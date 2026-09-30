@@ -5656,7 +5656,7 @@
     "name": "get_id_range_mapping"
   },
   {
-    "description": "Debug/test: drive a region face-select (box or paint brush) over an explicit viewport-pixel rectangle, bypassing the mouse. Forces Face component mode, requests a GPU id-buffer scan, and commits the visible faces a few frames later (poll get_mesh_component_selection afterwards). x,y,width,height are in viewport pixels; is_brush masks to a disk of brush_radius centered in the rect.",
+    "description": "Debug/test: drive a region select (box or paint brush) over an explicit viewport-pixel rectangle, bypassing the mouse. Sets the component mode (default face). Face mode requests a GPU id-buffer scan and commits the visible faces a few frames later; vertex and edge mode project every vertex of the visible content meshes of the last hovered viewport (the first viewport when none was hovered) on the CPU and select the vertices inside the region, or the edges whose both endpoints are inside, through the mesh (no occlusion), on the next frame. Poll get_mesh_component_selection afterwards. x,y,width,height are in viewport pixels; is_brush masks to a disk of brush_radius centered in the rect.",
     "inputSchema": {
       "properties": {
         "brush_radius": {
@@ -5671,12 +5671,21 @@
           "description": "Mask the rectangle to a centered disk (paint brush), default false",
           "type": "boolean"
         },
+        "mode": {
+          "description": "Component mode to select in (default face)",
+          "enum": [
+            "vertex",
+            "edge",
+            "face"
+          ],
+          "type": "string"
+        },
         "replace": {
           "description": "Clear the selection before adding (default true)",
           "type": "boolean"
         },
         "subtract": {
-          "description": "Remove the scanned faces instead of adding (default false)",
+          "description": "Remove the components in the region instead of adding (default false)",
           "type": "boolean"
         },
         "width": {

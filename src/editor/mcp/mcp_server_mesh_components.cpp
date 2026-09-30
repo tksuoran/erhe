@@ -596,14 +596,21 @@ auto Mcp_server::action_debug_region_select(const json& args) -> std::string
     const float brush_radius = args.value("brush_radius", 0.0f);
     const bool  replace      = args.value("replace", true);
     const bool  subtract     = args.value("subtract", false);
+    const std::string mode_str = args.value("mode", "face");
+    if ((mode_str != "vertex") && (mode_str != "edge") && (mode_str != "face")) {
+        return make_error_content("mode must be vertex, edge or face: " + mode_str);
+    }
     if ((width <= 0) || (height <= 0)) {
         return make_error_content("width and height (viewport pixels) are required and must be > 0");
     }
-    // Force Face mode so the scan resolves to facets.
-    m_context.mesh_component_selection->set_mode(Mesh_component_mode::face);
+    // Face mode resolves the id-buffer scan to facets; Vertex / Edge mode
+    // projects the vertices on the CPU (doc/editor/mesh_component_selection.md
+    // section 7).
+    m_context.mesh_component_selection->set_mode(parse_mesh_component_mode(mode_str, Mesh_component_mode::face));
     m_context.mesh_component_selection_tool->debug_region_select(x, y, width, height, is_brush, brush_radius, replace, subtract);
     return make_json_content({
-        {"status", "scan requested; poll get_mesh_component_selection in a few frames"},
+        {"status", "region select requested; poll get_mesh_component_selection in a few frames"},
+        {"mode", mode_str},
         {"x", x}, {"y", y}, {"width", width}, {"height", height},
         {"is_brush", is_brush}, {"replace", replace}, {"subtract", subtract}
     }).dump();

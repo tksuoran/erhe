@@ -13,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -32,12 +33,21 @@ class Viewport_scene_view;
 
 // Gesture sub-mode of the component selection tool. Click is the legacy
 // single-pick behavior; Box drags a rectangle; Paint drags a brush disk
-// (Blender Circle Select). Box and Paint scan the GPU id-buffer over a screen
-// region to gather visible faces. Faces only for now.
+// (Blender Circle Select). In Face mode Box and Paint scan the GPU id-buffer
+// over a screen region to gather visible faces; in Vertex and Edge mode they
+// project the vertices of the view's meshes on the CPU and test the region
+// (doc/editor/mesh_component_selection.md section 7).
 enum class Component_gesture_mode {
     click = 0,
     box   = 1,
     paint = 2
+};
+
+// How a region (box / brush) select combines with the current selection,
+// after the plain gesture's clear.
+enum class Region_select_operation : unsigned int {
+    add      = 0,
+    subtract = 1
 };
 
 // Left-mouse command that selects a mesh sub-component (vertex / edge / face)
@@ -55,11 +65,12 @@ private:
     App_context& m_context;
 };
 
-// Left-mouse drag that box-selects faces. Ready only in Box gesture sub-mode +
-// Face component mode; once the drag moves it becomes the active mouse command
-// (blocking the single-click command). The selection is committed a few frames
-// after release, when the async id-buffer region scan completes (see
-// Mesh_component_selection_tool::gesture_update).
+// Left-mouse drag that box-selects components. Ready only in Box gesture
+// sub-mode + a mesh component mode; once the drag moves it becomes the active
+// mouse command (blocking the single-click command). In Face mode the selection
+// is committed a few frames after release, when the async id-buffer region scan
+// completes; in Vertex / Edge mode on the first gesture_update after release
+// (see Mesh_component_selection_tool::gesture_update).
 class Component_box_select_command : public erhe::commands::Command
 {
 public:
@@ -85,11 +96,11 @@ private:
     App_context& m_context;
 };
 
-// Left-mouse drag that paint-selects faces under a brush disk (Blender Circle
-// Select). Ready only in Paint gesture sub-mode + Face component mode. Bound
+// Left-mouse drag that paint-selects components under a brush disk (Blender
+// Circle Select). Ready only in Paint gesture sub-mode + a mesh component mode. Bound
 // with call_on_button_down_without_motion so a single click selects under the
 // brush too. Modifiers (captured at stroke start): plain/Shift add (plain also
-// clears first), Ctrl subtract. Faces are added continuously along the path.
+// clears first), Ctrl subtract. Components are added continuously along the path.
 class Component_paint_select_command : public erhe::commands::Command
 {
 public:
@@ -117,7 +128,7 @@ private:
 };
 
 // Key that switches the gesture sub-mode (B -> Box, C -> Paint), a shortcut for
-// the toolbar combo. Only consumes the key while in Face component mode, so the
+// the toolbar combo. Only consumes the key while in a mesh component mode, so the
 // key falls through to other bindings (e.g. brush preview on C) otherwise.
 class Component_gesture_hotkey_command : public erhe::commands::Command
 {
@@ -214,7 +225,7 @@ public:
     // settable from the B / C hotkeys.
     [[nodiscard]] auto get_gesture_mode() const -> Component_gesture_mode;
     void               set_gesture_mode(Component_gesture_mode mode);
-    // B / C hotkey: switch to `mode` and consume, but only while in Face
+    // B / C hotkey: switch to `mode` and consume, but only while in a mesh
     // component mode (returns false otherwise so the key falls through).
     [[nodiscard]] auto try_set_gesture_hotkey(Component_gesture_mode mode) -> bool;
 
@@ -237,7 +248,7 @@ public:
 
     // Called by Component_box_select_command.
     [[nodiscard]] auto box_select_try_ready() const -> bool;
-    // True while Box gesture sub-mode + Face component mode are both active
+    // True while Box gesture sub-mode + a mesh component mode are both active
     // (the in-drag guard; does not require a hovered viewport, unlike
     // box_select_try_ready). Used to drop a drag command left armed across a
     // sub-mode change.
@@ -257,9 +268,12 @@ public:
     // Called by Component_gesture_update_command once per frame.
     void gesture_update();
 
-    // Debug/test entry (MCP debug_region_select): drive a region face-select over
-    // an explicit viewport-pixel rectangle (or brush disk), bypassing the mouse.
-    // Commits over the next frames via gesture_update, like a real gesture.
+    // Debug/test entry (MCP debug_region_select): drive a region select in the
+    // current mesh component mode over an explicit viewport-pixel rectangle (or
+    // brush disk), bypassing the mouse. Commits over the next frames via
+    // gesture_update, like a real gesture: Face mode through the id-buffer scan,
+    // Vertex / Edge mode through the CPU projection over the last hovered
+    // viewport (the first viewport window when none was hovered).
     void debug_region_select(int x, int y, int width, int height, bool is_brush, float brush_radius, bool replace, bool subtract);
 
     // Highlight one component from outside the viewport - the Geometry
@@ -288,6 +302,38 @@ private:
     void request_box_scan();
     // Build and submit an id-buffer disk scan for the current brush.
     void request_paint_scan();
+    // A screen region in viewport pixels (the space of
+    // Viewport_scene_view::get_viewport_from_window and project_to_viewport).
+    enum class Region_shape : unsigned int {
+        rectangle = 0,
+        disk      = 1
+    };
+    class Component_region
+    {
+    public:
+        Region_shape shape {Region_shape::rectangle};
+        glm::vec2    min   {0.0f, 0.0f}; // rectangle
+        glm::vec2    max   {0.0f, 0.0f}; // rectangle
+        glm::vec2    center{0.0f, 0.0f}; // disk
+        float        radius{0.0f};       // disk
+
+        [[nodiscard]] auto contains(glm::vec2 position_in_viewport) const -> bool;
+    };
+    // Vertex / Edge mode region select on the CPU: projects every vertex of the
+    // visible, component-addressable content meshes of the view's scene and
+    // adds (or subtracts) the vertices inside the region, or the edges whose
+    // both endpoints are inside, then flushes. Selects through the mesh (no
+    // occlusion test).
+    void select_components_in_region(
+        const Viewport_scene_view& viewport_scene_view,
+        const Component_region&    region,
+        Region_select_operation    operation
+    );
+    // The current box gesture / brush as a region in the view's pixels.
+    [[nodiscard]] auto make_box_region  (const Viewport_scene_view& viewport_scene_view) const -> Component_region;
+    [[nodiscard]] auto make_brush_region(const Viewport_scene_view& viewport_scene_view) const -> Component_region;
+    // The view the MCP debug region select projects in.
+    [[nodiscard]] auto get_debug_scene_view() const -> const Viewport_scene_view*;
     // Abandon any in-flight async region-scan drains (box deferred commit, paint
     // post-release drain, MCP debug scan) so their results are not applied. Used
     // by the Clear button: an explicit clear must be authoritative even while a
@@ -359,8 +405,13 @@ private:
     std::vector<Mesh_component_target>                        m_select_all_targets;
     // Select linked (L) seed scratch: the hovered facet's vertices.
     std::vector<GEO::index_t>                                 m_linked_seed_vertices;
+    // CPU region select scratch (cleared at use, capacity kept): the candidate
+    // targets (cleared again after use so no mesh is retained across frames)
+    // and one inside-the-region flag per vertex of the current target.
+    std::vector<Mesh_component_target>                        m_region_targets;
+    std::vector<std::uint8_t>                                 m_region_vertex_inside;
 
-    // Gesture sub-mode + box-select state (faces only). The box is stored in
+    // Gesture sub-mode + box-select state. The box is stored in
     // window coordinates (for the ImGui overlay) and converted to viewport
     // coordinates when building the id-buffer scan request. The commit is
     // deferred: on release we wait for a scan whose pixels are from at-or-after

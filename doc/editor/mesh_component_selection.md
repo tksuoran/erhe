@@ -56,6 +56,25 @@ The mode combo in the viewport toolbar switches the mode with
 `Mode_conversion::flush`; holding Ctrl while choosing the mode switches with
 `Mode_conversion::expand` (section 3).
 
+### Box and paint select
+
+A second toolbar combo picks the gesture: Click, Box or Paint (B and C switch
+to Box and Paint; they consume the key only in a mesh component mode, so in
+Object and Bone mode the key falls through). Both gestures work in Vertex,
+Edge and Face mode, with the same modifiers:
+
+- **Box** (`Component_box_select_command`, a left-button drag) draws a
+  rubber-band rectangle and commits on release: plain replaces the selection,
+  Shift extends it, Ctrl subtracts from it. A click without motion falls
+  through to the single-click select.
+- **Paint** (`Component_paint_select_command`, Blender Circle Select) applies
+  a brush disk along the drag, a click paints one dab: plain clears once at
+  the stroke start and then adds, Shift adds, Ctrl subtracts. The mouse wheel
+  resizes the brush while hovering a viewport in Paint mode.
+
+Face mode gathers the visible facets with the GPU id-buffer scan; Vertex and
+Edge mode project the vertices on the CPU (section 7).
+
 ### Selection commands
 
 Each command is a `Component_selection_action_command` hosted by the tool,
@@ -107,6 +126,11 @@ command ends with a flush (section 3).
   + node + `primitive_index` + `vertices` (seed list); optional
   `delimit_crease` stops the flood at crease edges.
 - `clear_mesh_component_selection` - select none.
+- `debug_region_select` - a box (or, with `is_brush`, a brush disk) select
+  over a rectangle in viewport pixels in `mode` (`vertex`, `edge` or `face`,
+  the default), with `replace` (default true) and `subtract`; it commits over
+  the next frames like the gesture. Vertex and Edge mode project in the last
+  hovered viewport, or the first viewport window when none was hovered.
 
 The mutating tools return the same JSON as `get_mesh_component_selection`,
 except `select_mesh_components` (the entry's counts) and
@@ -281,7 +305,36 @@ Lifting the desktop-only restriction would require a multiview variant of the
 `line_simple` shader (and feeding per-eye view data on the direct path), the
 same way the wide-line compute path already has a multiview graphics stage.
 
-## 7. Region and brush face selection on the GPU
+## 7. Region and brush selection
+
+### Vertex and edge mode: CPU projection
+
+`Mesh_component_selection_tool::select_components_in_region()` takes the
+region (the box rectangle or the brush disk, in the viewport pixels of
+`Viewport_scene_view::get_viewport_from_window()`) and:
+
+1. collects the candidate targets: every visible mesh of the view's scene
+   content layer passed through `append_mesh_component_targets()` (the same
+   filters as select all), gathered under the scene's `item_host_mutex`;
+2. projects every vertex of each target with the math of
+   `Viewport_scene_view::project_to_viewport()`, the camera transforms
+   computed once per call; a vertex behind the camera (clip w <= 0) is
+   outside;
+3. in Vertex mode adds (or, with Ctrl, erases) the vertices inside the
+   region; in Edge mode the edges whose both endpoints are inside, walked
+   from the facet corners;
+4. flushes (section 3).
+
+The selection goes through the mesh: vertices and edges hidden behind
+other surfaces are selected too (Blender's X-ray behavior). The per-vertex
+inside flags and the target list are persistent scratch on the tool; the
+target list is emptied after each call so it holds no mesh across frames.
+The projection runs once per box commit (on the first `gesture_update`
+after release) and once per gesture frame while a brush stroke is held,
+never in idle frames. Selecting only the visible elements is the
+compute-shader selection of `doc/plans/mesh_component_selection.md`.
+
+### Face mode: id-buffer scan on the GPU
 
 Region (box) and paint-brush face selection gather their result on the GPU.
 When the device supports compute shaders and shader storage buffers (Vulkan,
@@ -326,7 +379,8 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
   inactive there).
 - `py -3 scripts/mesh_modeling_verify.py [--editor <editor.exe>]` launches a
   headless editor and checks the flush rules, both mode conversions, invert,
-  select all / none, select linked and their keys on a box; the `Mcp_test`
+  select all / none, select linked and their keys, and vertex / edge mode
+  box and brush select (`debug_region_select`) on a box; the `Mcp_test`
   case `mesh_component_flush_and_select_all` covers the face-to-vertex flush
   and select all in CI.
 

@@ -4,8 +4,8 @@ section 4.2, doc/editor/mesh_component_selection.md) over MCP.
 
 Launches a headless editor (ERHE_AI_DRIVER=1), creates a box and checks the
 flush rules, the mode conversions (flush and expand), invert, select all,
-select none and select linked against the box's known counts (8 vertices,
-12 edges, 6 facets).
+select none, select linked and the vertex / edge mode region (box and brush)
+select against the box's known counts (8 vertices, 12 edges, 6 facets).
 
 Usage:
     py -3 scripts/mesh_modeling_verify.py [--editor <path to editor.exe>]
@@ -14,6 +14,7 @@ Exit code 0 when every check passes; otherwise the failing checks are named.
 """
 
 import argparse
+import math
 import os
 import re
 import subprocess
@@ -92,7 +93,90 @@ def expect(label, actual, expected):
     check_true(label, actual == expected, f"got {actual}, expected {expected}")
 
 
+def quaternion_from_columns(m):
+    """Unit quaternion [x, y, z, w] of the rotation part of a column-major 4x4."""
+    # r[row][column]
+    r = [[m[(column * 4) + row] for column in range(3)] for row in range(3)]
+    for column in range(3):
+        length = math.sqrt(sum(r[row][column] ** 2 for row in range(3)))
+        for row in range(3):
+            r[row][column] /= length
+    trace = r[0][0] + r[1][1] + r[2][2]
+    if trace > 0.0:
+        k = 0.5 / math.sqrt(trace + 1.0)
+        q = [(r[2][1] - r[1][2]) * k, (r[0][2] - r[2][0]) * k, (r[1][0] - r[0][1]) * k, 0.25 / k]
+    elif (r[0][0] > r[1][1]) and (r[0][0] > r[2][2]):
+        k = 2.0 * math.sqrt(1.0 + r[0][0] - r[1][1] - r[2][2])
+        q = [0.25 * k, (r[0][1] + r[1][0]) / k, (r[0][2] + r[2][0]) / k, (r[2][1] - r[1][2]) / k]
+    elif r[1][1] > r[2][2]:
+        k = 2.0 * math.sqrt(1.0 + r[1][1] - r[0][0] - r[2][2])
+        q = [(r[0][1] + r[1][0]) / k, 0.25 * k, (r[1][2] + r[2][1]) / k, (r[0][2] - r[2][0]) / k]
+    else:
+        k = 2.0 * math.sqrt(1.0 + r[2][2] - r[0][0] - r[1][1])
+        q = [(r[0][2] + r[2][0]) / k, (r[1][2] + r[2][1]) / k, 0.25 * k, (r[1][0] - r[0][1]) / k]
+    length = math.sqrt(sum(c * c for c in q))
+    return [c / length for c in q]
+
+
+def run_region_select(e):
+    """Vertex / edge mode box and brush select through debug_region_select.
+
+    The box is placed in front of the first viewport's camera with the
+    camera's orientation, so its local -X vertices (one face) project to the
+    left half of the viewport and its +X vertices to the right half.
+    """
+    viewport = e.call("get_viewports")["viewports"][0]
+    m = viewport["camera_world_from_camera"]
+    position = [m[12], m[13], m[14]]
+    forward = [-m[8], -m[9], -m[10]]
+    length = math.sqrt(sum(c * c for c in forward))
+    distance = 5.0
+    translation = [position[i] + (forward[i] / length) * distance for i in range(3)]
+    e.call("set_node_transform", {
+        "scene_name": e.scene, "node_name": BOX,
+        "translation": translation, "rotation_xyzw": quaternion_from_columns(m)
+    })
+    e.advance(2)
+
+    width = int(viewport["width"])
+    height = int(viewport["height"])
+    whole = {"x": 0, "y": 0, "width": width, "height": height}
+    left_half = {"x": 0, "y": 0, "width": width // 2, "height": height}
+
+    def region(mode, rect, **kwargs):
+        args = {"mode": mode}
+        args.update(rect)
+        args.update(kwargs)
+        e.call("debug_region_select", args)
+        e.advance(2)
+        return e.counts()
+
+    e.call("clear_mesh_component_selection")
+    expect("vertex mode box over the viewport -> 8 vertices, 12 edges, 6 facets", region("vertex", whole), (8, 12, 6))
+    expect("vertex mode box over the left half -> 4 vertices, 4 edges, 1 facet", region("vertex", left_half), (4, 4, 1))
+    expect("edge mode box over the viewport -> 12 edges", region("edge", whole), (8, 12, 6))
+    expect("edge mode box over the left half -> 4 edges (both endpoints inside)", region("edge", left_half), (4, 4, 1))
+    region("vertex", whole)
+    expect("vertex mode Ctrl box (subtract) of the left half -> 4 vertices remain",
+           region("vertex", left_half, replace=False, subtract=True), (4, 4, 1))
+    region("edge", whole)
+    expect("edge mode Ctrl box (subtract) of the left half -> the other 8 edges remain",
+           region("edge", left_half, replace=False, subtract=True)[1], 8)
+    e.call("clear_mesh_component_selection")
+    expect("vertex mode Shift box (extend) of the left half onto nothing -> 4 vertices",
+           region("vertex", left_half, replace=False), (4, 4, 1))
+    brush = {"x": 0, "y": 0, "width": width, "height": height}
+    expect("vertex mode brush covering the viewport -> 8 vertices",
+           region("vertex", brush, is_brush=True, brush_radius=float(max(width, height)))[0], 8)
+    expect("vertex mode brush of radius 1 at the viewport centre -> nothing (box vertices lie off-centre)",
+           region("vertex", brush, is_brush=True, brush_radius=1.0), (0, 0, 0))
+    e.call("clear_mesh_component_selection")
+
+
 def run(e):
+    # First, while nothing is object-selected: it moves the box.
+    run_region_select(e)
+
     # Flush: a facet selects its edges and vertices.
     e.select(mode="face", facets=[0])
     expect("face mode, facet 0 -> 4 vertices, 4 edges, 1 facet", e.counts(), (4, 4, 1))

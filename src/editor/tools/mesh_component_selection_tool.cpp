@@ -7,6 +7,7 @@
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/viewport_config.hpp"
+#include "editor_log.hpp"
 #include "graphics/gradients.hpp"
 #include "input_state.hpp"
 #include "operations/compound_operation.hpp"
@@ -14,19 +15,25 @@
 #include "operations/set_edge_sharpness_operation.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
@@ -42,6 +49,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <mutex>
 
 using erhe::geometry::get_pointf;
 using erhe::geometry::to_glm_vec3;
@@ -464,8 +472,8 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     commands.register_command          (&m_brush_radius_command);
     commands.bind_command_to_mouse_wheel(&m_brush_radius_command);
 
-    // B -> Box, C -> Paint (shortcuts for the gesture combo). Gated to Face mode
-    // in try_set_gesture_hotkey, so C still falls through to brush preview etc.
+    // B -> Box, C -> Paint (shortcuts for the gesture combo). Gated to mesh
+    // component modes in try_set_gesture_hotkey, so C still falls through to brush preview etc.
     m_box_hotkey_command.set_host(this);
     commands.register_command(&m_box_hotkey_command);
     commands.bind_command_to_key(&m_box_hotkey_command, erhe::window::Key_b);
@@ -1087,16 +1095,16 @@ void Mesh_component_selection_tool::viewport_toolbar()
         ImGui::SetTooltip("Mesh Component Selection Mode (hold Ctrl while choosing to expand the selection)");
     }
 
-    // Gesture sub-mode (Click / Box / Paint). Box and Paint scan the id-buffer
-    // over a screen region to select faces; only meaningful in Face mode for now.
-    // The B / C hotkeys switch to Box / Paint as a shortcut for this combo.
+    // Gesture sub-mode (Click / Box / Paint). Box and Paint select the
+    // components in a screen region: the id-buffer scan in Face mode, the CPU
+    // projection in Vertex / Edge mode. The B / C hotkeys switch to Box / Paint as a shortcut for this combo.
     int               gesture_index   = static_cast<int>(m_gesture_mode);
     const char* const gesture_items[] = {"Click", "Box", "Paint"};
     if (erhe::imgui::combo_fit_width("##mesh_component_gesture", &gesture_index, gesture_items, IM_ARRAYSIZE(gesture_items))) {
         m_gesture_mode = static_cast<Component_gesture_mode>(gesture_index);
     }
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Selection gesture: Click picks one face; Box drags a rectangle; Paint drags a brush (B / C hotkeys)");
+        ImGui::SetTooltip("Selection gesture: Click picks one component; Box drags a rectangle; Paint drags a brush (B / C hotkeys)");
     }
 
     // Brush radius (paint mode), in viewport pixels. Also adjustable with the
@@ -1374,9 +1382,9 @@ void Mesh_component_selection_tool::set_gesture_mode(const Component_gesture_mod
 
 auto Mesh_component_selection_tool::try_set_gesture_hotkey(const Component_gesture_mode mode) -> bool
 {
-    // Only act (and consume the key) while in Face component mode; otherwise the
-    // key falls through to other bindings (e.g. brush preview on C).
-    if (m_mesh_component_selection.get_mode() != Mesh_component_mode::face) {
+    // Only act (and consume the key) while in a mesh component mode; otherwise
+    // the key falls through to other bindings (e.g. brush preview on C).
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
     m_gesture_mode = mode;
@@ -1522,21 +1530,22 @@ auto Mesh_component_selection_tool::box_select_try_ready() const -> bool
     if (m_gesture_mode != Component_gesture_mode::box) {
         return false;
     }
-    if (m_mesh_component_selection.get_mode() != Mesh_component_mode::face) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         return false;
     }
-    // Desktop viewport only (the id-buffer scan needs a Viewport_scene_view).
+    // Desktop viewport only (the id-buffer scan and the CPU projection need a
+    // Viewport_scene_view).
     return scene_view->as_viewport_scene_view() != nullptr;
 }
 
 auto Mesh_component_selection_tool::is_gesture_box_mode() const -> bool
 {
     return (m_gesture_mode == Component_gesture_mode::box) &&
-           (m_mesh_component_selection.get_mode() == Mesh_component_mode::face);
+           is_mesh_component_mode(m_mesh_component_selection.get_mode());
 }
 
 void Mesh_component_selection_tool::box_select_update(const glm::vec2 window_position, const bool real_motion)
@@ -1552,7 +1561,9 @@ void Mesh_component_selection_tool::box_select_update(const glm::vec2 window_pos
         }
         m_box_current_window = window_position;
     }
-    if (m_box_active) {
+    // Face mode keeps the id-buffer scan warm while dragging; Vertex / Edge
+    // mode projects once, at the commit after release.
+    if (m_box_active && (m_mesh_component_selection.get_mode() == Mesh_component_mode::face)) {
         request_box_scan();
     }
 }
@@ -1603,7 +1614,7 @@ auto Mesh_component_selection_tool::paint_select_try_ready() const -> bool
     if (m_gesture_mode != Component_gesture_mode::paint) {
         return false;
     }
-    if (m_mesh_component_selection.get_mode() != Mesh_component_mode::face) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
@@ -1616,7 +1627,7 @@ auto Mesh_component_selection_tool::paint_select_try_ready() const -> bool
 auto Mesh_component_selection_tool::is_gesture_paint_mode() const -> bool
 {
     return (m_gesture_mode == Component_gesture_mode::paint) &&
-           (m_mesh_component_selection.get_mode() == Mesh_component_mode::face);
+           is_mesh_component_mode(m_mesh_component_selection.get_mode());
 }
 
 void Mesh_component_selection_tool::paint_select_update(const glm::vec2 window_position, const bool real_motion)
@@ -1625,8 +1636,9 @@ void Mesh_component_selection_tool::paint_select_update(const glm::vec2 window_p
         if (!m_paint_active) {
             // Stroke just started: lock to the starting view, capture modifiers,
             // and (for a plain stroke) clear the selection once before adding.
+            // Only the face path drains async scan results after release.
             m_paint_active               = true;
-            m_paint_pending              = true;
+            m_paint_pending              = (m_mesh_component_selection.get_mode() == Mesh_component_mode::face);
             m_paint_scene_view           = get_hover_scene_view();
             m_paint_last_applied_frame   = 0;
             m_paint_commit_request_frame = 0;
@@ -1644,9 +1656,26 @@ void Mesh_component_selection_tool::paint_select_update(const glm::vec2 window_p
         }
         m_brush_center_window = window_position;
     }
-    if (m_paint_active) {
-        request_paint_scan();
+    if (!m_paint_active) {
+        return;
     }
+    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::face) {
+        request_paint_scan();
+        return;
+    }
+    // Vertex / Edge mode: project and apply the brush now, once per gesture
+    // frame while the button is held.
+    const Viewport_scene_view* viewport_scene_view = (m_paint_scene_view != nullptr)
+        ? m_paint_scene_view->as_viewport_scene_view()
+        : nullptr;
+    if (viewport_scene_view == nullptr) {
+        return;
+    }
+    select_components_in_region(
+        *viewport_scene_view,
+        make_brush_region(*viewport_scene_view),
+        m_paint_subtract ? Region_select_operation::subtract : Region_select_operation::add
+    );
 }
 
 void Mesh_component_selection_tool::request_paint_scan()
@@ -1711,6 +1740,36 @@ void Mesh_component_selection_tool::gesture_update()
     // Debug/test (MCP debug_region_select): drive a region scan over an explicit
     // viewport rectangle / disk and commit when it completes. Exclusive with the
     // mouse gestures below (only one is ever pending at a time).
+    if (m_debug_pending && (m_mesh_component_selection.get_mode() != Mesh_component_mode::face)) {
+        // Vertex / Edge mode: the CPU projection, committed on this frame.
+        m_debug_pending = false;
+        const Viewport_scene_view* viewport_scene_view = get_debug_scene_view();
+        if (viewport_scene_view == nullptr) {
+            log_selection->warn("debug_region_select: no viewport to project in");
+        } else {
+            Component_region region{};
+            if (m_debug_is_brush) {
+                region.shape  = Region_shape::disk;
+                region.center = glm::vec2{
+                    static_cast<float>(m_debug_x) + (0.5f * static_cast<float>(m_debug_w)),
+                    static_cast<float>(m_debug_y) + (0.5f * static_cast<float>(m_debug_h))
+                };
+                region.radius = m_debug_brush_radius;
+            } else {
+                region.shape = Region_shape::rectangle;
+                region.min   = glm::vec2{static_cast<float>(m_debug_x), static_cast<float>(m_debug_y)};
+                region.max   = glm::vec2{static_cast<float>(m_debug_x + m_debug_w), static_cast<float>(m_debug_y + m_debug_h)};
+            }
+            if (m_debug_replace) {
+                m_mesh_component_selection.clear_all();
+            }
+            select_components_in_region(
+                *viewport_scene_view,
+                region,
+                m_debug_subtract ? Region_select_operation::subtract : Region_select_operation::add
+            );
+        }
+    }
     if (m_debug_pending && have_devices) {
         Id_renderer::Scan_request request;
         request.x        = m_debug_x;
@@ -1737,14 +1796,30 @@ void Mesh_component_selection_tool::gesture_update()
         }
     }
 
-    // Box: deferred single commit after release, once a scan whose pixels are
-    // from at-or-after the first post-release request completes.
+    // Box: deferred single commit after release. Face mode waits for a scan
+    // whose pixels are from at-or-after the first post-release request; Vertex /
+    // Edge mode projects once, now.
     if (m_box_commit_pending) {
-        if (
-            !have_devices ||
-            (m_gesture_mode != Component_gesture_mode::box) ||
-            (m_mesh_component_selection.get_mode() != Mesh_component_mode::face)
-        ) {
+        const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
+        if ((m_gesture_mode != Component_gesture_mode::box) || !is_mesh_component_mode(mode)) {
+            m_box_commit_pending = false;
+        } else if (mode != Mesh_component_mode::face) {
+            m_box_commit_pending = false;
+            const Viewport_scene_view* viewport_scene_view = (m_box_scene_view != nullptr)
+                ? m_box_scene_view->as_viewport_scene_view()
+                : nullptr;
+            if (viewport_scene_view != nullptr) {
+                const bool replace = !m_box_modifier_shift && !m_box_modifier_ctrl;
+                if (replace) {
+                    m_mesh_component_selection.clear_all();
+                }
+                select_components_in_region(
+                    *viewport_scene_view,
+                    make_box_region(*viewport_scene_view),
+                    m_box_modifier_ctrl ? Region_select_operation::subtract : Region_select_operation::add
+                );
+            }
+        } else if (!have_devices) {
             m_box_commit_pending = false;
         } else {
             // Re-request the final box every frame until its scan completes; this
@@ -1769,7 +1844,8 @@ void Mesh_component_selection_tool::gesture_update()
     // Paint: apply scan results continuously while painting, and drain the last
     // results for a few frames after release.
     if (m_paint_pending) {
-        if (!have_devices) {
+        // The drain applies facet hits: drop it when the mode left Face.
+        if (!have_devices || (m_mesh_component_selection.get_mode() != Mesh_component_mode::face)) {
             m_paint_pending = false;
         } else {
             // After release, re-request the final brush so its faces are not
@@ -1817,7 +1893,7 @@ void Mesh_component_selection_tool::gesture_update()
     Scene_view* const hover_scene_view = get_hover_scene_view();
     const bool paint_wheel_active =
         (m_gesture_mode == Component_gesture_mode::paint) &&
-        (m_mesh_component_selection.get_mode() == Mesh_component_mode::face) &&
+        is_mesh_component_mode(m_mesh_component_selection.get_mode()) &&
         (hover_scene_view != nullptr) &&
         (hover_scene_view->as_viewport_scene_view() != nullptr);
     if (paint_wheel_active) {
@@ -1848,6 +1924,185 @@ void Mesh_component_selection_tool::debug_region_select(
     m_debug_subtract      = subtract;
     m_debug_request_frame = 0;
     m_debug_pending       = true;
+}
+
+auto Mesh_component_selection_tool::Component_region::contains(const glm::vec2 position_in_viewport) const -> bool
+{
+    switch (shape) {
+        case Region_shape::rectangle: {
+            return
+                (position_in_viewport.x >= min.x) && (position_in_viewport.x <= max.x) &&
+                (position_in_viewport.y >= min.y) && (position_in_viewport.y <= max.y);
+        }
+        case Region_shape::disk: {
+            return glm::distance2(position_in_viewport, center) <= (radius * radius);
+        }
+        default: {
+            return false;
+        }
+    }
+}
+
+auto Mesh_component_selection_tool::make_box_region(const Viewport_scene_view& viewport_scene_view) const -> Component_region
+{
+    const glm::vec2 a = viewport_scene_view.get_viewport_from_window(m_box_anchor_window);
+    const glm::vec2 b = viewport_scene_view.get_viewport_from_window(m_box_current_window);
+    Component_region region{};
+    region.shape = Region_shape::rectangle;
+    region.min   = glm::min(a, b);
+    region.max   = glm::max(a, b);
+    return region;
+}
+
+auto Mesh_component_selection_tool::make_brush_region(const Viewport_scene_view& viewport_scene_view) const -> Component_region
+{
+    Component_region region{};
+    region.shape  = Region_shape::disk;
+    region.center = viewport_scene_view.get_viewport_from_window(m_brush_center_window);
+    region.radius = m_brush_radius;
+    return region;
+}
+
+auto Mesh_component_selection_tool::get_debug_scene_view() const -> const Viewport_scene_view*
+{
+    // The view the pointer was last over, as the interactive gestures use;
+    // with no hover yet (a fresh headless run), the first viewport window.
+    const Scene_view* const last_hover_scene_view = get_last_hover_scene_view();
+    if (last_hover_scene_view != nullptr) {
+        const Viewport_scene_view* const viewport_scene_view = last_hover_scene_view->as_viewport_scene_view();
+        if (viewport_scene_view != nullptr) {
+            return viewport_scene_view;
+        }
+    }
+    if (m_context.scene_views == nullptr) {
+        return nullptr;
+    }
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> viewport_scene_view = viewport_window->viewport_scene_view();
+        if (viewport_scene_view) {
+            return viewport_scene_view.get();
+        }
+    }
+    return nullptr;
+}
+
+void Mesh_component_selection_tool::select_components_in_region(
+    const Viewport_scene_view&    viewport_scene_view,
+    const Component_region&       region,
+    const Region_select_operation operation
+)
+{
+    Mesh_component_selection& selection = m_mesh_component_selection;
+    const Mesh_component_mode mode = selection.get_mode();
+    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge)) {
+        return;
+    }
+    const std::shared_ptr<Scene_root>          scene_root = viewport_scene_view.get_scene_root();
+    const std::shared_ptr<erhe::scene::Camera> camera     = viewport_scene_view.get_camera();
+    if (!scene_root || !camera) {
+        return;
+    }
+
+    // Candidates: the visible content meshes of the view's scene that component
+    // selection can address (the same filters as select all).
+    m_region_targets.clear();
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+        const erhe::scene::Mesh_layer* const content_layer = scene_root->layers().content();
+        if (content_layer != nullptr) {
+            for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer->meshes) {
+                if (mesh && mesh->is_visible()) {
+                    static_cast<void>(append_mesh_component_targets(mesh, m_region_targets));
+                }
+            }
+        }
+    }
+
+    // The projection of Viewport_scene_view::project_to_viewport, with the
+    // camera transforms computed once instead of once per vertex.
+    const erhe::math::Viewport&                     projection_viewport = viewport_scene_view.get_projection_viewport();
+    const erhe::math::Coordinate_conventions        conventions         = viewport_scene_view.get_conventions();
+    const erhe::scene::Camera_projection_transforms transforms          = camera->projection_transforms(
+        projection_viewport,
+        viewport_scene_view.get_reverse_depth(),
+        viewport_scene_view.get_depth_range(),
+        conventions
+    );
+    const glm::mat4 clip_from_world = transforms.clip_from_world.get_matrix();
+
+    for (const Mesh_component_target& target : m_region_targets) {
+        const glm::mat4    clip_from_node = clip_from_world * target.mesh->world_from_node();
+        const GEO::Mesh&   geo_mesh       = target.geometry->get_mesh();
+        const GEO::index_t vertex_count   = geo_mesh.vertices.nb();
+        m_region_vertex_inside.assign(vertex_count, std::uint8_t{0});
+        bool any_inside = false;
+        for (GEO::index_t vertex = 0; vertex < vertex_count; ++vertex) {
+            const glm::vec3 position_in_node = to_glm_vec3(get_pointf(geo_mesh.vertices, vertex));
+            const glm::vec4 clip             = clip_from_node * glm::vec4{position_in_node, 1.0f};
+            if (!(clip.w > 0.0f)) {
+                continue; // behind the camera
+            }
+            const glm::vec3 position_in_viewport = erhe::math::project_to_screen_space<float>(
+                clip_from_node,
+                position_in_node,
+                0.0f,
+                1.0f,
+                static_cast<float>(projection_viewport.x),
+                static_cast<float>(projection_viewport.y),
+                static_cast<float>(projection_viewport.width),
+                static_cast<float>(projection_viewport.height),
+                conventions
+            );
+            if (region.contains(glm::vec2{position_in_viewport})) {
+                m_region_vertex_inside[vertex] = 1;
+                any_inside = true;
+            }
+        }
+        if (!any_inside) {
+            continue;
+        }
+
+        Mesh_component_entry* const entry = (operation == Region_select_operation::subtract)
+            ? selection.find_entry(target.mesh, target.primitive_index, target.geometry)
+            : &selection.find_or_create_entry(target.mesh, target.primitive_index, target.geometry);
+        if (entry == nullptr) {
+            continue; // nothing selected on this target to subtract from
+        }
+
+        if (mode == Mesh_component_mode::vertex) {
+            for (GEO::index_t vertex = 0; vertex < vertex_count; ++vertex) {
+                if (m_region_vertex_inside[vertex] == 0) {
+                    continue;
+                }
+                if (operation == Region_select_operation::subtract) {
+                    static_cast<void>(entry->vertices.erase(vertex));
+                } else {
+                    entry->add_vertex(vertex);
+                }
+            }
+        } else {
+            // An edge is inside when both of its endpoints are.
+            for (GEO::index_t facet = 0, facet_count = geo_mesh.facets.nb(); facet < facet_count; ++facet) {
+                const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                for (GEO::index_t i = 0; i < corner_count; ++i) {
+                    const GEO::index_t v0 = geo_mesh.facet_corners.vertex(geo_mesh.facets.corner(facet, i));
+                    const GEO::index_t v1 = geo_mesh.facet_corners.vertex(geo_mesh.facets.corner(facet, (i + 1) % corner_count));
+                    if ((m_region_vertex_inside[v0] == 0) || (m_region_vertex_inside[v1] == 0)) {
+                        continue;
+                    }
+                    if (operation == Region_select_operation::subtract) {
+                        static_cast<void>(entry->edges.erase(make_edge_key(v0, v1)));
+                    } else {
+                        entry->add_edge(v0, v1);
+                    }
+                }
+            }
+        }
+    }
+    // Drop the targets now: the scratch must not keep meshes alive across
+    // frames (a closed scene or an undone insert must release them).
+    m_region_targets.clear();
+    selection.flush();
 }
 
 void Mesh_component_selection_tool::draw_gesture_overlay(const Viewport_scene_view* viewport_scene_view)
