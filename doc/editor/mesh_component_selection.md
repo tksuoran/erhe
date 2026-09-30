@@ -145,13 +145,17 @@ live, non-empty selection of its own set
 |---------|-----|--------|
 | `Geometry.Delete.Selected` | Delete | Delete the selection: vertices in vertex mode, edges in edge mode, faces in face mode |
 | `Geometry.Dissolve.Selected` | Ctrl+X | Dissolve the selection: vertices, edges or faces by mode, with the Operations window's dissolve options |
+| `Geometry.Merge.AtCenter` | M | Merge the selection's vertices at their center (any of vertex, edge, face mode) |
 
 The object `Selection` binds the same keys (`Selection.delete`,
 `Selection.cut`); both of its commands decline in that state and the two
 `Geometry` commands decline outside it, so exactly one handler consumes the
 key. The other delete contexts and the limited dissolve are Operations window
 buttons and `Geometry.Delete.*` / `Geometry.Dissolve.*` commands
-(`doc/editor/operations.md`).
+(`doc/editor/operations.md`). Blender's M opens a merge menu; the editor has
+no popup menu, so M merges at center and the other merge types are the
+Operations window's Components buttons and `Geometry.Merge.*` commands. M
+declines (the key falls through) without a live component selection.
 
 The toolbar has All / None / Invert / Linked buttons (Linked is the
 from-selection form) beside Clear while a component mode is active. Ctrl+A
@@ -210,8 +214,15 @@ command ends with a flush (section 3).
 - `dissolve_limited` - `angle_limit_degrees`, `dissolve_boundaries`,
   `delimit_winding`, `delimit_crease` (library defaults); on the component
   selection when one is active, else on the selected meshes.
+- `merge_mesh_vertices` - optional `type` (`at_center` default,
+  `at_position`, `at_first`, `at_last`, `collapse`), `position` ([x, y, z]
+  in the mesh's local space, required for `at_position`) and `merge_uvs`
+  (default false); needs a live selection in vertex, edge or face mode.
+- `merge_mesh_by_distance` - `threshold` (default 1e-4), `use_centroid`
+  (default true), `include_unselected` (default false); on the component
+  selection when one is active, else on the selected meshes.
 
-The three geometry tools queue an undoable operation and return
+The five geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`
 / `node_id` / `node_name` + `scene_name`) override the object selection as
 for `merge_faces`.

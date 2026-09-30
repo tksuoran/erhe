@@ -6,6 +6,8 @@
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include <glm/glm.hpp>
+
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -16,6 +18,7 @@
 #include "operations/mesh_operation.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
+#include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
 #include "windows/property_editor.hpp"
 
@@ -220,6 +223,22 @@ public:
     // mesh component modes.
     [[nodiscard]] auto get_mode_delete_context() const -> std::optional<erhe::geometry::Delete_context>;
 
+    // Merge on the mesh-component selection (doc/plans/mesh_modeling.md section
+    // 4.4). Needs a live selection in a vertex, edge or face mode (the library
+    // merges the vertices of that set); returns false, queueing nothing,
+    // otherwise. The Merge_type form uses the window's UVs option; at_position
+    // (Geometry.Merge.AtCursor) takes the component tool's last hovered content
+    // point and returns false when there is none. The options form takes
+    // world_position for at_position, or options.position in mesh-local space
+    // when world_position is empty.
+    auto merge_vertices(erhe::geometry::operation::Merge_type type) -> bool;
+    auto merge_vertices(erhe::geometry::operation::Merge_vertices_options options, std::optional<glm::vec3> world_position) -> bool;
+    // Merge by distance on the component selection when one is active, else on
+    // the whole of every mesh of the object selection. The no-argument form uses
+    // the window's options. Returns false when there is nothing to act on.
+    auto merge_by_distance() -> bool;
+    auto merge_by_distance(erhe::geometry::operation::Merge_by_distance_options options) -> bool;
+
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
     // (see Mesh_component_selection::grow / shrink).
@@ -401,6 +420,12 @@ private:
     erhe::commands::Lambda_command m_dissolve_vertices_command;
     erhe::commands::Lambda_command m_dissolve_limited_command;
     erhe::commands::Lambda_command m_dissolve_selected_command;
+    erhe::commands::Lambda_command m_merge_at_center_command;
+    erhe::commands::Lambda_command m_merge_at_cursor_command;
+    erhe::commands::Lambda_command m_merge_at_first_command;
+    erhe::commands::Lambda_command m_merge_at_last_command;
+    erhe::commands::Lambda_command m_merge_collapse_command;
+    erhe::commands::Lambda_command m_merge_by_distance_command;
 
     // Dissolve options edited in the Operations window "Components" section and
     // read by the dissolve commands (the MCP tools take their own arguments).
@@ -408,6 +433,11 @@ private:
     erhe::geometry::operation::Dissolve_edges_options    m_dissolve_edges_options{};
     erhe::geometry::operation::Dissolve_vertices_options m_dissolve_vertices_options{};
     erhe::geometry::operation::Dissolve_limited_options  m_dissolve_limited_options{};
+
+    // Merge options edited in the "Components" section and read by the merge
+    // commands (the MCP tools take their own arguments).
+    bool                                                 m_merge_uvs{false};
+    erhe::geometry::operation::Merge_by_distance_options m_merge_by_distance_options{};
 
     // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
     // post-processing regenerates facet texture coordinates

@@ -106,4 +106,9 @@ void Edit_mesh_operation::emit()
     }
 }
 
+auto Edit_mesh_operation::get_emitted_vertex(const GEO::index_t scratch_vertex) const -> GEO::index_t
+{
+    return (scratch_vertex < m_scratch_to_dst_vertex.size()) ? m_scratch_to_dst_vertex[scratch_vertex] : GEO::NO_INDEX;
+}
+
 } // namespace erhe::geometry::operation

@@ -6,8 +6,12 @@
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
+#include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
 
+#include <glm/glm.hpp>
+
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -133,6 +137,32 @@ class Dissolve_limited_operation : public Mesh_operation
 {
 public:
     Dissolve_limited_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Dissolve_limited_options options);
+};
+
+// Merge (doc/plans/mesh_modeling.md section 4.4,
+// erhe_geometry/operation/merge_vertices.hpp) on the component selection
+// snapshot; the library derives the merged vertices from any mode's set (the
+// endpoints of edges, the vertices of facets). With world_position set, the
+// at_position target is that world point converted into each mesh's local
+// space (the component tool's hovered point); otherwise options.position is
+// used as given (mesh-local). A primitive without a selection is emitted
+// unchanged.
+class Merge_vertices_operation : public Mesh_operation
+{
+public:
+    Merge_vertices_operation(
+        Mesh_operation_parameters&&                       context,
+        erhe::geometry::operation::Merge_vertices_options options,
+        std::optional<glm::vec3>                          world_position = std::nullopt
+    );
+};
+
+// Merge by distance on the component selection when the snapshot holds one,
+// else on the whole of every mesh of the object selection.
+class Merge_by_distance_operation : public Mesh_operation
+{
+public:
+    Merge_by_distance_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Merge_by_distance_options options);
 };
 
 class Reverse_operation : public Mesh_operation

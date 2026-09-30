@@ -38,6 +38,7 @@
 #include "scene/viewport_scene_views.hpp"
 #include "brushes/reference_frame.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/item_tree_window.hpp"
 #include "windows/window_placement.hpp"
@@ -770,6 +771,12 @@ Operations::Operations(
     , m_dissolve_vertices_command          {commands, "Geometry.Dissolve.Vertices",        [this]() -> bool { return dissolve_vertices(m_dissolve_vertices_options); } }
     , m_dissolve_limited_command           {commands, "Geometry.Dissolve.Limited",         [this]() -> bool { return dissolve_limited (m_dissolve_limited_options); } }
     , m_dissolve_selected_command          {commands, "Geometry.Dissolve.Selected",        [this]() -> bool { return dissolve_selected_components(); } }
+    , m_merge_at_center_command            {commands, "Geometry.Merge.AtCenter",           [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::at_center); } }
+    , m_merge_at_cursor_command            {commands, "Geometry.Merge.AtCursor",           [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::at_position); } }
+    , m_merge_at_first_command             {commands, "Geometry.Merge.AtFirst",            [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::at_first); } }
+    , m_merge_at_last_command              {commands, "Geometry.Merge.AtLast",             [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::at_last); } }
+    , m_merge_collapse_command             {commands, "Geometry.Merge.Collapse",           [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::collapse); } }
+    , m_merge_by_distance_command          {commands, "Geometry.Merge.ByDistance",         [this]() -> bool { return merge_by_distance(); } }
 
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
     , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
@@ -830,6 +837,12 @@ Operations::Operations(
     commands.register_command(&m_dissolve_vertices_command);
     commands.register_command(&m_dissolve_limited_command);
     commands.register_command(&m_dissolve_selected_command);
+    commands.register_command(&m_merge_at_center_command);
+    commands.register_command(&m_merge_at_cursor_command);
+    commands.register_command(&m_merge_at_first_command);
+    commands.register_command(&m_merge_at_last_command);
+    commands.register_command(&m_merge_collapse_command);
+    commands.register_command(&m_merge_by_distance_command);
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
@@ -887,6 +900,12 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_delete_only_edges_and_faces_command, "Geometry.Delete.Only Edges and Faces");
     commands.bind_command_to_menu(&m_delete_only_faces_command,           "Geometry.Delete.Only Faces");
     commands.bind_command_to_menu(&m_dissolve_selected_command,           "Geometry.Dissolve.Selected");
+    commands.bind_command_to_menu(&m_merge_at_center_command,             "Geometry.Merge Vertices.At Center");
+    commands.bind_command_to_menu(&m_merge_at_cursor_command,             "Geometry.Merge Vertices.At Cursor");
+    commands.bind_command_to_menu(&m_merge_at_first_command,              "Geometry.Merge Vertices.At First");
+    commands.bind_command_to_menu(&m_merge_at_last_command,               "Geometry.Merge Vertices.At Last");
+    commands.bind_command_to_menu(&m_merge_collapse_command,              "Geometry.Merge Vertices.Collapse");
+    commands.bind_command_to_menu(&m_merge_by_distance_command,           "Geometry.Merge Vertices.By Distance");
     commands.bind_command_to_menu(&m_dissolve_faces_command,              "Geometry.Dissolve.Faces");
     commands.bind_command_to_menu(&m_dissolve_edges_command,              "Geometry.Dissolve.Edges");
     commands.bind_command_to_menu(&m_dissolve_vertices_command,           "Geometry.Dissolve.Vertices");
@@ -916,6 +935,10 @@ Operations::Operations(
     // exactly one of them consumes the key.
     commands.bind_command_to_key(&m_delete_selected_command,   erhe::window::Key_delete);
     commands.bind_command_to_key(&m_dissolve_selected_command, erhe::window::Key_x, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+    // M: Blender opens the merge menu; the editor has no popup menu, so M is
+    // merge at center and the Components section offers the other types.
+    // Declines (falls through) without a live component selection.
+    commands.bind_command_to_key(&m_merge_at_center_command, erhe::window::Key_m, erhe::commands::Button_trigger::Button_pressed);
 
     // Parameterized invokers for operations that can be dragged into / invoked from
     // an inventory slot. Each thunk runs its operation with the explicit snapshot
@@ -1234,6 +1257,13 @@ void Operations::imgui()
         (component_selection_non_empty && (current_component_mode == Mesh_component_mode::vertex)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto edge_component_mode =
         (component_selection_non_empty && (current_component_mode == Mesh_component_mode::edge)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    // Merge reads the vertices of any component mode's set.
+    const bool is_mesh_component_mode =
+        (current_component_mode == Mesh_component_mode::vertex) ||
+        (current_component_mode == Mesh_component_mode::edge)   ||
+        (current_component_mode == Mesh_component_mode::face);
+    const auto merge_component_mode =
+        (component_selection_non_empty && is_mesh_component_mode) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
     const auto attach_mode     = can_attach_to_active() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto align_mode      = can_align()      ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
@@ -1337,6 +1367,62 @@ void Operations::imgui()
             ImGui::Checkbox("Dissolve Boundaries", &m_dissolve_limited_options.dissolve_boundaries);
             ImGui::Checkbox("Delimit Winding",     &m_dissolve_limited_options.delimit_winding);
             ImGui::Checkbox("Delimit Crease",      &m_dissolve_limited_options.delimit_crease);
+            ImGui::PopID();
+        }
+        if (visible("Merge at Center") && make_button("Merge at Center", merge_component_mode, button_size)) {
+            merge_vertices(erhe::geometry::operation::Merge_type::at_center);
+        }
+        if (visible("Merge at Cursor")) {
+            if (make_button("Merge at Cursor", merge_component_mode, button_size)) {
+                merge_vertices(erhe::geometry::operation::Merge_type::at_position);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Merges at the last hovered point on the scene content");
+            }
+        }
+        if (visible("Merge at First")) {
+            if (make_button("Merge at First", merge_component_mode, button_size)) {
+                merge_vertices(erhe::geometry::operation::Merge_type::at_first);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("The lowest-index selected vertex survives in place");
+            }
+        }
+        if (visible("Merge at Last")) {
+            if (make_button("Merge at Last", merge_component_mode, button_size)) {
+                merge_vertices(erhe::geometry::operation::Merge_type::at_last);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("The highest-index selected vertex survives in place");
+            }
+        }
+        if (visible("Merge Collapse")) {
+            if (make_button("Merge Collapse", merge_component_mode, button_size)) {
+                merge_vertices(erhe::geometry::operation::Merge_type::collapse);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Each connected island of selected edges collapses to its mean");
+            }
+        }
+        if (visible("Merge at Center") || visible("Merge at Cursor") || visible("Merge Collapse")) {
+            ImGui::PushID("merge_vertices");
+            ImGui::Checkbox("UVs", &m_merge_uvs);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Merge the corner texture coordinates to the midpoint of their extent (at center, at cursor, collapse)");
+            }
+            ImGui::PopID();
+        }
+        if (visible("Merge by Distance")) {
+            if (make_button("Merge by Distance", selection_aware_mode, button_size)) {
+                merge_by_distance();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("On the component selection when one is active, else on the whole of the selected meshes");
+            }
+            ImGui::PushID("merge_by_distance");
+            ImGui::DragFloat("Threshold", &m_merge_by_distance_options.threshold, 0.0001f, 0.0f, 100.0f, "%.5f");
+            ImGui::Checkbox("Centroid",           &m_merge_by_distance_options.use_centroid);
+            ImGui::Checkbox("Include Unselected", &m_merge_by_distance_options.include_unselected);
             ImGui::PopID();
         }
     }
@@ -2806,6 +2892,74 @@ auto Operations::dissolve_limited(const erhe::geometry::operation::Dissolve_limi
         [this, options](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue_from_thread(
                 std::make_shared<Dissolve_limited_operation>(std::move(params), options)
+            );
+        }
+    );
+    return true;
+}
+
+auto Operations::merge_vertices(const erhe::geometry::operation::Merge_type type) -> bool
+{
+    erhe::geometry::operation::Merge_vertices_options options{};
+    options.type      = type;
+    options.merge_uvs = m_merge_uvs;
+    std::optional<glm::vec3> world_position{};
+    if (type == erhe::geometry::operation::Merge_type::at_position) {
+        if (m_context.mesh_component_selection_tool != nullptr) {
+            world_position = m_context.mesh_component_selection_tool->get_hovered_content_position();
+        }
+        if (!world_position.has_value()) {
+            log_operations->info("Merge at Cursor: no hovered content point");
+            return false;
+        }
+    }
+    return merge_vertices(options, world_position);
+}
+
+auto Operations::merge_vertices(
+    const erhe::geometry::operation::Merge_vertices_options options,
+    const std::optional<glm::vec3>                          world_position
+) -> bool
+{
+    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::face)) {
+        log_operations->info("Merge needs a mesh component mode (vertex, edge or face)");
+        return false;
+    }
+    if (!mesh_component_selection->has_live_mode_selection()) {
+        log_operations->info("Merge: nothing selected in {} mode", c_str(mode));
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, options, world_position](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Merge_vertices_operation>(std::move(params), options, world_position)
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::merge_by_distance() -> bool
+{
+    return merge_by_distance(m_merge_by_distance_options);
+}
+
+auto Operations::merge_by_distance(const erhe::geometry::operation::Merge_by_distance_options options) -> bool
+{
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(true, Operation_reference::operands_only, items) || items.empty()) {
+        log_operations->info("Merge by Distance: nothing selected");
+        return false;
+    }
+    async_for_nodes_with_mesh(
+        m_context,
+        items,
+        [this, options](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Merge_by_distance_operation>(std::move(params), options)
             );
         }
     );

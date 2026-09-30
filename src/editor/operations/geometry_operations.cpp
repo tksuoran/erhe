@@ -28,6 +28,7 @@
 #include "erhe_geometry/operation/generate_tangents.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/operation/merge_faces.hpp"
+#include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/remesh.hpp"
 #include "erhe_geometry/operation/repair.hpp"
@@ -419,6 +420,79 @@ Dissolve_limited_operation::Dissolve_limited_operation(
         }
     );
     set_description(fmt::format("Limited Dissolve {}", describe_entries()));
+}
+
+namespace {
+
+[[nodiscard]] auto c_str(const erhe::geometry::operation::Merge_type merge_type) -> const char*
+{
+    switch (merge_type) {
+        case erhe::geometry::operation::Merge_type::at_center:   return "at Center";
+        case erhe::geometry::operation::Merge_type::at_position: return "at Cursor";
+        case erhe::geometry::operation::Merge_type::at_first:    return "at First";
+        case erhe::geometry::operation::Merge_type::at_last:     return "at Last";
+        case erhe::geometry::operation::Merge_type::collapse:    return "Collapse";
+        default:                                                 return "?";
+    }
+}
+
+} // anonymous namespace
+
+Merge_vertices_operation::Merge_vertices_operation(
+    Mesh_operation_parameters&&                             context,
+    const erhe::geometry::operation::Merge_vertices_options options,
+    const std::optional<glm::vec3>                          world_position
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description(fmt::format("Merge {}", c_str(options.type)));
+    make_entries(
+        [options, world_position](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              node,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Merge_vertices_options entry_options = options;
+            if (world_position.has_value() && (node != nullptr)) {
+                const glm::vec3 local_position = node->transform_point_from_world_to_local(world_position.value());
+                entry_options.position = GEO::vec3f{local_position.x, local_position.y, local_position.z};
+            }
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::merge_vertices(before_geometry, after_geometry, selection_or_empty(remap_source), entry_options, &remap);
+        }
+    );
+    set_description(fmt::format("Merge {} {}", c_str(options.type), describe_entries()));
+}
+
+Merge_by_distance_operation::Merge_by_distance_operation(
+    Mesh_operation_parameters&&                                context,
+    const erhe::geometry::operation::Merge_by_distance_options options
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Merge by Distance");
+    // An empty snapshot means no component selection was active: the whole
+    // of every mesh is a candidate. Otherwise a primitive without a selection
+    // is left unchanged.
+    const bool whole_mesh = m_parameters.component_selection.empty();
+    make_entries(
+        [options, whole_mesh](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            const erhe::geometry::operation::Geometry_component_selection* selection = whole_mesh ? nullptr : &selection_or_empty(remap_source);
+            erhe::geometry::operation::merge_by_distance(before_geometry, after_geometry, selection, options, &remap);
+        }
+    );
+    set_description(fmt::format("Merge by Distance {}", describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

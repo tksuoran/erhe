@@ -11,8 +11,11 @@ and ring select are checked on the box, a torus and a one-sided rectangle
 Delete and dissolve (section 4.3) are checked on a box subdivided once with
 Catmull-Clark and a box with subdivided flat sides: each operation through its
 MCP tool and the Delete / Ctrl+X keys, each followed by undo, comparing
-get_mesh_geometry_info counts. The editor's stderr (where a crash stack goes)
-is written to logs/editor_stderr.txt.
+get_mesh_geometry_info counts. Merge (section 4.4) is checked on the
+Catmull-Clark box (at center, collapse, at position with the survivor's
+position read back, the M key) and merge by distance on the plain box, each followed by
+undo. The editor's stderr (where a crash stack goes) is written to
+logs/editor_stderr.txt.
 
 Usage:
     py -3 scripts/mesh_modeling_verify.py [--editor <path to editor.exe>]
@@ -530,6 +533,110 @@ def run_delete_dissolve(e):
     undo_and_check(e, "limited dissolve", FLAT_BOX, flat)
 
 
+def vertex_position(e, node_name, vertex):
+    elements = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": node_name, "domain": "vertex", "indices": [vertex]
+    })["elements"]
+    position = elements[0]["position"]
+    if isinstance(position, dict):
+        return [position["x"], position["y"], position["z"]]
+    return list(position)
+
+
+def run_merge(e):
+    """Merge (doc/plans/mesh_modeling.md section 4.4)."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = geometry_counts(e, CC_BOX)
+    expect("merge: Catmull-Clark box at its base counts", base, (26, 48, 24))
+    v, ed, f = base
+
+    # Two adjacent vertices: the endpoints of an edge of facet 0.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, CC_BOX, facets=[0])
+    seed = entry_of(e.call("get_mesh_component_selection"), CC_BOX)["edges"][0]
+    pair = sorted(seed)
+    # Merging an edge's two endpoints collapses the edge; its two quads become
+    # triangles, so the facet count stays.
+    merged = (v - 1, ed - 1, f)
+
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, CC_BOX, vertices=pair)
+    result = e.call("merge_mesh_vertices", {})
+    expect("merge_mesh_vertices default type -> at_center", result.get("type"), "at_center")
+    wait_idle(e)
+    expect("merge at center of two adjacent vertices -> (v-1, e-1, f)", geometry_counts(e, CC_BOX), merged)
+    after = entry_of(e.call("get_mesh_component_selection"), CC_BOX)
+    expect("merge at center: the survivor is the selection", after["vertices"], [pair[0]])
+    undo_and_check(e, "merge at center", CC_BOX, base)
+
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, CC_BOX, edges=[seed])
+    e.call("merge_mesh_vertices", {"type": "collapse"})
+    wait_idle(e)
+    expect("collapse one edge -> (v-1, e-1, f)", geometry_counts(e, CC_BOX), merged)
+    undo_and_check(e, "collapse", CC_BOX, base)
+
+    target = [0.125, 0.25, 0.375]
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, CC_BOX, vertices=pair)
+    e.call("merge_mesh_vertices", {"type": "at_position", "position": target})
+    wait_idle(e)
+    expect("merge at position -> (v-1, e-1, f)", geometry_counts(e, CC_BOX), merged)
+    position = vertex_position(e, CC_BOX, pair[0])
+    check_true("merge at position: the survivor is at the position",
+               all(abs(a - b) < 1e-5 for a, b in zip(position, target)), f"got {position}")
+    undo_and_check(e, "merge at position", CC_BOX, base)
+
+    # at_position without a position is refused.
+    select_on(e, CC_BOX, vertices=pair)
+    try:
+        e.call("merge_mesh_vertices", {"type": "at_position"})
+        check_true("merge at_position without position is refused", False, "no error")
+    except RuntimeError:
+        check_true("merge at_position without position is refused", True)
+
+    # The M key (merge at center), with the pointer over a viewport.
+    viewport = place_in_front_of_camera(e, CC_BOX, distance=5.0)
+    x = viewport["x"] + (viewport["width"] / 2.0)
+    y = viewport["y"] + (viewport["height"] / 2.0)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    select_on(e, CC_BOX, vertices=pair)
+    e.key("m", [])
+    wait_idle(e)
+    expect("M key in vertex mode merges at center -> (v-1, e-1, f)", geometry_counts(e, CC_BOX), merged)
+    undo_and_check(e, "M key", CC_BOX, base)
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": CC_BOX, "translation": [0.0, -200.0, 0.0]})
+    e.advance(2)
+
+    # Merge by distance on the whole plain box: nothing is closer than 1e-4.
+    e.call("merge_mesh_by_distance", {"scene_name": e.scene, "node_name": BOX})
+    wait_idle(e)
+    expect("merge by distance 1e-4 on the plain box changes nothing", geometry_counts(e, BOX), (8, 12, 6))
+
+    # The four vertices of one box face, with a threshold above the face
+    # diagonal: they form one cluster and collapse to one vertex. The face
+    # goes, its four neighbours become triangles, the four side edges stay:
+    # (8 - 3, 12 - 4, 6 - 1). (A threshold that merges the whole box leaves no
+    # facet at all, which the editor cannot hold as a mesh primitive.)
+    face_vertices = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": BOX, "domain": "facet", "indices": [0]
+    })["elements"][0]["vertices"]
+    corners = [vertex_position(e, BOX, vertex) for vertex in face_vertices]
+    face_diagonal = max(sum((a - b) ** 2 for a, b in zip(p, q)) ** 0.5 for p in corners for q in corners)
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, BOX, vertices=face_vertices)
+    e.call("merge_mesh_by_distance", {"scene_name": e.scene, "node_name": BOX, "threshold": face_diagonal * 1.01})
+    wait_idle(e)
+    expect("merge by distance of one face's vertices above its diagonal -> (5, 8, 5)", geometry_counts(e, BOX), (5, 8, 5))
+    undo_and_check(e, "merge by distance", BOX, (8, 12, 6))
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -613,6 +720,8 @@ def run(e):
     run_transform_in_component_mode(e)
 
     run_delete_dissolve(e)
+
+    run_merge(e)
 
 
 def main():

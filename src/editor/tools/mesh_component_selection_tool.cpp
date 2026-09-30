@@ -1282,6 +1282,19 @@ void Mesh_component_selection_tool::set_external_hover(
     };
 }
 
+auto Mesh_component_selection_tool::get_hovered_content_position() const -> std::optional<glm::vec3>
+{
+    Scene_view* const scene_view = get_last_hover_scene_view();
+    if (scene_view == nullptr) {
+        return std::nullopt;
+    }
+    const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
+    if (!content.valid || !content.position.has_value()) {
+        return std::nullopt;
+    }
+    return content.position.value();
+}
+
 void Mesh_component_selection_tool::clear_external_hover()
 {
     m_external_hover = External_hover{};

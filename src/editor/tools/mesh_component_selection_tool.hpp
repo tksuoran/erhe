@@ -331,6 +331,11 @@ public:
     );
     void clear_external_hover();
 
+    // The world-space point of the content hover in the last hovered scene
+    // view (the target of Geometry.Merge.AtCursor); std::nullopt when that view
+    // has no valid content hover.
+    [[nodiscard]] auto get_hovered_content_position() const -> std::optional<glm::vec3>;
+
     // Draws the rubber-band box (and, later, brush circle) into the viewport
     // window's ImGui draw list. Called by Viewport_window::imgui().
     void draw_gesture_overlay(const Viewport_scene_view* viewport_scene_view);

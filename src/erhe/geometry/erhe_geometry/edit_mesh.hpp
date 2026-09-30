@@ -129,6 +129,9 @@ public:
 
     [[nodiscard]] auto get_position(GEO::index_t vertex) const -> GEO::vec3f;
     void               set_position(GEO::index_t vertex, const GEO::vec3f& position);
+    // Replaces the vertex provenance (weighted source vertices), e.g. to make
+    // a merged vertex interpolate its attributes over the merged cluster.
+    void               set_vertex_sources(GEO::index_t vertex, std::span<const Edit_source> sources);
 
     // Queries
     [[nodiscard]] auto find_edge            (GEO::index_t vertex_a, GEO::index_t vertex_b) const -> GEO::index_t; // GEO::NO_INDEX when absent

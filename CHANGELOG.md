@@ -9,6 +9,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/merge_vertices.hpp`: `merge_vertices()`
+  with `Merge_type` (`at_center`, `at_position`, `at_first`, `at_last`,
+  `collapse`) and `Merge_vertices_options`, and `merge_by_distance()` with
+  `Merge_by_distance_options`: the merge operations of
+  `doc/plans/mesh_modeling.md` section 4.4, composed on `Edit_mesh`, carrying a
+  component selection through `Component_remap`. `Edit_mesh::set_vertex_sources()`
+  replaces a scratch vertex's provenance; `Edit_mesh_operation::get_emitted_vertex()`
+  returns the destination vertex of a scratch vertex after `emit()`.
 - `erhe::geometry`: `erhe_geometry/operation/dissolve.hpp`: `delete_components()`,
   `dissolve_faces()`, `dissolve_edges()`, `dissolve_vertices()` and
   `dissolve_limited()` with the option classes `Dissolve_faces_options`,

@@ -81,7 +81,7 @@ validated before any placement applies.
 |---|---|
 | `csg` (union/intersection/difference, batched tool lists, world-space composed) | The CSG boolean mesh operation: replaces the target's primitives in place (id, transform, children, material, rigid body survive), removes the tool nodes, rebuilds collision as a convex hull |
 | `lattice_deform` (sparse FFD control-point offsets, bezier/linear, auto-fit cage) | Free-form deformation over the mesh's local bounds - billowed sails, bent trim strips, rippled pennants |
-| `chamfer`, `remesh`, `decimate`, `smooth`, `catmull_clark`, `merge_faces`, `delete_mesh_components`, `dissolve_mesh_components`, `dissolve_limited`, ... with `node_ids` batches (no selection dance) | The async geometry operation framework (`operations/geometry_operations.*`): queued, undoable, previous selection restored server-side; edited pooled instances silently go private |
+| `chamfer`, `remesh`, `decimate`, `smooth`, `catmull_clark`, `merge_faces`, `delete_mesh_components`, `dissolve_mesh_components`, `dissolve_limited`, `merge_mesh_vertices`, `merge_mesh_by_distance`, ... with `node_ids` batches (no selection dance) | The async geometry operation framework (`operations/geometry_operations.*`): queued, undoable, previous selection restored server-side; edited pooled instances silently go private |
 | `merge_static_subtree` | Transform-flattening operation that bakes a subtree into few nodes (built for the 11k-node tree garden -> 372 nodes, ~31 ms -> ~4 ms) |
 | Mesh component selection (`select_mesh_components`, grow/shrink, attribute dumps) | The mesh-component editing mode; `get_mesh_attribute_values` exposes raw vertex/corner/facet attributes for offline analysis |
 

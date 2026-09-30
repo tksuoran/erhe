@@ -235,6 +235,11 @@ void Edit_mesh::set_position(const GEO::index_t vertex, const GEO::vec3f& positi
     m_vertices[vertex].position = position;
 }
 
+void Edit_mesh::set_vertex_sources(const GEO::index_t vertex, const std::span<const Edit_source> sources)
+{
+    m_vertices[vertex].sources.assign(sources.begin(), sources.end());
+}
+
 auto Edit_mesh::find_edge(const GEO::index_t vertex_a, const GEO::index_t vertex_b) const -> GEO::index_t
 {
     const std::unordered_map<std::uint64_t, GEO::index_t>::const_iterator i = m_edge_map.find(make_edge_key(vertex_a, vertex_b));

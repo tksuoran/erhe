@@ -29,6 +29,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
+#include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/math_util.hpp"
@@ -1615,6 +1616,75 @@ auto Mcp_server::action_dissolve_limited(const json& args) -> std::string
         {"dissolve_boundaries", options.dissolve_boundaries},
         {"delimit_winding",     options.delimit_winding},
         {"delimit_crease",      options.delimit_crease}
+    }).dump();
+}
+
+auto Mcp_server::action_merge_mesh_vertices(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    // Explicit-state rule (doc/agents/mcp_api_guidelines.md): the option
+    // defaults are the library defaults, never the Operations window's widgets.
+    erhe::geometry::operation::Merge_vertices_options options{};
+    const std::string type_str = args.value("type", std::string{"at_center"});
+    if      (type_str == "at_center")   { options.type = erhe::geometry::operation::Merge_type::at_center; }
+    else if (type_str == "at_position") { options.type = erhe::geometry::operation::Merge_type::at_position; }
+    else if (type_str == "at_first")    { options.type = erhe::geometry::operation::Merge_type::at_first; }
+    else if (type_str == "at_last")     { options.type = erhe::geometry::operation::Merge_type::at_last; }
+    else if (type_str == "collapse")    { options.type = erhe::geometry::operation::Merge_type::collapse; }
+    else {
+        return make_error_content("Invalid type: " + type_str + " (at_center, at_position, at_first, at_last, collapse)");
+    }
+    if (options.type == erhe::geometry::operation::Merge_type::at_position) {
+        if (!args.contains("position") || !args["position"].is_array() || (args["position"].size() != 3)) {
+            return make_error_content("type at_position needs position [x, y, z] (mesh-local)");
+        }
+        const json& position = args["position"];
+        options.position = GEO::vec3f{position[0].get<float>(), position[1].get<float>(), position[2].get<float>()};
+    }
+    options.merge_uvs = args.value("merge_uvs", options.merge_uvs);
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->merge_vertices(options, std::nullopt);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Merge needs a live selection in a mesh component mode (vertex, edge or face)");
+    }
+    json result = {{"queued", true}, {"type", type_str}, {"merge_uvs", options.merge_uvs}};
+    if (options.type == erhe::geometry::operation::Merge_type::at_position) {
+        result["position"] = {options.position.x, options.position.y, options.position.z};
+    }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_merge_mesh_by_distance(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    erhe::geometry::operation::Merge_by_distance_options options{};
+    options.threshold          = args.value("threshold",          options.threshold);
+    options.use_centroid       = args.value("use_centroid",       options.use_centroid);
+    options.include_unselected = args.value("include_unselected", options.include_unselected);
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->merge_by_distance(options);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Merge by distance: nothing selected (select mesh nodes, or components in a component mode)");
+    }
+    return make_json_content({
+        {"queued",             true},
+        {"threshold",          options.threshold},
+        {"use_centroid",       options.use_centroid},
+        {"include_unselected", options.include_unselected}
     }).dump();
 }
 

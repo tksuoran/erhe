@@ -30,6 +30,10 @@ protected:
     // edge (no facets) has no destination edge; a loose vertex is emitted.
     void emit();
 
+    // After emit(): the destination vertex of a live scratch vertex
+    // (GEO::NO_INDEX for a deleted one).
+    [[nodiscard]] auto get_emitted_vertex(GEO::index_t scratch_vertex) const -> GEO::index_t;
+
     Edit_mesh m_edit_mesh;
 
 private:

@@ -6666,6 +6666,96 @@
     "name": "dissolve_limited"
   },
   {
+    "description": "Merge vertices of the active mesh-component selection (doc/plans/mesh_modeling.md section 4.4), queued and undoable. The merged vertices are the selection's vertices, the endpoints of its edges or the vertices of its facets, so any of vertex / edge / face mode works; an error without a live selection. type at_center (default): the lowest selected vertex survives at the mean of the selected vertices; at_position: it survives at position; at_first / at_last: the lowest / highest selected vertex index survives in place (the selection has no history order); collapse: each connected island of selected edges collapses to its lowest vertex at the island mean. Facets left with fewer than three vertices go. At center, at position and collapse average the vertex attributes over the merged vertices. merge_uvs (default false) sets every corner of the survivor to the midpoint of the extent of the merged vertices' corner texcoords (not for at_first / at_last). The survivor is selected afterwards. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "merge_uvs": {
+          "description": "Merge corner texcoords to their extent midpoint (at_center, at_position, collapse; default false)",
+          "type": "boolean"
+        },
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "position": {
+          "description": "Target of type at_position, [x, y, z] in the mesh's local space (required for at_position)",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        },
+        "type": {
+          "description": "at_center | at_position | at_first | at_last | collapse (default at_center)",
+          "enum": [
+            "at_center",
+            "at_position",
+            "at_first",
+            "at_last",
+            "collapse"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "merge_mesh_vertices"
+  },
+  {
+    "description": "Merge by distance (doc/plans/mesh_modeling.md section 4.4), queued and undoable: vertices closer than threshold merge; a cluster is a connected component of that relation, a two-vertex cluster keeps the lower index and a larger one the vertex nearest its centroid. With an active mesh-component selection the candidates are the selected components' vertices; otherwise every vertex of every selected mesh. Options not given take the library defaults. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "include_unselected": {
+          "description": "An unselected vertex within the threshold of a selected one joins its cluster and survives in place (default false)",
+          "type": "boolean"
+        },
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        },
+        "threshold": {
+          "description": "Merge distance (default 0.0001)",
+          "type": "number"
+        },
+        "use_centroid": {
+          "description": "Move the survivor to its cluster mean and average the vertex attributes (default true)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "merge_mesh_by_distance"
+  },
+  {
     "description": "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.",
     "inputSchema": {
       "properties": {
