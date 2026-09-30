@@ -27,8 +27,10 @@
 ✓scalar-drag+M6::{Mesh_component_transform-scalar-path(begin_scalar/apply_scalar/cancel)+Transform_tool-pointer-drag+G/Enter/Esc/E/F/C-on-component-tool(exact-mask-0)+undo/redo-blocked-during-live-edit(Operation_stack::get_undo_block_reason)+correct-UVs-at-commit+edge_slide/vertex_slide-modes;MCP-slide_mesh_components/cancel_component_edit;verify-173/173}
 ?left::Mcp_test-injected-input-slide-case;on-screen-rail-drawing;pointer-wrap
 ✓M5::{Ctrl+R-loop-cut:change-driven-ring-preview+modal-keys+cut(subdivide-ring)+chained-edge-slide(Scalar_topology_step)+one-Fork_geometry_operation;MCP-loop_cut_mesh;doc/editor/mesh_modeling.md-created;verify-220/220;preview-look=user-interactive-check-pending}
-⚡M7::inset-as-scalar-mode
-?M9-separate->phase-5-M11,M12->phase-6
+✓M7::{inset_faces.hpp(region/individual/all-options)+I-key-scalar-inset-mode(pointer=thickness,Ctrl=depth;O/I/B/E/R-rerun-step;commit-rebuilds-via-library)+MCP-inset_mesh_faces;188-geometry-tests;verify-256/256}
+✓PHASE-3+4-DONE-except-M9
+⚡M9::split/rip/separate
+?phase-5-M11-snap+M12-knife(no-plane-query-on-IScene->test-plane-vs-CPU-facets;first-hit-rays-for-occlusion)->phase-6
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b

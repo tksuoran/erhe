@@ -605,7 +605,7 @@ phase extends (section 8) before the next phase starts.
 - `doc/editor/transform.md`: the slide modes and the snap option.
 - `doc/editor/operations.md`: each new `Mesh_operation`.
 - `doc/editor/mesh_modeling.md`: the modal tools, their shared gesture
-  lifecycle, keys and MCP tools. It describes loop cut; knife, inset and
+  lifecycle, keys and MCP tools. It describes loop cut and inset; knife and
   bevel join it as they land, and until then this plan is their description.
 - `doc/agents/mcp_api_guidelines.md` and the MCP tool list for the actions
   of D6.
