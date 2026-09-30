@@ -273,6 +273,14 @@ public:
     auto rip_vertices() -> bool;
     auto rip_vertices(erhe::geometry::operation::Rip_options options, std::optional<glm::vec3> world_position) -> bool;
     auto separate_selection() -> std::shared_ptr<Separate_selection_operation>;
+    // Fill (F, catalog M15, Fill_operation) on a vertex, edge or face mode
+    // selection and connect vertex path (J, catalog M16,
+    // Connect_vertices_operation) on a vertex or edge mode selection. Each
+    // returns false, queueing nothing, without a live selection in a mode it
+    // reads or while a modal component edit (slide, loop cut, inset, bevel,
+    // knife) runs, so their keys fall through.
+    auto fill_selection() -> bool;
+    auto connect_vertex_path() -> bool;
 
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
@@ -465,6 +473,8 @@ private:
     erhe::commands::Lambda_command m_split_selected_command;
     erhe::commands::Lambda_command m_rip_selected_command;
     erhe::commands::Lambda_command m_separate_selection_command;
+    erhe::commands::Lambda_command m_fill_selected_command;
+    erhe::commands::Lambda_command m_connect_selected_command;
 
     // Dissolve options edited in the Operations window "Components" section and
     // read by the dissolve commands (the MCP tools take their own arguments).

@@ -9,6 +9,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/fill.hpp`: `fill_selection()`
+  with `Fill_result`: fill (F) of `doc/plans/mesh_modeling.md` section 4.10
+  (two vertices closing a boundary chain, a free vertex plus a chain, edge
+  cycles / chains / nets, selected facets joined, vertices sorted radially),
+  composed on `Edit_mesh`, selecting the new facets through `Component_remap`.
+- `erhe::geometry`: `erhe_geometry/operation/connect_vertices.hpp`:
+  `connect_vertices()`, `connect_vertex_pair()` and `connect_selection()`:
+  connect vertex path (J) of `doc/plans/mesh_modeling.md` section 4.10
+  (facet splits between selected corners; a cutting-plane best-first path
+  between two vertices sharing no facet), selecting the new edges through
+  `Component_remap`.
 - `erhe::geometry`: `erhe_geometry/operation/bevel_edges.hpp`: `bevel_edges()`
   with `Bevel_edges_options` (`Bevel_offset_type` offset / width, amount,
   loop slide) and `Bevel_edges_result`: the first version of the edge bevel of

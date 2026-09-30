@@ -18,6 +18,7 @@ add_executable(${_target}
     test_chamfer_diagnostics.cpp
     test_chamfer_self_intersection.cpp
     test_clip_tile_tree.cpp
+    test_connect_vertices.cpp
     test_component_selection_remap.cpp
     test_convex_hull.cpp
     test_conway_texcoord_seam.cpp
@@ -25,6 +26,7 @@ add_executable(${_target}
     test_dissolve.cpp
     test_edge_sharpness.cpp
     test_edit_mesh.cpp
+    test_fill.cpp
     test_geometry_operation.cpp
     test_geometry_serialization.cpp
     test_inset_faces.cpp

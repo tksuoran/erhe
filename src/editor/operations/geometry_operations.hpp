@@ -214,6 +214,30 @@ public:
     );
 };
 
+// Fill (F, doc/plans/mesh_modeling.md section 4.10, catalog M15;
+// erhe::geometry::operation::fill_selection()) on the component selection
+// snapshot of any mode: two vertices closing a boundary chain, a free vertex
+// plus a chain, edge cycles / chains / an edge net, selected faces dissolved,
+// or three or more vertices sorted radially, the first case that creates
+// anything. The new facets are selected afterwards. With nothing to fill the
+// primitive is emitted unchanged (logged).
+class Fill_operation : public Mesh_operation
+{
+public:
+    explicit Fill_operation(Mesh_operation_parameters&& context);
+};
+
+// Connect vertex path (J, catalog M16;
+// erhe::geometry::operation::connect_selection()) on the component selection
+// snapshot: two vertices sharing no facet are joined along the cutting plane
+// path, otherwise each facet is split between its selected corners. The new
+// edges (and the selected and inserted vertices) are selected afterwards.
+class Connect_vertices_operation : public Mesh_operation
+{
+public:
+    explicit Connect_vertices_operation(Mesh_operation_parameters&& context);
+};
+
 class Reverse_operation : public Mesh_operation
 {
 public:

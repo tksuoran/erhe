@@ -51,6 +51,12 @@ vertex to vertex diagonal, three points over two faces with and without cut
 through), each with the selection afterwards and one undo step, and through
 the K key in a viewport (click, move, click, Enter: one "Knife" undo entry;
 click, Escape: unchanged, no entry; click, click, Ctrl+Z, Enter: no cut).
+Fill and connect vertex path (section 4.10, catalog M15, M16) are checked on
+the plain box: fill_mesh_selection of a deleted face's four vertices (the new
+face selected), a nothing-to-fill pair, connect_mesh_vertices of two vertices
+of one face and of two antipodal vertices (the cutting plane path), each with
+undo, and the F and J keys in a viewport (one undo entry each; F in object
+mode queues nothing).
 Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
@@ -1833,6 +1839,29 @@ def run_knife(e):
     expect("K, click, Escape: no undo entry", undo_count(e), before_undo)
     expect("K, click, Escape: face mode kept", e.call("get_mesh_component_selection").get("mode"), "face")
 
+    # K with a live edge selection, then Y: the knife's axis lock, not a
+    # split (mode-dispatching commands decline while a modal gesture runs).
+    select_on(e, BOX, facets=[0])
+    seed_edge = entry_of(e.call("get_mesh_component_selection"), BOX)["edges"][0]
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, BOX, edges=[seed_edge])
+    move(y0)
+    e.key("k", [])
+    e.key("y", [])
+    wait_idle(e)
+    expect("K, Y with an edge selection: no split", geometry_counts(e, BOX), base)
+    expect("K, Y with an edge selection: no undo entry", undo_count(e), before_undo)
+    try:
+        e.call("undo")
+        check_true("K, Y: the knife stays active", False, "undo was accepted")
+    except RuntimeError as error:
+        check_true("K, Y: the knife stays active", "knife" in str(error), str(error))
+    e.key("escape", [])
+    wait_idle(e)
+    expect("K, Y, Escape: the box unchanged", geometry_counts(e, BOX), base)
+    expect("K, Y, Escape: no undo entry", undo_count(e), before_undo)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+
     # K, click, click, Ctrl+Z, Enter: the one point left makes no cut.
     move(y0)
     e.key("k", [])
@@ -1846,6 +1875,123 @@ def run_knife(e):
     wait_idle(e)
     expect("K, click, click, Ctrl+Z, Enter: the box unchanged", geometry_counts(e, BOX), base)
     expect("K, click, click, Ctrl+Z, Enter: no undo entry", undo_count(e), before_undo)
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX, "translation": [0.0, 1.0, 0.0],
+                                  "rotation_xyzw": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]})
+    e.advance(2)
+
+
+def run_fill_connect(e):
+    """Fill (F) and connect vertex path (J), doc/plans/mesh_modeling.md
+    section 4.10 (catalog M15, M16), on the plain box."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    expect("fill / connect: plain box at its base counts", geometry_counts(e, BOX), base)
+
+    # Face 0's vertices, from the face mode flush.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    face_vertices = entry_of(e.call("get_mesh_component_selection"), BOX)["vertices"]
+    expect("face 0 has four vertices", len(face_vertices), 4)
+    p = vertex_positions(e, BOX, range(base[0]))
+
+    def differing_axes(a, b):
+        return sum(1 for i in range(3) if abs(p[a][i] - p[b][i]) > 1e-6)
+
+    first = face_vertices[0]
+    opposite = next(v for v in face_vertices if differing_axes(first, v) == 2)
+    antipode = next(v for v in range(base[0]) if differing_axes(first, v) == 3)
+
+    def delete_face_0():
+        e.call("set_mesh_component_mode", {"mode": "face"})
+        select_on(e, BOX, facets=[0])
+        e.call("delete_mesh_components")
+        wait_idle(e)
+        expect("delete face 0 -> (8, 12, 5)", geometry_counts(e, BOX), (8, 12, 5))
+
+    # Fill the hole from its four boundary vertices.
+    delete_face_0()
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, BOX, vertices=face_vertices)
+    e.call("fill_mesh_selection")
+    wait_idle(e)
+    expect("fill the hole's four vertices -> (8, 12, 6)", geometry_counts(e, BOX), base)
+    expect("fill: the new face is selected",
+           len(entry_of(e.call("get_mesh_component_selection"), BOX)["facets"]), 1)
+    undo_and_check(e, "fill", BOX, (8, 12, 5))
+    undo_and_check(e, "delete face 0", BOX, base)
+
+    # Nothing to fill: two opposite corners of the closed box.
+    select_on(e, BOX, vertices=[first, antipode])
+    e.call("fill_mesh_selection")
+    wait_idle(e)
+    expect("fill two opposite corners of the closed box: nothing to fill", geometry_counts(e, BOX), base)
+    undo_and_check(e, "fill nothing", BOX, base)
+
+    # Connect two opposite vertices of one face: one split.
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, BOX, vertices=[first, opposite])
+    e.call("connect_mesh_vertices")
+    wait_idle(e)
+    expect("connect two opposite vertices of a face -> (8, 13, 7)", geometry_counts(e, BOX), (8, 13, 7))
+    expect("connect: the new edge is selected",
+           len(entry_of(e.call("get_mesh_component_selection"), BOX)["edges"]), 1)
+    undo_and_check(e, "connect", BOX, base)
+
+    # Connect two antipodal vertices (no shared face): their vertex normals
+    # cancel, so the cutting plane contains the least aligned axis; it holds
+    # four corners, and the shortest path runs along one existing edge and
+    # one face diagonal - one face split.
+    select_on(e, BOX, vertices=[first, antipode])
+    e.call("connect_mesh_vertices")
+    wait_idle(e)
+    expect("connect antipodal vertices (pair path) -> (8, 13, 7)", geometry_counts(e, BOX), (8, 13, 7))
+    undo_and_check(e, "connect pair", BOX, base)
+
+    # Connect is refused in face mode.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    try:
+        e.call("connect_mesh_vertices")
+        check_true("connect in face mode is refused", False, "no error")
+    except RuntimeError:
+        check_true("connect in face mode is refused", True)
+
+    # The keys, with the pointer over the box in a viewport.
+    e.call("clear_mesh_component_selection")
+    viewport = place_in_front_of_camera(e, BOX)
+    x, y = left_of_centre(viewport)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    delete_face_0()
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, BOX, vertices=face_vertices)
+    before_undo = undo_count(e)
+    e.key("f", [])
+    wait_idle(e)
+    expect("F in vertex mode fills the hole -> (8, 12, 6)", geometry_counts(e, BOX), base)
+    expect("F: one undo entry", undo_count(e), before_undo + 1)
+    undo_and_check(e, "F", BOX, (8, 12, 5))
+    undo_and_check(e, "delete face 0 (keys)", BOX, base)
+    select_on(e, BOX, vertices=[first, opposite])
+    before_undo = undo_count(e)
+    e.key("j", [])
+    wait_idle(e)
+    expect("J in vertex mode connects the two vertices -> (8, 13, 7)", geometry_counts(e, BOX), (8, 13, 7))
+    expect("J: one undo entry", undo_count(e), before_undo + 1)
+    undo_and_check(e, "J", BOX, base)
+
+    # Object mode: F falls through to the fly camera's frame command.
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    before_undo = undo_count(e)
+    e.key("f", [])
+    wait_idle(e)
+    expect("F in object mode changes no geometry", geometry_counts(e, BOX), base)
+    expect("F in object mode queues no operation", undo_count(e), before_undo)
 
     e.call("clear_mesh_component_selection")
     e.call("set_mesh_component_mode", {"mode": "object"})
@@ -1953,6 +2099,8 @@ def run(e):
     run_split_rip_separate(e)
 
     run_knife(e)
+
+    run_fill_connect(e)
 
 
 def main():

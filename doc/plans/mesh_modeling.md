@@ -534,7 +534,7 @@ feature needs to matter a lot to rank. Dependencies name the catalog id;
 | M13a | Bevel first version: edges, one segment, offset and width (4.9) | 5 | 4 | 6 | M0, M2 |
 | M13b | Bevel second version: segments, profile, vertex bevel, clamp, miters (4.9) | 3 | 5 | 1 | M13a |
 | M14 | Bridge edge loops (4.10) | 3 | 3 | 3 | M2, M4, M8 |
-| M15 | Fill (F) with the contextual order, grid fill as a later step (4.10) | 3 | 2 | 4 | M0 |
+| M15 | Fill (F) with the contextual order (4.10); grid fill is not implemented yet and remains | 3 | 2 | 4 | M0 |
 | M16 | Connect vertex path (4.10) | 3 | 3 | 3 | M0 |
 | M17 | Proportional editing falloff for the component transform | 3 | 2 | 4 | - |
 | M18 | Symmetry (mirror) editing across a chosen axis of the component transform | 3 | 3 | 3 | - |

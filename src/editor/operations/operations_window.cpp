@@ -782,6 +782,8 @@ Operations::Operations(
     , m_split_selected_command             {commands, "Geometry.Split.Selected",           [this]() -> bool { return split_components(); } }
     , m_rip_selected_command               {commands, "Geometry.Rip.Selected",             [this]() -> bool { return rip_vertices(); } }
     , m_separate_selection_command         {commands, "Geometry.Separate.Selection",       [this]() -> bool { return static_cast<bool>(separate_selection()); } }
+    , m_fill_selected_command              {commands, "Geometry.Fill.Selected",            [this]() -> bool { return fill_selection(); } }
+    , m_connect_selected_command           {commands, "Geometry.Connect.Selected",         [this]() -> bool { return connect_vertex_path(); } }
 
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
     , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
@@ -852,6 +854,8 @@ Operations::Operations(
     commands.register_command(&m_split_selected_command);
     commands.register_command(&m_rip_selected_command);
     commands.register_command(&m_separate_selection_command);
+    commands.register_command(&m_fill_selected_command);
+    commands.register_command(&m_connect_selected_command);
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
@@ -919,6 +923,8 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_split_selected_command,              "Geometry.Split");
     commands.bind_command_to_menu(&m_rip_selected_command,                "Geometry.Rip");
     commands.bind_command_to_menu(&m_separate_selection_command,          "Geometry.Separate Selection");
+    commands.bind_command_to_menu(&m_fill_selected_command,               "Geometry.Fill");
+    commands.bind_command_to_menu(&m_connect_selected_command,            "Geometry.Connect Vertex Path");
     commands.bind_command_to_menu(&m_dissolve_faces_command,              "Geometry.Dissolve.Faces");
     commands.bind_command_to_menu(&m_dissolve_edges_command,              "Geometry.Dissolve.Edges");
     commands.bind_command_to_menu(&m_dissolve_vertices_command,           "Geometry.Dissolve.Vertices");
@@ -958,6 +964,14 @@ Operations::Operations(
     commands.bind_command_to_key(&m_split_selected_command,     erhe::window::Key_y, erhe::commands::Button_trigger::Button_pressed, 0u);
     commands.bind_command_to_key(&m_rip_selected_command,       erhe::window::Key_v, erhe::commands::Button_trigger::Button_pressed, 0u);
     commands.bind_command_to_key(&m_separate_selection_command, erhe::window::Key_p, erhe::commands::Button_trigger::Button_pressed, 0u);
+    // F fill and J connect vertex path (D7), without modifiers. F is also the
+    // fly camera's frame-selection key (bound without a modifier mask) and a
+    // slide's flip key (mask 0, declared later on the component tool): fill
+    // declines (falls through) without a live component selection and while
+    // a modal component edit runs, so F frames in object mode and flips in a
+    // slide. J has no other binding.
+    commands.bind_command_to_key(&m_fill_selected_command,      erhe::window::Key_f, erhe::commands::Button_trigger::Button_pressed, 0u);
+    commands.bind_command_to_key(&m_connect_selected_command,   erhe::window::Key_j, erhe::commands::Button_trigger::Button_pressed, 0u);
 
     // Parameterized invokers for operations that can be dragged into / invoked from
     // an inventory slot. Each thunk runs its operation with the explicit snapshot
@@ -1524,6 +1538,26 @@ void Operations::imgui()
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Moves the selected faces into a new mesh beside the original (P)");
+            }
+        }
+        if (visible("Fill")) {
+            if (make_button("Fill", merge_component_mode, button_size)) {
+                fill_selection();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Creates faces from the selection: edge loops / chains, a free vertex and a chain, selected faces joined, or vertices sorted around their centre (F)");
+            }
+        }
+        if (visible("Connect")) {
+            const erhe::imgui::Item_mode connect_mode =
+                ((vertex_component_mode == erhe::imgui::Item_mode::normal) || (edge_component_mode == erhe::imgui::Item_mode::normal))
+                    ? erhe::imgui::Item_mode::normal
+                    : erhe::imgui::Item_mode::disabled;
+            if (make_button("Connect", connect_mode, button_size)) {
+                connect_vertex_path();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Splits faces between the selected vertices; two vertices without a shared face are joined along a cutting plane path (J)");
             }
         }
     }
@@ -3141,8 +3175,9 @@ namespace {
         log_operations->info("{}: nothing selected in {} mode", operation_name, c_str(mode));
         return false;
     }
-    // A modal gesture (slide, loop cut, inset, knife) owns the mesh and its
-    // keys: the knife's Y axis lock must not split (split and separate).
+    // A modal gesture (slide, loop cut, inset, bevel, knife) owns the mesh and
+    // its keys: the knife's Y axis lock must not split, a slide's F must not
+    // fill (split, separate, fill, connect).
     if ((context.mesh_component_selection_tool != nullptr) && context.mesh_component_selection_tool->is_modal_active()) {
         log_operations->info("{} declined: a modal mesh edit is running", operation_name);
         return false;
@@ -3161,6 +3196,44 @@ auto Operations::split_components() -> bool
         [this](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue_from_thread(
                 std::make_shared<Split_components_operation>(std::move(params))
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::fill_selection() -> bool
+{
+    if (!has_component_mode_selection(m_context, "Fill")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Fill_operation>(std::move(params))
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::connect_vertex_path() -> bool
+{
+    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    if (mode == Mesh_component_mode::face) {
+        log_operations->info("Connect vertex path needs vertex or edge mode");
+        return false;
+    }
+    if (!has_component_mode_selection(m_context, "Connect vertex path")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Connect_vertices_operation>(std::move(params))
             );
         },
         true

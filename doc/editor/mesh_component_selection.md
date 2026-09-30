@@ -149,6 +149,8 @@ live, non-empty selection of its own set
 | `Geometry.Split.Selected` | Y | Split the selection off the rest (face mode: the faces; vertex / edge mode: the faces fully selected; edge mode without a complete face: tear along the edges) |
 | `Geometry.Rip.Selected` | V | Rip the selected vertices (vertex mode) or edges (edge mode), ripping the side toward the last hovered content point |
 | `Geometry.Separate.Selection` | P | Move the selection's faces into a new mesh beside the original |
+| `Geometry.Fill.Selected` | F | Fill: faces from the selection's vertices, edges or faces (any of vertex, edge, face mode) |
+| `Geometry.Connect.Selected` | J | Connect vertex path between the selected vertices (vertex or edge mode) |
 
 The object `Selection` binds the same keys (`Selection.delete`,
 `Selection.cut`); both of its commands decline in that state and the two
@@ -160,7 +162,12 @@ no popup menu, so M merges at center and the other merge types are the
 Operations window's Components buttons and `Geometry.Merge.*` commands. M
 declines (the key falls through) without a live component selection. Y, V
 and P are bound with the modifier mask 0 (Ctrl+Y is redo, Ctrl+V paste) and
-decline the same way (V also outside vertex and edge mode).
+decline the same way (V also outside vertex and edge mode). F and J carry the
+mask 0 too and decline without a live component selection (J also outside
+vertex and edge mode) and while a modal component edit runs: F is also the
+fly camera's frame-selection key (bound without a mask, so it frames in
+object mode) and a slide's flip key (the slide's F is declared after the
+fill command and receives the key because fill declines during the slide).
 
 ### Slide keys
 
@@ -325,6 +332,11 @@ command ends with a flush (section 3).
   complete face; returns `node_id` and `node_name` of the new node (`nodes`
   lists one per separated mesh), which joins the scene when the queued
   operation runs.
+- `fill_mesh_selection` - no options; needs a live selection in vertex, edge
+  or face mode (`Fill_operation`, `doc/editor/operations.md`); nothing to
+  fill leaves the mesh unchanged (logged).
+- `connect_mesh_vertices` - no options; needs a live selection in vertex or
+  edge mode (`Connect_vertices_operation`).
 
 The geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`

@@ -20,7 +20,9 @@
 #include "erhe_geometry/operation/conway/meta.hpp"
 #include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/conway/truncate.hpp"
+#include "erhe_geometry/operation/connect_vertices.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
+#include "erhe_geometry/operation/fill.hpp"
 #include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/csg/intersection.hpp"
@@ -612,6 +614,48 @@ Rip_vertices_operation::Rip_vertices_operation(
         }
     );
     set_description(fmt::format("Rip {}", describe_entries()));
+}
+
+Fill_operation::Fill_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Fill");
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            const erhe::geometry::operation::Geometry_component_selection& selection = selection_or_empty(remap_source);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::fill_selection(before_geometry, after_geometry, selection, nullptr, &remap);
+        }
+    );
+    set_description(fmt::format("Fill {}", describe_entries()));
+}
+
+Connect_vertices_operation::Connect_vertices_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Connect");
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            const erhe::geometry::operation::Geometry_component_selection& selection = selection_or_empty(remap_source);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::connect_selection(before_geometry, after_geometry, selection, &remap);
+        }
+    );
+    set_description(fmt::format("Connect Vertex Path {}", describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

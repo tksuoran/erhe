@@ -60,10 +60,14 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/bevel_edges.hpp
     erhe_geometry/operation/clip_tile_tree.cpp
     erhe_geometry/operation/clip_tile_tree.hpp
+    erhe_geometry/operation/connect_vertices.cpp
+    erhe_geometry/operation/connect_vertices.hpp
     erhe_geometry/operation/dissolve.cpp
     erhe_geometry/operation/dissolve.hpp
     erhe_geometry/operation/edit_mesh_operation.cpp
     erhe_geometry/operation/edit_mesh_operation.hpp
+    erhe_geometry/operation/fill.cpp
+    erhe_geometry/operation/fill.hpp
     erhe_geometry/operation/generate_frame_field_tangents.cpp
     erhe_geometry/operation/generate_frame_field_tangents.hpp
     erhe_geometry/operation/generate_tangents.cpp

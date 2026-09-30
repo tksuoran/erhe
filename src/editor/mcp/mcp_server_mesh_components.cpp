@@ -2598,6 +2598,46 @@ auto Mcp_server::action_rip_mesh_vertices(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_fill_mesh_selection(const json& args) -> std::string
+{
+    // Fill (F, doc/plans/mesh_modeling.md section 4.10, catalog M15) on the
+    // live component selection of the current mode.
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->fill_selection();
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Fill needs a live selection in a mesh component mode (vertex, edge or face) and no running component edit");
+    }
+    return make_json_content({{"queued", true}}).dump();
+}
+
+auto Mcp_server::action_connect_mesh_vertices(const json& args) -> std::string
+{
+    // Connect vertex path (J, catalog M16) on the live vertex or edge mode
+    // selection.
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->connect_vertex_path();
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Connect vertex path needs a live selection in vertex or edge mode and no running component edit");
+    }
+    return make_json_content({{"queued", true}}).dump();
+}
+
 auto Mcp_server::action_separate_mesh_selection(const json& args) -> std::string
 {
     // Separate (P, catalog M9): the selected faces become a new mesh node

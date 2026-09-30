@@ -7553,6 +7553,62 @@
     "name": "separate_mesh_selection"
   },
   {
+    "description": "Blender fill (F, doc/plans/mesh_modeling.md section 4.10, catalog M15), queued and undoable, on the active mesh-component selection of any mode (vertex mode also reads the edges between selected vertices, and the faces whose vertices are all selected). The first case that creates anything: two vertices closing the shortest boundary chain between them into one face (erhe meshes have no loose edges, so without such a chain nothing is filled); one free vertex plus one open edge chain -> one face; edge cycles -> one face each, one open chain closed or two joined (the more planar way); a branching edge net -> the faces it encloses; selected faces -> joined; three or more vertices -> one face, sorted around their centre in their fitted plane. Only edges with fewer than two faces take part. New faces follow the winding of their neighbours and copy their corner attributes (texture coordinates). The new faces are selected afterwards. With nothing to fill the mesh stays as it was (logged). An error without a live selection. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "fill_mesh_selection"
+  },
+  {
+    "description": "Blender connect vertex path (J, catalog M16), queued and undoable, on the active vertex or edge mode selection (edge mode: the edges' endpoints). Two vertices sharing no face: a cutting plane through both, containing their mean normal, is followed by a shortest-path search across the faces between them; the crossed edges are split at the plane and the path vertices connected. Otherwise every face is split between consecutive selected corners (a vertex inside a run of selected neighbours is skipped; a split that would leave a concave face, or cross an earlier split, is dropped). The new edges and the selected and inserted vertices are selected afterwards. An error without a live vertex or edge mode selection. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "connect_mesh_vertices"
+  },
+  {
     "description": "Show or hide the transform gizmo handle sets (translate arrows, rotate rings, scale handles) and choose the scale gizmo style (basic axis/plane/uniform handles, or bounding_box face cones). This is the scriptable equivalent of activating the Move/Rotate/Scale tool from the hotbar or toggling the viewport-toolbar gizmo buttons, which are otherwise mouse-only. Omitted flags keep their current value; returns the resulting state.",
     "inputSchema": {
       "properties": {
