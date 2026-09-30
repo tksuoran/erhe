@@ -9,10 +9,12 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
+#include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
 #include "windows/property_editor.hpp"
@@ -197,6 +199,27 @@ public:
     void chamfer3(float bevel_ratio);
     void merge_faces();
 
+    // Delete and dissolve on the mesh-component selection (doc/plans/mesh_modeling.md
+    // section 4.3). Each needs a live selection in the component mode its context /
+    // kind reads (vertices: vertex mode, edges / only_edges_and_faces: edge mode,
+    // faces / only_faces: face mode); returns false, queueing nothing, otherwise.
+    auto delete_components(erhe::geometry::Delete_context delete_context) -> bool;
+    auto dissolve_faces   (erhe::geometry::operation::Dissolve_faces_options    options) -> bool;
+    auto dissolve_edges   (erhe::geometry::operation::Dissolve_edges_options    options) -> bool;
+    auto dissolve_vertices(erhe::geometry::operation::Dissolve_vertices_options options) -> bool;
+    // The mode-dispatching forms behind the Delete key and Ctrl+X: the context /
+    // kind follows the current component mode; dissolve uses the window's options.
+    auto delete_selected_components  () -> bool;
+    auto dissolve_selected_components() -> bool;
+    // Limited dissolve on the component selection when one is active, else on
+    // the whole of every mesh of the object selection. Returns false when there
+    // is nothing to act on.
+    auto dissolve_limited(erhe::geometry::operation::Dissolve_limited_options options) -> bool;
+    // The context a delete takes in the current component mode (vertex mode:
+    // vertices, edge mode: edges, face mode: faces); std::nullopt outside the
+    // mesh component modes.
+    [[nodiscard]] auto get_mode_delete_context() const -> std::optional<erhe::geometry::Delete_context>;
+
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
     // (see Mesh_component_selection::grow / shrink).
@@ -365,6 +388,26 @@ private:
     erhe::commands::Lambda_command m_truncate_command;
     erhe::commands::Lambda_command m_gyro_command;
     erhe::commands::Lambda_command m_chamfer3_command;
+
+    // Mesh component delete / dissolve
+    erhe::commands::Lambda_command m_delete_vertices_command;
+    erhe::commands::Lambda_command m_delete_edges_command;
+    erhe::commands::Lambda_command m_delete_faces_command;
+    erhe::commands::Lambda_command m_delete_only_edges_and_faces_command;
+    erhe::commands::Lambda_command m_delete_only_faces_command;
+    erhe::commands::Lambda_command m_delete_selected_command;
+    erhe::commands::Lambda_command m_dissolve_faces_command;
+    erhe::commands::Lambda_command m_dissolve_edges_command;
+    erhe::commands::Lambda_command m_dissolve_vertices_command;
+    erhe::commands::Lambda_command m_dissolve_limited_command;
+    erhe::commands::Lambda_command m_dissolve_selected_command;
+
+    // Dissolve options edited in the Operations window "Components" section and
+    // read by the dissolve commands (the MCP tools take their own arguments).
+    erhe::geometry::operation::Dissolve_faces_options    m_dissolve_faces_options{};
+    erhe::geometry::operation::Dissolve_edges_options    m_dissolve_edges_options{};
+    erhe::geometry::operation::Dissolve_vertices_options m_dissolve_vertices_options{};
+    erhe::geometry::operation::Dissolve_limited_options  m_dissolve_limited_options{};
 
     // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
     // post-processing regenerates facet texture coordinates

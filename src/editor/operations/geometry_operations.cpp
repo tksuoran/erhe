@@ -20,6 +20,7 @@
 #include "erhe_geometry/operation/conway/meta.hpp"
 #include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/conway/truncate.hpp"
+#include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/csg/intersection.hpp"
 #include "erhe_geometry/operation/csg/union.hpp"
@@ -271,6 +272,153 @@ Merge_faces_operation::Merge_faces_operation(Mesh_operation_parameters&& context
         }
     );
     set_description(fmt::format("Merge Faces {}", describe_entries()));
+}
+
+namespace {
+
+[[nodiscard]] auto c_str(const erhe::geometry::Delete_context delete_context) -> const char*
+{
+    switch (delete_context) {
+        case erhe::geometry::Delete_context::vertices:             return "Vertices";
+        case erhe::geometry::Delete_context::edges:                return "Edges";
+        case erhe::geometry::Delete_context::faces:                return "Faces";
+        case erhe::geometry::Delete_context::only_edges_and_faces: return "Only Edges and Faces";
+        case erhe::geometry::Delete_context::only_faces:           return "Only Faces";
+        default:                                                   return "?";
+    }
+}
+
+// The selection a delete / dissolve reads for one primitive: the snapshot's
+// selection, or an empty one (the primitive is emitted unchanged) when the
+// primitive has none.
+[[nodiscard]] auto selection_or_empty(
+    const erhe::geometry::operation::Geometry_component_selection* remap_source
+) -> const erhe::geometry::operation::Geometry_component_selection&
+{
+    static const erhe::geometry::operation::Geometry_component_selection empty_selection{};
+    return (remap_source != nullptr) ? *remap_source : empty_selection;
+}
+
+} // anonymous namespace
+
+Delete_components_operation::Delete_components_operation(
+    Mesh_operation_parameters&&          context,
+    const erhe::geometry::Delete_context delete_context
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description(fmt::format("Delete {}", c_str(delete_context)));
+    make_entries(
+        [delete_context](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::delete_components(before_geometry, after_geometry, selection_or_empty(remap_source), delete_context, &remap);
+        }
+    );
+    set_description(fmt::format("Delete {} {}", c_str(delete_context), describe_entries()));
+}
+
+Dissolve_faces_operation::Dissolve_faces_operation(
+    Mesh_operation_parameters&&                             context,
+    const erhe::geometry::operation::Dissolve_faces_options options
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Dissolve Faces");
+    make_entries(
+        [options](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::dissolve_faces(before_geometry, after_geometry, selection_or_empty(remap_source).facets, options, &remap);
+        }
+    );
+    set_description(fmt::format("Dissolve Faces {}", describe_entries()));
+}
+
+Dissolve_edges_operation::Dissolve_edges_operation(
+    Mesh_operation_parameters&&                             context,
+    const erhe::geometry::operation::Dissolve_edges_options options
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Dissolve Edges");
+    make_entries(
+        [options](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::dissolve_edges(before_geometry, after_geometry, selection_or_empty(remap_source).edges, options, &remap);
+        }
+    );
+    set_description(fmt::format("Dissolve Edges {}", describe_entries()));
+}
+
+Dissolve_vertices_operation::Dissolve_vertices_operation(
+    Mesh_operation_parameters&&                                context,
+    const erhe::geometry::operation::Dissolve_vertices_options options
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Dissolve Vertices");
+    make_entries(
+        [options](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::dissolve_vertices(before_geometry, after_geometry, selection_or_empty(remap_source).vertices, options, &remap);
+        }
+    );
+    set_description(fmt::format("Dissolve Vertices {}", describe_entries()));
+}
+
+Dissolve_limited_operation::Dissolve_limited_operation(
+    Mesh_operation_parameters&&                               context,
+    const erhe::geometry::operation::Dissolve_limited_options options
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Limited Dissolve");
+    // An empty snapshot means no component selection was active: the whole
+    // of every mesh is a candidate. Otherwise a primitive without a selection
+    // is left unchanged.
+    const bool whole_mesh = m_parameters.component_selection.empty();
+    make_entries(
+        [options, whole_mesh](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            const erhe::geometry::operation::Geometry_component_selection* selection = whole_mesh ? nullptr : &selection_or_empty(remap_source);
+            erhe::geometry::operation::dissolve_limited(before_geometry, after_geometry, selection, options, &remap);
+        }
+    );
+    set_description(fmt::format("Limited Dissolve {}", describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

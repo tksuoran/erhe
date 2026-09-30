@@ -21,6 +21,18 @@ Implements the undo/redo operation system and all concrete editor operations.
   - Conway operators: `Dual`, `Ambo`, `Truncate`, `Kis`, `Join`, `Meta`, `Gyro`, `Chamfer`, `Subdivide`
   - `Triangulate`, `Reverse`, `Normalize`, `Repair`, `Weld`
   - `Generate_tangents`, `Make_raytrace`, `Bake_transform`
+  - `Merge_faces`
+  - Delete and dissolve on the mesh-component selection
+    (`doc/plans/mesh_modeling.md` section 4.3, `erhe_geometry/operation/dissolve.hpp`):
+    `Delete_components` (a `Delete_context`: vertices, edges, faces, only
+    edges and faces, only faces), `Dissolve_faces`, `Dissolve_edges`,
+    `Dissolve_vertices` (each with its library options class) and
+    `Dissolve_limited`. They read the active mode's set of the
+    `Mesh_operation_parameters::component_selection` snapshot, emit a
+    primitive without a selection unchanged, and carry the selection over to
+    the result. `Dissolve_limited` runs on the component selection when the
+    snapshot holds one, else on the whole of every mesh of the object
+    selection.
 
 - **Binary operations** (extend `Compound_operation`): `Union`, `Intersection`, `Difference` -- CSG operations.
 
@@ -36,7 +48,7 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit); refreshes normals, rebuilds static physics.
   - `Paint_weights_operation` -- rewrites `vertex_joint_indices_0` / `vertex_joint_weights_0` of a vertex set (one `Weight_paint_tool` stroke); no physics or normal work (positions unchanged), but the primitive rebuild refreshes the solid-wireframe / edge-line streams that carry their own copy of the joint data.
 
-- **`Operations`** window -- ImGui window providing buttons for all geometry operations.
+- **`Operations`** window -- ImGui window providing buttons for all geometry operations. Its "Components" section holds the delete and dissolve buttons, each enabled in the component mode whose set it reads (Delete Vertices and Dissolve Vertices in vertex mode; Delete Edges, Delete Only Edges and Faces and Dissolve Edges in edge mode; Delete Faces, Delete Only Faces and Dissolve Faces in face mode; Limited Dissolve with a component or a mesh selection), and the dissolve options as widgets; the options are `Operations` members read by the buttons and the `Geometry.Dissolve.*` commands. The commands are `Geometry.Delete.Vertices` / `.Edges` / `.Faces` / `.OnlyEdgesAndFaces` / `.OnlyFaces`, `Geometry.Dissolve.Faces` / `.Edges` / `.Vertices` / `.Limited`, and the mode-dispatching `Geometry.Delete.Selected` (Delete) and `Geometry.Dissolve.Selected` (Ctrl+X) of `doc/editor/mesh_component_selection.md`.
 
 ## Primitive swaps keep the node in place
 

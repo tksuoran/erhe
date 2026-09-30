@@ -295,6 +295,11 @@ public:
 
     void               clear_all();
     [[nodiscard]] auto is_empty() const -> bool;
+    // True when a mesh component mode (vertex / edge / face) is active and a
+    // live entry has a non-empty set of that mode: the state in which the
+    // component delete / dissolve commands act (Delete, Ctrl+X) and the
+    // object Selection's delete / cut commands do not.
+    [[nodiscard]] auto has_live_mode_selection() const -> bool;
 
     // Blender-style Select More / Select Less. Expand (grow) or contract (shrink)
     // the selection by one ring of border components, in the current mode, for

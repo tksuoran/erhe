@@ -8,8 +8,11 @@ select none, select linked and the vertex / edge mode region (box and brush)
 select against the box's known counts (8 vertices, 12 edges, 6 facets). Loop
 and ring select are checked on the box, a torus and a one-sided rectangle
 (an open mesh), through select_mesh_loop and through Alt / Ctrl+Alt clicks.
-The editor's stderr (where a crash stack goes) is written to
-logs/editor_stderr.txt.
+Delete and dissolve (section 4.3) are checked on a box subdivided once with
+Catmull-Clark and a box with subdivided flat sides: each operation through its
+MCP tool and the Delete / Ctrl+X keys, each followed by undo, comparing
+get_mesh_geometry_info counts. The editor's stderr (where a crash stack goes)
+is written to logs/editor_stderr.txt.
 
 Usage:
     py -3 scripts/mesh_modeling_verify.py [--editor <path to editor.exe>]
@@ -376,6 +379,157 @@ def run_transform_in_component_mode(e):
     e.advance()
 
 
+CC_BOX = "mm_cc_box"
+FLAT_BOX = "mm_flat_box"
+
+
+def wait_idle(e, tries=600):
+    """Advance frames until no async mesh operation is pending, running or
+    queued on the operation stack."""
+    keys = ["pending", "running", "queued_operations", "pending_scene_commits"]
+    for _ in range(tries):
+        e.advance(1)
+        status = e.call("get_async_status")
+        if all(int(status.get(key, 0)) == 0 for key in keys):
+            e.advance(1)
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def geometry_counts(e, node_name):
+    """(vertices, edges, facets) of node_name's first primitive."""
+    info = e.call("get_mesh_geometry_info", {"scene_name": e.scene, "node_name": node_name})
+    counts = info.get("counts", info)
+    return (counts["vertices"], counts["edges"], counts["facets"])
+
+
+def select_on(e, node_name, **kwargs):
+    args = {"scene_name": e.scene, "node_name": node_name}
+    args.update(kwargs)
+    return e.call("select_mesh_components", args)
+
+
+def undo_and_check(e, label, node_name, expected):
+    e.call("undo")
+    wait_idle(e)
+    expect(f"{label}: undo restores the counts", geometry_counts(e, node_name), expected)
+
+
+def run_delete_dissolve(e):
+    """Delete and dissolve (doc/plans/mesh_modeling.md section 4.3)."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("create_shape", {"scene_name": e.scene, "shape": "box", "name": CC_BOX, "steps": [0, 0, 0], "motion_mode": "none"})
+    e.advance(4)
+    e.call("catmull_clark", {"scene_name": e.scene, "node_name": CC_BOX})
+    wait_idle(e)
+    base = geometry_counts(e, CC_BOX)
+    expect("Catmull-Clark box -> 26 vertices, 48 edges, 24 facets", base, (26, 48, 24))
+    v, ed, f = base
+
+    # Delete faces (face mode, MCP, context by mode).
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, CC_BOX, facets=[0])
+    result = e.call("delete_mesh_components")
+    expect("delete_mesh_components in face mode -> context by mode", result.get("queued"), True)
+    wait_idle(e)
+    expect("delete one facet -> facets minus one, edges and vertices kept (all still used)",
+           geometry_counts(e, CC_BOX), (v, ed, f - 1))
+    undo_and_check(e, "delete faces", CC_BOX, base)
+
+    # A context whose mode does not match is refused.
+    select_on(e, CC_BOX, facets=[0])
+    try:
+        e.call("delete_mesh_components", {"context": "vertices"})
+        check_true("delete context vertices in face mode is refused", False, "no error")
+    except RuntimeError:
+        check_true("delete context vertices in face mode is refused", True)
+
+    # Dissolve one interior edge (edge mode): its two quads join into a hexagon.
+    seed = entry_of(e.call("get_mesh_component_selection"), CC_BOX)["edges"][0]
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, CC_BOX, edges=[seed])
+    e.call("dissolve_mesh_components", {"kind": "edges", "dissolve_vertices": False})
+    wait_idle(e)
+    expect("dissolve one edge (dissolve_vertices off) -> one hexagon: facets minus one, edges minus one",
+           geometry_counts(e, CC_BOX), (v, ed - 1, f - 1))
+    undo_and_check(e, "dissolve edges", CC_BOX, base)
+
+    # Dissolve one vertex (vertex mode): its facets join. Its valence comes
+    # from an expand to edge mode.
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, CC_BOX, vertices=[0])
+    e.call("set_mesh_component_mode", {"mode": "edge", "conversion": "expand"})
+    valence = counts_of(e.call("get_mesh_component_selection"), CC_BOX)[1]
+    check_true("vertex 0 has valence 3 or 4", valence in (3, 4), f"got {valence}")
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, CC_BOX, vertices=[0])
+    e.call("dissolve_mesh_components", {})
+    wait_idle(e)
+    expect(f"dissolve a valence-{valence} vertex -> its {valence} facets join, it and its edges go",
+           geometry_counts(e, CC_BOX), (v - 1, ed - valence, f - (valence - 1)))
+    undo_and_check(e, "dissolve vertices", CC_BOX, base)
+
+    # Dissolve faces: two adjacent facets (those of the seed edge) join.
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, CC_BOX, edges=[seed])
+    e.call("set_mesh_component_mode", {"mode": "face", "conversion": "expand"})
+    facets = entry_of(e.call("get_mesh_component_selection"), CC_BOX)["facets"]
+    expect("expand from the seed edge -> its 2 facets", len(facets), 2)
+    e.call("dissolve_mesh_components", {"kind": "faces"})
+    wait_idle(e)
+    expect("dissolve two adjacent facets -> facets minus one, edges minus one",
+           geometry_counts(e, CC_BOX), (v, ed - 1, f - 1))
+    undo_and_check(e, "dissolve faces", CC_BOX, base)
+
+    # The keys, with the pointer over a viewport (and the box in front of the
+    # camera, so the keys reach the viewport).
+    viewport = place_in_front_of_camera(e, CC_BOX, distance=5.0)
+    x = viewport["x"] + (viewport["width"] / 2.0)
+    y = viewport["y"] + (viewport["height"] / 2.0)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    # Object-selected too: Selection.delete / Selection.cut would remove the
+    # node if they consumed the keys.
+    e.call("select_items", {"scene_name": e.scene, "paths": [CC_BOX]})
+    e.advance()
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, CC_BOX, facets=[0])
+    e.key("delete", [])
+    wait_idle(e)
+    expect("Delete key in face mode deletes the facet, not the node",
+           geometry_counts(e, CC_BOX), (v, ed, f - 1))
+    undo_and_check(e, "Delete key", CC_BOX, base)
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, CC_BOX, edges=[seed])
+    e.key("x", ["ctrl"])
+    wait_idle(e)
+    after = geometry_counts(e, CC_BOX)
+    check_true("Ctrl+X in edge mode dissolves the edge (facets minus one)", after[2] == f - 1, f"got {after}")
+    undo_and_check(e, "Ctrl+X", CC_BOX, base)
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("select_items", {"scene_name": e.scene, "paths": []})
+    e.advance()
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": CC_BOX, "translation": [0.0, -200.0, 0.0]})
+    e.advance(2)
+
+    # Limited dissolve: the plain box is unchanged (90 degree dihedrals); a box
+    # with subdivided flat sides goes back to the plain box.
+    e.call("dissolve_limited", {"scene_name": e.scene, "node_name": BOX})
+    wait_idle(e)
+    expect("limited dissolve on the plain box changes nothing", geometry_counts(e, BOX), (8, 12, 6))
+    e.call("create_shape", {"scene_name": e.scene, "shape": "box", "name": FLAT_BOX, "steps": [1, 1, 1], "motion_mode": "none"})
+    e.advance(4)
+    flat = geometry_counts(e, FLAT_BOX)
+    check_true("stepped box has subdivided flat sides", flat[2] > 6, f"got {flat}")
+    e.call("dissolve_limited", {"scene_name": e.scene, "node_name": FLAT_BOX})
+    wait_idle(e)
+    expect("limited dissolve on the stepped box -> the plain box (8, 12, 6)", geometry_counts(e, FLAT_BOX), (8, 12, 6))
+    undo_and_check(e, "limited dissolve", FLAT_BOX, flat)
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -455,8 +609,10 @@ def run(e):
     run_loop_select_mcp(e)
     run_loop_select_clicks(e)
 
-    # Last: it moves the box.
+    # It moves the box.
     run_transform_in_component_mode(e)
+
+    run_delete_dissolve(e)
 
 
 def main():

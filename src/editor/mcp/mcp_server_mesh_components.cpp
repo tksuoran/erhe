@@ -27,6 +27,7 @@
 #include "transform/transform_tool_settings.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
 #include "erhe_item/item.hpp"
@@ -1496,6 +1497,125 @@ auto Mcp_server::action_merge_faces(const json& args) -> std::string
         return make_error_content(target_error);
     }
     return make_json_content({{"queued", true}}).dump();
+}
+
+auto Mcp_server::action_delete_mesh_components(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    std::optional<erhe::geometry::Delete_context> delete_context = m_context.operations->get_mode_delete_context();
+    if (args.contains("context")) {
+        const std::string context_str = args.value("context", "");
+        if      (context_str == "vertices")             { delete_context = erhe::geometry::Delete_context::vertices; }
+        else if (context_str == "edges")                { delete_context = erhe::geometry::Delete_context::edges; }
+        else if (context_str == "faces")                { delete_context = erhe::geometry::Delete_context::faces; }
+        else if (context_str == "only_edges_and_faces") { delete_context = erhe::geometry::Delete_context::only_edges_and_faces; }
+        else if (context_str == "only_faces")           { delete_context = erhe::geometry::Delete_context::only_faces; }
+        else {
+            return make_error_content("Invalid context: " + context_str + " (vertices, edges, faces, only_edges_and_faces, only_faces)");
+        }
+    }
+    if (!delete_context.has_value()) {
+        return make_error_content("delete_mesh_components needs a mesh component mode (set_mesh_component_mode vertex / edge / face)");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->delete_components(delete_context.value());
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Delete needs a live selection in the component mode its context reads (vertices: vertex, edges / only_edges_and_faces: edge, faces / only_faces: face)");
+    }
+    return make_json_content({{"queued", true}, {"context", args.value("context", std::string{"by_mode"})}}).dump();
+}
+
+auto Mcp_server::action_dissolve_mesh_components(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    // Explicit-state rule (doc/agents/mcp_api_guidelines.md): the option
+    // defaults are the library defaults, never the Operations window's widgets.
+    std::string kind = args.value("kind", "");
+    if (kind.empty() && (m_context.mesh_component_selection != nullptr)) {
+        switch (m_context.mesh_component_selection->get_mode()) {
+            case Mesh_component_mode::vertex: kind = "vertices"; break;
+            case Mesh_component_mode::edge:   kind = "edges";    break;
+            case Mesh_component_mode::face:   kind = "faces";    break;
+            default:                                             break;
+        }
+    }
+    bool queued = false;
+    std::function<void()> op;
+    json result = {{"queued", true}, {"kind", kind}};
+    if (kind == "faces") {
+        erhe::geometry::operation::Dissolve_faces_options options{};
+        options.dissolve_vertices = args.value("dissolve_vertices", options.dissolve_vertices);
+        result["dissolve_vertices"] = options.dissolve_vertices;
+        op = [&, options]() { queued = m_context.operations->dissolve_faces(options); };
+    } else if (kind == "edges") {
+        erhe::geometry::operation::Dissolve_edges_options options{};
+        options.dissolve_vertices       = args.value("dissolve_vertices",       options.dissolve_vertices);
+        options.preserve_quads          = args.value("preserve_quads",          options.preserve_quads);
+        options.angle_threshold_degrees = args.value("angle_threshold_degrees", options.angle_threshold_degrees);
+        options.face_split              = args.value("face_split",              options.face_split);
+        result["dissolve_vertices"]       = options.dissolve_vertices;
+        result["preserve_quads"]          = options.preserve_quads;
+        result["angle_threshold_degrees"] = options.angle_threshold_degrees;
+        result["face_split"]              = options.face_split;
+        op = [&, options]() { queued = m_context.operations->dissolve_edges(options); };
+    } else if (kind == "vertices") {
+        erhe::geometry::operation::Dissolve_vertices_options options{};
+        options.face_split    = args.value("face_split",    options.face_split);
+        options.boundary_tear = args.value("boundary_tear", options.boundary_tear);
+        result["face_split"]    = options.face_split;
+        result["boundary_tear"] = options.boundary_tear;
+        op = [&, options]() { queued = m_context.operations->dissolve_vertices(options); };
+    } else if (kind.empty()) {
+        return make_error_content("dissolve_mesh_components needs a mesh component mode (set_mesh_component_mode vertex / edge / face) or kind");
+    } else {
+        return make_error_content("Invalid kind: " + kind + " (faces, edges, vertices)");
+    }
+    const std::string target_error = run_geometry_op_with_target(args, op);
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Dissolve " + kind + " needs a live selection in the matching component mode (faces: face, edges: edge, vertices: vertex)");
+    }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_dissolve_limited(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    erhe::geometry::operation::Dissolve_limited_options options{};
+    options.angle_limit_degrees = args.value("angle_limit_degrees", options.angle_limit_degrees);
+    options.dissolve_boundaries = args.value("dissolve_boundaries", options.dissolve_boundaries);
+    options.delimit_winding     = args.value("delimit_winding",     options.delimit_winding);
+    options.delimit_crease      = args.value("delimit_crease",      options.delimit_crease);
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->dissolve_limited(options);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Limited dissolve: nothing selected (select mesh nodes, or components in a component mode)");
+    }
+    return make_json_content({
+        {"queued",              true},
+        {"angle_limit_degrees", options.angle_limit_degrees},
+        {"dissolve_boundaries", options.dissolve_boundaries},
+        {"delimit_winding",     options.delimit_winding},
+        {"delimit_crease",      options.delimit_crease}
+    }).dump();
 }
 
 auto Mcp_server::action_catmull_clark(const json& args) -> std::string

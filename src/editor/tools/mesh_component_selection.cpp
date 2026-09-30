@@ -1111,6 +1111,23 @@ auto Mesh_component_selection::is_empty() const -> bool
     return true;
 }
 
+auto Mesh_component_selection::has_live_mode_selection() const -> bool
+{
+    if (!is_mesh_component_mode(m_mode)) {
+        return false;
+    }
+    for (const Mesh_component_entry& entry : m_entries) {
+        const bool has_mode_set =
+            ((m_mode == Mesh_component_mode::vertex) && !entry.vertices.empty()) ||
+            ((m_mode == Mesh_component_mode::edge  ) && !entry.edges   .empty()) ||
+            ((m_mode == Mesh_component_mode::face  ) && !entry.facets  .empty());
+        if (has_mode_set && is_live(entry)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Mesh_component_selection::prune()
 {
     std::erase_if(

@@ -3,6 +3,7 @@
 #include "operations/mesh_operation.hpp"
 #include "operations/compound_operation.hpp"
 
+#include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
@@ -95,6 +96,43 @@ class Merge_faces_operation : public Mesh_operation
 {
 public:
     explicit Merge_faces_operation(Mesh_operation_parameters&& context);
+};
+
+// Delete and dissolve (doc/plans/mesh_modeling.md section 4.3,
+// erhe_geometry/operation/dissolve.hpp). Each acts on the mesh-component
+// selection snapshot of Mesh_operation_parameters::component_selection (the
+// active mode's set) and carries the selection over to the result; a
+// primitive without a selection in the snapshot is emitted unchanged.
+class Delete_components_operation : public Mesh_operation
+{
+public:
+    Delete_components_operation(Mesh_operation_parameters&& context, erhe::geometry::Delete_context delete_context);
+};
+
+class Dissolve_faces_operation : public Mesh_operation
+{
+public:
+    Dissolve_faces_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Dissolve_faces_options options);
+};
+
+class Dissolve_edges_operation : public Mesh_operation
+{
+public:
+    Dissolve_edges_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Dissolve_edges_options options);
+};
+
+class Dissolve_vertices_operation : public Mesh_operation
+{
+public:
+    Dissolve_vertices_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Dissolve_vertices_options options);
+};
+
+// Limited dissolve on the component selection when the snapshot holds one,
+// else on the whole of every mesh of the object selection.
+class Dissolve_limited_operation : public Mesh_operation
+{
+public:
+    Dissolve_limited_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Dissolve_limited_options options);
 };
 
 class Reverse_operation : public Mesh_operation

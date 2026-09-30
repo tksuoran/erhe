@@ -6526,6 +6526,146 @@
     "name": "merge_faces"
   },
   {
+    "description": "Delete mesh components of the active mesh-component selection (doc/plans/mesh_modeling.md section 4.3), queued and undoable. context: vertices (their edges and facets go too), edges (their facets go; endpoints left loose go), faces (facets, then edges and vertices no surviving facet uses), only_edges_and_faces (edges and their facets; vertices stay), only_faces (facets only). The default follows the current mode (vertex: vertices, edge: edges, face: faces). The context reads the set of one mode, so it needs a live selection in that mode (vertices: vertex mode; edges / only_edges_and_faces: edge mode; faces / only_faces: face mode); an error otherwise. The remapped selection is installed on the result. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "context": {
+          "description": "vertices | edges | faces | only_edges_and_faces | only_faces (default: by the current component mode)",
+          "enum": [
+            "vertices",
+            "edges",
+            "faces",
+            "only_edges_and_faces",
+            "only_faces"
+          ],
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "delete_mesh_components"
+  },
+  {
+    "description": "Dissolve mesh components of the active mesh-component selection (doc/plans/mesh_modeling.md section 4.3), queued and undoable. kind faces (face mode): join each edge-connected group of selected facets into one facet. kind edges (edge mode): join the facet pair of each selected manifold edge, then collapse end vertices left two-valent. kind vertices (vertex mode): join the facets around each selected vertex. kind defaults to the current mode. Options not given take the library defaults (not the Operations window's widgets). Error when the matching mode has no live selection. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "angle_threshold_degrees": {
+          "description": "edges: a two-valent end vertex collapses only when the angle between its two remaining edges is below this (default 180)",
+          "type": "number"
+        },
+        "boundary_tear": {
+          "description": "vertices: separate a boundary vertex into one vertex per facet and collapse each copy (default false)",
+          "type": "boolean"
+        },
+        "dissolve_vertices": {
+          "description": "faces / edges: collapse vertices the joins left two-valent (default false for faces, true for edges)",
+          "type": "boolean"
+        },
+        "face_split": {
+          "description": "edges / vertices: split off the corner of each collapsing vertex first so the surrounding facets keep their shape (default false)",
+          "type": "boolean"
+        },
+        "kind": {
+          "description": "faces | edges | vertices (default: by the current component mode)",
+          "enum": [
+            "faces",
+            "edges",
+            "vertices"
+          ],
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "preserve_quads": {
+          "description": "edges: keep the four corners of a dissolved edge's triangle pair (default true)",
+          "type": "boolean"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "dissolve_mesh_components"
+  },
+  {
+    "description": "Limited dissolve (doc/plans/mesh_modeling.md section 4.3), queued and undoable: joins facet pairs across manifold edges whose dihedral angle is below the angle limit, then collapses two-valent vertices whose edge angle is below the limit while every adjacent corner stays convex. With an active mesh-component selection the candidates are the selected components; otherwise the whole of every selected mesh. Options not given take the library defaults. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "angle_limit_degrees": {
+          "description": "Angle limit in degrees (default 5)",
+          "type": "number"
+        },
+        "delimit_crease": {
+          "description": "Never join across an edge with a positive sharpness (default false)",
+          "type": "boolean"
+        },
+        "delimit_winding": {
+          "description": "Never join across an edge whose two facets traverse it in the same direction (default true)",
+          "type": "boolean"
+        },
+        "dissolve_boundaries": {
+          "description": "Also collapse two-valent vertices whose edges are delimited (default false)",
+          "type": "boolean"
+        },
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "dissolve_limited"
+  },
+  {
     "description": "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.",
     "inputSchema": {
       "properties": {

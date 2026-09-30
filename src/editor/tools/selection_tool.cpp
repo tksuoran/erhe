@@ -271,6 +271,11 @@ Selection_delete_command::Selection_delete_command(erhe::commands::Commands& com
 
 auto Selection_delete_command::try_call() -> bool
 {
+    // With a live selection in a mesh component mode the Delete key belongs to
+    // Geometry.Delete.Selected (Operations), which deletes the components.
+    if ((m_context.mesh_component_selection != nullptr) && m_context.mesh_component_selection->has_live_mode_selection()) {
+        return false;
+    }
     return m_context.selection->delete_selection();
 }
 
@@ -284,6 +289,11 @@ Selection_cut_command::Selection_cut_command(erhe::commands::Commands& commands,
 
 auto Selection_cut_command::try_call() -> bool
 {
+    // With a live selection in a mesh component mode Ctrl+X belongs to
+    // Geometry.Dissolve.Selected (Operations), which dissolves the components.
+    if ((m_context.mesh_component_selection != nullptr) && m_context.mesh_component_selection->has_live_mode_selection()) {
+        return false;
+    }
     return m_context.selection->cut_selection();
 }
 

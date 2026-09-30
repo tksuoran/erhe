@@ -759,6 +759,18 @@ Operations::Operations(
     , m_gyro_command              {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
     , m_chamfer3_command          {commands, "Geometry.Conway.Chamfer3",           [this]() -> bool { chamfer3      (); return true; } }
 
+    , m_delete_vertices_command            {commands, "Geometry.Delete.Vertices",          [this]() -> bool { return delete_components(erhe::geometry::Delete_context::vertices); } }
+    , m_delete_edges_command               {commands, "Geometry.Delete.Edges",             [this]() -> bool { return delete_components(erhe::geometry::Delete_context::edges); } }
+    , m_delete_faces_command               {commands, "Geometry.Delete.Faces",             [this]() -> bool { return delete_components(erhe::geometry::Delete_context::faces); } }
+    , m_delete_only_edges_and_faces_command{commands, "Geometry.Delete.OnlyEdgesAndFaces", [this]() -> bool { return delete_components(erhe::geometry::Delete_context::only_edges_and_faces); } }
+    , m_delete_only_faces_command          {commands, "Geometry.Delete.OnlyFaces",         [this]() -> bool { return delete_components(erhe::geometry::Delete_context::only_faces); } }
+    , m_delete_selected_command            {commands, "Geometry.Delete.Selected",          [this]() -> bool { return delete_selected_components(); } }
+    , m_dissolve_faces_command             {commands, "Geometry.Dissolve.Faces",           [this]() -> bool { return dissolve_faces   (m_dissolve_faces_options); } }
+    , m_dissolve_edges_command             {commands, "Geometry.Dissolve.Edges",           [this]() -> bool { return dissolve_edges   (m_dissolve_edges_options); } }
+    , m_dissolve_vertices_command          {commands, "Geometry.Dissolve.Vertices",        [this]() -> bool { return dissolve_vertices(m_dissolve_vertices_options); } }
+    , m_dissolve_limited_command           {commands, "Geometry.Dissolve.Limited",         [this]() -> bool { return dissolve_limited (m_dissolve_limited_options); } }
+    , m_dissolve_selected_command          {commands, "Geometry.Dissolve.Selected",        [this]() -> bool { return dissolve_selected_components(); } }
+
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
     , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
     , m_make_geometry_command     {commands, "Mesh.MakeGeometry",                  [this]() -> bool { make_geometry    (); return true; } }
@@ -807,6 +819,17 @@ Operations::Operations(
     commands.register_command(&m_ambo_command    );
     commands.register_command(&m_truncate_command);
     commands.register_command(&m_gyro_command    );
+    commands.register_command(&m_delete_vertices_command);
+    commands.register_command(&m_delete_edges_command);
+    commands.register_command(&m_delete_faces_command);
+    commands.register_command(&m_delete_only_edges_and_faces_command);
+    commands.register_command(&m_delete_only_faces_command);
+    commands.register_command(&m_delete_selected_command);
+    commands.register_command(&m_dissolve_faces_command);
+    commands.register_command(&m_dissolve_edges_command);
+    commands.register_command(&m_dissolve_vertices_command);
+    commands.register_command(&m_dissolve_limited_command);
+    commands.register_command(&m_dissolve_selected_command);
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
@@ -857,6 +880,18 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_gyro_command    , "Geometry.Conway Operations.Gyro");
     commands.bind_command_to_menu(&m_chamfer3_command, "Geometry.Conway Operations.Chamfer3");
 
+    commands.bind_command_to_menu(&m_delete_selected_command,             "Geometry.Delete.Selected");
+    commands.bind_command_to_menu(&m_delete_vertices_command,             "Geometry.Delete.Vertices");
+    commands.bind_command_to_menu(&m_delete_edges_command,                "Geometry.Delete.Edges");
+    commands.bind_command_to_menu(&m_delete_faces_command,                "Geometry.Delete.Faces");
+    commands.bind_command_to_menu(&m_delete_only_edges_and_faces_command, "Geometry.Delete.Only Edges and Faces");
+    commands.bind_command_to_menu(&m_delete_only_faces_command,           "Geometry.Delete.Only Faces");
+    commands.bind_command_to_menu(&m_dissolve_selected_command,           "Geometry.Dissolve.Selected");
+    commands.bind_command_to_menu(&m_dissolve_faces_command,              "Geometry.Dissolve.Faces");
+    commands.bind_command_to_menu(&m_dissolve_edges_command,              "Geometry.Dissolve.Edges");
+    commands.bind_command_to_menu(&m_dissolve_vertices_command,           "Geometry.Dissolve.Vertices");
+    commands.bind_command_to_menu(&m_dissolve_limited_command,            "Geometry.Dissolve.Limited");
+
     commands.bind_command_to_menu(&m_generate_tangents_command, "Geometry.Generate Tangents");
     commands.bind_command_to_menu(&m_generate_frame_field_tangents_command, "Geometry.Generate Frame Field Tangents");
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
@@ -874,6 +909,13 @@ Operations::Operations(
     // Default keys for Align / Align with Scale (F7/F8 are otherwise unbound).
     commands.bind_command_to_key(&m_align_command,            erhe::window::Key_f8);
     commands.bind_command_to_key(&m_align_with_scale_command, erhe::window::Key_f7);
+
+    // Delete and Ctrl+X in a mesh component mode (doc/plans/mesh_modeling.md D7).
+    // The object Selection binds the same keys (Selection.delete, Selection.cut);
+    // both sides test Mesh_component_selection::has_live_mode_selection(), so
+    // exactly one of them consumes the key.
+    commands.bind_command_to_key(&m_delete_selected_command,   erhe::window::Key_delete);
+    commands.bind_command_to_key(&m_dissolve_selected_command, erhe::window::Key_x, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
 
     // Parameterized invokers for operations that can be dragged into / invoked from
     // an inventory slot. Each thunk runs its operation with the explicit snapshot
@@ -1182,6 +1224,17 @@ void Operations::imgui()
         !m_context.mesh_component_selection->is_empty();
     const auto face_component_mode = face_component_active ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
+    // Component delete / dissolve buttons read the set of one component mode
+    // (doc/plans/mesh_modeling.md section 4.3), so each is enabled in that mode
+    // with a non-empty selection.
+    const Mesh_component_mode current_component_mode =
+        (m_context.mesh_component_selection != nullptr) ? m_context.mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    const bool component_selection_non_empty = (m_context.mesh_component_selection != nullptr) && !m_context.mesh_component_selection->is_empty();
+    const auto vertex_component_mode =
+        (component_selection_non_empty && (current_component_mode == Mesh_component_mode::vertex)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    const auto edge_component_mode =
+        (component_selection_non_empty && (current_component_mode == Mesh_component_mode::edge)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+
     const auto attach_mode     = can_attach_to_active() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto align_mode      = can_align()      ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto flip_joint_mode = can_flip_joint() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
@@ -1222,6 +1275,69 @@ void Operations::imgui()
         }
         if (visible("Merge Faces") && make_button("Merge Faces", face_component_mode, button_size)) {
             merge_faces();
+        }
+    }
+
+    if (section("Components")) {
+        if (visible("Delete Vertices") && make_button("Delete Vertices", vertex_component_mode, button_size)) {
+            delete_components(erhe::geometry::Delete_context::vertices);
+        }
+        if (visible("Delete Edges") && make_button("Delete Edges", edge_component_mode, button_size)) {
+            delete_components(erhe::geometry::Delete_context::edges);
+        }
+        if (visible("Delete Only Edges and Faces") && make_button("Delete Only Edges and Faces", edge_component_mode, button_size)) {
+            delete_components(erhe::geometry::Delete_context::only_edges_and_faces);
+        }
+        if (visible("Delete Faces") && make_button("Delete Faces", face_component_mode, button_size)) {
+            delete_components(erhe::geometry::Delete_context::faces);
+        }
+        if (visible("Delete Only Faces") && make_button("Delete Only Faces", face_component_mode, button_size)) {
+            delete_components(erhe::geometry::Delete_context::only_faces);
+        }
+        if (visible("Dissolve Faces")) {
+            if (make_button("Dissolve Faces", face_component_mode, button_size)) {
+                dissolve_faces(m_dissolve_faces_options);
+            }
+            ImGui::PushID("dissolve_faces");
+            ImGui::Checkbox("Dissolve Vertices", &m_dissolve_faces_options.dissolve_vertices);
+            ImGui::PopID();
+        }
+        if (visible("Dissolve Edges")) {
+            if (make_button("Dissolve Edges", edge_component_mode, button_size)) {
+                dissolve_edges(m_dissolve_edges_options);
+            }
+            ImGui::PushID("dissolve_edges");
+            ImGui::Checkbox("Dissolve Vertices", &m_dissolve_edges_options.dissolve_vertices);
+            ImGui::Checkbox("Preserve Quads",    &m_dissolve_edges_options.preserve_quads);
+            ImGui::Checkbox("Face Split",        &m_dissolve_edges_options.face_split);
+            ImGui::DragFloat("Angle Threshold", &m_dissolve_edges_options.angle_threshold_degrees, 0.5f, 0.0f, 180.0f, "%.1f deg");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("A two-valent end vertex collapses only when the angle between its two remaining edges is below this");
+            }
+            ImGui::PopID();
+        }
+        if (visible("Dissolve Vertices")) {
+            if (make_button("Dissolve Vertices", vertex_component_mode, button_size)) {
+                dissolve_vertices(m_dissolve_vertices_options);
+            }
+            ImGui::PushID("dissolve_vertices");
+            ImGui::Checkbox("Face Split",    &m_dissolve_vertices_options.face_split);
+            ImGui::Checkbox("Boundary Tear", &m_dissolve_vertices_options.boundary_tear);
+            ImGui::PopID();
+        }
+        if (visible("Limited Dissolve")) {
+            if (make_button("Limited Dissolve", selection_aware_mode, button_size)) {
+                dissolve_limited(m_dissolve_limited_options);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("On the component selection when one is active, else on the whole of the selected meshes");
+            }
+            ImGui::PushID("dissolve_limited");
+            ImGui::DragFloat("Angle Limit", &m_dissolve_limited_options.angle_limit_degrees, 0.1f, 0.0f, 180.0f, "%.1f deg");
+            ImGui::Checkbox("Dissolve Boundaries", &m_dissolve_limited_options.dissolve_boundaries);
+            ImGui::Checkbox("Delimit Winding",     &m_dissolve_limited_options.delimit_winding);
+            ImGui::Checkbox("Delimit Crease",      &m_dissolve_limited_options.delimit_crease);
+            ImGui::PopID();
         }
     }
 
@@ -2541,6 +2657,159 @@ void Operations::merge_faces()
         },
         true
     );
+}
+
+auto Operations::get_mode_delete_context() const -> std::optional<erhe::geometry::Delete_context>
+{
+    if (m_context.mesh_component_selection == nullptr) {
+        return std::nullopt;
+    }
+    switch (m_context.mesh_component_selection->get_mode()) {
+        case Mesh_component_mode::vertex: return erhe::geometry::Delete_context::vertices;
+        case Mesh_component_mode::edge:   return erhe::geometry::Delete_context::edges;
+        case Mesh_component_mode::face:   return erhe::geometry::Delete_context::faces;
+        default:                          return std::nullopt;
+    }
+}
+
+namespace {
+
+[[nodiscard]] auto get_delete_context_mode(const erhe::geometry::Delete_context delete_context) -> Mesh_component_mode
+{
+    switch (delete_context) {
+        case erhe::geometry::Delete_context::vertices:             return Mesh_component_mode::vertex;
+        case erhe::geometry::Delete_context::edges:                return Mesh_component_mode::edge;
+        case erhe::geometry::Delete_context::only_edges_and_faces: return Mesh_component_mode::edge;
+        case erhe::geometry::Delete_context::faces:                return Mesh_component_mode::face;
+        case erhe::geometry::Delete_context::only_faces:           return Mesh_component_mode::face;
+        default:                                                   return Mesh_component_mode::object;
+    }
+}
+
+// True when mode is the current component mode and a live entry has a
+// non-empty set of it; logs the reason otherwise.
+[[nodiscard]] auto has_mode_selection(const App_context& context, const Mesh_component_mode mode, const char* operation_name) -> bool
+{
+    const Mesh_component_selection* mesh_component_selection = context.mesh_component_selection;
+    if ((mesh_component_selection == nullptr) || (mesh_component_selection->get_mode() != mode)) {
+        log_operations->info("{} needs {} mode", operation_name, c_str(mode));
+        return false;
+    }
+    if (!mesh_component_selection->has_live_mode_selection()) {
+        log_operations->info("{}: nothing selected in {} mode", operation_name, c_str(mode));
+        return false;
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+auto Operations::delete_components(const erhe::geometry::Delete_context delete_context) -> bool
+{
+    if (!has_mode_selection(m_context, get_delete_context_mode(delete_context), "Delete")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, delete_context](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Delete_components_operation>(std::move(params), delete_context)
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::dissolve_faces(const erhe::geometry::operation::Dissolve_faces_options options) -> bool
+{
+    if (!has_mode_selection(m_context, Mesh_component_mode::face, "Dissolve Faces")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, options](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Dissolve_faces_operation>(std::move(params), options)
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::dissolve_edges(const erhe::geometry::operation::Dissolve_edges_options options) -> bool
+{
+    if (!has_mode_selection(m_context, Mesh_component_mode::edge, "Dissolve Edges")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, options](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Dissolve_edges_operation>(std::move(params), options)
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::dissolve_vertices(const erhe::geometry::operation::Dissolve_vertices_options options) -> bool
+{
+    if (!has_mode_selection(m_context, Mesh_component_mode::vertex, "Dissolve Vertices")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, options](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Dissolve_vertices_operation>(std::move(params), options)
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::delete_selected_components() -> bool
+{
+    if ((m_context.mesh_component_selection == nullptr) || !m_context.mesh_component_selection->has_live_mode_selection()) {
+        return false;
+    }
+    const std::optional<erhe::geometry::Delete_context> delete_context = get_mode_delete_context();
+    if (!delete_context.has_value()) {
+        return false;
+    }
+    return delete_components(delete_context.value());
+}
+
+auto Operations::dissolve_selected_components() -> bool
+{
+    if ((m_context.mesh_component_selection == nullptr) || !m_context.mesh_component_selection->has_live_mode_selection()) {
+        return false;
+    }
+    switch (m_context.mesh_component_selection->get_mode()) {
+        case Mesh_component_mode::vertex: return dissolve_vertices(m_dissolve_vertices_options);
+        case Mesh_component_mode::edge:   return dissolve_edges   (m_dissolve_edges_options);
+        case Mesh_component_mode::face:   return dissolve_faces   (m_dissolve_faces_options);
+        default:                          return false;
+    }
+}
+
+auto Operations::dissolve_limited(const erhe::geometry::operation::Dissolve_limited_options options) -> bool
+{
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(true, Operation_reference::operands_only, items) || items.empty()) {
+        log_operations->info("Limited Dissolve: nothing selected");
+        return false;
+    }
+    async_for_nodes_with_mesh(
+        m_context,
+        items,
+        [this, options](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Dissolve_limited_operation>(std::move(params), options)
+            );
+        }
+    );
+    return true;
 }
 
 auto Operations::get_target_scene_root() -> std::shared_ptr<Scene_root>

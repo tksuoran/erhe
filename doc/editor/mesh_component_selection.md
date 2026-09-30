@@ -134,6 +134,25 @@ Bone mode the key falls through to other bindings.
 | `Mesh_component_selection.grow` | Ctrl+Numpad+ / Ctrl+= | Grow the selection by one border ring |
 | `Mesh_component_selection.shrink` | Ctrl+Numpad- / Ctrl+- | Shrink the selection by one border ring |
 
+### Delete and dissolve keys
+
+Delete and Ctrl+X act on the components while a mesh component mode has a
+live, non-empty selection of its own set
+(`Mesh_component_selection::has_live_mode_selection()`), following
+`doc/plans/mesh_modeling.md` D7:
+
+| Command | Key | Action |
+|---------|-----|--------|
+| `Geometry.Delete.Selected` | Delete | Delete the selection: vertices in vertex mode, edges in edge mode, faces in face mode |
+| `Geometry.Dissolve.Selected` | Ctrl+X | Dissolve the selection: vertices, edges or faces by mode, with the Operations window's dissolve options |
+
+The object `Selection` binds the same keys (`Selection.delete`,
+`Selection.cut`); both of its commands decline in that state and the two
+`Geometry` commands decline outside it, so exactly one handler consumes the
+key. The other delete contexts and the limited dissolve are Operations window
+buttons and `Geometry.Delete.*` / `Geometry.Dissolve.*` commands
+(`doc/editor/operations.md`).
+
 The toolbar has All / None / Invert / Linked buttons (Linked is the
 from-selection form) beside Clear while a component mode is active. Ctrl+A
 and Alt+A share the A key with the fly camera's strafe binding, which has no
@@ -181,7 +200,23 @@ command ends with a flush (section 3).
   the next frames like the gesture. Vertex and Edge mode project in the last
   hovered viewport, or the first viewport window when none was hovered.
 
-The mutating tools return the same JSON as `get_mesh_component_selection`,
+- `delete_mesh_components` - optional `context` (`vertices`, `edges`,
+  `faces`, `only_edges_and_faces`, `only_faces`; default by the current
+  mode); needs a live selection in the mode the context reads.
+- `dissolve_mesh_components` - optional `kind` (`faces`, `edges`,
+  `vertices`; default by the current mode) and the options of that kind
+  (`dissolve_vertices`, `preserve_quads`, `angle_threshold_degrees`,
+  `face_split`, `boundary_tear`), each defaulting to the library default.
+- `dissolve_limited` - `angle_limit_degrees`, `dissolve_boundaries`,
+  `delimit_winding`, `delimit_crease` (library defaults); on the component
+  selection when one is active, else on the selected meshes.
+
+The three geometry tools queue an undoable operation and return
+`{queued: true, ...}` with the options they used; node targets (`node_ids`
+/ `node_id` / `node_name` + `scene_name`) override the object selection as
+for `merge_faces`.
+
+The mutating selection tools return the same JSON as `get_mesh_component_selection`,
 except `select_mesh_components` (the entry's counts) and
 `clear_mesh_component_selection`.
 
