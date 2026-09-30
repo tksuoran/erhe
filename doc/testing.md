@@ -111,9 +111,15 @@ builds while discovery ran post-build.
 
 CI (`.github/workflows/build.yml`) configures every matrix entry with tests
 on, builds `editor` and `erhe_tests`, and runs
-`ctest --label-exclude "gpu|editor" --output-junit`; the runners have no GPU.
-That ctest step does not fail its job, so the build badge stays a build
-verdict: the JUnit files are uploaded as `test-results-*` artifacts and
+`ctest --label-exclude "gpu|editor" --output-junit` through
+`scripts/ci_run_tests.py`; the runners have no GPU. Each test is bounded to
+120 s and the ctest step to 30 minutes, so a hung test is reported as a
+Timeout and a runaway step ends while the job is still alive. The script
+tees ctest's output line by line to a `.log` next to the JUnit file (ctest's
+own `--output-log` is written only at exit); both are uploaded, and the log
+names the test that was running when a step was cut off. That ctest step
+does not fail its job, so the build badge stays a build verdict: the JUnit
+files are uploaded as `test-results-*` artifacts and
 `.github/workflows/tests.yml` (triggered when a build run completes)
 summarizes them with `scripts/ci_test_summary.py` and gives the tests badge in
 README.md. A build run that did not succeed fails the tests workflow too.

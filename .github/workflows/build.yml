@@ -148,17 +148,32 @@ jobs:
       # Device) and "editor" (they drive a running editor over its MCP server)
       # are left out. The step's outcome is deliberately not the job's: the
       # tests workflow judges the uploaded JUnit file.
+      #
+      # Bounds: the slowest test of any tree takes a few seconds and a whole
+      # tree about ten minutes, so a test that reaches 120 s (the script's
+      # ctest --timeout) has hung and a step that reaches 30 min has gone
+      # wrong. The per-test timeout turns a hang into a reported Timeout; the
+      # step timeout ends a runaway step while the job is still alive, so the
+      # step log is kept and the upload below still runs. Without them a hung
+      # or memory-starved test can take the hosted runner down ("lost
+      # communication with the server"), and such a job keeps no log at all.
+      # The script tees ctest's output to test-results/<build_dir>.log line by
+      # line (ctest's own --output-log is written only at exit), so the
+      # uploaded log names the test that was running when a step was cut off.
       - name: Run tests
         id: ctest
         continue-on-error: true
-        run: ctest --test-dir "${{ matrix.build_dir }}" --build-config "${{ matrix.config }}" --label-exclude "gpu|editor" --output-on-failure --timeout 900 --output-junit "${{ github.workspace }}/test-results/${{ matrix.build_dir }}.xml"
+        timeout-minutes: 30
+        run: python3 scripts/ci_run_tests.py "${{ matrix.build_dir }}" "${{ matrix.config }}" "${{ github.workspace }}/test-results"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.build_dir }}
-          path: test-results/${{ matrix.build_dir }}.xml
+          path: |
+            test-results/${{ matrix.build_dir }}.xml
+            test-results/${{ matrix.build_dir }}.log
           if-no-files-found: ignore
 
   # Grep-level rule (proposal D of doc/erhe/gl_worker_context_enforcement.md):
