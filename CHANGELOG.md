@@ -130,6 +130,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   result (`open` | `closed`); and `Geometry::get_corner_edge(corner)`, the
   edge of the facet edge starting at a corner, valid until the next
   `build_edges()`.
+- `erhe::geometry`: `erhe_geometry/edit_mesh.hpp` `Edit_mesh`, a mutable
+  polygon mesh scratch with provenance, loaded from a `Geometry`, with the
+  primitives `split_edge()`, `split_facet()`, `split_facet_edgenet()`,
+  `join_facets()`, `join_facet_pair()`, `collapse_vertex()`,
+  `weld_vertices()`, `separate_vertex()`, `delete_elements()` (with
+  `Delete_context`) and `create_facet()`, their result enums
+  `Join_result`, `Collapse_result` and `Edgenet_result`, and adjacency
+  queries; and `operation::Edit_mesh_operation`, a `Geometry_operation`
+  whose `emit()` writes the scratch into the destination through the
+  provenance tables.
 
 ### Changed
 

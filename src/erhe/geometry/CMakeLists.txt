@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::geometry ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_geometry/edit_mesh.cpp
+    erhe_geometry/edit_mesh.hpp
     erhe_geometry/geometry.cpp
     erhe_geometry/geometry.hpp
     erhe_geometry/geometry_log.cpp
@@ -56,6 +58,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/bake_transform.hpp
     erhe_geometry/operation/clip_tile_tree.cpp
     erhe_geometry/operation/clip_tile_tree.hpp
+    erhe_geometry/operation/edit_mesh_operation.cpp
+    erhe_geometry/operation/edit_mesh_operation.hpp
     erhe_geometry/operation/generate_frame_field_tangents.cpp
     erhe_geometry/operation/generate_frame_field_tangents.hpp
     erhe_geometry/operation/generate_tangents.cpp

@@ -22,6 +22,7 @@ add_executable(${_target}
     test_conway_texcoord_seam.cpp
     test_csg.cpp
     test_edge_sharpness.cpp
+    test_edit_mesh.cpp
     test_geometry_operation.cpp
     test_geometry_serialization.cpp
     test_lattice_deform.cpp
