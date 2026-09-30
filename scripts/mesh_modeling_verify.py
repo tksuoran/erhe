@@ -5,7 +5,11 @@ section 4.2, doc/editor/mesh_component_selection.md) over MCP.
 Launches a headless editor (ERHE_AI_DRIVER=1), creates a box and checks the
 flush rules, the mode conversions (flush and expand), invert, select all,
 select none, select linked and the vertex / edge mode region (box and brush)
-select against the box's known counts (8 vertices, 12 edges, 6 facets).
+select against the box's known counts (8 vertices, 12 edges, 6 facets). Loop
+and ring select are checked on the box, a torus and a one-sided rectangle
+(an open mesh), through select_mesh_loop and through Alt / Ctrl+Alt clicks.
+The editor's stderr (where a crash stack goes) is written to
+logs/editor_stderr.txt.
 
 Usage:
     py -3 scripts/mesh_modeling_verify.py [--editor <path to editor.exe>]
@@ -26,6 +30,7 @@ from erhe_mcp import McpClient, check_true, report  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_PATH = os.path.join(REPO_ROOT, "logs", "log.txt")
+STDERR_PATH = os.path.join(REPO_ROOT, "logs", "editor_stderr.txt")
 DEFAULT_EDITOR = os.path.join("build_vs2026_vulkan_headless", "bin", "Debug", "editor.exe")
 BOX = "mm_box"
 
@@ -38,13 +43,16 @@ def launch_editor(editor_exe):
     open(LOG_PATH, "w").close()
     env = dict(os.environ, ERHE_AI_DRIVER="1")
     flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    # The cpptrace crash stack goes to stderr; keep it for the post-mortem.
+    stderr_file = open(STDERR_PATH, "w", encoding="utf-8")
     process = subprocess.Popen([exe], cwd=REPO_ROOT, env=env, creationflags=flags,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                               stdout=subprocess.DEVNULL, stderr=stderr_file)
+    stderr_file.close()
     deadline = time.monotonic() + 180.0
     pattern = re.compile(r"MCP server: listening on 127\.0\.0\.1:(\d+)")
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise RuntimeError(f"editor exited with {process.returncode} during startup; see logs/log.txt")
+            raise RuntimeError(f"editor exited with {process.returncode} during startup; see logs/log.txt and logs/editor_stderr.txt")
         try:
             with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as handle:
                 text = handle.read()
@@ -173,6 +181,175 @@ def run_region_select(e):
     e.call("clear_mesh_component_selection")
 
 
+TORUS = "mm_torus"
+RECTANGLE = "mm_rectangle"
+
+
+def entry_of(selection, node_name):
+    """(vertices, edges, facets) lists of node_name's live entry."""
+    for entry in selection.get("entries", []):
+        if (entry.get("node_name") == node_name) and entry.get("live", False):
+            return entry
+    return {"vertices": [], "edges": [], "facets": []}
+
+
+def counts_of(selection, node_name):
+    entry = entry_of(selection, node_name)
+    return (len(entry["vertices"]), len(entry["edges"]), len(entry["facets"]))
+
+
+def place_in_front_of_camera(e, node_name, distance=2.0):
+    """Move node_name in front of the first viewport's camera, camera-aligned."""
+    viewport = e.call("get_viewports")["viewports"][0]
+    m = viewport["camera_world_from_camera"]
+    position = [m[12], m[13], m[14]]
+    forward = [-m[8], -m[9], -m[10]]
+    length = math.sqrt(sum(c * c for c in forward))
+    translation = [position[i] + (forward[i] / length) * distance for i in range(3)]
+    e.call("set_node_transform", {
+        "scene_name": e.scene, "node_name": node_name,
+        "translation": translation, "rotation_xyzw": quaternion_from_columns(m)
+    })
+    e.advance(2)
+    return viewport
+
+
+def left_of_centre(viewport):
+    """A window point left of the viewport centre, inside a shape placed by
+    place_in_front_of_camera, so the nearest edge to it is the shape's left
+    edge."""
+    x = viewport["x"] + (viewport["width"] * 0.5) - (viewport["height"] * 0.02)
+    y = viewport["y"] + (viewport["height"] * 0.5)
+    return x, y
+
+
+def check_pick(e, viewport, node_name, x, y):
+    """The click point hovers node_name (pick_at takes viewport pixels)."""
+    pick = e.call("pick_at", {"x": x - viewport["x"], "y": y - viewport["y"]})
+    node = pick.get("nearest", {}).get("node")
+    check_true(f"the click point hovers {node_name}", node == node_name, f"hovers {node}")
+
+
+def run_loop_select_mcp(e):
+    """select_mesh_loop on the box and a torus (doc/plans/mesh_modeling.md
+    section 4.2)."""
+    def loop(node_name, edge, kind, action="replace", **kwargs):
+        args = {"scene_name": e.scene, "node_name": node_name, "edge": edge, "kind": kind, "action": action}
+        args.update(kwargs)
+        return e.call("select_mesh_loop", args)
+
+    # A cube edge: the edges of facet 0 give valid seeds.
+    e.select(mode="face", facets=[0])
+    seed = entry_of(e.call("get_mesh_component_selection"), BOX)["edges"][0]
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    selection = loop(BOX, seed, "edge_loop")
+    expect("box edge loop from a cube edge -> the edge alone (valence-3 corners)",
+           (selection["walked"], counts_of(selection, BOX)), (1, (2, 1, 0)))
+    selection = loop(BOX, seed, "edge_ring")
+    expect("box edge ring from a cube edge -> 4 edges", (selection["walked"], counts_of(selection, BOX)[1]), (4, 4))
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    selection = loop(BOX, seed, "edge_ring")
+    expect("box edge ring in vertex mode selects the ring's 8 vertices (flush derives every edge)",
+           counts_of(selection, BOX), (8, 12, 6))
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    selection = loop(BOX, seed, "face_loop")
+    expect("box face loop -> 4 facets (flushing to 8 vertices, 12 edges)",
+           (selection["walked"], counts_of(selection, BOX)), (4, (8, 12, 4)))
+    try:
+        loop(BOX, seed, "edge_loop")
+        check_true("edge_loop in face mode is refused", False, "no error")
+    except RuntimeError:
+        check_true("edge_loop in face mode is refused", True)
+    e.call("clear_mesh_component_selection")
+
+    # Torus: all quads, valence-4 vertices, closed loops and rings.
+    major, minor = 12, 8
+    e.call("create_shape", {"scene_name": e.scene, "shape": "torus", "name": TORUS,
+                            "major_steps": major, "minor_steps": minor, "motion_mode": "none"})
+    e.advance(4)
+    info = e.call("get_mesh_geometry_info", {"scene_name": e.scene, "node_name": TORUS})
+    counts = info.get("counts", info)
+    torus_ok = (counts.get("vertices") == major * minor) and (counts.get("facets") == major * minor)
+    check_true("torus is welded: 96 vertices, 96 facets", torus_ok, f"got {counts}")
+    if torus_ok:
+        e.call("set_mesh_component_mode", {"mode": "face"})
+        e.call("select_mesh_components", {"scene_name": e.scene, "node_name": TORUS, "facets": [0]})
+        seed = entry_of(e.call("get_mesh_component_selection"), TORUS)["edges"][0]
+        e.call("set_mesh_component_mode", {"mode": "edge"})
+        selection = loop(TORUS, seed, "edge_loop")
+        loop_count = selection["walked"]
+        loop_edges = entry_of(selection, TORUS)["edges"]
+        check_true("torus edge loop is a closed circle (8 or 12 edges)", loop_count in (major, minor), f"got {loop_count}")
+        selection = loop(TORUS, seed, "edge_ring")
+        ring_count = selection["walked"]
+        expect("torus edge ring crosses the other circle direction (loop + ring = 20)", loop_count + ring_count, major + minor)
+        # A ring edge sharing no vertex with the seed lies on a parallel,
+        # disjoint loop.
+        ring_edges = entry_of(selection, TORUS)["edges"]
+        other = next(edge for edge in ring_edges if not (set(edge) & set(seed)))
+        selection = loop(TORUS, seed, "edge_loop")
+        expect("torus loop (replace) -> loop edges", counts_of(selection, TORUS)[1], loop_count)
+        selection = loop(TORUS, other, "edge_loop", action="extend")
+        expect("torus extend with a parallel loop -> twice the edges", counts_of(selection, TORUS)[1], 2 * loop_count)
+        selection = loop(TORUS, other, "edge_loop", action="deselect")
+        expect("torus deselect the parallel loop -> back to the first loop",
+               sorted(map(tuple, entry_of(selection, TORUS)["edges"])), sorted(map(tuple, loop_edges)))
+        e.call("set_mesh_component_mode", {"mode": "face"})
+        selection = loop(TORUS, seed, "face_loop")
+        check_true("torus face loop is a closed band (8 or 12 facets)", selection["walked"] in (major, minor),
+                   f"got {selection['walked']}")
+        e.call("clear_mesh_component_selection")
+    # Out of the way of the click tests.
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": TORUS, "translation": [0.0, -100.0, 0.0]})
+    e.advance(2)
+
+
+def run_loop_select_clicks(e):
+    """Alt+click / Ctrl+Alt+click / Shift on the box in front of the camera,
+    then the boundary cycle on a one-sided rectangle."""
+    viewport = place_in_front_of_camera(e, BOX)
+    x, y = left_of_centre(viewport)
+    check_pick(e, viewport, BOX, x, y)
+
+    def click(modifiers):
+        e.call("mouse_click", {"x": x, "y": y, "modifiers": modifiers})
+        e.advance(2)
+        return e.call("get_mesh_component_selection")
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    expect("Alt+click on a cube edge (edge mode) -> the edge alone", counts_of(click(["menu"]), BOX), (2, 1, 0))
+    expect("Ctrl+Alt+click on a cube edge -> the 4-edge ring", counts_of(click(["ctrl", "menu"]), BOX)[1], 4)
+    expect("Shift+Ctrl+Alt+click on the selected ring -> deselects it", counts_of(click(["shift", "ctrl", "menu"]), BOX)[1], 0)
+    expect("Shift+Ctrl+Alt+click again -> extends with the ring", counts_of(click(["shift", "ctrl", "menu"]), BOX)[1], 4)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    e.call("clear_mesh_component_selection")
+    expect("Alt+click in face mode -> the 4-facet face loop", counts_of(click(["menu"]), BOX)[2], 4)
+    expect("Ctrl+Alt+click in face mode -> the face loop too", counts_of(click(["ctrl", "menu"]), BOX)[2], 4)
+    e.call("clear_mesh_component_selection")
+
+    # An open mesh: a one-sided rectangle, 4 boundary edges with valence-2
+    # corners. Box out of the way first.
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX, "translation": [0.0, 100.0, 0.0]})
+    e.call("create_shape", {"scene_name": e.scene, "shape": "rectangle", "name": RECTANGLE,
+                            "back_face": False, "motion_mode": "none"})
+    e.advance(4)
+    viewport = place_in_front_of_camera(e, RECTANGLE)
+    x, y = left_of_centre(viewport)
+    check_pick(e, viewport, RECTANGLE, x, y)
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    selection = click(["menu"])
+    expect("Alt+click on a boundary edge -> stops at the outer corners (1 edge)", counts_of(selection, RECTANGLE)[1], 1)
+    seed = entry_of(selection, RECTANGLE)["edges"][0] if counts_of(selection, RECTANGLE)[1] == 1 else [0, 1]
+    expect("Alt+click again on the selected boundary loop -> the whole boundary (4 edges)",
+           counts_of(click(["menu"]), RECTANGLE)[1], 4)
+    expect("Alt+click once more -> back to the loop (1 edge)", counts_of(click(["menu"]), RECTANGLE)[1], 1)
+    selection = e.call("select_mesh_loop", {"scene_name": e.scene, "node_name": RECTANGLE, "edge": seed, "kind": "boundary_loop"})
+    expect("select_mesh_loop boundary_loop on the rectangle -> 4 edges", (selection["walked"], counts_of(selection, RECTANGLE)[1]), (4, 4))
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+
+
 def run_transform_in_component_mode(e):
     """A node transform while a mesh component mode is active and the box is
     object-selected with no component selected (the gizmo is owned by the
@@ -274,6 +451,9 @@ def run(e):
 
     e.call("clear_mesh_component_selection")
     e.call("set_mesh_component_mode", {"mode": "object"})
+
+    run_loop_select_mcp(e)
+    run_loop_select_clicks(e)
 
     # Last: it moves the box.
     run_transform_in_component_mode(e)

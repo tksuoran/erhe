@@ -75,6 +75,48 @@ Edge and Face mode, with the same modifiers:
 Face mode gathers the visible facets with the GPU id-buffer scan; Vertex and
 Edge mode project the vertices on the CPU (section 7).
 
+### Loop and ring select
+
+Two `Component_loop_select_command`s bound to the left mouse button (on
+release) with an exact modifier mask, so at the tool's priority they
+dispatch before the mask-less single-click select, and the fly camera's Alt
+drags (right and middle button) are unaffected:
+
+| Command | Keys | Action |
+|---------|------|--------|
+| `Mesh_component_selection.loop_select` | Alt+click, Shift+Alt+click | Edge loop (vertex and edge mode), face loop (face mode) |
+| `Mesh_component_selection.ring_select` | Ctrl+Alt+click, Shift+Ctrl+Alt+click | Edge ring (vertex and edge mode), face loop (face mode) |
+
+The walk starts from the picked edge, which is the facet boundary edge
+nearest to the pointer in every mode (section 4), and runs the walkers of
+`erhe_geometry/topology.hpp` (`doc/erhe/geometry.md`) through
+`Mesh_component_selection::select_loop()`. The walked elements go into the
+current mode's set: edge mode takes the walked edges, vertex mode their
+vertices, face mode the walked facets; then the selection flushes (section
+3). A plain click replaces the selection; Shift extends it, or deselects the
+walked set when every element of it is already selected. The walk needs the
+Geometry's vertex and edge connectivity; without it the click is consumed
+and a `log_selection` warning names the Geometry.
+
+- **Boundary cycle.** A plain Alt+click on a boundary edge whose edge loop is
+  already fully selected selects the whole boundary loop instead
+  (`walk_boundary_loop`); the next Alt+click on the same edge returns to the
+  edge loop. The tool keeps the last picked boundary edge and whether its
+  click selected the boundary loop.
+- **Delimit.** The edge loop stops at outer corners (valence-2 boundary
+  vertices) and, while the toolbar checkbox "Loop stops at creases" (vertex
+  and edge mode, default on) is checked, at creases: a crease edge
+  continues only onto crease edges, a plain edge stops at a vertex with a
+  crease edge.
+- **Preview.** While Alt (or Ctrl+Alt) is held over a component, the tool
+  draws the loop, ring or face loop a click would select in the hover color.
+  The walk runs only when its key changes (scene view, mesh, primitive,
+  Geometry, picked edge, kind, delimit): on `Hover_mesh_message` (the hovered
+  mesh or the pointer ray changed), on the hovered scene view changing, on
+  the editor's key handler seeing the Shift / Ctrl / Alt state change, on a
+  mode change, on a geometry change and on the delimit checkbox. The preview
+  is drawn only while its target is live (`Mesh_component_selection::is_live`).
+
 ### Selection commands
 
 Each command is a `Component_selection_action_command` hosted by the tool,
@@ -125,6 +167,13 @@ command ends with a flush (section 3).
 - `select_linked_mesh_components` - `from_selection: true`, or `scene_name`
   + node + `primitive_index` + `vertices` (seed list); optional
   `delimit_crease` stops the flood at crease edges.
+- `select_mesh_loop` - `scene_name` + node + `primitive_index` + `edge`
+  ([v0, v1]), `kind` (`edge_loop`, the default, `edge_ring`,
+  `boundary_loop` or `face_loop`), `action` (`replace`, the default,
+  `extend` or `deselect`) and `delimit_crease` (default true): loop / ring
+  select without the pointer. The edge kinds apply in vertex and edge mode,
+  `face_loop` in face mode; the result carries `walked`, the element count
+  of the walk.
 - `clear_mesh_component_selection` - select none.
 - `debug_region_select` - a box (or, with `is_brush`, a brush disk) select
   over a rectangle in viewport pixels in `mode` (`vertex`, `edge` or `face`,
@@ -380,7 +429,10 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
 - `py -3 scripts/mesh_modeling_verify.py [--editor <editor.exe>]` launches a
   headless editor and checks the flush rules, both mode conversions, invert,
   select all / none, select linked and their keys, and vertex / edge mode
-  box and brush select (`debug_region_select`) on a box; the `Mcp_test`
+  box and brush select (`debug_region_select`) on a box, loop, ring and
+  face loop select (`select_mesh_loop` and Alt / Ctrl+Alt clicks) on the
+  box, a torus and a one-sided rectangle, including the boundary cycle; it
+  writes the editor's stderr to `logs/editor_stderr.txt`; the `Mcp_test`
   case `mesh_component_flush_and_select_all` covers the face-to-vertex flush
   and select all in CI.
 
@@ -390,5 +442,5 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
   editing the selection, skinned meshes, and compute selection over the
   vertex and index buffers.
 - [plans/mesh_modeling.md](../plans/mesh_modeling.md) - Blender-style
-  modeling operations: loop and ring select, loop cut, knife, slide, merge,
+  modeling operations: loop cut, knife, slide, merge,
   dissolve, inset, bevel.

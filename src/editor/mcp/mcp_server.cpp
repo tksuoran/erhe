@@ -719,6 +719,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "select_all_mesh_components",     &Mcp_server::action_select_all_mesh_components    },
         { "invert_mesh_selection",          &Mcp_server::action_invert_mesh_selection         },
         { "select_linked_mesh_components",  &Mcp_server::action_select_linked_mesh_components },
+        { "select_mesh_loop",               &Mcp_server::action_select_mesh_loop              },
         { "get_mesh_component_selection",   &Mcp_server::query_mesh_component_selection       },
         { "get_id_range_mapping",           &Mcp_server::query_id_range_mapping               },
         { "debug_region_select",            &Mcp_server::action_debug_region_select           },

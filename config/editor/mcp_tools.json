@@ -5648,6 +5648,67 @@
     "name": "select_linked_mesh_components"
   },
   {
+    "description": "Blender loop / ring select (Alt+click / Ctrl+Alt+click): run the kind walk from the edge [v0, v1] of one node's mesh primitive and apply action to the current mode's set, then flush. edge_loop, edge_ring and boundary_loop yield edges and apply in vertex mode (their vertices) and edge mode; face_loop yields facets and applies in face mode only. delimit_crease (default true) stops an edge loop at crease edges (edge_sharpness > 0); an edge loop always stops at outer corners. Errors in object mode, when the kind does not apply in the mode, when [v0, v1] is not an edge and when the geometry has no connectivity. Returns the resulting selection (same shape as get_mesh_component_selection) plus walked, the number of elements the walk yielded (0 changes nothing).",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "replace (default: clear the selection first), extend (add) or deselect (remove)",
+          "enum": [
+            "replace",
+            "extend",
+            "deselect"
+          ],
+          "type": "string"
+        },
+        "delimit_crease": {
+          "description": "Stop an edge loop at crease edges (default true)",
+          "type": "boolean"
+        },
+        "edge": {
+          "description": "The seed edge as a [v0, v1] vertex-index pair",
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "kind": {
+          "description": "The walk (default edge_loop)",
+          "enum": [
+            "edge_loop",
+            "edge_ring",
+            "boundary_loop",
+            "face_loop"
+          ],
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given)",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Node name (used when node_id is absent)",
+          "type": "string"
+        },
+        "primitive_index": {
+          "description": "Mesh primitive index (default 0)",
+          "type": "integer"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "edge"
+      ],
+      "type": "object"
+    },
+    "name": "select_mesh_loop"
+  },
+  {
     "description": "Report the GPU ID-buffer range mapping from the most recently resolved region scan: for each drawn primitive, its id_offset, length (index count), triangle_count, base_vertex, and the owning mesh/node/primitive_index. A decoded pixel id in [id_offset, id_offset+length) selects that primitive and (id - id_offset) is its 0-based facet index. Run a box/paint select (or debug_region_select) first to populate it.",
     "inputSchema": {
       "properties": {},

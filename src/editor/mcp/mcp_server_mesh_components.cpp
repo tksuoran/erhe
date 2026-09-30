@@ -363,15 +363,13 @@ auto Mcp_server::action_select_mesh_components(const json& args) -> std::string
     }).dump();
 }
 
-auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
+namespace {
+
+// The get_mesh_component_selection payload: the mode and every entry's sets.
+[[nodiscard]] auto mesh_component_selection_json(const Mesh_component_selection& selection) -> json
 {
-    static_cast<void>(args);
-    Mesh_component_selection* selection = m_context.mesh_component_selection;
-    if (selection == nullptr) {
-        return make_json_content({{"mode", "object"}, {"entries", json::array()}}).dump();
-    }
     json entries = json::array();
-    for (const Mesh_component_entry& entry : selection->get_entries()) {
+    for (const Mesh_component_entry& entry : selection.get_entries()) {
         json vertices = json::array();
         for (const GEO::index_t v : entry.vertices) {
             vertices.push_back(v);
@@ -386,7 +384,7 @@ auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
         }
         json entry_json = {
             {"primitive_index", entry.primitive_index},
-            {"live",            selection->is_live(entry)},
+            {"live",            selection.is_live(entry)},
             {"vertices",        vertices},
             {"edges",           edges},
             {"facets",          facets}
@@ -402,10 +400,22 @@ auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
         }
         entries.push_back(entry_json);
     }
-    return make_json_content({
-        {"mode",    mesh_component_mode_lc(selection->get_mode())},
+    return json{
+        {"mode",    mesh_component_mode_lc(selection.get_mode())},
         {"entries", entries}
-    }).dump();
+    };
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    const Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return make_json_content({{"mode", "object"}, {"entries", json::array()}}).dump();
+    }
+    return make_json_content(mesh_component_selection_json(*selection)).dump();
 }
 
 auto Mcp_server::action_grow_mesh_selection(const json& args) -> std::string
@@ -528,6 +538,84 @@ auto Mcp_server::action_select_linked_mesh_components(const json& args) -> std::
         return make_error_content("Select linked needs the geometry's connectivity, which is not built: " + node->get_name());
     }
     return query_mesh_component_selection(args);
+}
+
+auto Mcp_server::action_select_mesh_loop(const json& args) -> std::string
+{
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    if (!is_mesh_component_mode(selection->get_mode())) {
+        return make_error_content("select_mesh_loop needs a vertex, edge or face mode (set_mesh_component_mode)");
+    }
+    const std::string kind_str = args.value("kind", "edge_loop");
+    Loop_kind kind = Loop_kind::edge_loop;
+    if      (kind_str == "edge_loop")     { kind = Loop_kind::edge_loop; }
+    else if (kind_str == "edge_ring")     { kind = Loop_kind::edge_ring; }
+    else if (kind_str == "boundary_loop") { kind = Loop_kind::boundary_loop; }
+    else if (kind_str == "face_loop")     { kind = Loop_kind::face_loop; }
+    else {
+        return make_error_content("Invalid kind: " + kind_str + " (edge_loop, edge_ring, boundary_loop, face_loop)");
+    }
+    const bool face_mode = (selection->get_mode() == Mesh_component_mode::face);
+    if ((kind == Loop_kind::face_loop) != face_mode) {
+        return make_error_content("kind " + kind_str + " does not apply in " + mesh_component_mode_lc(selection->get_mode()) + " mode (face_loop: face mode; the edge kinds: vertex and edge mode)");
+    }
+    const std::string action_str = args.value("action", "replace");
+    Select_action action = Select_action::replace;
+    if      (action_str == "replace")  { action = Select_action::replace; }
+    else if (action_str == "extend")   { action = Select_action::extend; }
+    else if (action_str == "deselect") { action = Select_action::deselect; }
+    else {
+        return make_error_content("Invalid action: " + action_str + " (replace, extend, deselect)");
+    }
+    const erhe::geometry::Edge_loop_delimit delimit = args.value("delimit_crease", true)
+        ? (erhe::geometry::Edge_loop_delimit::outer_corners | erhe::geometry::Edge_loop_delimit::crease)
+        : erhe::geometry::Edge_loop_delimit::outer_corners;
+
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::vector<Mesh_component_target> targets;
+    append_mesh_component_targets(erhe::scene::get_mesh(node.get()), targets);
+    const Mesh_component_target* target = nullptr;
+    for (const Mesh_component_target& candidate : targets) {
+        if (candidate.primitive_index == primitive_index) {
+            target = &candidate;
+            break;
+        }
+    }
+    if (target == nullptr) {
+        return make_error_content("Node has no component-selectable mesh primitive at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+    if (!args.contains("edge") || !args["edge"].is_array() || (args["edge"].size() != 2)) {
+        return make_error_content("edge (a [v0, v1] vertex-index pair) is required");
+    }
+    const GEO::index_t v0 = args["edge"][0].get<GEO::index_t>();
+    const GEO::index_t v1 = args["edge"][1].get<GEO::index_t>();
+    const erhe::geometry::Geometry& geometry     = *target->geometry;
+    const GEO::index_t              vertex_count = geometry.get_mesh().vertices.nb();
+    if ((v0 >= vertex_count) || (v1 >= vertex_count) || (v0 == v1)) {
+        return make_error_content("edge vertices must be two distinct indices below vertex_count " + std::to_string(vertex_count));
+    }
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        return make_error_content("Loop select needs the geometry's connectivity, which is not built: " + node->get_name());
+    }
+    if (geometry.get_edge(v0, v1) == GEO::NO_EDGE) {
+        return make_error_content("(" + std::to_string(v0) + ", " + std::to_string(v1) + ") is not an edge of " + node->get_name());
+    }
+    const std::size_t count = selection->select_loop(*target, make_edge_key(v0, v1), kind, action, delimit);
+    json result = mesh_component_selection_json(*selection);
+    result["walked"] = count;
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::query_id_range_mapping(const json& args) -> std::string

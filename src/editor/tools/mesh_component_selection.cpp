@@ -51,6 +51,71 @@ auto c_str(const Mode_conversion conversion) -> const char*
     }
 }
 
+auto c_str(const Loop_kind kind) -> const char*
+{
+    switch (kind) {
+        case Loop_kind::edge_loop:     return "edge_loop";
+        case Loop_kind::edge_ring:     return "edge_ring";
+        case Loop_kind::boundary_loop: return "boundary_loop";
+        case Loop_kind::face_loop:     return "face_loop";
+        default:                       return "?";
+    }
+}
+
+auto c_str(const Select_action action) -> const char*
+{
+    switch (action) {
+        case Select_action::replace:  return "replace";
+        case Select_action::extend:   return "extend";
+        case Select_action::deselect: return "deselect";
+        default:                      return "?";
+    }
+}
+
+auto walk_mesh_loop(
+    const erhe::geometry::Geometry&         geometry,
+    const Mesh_edge_key                     edge_key,
+    const Loop_kind                         kind,
+    const erhe::geometry::Edge_loop_delimit delimit,
+    std::vector<GEO::index_t>&              out_elements
+) -> bool
+{
+    out_elements.clear();
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        return false;
+    }
+    const GEO::index_t vertex_count = geometry.get_mesh().vertices.nb();
+    if ((edge_key.first == edge_key.second) || (edge_key.first >= vertex_count) || (edge_key.second >= vertex_count)) {
+        return false;
+    }
+    const GEO::index_t edge = geometry.get_edge(edge_key.first, edge_key.second);
+    if (edge == GEO::NO_EDGE) {
+        return false;
+    }
+    switch (kind) {
+        case Loop_kind::edge_loop: {
+            static_cast<void>(erhe::geometry::walk_edge_loop(geometry, edge, delimit, out_elements));
+            break;
+        }
+        case Loop_kind::edge_ring: {
+            static_cast<void>(erhe::geometry::walk_edge_ring(geometry, edge, out_elements));
+            break;
+        }
+        case Loop_kind::boundary_loop: {
+            erhe::geometry::walk_boundary_loop(geometry, edge, out_elements);
+            break;
+        }
+        case Loop_kind::face_loop: {
+            static_cast<void>(erhe::geometry::walk_face_loop(geometry, edge, out_elements));
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    return true;
+}
+
 auto append_mesh_component_targets(
     const std::shared_ptr<erhe::scene::Mesh>& mesh,
     std::vector<Mesh_component_target>&       out_targets
@@ -703,6 +768,127 @@ auto Mesh_component_selection::select_linked(
     Mesh_component_entry& entry = find_or_create_entry(target.mesh, target.primitive_index, target.geometry);
     return add_linked_region(entry, geometry, delimit);
 }
+
+namespace {
+
+[[nodiscard]] auto loop_kind_applies(const Loop_kind kind, const Mesh_component_mode mode) -> bool
+{
+    if (kind == Loop_kind::face_loop) {
+        return mode == Mesh_component_mode::face;
+    }
+    return (mode == Mesh_component_mode::vertex) || (mode == Mesh_component_mode::edge);
+}
+
+} // anonymous namespace
+
+auto Mesh_component_selection::walk_loop(
+    const Mesh_component_target&            target,
+    const Mesh_edge_key                     edge_key,
+    const Loop_kind                         kind,
+    const erhe::geometry::Edge_loop_delimit delimit
+) -> bool
+{
+    m_loop_elements.clear();
+    if (!loop_kind_applies(kind, m_mode) || !target.mesh || !target.geometry) {
+        return false;
+    }
+    const erhe::geometry::Geometry& geometry = *target.geometry;
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        log_selection->warn("Loop select: geometry '{}' has no connectivity; skipped", geometry.get_name());
+        return false;
+    }
+    return walk_mesh_loop(geometry, edge_key, kind, delimit, m_loop_elements) && !m_loop_elements.empty();
+}
+
+auto Mesh_component_selection::select_loop(
+    const Mesh_component_target&            target,
+    const Mesh_edge_key                     edge_key,
+    const Loop_kind                         kind,
+    const Select_action                     action,
+    const erhe::geometry::Edge_loop_delimit delimit
+) -> std::size_t
+{
+    if (!walk_loop(target, edge_key, kind, delimit)) {
+        return 0;
+    }
+    if (action == Select_action::replace) {
+        clear_all();
+    }
+    const bool            add      = (action != Select_action::deselect);
+    const GEO::Mesh&      geo_mesh = target.geometry->get_mesh();
+    Mesh_component_entry& entry    = find_or_create_entry(target.mesh, target.primitive_index, target.geometry);
+    const auto apply_vertex = [&entry, add](const GEO::index_t vertex) {
+        if (add) { entry.vertices.insert(vertex); } else { entry.vertices.erase(vertex); }
+    };
+    for (const GEO::index_t element : m_loop_elements) {
+        switch (m_mode) {
+            case Mesh_component_mode::vertex: {
+                apply_vertex(geo_mesh.edges.vertex(element, 0));
+                apply_vertex(geo_mesh.edges.vertex(element, 1));
+                break;
+            }
+            case Mesh_component_mode::edge: {
+                const Mesh_edge_key key = make_edge_key(geo_mesh.edges.vertex(element, 0), geo_mesh.edges.vertex(element, 1));
+                if (add) { entry.edges.insert(key); } else { entry.edges.erase(key); }
+                break;
+            }
+            case Mesh_component_mode::face: {
+                if (add) { entry.facets.insert(element); } else { entry.facets.erase(element); }
+                break;
+            }
+            case Mesh_component_mode::object:
+            default: {
+                break;
+            }
+        }
+    }
+    flush_entry(geo_mesh, m_mode, entry);
+    return m_loop_elements.size();
+}
+
+auto Mesh_component_selection::is_loop_selected(
+    const Mesh_component_target&            target,
+    const Mesh_edge_key                     edge_key,
+    const Loop_kind                         kind,
+    const erhe::geometry::Edge_loop_delimit delimit
+) -> bool
+{
+    if (!walk_loop(target, edge_key, kind, delimit)) {
+        return false;
+    }
+    const Mesh_component_entry* const entry = find_entry(target.mesh, target.primitive_index, target.geometry);
+    if (entry == nullptr) {
+        return false;
+    }
+    const GEO::Mesh& geo_mesh = target.geometry->get_mesh();
+    for (const GEO::index_t element : m_loop_elements) {
+        switch (m_mode) {
+            case Mesh_component_mode::vertex: {
+                if (!entry->vertices.contains(geo_mesh.edges.vertex(element, 0)) || !entry->vertices.contains(geo_mesh.edges.vertex(element, 1))) {
+                    return false;
+                }
+                break;
+            }
+            case Mesh_component_mode::edge: {
+                if (!entry->edges.contains(make_edge_key(geo_mesh.edges.vertex(element, 0), geo_mesh.edges.vertex(element, 1)))) {
+                    return false;
+                }
+                break;
+            }
+            case Mesh_component_mode::face: {
+                if (!entry->facets.contains(element)) {
+                    return false;
+                }
+                break;
+            }
+            case Mesh_component_mode::object:
+            default: {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 #pragma endregion Selection commands
 
 #pragma region Grow / Shrink
@@ -937,7 +1123,15 @@ void Mesh_component_selection::prune()
 
 auto Mesh_component_selection::is_live(const Mesh_component_entry& entry) const -> bool
 {
-    const std::shared_ptr<erhe::scene::Mesh> mesh = entry.mesh.lock();
+    return is_live(entry.mesh.lock(), entry.primitive_index, entry.geometry.lock());
+}
+
+auto Mesh_component_selection::is_live(
+    const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+    const std::size_t                                primitive_index,
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry
+) const -> bool
+{
     if (!mesh) {
         return false;
     }
@@ -945,15 +1139,14 @@ auto Mesh_component_selection::is_live(const Mesh_component_entry& entry) const 
     if ((node == nullptr) || (node->get_item_host() == nullptr)) {
         return false; // mesh removed from the scene (e.g. an undone insert)
     }
-    const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
     if (!geometry) {
         return false;
     }
     const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
-    if (entry.primitive_index >= primitives.size()) {
+    if (primitive_index >= primitives.size()) {
         return false;
     }
-    const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[entry.primitive_index].primitive;
+    const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[primitive_index].primitive;
     if (!primitive) {
         return false;
     }

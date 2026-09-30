@@ -2,7 +2,7 @@
 
 #include "app_message.hpp"
 
-#include "erhe_geometry/topology.hpp" // Region_delimit
+#include "erhe_geometry/topology.hpp" // Edge_loop_delimit, Region_delimit
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <geogram/basic/numeric.h>
@@ -66,6 +66,45 @@ enum class Mode_conversion : unsigned int {
 // reached from either adjacent facet maps to a single entry.
 using Mesh_edge_key = std::pair<GEO::index_t, GEO::index_t>;
 [[nodiscard]] auto make_edge_key(GEO::index_t a, GEO::index_t b) -> Mesh_edge_key;
+
+// The walk a loop / ring select runs from a picked edge
+// (doc/plans/mesh_modeling.md section 4.1). The edge kinds yield edges and
+// apply in vertex and edge mode; face_loop yields facets and applies in face
+// mode.
+enum class Loop_kind : unsigned int {
+    edge_loop     = 0,
+    edge_ring     = 1,
+    boundary_loop = 2,
+    face_loop     = 3
+};
+
+[[nodiscard]] auto c_str(Loop_kind kind) -> const char*;
+
+// How a loop select combines with the current selection.
+//   replace  - clear the whole selection, then select the walked elements
+//   extend   - add the walked elements
+//   deselect - remove the walked elements
+enum class Select_action : unsigned int {
+    replace  = 0,
+    extend   = 1,
+    deselect = 2
+};
+
+[[nodiscard]] auto c_str(Select_action action) -> const char*;
+
+// Runs the `kind` walk of erhe_geometry/topology.hpp from the edge edge_key
+// names, filling out_elements (cleared, capacity kept) with edge indices, or
+// facet indices for face_loop. The delimit applies to edge_loop only. Returns
+// false, leaving out_elements empty, when the geometry lacks vertex or edge
+// connectivity or edge_key is not an edge of it. Logs nothing: the callers
+// decide whether a missing walk is worth a warning.
+auto walk_mesh_loop(
+    const erhe::geometry::Geometry&   geometry,
+    Mesh_edge_key                     edge_key,
+    Loop_kind                         kind,
+    erhe::geometry::Edge_loop_delimit delimit,
+    std::vector<GEO::index_t>&        out_elements
+) -> bool;
 
 class Mesh_component_selection;
 
@@ -218,6 +257,30 @@ public:
         erhe::geometry::Region_delimit delimit = erhe::geometry::Region_delimit::none
     ) -> bool;
 
+    // Loop / ring select (doc/plans/mesh_modeling.md section 4.2): runs the
+    // `kind` walk from edge_key on the target's Geometry and applies `action`
+    // to the current mode's set of the target's entry, then flushes. Vertex
+    // mode takes the walked edges' vertices, edge mode the walked edges, face
+    // mode the walked facets; the edge kinds apply in vertex and edge mode,
+    // face_loop in face mode only. Returns the number of walked elements, 0
+    // (changing nothing) when the kind does not apply in the current mode, the
+    // walk is empty, or the Geometry lacks connectivity (logged as a warning).
+    auto select_loop(
+        const Mesh_component_target&      target,
+        Mesh_edge_key                     edge_key,
+        Loop_kind                         kind,
+        Select_action                     action,
+        erhe::geometry::Edge_loop_delimit delimit
+    ) -> std::size_t;
+    // True when the walk select_loop would run is non-empty and every element
+    // it would select is already selected in the target's entry.
+    [[nodiscard]] auto is_loop_selected(
+        const Mesh_component_target&      target,
+        Mesh_edge_key                     edge_key,
+        Loop_kind                         kind,
+        erhe::geometry::Edge_loop_delimit delimit
+    ) -> bool;
+
     // Entry lookup keyed by (mesh, primitive_index, geometry).
     [[nodiscard]] auto find_entry(
         const std::shared_ptr<erhe::scene::Mesh>&        mesh,
@@ -267,6 +330,12 @@ public:
     // An entry is live when its mesh is in the scene (node attached to an item
     // host) and the primitive still carries this exact Geometry object.
     [[nodiscard]] auto is_live(const Mesh_component_entry& entry) const -> bool;
+    // The same test for a (mesh, primitive index, Geometry) held elsewhere.
+    [[nodiscard]] auto is_live(
+        const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+        std::size_t                                      primitive_index,
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry
+    ) const -> bool;
 
     [[nodiscard]] auto get_entries()       ->       std::vector<Mesh_component_entry>&;
     [[nodiscard]] auto get_entries() const -> const std::vector<Mesh_component_entry>&;
@@ -291,6 +360,18 @@ private:
     Mesh_component_mode               m_mode   {Mesh_component_mode::object};
     std::vector<Mesh_component_entry> m_entries{};
     bool                              m_change_pending{false};
+
+    // Runs walk_mesh_loop into m_loop_elements when `kind` applies in the
+    // current mode; logs a warning when the Geometry lacks connectivity.
+    auto walk_loop(
+        const Mesh_component_target&      target,
+        Mesh_edge_key                     edge_key,
+        Loop_kind                         kind,
+        erhe::geometry::Edge_loop_delimit delimit
+    ) -> bool;
+
+    // Loop select scratch (cleared at use, capacity kept).
+    std::vector<GEO::index_t>         m_loop_elements{};
 
     // Select linked scratch (cleared at use, capacity kept).
     std::vector<GEO::index_t>         m_seed_vertices  {};

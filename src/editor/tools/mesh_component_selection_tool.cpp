@@ -414,6 +414,41 @@ auto Component_selection_action_command::try_call() -> bool
     }
     return m_context.mesh_component_selection_tool->run_selection_action(m_action);
 }
+Component_loop_select_command::Component_loop_select_command(
+    erhe::commands::Commands& commands,
+    App_context&              context,
+    const char*               name,
+    const Loop_select_gesture gesture
+)
+    : Command  {commands, name}
+    , m_context{context}
+    , m_gesture{gesture}
+{
+}
+
+void Component_loop_select_command::try_ready()
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return;
+    }
+    if (m_context.mesh_component_selection_tool->try_ready()) {
+        set_ready();
+    }
+}
+
+auto Component_loop_select_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    if (get_command_state() != erhe::commands::State::Ready) {
+        return false;
+    }
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        set_inactive();
+        return false;
+    }
+    const bool consumed = m_context.mesh_component_selection_tool->on_loop_select(m_gesture, input.modifier_mask);
+    set_inactive();
+    return consumed;
+}
 #pragma endregion Commands
 
 Mesh_component_selection_tool::Mesh_component_selection_tool(
@@ -439,6 +474,8 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_invert_command                      {commands, context, Component_selection_action::invert}
     , m_select_linked_under_cursor_command  {commands, context, Component_selection_action::select_linked_under_cursor}
     , m_select_linked_from_selection_command{commands, context, Component_selection_action::select_linked_from_selection}
+    , m_loop_select_command                 {commands, context, "Mesh_component_selection.loop_select", Loop_select_gesture::loop}
+    , m_ring_select_command                 {commands, context, "Mesh_component_selection.ring_select", Loop_select_gesture::ring}
 {
     set_base_priority(c_priority);
     set_description  ("Mesh Component Selection");
@@ -513,11 +550,183 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
         commands.bind_command_to_key(command, key.first, Button_trigger::Button_pressed, key.second);
     }
 
+    // Loop select (Alt+click) and ring select (Ctrl+Alt+click), each with and
+    // without Shift (doc/plans/mesh_modeling.md D7). A mouse button binding
+    // with a modifier mask matches that mask exactly, and at equal priority
+    // the masked bindings dispatch before the mask-less single-click select.
+    // The fly camera's Alt drags are on the right and middle buttons.
+    const uint32_t alt = erhe::window::Key_modifier_bit_menu;
+    const std::pair<Component_loop_select_command*, uint32_t> loop_select_buttons[] = {
+        {&m_loop_select_command, alt},
+        {&m_loop_select_command, alt | erhe::window::Key_modifier_bit_shift},
+        {&m_ring_select_command, alt | erhe::window::Key_modifier_bit_ctrl},
+        {&m_ring_select_command, alt | erhe::window::Key_modifier_bit_ctrl | erhe::window::Key_modifier_bit_shift}
+    };
+    m_loop_select_command.set_host(this);
+    m_ring_select_command.set_host(this);
+    commands.register_command(&m_loop_select_command);
+    commands.register_command(&m_ring_select_command);
+    for (const auto& [command, modifier_mask] : loop_select_buttons) {
+        commands.bind_command_to_mouse_button(command, erhe::window::Mouse_button_left, Button_trigger::Button_released, modifier_mask);
+    }
+
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
             Tool::on_message(message);
+            update_loop_preview();
         }
     );
+    // The loop preview follows the hover: Hover_mesh_message is sent when the
+    // hovered mesh or the pointer ray changes.
+    m_hover_mesh_subscription = app_message_bus.hover_mesh.subscribe(
+        [this](Hover_mesh_message&) {
+            update_loop_preview();
+        }
+    );
+    m_mode_changed_subscription = app_message_bus.mesh_component_mode_changed.subscribe(
+        [this](Mesh_component_mode_changed_message&) {
+            invalidate_loop_preview();
+        }
+    );
+    m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
+        [this](Mesh_geometry_changed_message&) {
+            invalidate_loop_preview();
+        }
+    );
+}
+
+auto Mesh_component_selection_tool::get_loop_delimit() const -> erhe::geometry::Edge_loop_delimit
+{
+    return m_loop_delimit_crease
+        ? (erhe::geometry::Edge_loop_delimit::outer_corners | erhe::geometry::Edge_loop_delimit::crease)
+        : erhe::geometry::Edge_loop_delimit::outer_corners;
+}
+
+auto Mesh_component_selection_tool::on_loop_select(const Loop_select_gesture gesture, const uint32_t modifier_mask) -> bool
+{
+    Mesh_component_selection& selection = m_mesh_component_selection;
+    const Mesh_component_mode mode      = selection.get_mode();
+    if (!is_mesh_component_mode(mode)) {
+        return false;
+    }
+    Scene_view* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return false;
+    }
+    const Pick_result pick_result = pick(*scene_view);
+    if (!pick_result.valid || (pick_result.edge_v0 == pick_result.edge_v1)) {
+        return false;
+    }
+    const erhe::geometry::Geometry& geometry = *pick_result.geometry;
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        log_selection->warn("Loop select: geometry '{}' has no connectivity; skipped", geometry.get_name());
+        return true;
+    }
+
+    const Mesh_component_target target{
+        .mesh            = pick_result.mesh,
+        .primitive_index = pick_result.primitive_index,
+        .geometry        = pick_result.geometry
+    };
+    const Mesh_edge_key                     edge_key = make_edge_key(pick_result.edge_v0, pick_result.edge_v1);
+    const erhe::geometry::Edge_loop_delimit delimit  = get_loop_delimit();
+    const bool                              shift    = (modifier_mask & erhe::window::Key_modifier_bit_shift) != 0;
+    Loop_kind kind = (mode == Mesh_component_mode::face)
+        ? Loop_kind::face_loop
+        : ((gesture == Loop_select_gesture::ring) ? Loop_kind::edge_ring : Loop_kind::edge_loop);
+
+    // Boundary cycle: a plain Alt+click on a boundary edge whose loop is
+    // already selected selects the whole boundary loop; the next click on
+    // the same edge returns to the loop.
+    const GEO::index_t edge        = geometry.get_edge(edge_key.first, edge_key.second);
+    const bool         is_boundary = (edge != GEO::NO_EDGE) && (geometry.get_edge_facets(edge).size() == 1);
+    if (!shift && (kind == Loop_kind::edge_loop) && is_boundary) {
+        const bool same_edge =
+            (m_boundary_cycle.mesh.lock()     == pick_result.mesh)     &&
+            (m_boundary_cycle.geometry.lock() == pick_result.geometry) &&
+            (m_boundary_cycle.edge_key        == edge_key);
+        const bool boundary_selected = (same_edge && m_boundary_cycle.boundary_selected)
+            ? false
+            : selection.is_loop_selected(target, edge_key, Loop_kind::edge_loop, delimit);
+        if (boundary_selected) {
+            kind = Loop_kind::boundary_loop;
+        }
+        m_boundary_cycle = Boundary_cycle{
+            .mesh              = pick_result.mesh,
+            .geometry          = pick_result.geometry,
+            .edge_key          = edge_key,
+            .boundary_selected = boundary_selected
+        };
+    } else {
+        m_boundary_cycle = Boundary_cycle{};
+    }
+
+    Select_action action = Select_action::replace;
+    if (shift) {
+        action = selection.is_loop_selected(target, edge_key, kind, delimit) ? Select_action::deselect : Select_action::extend;
+    }
+    const std::size_t count = selection.select_loop(target, edge_key, kind, action, delimit);
+    log_selection->trace("Loop select: {} {} from edge ({}, {}) -> {} elements", c_str(kind), c_str(action), edge_key.first, edge_key.second, count);
+    return true;
+}
+
+void Mesh_component_selection_tool::on_modifiers_changed()
+{
+    update_loop_preview();
+}
+
+void Mesh_component_selection_tool::invalidate_loop_preview()
+{
+    m_loop_preview.valid = false;
+    m_loop_preview_elements.clear();
+    update_loop_preview();
+}
+
+void Mesh_component_selection_tool::update_loop_preview()
+{
+    const Mesh_component_mode mode       = m_mesh_component_selection.get_mode();
+    const bool                alt_held   = (m_context.input_state != nullptr) && m_context.input_state->alt;
+    const bool                ctrl_held  = (m_context.input_state != nullptr) && m_context.input_state->control;
+    Scene_view* const         scene_view = get_hover_scene_view();
+    if (!is_mesh_component_mode(mode) || !alt_held || (scene_view == nullptr)) {
+        m_loop_preview = Loop_preview{};
+        m_loop_preview_elements.clear();
+        return;
+    }
+    const Pick_result pick_result = pick(*scene_view);
+    if (!pick_result.valid || (pick_result.edge_v0 == pick_result.edge_v1)) {
+        m_loop_preview = Loop_preview{};
+        m_loop_preview_elements.clear();
+        return;
+    }
+    const Loop_kind kind = (mode == Mesh_component_mode::face)
+        ? Loop_kind::face_loop
+        : (ctrl_held ? Loop_kind::edge_ring : Loop_kind::edge_loop);
+    const erhe::geometry::Edge_loop_delimit delimit  = get_loop_delimit();
+    const Mesh_edge_key                     edge_key = make_edge_key(pick_result.edge_v0, pick_result.edge_v1);
+    if (
+        m_loop_preview.valid                                            &&
+        (m_loop_preview.scene_view      == scene_view)                  &&
+        (m_loop_preview.mesh.lock()     == pick_result.mesh)            &&
+        (m_loop_preview.primitive_index == pick_result.primitive_index) &&
+        (m_loop_preview.geometry.lock() == pick_result.geometry)        &&
+        (m_loop_preview.edge_key        == edge_key)                    &&
+        (m_loop_preview.kind            == kind)                        &&
+        (m_loop_preview.delimit         == delimit)
+    ) {
+        return;
+    }
+    m_loop_preview = Loop_preview{
+        .valid           = false,
+        .scene_view      = scene_view,
+        .mesh            = pick_result.mesh,
+        .primitive_index = pick_result.primitive_index,
+        .geometry        = pick_result.geometry,
+        .edge_key        = edge_key,
+        .kind            = kind,
+        .delimit         = delimit
+    };
+    m_loop_preview.valid = walk_mesh_loop(*pick_result.geometry, edge_key, kind, delimit, m_loop_preview_elements);
 }
 
 auto Mesh_component_selection_tool::pick(Scene_view& scene_view) const -> Pick_result
@@ -1007,6 +1216,51 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
             }
         }
     }
+
+    // Loop select preview: what an Alt / Ctrl+Alt click would select,
+    // computed by update_loop_preview() on change; drawn only in the view it
+    // was picked in and only while its target is live.
+    if (component_mode && m_loop_preview.valid && (m_loop_preview.scene_view == &context.scene_view)) {
+        const std::shared_ptr<erhe::scene::Mesh>        preview_mesh     = m_loop_preview.mesh.lock();
+        const std::shared_ptr<erhe::geometry::Geometry> preview_geometry = m_loop_preview.geometry.lock();
+        if (m_mesh_component_selection.is_live(preview_mesh, m_loop_preview.primitive_index, preview_geometry)) {
+            const glm::mat4  world_from_node = preview_mesh->world_from_node();
+            const GEO::Mesh& geo_mesh        = preview_geometry->get_mesh();
+            if (m_loop_preview.kind == Loop_kind::face_loop) {
+                m_scratch_positions.clear();
+                m_scratch_indices.clear();
+                for (const GEO::index_t facet : m_loop_preview_elements) {
+                    append_facet_triangles(*preview_geometry, facet);
+                }
+                if (!m_scratch_indices.empty()) {
+                    triangle_renderer.add_triangles(world_from_node, style.hover_color, m_scratch_positions, m_scratch_indices);
+                }
+            } else {
+                const glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
+                m_scratch_lines.clear();
+                m_scratch_normals.clear();
+                for (const GEO::index_t edge : m_loop_preview_elements) {
+                    const GEO::index_t v0 = geo_mesh.edges.vertex(edge, 0);
+                    const GEO::index_t v1 = geo_mesh.edges.vertex(edge, 1);
+                    m_scratch_lines.push_back(
+                        erhe::renderer::Line{
+                            to_glm_vec3(get_pointf(geo_mesh.vertices, v0)),
+                            to_glm_vec3(get_pointf(geo_mesh.vertices, v1))
+                        }
+                    );
+                    m_scratch_normals.push_back(edge_world_normal(*preview_geometry, normal_matrix, v0, v1));
+                }
+                if (!m_scratch_lines.empty()) {
+                    line_renderer.set_thickness(style.edge_thickness - 1.0f);
+                    line_renderer.add_lines(
+                        world_from_node, style.hover_color,
+                        std::span<const erhe::renderer::Line>{m_scratch_lines},
+                        std::span<const glm::vec3>{m_scratch_normals}
+                    );
+                }
+            }
+        }
+    }
 }
 
 void Mesh_component_selection_tool::set_external_hover(
@@ -1181,6 +1435,16 @@ void Mesh_component_selection_tool::viewport_toolbar()
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s", button.tooltip);
             }
+        }
+    }
+
+    // Edge loop crease delimit (Alt+click loop select in vertex and edge mode).
+    if ((selection.get_mode() == Mesh_component_mode::vertex) || (selection.get_mode() == Mesh_component_mode::edge)) {
+        if (ImGui::Checkbox("Loop stops at creases", &m_loop_delimit_crease)) {
+            invalidate_loop_preview();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Alt+click edge loop select: a crease edge continues only onto crease edges, a plain edge stops at a vertex with a crease edge");
         }
     }
 

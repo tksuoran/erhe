@@ -167,6 +167,29 @@ private:
     App_context& m_context;
 };
 
+// Which loop select gesture a click is: Alt+click (loop) or Ctrl+Alt+click
+// (ring). Face mode runs the face loop for both.
+enum class Loop_select_gesture : unsigned int {
+    loop = 0,
+    ring = 1
+};
+
+// Left-mouse release with Alt (loop) or Ctrl+Alt (ring), each also with
+// Shift: loop / ring select from the edge nearest to the pointer
+// (doc/editor/mesh_component_selection.md section 2). Ready only while a mesh
+// component mode is active and a component is under the pointer.
+class Component_loop_select_command : public erhe::commands::Command
+{
+public:
+    Component_loop_select_command(erhe::commands::Commands& commands, App_context& context, const char* name, Loop_select_gesture gesture);
+    void try_ready          () override;
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    App_context&        m_context;
+    Loop_select_gesture m_gesture;
+};
+
 // The selection commands of doc/editor/mesh_component_selection.md section 2.
 enum class Component_selection_action : unsigned int {
     select_all                   = 0, // Ctrl+A
@@ -228,6 +251,22 @@ public:
     // B / C hotkey: switch to `mode` and consume, but only while in a mesh
     // component mode (returns false otherwise so the key falls through).
     [[nodiscard]] auto try_set_gesture_hotkey(Component_gesture_mode mode) -> bool;
+
+    // Called by Component_loop_select_command: the section 4.2 dispatch of
+    // doc/plans/mesh_modeling.md. The mode picks the walk (face mode: face
+    // loop; otherwise the gesture's edge loop or edge ring), Shift in
+    // modifier_mask extends, or deselects when the walked set is already
+    // selected, and a plain Alt+click on a boundary edge whose loop is
+    // already selected cycles to the whole boundary loop and back.
+    [[nodiscard]] auto on_loop_select(Loop_select_gesture gesture, uint32_t modifier_mask) -> bool;
+
+    // The edge loop delimit loop select uses: outer corners, plus creases
+    // while the toolbar's "Loop stops at creases" is checked.
+    [[nodiscard]] auto get_loop_delimit() const -> erhe::geometry::Edge_loop_delimit;
+
+    // Called by the editor's key event handler when the Shift / Ctrl / Alt
+    // state changes: the loop preview follows the modifiers.
+    void on_modifiers_changed();
 
     // Called by Component_grow_selection_command / Component_shrink_selection_command
     // (Blender Select More / Select Less). Grow/shrink the component selection by
@@ -359,6 +398,45 @@ private:
     // mesh / geometry is gone or no longer addresses the element.
     [[nodiscard]] auto resolve_external_hover() const -> Pick_result;
 
+    // Loop select preview (Alt / Ctrl+Alt held over an edge): the elements a
+    // click would select, drawn by tool_render in the hover color. Recomputed
+    // by update_loop_preview() only when its key (scene view, mesh, geometry,
+    // picked edge, kind, delimit) changes - on hover, modifier, mode, delimit
+    // and geometry changes - never per frame. References are weak, and the
+    // preview is drawn only while its target is live
+    // (Mesh_component_selection::is_live), so it never outlives a scene close,
+    // an undo removal or a geometry swap.
+    class Loop_preview
+    {
+    public:
+        bool                                    valid          {false};
+        const Scene_view*                       scene_view     {nullptr};
+        std::weak_ptr<erhe::scene::Mesh>        mesh           {};
+        std::size_t                             primitive_index{0};
+        std::weak_ptr<erhe::geometry::Geometry> geometry       {};
+        Mesh_edge_key                           edge_key       {0, 0};
+        Loop_kind                               kind           {Loop_kind::edge_loop};
+        erhe::geometry::Edge_loop_delimit       delimit        {erhe::geometry::Edge_loop_delimit::none};
+    };
+    void update_loop_preview    ();
+    void invalidate_loop_preview();
+    Loop_preview              m_loop_preview{};
+    std::vector<GEO::index_t> m_loop_preview_elements{}; // edge or facet indices (cleared at use, capacity kept)
+    bool                      m_loop_delimit_crease{true};
+
+    // Boundary cycle state of the last plain Alt+click on a boundary edge:
+    // boundary_selected is true when that click selected the whole boundary
+    // loop, so the next click on the same edge returns to the edge loop.
+    class Boundary_cycle
+    {
+    public:
+        std::weak_ptr<erhe::scene::Mesh>        mesh             {};
+        std::weak_ptr<erhe::geometry::Geometry> geometry         {};
+        Mesh_edge_key                           edge_key         {0, 0};
+        bool                                    boundary_selected{false};
+    };
+    Boundary_cycle m_boundary_cycle{};
+
     class External_hover
     {
     public:
@@ -386,6 +464,9 @@ private:
 
     Mesh_component_selection&                                 m_mesh_component_selection;
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Hover_mesh_message>       m_hover_mesh_subscription;
+    erhe::message_bus::Subscription<Mesh_component_mode_changed_message> m_mode_changed_subscription;
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message>       m_mesh_geometry_changed_subscription;
     Component_select_command                                  m_select_command;
     Component_box_select_command                              m_box_select_command;
     Component_gesture_update_command                          m_gesture_update_command;
@@ -400,6 +481,8 @@ private:
     Component_selection_action_command                        m_invert_command;
     Component_selection_action_command                        m_select_linked_under_cursor_command;
     Component_selection_action_command                        m_select_linked_from_selection_command;
+    Component_loop_select_command                             m_loop_select_command;
+    Component_loop_select_command                             m_ring_select_command;
 
     // Select all target scratch (cleared at use, capacity kept).
     std::vector<Mesh_component_target>                        m_select_all_targets;
