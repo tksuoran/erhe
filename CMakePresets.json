@@ -1,9 +1,9 @@
 {
-    "version": 10,
+    "version": 3,
     "cmakeMinimumRequired": {
         "major": 3,
-        "minor": 31,
-        "patch": 6
+        "minor": 21,
+        "patch": 0
     },
     "configurePresets": [
         {
@@ -115,6 +115,43 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE":  "Release"
             }
+        },
+        {
+            "name":      "Ninja",
+            "hidden":    true,
+            "generator": "Ninja"
+        },
+        {
+            "name":     "Ninja_OpenGL_Debug",
+            "inherits": ["Ninja", "OpenGL_Debug"]
+        },
+        {
+            "name":     "Ninja_OpenGL_Release",
+            "inherits": ["Ninja", "OpenGL_Release"]
+        },
+        {
+            "name":     "Ninja_OpenGL_ASAN_Debug",
+            "inherits": ["Ninja", "OpenGL_ASAN_Debug"]
+        },
+        {
+            "name":     "Ninja_OpenGL_ASAN_Release",
+            "inherits": ["Ninja", "OpenGL_ASAN_Release"]
+        },
+        {
+            "name":     "Ninja_Vulkan_Debug",
+            "inherits": ["Ninja", "Vulkan_Debug"]
+        },
+        {
+            "name":     "Ninja_Vulkan_Release",
+            "inherits": ["Ninja", "Vulkan_Release"]
+        },
+        {
+            "name":     "Ninja_Metal_Debug",
+            "inherits": ["Ninja", "Metal_Debug"]
+        },
+        {
+            "name":     "Ninja_Metal_Release",
+            "inherits": ["Ninja", "Metal_Release"]
         }
     ]
 }
