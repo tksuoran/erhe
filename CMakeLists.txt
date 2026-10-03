@@ -345,13 +345,14 @@ endif()
 CPMAddPackage(
     NAME              geogram
     # The tksuoran fork carries a stable tag plus erhe's local patches.
-    # erhe-2026-10-03c is upstream main b8318618 (2026-10-03, tagged
+    # erhe-2026-10-03d is upstream main b8318618 (2026-10-03, tagged
     # erhe-2026-10-03-upstream in the fork) plus the fork's warnings/all
     # branch rebased onto it: clang 18
     # -Weverything fixes (statement-safe geo_assert macros, unused and broken
     # PoissonRecon Allocator::rollBack() removed as upstream PoissonRecon did,
     # TBBThreadManager overrides, explicit
-    # __float128 conversions, stb include-site pragmas, and
+    # __float128 conversions, stb include-site pragmas, TBB headers included
+    # as system headers, and
     # -Wno-unsafe-buffer-usage / -Wno-switch-default). Each fix also has
     # its own warnings/<class> branch in the fork, for upstreaming. The
     # former fork fixes (thread-local ProgressTask, create_sub_elements
@@ -366,7 +367,7 @@ CPMAddPackage(
     # It stopped being the tip on 2026-08-16 and every cold-cache CI job failed
     # with "fatal: unable to read tree". Upstream cannot be tagged by us, hence
     # the fork.
-    GIT_TAG           erhe-2026-10-03c
+    GIT_TAG           erhe-2026-10-03d
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY tksuoran/geogram
     # An upstream release tag would work here too (VERSION 1.9.8 +
