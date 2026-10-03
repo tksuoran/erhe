@@ -1,4 +1,5 @@
 #include "erhe_graphics/vulkan/vulkan_scoped_debug_group.hpp"
+#include "erhe_graphics/debug_label_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/command_buffer.hpp"
@@ -8,9 +9,8 @@ namespace erhe::graphics {
 
 bool Scoped_debug_group_impl::s_enabled{false};
 
-Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer& command_buffer, erhe::utility::Debug_label debug_label)
-    : m_debug_label{std::move(debug_label)}
-    , m_command_buffer_impl{nullptr}
+Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer& command_buffer, const std::string_view debug_label)
+    : m_command_buffer_impl{nullptr}
 {
     // vkCmdBeginDebugUtilsLabelEXT belongs to VK_EXT_debug_utils. If
     // the extension is not loaded the function pointer is null and a
@@ -26,14 +26,14 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer& command_buffer,
         return;
     }
 
+    const Debug_label_buffer   label{debug_label};
     const VkDebugUtilsLabelEXT label_info{
         .sType      = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
         .pNext      = nullptr,
-        .pLabelName = m_debug_label.data(),
+        .pLabelName = label.c_str(),
         .color      = {0.1f, 0.2f, 0.3f, 1.0f}
     };
 
-    // log_debug->debug("begin debug group: {}", m_debug_label.string_view());
 
     // Route the label region through the impl so it can track open
     // regions: the cb may be ended (XR fan-out ends + submits the
@@ -53,13 +53,11 @@ Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept
         // not recording. Nothing was opened, so nothing to close.
         return;
     }
-    // log_debug->debug("end debug group: {}", m_debug_label.string_view());
     m_command_buffer_impl->end_debug_label();
 }
 
-Scoped_queue_debug_group_impl::Scoped_queue_debug_group_impl(Device& device, erhe::utility::Debug_label debug_label)
-    : m_debug_label{std::move(debug_label)}
-    , m_queue{VK_NULL_HANDLE}
+Scoped_queue_debug_group_impl::Scoped_queue_debug_group_impl(Device& device, const std::string_view debug_label)
+    : m_queue{VK_NULL_HANDLE}
 {
     // Same VK_EXT_debug_utils gate as the cb-level scope: the queue
     // label entry points are null unless the extension is loaded.
@@ -76,10 +74,11 @@ Scoped_queue_debug_group_impl::Scoped_queue_debug_group_impl(Device& device, erh
         return;
     }
 
+    const Debug_label_buffer   label{debug_label};
     const VkDebugUtilsLabelEXT label_info{
         .sType      = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
         .pNext      = nullptr,
-        .pLabelName = m_debug_label.data(),
+        .pLabelName = label.c_str(),
         .color      = {0.1f, 0.2f, 0.3f, 1.0f}
     };
 

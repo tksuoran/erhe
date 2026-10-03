@@ -1,12 +1,14 @@
 #pragma once
 
 #include "erhe_math/aabb.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
 
 #include <array>
 #include <optional>
+#include <vector>
 
 namespace erhe::scene {
     class Camera;
@@ -150,6 +152,8 @@ private:
     erhe::scene::Trs_transform m_world_from_anchor;
     float                      m_view_distance{1.0f};
     float                      m_view_scale   {1.0f}; // world units per gizmo unit, from update_transforms()
+    // render() scratch, cleared at use so the capacity is kept.
+    std::vector<erhe::renderer::Line> m_lines;
     glm::mat4                  m_box_frame{1.0f};
     erhe::math::Aabb           m_box_aabb{};
     bool                       m_box_valid{false};

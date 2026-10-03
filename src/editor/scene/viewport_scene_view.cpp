@@ -260,12 +260,8 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             (m_context.content_wide_line_renderer != nullptr) &&
             m_context.content_wide_line_renderer->is_enabled()
         ) {
-            // Push the editor-global content edge-line config (method + bias) to
-            // the renderer each frame; it is edited in the Settings window.
-            const Content_edge_lines_config& cel = m_context.editor_settings->content_edge_lines;
-            m_context.content_wide_line_renderer->set_use_tent(cel.use_tent);
-            m_context.content_wide_line_renderer->set_line_bias_margin(cel.line_bias_margin);
-            m_context.content_wide_line_renderer->set_line_bias_clamp(cel.line_bias_clamp);
+            // The editor-global edge-line config (method + bias) reaches the
+            // renderer through apply_content_edge_lines_settings().
             m_context.content_wide_line_renderer->begin_frame();
         }
 
@@ -329,12 +325,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         if (data.get_render_style && !is_primitive_mode_enabled(data.get_render_style(context), data.primitive_mode)) {
                             return;
                         }
-                        erhe::scene_renderer::Primitive_interface_settings settings;
-                        if (data.primitive_settings.has_value()) {
-                            settings = data.primitive_settings.value();
-                        } else if (data.get_appearance) {
-                            settings = get_primitive_settings(data.get_appearance(context), data.primitive_mode);
-                        }
+                        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, context);
                         const float     line_width = settings.constant_size;
                         const auto&     filter     = data.filter;
                         const uint32_t  group      = data.content_wide_line_group;
@@ -361,28 +352,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         }
                     };
 
-                    // Feed selection outline with animated color/width. The
-                    // outline appearance is editor-global (Selection_outline_style),
-                    // shared by all scene views; edited in the Settings window.
+                    // Feed the selection outline; its animated color / width
+                    // come from get_pass_primitive_settings (the pass's
+                    // selection_outline_pulse).
                     if (m_context.app_rendering->selection_outline) {
-                        const Selection_outline_style& sel_outline = m_context.editor_settings->selection_outline;
-                        const int64_t   t0_ns         = m_context.time->get_host_system_time_ns();
-                        const double    t0            = static_cast<double>(t0_ns) / 1'000'000'000.0;
-                        const float     period        = 1.0f / sel_outline.selection_highlight_frequency;
-                        const float     t1            = static_cast<float>(::fmod(t0, period));
-                        const float     t2            = static_cast<float>(0.5f + (2.0f * std::abs(2.0f * (t1 / period - std::floor(t1 / period + 0.5f))) - 1.0f) * 0.5f);
-                        const glm::vec4 outline_color = glm::mix(sel_outline.selection_highlight_low, sel_outline.selection_highlight_high, t2);
-                        const glm::vec4 active_color  = glm::mix(sel_outline.active_highlight_low, sel_outline.active_highlight_high, t2);
-                        const float     outline_width = sel_outline.selection_highlight_width_low * (1.0f - t2) + sel_outline.selection_highlight_width_high * t2;
-
-                        // Temporarily override primitive_settings for the animated outline
-                        m_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
-                            .color_source          = erhe::scene_renderer::Primitive_color_source::constant_color,
-                            .constant_color0       = outline_color,
-                            .constant_color_active = active_color,
-                            .size_source           = erhe::scene_renderer::Primitive_size_source::constant_size,
-                            .constant_size         = outline_width
-                        };
                         erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "selection_outline"};
                         feed_pass(m_context.app_rendering->selection_outline.get());
                     }

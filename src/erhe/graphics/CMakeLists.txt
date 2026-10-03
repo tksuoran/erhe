@@ -76,6 +76,7 @@ erhe_target_sources_grouped(
     erhe_graphics/scoped_worker_context.hpp
     erhe_graphics/scoped_debug_group.cpp
     erhe_graphics/scoped_debug_group.hpp
+    erhe_graphics/debug_label_buffer.hpp
     erhe_graphics/scoped_transient_object_pool.cpp
     erhe_graphics/scoped_transient_object_pool.hpp
     erhe_graphics/scoped_gpu_zone.cpp

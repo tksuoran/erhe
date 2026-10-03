@@ -100,6 +100,11 @@ public:
     erhe::graphics::Base_render_pipeline bone6_hidden_color;
 };
 
+// Applies editor_settings->content_edge_lines (method + bias) to the
+// content wide-line renderer. Called once the renderer exists and from the
+// Settings window when the section is edited, never per frame.
+void apply_content_edge_lines_settings(App_context& context);
+
 class App_rendering
 {
 public:

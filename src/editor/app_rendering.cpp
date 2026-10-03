@@ -473,14 +473,7 @@ App_rendering::App_rendering(
             // Outline-inclusive filter: proxy_hidden sources get an outline
             // too (their silhouette stencil comes from the dedicated pass
             // above; their edges coincide with the rendered proxies).
-            .filter                        {filter_selected_or_hovered_outline},
-            .primitive_settings{
-                erhe::scene_renderer::Primitive_interface_settings{
-                    .constant_color0 = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},
-                    .constant_color1 = glm::vec4{0.0f, 0.0f,  1.0f, 1.0f},
-                    .constant_size   = -5.0f
-                }
-            }
+            .filter                        {filter_selected_or_hovered_outline}
         },
         { &m_pipeline_passes.outline }
     );
@@ -488,10 +481,8 @@ App_rendering::App_rendering(
     // Editor guides, not scene content: a Render_content::scene_only render
     // (MCP render_scene_image) leaves these passes out.
     selection_outline->data.kind = Composition_pass_kind::editor_aid;
+    selection_outline->data.selection_outline_pulse = true;
     ghost_edge_lines ->data.kind = Composition_pass_kind::editor_aid;
-
-    // This gets overridden in Composition_pass::render()
-    // TODO Figure out a good way to route the settings
 
     {
         // Sky uses a Composition_pass subclass that switches between the
@@ -1778,6 +1769,18 @@ void App_rendering::render_id(const Render_context& context)
             .skinning_filter    = skinning_filter,
         }
     );
+}
+
+void apply_content_edge_lines_settings(App_context& context)
+{
+    erhe::scene_renderer::Content_wide_line_renderer* const renderer = context.content_wide_line_renderer;
+    if (renderer == nullptr) {
+        return;
+    }
+    const Content_edge_lines_config& config = context.editor_settings->content_edge_lines;
+    renderer->set_use_tent        (config.use_tent);
+    renderer->set_line_bias_margin(config.line_bias_margin);
+    renderer->set_line_bias_clamp (config.line_bias_clamp);
 }
 
 }  // namespace editor

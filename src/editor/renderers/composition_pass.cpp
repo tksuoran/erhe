@@ -56,6 +56,54 @@ auto triangle_wave(float t, float p) -> float
     return 2.0f * std::abs(2.0f * (t / p - std::floor(t / p + 0.5f))) - 1.0f;
 }
 
+auto make_selection_outline_settings(const App_context& context) -> erhe::scene_renderer::Primitive_interface_settings
+{
+    // Selection outline appearance is editor-global (Selection_outline_style),
+    // shared by all scene views; edited in the Settings window.
+    const Selection_outline_style& outline = context.editor_settings->selection_outline;
+    const int64_t t0_ns  = context.time->get_host_system_time_ns();
+    const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
+    const float   period = 1.0f / outline.selection_highlight_frequency;
+    const float   t1     = static_cast<float>(::fmod(t0, period));
+    const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
+    return erhe::scene_renderer::Primitive_interface_settings{
+        .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+        .constant_color0 = glm::mix(
+            outline.selection_highlight_low,
+            outline.selection_highlight_high,
+            t2
+        ),
+        .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
+        // The active item of the selection pulses in its own color
+        // (doc/editor/active_item.md D5), on the same phase.
+        .constant_color_active = glm::mix(
+            outline.active_highlight_low,
+            outline.active_highlight_high,
+            t2
+        ),
+        .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+        .constant_size   = mix(
+            outline.selection_highlight_width_low,
+            outline.selection_highlight_width_high,
+            t2
+        )
+    };
+}
+
+auto get_pass_primitive_settings(const Composition_pass_data& data, const Render_context& context) -> erhe::scene_renderer::Primitive_interface_settings
+{
+    if (data.selection_outline_pulse) {
+        return make_selection_outline_settings(context.app_context);
+    }
+    if (data.primitive_settings.has_value()) {
+        return data.primitive_settings.value();
+    }
+    if (data.get_appearance) {
+        return get_primitive_settings(data.get_appearance(context), data.primitive_mode);
+    }
+    return erhe::scene_renderer::Primitive_interface_settings{};
+}
+
 auto c_str(const Composition_pass_result result) -> const char*
 {
     switch (result) {
@@ -113,41 +161,6 @@ void Composition_pass::render(const Render_context& context)
     if (data.is_enabled && !data.is_enabled(context)) {
         m_last_result = Composition_pass_result::is_enabled_false;
         return;
-    }
-
-    // NOTE This overrides settings in App_rendering::App_rendering()
-    // TODO This is a bit hacky, route this better.
-    if (context.app_context.app_rendering->selection_outline) {
-        // Selection outline appearance is editor-global (Selection_outline_style),
-        // shared by all scene views; edited in the Settings window.
-        const Selection_outline_style& outline = context.app_context.editor_settings->selection_outline;
-        const int64_t t0_ns  = context.app_context.time->get_host_system_time_ns();
-        const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
-        const float   period = 1.0f / outline.selection_highlight_frequency;
-        const float   t1     = static_cast<float>(::fmod(t0, period));
-        const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
-        context.app_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
-            .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
-            .constant_color0 = glm::mix(
-                outline.selection_highlight_low,
-                outline.selection_highlight_high,
-                t2
-            ),
-            .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
-            // The active item of the selection pulses in its own color
-            // (doc/editor/active_item.md D5), on the same phase.
-            .constant_color_active = glm::mix(
-                outline.active_highlight_low,
-                outline.active_highlight_high,
-                t2
-            ),
-            .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
-            .constant_size   = mix(
-                outline.selection_highlight_width_low,
-                outline.selection_highlight_width_high,
-                t2
-            )
-        };
     }
 
     const auto scene_root = data.override_scene_root 
@@ -278,12 +291,7 @@ void Composition_pass::render(const Render_context& context)
             }
         } else {
             uint32_t force_enable_mask = data.shader_key_force_enable_mask;
-            erhe::scene_renderer::Primitive_interface_settings primitive_settings =
-                data.primitive_settings.has_value()
-                    ? data.primitive_settings.value()
-                    : data.get_appearance
-                        ? get_primitive_settings(data.get_appearance(context), data.primitive_mode)
-                        : erhe::scene_renderer::Primitive_interface_settings{};
+            erhe::scene_renderer::Primitive_interface_settings primitive_settings = get_pass_primitive_settings(data, context);
             // Weight_display's active joint for the joint_weight_ramp debug
             // mode. Locked into a local so the node outlives the render call
             // below, which takes it as a raw pointer.

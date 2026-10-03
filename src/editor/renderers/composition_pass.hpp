@@ -23,6 +23,7 @@ struct Render_style_appearance;
 
 namespace editor {
 
+class App_context;
 class Render_context;
 class Scene_root;
 
@@ -82,6 +83,10 @@ public:
     // forwarded to the camera UBO; read by sky.frag.
     erhe::scene_renderer::Sky_parameters                                   sky_parameters{};
     std::optional<erhe::scene_renderer::Primitive_interface_settings>      primitive_settings{};
+    // The pass draws the selection outline: its primitive settings are the
+    // time-animated make_selection_outline_settings(), taking precedence over
+    // primitive_settings.
+    bool                                                                   selection_outline_pulse{false};
     std::function<void()>                                                  begin{};
     std::function<void()>                                                  end{};
     std::function<const Render_style_data&(const Render_context& context)> get_render_style{};
@@ -117,6 +122,15 @@ enum class Composition_pass_result : unsigned int {
 };
 
 [[nodiscard]] auto c_str(Composition_pass_result result) -> const char*;
+
+// The selection outline settings at the current host time: color, active
+// item color and width pulse between the editor-global Selection_outline_style
+// low / high values. A per-frame animation, computed where it is used.
+[[nodiscard]] auto make_selection_outline_settings(const App_context& context) -> erhe::scene_renderer::Primitive_interface_settings;
+
+// The primitive settings a pass draws with: the selection outline pulse, the
+// pass's explicit primitive_settings, or its editor-global appearance.
+[[nodiscard]] auto get_pass_primitive_settings(const Composition_pass_data& data, const Render_context& context) -> erhe::scene_renderer::Primitive_interface_settings;
 
 class Composition_pass : public erhe::Item<erhe::Item_base, erhe::Item_base, Composition_pass>
 {

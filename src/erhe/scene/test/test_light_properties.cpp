@@ -226,3 +226,28 @@ TEST(Light_properties, luminous_flux_writes_intensity)
     EXPECT_NEAR(light->get_intensity(), 1.0f, 1e-5f);
     EXPECT_EQ(light->get_value_source(Light::intensity_property), Value_source::local);
 }
+
+// The getters read a mirror of the effective values; it follows values the
+// light does not hold itself - inherited from an ancestor node - when the
+// ancestor's value changes and when the light moves out from under it.
+TEST(Light_properties, getters_follow_inherited_values)
+{
+    Counting_scene_host host;
+    const std::shared_ptr<erhe::scene::Xform> group = std::make_shared<erhe::scene::Xform>("group");
+    group->set_parent(host.scene.get_root_node());
+    auto light = std::make_shared<Light>("l");
+    light->set_parent(group);
+    EXPECT_FLOAT_EQ(light->get_intensity(), 1.0f);
+
+    ASSERT_TRUE(group->set_value(Light::intensity_property.get(), Property_value{3.0f}));
+    EXPECT_EQ(light->get_value_source(Light::intensity_property), Value_source::inherited);
+    EXPECT_FLOAT_EQ(light->get_intensity(), 3.0f);
+    EXPECT_FLOAT_EQ(light->get_intensity(), light->get_value(Light::intensity_property));
+
+    ASSERT_TRUE(group->set_value(Light::intensity_property.get(), Property_value{4.0f}));
+    EXPECT_FLOAT_EQ(light->get_intensity(), 4.0f);
+
+    light->set_parent(host.scene.get_root_node());
+    EXPECT_FLOAT_EQ(light->get_intensity(), light->get_value(Light::intensity_property));
+    EXPECT_FLOAT_EQ(light->get_intensity(), 1.0f);
+}

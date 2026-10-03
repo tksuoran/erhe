@@ -429,6 +429,19 @@ public:
         const erhe::primitive::Primitive_mode primitive_mode
     );
 
+    // Re-initializes the bucket for a first primitive like the constructor,
+    // keeping the capacity of entries and buffer_set.vertex_buffers.
+    void reset(
+        erhe::scene::Mesh&                    mesh,
+        std::size_t                           mesh_primitive_index,
+        const erhe::primitive::Buffer_mesh&   buffer_mesh,
+        const Shader_key&                     shader_key,
+        uint64_t                              shader_key_hash,
+        bool                                  negative_determinant,
+        bool                                  double_sided,
+        erhe::primitive::Primitive_mode       primitive_mode
+    );
+
     [[nodiscard]] auto accept(
         erhe::scene::Mesh&                  mesh,
         const std::size_t                   mesh_primitive_index,
@@ -450,6 +463,35 @@ public:
     erhe::primitive::Primitive_mode   primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 };
 
+// Bucket storage a renderer keeps across frames: clear() drops the buckets
+// but keeps them (and their entry vectors) for reuse, so steady-state
+// bucketing performs no heap allocations.
+class Render_bucket_list
+{
+public:
+    void clear();
+    [[nodiscard]] auto get_buckets() const -> std::span<const Render_bucket>;
+    [[nodiscard]] auto get_buckets()       -> std::span<Render_bucket>;
+    [[nodiscard]] auto size       () const -> std::size_t { return m_count; }
+    [[nodiscard]] auto empty      () const -> bool        { return m_count == 0; }
+
+    // A new bucket holding the given first primitive (bucket_primitives()).
+    void add(
+        erhe::scene::Mesh&                    mesh,
+        std::size_t                           mesh_primitive_index,
+        const erhe::primitive::Buffer_mesh&   buffer_mesh,
+        const Shader_key&                     shader_key,
+        uint64_t                              shader_key_hash,
+        bool                                  negative_determinant,
+        bool                                  double_sided,
+        erhe::primitive::Primitive_mode       primitive_mode
+    );
+
+private:
+    std::vector<Render_bucket> m_buckets;
+    std::size_t                m_count{0};
+};
+
 enum class Blending_mode_policy : uint32_t
 {
     not_set                            = 0, // error
@@ -460,7 +502,7 @@ enum class Blending_mode_policy : uint32_t
 };
 
 void bucket_primitives(
-    std::vector<Render_bucket>&                                buckets,
+    Render_bucket_list&                                        buckets,
     uint32_t                                                   boolean_mask_force_enable,
     uint32_t                                                   boolean_mask_force_disable,
     const Mesh_memory&                                         mesh_memory,

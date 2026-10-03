@@ -214,12 +214,26 @@ Light::~Light() noexcept = default;
 Light::Light(const std::string_view name)
     : Item{name}
 {
+    refresh_values();
 }
 
 Light::Light(const Light& src, erhe::for_clone)
     : Item    {src, erhe::for_clone{}} // the property entries copy with the base (D10)
     , layer_id{src.layer_id}
 {
+    refresh_values();
+}
+
+void Light::refresh_values()
+{
+    m_values.light_type       = get_value(light_type_property);
+    m_values.color            = get_value(color_property);
+    m_values.intensity        = get_value(intensity_property);
+    m_values.temperature      = get_value(temperature_property);
+    m_values.range            = get_value(range_property);
+    m_values.inner_spot_angle = get_value(inner_spot_angle_property);
+    m_values.outer_spot_angle = get_value(outer_spot_angle_property);
+    m_values.cast_shadow      = get_value(cast_shadow_property);
 }
 
 auto Light::get_effective_color() const -> glm::vec3
@@ -346,6 +360,9 @@ void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::
 void Light::on_light_property_changed(Dependency_object& object, const Property_changed_args&)
 {
     Light& light = static_cast<Light&>(object);
+    // The mirror first: the computed rows below and every reader after this
+    // change read the getters.
+    light.refresh_values();
     // D26: the computed rows derive from the stored ones; an expression
     // reading them re-evaluates on the change (one null check each when
     // nothing reads them).

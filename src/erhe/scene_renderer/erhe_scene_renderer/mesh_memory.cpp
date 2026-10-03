@@ -1075,12 +1075,28 @@ Render_bucket::Render_bucket(
     const bool                            double_sided,
     const erhe::primitive::Primitive_mode primitive_mode
 )
-    : shader_key          {shader_key}
-    , shader_key_hash     {shader_key_hash}
-    , negative_determinant{negative_determinant}
-    , double_sided        {double_sided}
-    , primitive_mode      {primitive_mode}
 {
+    reset(mesh, mesh_primitive_index, buffer_mesh, shader_key, shader_key_hash, negative_determinant, double_sided, primitive_mode);
+}
+
+void Render_bucket::reset(
+    erhe::scene::Mesh&                    mesh,
+    const std::size_t                     mesh_primitive_index,
+    const erhe::primitive::Buffer_mesh&   buffer_mesh,
+    const Shader_key&                     shader_key_in,
+    const uint64_t                        shader_key_hash_in,
+    const bool                            negative_determinant_in,
+    const bool                            double_sided_in,
+    const erhe::primitive::Primitive_mode primitive_mode_in
+)
+{
+    shader_key           = shader_key_in;
+    shader_key_hash      = shader_key_hash_in;
+    negative_determinant = negative_determinant_in;
+    double_sided         = double_sided_in;
+    primitive_mode       = primitive_mode_in;
+    entries.clear();
+    buffer_set.vertex_buffers.clear();
     buffer_set.vertex_input_key = bucket_vertex_input_key(buffer_mesh, primitive_mode);
     buffer_set.index_buffer     = Pool_buffer_identity{buffer_mesh.index_buffer_range.pool_id, buffer_mesh.index_buffer_range.buffer_id};
 
@@ -1090,6 +1106,40 @@ Render_bucket::Render_bucket(
 
     const bool done = accept(mesh, mesh_primitive_index, buffer_mesh, shader_key_hash, negative_determinant, double_sided);
     ERHE_VERIFY(done);
+}
+
+void Render_bucket_list::clear()
+{
+    m_count = 0;
+}
+
+auto Render_bucket_list::get_buckets() const -> std::span<const Render_bucket>
+{
+    return std::span<const Render_bucket>{m_buckets.data(), m_count};
+}
+
+auto Render_bucket_list::get_buckets() -> std::span<Render_bucket>
+{
+    return std::span<Render_bucket>{m_buckets.data(), m_count};
+}
+
+void Render_bucket_list::add(
+    erhe::scene::Mesh&                    mesh,
+    const std::size_t                     mesh_primitive_index,
+    const erhe::primitive::Buffer_mesh&   buffer_mesh,
+    const Shader_key&                     shader_key,
+    const uint64_t                        shader_key_hash,
+    const bool                            negative_determinant,
+    const bool                            double_sided,
+    const erhe::primitive::Primitive_mode primitive_mode
+)
+{
+    if (m_count < m_buckets.size()) {
+        m_buckets[m_count].reset(mesh, mesh_primitive_index, buffer_mesh, shader_key, shader_key_hash, negative_determinant, double_sided, primitive_mode);
+    } else {
+        m_buckets.emplace_back(mesh, mesh_primitive_index, buffer_mesh, shader_key, shader_key_hash, negative_determinant, double_sided, primitive_mode);
+    }
+    ++m_count;
 }
 
 Render_bucket::~Render_bucket() noexcept = default;
@@ -1132,7 +1182,7 @@ auto Render_bucket::accept(
 }
 
 void bucket_primitives(
-    std::vector<Render_bucket>&                                buckets,
+    Render_bucket_list&                                        buckets,
     const uint32_t                                             boolean_mask_force_enable,
     const uint32_t                                             boolean_mask_force_disable,
     const Mesh_memory&                                         mesh_memory,
@@ -1149,7 +1199,7 @@ void bucket_primitives(
     ERHE_PROFILE_FUNCTION();
 
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
-        const auto primitives = mesh->get_primitives();
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
         if (!filter(mesh->get_flag_bits())) {
             // log_draw->warn("filtered away {} filter: {}", mesh->describe(2), filter.describe());
             // static_cast<void>(filter(mesh->get_flag_bits()));
@@ -1262,7 +1312,7 @@ void bucket_primitives(
             const bool primitive_double_sided = erhe::scene::is_double_sided(*mesh.get(), mesh_primitive);
 
             bool done = false;
-            for (Render_bucket& b : buckets) {
+            for (Render_bucket& b : buckets.get_buckets()) {
                 if (b.accept(*mesh.get(), i, *buffer_mesh, shader_key_hash, mesh_negative_determinant, primitive_double_sided)) {
                     done = true;
                     break;
@@ -1272,7 +1322,7 @@ void bucket_primitives(
                 continue;
             }
 
-            buckets.emplace_back(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash, mesh_negative_determinant, primitive_double_sided, primitive_mode);
+            buckets.add(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash, mesh_negative_determinant, primitive_double_sided, primitive_mode);
         }
     }
 }

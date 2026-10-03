@@ -190,6 +190,11 @@ draw call, so primitives are grouped before draw submission.
 `Render_bucket` aggregates a `Buffer_set`, a `Shader_key` plus its hash, and
 the list of `Mesh_primitive_entry` (mesh + primitive index) that match.
 
+`Render_bucket_list` is the bucket storage a renderer keeps across frames
+(`Forward_renderer`, `Shadow_renderer`, the editor's `Id_renderer`): `clear()`
+keeps the buckets and their entry vectors for reuse (`Render_bucket::reset()`),
+so steady-state bucketing allocates nothing.
+
 `bucket_primitives(buckets, mesh_memory, environment_shader_key, meshes,
 primitive_mode, variant_signature_policy)` walks the mesh span, derives a
 per-primitive shader key (or reuses the environment key when the policy is

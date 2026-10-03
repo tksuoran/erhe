@@ -13,13 +13,14 @@
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
-//#include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
 #include <array>
 #include <cstddef>
 #include <initializer_list>
 #include <span>
+#include <string>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -266,6 +267,10 @@ private:
     Light_buffer                                  m_light_buffer;
     Camera_buffer                                 m_camera_buffer;
     Primitive_buffer                              m_primitive_buffer;
+    // Per-draw_shadow_casters() scratch, cleared at use so the capacity is
+    // kept: the buckets of one light pass and the debug label of one bucket.
+    Render_bucket_list                            m_buckets;
+    std::string                                   m_bucket_label;
     // TODO Re-add per-cascade GPU timers; the cascade Render_pass objects
     // are owned by Shadow_render_node, so the timers should live there.
     // Per-render() caster / receiver world AABB gather for the tight frustum

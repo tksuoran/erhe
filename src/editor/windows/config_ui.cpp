@@ -96,14 +96,15 @@ void store_as(void* const dst, const ImGuiDataType data_type, const double value
 // bounds a slider can represent, and as a drag otherwise. DragBehavior has no
 // range restriction, so it is the honest fallback for a wide range - the field
 // stays editable instead of asserting.
-void imgui_integer_field(void* const ptr, const erhe::codegen::Field_info& field, const bool is_signed)
+// Returns true when the value was changed.
+[[nodiscard]] auto imgui_integer_field(void* const ptr, const erhe::codegen::Field_info& field, const bool is_signed) -> bool
 {
     const std::optional<ImGuiDataType> data_type = imgui_integer_data_type(field.size, is_signed);
     if (!data_type.has_value()) {
         // An integer width the codegen should never emit; showing the type name
         // beats writing through a wrongly-sized pointer.
         ImGui::TextUnformatted(field.type_name);
-        return;
+        return false;
     }
 
     if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
@@ -119,47 +120,46 @@ void imgui_integer_field(void* const ptr, const erhe::codegen::Field_info& field
         store_as(min_storage.data(), data_type.value(), field.numeric_limits.ui_min);
         store_as(max_storage.data(), data_type.value(), field.numeric_limits.ui_max);
         if (slider_ok) {
-            ImGui::SliderScalar("##", data_type.value(), ptr, min_storage.data(), max_storage.data());
-        } else {
-            ImGui::DragScalar("##", data_type.value(), ptr, 1.0f, min_storage.data(), max_storage.data());
+            return ImGui::SliderScalar("##", data_type.value(), ptr, min_storage.data(), max_storage.data());
         }
-        return;
+        return ImGui::DragScalar("##", data_type.value(), ptr, 1.0f, min_storage.data(), max_storage.data());
     }
-    ImGui::DragScalar("##", data_type.value(), ptr, 1.0f);
+    return ImGui::DragScalar("##", data_type.value(), ptr, 1.0f);
 }
 
 } // anonymous namespace
 
-void imgui_field(void* base, const erhe::codegen::Field_info& field)
+auto imgui_field(void* base, const erhe::codegen::Field_info& field) -> bool
 {
     using erhe::codegen::Field_type;
     void* ptr = static_cast<char*>(base) + field.offset;
 
+    bool edited = false;
     switch (field.field_type) {
         case Field_type::bool_:
-            ImGui::Checkbox("##", static_cast<bool*>(ptr));
+            edited = ImGui::Checkbox("##", static_cast<bool*>(ptr));
             break;
         case Field_type::int_:
         case Field_type::int8:
         case Field_type::int16:
         case Field_type::int32:
         case Field_type::int64:
-            imgui_integer_field(ptr, field, true);
+            edited = imgui_integer_field(ptr, field, true);
             break;
         case Field_type::unsigned_int:
         case Field_type::uint8:
         case Field_type::uint16:
         case Field_type::uint32:
         case Field_type::uint64:
-            imgui_integer_field(ptr, field, false);
+            edited = imgui_integer_field(ptr, field, false);
             break;
         case Field_type::float_:
             if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
-                ImGui::SliderFloat("##", static_cast<float*>(ptr),
+                edited = ImGui::SliderFloat("##", static_cast<float*>(ptr),
                     static_cast<float>(field.numeric_limits.ui_min),
                     static_cast<float>(field.numeric_limits.ui_max));
             } else {
-                ImGui::DragFloat("##", static_cast<float*>(ptr), 0.01f);
+                edited = ImGui::DragFloat("##", static_cast<float*>(ptr), 0.01f);
             }
             break;
         case Field_type::double_:
@@ -167,26 +167,27 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
                 float v = static_cast<float>(*static_cast<double*>(ptr));
                 if (ImGui::DragFloat("##", &v, 0.01f)) {
                     *static_cast<double*>(ptr) = static_cast<double>(v);
+                    edited = true;
                 }
             }
             break;
         case Field_type::string:
-            ImGui::InputText("##", static_cast<std::string*>(ptr));
+            edited = ImGui::InputText("##", static_cast<std::string*>(ptr));
             break;
         case Field_type::vec2:
-            ImGui::DragFloat2("##", static_cast<float*>(ptr), 0.01f);
+            edited = ImGui::DragFloat2("##", static_cast<float*>(ptr), 0.01f);
             break;
         case Field_type::vec3:
-            ImGui::ColorEdit3("##", static_cast<float*>(ptr));
+            edited = ImGui::ColorEdit3("##", static_cast<float*>(ptr));
             break;
         case Field_type::vec4:
-            ImGui::ColorEdit4("##", static_cast<float*>(ptr));
+            edited = ImGui::ColorEdit4("##", static_cast<float*>(ptr));
             break;
         case Field_type::ivec2:
-            ImGui::DragInt2("##", static_cast<int*>(ptr));
+            edited = ImGui::DragInt2("##", static_cast<int*>(ptr));
             break;
         case Field_type::ivec3:
-            ImGui::DragInt3("##", static_cast<int*>(ptr));
+            edited = ImGui::DragInt3("##", static_cast<int*>(ptr));
             break;
         case Field_type::mat4:
         case Field_type::vector:
@@ -210,7 +211,7 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
                 case 2: current_value = static_cast<int64_t>(*static_cast<int16_t*>(ptr)); break;
                 case 4: current_value = static_cast<int64_t>(*static_cast<int32_t*>(ptr)); break;
                 case 8: current_value = *static_cast<int64_t*>(ptr); break;
-                default: ImGui::TextUnformatted(field.type_name); return;
+                default: ImGui::TextUnformatted(field.type_name); return false;
             }
 
             int current_index = -1;
@@ -242,6 +243,7 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
                             case 4: *static_cast<int32_t*>(ptr) = static_cast<int32_t>(new_value); break;
                             case 8: *static_cast<int64_t*>(ptr) = new_value; break;
                         }
+                        edited = true;
                     }
                     if (selected) {
                         ImGui::SetItemDefaultFocus();
@@ -252,6 +254,7 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
             break;
         }
     }
+    return edited;
 }
 
 } // namespace editor

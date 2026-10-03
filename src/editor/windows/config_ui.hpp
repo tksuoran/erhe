@@ -8,6 +8,7 @@
 
 #include <span>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <type_traits>
 
@@ -15,8 +16,8 @@ namespace editor {
 
 // Renders a single reflected config field as its matching ImGui widget. Shared
 // by the Settings window and the Properties window (issue #240). Defined in
-// config_ui.cpp.
-void imgui_field(void* base, const erhe::codegen::Field_info& field);
+// config_ui.cpp. Returns true when the value was changed.
+auto imgui_field(void* base, const erhe::codegen::Field_info& field) -> bool;
 
 // Renders a codegen enum value as a combo of its reflected values (the
 // short_desc labels, the value names as fallback), like imgui_field() does
@@ -63,8 +64,16 @@ auto imgui_enum_combo(const char* label, E& value) -> bool
 // get_struct_info / get_fields are the codegen-generated reflection helpers for
 // the concrete config struct type; they are resolved at instantiation (the
 // including translation unit must include the struct's generated header).
+// on_edit, when set, runs when any field of the section is changed: the edit
+// site of settings whose consumers are not read per frame.
 template <typename T>
-void add_config_section(Property_editor& editor, bool show_developer, T& section, const char* label_override = nullptr)
+void add_config_section(
+    Property_editor&             editor,
+    bool                         show_developer,
+    T&                           section,
+    const char*                  label_override = nullptr,
+    const std::function<void()>& on_edit        = {}
+)
 {
     const erhe::codegen::Struct_info& struct_info = get_struct_info(static_cast<const std::remove_reference_t<T>*>(nullptr));
     if (struct_info.developer && !show_developer) {
@@ -93,8 +102,10 @@ void add_config_section(Property_editor& editor, bool show_developer, T& section
         std::string tooltip = (field.long_desc != nullptr && field.long_desc[0] != '\0')
             ? std::string{field.long_desc}
             : std::string{};
-        editor.add_entry(std::string{entry_label}, [&section, &field]() {
-            imgui_field(&section, field);
+        editor.add_entry(std::string{entry_label}, [&section, &field, on_edit]() {
+            if (imgui_field(&section, field) && on_edit) {
+                on_edit();
+            }
         }, std::move(tooltip));
     }
     editor.pop_group();

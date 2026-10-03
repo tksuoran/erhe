@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_utility/debug_label.hpp"
+#include <string_view>
 
 #include "volk.h"
 
@@ -13,13 +13,12 @@ class Device;
 class Scoped_debug_group_impl final
 {
 public:
-    Scoped_debug_group_impl(Command_buffer& command_buffer, erhe::utility::Debug_label debug_label);
+    Scoped_debug_group_impl(Command_buffer& command_buffer, std::string_view debug_label);
     ~Scoped_debug_group_impl() noexcept;
 
     static bool s_enabled; // set by Device_impl during init
 
 private:
-    erhe::utility::Debug_label m_debug_label;
     // Impl of the Command_buffer the label region was opened on, null
     // when nothing was opened. The begin/end calls route through the
     // impl so it can drop the end label when the region was already
@@ -35,11 +34,10 @@ private:
 class Scoped_queue_debug_group_impl final
 {
 public:
-    Scoped_queue_debug_group_impl(Device& device, erhe::utility::Debug_label debug_label);
+    Scoped_queue_debug_group_impl(Device& device, std::string_view debug_label);
     ~Scoped_queue_debug_group_impl() noexcept;
 
 private:
-    erhe::utility::Debug_label m_debug_label;
     // Graphics queue the begin label was recorded on; VK_NULL_HANDLE
     // when nothing was opened (debug utils disabled / no device).
     VkQueue                    m_queue;

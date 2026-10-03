@@ -15,14 +15,14 @@
 
 namespace erhe::graphics {
 
-Scoped_debug_group::Scoped_debug_group(Command_buffer& command_buffer, erhe::utility::Debug_label debug_label)
+Scoped_debug_group::Scoped_debug_group(Command_buffer& command_buffer, const std::string_view debug_label)
     : m_impl{command_buffer, debug_label}
 {
 }
 
 Scoped_debug_group::~Scoped_debug_group() noexcept = default;
 
-Scoped_queue_debug_group::Scoped_queue_debug_group(Device& device, erhe::utility::Debug_label debug_label)
+Scoped_queue_debug_group::Scoped_queue_debug_group(Device& device, const std::string_view debug_label)
     : m_impl{device, debug_label}
 {
 }

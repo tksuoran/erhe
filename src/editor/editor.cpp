@@ -898,8 +898,9 @@ public:
         // frame command buffer before the rendergraph samples the published
         // atlas.
         {
+            // The lightmap settings reach the renderer / baker / streamer
+            // through apply_lightmap_settings() at their edit sites.
             const Lightmap_config& lightmap_config = m_app_context.editor_settings->lightmap;
-            m_forward_renderer->set_lightmap_bicubic(lightmap_config.bicubic_sampling);
             if (m_lightmap_partitioner) {
                 // Commit or discard a finished async prepare job. After the
                 // operation stack (:694) and transform updates, so the
@@ -913,24 +914,6 @@ public:
                 // readback must run here, before any lightmap commands are
                 // recorded into the frame, never mid-ImGui.
                 m_lightmap_window->update();
-            }
-            if (m_lightmap_baker) {
-                m_lightmap_baker->set_tile_config(lightmap_config.tile_texture_size, lightmap_config.resident_tile_budget);
-                m_lightmap_baker->set_cell_size(lightmap_config.cell_size_m);
-                m_lightmap_baker->set_options(
-                    Lightmap_baker::Bake_options{
-                        .indirect_bounce = lightmap_config.indirect_bounce,
-                        .terminator_fix  = lightmap_config.terminator_fix,
-                        .denoise         = lightmap_config.denoise,
-                        .dilation        = lightmap_config.dilation,
-                        .seam_blend      = lightmap_config.seam_blend,
-                        .coverage_mode   = static_cast<Lightmap_baker::Coverage_mode>(std::clamp(lightmap_config.coverage_mode, 0, 2)),
-                        // Stored as a combo index (0 = off, 1 = 16 points,
-                        // 2 = 64 points); the baker takes the grid side.
-                        .supersample_factor = (lightmap_config.supersample_points == 2) ? 8 : (lightmap_config.supersample_points == 1) ? 4 : 0,
-                        .gutter_texels   = lightmap_config.uv_gutter_texels
-                    }
-                );
             }
             // A finished offline bake left fresh tiles on disk; make the
             // streamer reload them.
@@ -946,17 +929,6 @@ public:
             // camera, falling back to the scene's first camera; no camera
             // at all = keep current residency / bake all tiles.
             const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
-            // Scene-persisted quadtree overrides (subdivide/merge) feed the
-            // grid split; a change flows into the tick's layout hash.
-            if (m_lightmap_baker && lightmap_scene_root) {
-                const std::vector<Lightmap_tile_override>& overrides = lightmap_scene_root->get_scene_settings().lightmap_tile_overrides;
-                std::vector<glm::ivec3> override_values;
-                override_values.reserve(overrides.size());
-                for (const Lightmap_tile_override& value : overrides) {
-                    override_values.emplace_back(value.level, value.ix, value.iz);
-                }
-                m_lightmap_baker->set_tile_overrides(override_values);
-            }
             glm::vec3  lightmap_camera_position{0.0f};
             glm::vec3* lightmap_camera_position_ptr{nullptr};
             if (lightmap_scene_root) {
@@ -1047,7 +1019,6 @@ public:
                 // set); once everything published is saved the streamer owns
                 // again (same pixels) and disk tile streaming resumes.
                 erhe::log::set_breadcrumb("tick: lightmap stream");
-                m_lightmap_streamer->set_budget(lightmap_config.resident_tile_budget);
                 if (m_lightmap_baker_owned_binding) {
                     // Ownership handoff baker -> streamer: the baker's
                     // publish_regions overwrote the primitives' uv mappings
@@ -2546,6 +2517,11 @@ public:
 #endif
 
         fill_app_context();
+
+        // Lightmap settings from editor_settings.json; later edits apply
+        // themselves at their edit site.
+        apply_lightmap_settings(m_app_context);
+        apply_content_edge_lines_settings(m_app_context);
 
         // Every part has registered its commands and declared its default
         // bindings; apply the user's overrides on top.

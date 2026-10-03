@@ -2275,17 +2275,13 @@ void Lightmap_baker::set_cell_size(const float cell_size_m)
     m_cell_size = std::clamp(cell_size_m, 0.25f, 1024.0f);
 }
 
-void Lightmap_baker::set_tile_overrides(const std::vector<glm::ivec3>& overrides)
-{
-    m_tile_overrides = overrides;
-}
-
-auto Lightmap_baker::get_grid_parameters_hash() const -> uint64_t
+auto Lightmap_baker::get_grid_parameters_hash(const Scene_root& scene_root) const -> uint64_t
 {
     uint64_t hash = fnv1a64(&m_cell_size, sizeof(float));
     hash = fnv1a64(&m_tile_size, sizeof(int), hash);
-    for (const glm::ivec3& value : m_tile_overrides) {
-        hash = fnv1a64(&value, sizeof(glm::ivec3), hash);
+    for (const Lightmap_tile_override& value : scene_root.get_scene_settings().lightmap_tile_overrides) {
+        const glm::ivec3 key{value.level, value.ix, value.iz};
+        hash = fnv1a64(&key, sizeof(glm::ivec3), hash);
     }
     return hash;
 }
@@ -2355,7 +2351,7 @@ auto Lightmap_baker::Grid_split::tile_for_position(const glm::vec2 xz, const flo
     return -1;
 }
 
-auto Lightmap_baker::build_grid_split(const std::vector<erhe::math::Aabb>& region_bounds) -> Grid_split
+auto Lightmap_baker::build_grid_split(const Scene_root& scene_root, const std::vector<erhe::math::Aabb>& region_bounds) -> Grid_split
 {
     // ---- Uniform quadtree grid (world-origin anchored) ----
     // Level-0 cells of m_cell_size meters cover the content; scene leaf
@@ -2420,8 +2416,8 @@ auto Lightmap_baker::build_grid_split(const std::vector<erhe::math::Aabb>& regio
     std::unordered_set<Lightmap_tile_key, Lightmap_tile_key_hash> stored;
     std::unordered_set<Lightmap_tile_key, Lightmap_tile_key_hash> stored_interior; // strict ancestors of stored subdivide leaves
     int min_override_level = 0;
-    for (const glm::ivec3& value : m_tile_overrides) {
-        const Lightmap_tile_key key{value};
+    for (const Lightmap_tile_override& value : scene_root.get_scene_settings().lightmap_tile_overrides) {
+        const Lightmap_tile_key key{value.level, value.ix, value.iz};
         if (key.level == 0) {
             continue; // level 0 is the default; never stored
         }
@@ -2790,7 +2786,7 @@ auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root) -> Esti
     for (const Instance_region& region : regions) {
         bounds.push_back(region_world_bounds(region));
     }
-    Grid_split grid = build_grid_split(bounds);
+    Grid_split grid = build_grid_split(scene_root, bounds);
     if (grid.tiles.empty()) {
         if (m_report != nullptr) {
             m_report->add_warning(Lightmap_report::Stage::layout, "split estimate", "grid split produced no tiles");
@@ -5086,7 +5082,7 @@ auto Lightmap_baker::compute_scene_hashes(Scene_root& scene_root) const -> Scene
         // merge or cell-size change relayouts (and, with a live partition,
         // the re-prepare commit swaps the pieces, which re-triggers this
         // through their buffer-mesh pointers).
-        const uint64_t grid_hash = get_grid_parameters_hash();
+        const uint64_t grid_hash = get_grid_parameters_hash(scene_root);
         hash_layout = fnv1a64(&grid_hash, sizeof(grid_hash), hash_layout);
         const Scene_root* const scene_ptr = &scene_root;
         hash_layout = fnv1a64(&scene_ptr, sizeof(scene_ptr), hash_layout);

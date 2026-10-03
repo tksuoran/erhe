@@ -28,6 +28,8 @@
 
 #include <fmt/format.h>
 
+#include <iterator>
+
 namespace erhe::scene_renderer {
 
 using erhe::graphics::Render_pass;
@@ -166,9 +168,10 @@ void Shadow_renderer::draw_shadow_casters(
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 
-    Shader_key                 environment_key{};
-    std::vector<Render_bucket> buckets;
-    const uint32_t             boolean_mask_force_disable = 0; // TODO
+    Shader_key          environment_key{};
+    Render_bucket_list& buckets                    = m_buckets;
+    const uint32_t      boolean_mask_force_disable = 0; // TODO
+    buckets.clear();
 
     for (const auto& meshes : mesh_spans) {
         bucket_primitives(
@@ -188,19 +191,17 @@ void Shadow_renderer::draw_shadow_casters(
     }
 
     for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-        const Render_bucket& bucket = buckets[bucket_index];
-        erhe::graphics::Scoped_debug_group bucket_scope{
-            command_buffer,
-            erhe::utility::Debug_label{
-                fmt::format(
-                    "shadow bucket {}/{} entries={} streams={}",
-                    bucket_index + 1,
-                    buckets.size(),
-                    bucket.entries.size(),
-                    bucket.buffer_set.vertex_buffers.size()
-                )
-            }
-        };
+        const Render_bucket& bucket = buckets.get_buckets()[bucket_index];
+        m_bucket_label.clear();
+        fmt::format_to(
+            std::back_inserter(m_bucket_label),
+            "shadow bucket {}/{} entries={} streams={}",
+            bucket_index + 1,
+            buckets.size(),
+            bucket.entries.size(),
+            bucket.buffer_set.vertex_buffers.size()
+        );
+        erhe::graphics::Scoped_debug_group bucket_scope{command_buffer, std::string_view{m_bucket_label}};
 
         const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
         const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
@@ -834,7 +835,7 @@ void Shadow_renderer::prewarm_pipelines(
         .require_at_least_one_bit_clear = 0u
     };
 
-    std::vector<Render_bucket> buckets;
+    Render_bucket_list buckets;
     for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : mesh_spans) {
         bucket_primitives(
             buckets,
@@ -896,7 +897,7 @@ void Shadow_renderer::prewarm_pipelines(
         }
     }
 
-    for (const Render_bucket& bucket : buckets) {
+    for (const Render_bucket& bucket : buckets.get_buckets()) {
         const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
 
         // Phase 1: shader-module compile (no-op on cache hit).

@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <vector>
 
 namespace erhe::graphics { class Command_buffer; }
 namespace erhe::imgui    { class Imgui_windows; }
@@ -199,6 +200,12 @@ private:
     Property_editor m_property_editor;
 
     Joint_constraint_visualization m_joint_constraint_visualization;
+
+    // selection_visualization() projected-hull scratch, cleared at use so
+    // the capacity is kept.
+    std::vector<glm::vec2> m_ndc_points;
+    std::vector<glm::vec2> m_ndc_convex_hull;
+    std::vector<glm::vec3> m_projected_convex_hull_points;
 };
 
 }

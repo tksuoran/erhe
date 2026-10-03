@@ -250,15 +250,13 @@ public:
     void set_cell_size(float cell_size_m);
     [[nodiscard]] auto get_cell_size() const -> float { return m_cell_size; }
 
-    // Quadtree leaf overrides (Scene_settings::lightmap_tile_overrides):
-    // each {level, ix, iz} with level != 0 replaces the level-0 cells it
-    // covers. Pushed by the editor tick from the active scene; consumed by
-    // the next layout / split estimate.
-    void set_tile_overrides(const std::vector<glm::ivec3>& overrides);
-    [[nodiscard]] auto get_tile_overrides() const -> const std::vector<glm::ivec3>& { return m_tile_overrides; }
-    // FNV hash of cell size + overrides, mixed into the tick's layout hash
-    // so grid changes relayout (and, with a live partition, re-prepare).
-    [[nodiscard]] auto get_grid_parameters_hash() const -> uint64_t;
+    // Quadtree leaf overrides are read from the scene being baked
+    // (Scene_settings::lightmap_tile_overrides): each {level, ix, iz} with
+    // level != 0 replaces the level-0 cells it covers.
+    // FNV hash of cell size + the scene's overrides, mixed into the tick's
+    // layout hash so grid changes relayout (and, with a live partition,
+    // re-prepare).
+    [[nodiscard]] auto get_grid_parameters_hash(const Scene_root& scene_root) const -> uint64_t;
 
     // Failure/warning sink (layout density flex, overflow tiles, budget
     // clamps); optional, shown by the Lightmap window.
@@ -677,7 +675,6 @@ private:
     int                                                m_tile_size  {s_tile};
     int                                                m_slot_budget{s_default_slot_budget};
     float                                              m_cell_size  {8.0f};
-    std::vector<glm::ivec3>                            m_tile_overrides;
     Lightmap_report*                                   m_report     {nullptr};
     const Lightmap_partitioner*                        m_partitioner{nullptr};
     bool                                               m_show_tile_bounds{false};
@@ -885,7 +882,7 @@ private:
         std::unordered_map<Lightmap_tile_key, int, Lightmap_tile_key_hash>  tile_of_key;
         [[nodiscard]] auto tile_for_position(glm::vec2 xz, float base_cell_size) const -> int;
     };
-    auto build_grid_split(const std::vector<erhe::math::Aabb>& region_bounds) -> Grid_split;
+    auto build_grid_split(const Scene_root& scene_root, const std::vector<erhe::math::Aabb>& region_bounds) -> Grid_split;
 
     // Skyline-pack one grid tile's regions at the tile's nominal density,
     // flexing density down only (error + drop below the 1% floor). Fills

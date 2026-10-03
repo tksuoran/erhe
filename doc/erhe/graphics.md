@@ -40,6 +40,7 @@ hides the underlying graphics API behind a pimpl pattern.
 - `Shader_stages(device, prototype)` -- Create shader program from compiled prototype.
 - `Texture_heap(device, fallback_texture, fallback_sampler, bind_group_layout)` -- Create a material-texture heap bound to a layout.
 - `Scoped_render_pass(render_pass, command_buffer, render_pass_before, render_pass_after)` -- RAII render pass begin/end recorded into `command_buffer`; the optional neighbouring passes refine the synchronization between passes.
+- `Scoped_debug_group(command_buffer, label)` / `Scoped_queue_debug_group(device, label)` -- RAII debug label region; the label (`std::string_view`, literal or `Debug_label`) is read during construction only and copied onto the stack (`Debug_label_buffer`, truncated at 255 characters), so a caller may format per-draw labels into a reused buffer without heap allocation.
 - `Gpu_timer(render_pass, label)` / `Gpu_timer(device, label)` + `Scoped_gpu_timer(timer, command_buffer)` -- GPU timing of a render pass or of an explicit command buffer range.
 - `Render_command_encoder::set_render_pipeline()` / `set_bind_group_layout()` / `set_sampled_image(binding_point, texture, sampler)` / `draw_indexed_primitives()` -- Issue draw calls.
 

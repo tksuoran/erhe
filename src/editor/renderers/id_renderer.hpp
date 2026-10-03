@@ -7,6 +7,7 @@
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_math/viewport.hpp"
@@ -18,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <string>
 #include <vector>
 
 typedef struct __GLsync *GLsync;
@@ -233,6 +235,12 @@ private:
     erhe::scene_renderer::Camera_buffer          m_camera_buffers;
     erhe::scene_renderer::Draw_indirect_buffer   m_draw_indirect_buffers;
     erhe::scene_renderer::Primitive_buffer       m_primitive_buffers;
+
+    // Per-render scratch, cleared at use so the capacity is kept: the
+    // skinned-only mesh filter, the buckets and one bucket's debug label.
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_filtered_meshes;
+    erhe::scene_renderer::Render_bucket_list        m_buckets;
+    std::string                                     m_bucket_label;
 
     erhe::graphics::Base_render_pipeline         m_pipeline;
     std::unique_ptr<erhe::graphics::Texture>     m_color_texture;

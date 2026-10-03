@@ -1131,9 +1131,14 @@ auto Mcp_server::query_lightmap_tiles(const json& args) -> std::string
             {"cell_max",         {layout_tile.cell_bounds.max.x, layout_tile.cell_bounds.max.z}}
         });
     }
+    // The overrides the layout uses: the active scene's (the scene the
+    // editor tick bakes, Selection::get_active_scene_root()).
     json overrides = json::array();
-    for (const glm::ivec3& value : m_context.lightmap_baker->get_tile_overrides()) {
-        overrides.push_back({{"level", value.x}, {"ix", value.y}, {"iz", value.z}});
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (scene_root) {
+        for (const Lightmap_tile_override& value : scene_root->get_scene_settings().lightmap_tile_overrides) {
+            overrides.push_back({{"level", value.level}, {"ix", value.ix}, {"iz", value.iz}});
+        }
     }
     return make_json_content({
         {"cell_size_m", m_context.lightmap_baker->get_cell_size()},

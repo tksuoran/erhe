@@ -30,12 +30,18 @@ class Scoped_queue_debug_group_impl;
 class Scoped_debug_group final
 {
 public:
+    // The label is read during construction only (no copy is kept), so a
+    // caller may pass a view of its own reused buffer.
     template<std::size_t N>
     Scoped_debug_group(Command_buffer& command_buffer, const char (&debug_label)[N])
-        : Scoped_debug_group{command_buffer, erhe::utility::Debug_label{std::string_view{debug_label, N - 1}}}
+        : Scoped_debug_group{command_buffer, std::string_view{debug_label, N - 1}}
     {
     }
-    Scoped_debug_group(Command_buffer& command_buffer, erhe::utility::Debug_label debug_label);
+    Scoped_debug_group(Command_buffer& command_buffer, const erhe::utility::Debug_label& debug_label)
+        : Scoped_debug_group{command_buffer, debug_label.string_view()}
+    {
+    }
+    Scoped_debug_group(Command_buffer& command_buffer, std::string_view debug_label);
 
     ~Scoped_debug_group() noexcept;
 
@@ -62,10 +68,14 @@ class Scoped_queue_debug_group final
 public:
     template<std::size_t N>
     Scoped_queue_debug_group(Device& device, const char (&debug_label)[N])
-        : Scoped_queue_debug_group{device, erhe::utility::Debug_label{std::string_view{debug_label, N - 1}}}
+        : Scoped_queue_debug_group{device, std::string_view{debug_label, N - 1}}
     {
     }
-    Scoped_queue_debug_group(Device& device, erhe::utility::Debug_label debug_label);
+    Scoped_queue_debug_group(Device& device, const erhe::utility::Debug_label& debug_label)
+        : Scoped_queue_debug_group{device, debug_label.string_view()}
+    {
+    }
+    Scoped_queue_debug_group(Device& device, std::string_view debug_label);
 
     ~Scoped_queue_debug_group() noexcept;
 

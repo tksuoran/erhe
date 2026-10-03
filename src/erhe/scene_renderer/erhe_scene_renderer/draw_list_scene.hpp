@@ -366,6 +366,11 @@ private:
 
     mutable std::mutex                                               m_pending_mutex;
     std::vector<Pending_op>                                          m_pending;
+    // flush_pending() swaps m_pending with this and clears it after the
+    // ops ran, so both vectors keep their capacity across frames.
+    std::vector<Pending_op>                                          m_flushing;
+    // Debug label of one draw list, cleared at use (capacity kept).
+    std::string                                                      m_list_label;
     std::size_t                                                      m_determinant_flip_count{0};
     std::size_t                                                      m_transform_update_count{0};
     std::size_t                                                      m_refresh_count{0};

@@ -443,11 +443,11 @@ void Rotate_tool::render(const Render_context& context)
         constexpr int background_segment_count = 96;
         // Slightly past the ring so the ring line itself sits on the disc.
         const float background_radius = 1.05f * r1;
-        std::vector<vec3> disc_positions;
-        disc_positions.reserve(background_segment_count + 1);
+        std::vector<vec3>& disc_positions = m_render_positions;
+        disc_positions.clear();
         disc_positions.push_back(p);
-        std::vector<uint32_t> disc_indices;
-        disc_indices.reserve(3 * static_cast<size_t>(background_segment_count));
+        std::vector<uint32_t>& disc_indices = m_render_indices;
+        disc_indices.clear();
         for (int i = 0; i < background_segment_count; ++i) {
             const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(background_segment_count);
             disc_positions.push_back(p + background_radius * (std::cos(theta) * side1 + std::sin(theta) * side2));
@@ -482,8 +482,10 @@ void Rotate_tool::render(const Render_context& context)
         // inside the swept sector are drawn, in yellow: outside it the
         // dragged gizmo ring itself (Handle_visualizations) is the reference.
         constexpr float sector_tick_line_width = -1.0f;
-        std::vector<erhe::renderer::Line> inside_major_ticks;
-        std::vector<erhe::renderer::Line> inside_minor_ticks;
+        std::vector<erhe::renderer::Line>& inside_major_ticks = m_render_lines_a;
+        std::vector<erhe::renderer::Line>& inside_minor_ticks = m_render_lines_b;
+        inside_major_ticks.clear();
+        inside_minor_ticks.clear();
         constexpr int tick_count = 72;  // one tick per 5 deg
         for (int i = 0; i < tick_count; ++i) {
             const float theta  = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(tick_count);
@@ -519,7 +521,8 @@ void Rotate_tool::render(const Render_context& context)
     // indicator spokes.
     {
         constexpr int segment_count = 200;
-        std::vector<erhe::renderer::Line> inside_segments;
+        std::vector<erhe::renderer::Line>& inside_segments = m_render_lines_a;
+        inside_segments.clear();
         for (int i = 0; i < segment_count; ++i) {
             const float theta0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(segment_count);
             const float theta1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segment_count);
@@ -586,10 +589,10 @@ void Rotate_tool::render(const Render_context& context)
     if ((std::abs(snapped_angle) > 1e-4f) && (r_sector_inner < r1)) {
         constexpr float sector_step  = glm::two_pi<float>() / 200.0f;
         const int       sector_count = std::max(1, static_cast<int>(std::ceil(std::abs(snapped_angle) / sector_step)));
-        std::vector<vec3>     sector_positions;
-        std::vector<uint32_t> sector_indices;
-        sector_positions.reserve(2 * (static_cast<std::size_t>(sector_count) + 1));
-        sector_indices.reserve(6 * static_cast<std::size_t>(sector_count));
+        std::vector<vec3>&     sector_positions = m_render_positions;
+        std::vector<uint32_t>& sector_indices   = m_render_indices;
+        sector_positions.clear();
+        sector_indices.clear();
         // Annular sector: inner edge on the dragged ring, outer edge on the
         // protractor arc. Vertex 2 i is inner, 2 i + 1 outer.
         for (int i = 0; i <= sector_count; ++i) {

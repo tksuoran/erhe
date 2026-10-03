@@ -990,8 +990,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // owned by Xr_session and the callback is the documented
             // place to update it.
             erhe::xr::Render_views_frame& frame = const_cast<erhe::xr::Render_views_frame&>(frame_in);
-            std::vector<erhe::scene_renderer::Camera_view_input> view_inputs;
-            view_inputs.reserve(frame.views.size());
+            std::vector<erhe::scene_renderer::Camera_view_input>& view_inputs = m_view_inputs;
+            view_inputs.clear();
             const erhe::math::Viewport viewport_xy{
                 .x      = 0,
                 .y      = 0,
@@ -1033,8 +1033,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // Tool / Renderable submissions push lines via
             // Primitive_renderer once -- the lines are world-space and
             // identical across views.
-            std::vector<erhe::renderer::View> debug_views;
-            debug_views.reserve(view_inputs.size());
+            std::vector<erhe::renderer::View>& debug_views = m_debug_views;
+            debug_views.clear();
             for (const erhe::scene_renderer::Camera_view_input& view_input : view_inputs) {
                 ERHE_VERIFY(view_input.projection != nullptr);
                 ERHE_VERIFY(view_input.node       != nullptr);
@@ -1091,12 +1091,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = m_app_context.content_wide_line_renderer;
             const bool drive_wide_lines = (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled();
             if (drive_wide_lines) {
-                // Push the editor-global content edge-line config (method + bias)
-                // to the renderer each frame; edited in the Settings window.
-                const Content_edge_lines_config& cel = m_app_context.editor_settings->content_edge_lines;
-                content_wide_line_renderer->set_use_tent(cel.use_tent);
-                content_wide_line_renderer->set_line_bias_margin(cel.line_bias_margin);
-                content_wide_line_renderer->set_line_bias_clamp(cel.line_bias_clamp);
+                // The editor-global edge-line config (method + bias) reaches
+                // the renderer through apply_content_edge_lines_settings().
                 content_wide_line_renderer->begin_frame();
 
                 erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();

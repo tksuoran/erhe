@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <iterator>
 
 namespace editor {
 
@@ -244,18 +245,17 @@ void Id_renderer::render_meshes(
 
     // Pre-filter the input mesh span when the caller asked for skinned-only
     // (the hybrid picker delegates static meshes to the raytrace path).
-    // A pointer-vector copy is cheap; doing it here keeps the
+    // A pointer-vector copy into member scratch keeps the
     // bucket_primitives() / Item_filter API surface unchanged.
-    std::vector<std::shared_ptr<erhe::scene::Mesh>> filtered_meshes;
     std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes_to_render = meshes;
     if (parameters.skinning_filter == Skinning_filter::skinned_only) {
-        filtered_meshes.reserve(meshes.size());
+        m_filtered_meshes.clear();
         for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
             if (mesh && mesh->skin) {
-                filtered_meshes.push_back(mesh);
+                m_filtered_meshes.push_back(mesh);
             }
         }
-        meshes_to_render = filtered_meshes;
+        meshes_to_render = m_filtered_meshes;
     }
     if (meshes_to_render.empty()) {
         return;
@@ -292,7 +292,8 @@ void Id_renderer::render_buckets(
 
     using namespace erhe::scene_renderer;
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-    std::vector<Render_bucket> buckets;
+    Render_bucket_list& buckets = m_buckets;
+    buckets.clear();
     const uint32_t boolean_mask_force_disable = 0; // TODO: Maybe disable some features for ID rendering?
     bucket_primitives(
         buckets,
@@ -310,7 +311,7 @@ void Id_renderer::render_buckets(
     );
 
     for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-        const Render_bucket&      bucket       = buckets[bucket_index];
+        const Render_bucket&      bucket       = buckets.get_buckets()[bucket_index];
         const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
 
         ERHE_VERIFY(!bucket.entries.empty());
@@ -355,19 +356,17 @@ void Id_renderer::render_buckets(
             continue;
         }
 
-        erhe::graphics::Scoped_debug_group bucket_scope{
-            render_encoder.get_command_buffer(),
-            erhe::utility::Debug_label{
-                fmt::format(
-                    "bucket {}/{} prims={} streams={} {}",
-                    bucket_index,
-                    buckets.size(),
-                    bucket.entries.size(),
-                    bucket.buffer_set.vertex_buffers.size(),
-                    bucket.shader_key.describe()
-                )
-            }
-        };
+        m_bucket_label.clear();
+        fmt::format_to(
+            std::back_inserter(m_bucket_label),
+            "bucket {}/{} prims={} streams={} shader key {:016x}",
+            bucket_index,
+            buckets.size(),
+            bucket.entries.size(),
+            bucket.buffer_set.vertex_buffers.size(),
+            bucket.shader_key_hash
+        );
+        erhe::graphics::Scoped_debug_group bucket_scope{render_encoder.get_command_buffer(), std::string_view{m_bucket_label}};
 
         // Bind the resolved pipeline and the bucket's geometry before the
         // draw. Without these the encoder has no program / vertex input /

@@ -13,9 +13,12 @@
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_math/input_axis.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_renderer/view.hpp"
+#include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_xr/headset.hpp"
 
 #include <span>
+#include <vector>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -275,6 +278,10 @@ private:
     void update_hover_with_id_render();
     [[nodiscard]] auto get_pick_position_in_world(float depth) const -> std::optional<glm::vec3>;
 
+    // Per-frame scratch of render_headset(), cleared at use so the capacity
+    // is kept: one camera view input and one debug renderer view per eye.
+    std::vector<erhe::scene_renderer::Camera_view_input> m_view_inputs;
+    std::vector<erhe::renderer::View>                    m_debug_views;
     erhe::math::Input_axis                               m_translate_x;
     erhe::math::Input_axis                               m_translate_y;
     erhe::math::Input_axis                               m_translate_z;

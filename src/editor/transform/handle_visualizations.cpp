@@ -12,6 +12,7 @@
 #include "transform/scale_tool.hpp"
 #include "transform/transform_tool.hpp"
 
+#include "erhe_verify/verify.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_hash/xxhash.hpp"
 #include "erhe_math/math_util.hpp"
@@ -28,6 +29,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <span>
 #include <optional>
 #include <vector>
 
@@ -1017,8 +1019,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         // ring is drawn as at rest (not hot).
         const bool  rotate_drag_active = m_context.rotate_tool->is_active();
         const float drag_alpha         = rotate_drag_active ? 0.5f : 1.0f;
-        std::vector<erhe::renderer::Line> visible_lines;
-        visible_lines.reserve(ring_arc_sample_count);
+        std::vector<erhe::renderer::Line>& visible_lines = m_lines;
         for (int axis = 0; axis < 3; ++axis) {
             if (!ring_shown[axis]) {
                 continue;
@@ -1115,8 +1116,8 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         const vec3   vs1      = normalize(cross(view_dir, ref));
         const vec3   vs2      = normalize(cross(view_dir, vs1));
         const float  radius   = s * gz.view_ring_radius;
-        std::vector<erhe::renderer::Line> lines;
-        lines.reserve(ring_arc_sample_count);
+        std::vector<erhe::renderer::Line>& lines = m_lines;
+        lines.clear();
         vec3 previous{0.0f};
         for (int i = 0; i <= ring_arc_sample_count; ++i) {
             const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
@@ -1137,12 +1138,22 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     // views cross pieces of different axes - the winner would be whichever
     // loop ran first, not the nearer piece. Collect the tip draws with their
     // eye distance and flush them sorted nearest-first below.
-    struct Solid_tip
+    // At most one cone per translate direction and one cube per scale
+    // direction (3 axes x 2 signs each).
+    class Solid_tip
     {
-        float                 depth; // squared eye distance to the piece center
-        std::function<void()> draw;
+    public:
+        enum class Kind : unsigned int { cone, cube };
+        float depth{0.0f}; // squared eye distance to the piece center
+        Kind  kind {Kind::cone};
+        vec4  color{0.0f};
+        vec3  position{0.0f}; // cone base center / cube center
+        vec3  direction{0.0f};
+        vec3  side1{0.0f};
+        vec3  side2{0.0f};
     };
-    std::vector<Solid_tip> solid_tips;
+    std::array<Solid_tip, 12> solid_tips{};
+    std::size_t               solid_tip_count{0};
 
     // Translate arrows. In single-arrow mode (translate_negative_handles
     // off) each axis shows only the direction facing the camera, so no
@@ -1193,12 +1204,16 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + gz.arrow_shaft_length)) * dir}});
             const vec3 base       = c + (s * (start + gz.arrow_shaft_length)) * dir;
             const vec3 tip_center = base + (0.5f * s * gz.translate_cone_length) * dir;
-            solid_tips.push_back({
-                dot(tip_center - eye, tip_center - eye),
-                [&arrow_triangle_renderer, color, eye, base, dir, side1, side2, s, gz]() {
-                    draw_cone_fill(arrow_triangle_renderer, color, eye, base, dir, side1, side2, s * gz.translate_cone_length, s * gz.translate_cone_radius, true, cone_base_darken);
-                }
-            });
+            ERHE_VERIFY(solid_tip_count < solid_tips.size());
+            solid_tips[solid_tip_count++] = Solid_tip{
+                .depth     = dot(tip_center - eye, tip_center - eye),
+                .kind      = Solid_tip::Kind::cone,
+                .color     = color,
+                .position  = base,
+                .direction = dir,
+                .side1     = side1,
+                .side2     = side2
+            };
         }
     }
 
@@ -1255,22 +1270,33 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             arrow_line_renderer.set_thickness(hot ? gz.arrow_shaft_width_hot : gz.arrow_shaft_width);
             arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + shaft)) * dir}});
             const vec3 cube_center = c + (s * (start + shaft + gz.scale_cube_half_length)) * dir;
-            solid_tips.push_back({
-                dot(cube_center - eye, cube_center - eye),
-                [&arrow_triangle_renderer, color, eye, cube_center, basis, s, gz]() {
-                    draw_cube_fill(arrow_triangle_renderer, color, eye, cube_center, basis, s * gz.scale_cube_half_length);
-                }
-            });
+            ERHE_VERIFY(solid_tip_count < solid_tips.size());
+            solid_tips[solid_tip_count++] = Solid_tip{
+                .depth    = dot(cube_center - eye, cube_center - eye),
+                .kind     = Solid_tip::Kind::cube,
+                .color    = color,
+                .position = cube_center
+            };
         }
     }
     // Flush the solid tips nearest-first: in the first-wins bucket that is
     // exactly back-to-front occlusion between the pieces.
+    const std::span<Solid_tip> tips{solid_tips.data(), solid_tip_count};
     std::sort(
-        solid_tips.begin(), solid_tips.end(),
+        tips.begin(), tips.end(),
         [](const Solid_tip& a, const Solid_tip& b) { return a.depth < b.depth; }
     );
-    for (const Solid_tip& tip : solid_tips) {
-        tip.draw();
+    for (const Solid_tip& tip : tips) {
+        switch (tip.kind) {
+            case Solid_tip::Kind::cone: {
+                draw_cone_fill(arrow_triangle_renderer, tip.color, eye, tip.position, tip.direction, tip.side1, tip.side2, s * gz.translate_cone_length, s * gz.translate_cone_radius, true, cone_base_darken);
+                break;
+            }
+            case Solid_tip::Kind::cube: {
+                draw_cube_fill(arrow_triangle_renderer, tip.color, eye, tip.position, basis, s * gz.scale_cube_half_length);
+                break;
+            }
+        }
     }
     // Plane-scale sectors: the outer shell of the concentric plane layout,
     // ending at the rotate ring radius (minus the sector gap). Lower fill

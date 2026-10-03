@@ -388,9 +388,10 @@ void Material_set::enqueue_release_object(const uint64_t object_key)
 
 void Material_set::flush_pending()
 {
-    std::vector<Pending_op> pending;
+    std::vector<Pending_op>& pending = m_flushing;
     {
         const std::lock_guard<std::mutex> lock{m_pending_mutex};
+        ERHE_VERIFY(pending.empty());
         pending.swap(m_pending);
     }
     // In enqueue order: a register / unregister pair for one object means
@@ -402,6 +403,7 @@ void Material_set::flush_pending()
             sync_object_materials(op.object_key, op.materials);
         }
     }
+    pending.clear();
 }
 
 auto Material_set::get_pending_count() const -> std::size_t

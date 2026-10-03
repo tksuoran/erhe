@@ -354,9 +354,12 @@ These keep a non-interactive mode cheap to add (see the plan):
   CCW facet arrives with negative signed UV area), and the G-buffer raster's
   fold-culling convention (`cull_mode_back_cw` plus `winding_flip_if`) is tuned
   to that. A new unwrap mode must match it, or it rasterizes zero texels.
-- The editor tick pushes `lightmap_config` tile size and budget into the baker
-  every frame, so MCP overrides of those do not survive into interactive baking:
-  config values rule.
+- `apply_lightmap_settings()` (`windows/lightmap_window.hpp`) pushes
+  `lightmap_config` (tile size and budget, cell size, bake options, bicubic
+  filtering, streamer budget) into the baker, the forward renderer and the
+  streamer at startup and at every Lightmap window edit of those settings, so
+  MCP-passed tile sizes and budgets do not reach interactive baking: config
+  values rule.
 - Piece meshes do not carry `Item_flags::lightmapped`; the partitioned layout
   enumerates them through the partitioner store, and the tick hash mixes the
   piece buffer meshes explicitly.
@@ -381,7 +384,8 @@ count or vertex density.
 - **Subdivide and merge.** Density is controlled by scene-persisted leaf
   overrides (`Scene_settings::lightmap_tile_overrides`, a list of
   `{level, ix, iz}` with a non-zero level, saved through the `ERHE_scene`
-  extension). With a live partition, changing an override launches an
+  extension). The baker reads them from the scene it bakes (layout hash and
+  grid split), holding no copy. With a live partition, changing an override launches an
   asynchronous re-prepare.
 - **kd tree emission.** Each quadtree split is one X plane and two Z planes, so
   the clipper (section 10) consumes an ordinary kd tree. A world-origin quadtree

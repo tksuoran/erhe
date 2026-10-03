@@ -242,6 +242,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `Scoped_debug_group` / `Scoped_queue_debug_group` take
+  the label as `std::string_view` (or `const Debug_label&`) and keep no copy;
+  the backends copy it onto the stack (`erhe_graphics/debug_label_buffer.hpp`).
+- `erhe::scene_renderer`: `bucket_primitives()` fills a `Render_bucket_list`
+  (reused bucket storage, `clear()` keeps capacity) instead of a
+  `std::vector<Render_bucket>`; `Render_bucket::reset()` added.
+- `erhe::scene`: `Light`'s getters read a mirror of the effective property
+  values, refreshed by the shared changed callback.
 - `erhe::scene`: the copy constructors and copy assignments of `Xformable`,
   `Xform`, `Boundable`, `Gprim`, `Point_instancer`, `Light`, `Camera` and
   `Scene` are deleted (they aborted at run time); cloning goes through the

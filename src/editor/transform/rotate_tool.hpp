@@ -3,10 +3,14 @@
 #include "transform/subtool.hpp"
 #include "tools/tool.hpp"
 
+#include "erhe_renderer/primitive_renderer.hpp"
+
 #include <glm/gtc/quaternion.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace editor {
 
@@ -67,6 +71,13 @@ private:
     std::optional<glm::vec3> m_intersection        {};
     float                    m_start_rotation_angle{0.0f};
     float                    m_current_angle       {0.0f};
+    // render() scratch, cleared at use so the capacity is kept: triangle
+    // positions / indices (background disc, swept sector) and two line lists
+    // (minor / major ticks, then the ring segments).
+    std::vector<glm::vec3>            m_render_positions;
+    std::vector<uint32_t>             m_render_indices;
+    std::vector<erhe::renderer::Line> m_render_lines_a;
+    std::vector<erhe::renderer::Line> m_render_lines_b;
 };
 
 }

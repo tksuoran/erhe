@@ -22,6 +22,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace erhe {
@@ -240,6 +241,10 @@ private:
     Scene_pass_resources&                         m_pass_resources;
     erhe::scene_renderer::Draw_indirect_buffer    m_draw_indirect_buffer;
     Primitive_buffer                              m_primitive_buffer;
+    // Per-render() scratch, cleared at use so the capacity is kept: the
+    // buckets of one pipeline and the debug label of one bucket.
+    Render_bucket_list                            m_buckets;
+    std::string                                   m_bucket_label;
 };
 
 } // namespace erhe::scene_renderer

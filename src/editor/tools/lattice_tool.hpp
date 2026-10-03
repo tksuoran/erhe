@@ -4,6 +4,7 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_message_bus/message_bus.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 
 #include <glm/glm.hpp>
 
@@ -94,6 +95,8 @@ private:
     // Scratch for billboard quads (cleared per use, capacity kept)
     std::vector<glm::vec3> m_scratch_positions;
     std::vector<uint32_t>  m_scratch_indices;
+    // Cage wireframe lines of tool_render (cleared per use, capacity kept)
+    std::vector<erhe::renderer::Line> m_scratch_lines;
 };
 
 }

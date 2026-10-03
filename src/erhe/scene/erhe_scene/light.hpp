@@ -304,14 +304,18 @@ public:
     static const erhe::property::Property<float>      flux_property;
     static const erhe::property::Property<glm::vec3>  blackbody_property;
 
-    [[nodiscard]] auto get_light_type      () const -> Type      { return get_value(light_type_property); }
-    [[nodiscard]] auto get_color           () const -> glm::vec3 { return get_value(color_property); }
-    [[nodiscard]] auto get_intensity       () const -> float     { return get_value(intensity_property); }
-    [[nodiscard]] auto get_temperature     () const -> float     { return get_value(temperature_property); }
-    [[nodiscard]] auto get_range           () const -> float     { return get_value(range_property); }
-    [[nodiscard]] auto get_inner_spot_angle() const -> float     { return get_value(inner_spot_angle_property); }
-    [[nodiscard]] auto get_outer_spot_angle() const -> float     { return get_value(outer_spot_angle_property); }
-    [[nodiscard]] auto get_cast_shadow     () const -> bool      { return get_value(cast_shadow_property); }
+    // The effective values (local, style, animated or inherited), read from
+    // a mirror kept current by on_light_property_changed: the renderers read these
+    // per light per pass, and an unauthored inherited value would otherwise
+    // walk the property layers and the ancestor chain on every read.
+    [[nodiscard]] auto get_light_type      () const -> Type      { return m_values.light_type; }
+    [[nodiscard]] auto get_color           () const -> glm::vec3 { return m_values.color; }
+    [[nodiscard]] auto get_intensity       () const -> float     { return m_values.intensity; }
+    [[nodiscard]] auto get_temperature     () const -> float     { return m_values.temperature; }
+    [[nodiscard]] auto get_range           () const -> float     { return m_values.range; }
+    [[nodiscard]] auto get_inner_spot_angle() const -> float     { return m_values.inner_spot_angle; }
+    [[nodiscard]] auto get_outer_spot_angle() const -> float     { return m_values.outer_spot_angle; }
+    [[nodiscard]] auto get_cast_shadow     () const -> bool      { return m_values.cast_shadow; }
 
     void set_light_type      (Type value)             { set_value(light_type_property, value); }
     void set_color           (const glm::vec3& value) { set_value(color_property, value); }
@@ -326,6 +330,26 @@ public:
     std::size_t layer_id{};
 
 private:
+    // Mirrors the effective light property values into m_values; run by the
+    // changed callback every Light property shares (on_light_property_changed),
+    // which is delivered for local, style, animated, expression and
+    // inherited changes alike.
+    void refresh_values();
+
+    class Values
+    {
+    public:
+        Type      light_type{Type::directional};
+        glm::vec3 color{1.0f, 1.0f, 1.0f};
+        float     intensity{1.0f};
+        float     temperature{0.0f};
+        float     range{100.0f};
+        float     inner_spot_angle{0.0f};
+        float     outer_spot_angle{0.0f};
+        bool      cast_shadow{true};
+    };
+    Values m_values;
+
     // Changed callback of every Light property (D19): notifies the
     // Scene_host (Scene_host::on_light_changed) so the scene's resolved
     // light set (erhe::scene_renderer::Light_set) is re-resolved.

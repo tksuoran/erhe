@@ -1,6 +1,7 @@
 #include "windows/settings_window.hpp"
 
 #include "app_context.hpp"
+#include "app_rendering.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
@@ -557,8 +558,8 @@ void Settings_window::imgui()
     // Thin forwarder to the shared reflection renderer (windows/config_ui.hpp),
     // so the many call sites below stay terse. label_override gives a distinct
     // group header when the same struct type is shown more than once.
-    auto add_config_section = [this, show_developer](auto& section, const char* label_override = nullptr) {
-        editor::add_config_section(*this, show_developer, section, label_override);
+    auto add_config_section = [this, show_developer](auto& section, const char* label_override = nullptr, const std::function<void()>& on_edit = {}) {
+        editor::add_config_section(*this, show_developer, section, label_override, on_edit);
     };
 
     push_group("Startup Configuration", ImGuiTreeNodeFlags_Framed);
@@ -649,7 +650,7 @@ void Settings_window::imgui()
         add_entry("Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
         pop_group();
         // Editor-global content edge-line (wide-line) method + bias tuning.
-        add_config_section(settings.content_edge_lines);
+        add_config_section(settings.content_edge_lines, nullptr, [this]() { apply_content_edge_lines_settings(m_context); });
         // Edge-line overlay for the preview thumbnails (same struct shown
         // twice; the label override gives each a distinct group header).
         add_config_section(settings.graph_node_preview_edge_lines, "Graph Node Preview Edge Lines");

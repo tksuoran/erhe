@@ -1579,7 +1579,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             const mat4         node_from_clip  = inverse(clip_from_node);
             const mat4         world_from_clip = camera_node->world_from_node() * node_from_clip;
 
-            std::vector<glm::vec2> ndc_points;
+            std::vector<glm::vec2>& ndc_points = m_ndc_points;
+            ndc_points.clear();
             for (const glm::vec3& p : selection_convex_hull.points) {
                 glm::vec4 p_in_clip = clip_from_world * glm::vec4(p, 1.0f);
                 glm::vec2 p_in_ndc  = glm::vec2{glm::vec3{p_in_clip} / p_in_clip.w};
@@ -1595,8 +1596,10 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             };
 
             {
-                std::vector<glm::vec3> projected_convex_hull_points;
-                std::vector<glm::vec2> ndc_convex_hull = erhe::math::calculate_bounding_convex_hull(ndc_points);
+                std::vector<glm::vec3>& projected_convex_hull_points = m_projected_convex_hull_points;
+                std::vector<glm::vec2>& ndc_convex_hull              = m_ndc_convex_hull;
+                projected_convex_hull_points.clear();
+                erhe::math::calculate_bounding_convex_hull(std::span<const glm::vec2>{ndc_points}, ndc_convex_hull);
                 for (const glm::vec2& p_in_ndc : ndc_convex_hull) {
                     glm::vec3 world_pos = unproject_nearplane_to_world(p_in_ndc);
                     projected_convex_hull_points.push_back(world_pos);

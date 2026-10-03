@@ -296,7 +296,8 @@ void Lattice_tool::tool_render(const Render_context& context)
     // stencil_reference must be non-zero (function=greater against a
     // zero-cleared stencil buffer); 2 matches the other debug tools.
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
-    std::vector<erhe::renderer::Line> lines;
+    std::vector<erhe::renderer::Line>& lines = m_scratch_lines;
+    lines.clear();
     for (int k = 0; k <= divisions.z; ++k) {
         for (int j = 0; j <= divisions.y; ++j) {
             for (int i = 0; i <= divisions.x; ++i) {

@@ -11,6 +11,7 @@
 #include "renderers/lightmap_report.hpp"
 #include "renderers/lightmap_streamer.hpp"
 #include "renderers/lightmap_tile_io.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -608,17 +609,6 @@ void Lightmap_window::apply_tile_overrides(std::vector<Lightmap_tile_key>&& over
     for (const Lightmap_tile_key& key : overrides) {
         stored.push_back(Lightmap_tile_override{.level = key.level, .ix = key.ix, .iz = key.iz});
     }
-    // Push into the baker NOW: the editor tick mirrors the scene settings
-    // only next frame, and the re-prepare below computes its split estimate
-    // immediately - it must see the new grid.
-    if (m_context.lightmap_baker != nullptr) {
-        std::vector<glm::ivec3> values;
-        values.reserve(overrides.size());
-        for (const Lightmap_tile_key& key : overrides) {
-            values.emplace_back(key.level, key.ix, key.iz);
-        }
-        m_context.lightmap_baker->set_tile_overrides(values);
-    }
     log_render->info("Lightmap_window: {} tile overrides applied", stored.size());
     // A live partition was clipped against the old grid - re-prepare
     // asynchronously. The legacy (non-partitioned) layout relayouts by
@@ -809,6 +799,7 @@ void Lightmap_window::imgui()
         ImGui::SetNextItemWidth(120.0f);
         if (ImGui::DragFloat("Cell size (m)", &config.cell_size_m, 0.25f, 0.25f, 1024.0f, "%.2f")) {
             m_context.app_settings->settings_store().touch();
+            apply_lightmap_settings(m_context);
         }
         const bool cell_size_edited = ImGui::IsItemDeactivatedAfterEdit();
         if (ImGui::IsItemHovered()) {
@@ -839,6 +830,7 @@ void Lightmap_window::imgui()
         if (ImGui::Combo("Tile texture size", &tile_size_index, tile_size_names, IM_ARRAYSIZE(tile_size_names))) {
             config.tile_texture_size = tile_size_values[tile_size_index];
             m_context.app_settings->settings_store().touch();
+            apply_lightmap_settings(m_context);
             if ((m_context.lightmap_partitioner != nullptr) &&
                 m_context.lightmap_partitioner->is_prepared() &&
                 !m_context.lightmap_partitioner->is_prepare_in_flight()) {
@@ -856,6 +848,7 @@ void Lightmap_window::imgui()
         ImGui::SetNextItemWidth(120.0f);
         if (ImGui::DragInt("Resident tiles", &config.resident_tile_budget, 0.1f, 1, 64)) {
             m_context.app_settings->settings_store().touch();
+            apply_lightmap_settings(m_context);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
@@ -893,6 +886,7 @@ void Lightmap_window::imgui()
         ImGui::SetNextItemWidth(140.0f);
         if (ImGui::DragFloat("Chart gutter (texels)", &config.uv_gutter_texels, 0.25f, 0.0f, 16.0f, "%.2f")) {
             m_context.app_settings->settings_store().touch();
+            apply_lightmap_settings(m_context);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Minimum empty space between charts, in texels at the expected density (erhe's own packing).");
@@ -1170,6 +1164,7 @@ void Lightmap_window::imgui()
             if (ImGui::Combo("Bake mode", &bake_mode, bake_mode_names, IM_ARRAYSIZE(bake_mode_names))) {
                 config.indirect_bounce = (bake_mode == 1);
                 m_context.app_settings->settings_store().touch();
+                apply_lightmap_settings(m_context);
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip(
@@ -1431,6 +1426,36 @@ void Lightmap_window::imgui()
     ImGui::EndDisabled(); // !bake_supported (Features)
     if (touched) {
         m_context.app_settings->settings_store().touch();
+        apply_lightmap_settings(m_context);
+    }
+}
+
+void apply_lightmap_settings(App_context& context)
+{
+    const Lightmap_config& config = context.editor_settings->lightmap;
+    if (context.forward_renderer != nullptr) {
+        context.forward_renderer->set_lightmap_bicubic(config.bicubic_sampling);
+    }
+    if (context.lightmap_baker != nullptr) {
+        context.lightmap_baker->set_tile_config(config.tile_texture_size, config.resident_tile_budget);
+        context.lightmap_baker->set_cell_size(config.cell_size_m);
+        context.lightmap_baker->set_options(
+            Lightmap_baker::Bake_options{
+                .indirect_bounce = config.indirect_bounce,
+                .terminator_fix  = config.terminator_fix,
+                .denoise         = config.denoise,
+                .dilation        = config.dilation,
+                .seam_blend      = config.seam_blend,
+                .coverage_mode   = static_cast<Lightmap_baker::Coverage_mode>(std::clamp(config.coverage_mode, 0, 2)),
+                // Stored as a combo index (0 = off, 1 = 16 points,
+                // 2 = 64 points); the baker takes the grid side.
+                .supersample_factor = (config.supersample_points == 2) ? 8 : (config.supersample_points == 1) ? 4 : 0,
+                .gutter_texels   = config.uv_gutter_texels
+            }
+        );
+    }
+    if (context.lightmap_streamer != nullptr) {
+        context.lightmap_streamer->set_budget(config.resident_tile_budget);
     }
 }
 

@@ -19,6 +19,13 @@ namespace editor {
 
 class App_context;
 
+// Applies editor_settings->lightmap to the parts that consume it: the
+// forward renderer's bicubic lightmap filtering, the baker's tile size,
+// slot budget, cell size and bake options, and the streamer's tile budget.
+// Called once the parts exist and from every edit of those settings (the
+// Lightmap window rows), never per frame.
+void apply_lightmap_settings(App_context& context);
+
 // Lightmap baking control window (doc/editor/lightmap_baking.md).
 //
 // Front door: Prepare World-Space Tiles (the partitioner). The window

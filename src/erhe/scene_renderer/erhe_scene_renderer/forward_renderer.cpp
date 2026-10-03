@@ -26,6 +26,8 @@
 
 #include <fmt/format.h>
 
+#include <iterator>
+
 #include <functional>
 
 namespace erhe::scene_renderer {
@@ -133,7 +135,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             render_pipeline_state->data.debug_label
         };
 
-        std::vector<Render_bucket> buckets;
+        Render_bucket_list& buckets = m_buckets;
+        buckets.clear();
         for (const auto& meshes : mesh_spans) {
             bucket_primitives(
                 buckets,
@@ -151,7 +154,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
 
         for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-            const Render_bucket&      bucket       = buckets[bucket_index];
+            const Render_bucket&      bucket       = buckets.get_buckets()[bucket_index];
             const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
 
             ERHE_VERIFY(!bucket.entries.empty());
@@ -207,19 +210,17 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
 
-            erhe::graphics::Scoped_debug_group bucket_scope{
-                render_encoder.get_command_buffer(),
-                erhe::utility::Debug_label{
-                    fmt::format(
-                        "bucket {}/{} prims={} streams={} {}",
-                        bucket_index,
-                        buckets.size(),
-                        bucket.entries.size(),
-                        bucket.buffer_set.vertex_buffers.size(),
-                        bucket.shader_key.describe()
-                    )
-                }
-            };
+            m_bucket_label.clear();
+            fmt::format_to(
+                std::back_inserter(m_bucket_label),
+                "bucket {}/{} prims={} streams={} shader key {:016x}",
+                bucket_index,
+                buckets.size(),
+                bucket.entries.size(),
+                bucket.buffer_set.vertex_buffers.size(),
+                bucket.shader_key_hash
+            );
+            erhe::graphics::Scoped_debug_group bucket_scope{render_encoder.get_command_buffer(), std::string_view{m_bucket_label}};
 
             base.render_encoder.set_render_pipeline(*render_pipeline);
 
@@ -414,7 +415,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
             environment_key.set(Shader_int::SHADOW_DEPTH_BITS,                        parameters.shadow_depth_bits);
             environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   view_count);
 
-            std::vector<Render_bucket> buckets;
+            Render_bucket_list buckets;
             for (const auto& meshes : parameters.mesh_spans) {
                 bucket_primitives(
                     buckets,
@@ -430,7 +431,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                 );
             }
 
-            for (const Render_bucket& bucket : buckets) {
+            for (const Render_bucket& bucket : buckets.get_buckets()) {
                 const Vertex_input_entry& vertex_input = parameters.mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
 
                 // Phase 1: force shader-module compile (glslang -> SPIR-V ->

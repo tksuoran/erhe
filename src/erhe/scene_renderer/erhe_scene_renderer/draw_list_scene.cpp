@@ -23,6 +23,8 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <iterator>
+
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_operation.hpp>
@@ -1177,9 +1179,10 @@ void Draw_list_scene::flush_pending()
     ERHE_PROFILE_FUNCTION();
     assert_main_thread();
 
-    std::vector<Pending_op> ops;
+    std::vector<Pending_op>& ops = m_flushing;
     {
         const std::lock_guard<std::mutex> lock{m_pending_mutex};
+        ERHE_VERIFY(ops.empty());
         ops.swap(m_pending);
     }
     // A queued rebuild runs FIRST, ahead of this flush's register / unregister
@@ -1277,6 +1280,7 @@ void Draw_list_scene::flush_pending()
             }
         }
     }
+    ops.clear();
 
     check_material_changes();
 }
@@ -1572,12 +1576,9 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
             }
             // Keep the label cheap: Shader_key::describe() is a multi-line
             // define dump and would dominate the per-list CPU cost.
-            erhe::graphics::Scoped_debug_group list_scope{
-                parameters.render_encoder.get_command_buffer(),
-                erhe::utility::Debug_label{
-                    fmt::format("draw list {} {} {} layer={} entries={}", list_index, c_str(key.mobility), c_str(key.blending), key.layer_id, draw_list.entries.size())
-                }
-            };
+            m_list_label.clear();
+            fmt::format_to(std::back_inserter(m_list_label), "draw list {} {} {} layer={} entries={}", list_index, c_str(key.mobility), c_str(key.blending), key.layer_id, draw_list.entries.size());
+            erhe::graphics::Scoped_debug_group list_scope{parameters.render_encoder.get_command_buffer(), std::string_view{m_list_label}};
             draw_list_chunks(
                 draw_list,
                 parameters.render_encoder,
@@ -1629,12 +1630,9 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             log_draw_list->warn("No shadow render pipeline for draw list {}: {}", list_index, key.describe());
             continue;
         }
-        erhe::graphics::Scoped_debug_group list_scope{
-            parameters.render_encoder.get_command_buffer(),
-            erhe::utility::Debug_label{
-                fmt::format("shadow draw list {} {} {} layer={} entries={}", list_index, c_str(key.mobility), c_str(parameters.sub_variant), key.layer_id, draw_list.entries.size())
-            }
-        };
+        m_list_label.clear();
+        fmt::format_to(std::back_inserter(m_list_label), "shadow draw list {} {} {} layer={} entries={}", list_index, c_str(key.mobility), c_str(parameters.sub_variant), key.layer_id, draw_list.entries.size());
+        erhe::graphics::Scoped_debug_group list_scope{parameters.render_encoder.get_command_buffer(), std::string_view{m_list_label}};
         draw_list_chunks(
             draw_list,
             parameters.render_encoder,
