@@ -773,15 +773,15 @@ auto Scene_views::open_four_view() -> Four_view*
     scene_root->get_scene().get_root_node()->for_each<erhe::scene::Mesh>(
         [&bounds](erhe::scene::Mesh& mesh) -> bool {
             const erhe::math::Aabb mesh_bounds = mesh.get_aabb_world();
-            if (mesh.is_active() && mesh_bounds.is_valid()) {
+            if (mesh.is_active() && mesh_bounds.is_valid_3d()) {
                 bounds.include(mesh_bounds.min);
                 bounds.include(mesh_bounds.max);
             }
             return true;
         }
     );
-    const glm::vec3 center         = bounds.is_valid() ? bounds.center() : glm::vec3{0.0f, 0.0f, 0.0f};
-    const float     radius         = bounds.is_valid() ? glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-3f) : 5.0f;
+    const glm::vec3 center         = bounds.is_valid_3d() ? bounds.center() : glm::vec3{0.0f, 0.0f, 0.0f};
+    const float     radius         = bounds.is_valid_3d() ? glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-3f) : 5.0f;
     const float     view_height    = 2.2f * radius;
     const float     distance       = (4.0f * radius) + 1.0f;
     const float     focus_distance = glm::max(glm::length(center - glm::vec3{source_camera->position_in_world()}), 0.1f * radius);

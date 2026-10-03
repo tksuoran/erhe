@@ -116,7 +116,7 @@ void check_empty_primitive(const std::shared_ptr<erhe::geometry::Geometry>& geom
 
     // The bounding volume still covers the mesh vertices.
     const erhe::math::Aabb bounding_box = primitive.get_bounding_box();
-    EXPECT_TRUE(bounding_box.is_valid());
+    EXPECT_TRUE(bounding_box.is_valid_3d());
 }
 
 } // namespace

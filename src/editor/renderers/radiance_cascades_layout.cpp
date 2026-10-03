@@ -139,7 +139,7 @@ namespace {
 auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascades_layout_settings& settings) -> Radiance_cascades_layout
 {
     Radiance_cascades_layout layout{};
-    if (!bounds.is_valid()) {
+    if (!bounds.is_valid_3d()) {
         return layout;
     }
 

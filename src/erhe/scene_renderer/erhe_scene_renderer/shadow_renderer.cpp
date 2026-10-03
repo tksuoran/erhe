@@ -339,7 +339,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     continue; // nothing to gather for this mesh; skip the AABB compute
                 }
                 const erhe::math::Aabb aabb = mesh->get_aabb_world();
-                if (!aabb.is_valid()) {
+                if (!aabb.is_valid_3d()) {
                     continue;
                 }
                 if (gather_receivers) {
@@ -356,7 +356,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     glm::vec3 node_abs_extent{0.0f};
                     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
                         const erhe::math::Aabb node_aabb = mesh_primitive.primitive->get_bounding_box();
-                        if (!node_aabb.is_valid()) {
+                        if (!node_aabb.is_valid_3d()) {
                             continue;
                         }
                         node_abs_extent = glm::max(node_abs_extent, glm::max(glm::abs(node_aabb.min), glm::abs(node_aabb.max)));

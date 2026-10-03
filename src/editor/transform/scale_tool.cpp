@@ -61,7 +61,7 @@ constexpr float c_min_geometry_extent = 1e-6f;
                 continue;
             }
             const erhe::math::Aabb local = mesh_primitive.primitive->get_bounding_box();
-            if (local.is_valid()) {
+            if (local.is_valid_3d()) {
                 aabb.include(local);
             }
         }
@@ -417,7 +417,7 @@ auto Scale_tool::apply_box_per_node(const float pivot, const float old_size, con
         const bool node_collapsed = std::abs(scale[local_axis]) < c_singular_scale;
 
         const erhe::math::Aabb geometry_aabb = node_local_aabb(node.get());
-        if (!geometry_aabb.is_valid()) {
+        if (!geometry_aabb.is_valid_3d()) {
             // No geometry (light/camera/empty): nothing to size. A healthy node still rides
             // along (its position scales about the pivot); a collapsed one is left in place.
             if (!node_collapsed) {

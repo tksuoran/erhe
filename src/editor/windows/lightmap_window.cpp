@@ -99,7 +99,7 @@ namespace {
         entry.texels_per_meter = layout_tile.texels_per_meter;
         // Content union when there is content; the grid cell box otherwise
         // (an empty tile's default Aabb would serialize garbage extents).
-        const erhe::math::Aabb& bounds = layout_tile.world_bounds.is_valid() ? layout_tile.world_bounds : layout_tile.cell_bounds;
+        const erhe::math::Aabb& bounds = layout_tile.world_bounds.is_valid_3d() ? layout_tile.world_bounds : layout_tile.cell_bounds;
         entry.bounds_min       = bounds.min;
         entry.bounds_max       = bounds.max;
         entry.density_scale    = layout_tile.density_scale;

@@ -271,7 +271,7 @@ void Viewport_window::gltf_drag_preview_and_drop(Asset_file_gltf& gltf, const bo
 
     // Snap the asset so its AABB rests bottom-centered on the anchor.
     glm::vec3 translation = anchor;
-    const bool has_bounds = gltf.bounding_box.has_value() && gltf.bounding_box->is_valid();
+    const bool has_bounds = gltf.bounding_box.has_value() && gltf.bounding_box->is_valid_3d();
     if (has_bounds) {
         const erhe::math::Aabb& aabb  = gltf.bounding_box.value();
         const glm::vec3         center = aabb.center();

@@ -47,17 +47,6 @@ auto axis_vector(const Axis_direction direction) -> glm::vec3
 
 namespace {
 
-// An Aabb is empty (carries no extent) when its minimum exceeds its maximum on
-// any axis. The default-constructed Aabb (min = FLT_MAX, max = -FLT_MAX) is empty.
-// Note: erhe::math::Aabb::is_valid() uses '||' and is unreliable here, so this
-// feature uses its own explicit emptiness test.
-[[nodiscard]] auto is_empty(const erhe::math::Aabb& aabb) -> bool
-{
-    return (aabb.min.x > aabb.max.x) ||
-           (aabb.min.y > aabb.max.y) ||
-           (aabb.min.z > aabb.max.z);
-}
-
 [[nodiscard]] auto node_own_local_aabb(const Node& node) -> erhe::math::Aabb
 {
     erhe::math::Aabb aabb{};
@@ -68,7 +57,7 @@ namespace {
                 continue;
             }
             const erhe::math::Aabb local = mesh_primitive.primitive->get_bounding_box();
-            if (!is_empty(local)) {
+            if (local.is_valid_3d()) {
                 aabb.include(local);
             }
         }
@@ -473,7 +462,7 @@ auto compute_content_local_aabb(const Node& node) -> erhe::math::Aabb
             continue;
         }
         const erhe::math::Aabb child_box = measure_child_content(*child);
-        if (!is_empty(child_box)) {
+        if (child_box.is_valid_3d()) {
             const glm::mat4 child_from_node = child->parent_from_node(); // child-local -> node-local
             aabb.include(child_box.transformed_by(child_from_node));
         }

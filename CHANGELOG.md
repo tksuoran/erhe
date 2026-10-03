@@ -246,6 +246,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::math`: `Aabb::is_valid()` is replaced by `Aabb::is_valid_3d()`, which
+  requires `min <= max` on all three axes (the old check accepted a box valid
+  on any one axis, and a box with a NaN bound).
 - `erhe::scene_renderer`: `Mesh_memory` rejects a temporary config at compile
   time (deleted rvalue constructor); it keeps a reference to the config.
 - `erhe::scene_renderer`: draw-list color passes cull entries against the

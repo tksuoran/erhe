@@ -4666,7 +4666,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
                 }
             }
         }
-        if (aabb.is_valid()) {
+        if (aabb.is_valid_3d()) {
             result.bounding_box = aabb;
         }
     }

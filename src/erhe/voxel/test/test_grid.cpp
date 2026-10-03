@@ -180,7 +180,7 @@ TEST(Grid, copy_and_empty_semantics)
     EXPECT_TRUE(empty.is_empty());
     EXPECT_EQ(empty.get_active_voxel_count(), std::int64_t{0});
     EXPECT_EQ(empty.get_volume(), 0.0f);
-    EXPECT_FALSE(empty.get_aabb().is_valid());
+    EXPECT_FALSE(empty.get_aabb().is_valid_3d());
 
     // Deep copy: mutating the copy leaves the source untouched
     erhe::voxel::Grid source = erhe::voxel::Grid::make_sphere(c_create_info, glm::vec3{0.0f}, 1.0f);

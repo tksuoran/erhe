@@ -100,11 +100,11 @@ TEST(Bvh_scene, SceneBoundsFollowChildren)
 
     auto  scene     = IScene::create_unique("bounds");
     auto* bvh_scene = as_bvh_scene(scene.get());
-    EXPECT_FALSE(bvh_scene->get_bbox().is_valid());
+    EXPECT_FALSE(bvh_scene->get_bbox().is_valid_3d());
 
     scene->attach(tg.geometry.get());
     const erhe::math::Aabb bbox = bvh_scene->get_bbox();
-    ASSERT_TRUE(bbox.is_valid());
+    ASSERT_TRUE(bbox.is_valid_3d());
     EXPECT_NEAR(bbox.min.x, 0.0f, 0.001f);
     EXPECT_NEAR(bbox.max.x, 1.0f, 0.001f);
     EXPECT_NEAR(bbox.min.y, 0.0f, 0.001f);
@@ -127,7 +127,7 @@ TEST(Bvh_scene, InstanceBoundsAreTransformed)
     root_scene->attach(instance.get());
 
     const erhe::math::Aabb bbox = bvh_root_scene->get_bbox();
-    ASSERT_TRUE(bbox.is_valid());
+    ASSERT_TRUE(bbox.is_valid_3d());
     EXPECT_NEAR(bbox.min.x, 10.0f, 0.001f);
     EXPECT_NEAR(bbox.max.x, 11.0f, 0.001f);
 }

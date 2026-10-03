@@ -27,7 +27,7 @@ namespace erhe::scene_renderer {
 
 auto get_position_quantization(const erhe::math::Aabb& bounding_box) -> Position_quantization
 {
-    if (!bounding_box.is_valid()) {
+    if (!bounding_box.is_valid_3d()) {
         return Position_quantization{};
     }
     // Small enough that it never perturbs a real extent, large enough to keep

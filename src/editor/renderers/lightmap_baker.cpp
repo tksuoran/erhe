@@ -169,7 +169,7 @@ void compute_region_uv_metrics(erhe::geometry::Geometry& geometry, Lightmap_bake
             local_bounds = primitives[region.primitive_index].primitive->get_bounding_box();
         }
     }
-    if (local_bounds.is_valid()) {
+    if (local_bounds.is_valid_3d()) {
         bounds = local_bounds.transformed_by(world_from_node);
     } else {
         bounds.include(glm::vec3{world_from_node[3]});
@@ -2371,7 +2371,7 @@ auto Lightmap_baker::build_grid_split(const Scene_root& scene_root, const std::v
     erhe::math::Aabb content_bounds{};
     constexpr int max_cells_per_region_axis = 256;
     for (const erhe::math::Aabb& bounds : region_bounds) {
-        if (!bounds.is_valid()) {
+        if (!bounds.is_valid_3d()) {
             continue;
         }
         content_bounds.include(bounds);
@@ -2795,7 +2795,7 @@ auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root) -> Esti
     }
     result.regions.reserve(regions.size());
     for (std::size_t i = 0; i < regions.size(); ++i) {
-        const glm::vec3 center = bounds[i].is_valid() ? bounds[i].center() : glm::vec3{0.0f};
+        const glm::vec3 center = bounds[i].is_valid_3d() ? bounds[i].center() : glm::vec3{0.0f};
         const int tile = grid.tile_for_position(glm::vec2{center.x, center.z}, std::max(m_cell_size, 0.01f));
         result.regions.push_back(Estimate_region{std::move(regions[i].mesh), regions[i].primitive_index, tile});
     }

@@ -1469,7 +1469,7 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
     );
 
     const erhe::math::Aabb bounds = compute_padded_content_bounds(scene_root, fit_padding_m);
-    if (!bounds.is_valid()) {
+    if (!bounds.is_valid_3d()) {
         return false;
     }
 

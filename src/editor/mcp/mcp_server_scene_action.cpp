@@ -3970,7 +3970,7 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
                     return true;
                 }
                 const erhe::math::Aabb mesh_bounds = mesh.get_aabb_world();
-                if (mesh_bounds.is_valid()) {
+                if (mesh_bounds.is_valid_3d()) {
                     bounds.include(mesh_bounds.min);
                     bounds.include(mesh_bounds.max);
                     ++mesh_count;

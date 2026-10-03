@@ -55,14 +55,14 @@ namespace {
                 }
                 const std::vector<erhe::math::Aabb>& joint_boxes =
                     shape->get_renderable_mesh().joint_bounding_boxes;
-                if ((joint_index >= joint_boxes.size()) || !joint_boxes[joint_index].is_valid()) {
+                if ((joint_index >= joint_boxes.size()) || !joint_boxes[joint_index].is_valid_3d()) {
                     continue;
                 }
                 bind_box.include(joint_boxes[joint_index]);
             }
         }
     }
-    if (!bind_box.is_valid()) {
+    if (!bind_box.is_valid_3d()) {
         return {};
     }
 

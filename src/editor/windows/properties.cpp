@@ -646,7 +646,7 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
         }
     }
 
-    if (buffer_mesh->bounding_box.is_valid()) {
+    if (buffer_mesh->bounding_box.is_valid_3d()) {
         const glm::vec3 size = buffer_mesh->bounding_box.max - buffer_mesh->bounding_box.min;
         const float volume = buffer_mesh->bounding_box.volume();
         add_entry("Bounding box size",   [=](){ ImGui::Text("%f, %f, %f", size.x, size.y, size.z); });

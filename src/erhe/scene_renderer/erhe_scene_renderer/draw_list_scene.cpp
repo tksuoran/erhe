@@ -1445,7 +1445,7 @@ void Draw_list_scene::draw_list_chunks(
     for (std::size_t i = 0; i < entry_count; ++i) {
         const Draw_list_entry& entry = draw_list.entries[i];
         bool passes = filter(entry.flag_bits);
-        if (passes && (view_frustum_planes != nullptr) && entry.world_aabb.is_valid()) {
+        if (passes && (view_frustum_planes != nullptr) && entry.world_aabb.is_valid_3d()) {
             const Draw_list_object& object = m_objects[entry.object_index];
             if ((object.mobility != Draw_mobility::skinned) && !erhe::math::aabb_in_convex_volume(std::span<const glm::vec4>{*view_frustum_planes}, entry.world_aabb)) {
                 passes = false;

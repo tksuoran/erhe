@@ -98,7 +98,7 @@ namespace {
 auto world_bounds_corner(const erhe::property::Dependency_object& object, const bool max_corner) -> erhe::property::Property_value
 {
     const erhe::math::Aabb aabb = static_cast<const Mesh&>(object).get_aabb_world();
-    if (!aabb.is_valid()) {
+    if (!aabb.is_valid_3d()) {
         return glm::vec3{0.0f};
     }
     return max_corner ? aabb.max : aabb.min;
@@ -643,7 +643,7 @@ auto Mesh::get_skinned_primitive_aabb_world(const erhe::primitive::Primitive& pr
     const std::size_t end = std::min(joint_boxes.size(), skin_data.joints.size());
     for (std::size_t i = 0; i < end; ++i) {
         const erhe::math::Aabb& joint_box = joint_boxes[i];
-        if (!joint_box.is_valid()) {
+        if (!joint_box.is_valid_3d()) {
             continue; // joint influences no vertex of this primitive
         }
         const std::optional<glm::mat4> world_from_bind = skin_data.get_world_from_bind(i);
@@ -670,7 +670,7 @@ auto Mesh::get_aabb_world() const -> erhe::math::Aabb
     // that actually influences the mesh.
     if (skin) {
         const erhe::math::Aabb skinned_aabb = get_skinned_aabb_world();
-        if (skinned_aabb.is_valid()) {
+        if (skinned_aabb.is_valid_3d()) {
             return skinned_aabb;
         }
         // Fall through when the primitives carry no per-joint bounds (geometry

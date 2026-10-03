@@ -386,7 +386,7 @@ auto Bvh_scene::make_tlas_build_input() -> Tlas_build_input
             continue;
         }
         const erhe::math::Aabb bbox = child.get_bbox();
-        if (!bbox.is_valid()) {
+        if (!bbox.is_valid_3d()) {
             continue;
         }
         child.in_pending_tlas = true;
@@ -512,7 +512,7 @@ auto Bvh_scene::get_bbox() const -> erhe::math::Aabb
     erhe::math::Aabb bbox{};
     for (const Bvh_scene_child& child : m_children) {
         const erhe::math::Aabb child_bbox = child.get_bbox();
-        if (child_bbox.is_valid()) {
+        if (child_bbox.is_valid_3d()) {
             bbox.include(child_bbox);
         }
     }

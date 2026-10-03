@@ -142,7 +142,7 @@ auto Draw_mode_system::get_extent(erhe::scene::Node& node, glm::vec3& out_min, g
                             continue;
                         }
                         const erhe::math::Aabb primitive_bounds = mesh_primitive.primitive->get_bounding_box();
-                        if (!primitive_bounds.is_valid()) {
+                        if (!primitive_bounds.is_valid_3d()) {
                             continue;
                         }
                         bounds.include(primitive_bounds.transformed_by(node_from_mesh));
@@ -150,7 +150,7 @@ auto Draw_mode_system::get_extent(erhe::scene::Node& node, glm::vec3& out_min, g
                     return true;
                 }
             );
-            if (bounds.is_valid()) {
+            if (bounds.is_valid_3d()) {
                 entry.extent_min   = bounds.min;
                 entry.extent_max   = bounds.max;
                 entry.extent_valid = true;

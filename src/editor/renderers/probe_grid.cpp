@@ -68,7 +68,7 @@ auto get_probe_field_max_probes(const int tile_texels, const int max_texture_siz
 auto fit_probe_grid(const erhe::math::Aabb& bounds, const float target_spacing, const int max_probes_in) -> Probe_grid
 {
     Probe_grid grid{};
-    if (!bounds.is_valid()) {
+    if (!bounds.is_valid_3d()) {
         return grid;
     }
     const glm::vec3 min    = bounds.min;
@@ -112,7 +112,7 @@ auto fit_probe_grid(const erhe::math::Aabb& bounds, const float target_spacing, 
 
 auto Probe_volume_bounds::is_outside(const erhe::math::Aabb& content) const -> bool
 {
-    return m_bounds.is_valid() && (
+    return m_bounds.is_valid_3d() && (
         glm::any(glm::lessThan   (content.min, m_bounds.min)) ||
         glm::any(glm::greaterThan(content.max, m_bounds.max))
     );
@@ -120,12 +120,12 @@ auto Probe_volume_bounds::is_outside(const erhe::math::Aabb& content) const -> b
 
 auto Probe_volume_bounds::is_much_smaller(const erhe::math::Aabb& content) const -> bool
 {
-    return m_bounds.is_valid() && (content.volume() < (0.5f * m_bounds.volume()));
+    return m_bounds.is_valid_3d() && (content.volume() < (0.5f * m_bounds.volume()));
 }
 
 auto Probe_volume_bounds::content_changed(const erhe::math::Aabb& content) const -> bool
 {
-    return !m_bounds.is_valid() || is_outside(content) || is_much_smaller(content);
+    return !m_bounds.is_valid_3d() || is_outside(content) || is_much_smaller(content);
 }
 
 auto Probe_volume_bounds::get_fit_bounds(const erhe::math::Aabb& content, const Volume_refit_cause cause) const -> erhe::math::Aabb
@@ -140,7 +140,7 @@ auto Probe_volume_bounds::get_fit_bounds(const erhe::math::Aabb& content, const 
             return content;
         }
         case Volume_refit_cause::budget: {
-            return m_bounds.is_valid() ? m_bounds : content;
+            return m_bounds.is_valid_3d() ? m_bounds : content;
         }
         case Volume_refit_cause::settings:
         case Volume_refit_cause::none:

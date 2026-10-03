@@ -180,7 +180,7 @@ auto Bvh_instance::get_bbox() const -> erhe::math::Aabb
     }
     auto* bvh_scene = reinterpret_cast<Bvh_scene*>(m_scene);
     const erhe::math::Aabb scene_bbox = bvh_scene->get_bbox();
-    if (!scene_bbox.is_valid()) {
+    if (!scene_bbox.is_valid_3d()) {
         return erhe::math::Aabb{};
     }
     return scene_bbox.transformed_by(m_transform);

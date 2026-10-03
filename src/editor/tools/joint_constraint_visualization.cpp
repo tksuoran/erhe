@@ -81,7 +81,7 @@ namespace {
     float extent = 0.0f;
     if (mesh != nullptr) {
         const erhe::math::Aabb aabb = mesh->get_aabb_world();
-        if (aabb.is_valid()) {
+        if (aabb.is_valid_3d()) {
             extent = std::max(extent, 0.5f * glm::length(aabb.diagonal()));
         }
         extent = std::max(extent, glm::distance(state.frame_a.origin, glm::vec3{mesh->position_in_world()}));

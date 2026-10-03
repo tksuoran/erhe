@@ -827,7 +827,7 @@ auto Primitive_shape::make_raytrace_proxy(const erhe::math::Aabb& aabb) -> bool
             return true;
         }
     }
-    if (!aabb.is_valid()) {
+    if (!aabb.is_valid_3d()) {
         return false;
     }
     // 12 triangles, but built aside and installed under the state lock like
@@ -1230,7 +1230,7 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
         erhe::dataformat::get_vertex_position_encoding(&buffer_info.vertex_format);
     glm::vec3 position_encode_center   {0.0f, 0.0f, 0.0f};
     glm::vec3 position_encode_inv_scale{1.0f, 1.0f, 1.0f};
-    if ((sink_position_encoding != erhe::dataformat::Vertex_position_encoding::passthrough) && (buffer_mesh.bounding_box.is_valid())) {
+    if ((sink_position_encoding != erhe::dataformat::Vertex_position_encoding::passthrough) && (buffer_mesh.bounding_box.is_valid_3d())) {
         // Same affine as Build_context and get_position_quantization().
         constexpr float epsilon = 1e-6f;
         const glm::vec3 half_extent = 0.5f * buffer_mesh.bounding_box.diagonal();

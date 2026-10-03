@@ -20,11 +20,13 @@ public:
         const auto d = diagonal();
         return d.x * d.y * d.z;
     }
-    [[nodiscard]] auto is_valid() const -> bool
+    // min <= max on all three axes: the box holds at least one point (a
+    // default-constructed box, and one with a NaN bound, does not).
+    [[nodiscard]] auto is_valid_3d() const -> bool
     {
         return
-            (min.x <= max.x) ||
-            (min.y <= max.y) ||
+            (min.x <= max.x) &&
+            (min.y <= max.y) &&
             (min.z <= max.z);
     }
     void include(const glm::vec3 p)
@@ -34,7 +36,7 @@ public:
     }
     void include(const Aabb& bbox)
     {
-        if (!is_valid()) {
+        if (!is_valid_3d()) {
             min = bbox.min;
             max = bbox.max;
             return;

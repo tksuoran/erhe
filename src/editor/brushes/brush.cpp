@@ -503,7 +503,7 @@ auto Brush::get_bounding_box() -> erhe::math::Aabb
     if (
         !m_primitive ||
         !m_primitive->has_renderable_triangles() ||
-        !m_primitive->render_shape->get_renderable_mesh().bounding_box.is_valid() // TODO is this condition needed?
+        !m_primitive->render_shape->get_renderable_mesh().bounding_box.is_valid_3d() // TODO is this condition needed?
     ) {
         late_initialize();
     }

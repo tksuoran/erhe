@@ -1811,7 +1811,7 @@ void Handle_visualizations::compute_selection_box()
                     continue;
                 }
                 const erhe::math::Aabb local = mesh_primitive.primitive->get_bounding_box();
-                if (!local.is_valid()) {
+                if (!local.is_valid_3d()) {
                     continue;
                 }
                 aabb.include(local.transformed_by(box_from_node));
@@ -1824,7 +1824,7 @@ void Handle_visualizations::compute_selection_box()
     }
 
     m_box_aabb  = aabb;
-    m_box_valid = any && aabb.is_valid();
+    m_box_valid = any && aabb.is_valid_3d();
 }
 
 void Handle_visualizations::viewport_toolbar()

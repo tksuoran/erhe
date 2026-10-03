@@ -213,7 +213,7 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
     // rest bounds and no posed box can be derived.
     if (mesh->skin) {
         const erhe::math::Aabb skinned_aabb = mesh->get_skinned_aabb_world();
-        if (skinned_aabb.is_valid()) {
+        if (skinned_aabb.is_valid_3d()) {
             const glm::vec3 gap{m_settings.gap};
             m_selection_bounding_volume.add_box(glm::mat4{1.0f}, skinned_aabb.min, skinned_aabb.max);
             if (m_settings.selection_parts) {
@@ -430,14 +430,14 @@ void Debug_visualizations::mesh_primitive_boxes_visualization(const Render_conte
                 // joint bounds.
                 if (mesh->skin) {
                     const erhe::math::Aabb posed_box = mesh->get_skinned_primitive_aabb_world(primitive);
-                    if (posed_box.is_valid()) {
+                    if (posed_box.is_valid_3d()) {
                         line_renderer.add_cube(glm::mat4{1.0f}, style.mesh_primitive_box_color, posed_box.min, posed_box.max);
                         continue;
                     }
                 }
 
                 const erhe::math::Aabb& box = primitive.render_shape->get_renderable_mesh().bounding_box;
-                if (!box.is_valid()) {
+                if (!box.is_valid_3d()) {
                     continue;
                 }
                 line_renderer.add_cube(node->world_from_node(), style.mesh_primitive_box_color, box.min, box.max);
@@ -476,7 +476,7 @@ void Debug_visualizations::bone_boxes_visualization(const Render_context& contex
                 const std::size_t end = std::min(joint_boxes.size(), skin_data.joints.size());
                 for (std::size_t i = 0; i < end; ++i) {
                     const erhe::math::Aabb& joint_box = joint_boxes[i];
-                    if (!joint_box.is_valid()) {
+                    if (!joint_box.is_valid_3d()) {
                         continue; // joint influences no vertex of this primitive
                     }
                     // Same matrix the renderer poses vertices with (Joint_buffer).
@@ -706,7 +706,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                             continue;
                         }
                         const erhe::math::Aabb aabb = mesh->get_aabb_world();
-                        if (!aabb.is_valid()) {
+                        if (!aabb.is_valid_3d()) {
                             continue;
                         }
                         const bool affects = erhe::math::aabb_in_convex_volume(fit_debug.shadow_volume_planes, aabb);
@@ -781,7 +781,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                             continue;
                         }
                         const erhe::math::Aabb aabb = mesh->get_aabb_world();
-                        if (!aabb.is_valid()) {
+                        if (!aabb.is_valid_3d()) {
                             continue;
                         }
                         const bool passes = erhe::math::aabb_in_frustum(
@@ -817,7 +817,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                             continue;
                         }
                         const erhe::math::Aabb aabb = mesh->get_aabb_world();
-                        if (!aabb.is_valid() ||
+                        if (!aabb.is_valid_3d() ||
                             !erhe::math::aabb_in_frustum(fit_debug.view_frustum_planes, fit_debug.view_frustum_corners, aabb)) {
                             continue;
                         }
@@ -2272,7 +2272,7 @@ void Debug_visualizations::lightmap_tiles_visualization(const Render_context& co
     constexpr glm::vec4 non_resident_color{0.6f, 0.2f, 0.9f, 1.0f}; // purple: no display slot
     for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
         const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
-        if (!layout_tile.world_bounds.is_valid()) {
+        if (!layout_tile.world_bounds.is_valid_3d()) {
             continue;
         }
         const glm::vec4 color = baker->is_tile_active(tile) ? active_color

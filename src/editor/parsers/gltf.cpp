@@ -427,7 +427,7 @@ void include_mesh_world_bounds(
             continue;
         }
         const erhe::math::Aabb primitive_bounds = mesh_primitive.primitive->get_bounding_box();
-        if (!primitive_bounds.is_valid()) {
+        if (!primitive_bounds.is_valid_3d()) {
             continue;
         }
         bounds.include(primitive_bounds.transformed_by(world_from_node));
@@ -511,14 +511,14 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
     const erhe::math::Aabb& framing_bounds
 ) -> std::optional<Content_fit>
 {
-    if (!depth_bounds.is_valid()) {
+    if (!depth_bounds.is_valid_3d()) {
         return {};
     }
     const float depth_radius = 0.5f * glm::length(depth_bounds.diagonal());
     if (!std::isfinite(depth_radius) || (depth_radius <= 0.0f)) {
         return {};
     }
-    const bool  use_framing_bounds = framing_bounds.is_valid() && (glm::length(framing_bounds.diagonal()) > 0.0f);
+    const bool  use_framing_bounds = framing_bounds.is_valid_3d() && (glm::length(framing_bounds.diagonal()) > 0.0f);
     const erhe::math::Aabb& fit_bounds = use_framing_bounds ? framing_bounds : depth_bounds;
     const float radius = use_framing_bounds ? (0.5f * glm::length(framing_bounds.diagonal())) : depth_radius;
     if (!std::isfinite(radius) || (radius <= 0.0f)) {
@@ -1427,7 +1427,7 @@ auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary
             out.push_back(" - " + extension);
         }
     }
-    if (scan.bounding_box.has_value() && scan.bounding_box->is_valid()) {
+    if (scan.bounding_box.has_value() && scan.bounding_box->is_valid_3d()) {
         const glm::vec3 size = scan.bounding_box->diagonal();
         out.push_back(fmt::format("size: {:.2f} x {:.2f} x {:.2f}", size.x, size.y, size.z));
     }

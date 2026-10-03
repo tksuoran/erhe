@@ -1270,7 +1270,7 @@ auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& c
     const float padding_m = std::max(0.0f, m_config.volume_padding_m);
 
     const erhe::math::Aabb bounds = compute_padded_content_bounds(scene_root, padding_m);
-    if (!bounds.is_valid()) {
+    if (!bounds.is_valid_3d()) {
         return false;
     }
 

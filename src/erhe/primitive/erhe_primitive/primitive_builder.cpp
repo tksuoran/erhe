@@ -688,7 +688,7 @@ Build_context::Build_context(
         // because the epsilon is only ever multiplied by zero.
         constexpr float epsilon = 1e-6f;
         const erhe::math::Aabb& bounding_box = root.buffer_mesh.bounding_box;
-        if (bounding_box.is_valid()) {
+        if (bounding_box.is_valid_3d()) {
             const glm::vec3 center      = bounding_box.center();
             const glm::vec3 half_extent = 0.5f * bounding_box.diagonal();
             const glm::vec3 scale       = glm::max(half_extent, glm::vec3{epsilon});
@@ -1113,7 +1113,7 @@ auto Build_context::take_optimizable_snapshot(
     {
         constexpr float epsilon = 1e-6f;
         const erhe::math::Aabb& bounding_box = root.buffer_mesh.bounding_box;
-        if (bounding_box.is_valid()) {
+        if (bounding_box.is_valid_3d()) {
             const glm::vec3 center      = bounding_box.center();
             const glm::vec3 half_extent = 0.5f * bounding_box.diagonal();
             const glm::vec3 scale       = glm::max(half_extent, glm::vec3{epsilon});

@@ -425,7 +425,7 @@ auto Fly_camera_frame_command::try_call() -> bool
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
             const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
             const auto bounding_box = primitive.get_bounding_box();
-            if (!bounding_box.is_valid()) {
+            if (!bounding_box.is_valid_3d()) {
                 continue;
             }
             erhe::math::Aabb world_bounding_box = bounding_box.transformed_by(node->world_from_node());
@@ -433,7 +433,7 @@ auto Fly_camera_frame_command::try_call() -> bool
         }
     }
     m_context.fly_camera_tool->set_framed_aabb(bbox);
-    if (!bbox.is_valid()) {
+    if (!bbox.is_valid_3d()) {
         return false;
     }
 

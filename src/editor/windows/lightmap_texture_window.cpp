@@ -416,7 +416,7 @@ void Lightmap_texture_window::imgui()
     if (camera_valid) {
         for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
             const erhe::math::Aabb& cell = layout.tiles[static_cast<std::size_t>(tile)].cell_bounds;
-            if (!cell.is_valid()) {
+            if (!cell.is_valid_3d()) {
                 continue;
             }
             if ((camera_position.x >= cell.min.x) && (camera_position.x < cell.max.x) &&

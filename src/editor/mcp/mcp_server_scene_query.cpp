@@ -551,7 +551,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         // computed from the joint transforms - the mesh node's own transform
         // does not affect them, because skinning ignores it.
         const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
-        if (aabb_world.is_valid()) {
+        if (aabb_world.is_valid_3d()) {
             mesh_json["world_aabb"] = {
                 {"min", json::array({aabb_world.min.x, aabb_world.min.y, aabb_world.min.z})},
                 {"max", json::array({aabb_world.max.x, aabb_world.max.y, aabb_world.max.z})}
@@ -813,7 +813,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
                 const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
                 if (mesh) {
                     const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
-                    if (aabb_world.is_valid()) {
+                    if (aabb_world.is_valid_3d()) {
                         subtree_aabb.include(aabb_world);
                     }
                 }
@@ -868,7 +868,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         {"draw_mode",      draw_mode_details(found_node)},
         {"layout",         layout_details(found_node)},
         {"children",       children},
-        {"subtree_world_aabb", subtree_aabb.is_valid()
+        {"subtree_world_aabb", subtree_aabb.is_valid_3d()
             ? json{
                 {"min", json::array({subtree_aabb.min.x, subtree_aabb.min.y, subtree_aabb.min.z})},
                 {"max", json::array({subtree_aabb.max.x, subtree_aabb.max.y, subtree_aabb.max.z})}

@@ -1094,7 +1094,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     for (const auto& brush : brushes) {
         for (int i = 0; i < config.instance_count; ++i) {
             const erhe::math::Aabb& bounding_box = brush->get_bounding_box();
-            ERHE_VERIFY(bounding_box.is_valid());
+            ERHE_VERIFY(bounding_box.is_valid_3d());
             pack_entries.emplace_back(brush.get());
             pack_entries.back().instance_number = i;
         }

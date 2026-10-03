@@ -23,12 +23,12 @@ auto compute_padded_content_bounds(Scene_root& scene_root, const float padding_m
             continue;
         }
         const erhe::math::Aabb mesh_bounds = mesh->get_aabb_world();
-        if (!mesh_bounds.is_valid()) {
+        if (!mesh_bounds.is_valid_3d()) {
             continue;
         }
         bounds.include(mesh_bounds);
     }
-    if (!bounds.is_valid()) {
+    if (!bounds.is_valid_3d()) {
         return bounds;
     }
 

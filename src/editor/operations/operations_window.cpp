@@ -2157,7 +2157,7 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
             return 0.0f;
         }
         const erhe::math::Aabb aabb = mesh->get_aabb_world();
-        return aabb.is_valid() ? glm::length(aabb.diagonal()) : 0.0f;
+        return aabb.is_valid_3d() ? glm::length(aabb.diagonal()) : 0.0f;
     };
     float characteristic_size = std::min(mesh_world_diagonal(alignment.anchor_node), mesh_world_diagonal(alignment.moved_node));
     if (characteristic_size <= 0.0f) {
@@ -2361,7 +2361,7 @@ auto Operations::flip_joint(const Add_joint_avoidance avoidance) -> bool
             return 0.0f;
         }
         const erhe::math::Aabb aabb = mesh->get_aabb_world();
-        return aabb.is_valid() ? glm::length(aabb.diagonal()) : 0.0f;
+        return aabb.is_valid_3d() ? glm::length(aabb.diagonal()) : 0.0f;
     };
     float characteristic_size = std::min(mesh_world_diagonal(target.moved_node), mesh_world_diagonal(target.other_node));
     if (characteristic_size <= 0.0f) {

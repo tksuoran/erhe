@@ -172,7 +172,7 @@ void Navigation_gizmo_tool::on_drag_end()
                 glm::vec3                  translation = transform.get_translation();
                 const int64_t              time_ns     = m_context.time->get_host_system_time_ns();
                 const erhe::math::Aabb&    framed_aabb = m_context.fly_camera_tool->get_framed_aabb();
-                const float focus_distance = framed_aabb.is_valid()
+                const float focus_distance = framed_aabb.is_valid_3d()
                     ? glm::distance(framed_aabb.center(), translation)
                     : 2.0f;
                 if (gizmo.snap(translation, rotation, m_drag_axis, time_ns, focus_distance)) {

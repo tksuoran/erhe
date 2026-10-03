@@ -146,7 +146,7 @@ void ensure_receiver_cache(
     }
     for (const erhe::math::Aabb& aabb : receiver_world_aabbs) {
         const bool in_frustum =
-            aabb.is_valid() &&
+            aabb.is_valid_3d() &&
             erhe::math::aabb_in_frustum(main_frustum_planes, main_frustum_corners, aabb);
         if (collect_debug) {
             cache.receiver_boxes.push_back(Shadow_frustum_fit_debug_data::Receiver_box{aabb, in_frustum});
@@ -462,7 +462,7 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
         {
             ERHE_PROFILE_SCOPE("fit: filter casters");
             for (const erhe::math::Aabb& aabb : parameters.caster_world_aabbs) {
-                if (!aabb.is_valid()) {
+                if (!aabb.is_valid_3d()) {
                     continue;
                 }
                 const bool in_shadow_volume = erhe::math::aabb_in_convex_volume(filter_planes, aabb);

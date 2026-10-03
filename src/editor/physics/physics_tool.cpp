@@ -523,7 +523,7 @@ auto Physics_tool::on_drag() -> bool
         for (const erhe::scene::Mesh_primitive& mesh_primitive : m_target_mesh->get_primitives()) {
             const erhe::primitive::Primitive& primitive              = *mesh_primitive.primitive.get();
             erhe::math::Aabb                  primitive_bounding_box = primitive.get_bounding_box();
-            if (primitive_bounding_box.is_valid()) {
+            if (primitive_bounding_box.is_valid_3d()) {
                 mesh_bounding_box.include(primitive_bounding_box);
             }
         }
