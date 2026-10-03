@@ -17,9 +17,5 @@ struct("Id_renderer_config",
             visible=True,
             developer=False
         ),
-        # The CPU readback + dedup fallback was removed in v2: compute shaders
-        # are a hard device requirement, box / paint select always uses the
-        # GPU compute scan, and the A/B toggle is retired.
-        field("box_select_use_compute", Bool, added_in=1, removed_in=2, default="true", short_desc="Box/Paint Select Uses GPU Compute", long_desc="Removed in v2."),
     ],
 )

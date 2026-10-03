@@ -2,79 +2,20 @@
 #include "ai_driver.hpp"
 #include "editor_log.hpp"
 
-#include "config/generated/ddgi_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
-#include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/user_state_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
-#include "erhe_codegen/migration.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
-#include <cstdint>
 #include <filesystem>
 #include <mutex>
 
 namespace editor {
 
-namespace {
-
-// One-time move of the inventory / scene view sections out of a pre-v4
-// settings file: Editor_settings_config keeps those fields readable (marked
-// removed in v4) purely so an existing setup carries over into the new
-// user_state.json. A file already written in v4 has them at their defaults,
-// which is exactly the empty user state a fresh install starts from.
-#if defined(_MSC_VER)
-#   pragma warning(push)
-#   pragma warning(disable : 4996)
-#elif defined(__GNUC__) || defined(__clang__)
-#   pragma GCC diagnostic push
-#   pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-[[nodiscard]] auto make_user_state_from_settings(const Editor_settings_config& settings) -> User_state_config
-{
-    User_state_config user_state{};
-    user_state.inventory   = settings.inventory;
-    user_state.scene_views = settings.scene_views;
-    return user_state;
-}
-
-// v5 replaced Ddgi_config::enabled (removed in Ddgi_config v2) with
-// indirect_diffuse_source (doc/editor/radiance_cascades.md "Source
-// selection"): a pre-v5 file selects DDGI exactly when it had DDGI enabled.
-// Runs after the whole file was deserialized, so the pre-v2 ddgi section
-// has filled the removed field.
-[[nodiscard]] auto migrate_indirect_diffuse_source(
-    Editor_settings_config& settings,
-    const uint32_t          old_version,
-    uint32_t                /*new_version*/
-) -> bool
-{
-    if (old_version < 5) {
-        settings.indirect_diffuse_source = settings.ddgi.enabled
-            ? Indirect_diffuse_source::ddgi
-            : Indirect_diffuse_source::ambient;
-    }
-    return true;
-}
-#if defined(_MSC_VER)
-#   pragma warning(pop)
-#elif defined(__GNUC__) || defined(__clang__)
-#   pragma GCC diagnostic pop
-#endif
-
-}
-
 Editor_settings_store::Editor_settings_store()
     : m_persist_user_state{!is_ai_driver()}
 {
-    // Migration callbacks live in a process-wide registry; register once
-    // even if a store were constructed more than once.
-    static std::once_flag migrations_registered;
-    std::call_once(migrations_registered, []() {
-        erhe::codegen::register_migration<Editor_settings_config>(migrate_indirect_diffuse_source);
-    });
-
     bool upgraded = false;
     m_settings = erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path, &upgraded);
     log_startup->info(
@@ -138,13 +79,6 @@ Editor_settings_store::Editor_settings_store()
             const bool ok = erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
             log_startup->info("Rewrote {} in current schema format (ok={})", m_user_state_file_path, ok);
         }
-    } else {
-        // No user state file yet: take the sections the settings file carried
-        // before the two were split (see make_user_state_from_settings()) and
-        // write them where they live now.
-        m_user_state = make_user_state_from_settings(m_settings);
-        const bool ok = erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
-        log_startup->info("Seeded {} from {} (ok={})", m_user_state_file_path, m_file_path, ok);
     }
 }
 

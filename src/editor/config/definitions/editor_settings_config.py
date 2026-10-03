@@ -42,10 +42,6 @@ struct("Editor_settings_config",
         # Editor-global geometry graph node preview thumbnails: visibility
         # (on by default) and hover auto-rotation.
         field("graph_node_previews",              StructRef("Graph_node_previews_config"), added_in=1),
-        # inventory / scene_views moved to User_state_config (user_state.json)
-        # in v4; kept here so a v3 file is still read and migrated by
-        # Editor_settings_store on first load.
-        field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=1, removed_in=4),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),
         field("headset",              StructRef("Headset_config"),         added_in=1),
@@ -56,7 +52,6 @@ struct("Editor_settings_config",
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
         field("radiance_cascades",    StructRef("Radiance_cascades_config"), added_in=5),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
-        field("inventory",            StructRef("Inventory_config"),       added_in=1, removed_in=4),
         # glTF import/open performance options (doc/editor/async_asset_loading.md).
         field("load",                 StructRef("Load_config"),            added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),
@@ -131,9 +126,7 @@ struct("Editor_settings_config",
             developer=False
         ),
         # The producer of the indirect diffuse probe field
-        # (doc/editor/radiance_cascades.md "Source selection"). Replaces
-        # Ddgi_config::enabled; Editor_settings_store migrates a pre-v5 file
-        # (ddgi.enabled = true -> ddgi, else ambient).
+        # (doc/editor/radiance_cascades.md "Source selection").
         field(
             "indirect_diffuse_source",
             EnumRef("Indirect_diffuse_source"),

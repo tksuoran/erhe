@@ -47,9 +47,6 @@ struct("Hotbar_config",
             visible=True,
             developer=False
         ),
-        # y was an absolute vertical offset; it is now computed every frame from
-        # the camera vertical FOV (see Hotbar::update_node_transform), so the
-        # field is removed in version 2.
         field(
             "z",
             Float,

@@ -25,9 +25,8 @@ static const char* const c_user_state_openxr_file_path      = "config/editor/ope
 // user_state.json holds the state the user builds up by using the editor -
 // the inventory / hotbar slot contents, the per scene view scene / camera /
 // visual style selections and the property group fold state and order. A
-// user_state.json that does not exist yet is
-// seeded from the pre-v4 editor_settings.json sections the two structs were
-// split out of, so an existing setup carries over.
+// user_state.json that does not exist yet leaves User_state_config at its
+// defaults.
 //
 // An AI-driven run (is_ai_driver(), ERHE_AI_DRIVER=1) neither reads nor writes
 // the user state file: it starts from the User_state_config defaults and

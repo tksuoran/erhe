@@ -37,14 +37,5 @@ struct("Opengl_config",
             visible=True,
             developer=False
         ),
-        # The pre-GL-4.5 emulation layer was removed in v2: OpenGL 4.5 (DSA,
-        # clip control, compute shaders, SSBOs) is now a hard device-creation
-        # requirement, so the switches that requested the emulated paths are
-        # retired.
-        field("force_no_direct_state_access", Bool, added_in=1, removed_in=2, default="false", short_desc="Force Disable OpenGL Direct State Access", long_desc="Removed in v2."),
-        field("force_no_clip_control",        Bool, added_in=1, removed_in=2, default="false", short_desc="Force Disable OpenGL Clip Control",        long_desc="Removed in v2."),
-        field("force_no_compute_shader",      Bool, added_in=1, removed_in=2, default="false", short_desc="Force Disable Compute Shaders",            long_desc="Removed in v2."),
-        field("force_gl_version",             Int,  added_in=1, removed_in=2, default="0",     short_desc="Force OpenGL Version",                     long_desc="Removed in v2."),
-        field("force_glsl_version",           Int,  added_in=1, removed_in=2, default="0",     short_desc="Force OpenGL GLSL Version",                long_desc="Removed in v2."),
     ],
 )

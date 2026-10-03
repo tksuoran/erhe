@@ -49,12 +49,6 @@ selects the producer of the one probe field the forward pass samples:
   `Forward_renderer::set_ddgi()`, and clears it when there is none (source
   `ambient`, or a producer without a field yet). That is the single
   publishing site; the MCP irradiance query samples the same field.
-- Migration: the enum replaces `Ddgi_config::enabled` (removed in
-  `Ddgi_config` v2). `Editor_settings_config` v5 added the enum and the
-  `radiance_cascades` section; a migration callback registered by
-  `Editor_settings_store` maps a pre-v5 file's `ddgi.enabled = true` to
-  `ddgi` and anything else to `ambient`. It runs after the whole file is
-  deserialized, when the removed field still holds the file's value.
 
 ## Settings
 

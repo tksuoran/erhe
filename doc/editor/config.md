@@ -20,9 +20,7 @@ in the `config/` directory (e.g. `config/<app_name/erhe_graphics.json`, `config/
   inventory / hotbar slot contents, the per scene view scene / camera / visual style
   selections and the fold state and order of the property groups
   (`property_groups`). Loaded from `user_state.json`, alongside `editor_settings.json` and with the
-  same autosave. `Editor_settings_store` seeds a missing `user_state.json` from the
-  matching sections of a pre-v4 `editor_settings.json`, which is why
-  `Editor_settings_config` still declares `inventory` and `scene_views` as removed in v4.
+  same autosave. A missing `user_state.json` leaves the struct at its defaults.
   The file is gitignored (it is per-user state, like the ImGui ini), and an AI-driven
   run (`ERHE_AI_DRIVER=1`) neither reads nor writes it.
 

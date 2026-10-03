@@ -8,17 +8,6 @@ struct("Ddgi_config",
     developer=False,
     fields=[
         field(
-            "enabled",
-            Bool,
-            added_in=1,
-            default="false",
-            removed_in=2,
-            short_desc="Enabled",
-            long_desc="Removed in v2: the Indirect Diffuse source (Editor_settings_config.indirect_diffuse_source) selects DDGI; the Editor_settings_config v5 migration maps enabled = true to 'ddgi'.",
-            visible=True,
-            developer=False
-        ),
-        field(
             "probe_spacing_m",
             Float,
             added_in=1,
