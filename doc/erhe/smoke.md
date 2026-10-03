@@ -26,3 +26,4 @@ Command-line executable:
 - The smoke test source is shared with the item library: `src/erhe/item/test/hierarchy_smoke.cpp`.
 - Seeds are printed at startup for easy reproduction of failures.
 - Designed to run under ASAN for maximum bug detection.
+- Registered with ctest as `erhe_smoke` (a 2-second run with a random seed, built by the `erhe_tests` target); a failing run prints the seed to reproduce with.

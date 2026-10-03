@@ -28,7 +28,7 @@ public:
     void remove_rigid_body   (IRigid_body* rigid_body)            override;
     void add_constraint      (IConstraint* constraint)            override;
     void remove_constraint   (IConstraint* constraint)            override;
-    void debug_draw          (erhe::renderer::Jolt_debug_renderer& debug_renderer) override;
+    void debug_draw          (IDebug_draw& debug_draw, glm::vec3 camera_position) override;
     void sanity_check        ()                                   override;
 
     void set_on_body_activated  (std::function<void(IRigid_body*)> callback) override;

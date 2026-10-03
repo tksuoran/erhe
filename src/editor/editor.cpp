@@ -105,7 +105,6 @@
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_host.hpp"
 #include "scene/draw_mode_renderer.hpp"
-#include "scene/debug_draw.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commit_queue.hpp"
@@ -194,9 +193,6 @@
 #include "erhe_net/net_log.hpp"
 #include "erhe_physics/physics_log.hpp"
 #include "erhe_physics/iworld.hpp"
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
-#   include "erhe_renderer/jolt_debug_renderer.hpp"
-#endif
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_executor.hpp"
 #include "erhe_task/task.hpp"
@@ -227,7 +223,7 @@
 #if defined(ERHE_USD_LIBRARY_LIGHTUSD)
 #include "erhe_usd/usd_log.hpp"
 #endif
-#include "erhe_utility/clipboard.hpp"
+#include "erhe_window/clipboard.hpp"
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
 #   include <SDL3/SDL.h>
@@ -1536,7 +1532,7 @@ public:
                             }
                             return;
                         }
-                        erhe::utility::copy_to_clipboard(report_text);
+                        erhe::window::copy_to_clipboard(report_text);
                         if (severity == erhe::graphics::Message_severity::error) {
                             ERHE_FATAL("Device error (copied to clipboard): %s", error_message.c_str());
                         } else {
@@ -1573,7 +1569,7 @@ public:
                         write_ai_error_report("logs/shader_error.txt", "Shader error", report_text);
                         ERHE_FATAL("Shader compilation/linking failed (see logs/shader_error.txt)");
                     }
-                    erhe::utility::copy_to_clipboard(report_text);
+                    erhe::window::copy_to_clipboard(report_text);
                     ERHE_FATAL("Shader compilation/linking failed (error and source copied to clipboard)");
                 }
             );
@@ -1583,13 +1579,13 @@ public:
                         log_render->info("{}", message);
                         return;
                     }
-                    erhe::utility::copy_to_clipboard(message);
+                    erhe::window::copy_to_clipboard(message);
                 }
             );
             m_graphics_device->set_state_dump_callback(
                 [](const std::string& state_dump) {
                     if (!is_ai_driver()) {
-                        erhe::utility::copy_to_clipboard(state_dump);
+                        erhe::window::copy_to_clipboard(state_dump);
                     }
                     log_render->info("{}", state_dump);
                 }
@@ -1658,7 +1654,6 @@ public:
                 m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
                 m_mesh_component_selection = std::make_unique<Mesh_component_selection>(app_message_bus);
                 m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context, app_message_bus);
-                m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
             }
             // Drive view_count from the OpenXR session's multiview
             // capability. The session was created above (line ~789).
@@ -1815,14 +1810,6 @@ public:
             }
             ERHE_TASK_FOOTER( .name("Rendergraph") );
 
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
-            ERHE_TASK_HEADER(jolt_debug_renderer_task)
-            {
-                ERHE_GET_GL_CONTEXT
-                m_jolt_debug_renderer = std::make_unique<erhe::renderer::Jolt_debug_renderer>(*m_debug_renderer.get());
-            }
-            ERHE_TASK_FOOTER( .name("Jolt_debug_renderer").succeed(debug_renderer_task) );
-#endif
             ERHE_TASK_HEADER(forward_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
@@ -2984,9 +2971,6 @@ public:
         m_app_context.graphics_device          = m_graphics_device       .get();
         m_app_context.imgui_renderer           = m_imgui_renderer        .get();
         m_app_context.imgui_windows            = m_imgui_windows         .get();
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
-        m_app_context.jolt_debug_renderer      = m_jolt_debug_renderer   .get();
-#endif
         m_app_context.debug_renderer           = m_debug_renderer        .get();
         m_app_context.rendergraph              = m_rendergraph           .get();
         m_app_context.text_renderer            = m_text_renderer         .get();
@@ -4195,9 +4179,6 @@ public:
     std::unique_ptr<erhe::scene_renderer::Program_interface> m_program_interface;
     std::unique_ptr<erhe::rendergraph::Rendergraph         > m_rendergraph;
     std::unique_ptr<erhe::renderer::Text_renderer          > m_text_renderer;
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
-    std::unique_ptr<erhe::renderer::Jolt_debug_renderer    > m_jolt_debug_renderer;
-#endif
     std::unique_ptr<erhe::scene_renderer::Shader_variant_cache>       m_shader_variant_cache;
     std::unique_ptr<Material_set_factory                  >           m_material_set_factory;
     std::unique_ptr<Programs                              >           m_programs;
@@ -4312,7 +4293,6 @@ public:
     std::unique_ptr<Inventory_window    >                    m_inventory_window;
     std::unique_ptr<Hover_tool          >                    m_hover_tool;
     std::unique_ptr<Brdf_slice          >                    m_brdf_slice;
-    std::unique_ptr<Debug_draw          >                    m_debug_draw;
     std::unique_ptr<Depth_visualization_window>              m_debug_view_window;
     std::unique_ptr<Material_preview    >                    m_material_preview;
     std::unique_ptr<Brush_preview       >                    m_brush_preview;

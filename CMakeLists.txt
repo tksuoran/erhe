@@ -445,12 +445,13 @@ CPMAddPackage(
     OPTIONS "SPDLOG_FMT_EXTERNAL ON"
 )
 
+# concurrentqueue has not tagged a release since v1.0.4 (2023); the pin is
+# the GitHub archive of the master commit of 2026-07-11, fetched by URL like
+# flip below.
 CPMAddPackage(
-    NAME              concurrentqueue 
-    GIT_TAG           master
-    #GIT_TAG           00dd7ba09164fcd25b590818747e3d9a32dddc9c
-    GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY cameron314/concurrentqueue
+    NAME              concurrentqueue
+    URL               https://github.com/cameron314/concurrentqueue/archive/683b9e31ea15eb69f1b81cc1defc7850d5f20b71.tar.gz
+    URL_HASH          SHA256=6314cd90eee2f945a00aee76546203d92ad69f1c68a2df231493aa712584a610
 )
 
 CPMAddPackage(
@@ -729,6 +730,20 @@ if (ERHE_USE_FPNG)
     message(STATUS "Erhe configured to build the fpng image writer (fast PNG save).")
 endif ()
 
+# One googletest for every test directory; each test CMakeLists links
+# GTest::gtest and calls include(GoogleTest) itself.
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    CPMAddPackage(
+        NAME              googletest
+        VERSION           1.16.0
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY google/googletest
+        OPTIONS
+            "BUILD_GMOCK OFF"
+            "INSTALL_GTEST OFF"
+    )
+endif ()
+
 # NVIDIA FLIP (https://github.com/NVlabs/flip, BSD-3) is the image difference
 # metric of the GPU tests' golden image assertions. Only the single header
 # src/cpp/FLIP.h is used, and only by erhe_gpu_test_support
@@ -958,7 +973,14 @@ CPMAddPackage(
 )
 
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
-    CPMAddPackage(NAME cpp-terminal GITHUB_REPOSITORY jupyter-xeus/cpp-terminal)
+    # Pinned to the last commit (2023-03-18) before cpp-terminal replaced
+    # base.hpp and the Terminal(bool, bool, bool) constructor that
+    # src/editor/net_test.cpp uses; the only tag (v0.1.0) is older still.
+    CPMAddPackage(
+        NAME     cpp-terminal
+        URL      https://github.com/jupyter-xeus/cpp-terminal/archive/52f1768cb6f3acc709c1c0a7add73f39bf74ee98.tar.gz
+        URL_HASH SHA256=a43eb3983fa27536e262d6fd5f3ba87e4bb788637ee7c0061f1b0d7dac7de0df
+    )
     message(STATUS "Erhe configured to use cpp-terminal.")
     add_definitions(-DERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
 else ()

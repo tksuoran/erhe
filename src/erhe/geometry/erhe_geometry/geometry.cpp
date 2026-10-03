@@ -55,7 +55,7 @@
 // https://github.com/BrunoLevy/geogram/issues/367
 #define ERHE_CONVEX_HULL_USE_QUICKHULL 0
 
-#include "erhe_log/log_geogram.hpp"
+#include "erhe_geometry/geogram_format.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_math/math_util.hpp"
 

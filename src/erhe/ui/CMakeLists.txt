@@ -22,7 +22,6 @@ target_link_libraries(
     ${_target}
     PUBLIC
         erhe::graphics
-        erhe::primitive
         fmt::fmt
         glm::glm-header-only
         erhe::window

@@ -9,12 +9,14 @@
 #include "erhe_commands/mouse_motion_binding.hpp"
 #include "erhe_commands/mouse_wheel_binding.hpp"
 #include "erhe_commands/update_binding.hpp"
-#include "erhe_commands/xr_boolean_binding.hpp"
-#include "erhe_commands/xr_float_binding.hpp"
-#include "erhe_commands/xr_vector2f_binding.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_xr/xr_action.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "erhe_commands/xr_boolean_binding.hpp"
+#   include "erhe_commands/xr_float_binding.hpp"
+#   include "erhe_commands/xr_vector2f_binding.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#endif
 
 #include <fmt/format.h>
 
@@ -87,6 +89,7 @@ auto Commands::get_controller_button_bindings() const -> const std::vector<Contr
     return m_controller_button_bindings;
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 auto Commands::get_xr_boolean_bindings() const -> const std::vector<Xr_boolean_binding>&
 {
     return m_xr_boolean_bindings;
@@ -101,6 +104,7 @@ auto Commands::get_xr_vector2f_bindings() const -> const std::vector<Xr_vector2f
 {
     return m_xr_vector2f_bindings;
 }
+#endif
 
 auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
 {
@@ -579,6 +583,7 @@ void Commands::update_menu_shortcut_labels()
     }
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Commands::bind_command_to_xr_boolean_action(
     Command* const                     command,
     erhe::xr::Xr_action_boolean* const xr_action,
@@ -600,6 +605,7 @@ void Commands::bind_command_to_xr_vector2f_action(Command* const command, erhe::
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     m_xr_vector2f_bindings.emplace_back(command, xr_action);
 }
+#endif
 
 void Commands::bind_command_to_update(Command* const command)
 {
@@ -634,7 +640,9 @@ void Commands::tick(int64_t timestamp_ns, std::vector<erhe::window::Input_event>
     //if (input_events.empty()) {
     //    SPDLOG_LOGGER_TRACE(log_input_frame, "Commands - no input events");
     //}
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     sort_xr_bindings();
+#endif
     for (erhe::window::Input_event& input_event : input_events) {
         /// TODO
         /// if (input_event.timestamp_ns > timestamp_ns) {
@@ -814,6 +822,7 @@ void Commands::sort_controller_bindings()
     );
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Commands::sort_xr_bindings()
 {
     std::sort(
@@ -850,6 +859,7 @@ void Commands::sort_xr_bindings()
         }
     );
 }
+#endif
 
 void Commands::inactivate_ready_commands()
 {
@@ -1125,6 +1135,7 @@ auto Commands::on_mouse_move_event(const erhe::window::Input_event& input_event)
     return false;
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 auto Commands::on_xr_boolean_event(const erhe::window::Input_event& input_event) -> bool
 {
     const erhe::window::Xr_boolean_event& xr_boolean_event = input_event.u.xr_boolean_event;
@@ -1231,6 +1242,7 @@ auto Commands::on_xr_vector2f_event(const erhe::window::Input_event& input_event
 
     return false;
 }
+#endif
 
 void Commands::sort_bindings()
 {
@@ -1252,7 +1264,9 @@ void Commands::sort_dispatch_bindings()
     sort_mouse_bindings();
     sort_mouse_wheel_bindings();
     sort_controller_bindings();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     sort_xr_bindings();
+#endif
 }
 
 }  // erhe::commands

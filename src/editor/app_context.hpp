@@ -17,9 +17,6 @@ namespace erhe::imgui {
 namespace erhe::renderer {
     class Debug_renderer;
     class Text_renderer;
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-    class Jolt_debug_renderer;
-#endif
 }
 namespace erhe::rendergraph { class Rendergraph; }
 namespace erhe::scene_renderer {
@@ -88,7 +85,6 @@ class Inventory_window;
 class Input_bindings_store;
 class Input_bindings_window;
 class Input_state;
-class Jolt_debug_renderer;
 class Lattice_tool;
 class Material_paint_tool;
 class Material_preview;
@@ -238,9 +234,6 @@ public:
     // Per-frame Scene::update_node_transforms() cost aggregation; feeds the
     // Performance window plots and MCP get_transform_update_stats.
     Transform_update_stats_tracker*         transform_update_stats_tracker{nullptr};
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-    erhe::renderer::Jolt_debug_renderer*    jolt_debug_renderer   {nullptr};
-#endif
     erhe::renderer::Debug_renderer*                   debug_renderer            {nullptr};
     erhe::rendergraph::Rendergraph*                   rendergraph               {nullptr};
     erhe::renderer::Text_renderer*                    text_renderer             {nullptr};

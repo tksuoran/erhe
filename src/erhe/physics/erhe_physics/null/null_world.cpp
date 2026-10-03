@@ -145,7 +145,7 @@ auto Null_world::describe() const -> std::vector<std::string>
     return {};
 }
 
-void Null_world::debug_draw(erhe::renderer::Jolt_debug_renderer&)
+void Null_world::debug_draw(IDebug_draw&, glm::vec3)
 {
 }
 

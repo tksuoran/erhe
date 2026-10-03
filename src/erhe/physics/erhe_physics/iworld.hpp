@@ -8,15 +8,12 @@
 #include <string>
 #include <vector>
 
-namespace erhe::renderer {
-    class Jolt_debug_renderer;
-}
-
 namespace erhe::physics {
 
 void initialize_physics_system();
 
 class IConstraint;
+class IDebug_draw;
 class IRigid_body;
 class IRigid_body_create_info;
 class Transform;
@@ -55,7 +52,9 @@ public:
     virtual void add_constraint         (IConstraint* constraint)                        = 0;
     virtual void remove_constraint      (IConstraint* constraint)                        = 0;
     virtual void set_gravity            (const glm::vec3& gravity)                       = 0;
-    virtual void debug_draw             (erhe::renderer::Jolt_debug_renderer& debug_renderer) = 0;
+    // Draws bodies and constraints as lines into debug_draw; camera_position
+    // selects the level of detail of the drawn shapes.
+    virtual void debug_draw             (IDebug_draw& debug_draw, glm::vec3 camera_position) = 0;
     virtual void sanity_check           ()                                               = 0;
     virtual void set_on_body_activated  (std::function<void(IRigid_body*)> callback)     = 0;
     virtual void set_on_body_deactivated(std::function<void(IRigid_body*)> callback)     = 0;

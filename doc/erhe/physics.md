@@ -104,7 +104,11 @@ a specific engine.
   straight line otherwise); used by the editor's interactive physics drags; tests in
   `test/test_joint_reach.cpp`, and `scripts/physics_drag_joint_sweep.py` checks the drags end to end
   against a running editor
-- `IDebug_draw` -- debug rendering interface (wireframe, contacts, AABBs)
+- `IDebug_draw` -- line sink for `IWorld::debug_draw(IDebug_draw&, camera_position)`, implemented by
+  the application over its line renderer (the editor's `Debug_visualizations`). The Jolt backend
+  adapts `JPH::DebugRenderer` to it (`jolt/jolt_debug_renderer.hpp`, one process-wide instance
+  because Jolt allows one; built with `JPH_DEBUG_RENDERER`), drawing bodies, constraints and
+  constraint limits as wireframe lines; the camera position selects the shape level of detail
 - `Transform` -- basis (mat3) + origin (vec3) transform representation
 - `Motion_mode` -- enum: `e_none`, static, kinematic (non-physical/physical), dynamic.
   `e_none` is the default of the editor's `Node_physics.motion_mode` key property and
@@ -121,7 +125,7 @@ a specific engine.
 ## Dependencies
 - External: glm, Jolt Physics (when `ERHE_PHYSICS_LIBRARY=jolt`), Box3D (when
   `ERHE_PHYSICS_LIBRARY=box3d`)
-- `erhe::renderer` -- for `Jolt_debug_renderer` (debug draw)
+- erhe::geometry, erhe::item, erhe::log, erhe::primitive, erhe::profile; no rendering library (debug draw goes through `IDebug_draw`)
 
 ## Notes
 - Backend selected at CMake time: `jolt/` directory has Jolt implementations, `box3d/` has
@@ -183,7 +187,7 @@ anything non-trivial here.
 
 | Feature                              | Status                    | Why |
 | ------------------------------------ | ------------------------- | --- |
-| `IWorld::debug_draw`                 | no-op                     | the signature names `erhe::renderer::Jolt_debug_renderer`; neutralizing it is deferred (Box3D does have `b3World_Draw`, so this is a wiring gap, not a capability gap) |
+| `IWorld::debug_draw`                 | no-op                     | `b3World_Draw` and its `b3DebugDraw` callbacks are not wired to `IDebug_draw` (a wiring gap, not a capability gap) |
 | `save_state` / `restore_state`       | not implemented, warns    | Box3D exposes no world snapshot API |
 | static friction                      | ignored, dynamic used     | `b3SurfaceMaterial` carries a single friction |
 | independent 6-DOF joints             | approximated              | Box3D has no generic six-DOF joint |

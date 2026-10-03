@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::window ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_window/clipboard.cpp
+    erhe_window/clipboard.hpp
     erhe_window/renderdoc_capture.cpp
     erhe_window/renderdoc_capture.hpp
     erhe_window/window_log.cpp
@@ -61,6 +63,11 @@ target_link_libraries(
         fmt::fmt
         glm::glm-header-only
 )
+
+if (ERHE_TARGET_OS_ANDROID)
+    # clipboard.cpp writes copy_to_clipboard() text to logcat
+    target_link_libraries(${_target} PRIVATE log)
+endif ()
 
 if (ERHE_TARGET_OS_WINDOWS)
     # Wtsapi32: WTSQuerySessionInformation for Context_window::is_session_locked

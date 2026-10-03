@@ -13,7 +13,6 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 - `Text_renderer` -- Renders 2D text at 3D positions using a font atlas texture. Uses `erhe::ui::Font` for glyph layout.
 - `Texture_renderer` -- Simple fullscreen texture blit.
 - `Draw_indirect_buffer` -- Builds GPU draw-indirect command buffers from a span of meshes filtered by `Item_filter`.
-- `Jolt_debug_renderer` -- Adapter implementing Jolt's `JPH::DebugRenderer` interface, forwarding draw calls to `Debug_renderer`.
 - `View` -- Camera view data (clip_from_world matrix, viewport rect, FOV sides, pixel scale).
 
 ## Public API
@@ -30,7 +29,6 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 - erhe::math (Viewport)
 - erhe::dataformat (Vertex_format)
 - erhe::verify
-- Jolt Physics (optional, for Jolt_debug_renderer behind `JPH_DEBUG_RENDERER`)
 - glm, etl
 
 ## Notes

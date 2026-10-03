@@ -1,13 +1,3 @@
-CPMAddPackage(
-    NAME              googletest
-    VERSION           1.16.0
-    GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY google/googletest
-    OPTIONS
-        "BUILD_GMOCK OFF"
-        "INSTALL_GTEST OFF"
-)
-
 set(_target "mcp_server_tests")
 add_executable(${_target}
     editor_launcher.cpp

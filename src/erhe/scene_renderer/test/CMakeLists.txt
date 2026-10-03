@@ -1,13 +1,3 @@
-CPMAddPackage(
-    NAME              googletest
-    VERSION           1.16.0
-    GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY google/googletest
-    OPTIONS
-        "BUILD_GMOCK OFF"
-        "INSTALL_GTEST OFF"
-)
-
 # Deviceless: the membership and slot logic of Material_set is pure
 # bookkeeping over shared_ptr<Material>, so it is tested with no window, no
 # device, no scene and no draw list (doc/erhe/draw_list_material_set.md R16).

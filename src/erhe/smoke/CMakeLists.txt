@@ -16,3 +16,8 @@ target_link_libraries(${_target}
 )
 
 erhe_target_settings(${_target} "erhe/tests")
+
+# A short randomized run under ctest; longer soak runs pass their own
+# --duration (doc/erhe/smoke.md).
+add_test(NAME erhe_smoke COMMAND ${_target} --duration 2)
+add_dependencies(erhe_tests ${_target})

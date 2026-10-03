@@ -8,9 +8,11 @@
 #include "erhe_commands/mouse_binding.hpp"
 #include "erhe_commands/mouse_wheel_binding.hpp"
 #include "erhe_commands/update_binding.hpp"
-#include "erhe_commands/xr_boolean_binding.hpp"
-#include "erhe_commands/xr_float_binding.hpp"
-#include "erhe_commands/xr_vector2f_binding.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "erhe_commands/xr_boolean_binding.hpp"
+#   include "erhe_commands/xr_float_binding.hpp"
+#   include "erhe_commands/xr_vector2f_binding.hpp"
+#endif
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
@@ -37,9 +39,6 @@ namespace erhe::commands {
 
 class Command;
 class Command_binding;
-class Xr_boolean_binding;
-class Xr_float_binding;
-class Xr_vector2f_binding;
 class Key_binding;
 class Menu_binding;
 class Mouse_binding;
@@ -103,9 +102,11 @@ public:
     [[nodiscard]] auto get_mouse_wheel_bindings      () const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&;
     [[nodiscard]] auto get_controller_axis_bindings  () const -> const std::vector<Controller_axis_binding>&;
     [[nodiscard]] auto get_controller_button_bindings() const -> const std::vector<Controller_button_binding>&;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     [[nodiscard]] auto get_xr_boolean_bindings       () const -> const std::vector<Xr_boolean_binding>&;
     [[nodiscard]] auto get_xr_float_bindings         () const -> const std::vector<Xr_float_binding>&;
     [[nodiscard]] auto get_xr_vector2f_bindings      () const -> const std::vector<Xr_vector2f_binding>&;
+#endif
     [[nodiscard]] auto get_update_bindings           () const -> const std::vector<Update_binding>&;
 
     void bind_command_to_key(
@@ -142,9 +143,11 @@ public:
         std::optional<uint32_t>    modifier_mask = {}
     );
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     void bind_command_to_xr_boolean_action (Command* command, erhe::xr::Xr_action_boolean* xr_action, Button_trigger button_trigger);
     void bind_command_to_xr_float_action   (Command* command, erhe::xr::Xr_action_float* xr_action);
     void bind_command_to_xr_vector2f_action(Command* command, erhe::xr::Xr_action_vector2f* xr_action);
+#endif
 
     void bind_command_to_update(Command* command);
 
@@ -209,9 +212,11 @@ public:
     [[nodiscard]] auto get_active_mouse_command() -> Command* { return m_active_mouse_command; }
 
 private:
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     auto on_xr_boolean_event (const erhe::window::Input_event&) -> bool override;
     auto on_xr_float_event   (const erhe::window::Input_event&) -> bool override;
     auto on_xr_vector2f_event(const erhe::window::Input_event&) -> bool override;
+#endif
 
     class Binding_entry
     {
@@ -241,7 +246,9 @@ private:
     void sort_mouse_bindings        ();
     void sort_mouse_wheel_bindings  ();
     void sort_controller_bindings   ();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     void sort_xr_bindings           ();
+#endif
     void inactivate_ready_commands  ();
     void update_active_mouse_command(Command* command);
 
@@ -259,9 +266,11 @@ private:
     std::vector<Controller_button_binding>            m_controller_button_bindings;
     std::vector<std::unique_ptr<Mouse_binding>>       m_mouse_bindings;
     std::vector<std::unique_ptr<Mouse_wheel_binding>> m_mouse_wheel_bindings;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     std::vector<Xr_boolean_binding>                   m_xr_boolean_bindings;
     std::vector<Xr_float_binding>                     m_xr_float_bindings;
     std::vector<Xr_vector2f_binding>                  m_xr_vector2f_bindings;
+#endif
     std::vector<Update_binding>                       m_update_bindings;
 
     // Editable bindings: the declared defaults in declaration order, the

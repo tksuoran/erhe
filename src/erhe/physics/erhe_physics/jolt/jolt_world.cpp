@@ -5,8 +5,8 @@
 #include "erhe_physics/jolt/jolt_rigid_body.hpp"
 #include "erhe_physics/jolt/glm_conversions.hpp"
 #include "erhe_physics/idebug_draw.hpp"
+#include "erhe_physics/jolt/jolt_debug_renderer.hpp"
 #include "erhe_physics/physics_log.hpp"
-#include "erhe_renderer/jolt_debug_renderer.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Jolt/RegisterTypes.h>
@@ -726,14 +726,19 @@ auto Jolt_world::get_constraint_count() const -> std::size_t
     return m_physics_system.GetConstraints().size();
 }
 
-void Jolt_world::debug_draw(erhe::renderer::Jolt_debug_renderer& debug_renderer)
+void Jolt_world::debug_draw(IDebug_draw& debug_draw, const glm::vec3 camera_position)
 {
-    static_cast<void>(debug_renderer);
 #ifdef JPH_DEBUG_RENDERER
+    Jolt_debug_renderer& debug_renderer = get_jolt_debug_renderer();
+    debug_renderer.begin(debug_draw, camera_position);
     m_physics_system.DrawBodies(JPH::BodyManager::DrawSettings{}, &debug_renderer);
     m_physics_system.DrawConstraintLimits(&debug_renderer);
     m_physics_system.DrawConstraintReferenceFrame(&debug_renderer);
     m_physics_system.DrawConstraints(&debug_renderer);
+    debug_renderer.end();
+#else
+    static_cast<void>(debug_draw);
+    static_cast<void>(camera_position);
 #endif
 }
 

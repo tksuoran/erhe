@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_imgui/imgui_window.hpp"
-#include "erhe_physics/idebug_draw.hpp"
 
 namespace erhe::imgui { class Imgui_windows; }
 
@@ -31,27 +30,8 @@ public:
     // Public API
     void viewport_toolbar(bool& hovered);
 
-    class Debug_draw_parameters
-    {
-    public:
-        bool enable           {false};
-        bool wireframe        {false};
-        bool aabb             {true};
-        bool contact_points   {true};
-        bool no_deactivation  {false}; // forcibly disables deactivation when enabled
-        bool constraints      {true};
-        bool constraint_limits{true};
-        bool normals          {false};
-        bool frames           {true};
-
-        erhe::physics::IDebug_draw::Colors colors;
-    };
-
-    [[nodiscard]] auto get_debug_draw_parameters() -> Debug_draw_parameters;
-
 private:
-    App_context&          m_context;
-    Debug_draw_parameters m_debug_draw;
+    App_context& m_context;
 };
 
 }

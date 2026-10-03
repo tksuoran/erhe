@@ -89,11 +89,11 @@ The editor's Input Bindings window, the `input_bindings.json` file and the MCP b
 [../editor/input_bindings.md](../editor/input_bindings.md).
 
 ## Dependencies
-- **erhe libraries:** `erhe::window` (public), `erhe::log` (public), `erhe::xr` (public, optional), `erhe::profile`, `erhe::verify` (private)
+- **erhe libraries:** `erhe::window` (public), `erhe::log` (public), `erhe::xr` (public, only when `ERHE_XR_LIBRARY=openxr`), `erhe::profile`, `erhe::verify` (private)
 - **External:** glm, fmt
 
 ## Notes
-- XR bindings are conditionally compiled with `ERHE_XR_LIBRARY_OPENXR`.
+- XR bindings (`Xr_*_binding`, `bind_command_to_xr_*_action()`, `get_xr_*_bindings()`) are compiled only with `ERHE_XR_LIBRARY_OPENXR`; without OpenXR the library does not link `erhe::xr`.
 - The state machine prevents conflicting commands from activating simultaneously.
 - Tests: `erhe_commands_tests` (`src/erhe/commands/test/`): `Binding_desc` text form round trips,
   overrides, input kind enforcement, conflicts, rebind during a drag, `sort_bindings()` from a

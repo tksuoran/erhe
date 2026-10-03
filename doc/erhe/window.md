@@ -21,6 +21,7 @@ Platform windowing abstraction over SDL and GLFW. Provides window creation, Open
 - `set_cursor()` / `set_cursor_relative_hold()` for cursor control.
 - `get_device_pointer()` / `get_window_handle()` for native handle access.
 - `initialize_frame_capture()` / `start_frame_capture()` / `end_frame_capture()` for RenderDoc.
+- `copy_to_clipboard(string_view)` (`clipboard.hpp`) -- clipboard helper for diagnostic dumps. Calls `SDL_SetClipboardText` with the SDL backend; on Android emits the message to logcat under tag `erhe.clipboard` (Android app processes have no SDL-accessible system clipboard, and the dumps callers pass here can exceed the binder parcel limit); a no-op with GLFW or no window library.
 
 ## Dependencies
 - SDL3 (when `ERHE_WINDOW_LIBRARY_SDL`)
@@ -28,6 +29,7 @@ Platform windowing abstraction over SDL and GLFW. Provides window creation, Open
 - erhe::time
 - glm
 - Windows API (on Windows, for HWND/HGLRC access)
+- liblog (Android only, for the logcat clipboard path)
 
 XR event types (`Xr_action_boolean`, etc.) are forward-declared in `window_event_handler.hpp` but erhe::xr is not a build dependency.
 

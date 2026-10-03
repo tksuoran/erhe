@@ -8,8 +8,6 @@ erhe_target_sources_grouped(
     erhe_utility/align.hpp
     erhe_utility/bit_helpers.cpp
     erhe_utility/bit_helpers.hpp
-    erhe_utility/clipboard.cpp
-    erhe_utility/clipboard.hpp
     erhe_utility/debug_label.cpp
     erhe_utility/debug_label.hpp
     erhe_utility/env.cpp
@@ -19,14 +17,5 @@ erhe_target_sources_grouped(
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
-if (ERHE_TARGET_OS_ANDROID)
-    target_link_libraries(${_target} PRIVATE log)
-elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
-    # clipboard.cpp routes copy_to_clipboard() through SDL_SetClipboardText
-    # only when SDL is the selected window library. For glfw / none there is
-    # no SDL3 target to link and clipboard.cpp compiles a no-op fallback.
-    target_link_libraries(${_target} PRIVATE SDL3::SDL3-static)
-endif ()
 
 erhe_target_settings(${_target} "erhe")

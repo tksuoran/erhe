@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace erhe::utility {
+namespace erhe::window {
 
 // Copy diagnostic text to the system clipboard for inspection by the
 // developer. When SDL is the selected window library this calls
@@ -14,4 +14,4 @@ namespace erhe::utility {
 // is a no-op.
 void copy_to_clipboard(std::string_view text);
 
-} // namespace erhe::utility
+} // namespace erhe::window

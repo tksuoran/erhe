@@ -15,12 +15,9 @@ Small standalone utility classes and functions used across the erhe codebase: me
 - `align_offset_non_power_of_two(offset, alignment)` -- Aligns offset up to arbitrary alignment.
 - `next_power_of_two(x)` -- Returns next power of two >= x (32-bit).
 - `test_bit_set(lhs, rhs)` / `test_all_rhs_bits_set()` / `test_any_rhs_bits_set()` -- Bitwise flag testing helpers.
-- `copy_to_clipboard(string_view)` -- Cross-platform clipboard helper for diagnostic dumps. Calls `SDL_SetClipboardText` on desktop; on Android emits the message to logcat under tag `erhe.clipboard` (Android app processes have no SDL-accessible system clipboard, and the dumps callers pass here can exceed the binder parcel limit).
 
 ## Dependencies
 - erhe::verify (used by align.hpp for ERHE_VERIFY assertions)
-- SDL3 (PRIVATE, desktop only -- linked from `clipboard.cpp` for `SDL_SetClipboardText`)
-- liblog (PRIVATE, Android only -- linked from `clipboard.cpp` for `__android_log_write`)
 - No other erhe libraries.
 
 ## Notes

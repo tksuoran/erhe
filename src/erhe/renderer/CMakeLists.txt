@@ -14,15 +14,6 @@ erhe_target_sources_grouped(
     erhe_renderer/text_renderer.cpp
     erhe_renderer/text_renderer.hpp
 )
-if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_renderer/jolt_debug_renderer.cpp
-        erhe_renderer/jolt_debug_renderer.hpp
-    )
-    target_link_libraries(${_target} PUBLIC Jolt)
-endif ()
-
 target_link_libraries(
     ${_target}
     PUBLIC

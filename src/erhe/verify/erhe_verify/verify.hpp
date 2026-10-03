@@ -24,7 +24,7 @@
 #include <source_location>
 #include <string>
 
-#define ERHE_FATAL(format, ...) do { printf("%s:%u " format "\n", std::source_location::current().file_name(), std::source_location::current().line(), ##__VA_ARGS__); erhe_dump_callstack(); DebugBreak(); abort(); } while (1)
+#define ERHE_FATAL(format, ...) do { erhe_report_fatal(std::source_location::current().file_name(), static_cast<int>(std::source_location::current().line()), format, ##__VA_ARGS__); DebugBreak(); abort(); } while (1)
 #define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #elif defined(__ANDROID__)
@@ -33,11 +33,9 @@
 #include <cstdlib>
 #include <string>
 
-// On Android, app processes have stdout/stderr connected to /dev/null, so
-// printf/fprintf messages are silently lost. Route the fatal message
-// through liblog so it appears in `adb logcat` under tag "erhe" before the
-// trap/abort.
-#define ERHE_FATAL(format, ...) do { __android_log_print(ANDROID_LOG_FATAL, "erhe", "%s:%d " format, __FILE__, __LINE__, ##__VA_ARGS__); erhe_dump_callstack(); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
+// erhe_report_fatal() writes to logcat (tag "erhe") on Android, where app
+// processes have stdout/stderr connected to /dev/null.
+#define ERHE_FATAL(format, ...) do { erhe_report_fatal(__FILE__, __LINE__, format, ##__VA_ARGS__); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
 #define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #else
@@ -46,10 +44,27 @@
 #include <cstdlib>
 #include <string>
 
-#define ERHE_FATAL(format, ...) do { printf("%s:%d " format "\n", __FILE__, __LINE__, ##__VA_ARGS__); erhe_dump_callstack(); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
+#define ERHE_FATAL(format, ...) do { erhe_report_fatal(__FILE__, __LINE__, format, ##__VA_ARGS__); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
 #define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #endif
+
+#if defined(__GNUC__) || defined(__clang__)
+#   define ERHE_PRINTF_FORMAT(format_index, first_argument_index) __attribute__((format(printf, format_index, first_argument_index)))
+#else
+#   define ERHE_PRINTF_FORMAT(format_index, first_argument_index)
+#endif
+
+// Reports a failing ERHE_FATAL / ERHE_VERIFY before the caller aborts: the
+// "file:line message" line goes to stdout (logcat on Android), the
+// callstack to stderr (logcat on Android), and both to the fatal handler.
+void erhe_report_fatal(const char* file, int line, const char* format, ...) ERHE_PRINTF_FORMAT(3, 4);
+
+// Receives the message and the callstack of a failing ERHE_FATAL /
+// ERHE_VERIFY. erhe::log installs one in initialize_log_sinks() so the crash
+// reason reaches logs/log.txt. A fatal failure inside the handler skips it.
+using Erhe_fatal_handler = void (*)(const char* message, const char* callstack);
+void erhe_set_fatal_handler(Erhe_fatal_handler handler);
 
 void erhe_dump_callstack();
 auto erhe_get_callstack() -> std::string;

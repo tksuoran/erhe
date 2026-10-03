@@ -1,13 +1,3 @@
-CPMAddPackage(
-    NAME              googletest
-    VERSION           1.16.0
-    GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY google/googletest
-    OPTIONS
-        "BUILD_GMOCK OFF"
-        "INSTALL_GTEST OFF"
-)
-
 # Device-backed only: Debug_renderer compiles its shaders and draws. The
 # erhe::gpu_test_support target exists only where a Device can be brought up
 # for the configured (api, window) pair (src/erhe/graphics/test), so its

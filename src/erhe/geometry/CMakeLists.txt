@@ -9,6 +9,7 @@ erhe_target_sources_grouped(
     erhe_geometry/geometry.hpp
     erhe_geometry/geometry_log.cpp
     erhe_geometry/geometry_log.hpp
+    erhe_geometry/geogram_format.hpp
     erhe_geometry/geometry_progress.cpp
     erhe_geometry/geometry_progress.hpp
     erhe_geometry/geometry_serialization.cpp

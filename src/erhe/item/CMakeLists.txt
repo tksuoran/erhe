@@ -33,7 +33,6 @@ target_link_libraries(
         Taskflow
     PRIVATE
         erhe::log
-        erhe::message_bus
         erhe::verify
         fmt::fmt
 )

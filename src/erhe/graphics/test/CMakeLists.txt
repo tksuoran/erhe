@@ -1,13 +1,3 @@
-CPMAddPackage(
-    NAME              googletest
-    VERSION           1.16.0
-    GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY google/googletest
-    OPTIONS
-        "BUILD_GMOCK OFF"
-        "INSTALL_GTEST OFF"
-)
-
 include(GoogleTest)
 
 # Deviceless tests: pure std140/std430 layout math, no graphics Device.

@@ -297,12 +297,10 @@ auto Box3d_world::describe() const -> std::vector<std::string>
     return result;
 }
 
-void Box3d_world::debug_draw(erhe::renderer::Jolt_debug_renderer&)
+void Box3d_world::debug_draw(IDebug_draw&, glm::vec3)
 {
-    // Not implemented: IWorld::debug_draw() names the Jolt debug renderer in
-    // its signature, so a backend-neutral path would have to land first. Box3D
-    // does have b3World_Draw with its own b3DebugDraw callback struct, so this
-    // is a wiring gap, not a capability gap.
+    // Not implemented: Box3D has b3World_Draw with its own b3DebugDraw
+    // callback struct, which would forward to IDebug_draw::draw_line().
 }
 
 void Box3d_world::sanity_check()

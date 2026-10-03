@@ -25,7 +25,6 @@ target_link_libraries(${_target}
         erhe::graphics
         erhe::log
         erhe::math
-        erhe::ui
     PRIVATE
         erhe::profile
         erhe::verify

@@ -343,13 +343,36 @@ public:
         m_sink_console = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         m_tail_store_log = std::make_shared<Store_log_sink>();
         m_frame_store_log = std::make_shared<Store_log_sink>();
+
+#if !defined(ERHE_OS_ANDROID)
+        // On Android erhe::verify already writes fatal reports to logcat,
+        // which is where the file sink goes.
+        erhe_set_fatal_handler(&Log_sinks::write_fatal_report);
+#endif
     }
 
 private:
     Log_sinks()
     {
     }
-    ~Log_sinks() {}
+    ~Log_sinks()
+    {
+        erhe_set_fatal_handler(nullptr);
+    }
+
+    // Erhe_fatal_handler: the reason and callstack of a failing ERHE_FATAL /
+    // ERHE_VERIFY go to logs/log.txt, written directly to the file sink and
+    // flushed before the caller aborts.
+    static void write_fatal_report(const char* const message, const char* const callstack)
+    {
+        spdlog::sink_ptr& file_sink = get_instance().m_sink_log_file;
+        if (!file_sink) {
+            return;
+        }
+        file_sink->log(spdlog::details::log_msg{"erhe.verify", spdlog::level::critical, message});
+        file_sink->log(spdlog::details::log_msg{"erhe.verify", spdlog::level::critical, callstack});
+        file_sink->flush();
+    }
 
 #if defined _WIN32
     std::shared_ptr<spdlog::sinks::msvc_sink_mt>         m_sink_msvc      {};

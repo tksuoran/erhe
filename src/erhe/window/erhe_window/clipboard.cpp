@@ -1,4 +1,4 @@
-#include "erhe_utility/clipboard.hpp"
+#include "erhe_window/clipboard.hpp"
 
 #if defined(__ANDROID__)
 #   include <android/log.h>
@@ -8,7 +8,7 @@
 #   include <string>
 #endif
 
-namespace erhe::utility {
+namespace erhe::window {
 
 void copy_to_clipboard(std::string_view text)
 {
@@ -36,4 +36,4 @@ void copy_to_clipboard(std::string_view text)
 #endif
 }
 
-} // namespace erhe::utility
+} // namespace erhe::window

@@ -11,8 +11,6 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_xr/headset.cpp
         erhe_xr/headset.hpp
-        erhe_xr/xr_action.cpp
-        erhe_xr/xr_action.hpp
         erhe_xr/xr_instance.cpp
         erhe_xr/xr_instance.hpp
         erhe_xr/xr_log.cpp

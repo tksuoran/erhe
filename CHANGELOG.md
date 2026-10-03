@@ -242,6 +242,32 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::physics`: `IWorld::debug_draw()` takes `(IDebug_draw&, glm::vec3
+  camera_position)` instead of `erhe::renderer::Jolt_debug_renderer&`;
+  `IDebug_draw` is reduced to `draw_line(from, to, color)` (RGBA), which the
+  application implements over its line renderer. The Jolt backend adapts
+  `JPH::DebugRenderer` itself (`erhe_physics/jolt/jolt_debug_renderer.hpp`,
+  `get_jolt_debug_renderer()`), so `erhe_physics` no longer links
+  `erhe::renderer`.
+- `erhe::renderer`: `Jolt_debug_renderer` (`erhe_renderer/jolt_debug_renderer.hpp`)
+  removed; `erhe_renderer` no longer links Jolt.
+- `erhe::window`: `copy_to_clipboard()` moved from `erhe::utility`
+  (`erhe_utility/clipboard.hpp`) to `erhe_window/clipboard.hpp`, namespace
+  `erhe::window`; `erhe_utility` no longer links SDL.
+- `erhe::geometry`: the Geogram `fmt::formatter` specializations moved from
+  `erhe_log/log_geogram.hpp` to `erhe_geometry/geogram_format.hpp`;
+  `erhe_log` no longer links geogram.
+- `erhe::commands`: the XR bindings (`Xr_boolean_binding`, `Xr_float_binding`,
+  `Xr_vector2f_binding`, `bind_command_to_xr_*_action()`,
+  `get_xr_*_bindings()`) exist only with `ERHE_XR_LIBRARY_OPENXR`; without
+  OpenXR `erhe_commands` does not link `erhe::xr`.
+- `erhe::verify`: `ERHE_FATAL` / `ERHE_VERIFY` report through
+  `erhe_report_fatal()`, which also passes the message and callstack to a
+  handler set with `erhe_set_fatal_handler()`; `erhe::log::initialize_log_sinks()`
+  installs one that writes them to `logs/log.txt`.
+- `erhe::graph` links `erhe::item` PUBLIC; `erhe::item` no longer links
+  `erhe::message_bus`, `erhe::rendergraph` no longer links `erhe::ui`, and
+  `erhe::ui` no longer links `erhe::primitive`.
 - `erhe::geometry`: `bevel_edges()` (`erhe_geometry/operation/bevel_edges.hpp`)
   gains segments and profile (`doc/plans/mesh_modeling.md` section 4.9, M13b):
   `Bevel_edges_options::segments` (default 1, the unchanged one segment

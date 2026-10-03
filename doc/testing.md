@@ -15,7 +15,11 @@ MCP server. `erhe_usd_tests` additionally needs `-DERHE_USD_LIBRARY=lightusd`,
 and `erhe_physics_tests` needs a backend that simulates
 (`-DERHE_PHYSICS_LIBRARY=jolt`, the default, or `box3d`); a `box3d` tree adds
 that backend's own tests to the suite. Each builds an `erhe_<name>_tests`
-executable, gated behind `-DERHE_BUILD_TESTS=ON` (default OFF).
+executable, gated behind `-DERHE_BUILD_TESTS=ON` (default OFF). The root
+`CMakeLists.txt` fetches googletest once for all of them; a new test directory
+links `GTest::gtest`, calls `include(GoogleTest)` and
+`add_dependencies(erhe_tests <target>)`. `erhe_smoke` (`doc/erhe/smoke.md`)
+runs under ctest as a short randomized hierarchy stress run.
 
 - A test `main()` that exercises code which logs must bootstrap logging the way
   `src/erhe/graph/test/main.cpp` does: `erhe::log::initialize_log_sinks()`, then

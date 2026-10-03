@@ -22,7 +22,7 @@ execution. Used as the base for the render graph system.
 - `pin.get_links()` -- Get all links connected to a pin.
 
 ## Dependencies
-- **erhe libraries:** `erhe::item` (private), `erhe::defer` (private), `erhe::log` (private), `erhe::verify` (private)
+- **erhe libraries:** `erhe::item` (public: `Node`, `Pin` and `Graph` derive from its types), `erhe::defer` (private), `erhe::log` (private), `erhe::verify` (private)
 - **External:** None
 
 ## Notes

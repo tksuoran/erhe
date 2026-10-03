@@ -95,6 +95,7 @@ erhe_target_sources_grouped(
     erhe_physics/icollision_shape.hpp
     erhe_physics/iconstraint.hpp
     erhe_physics/iconvex_hull_collision_shape.hpp
+    erhe_physics/idebug_draw.cpp
     erhe_physics/idebug_draw.hpp
     erhe_physics/irigid_body.cpp
     erhe_physics/irigid_body.hpp
@@ -123,7 +124,6 @@ target_link_libraries(
         erhe::log
         erhe::primitive
         erhe::profile
-        erhe::renderer
         fmt::fmt
         glm::glm-header-only
 )

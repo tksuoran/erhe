@@ -19,7 +19,7 @@ class Box3d_rigid_body;
 //
 // | Feature                              | Status                    | Why
 // | ------------------------------------ | ------------------------- | ---
-// | IWorld::debug_draw                   | no-op                     | the signature names erhe::renderer::Jolt_debug_renderer; neutralizing it is deferred
+// | IWorld::debug_draw                   | no-op                     | b3World_Draw is not wired to IDebug_draw yet
 // | save_state / restore_state           | not implemented, warns    | Box3D exposes no world snapshot API
 // | static friction                      | ignored, dynamic used     | b3SurfaceMaterial carries a single friction
 // | independent 6-DOF joints             | approximated              | Box3D has no generic six-DOF joint
@@ -64,7 +64,7 @@ public:
     void add_constraint         (IConstraint* constraint)                               override;
     void remove_constraint      (IConstraint* constraint)                               override;
     void set_gravity            (const glm::vec3& gravity)                              override;
-    void debug_draw             (erhe::renderer::Jolt_debug_renderer& debug_renderer)   override;
+    void debug_draw             (IDebug_draw& debug_draw, glm::vec3 camera_position)   override;
     void sanity_check           ()                                                      override;
     void set_on_body_activated  (std::function<void(IRigid_body*)> callback)            override;
     void set_on_body_deactivated(std::function<void(IRigid_body*)> callback)            override;

@@ -574,8 +574,6 @@ erhe_target_sources_grouped(
     scene/camera_roll_monitor.hpp
     scene/collision_shape_from_mesh.cpp
     scene/collision_shape_from_mesh.hpp
-    scene/debug_draw.cpp
-    scene/debug_draw.hpp
     scene/four_view.cpp
     scene/four_view.hpp
     scene/frame_controller.cpp

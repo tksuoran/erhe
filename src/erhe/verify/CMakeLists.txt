@@ -11,8 +11,8 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${_target} PUBLIC cpptrace::cpptrace)
 
 if (ERHE_TARGET_OS_ANDROID)
-    # ERHE_FATAL expands to __android_log_print() at consumer call sites,
-    # so liblog must propagate transitively.
+    # verify.cpp writes fatal reports to logcat; verify.hpp includes
+    # <android/log.h>, so liblog propagates to consumers.
     target_link_libraries(${_target} PUBLIC log)
 endif ()
 

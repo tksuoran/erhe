@@ -21,17 +21,16 @@ log->info("message {}", value);
 // Access stored entries for UI:
 erhe::log::get_tail_store_log().access_entries([](auto& entries){ ... });
 ```
-- `console_init()` / `initialize_log_sinks()` / `log_to_console()` -- initialization
+- `console_init()` / `initialize_log_sinks()` / `log_to_console()` -- initialization. `initialize_log_sinks()` also installs the `erhe::verify` fatal handler (desktop only), so a failing `ERHE_FATAL` / `ERHE_VERIFY` writes its message and callstack to `logs/log.txt` (logger name `erhe.verify`, level critical) and flushes it before the abort.
 - `timestamp()` / `timestamp_short()` -- formatted timestamp strings
 - `get_groupname()` / `get_basename()` / `get_levelname()` -- string utilities
 
 ## Dependencies
-- External: spdlog, fmt
-- No erhe library dependencies (leaf library)
+- External: spdlog, fmt, glm, simdjson (private)
+- erhe::hash, erhe::verify (private)
 
 ## Notes
 - Log levels are read from `logging.json` at startup via erhe_codegen-generated deserialization.
 - `log_glm.hpp` provides `fmt::formatter` specializations for all glm vec/dvec/ivec types (2/3/4).
-- `log_geogram.hpp` provides `fmt::formatter` specializations for all Geogram vector types.
 - Two store sinks exist: a "tail" store (persistent) and a "frame" store (per-frame).
 - The `Store_log_sink` deduplicates consecutive identical messages via `repeat_count`.

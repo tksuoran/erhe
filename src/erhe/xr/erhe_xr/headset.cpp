@@ -4,7 +4,7 @@
 #include "erhe_xr/xr_quad_layer.hpp"
 #include "erhe_xr/xr_session.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_utility/clipboard.hpp"
+#include "erhe_window/clipboard.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::xr {
@@ -19,7 +19,7 @@ Headset::Headset(erhe::window::Context_window& context_window, const Headset_con
             (severity == Message_severity::error)
         ) {
             std::string clipboard_text = "=== OpenXR ===\n" + message + "\n=== Callstack ===\n" + callstack;
-            erhe::utility::copy_to_clipboard(clipboard_text);
+            erhe::window::copy_to_clipboard(clipboard_text);
             //if (severity == Message_severity::error)
             {
                 ERHE_FATAL("OpenXR Error (error and callstack copied to clipboard)");
