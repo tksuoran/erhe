@@ -473,13 +473,15 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
                 const float ratio = mass / default_mass;
                 inertia = glm::mat4{glm::mat3{scaled.local_inertia} * ratio};
             }
-            // A static body has no mass (the physics backends ignore it), so
-            // none is written: a massless brush (density 0, the floor) would
-            // otherwise write mass 0, which the mass property rejects.
-            const bool is_static = (instance_create_info.motion_mode == erhe::physics::Motion_mode::e_static);
+            // A massless brush (density 0, the floor) is only valid as a static
+            // body, and the mass property rejects 0: such an instance writes no
+            // mass. Every other instance writes its brush mass, which a static
+            // body keeps for a later switch to dynamic.
+            const bool is_static_massless =
+                (instance_create_info.motion_mode == erhe::physics::Motion_mode::e_static) && !(mass > 0.0f);
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
                 .collision_shape  = scaled.collision_shape,
-                .mass             = is_static ? std::optional<float>{} : std::optional<float>{mass},
+                .mass             = is_static_massless ? std::optional<float>{} : std::optional<float>{mass},
                 .inertia_override = inertia,
                 .debug_label      = std::string{name},
                 .motion_mode      = instance_create_info.motion_mode,
