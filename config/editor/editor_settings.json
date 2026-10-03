@@ -1,5 +1,5 @@
 {
-    "_version": 4,
+    "_version": 5,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -14,7 +14,8 @@
         "zoom_glide_direction": "follow_view"
     },
     "debug_visualizations_style": {
-        "_version": 2,
+        "_version": 5,
+        "anti_aliased_lines": true,
         "shadow_fit_casters_color": [0.2,1,0.3,0.6],
         "shadow_fit_casters_culled_color": [1,0.2,0.2,0.4],
         "shadow_fit_casters_width": 1,
@@ -71,6 +72,19 @@
         "ik_root_color": [1,0.4,0.1,1],
         "ik_pole_color": [1,0.2,0.8,1],
         "ik_marker_width": 2,
+        "joint_size": 0,
+        "joint_line_width": -2,
+        "joint_thin_line_width": -1,
+        "joint_limit_color": [1,0.6,0.1,1],
+        "joint_free_color": [0.6,0.6,0.6,0.6],
+        "joint_value_color": [1,1,1,1],
+        "joint_violation_color": [1,0.1,0.1,1],
+        "joint_pending_color": [0.5,0.5,0.5,0.5],
+        "joint_approximated_color": [1,0.2,1,1],
+        "joint_backend_color": [0.35,0.55,1,1],
+        "joint_body_link_color": [0.4,0.8,1,0.8],
+        "ik_limit_swing_color": [0.2,0.9,0.6,1],
+        "ik_limit_twist_color": [1,0.9,0.2,1],
         "mesh_primitive_box_color": [0,0.8,1,1],
         "mesh_primitive_box_width": 1,
         "bone_box_color": [1,0.6,0.1,1],
@@ -234,7 +248,7 @@
         "max_bounces": 8
     },
     "ddgi": {
-        "enabled": false,
+        "_version": 3,
         "probe_spacing_m": 1.5,
         "volume_padding_m": 1,
         "max_probes": 4096,
@@ -249,7 +263,25 @@
         "probes_per_frame": 512,
         "relocation_enabled": true,
         "classification_enabled": true,
+        "bounces": "single",
         "debug_draw_probes": false
+    },
+    "radiance_cascades": {
+        "_version": 6,
+        "probe_spacing_m": 1.5,
+        "volume_padding_m": 1,
+        "max_probes_cascade0": 65536,
+        "max_cascades": 8,
+        "cascade0_tile_texels": 8,
+        "interval_scale": 2,
+        "texels_per_frame": 131072,
+        "hysteresis": 0.9,
+        "merge_mode": "per_neighbour_trace",
+        "direction_jitter": "none",
+        "bounces": "single",
+        "debug_cascade_mask": 0,
+        "debug_draw_probes": "none",
+        "debug_draw_cascade": 0
     },
     "lightmap": {
         "cell_size_m": 10,
@@ -461,5 +493,6 @@
     "exclude_unlit_primitives": true,
     "geometry_edit_mode": "fork",
     "transform_mode": "extrude_group_normal",
+    "indirect_diffuse_source": "ambient",
     "quit_after_frames": 0
 }
