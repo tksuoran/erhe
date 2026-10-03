@@ -464,6 +464,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Fixed
 
+- `erhe::primitive`: building a Geometry from a `Triangle_soup` whose
+  indices do not start at 0 (or skip vertices) no longer indexes outside its
+  tables: positions are colocated over the used vertices only, and only the
+  used vertices' attributes are read.
+- `erhe::gltf`: `parse_gltf` skips a primitive with an index at or past its
+  vertex count (logged) instead of reading outside the vertex data.
 - `erhe::geometry`: `Geometry::build_edges()` creates one edge per vertex
   pair when two facets traverse the pair in the same direction (a winding
   flip between them); it created a second, facet-less edge for the pair.

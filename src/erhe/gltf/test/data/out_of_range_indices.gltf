@@ -1,7 +1,7 @@
 {
     "asset": {
         "version": "2.0",
-        "generator": "erhe test fixture"
+        "generator": "erhe test fixture: invalid, primitive 1 indices 4..7 address a 4-vertex accessor"
     },
     "extensionsUsed": [
         "KHR_materials_variants"
@@ -185,7 +185,7 @@
     "buffers": [
         {
             "byteLength": 120,
-            "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AACAPwAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAgD8AAIA/AAABAAIAAAACAAMAAAABAAIAAAACAAMA"
+            "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AACAPwAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAgD8AAIA/AAABAAIAAAACAAMABAAFAAYABAAGAAcA"
         }
     ]
 }

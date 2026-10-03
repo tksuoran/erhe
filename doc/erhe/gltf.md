@@ -96,6 +96,14 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   collider whose geometry is such a mesh is skipped with a warning.
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
+- A primitive with an index at or past its vertex count (invalid glTF) is skipped with an
+  error, like a primitive with an unsupported attribute format.
+- Tests: `erhe_gltf_tests` (`src/erhe/gltf/test/`, fastgltf backend, no graphics device):
+  parse of the fixtures under `test/data/` (`variants.gltf`: hierarchy, primitives,
+  materials, `KHR_materials_variants` bindings, Geometry build; `out_of_range_indices.gltf`:
+  the invalid primitive is skipped) and GLB round trips (node hierarchy and transforms,
+  `ERHE_node` / `ERHE_light` / `ERHE_camera` local properties and their unauthored values,
+  the fixture's meshes).
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
   `ERHE_material`, `ERHE_geometry`) round-trip erhe-specific state that has no standard
   glTF representation; editor-domain extensions (`ERHE_scene`, collections, brushes,

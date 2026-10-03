@@ -53,3 +53,7 @@ target_link_libraries(${_target}
 )
 
 erhe_target_settings(${_target} "erhe")
+
+if ((${ERHE_BUILD_TESTS} STREQUAL "ON") AND (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf"))
+    add_subdirectory(test)
+endif ()

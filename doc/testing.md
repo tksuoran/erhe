@@ -9,7 +9,7 @@ instead (`doc/agents/editor_runs.md`).
 ## Suites
 
 Several `erhe::*` libraries have gtest suites under `src/erhe/<name>/test/`
-(circular_ring_buffer, codegen, dataformat, geometry, graphics, item, math,
+(circular_ring_buffer, codegen, dataformat, geometry, gltf, graphics, item, math,
 physics, primitive, raytrace, renderer, usd), plus `mcp_server_tests` for the editor's
 MCP server. `erhe_usd_tests` additionally needs `-DERHE_USD_LIBRARY=lightusd`,
 and `erhe_physics_tests` needs a backend that simulates

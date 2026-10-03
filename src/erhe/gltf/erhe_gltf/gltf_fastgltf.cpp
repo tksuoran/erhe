@@ -2297,6 +2297,20 @@ private:
                 );
             }
         }
+        // An index past the vertex count (the glTF spec requires every
+        // index to address an attribute element) would read outside the
+        // vertex data; such a primitive cannot be built.
+        for (const uint32_t index : triangle_soup.index_data) {
+            if (index >= vertex_count) {
+                log_gltf->error(
+                    "glTF primitive index {} is out of range for vertex count {} - primitive skipped",
+                    index,
+                    vertex_count
+                );
+                primitive_entry.triangle_soup.reset();
+                return;
+            }
+        }
         if (generate_tangents) {
             triangle_soup.vertex_format.streams.front().emplace_back(
                 erhe::dataformat::Format::format_32_vec4_float,

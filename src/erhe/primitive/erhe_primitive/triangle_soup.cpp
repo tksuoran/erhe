@@ -120,39 +120,35 @@ private:
             return;
         }
 
-        // Get vertex positions and calculate bounding box
+        // Positions of the used vertices only, in m_used_indices order: a
+        // primitive's indices need not start at 0 (glTF primitives sharing
+        // one vertex buffer) nor be contiguous, and an unused index inside
+        // [m_min_index, m_max_index] must not become a mesh point.
+        const std::size_t used_count = m_used_indices.size();
         m_vertex_positions.clear();
-
-        const std::size_t vertex_count = m_max_index - m_min_index + 1;
-        m_vertex_positions.resize(vertex_count);
+        m_vertex_positions.resize(used_count);
         const std::size_t   vertex_stride = vertex_stream.stride;
         const std::uint8_t* position_base = m_triangle_soup.vertex_data.data() + position_attribute->offset;
-        for (std::size_t index : m_used_indices) {
+        for (std::size_t used_slot = 0; used_slot < used_count; ++used_slot) {
+            const std::size_t index = m_used_indices[used_slot];
             float v[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
             const std::uint8_t* src = position_base + vertex_stride * index;
             std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&v[0]);
             erhe::dataformat::convert(
                 src, position_attribute->format,
-                dst, erhe::dataformat::Format::format_32_vec3_float, 
+                dst, erhe::dataformat::Format::format_32_vec3_float,
                 1.0f
             );
-            const GEO::vec3 position{v[0], v[1], v[2]};
-            m_vertex_positions.at(index - m_min_index) = position;
+            m_vertex_positions.at(used_slot) = GEO::vec3{v[0], v[1], v[2]};
         }
 
-        //// TODO
-        ////
-        //// log_primitive->trace("Bounding box   = {}", bounding_box_size0);
-        //// log_primitive->trace("Primary   axis = {}", "XYZ"[axis0]);
-        //// log_primitive->trace("Secondary axis = {}", "XYZ"[axis1]);
-        //// log_primitive->trace("Tertiary  axis = {}", "XYZ"[axis2]);
-
-        m_vertex_from_index    .resize(vertex_count);
+        const std::size_t index_range = m_max_index - m_min_index + 1;
+        m_vertex_from_index.resize(index_range);
         std::fill(m_vertex_from_index.begin(), m_vertex_from_index.end(), GEO::NO_INDEX);
 
-        // Create points for each unique vertex
-        GEO::index_t initial_point_count = m_vertex_positions.size();
-        GEO::vector<GEO::index_t> old_to_new(initial_point_count, GEO::NO_INDEX);
+        // Create points for each unique vertex. colocate() maps each used
+        // slot to the used slot of its representative (old_to_new).
+        GEO::vector<GEO::index_t> old_to_new(used_count, GEO::NO_INDEX);
         const double tolerance = 0.00001; // 0.01mm if node has scale = 1.0, 1mm if node scale is 100.0
         const GEO::index_t point_count = GEO::Geom::colocate(
             m_vertex_positions.data()->data(),                    // const double* points,
@@ -163,28 +159,25 @@ private:
             3,                                                    // index_t stride,
             "default"                                             // const std::string& nn_algo
         );
-        GEO::vector<GEO::index_t> unique_vertices = old_to_new;
-        std::sort(unique_vertices.begin(), unique_vertices.end());
-        unique_vertices.erase(std::unique(unique_vertices.begin(), unique_vertices.end()), unique_vertices.end());
+        GEO::vector<GEO::index_t> representatives = old_to_new;
+        std::sort(representatives.begin(), representatives.end());
+        representatives.erase(std::unique(representatives.begin(), representatives.end()), representatives.end());
+        ERHE_VERIFY(representatives.size() == point_count);
 
         const GEO::index_t base_vertex = m_mesh.vertices.create_vertices(point_count);
         m_mesh.vertices.set_double_precision();
-        GEO::vector<GEO::index_t> new_to_unique(initial_point_count, GEO::NO_INDEX);
-        for (GEO::index_t i = 0, end = unique_vertices.size(); i < end ; ++i) {
-            const GEO::index_t old_index    = unique_vertices.at(i);
-            const GEO::index_t new_index    = old_to_new.at(old_index);
-            const std::size_t  vertex_index = old_index - m_min_index;
-            const GEO::vec3    position     = m_vertex_positions.at(vertex_index);
-            new_to_unique.at(new_index) = i;
-            m_mesh.vertices.point<3>(i) = position;
+        GEO::vector<GEO::index_t> point_from_representative(used_count, GEO::NO_INDEX);
+        for (GEO::index_t i = 0, end = static_cast<GEO::index_t>(representatives.size()); i < end; ++i) {
+            const GEO::index_t representative = representatives[i];
+            point_from_representative.at(representative) = i;
+            m_mesh.vertices.point<3>(base_vertex + i) = m_vertex_positions.at(representative);
         }
         m_mesh.vertices.set_single_precision();
-        for (std::size_t old_index : m_used_indices) {
-            const GEO::index_t new_index    = old_to_new.at(old_index);
-            const GEO::index_t unique_index = new_to_unique.at(new_index);
-            ERHE_VERIFY(unique_index != GEO::NO_INDEX);
-            ERHE_VERIFY(unique_index < point_count);
-            m_vertex_from_index.at(old_index - m_min_index) = base_vertex + unique_index;
+        for (std::size_t used_slot = 0; used_slot < used_count; ++used_slot) {
+            const GEO::index_t point = point_from_representative.at(old_to_new.at(used_slot));
+            ERHE_VERIFY(point != GEO::NO_INDEX);
+            ERHE_VERIFY(point < point_count);
+            m_vertex_from_index.at(m_used_indices[used_slot] - m_min_index) = base_vertex + point;
         }
         //log_primitive->trace(
         //    "point count = {}, point share count = {}",
@@ -263,20 +256,18 @@ private:
         const Vertex_stream&                 vertex_stream = m_triangle_soup.vertex_format.streams.front();
         const std::vector<Vertex_attribute>& attributes    = vertex_stream.attributes;
 
-        std::size_t         vertex_count     = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
         const std::uint8_t* vertex_data_base = m_triangle_soup.vertex_data.data();
         for (std::size_t attribute_index = 0, end = attributes.size(); attribute_index < end; ++attribute_index) {
             const Vertex_attribute& attribute           = attributes[attribute_index];
             const std::uint8_t*     attribute_data_base = vertex_data_base + attribute.offset;
 
             if (is_per_point(attribute.usage_type)) {
-                for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
+                // Only the vertices the indices use: the soup's vertex data
+                // may hold more (glTF primitives sharing one vertex buffer).
+                for (const std::size_t vertex_index : m_used_indices) {
                     const std::uint8_t* src    = attribute_data_base + vertex_stream.stride * vertex_index;
                     const GEO::index_t  vertex = m_vertex_from_index.at(vertex_index - m_min_index);
-                    ERHE_VERIFY(vertex != GEO::NO_INDEX); // TODO Is this better or worse than using if condition below?
-                    if (vertex == GEO::NO_INDEX) {
-                        continue;
-                    }
+                    ERHE_VERIFY(vertex != GEO::NO_INDEX);
                     switch (erhe::dataformat::get_format_kind(attribute.format)) {
                         case erhe::dataformat::Format_kind::format_kind_unsigned_integer: {
                             uint32_t value[4] = { 0u, 0u, 0u, 0u };
