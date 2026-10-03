@@ -70,6 +70,15 @@ enum class Imgui_pointer_action
     scroll
 };
 
+// The recorded frame imgui_scroll_to_item is waiting for: the one that finds
+// the item, the one in which ImGui scrolls to it, the one that reports it.
+enum class Imgui_scroll_to_item_phase
+{
+    find,
+    scroll,
+    report
+};
+
 // Represents a single MCP tool descriptor
 struct Mcp_tool_info
 {
@@ -464,6 +473,10 @@ private:
     auto action_imgui_scroll                  (const nlohmann::json& args) -> std::string;
     auto run_imgui_pointer_action(const nlohmann::json& args, Imgui_pointer_action action) -> std::string;
 
+    // imgui_scroll_to_item: has Dear ImGui scroll an item (clipped or not)
+    // into view, over three recorded frames - find, scroll, report.
+    auto action_imgui_scroll_to_item          (const nlohmann::json& args) -> std::string;
+
     // The desktop host for a pointer action, refusing any other host (A6).
     auto resolve_imgui_pointer_host(const nlohmann::json& args, std::string& out_error) -> erhe::imgui::Imgui_host*;
 
@@ -717,6 +730,13 @@ private:
     // for a recorded frame and is deferring until that frame is done (main
     // thread only). doc/agents/mcp_ui_driving.md.
     const Queued_request*                            m_imgui_recording_request{nullptr};
+
+    // imgui_scroll_to_item: the request stepping through its three recorded
+    // frames, the phase it is in, the item's id and its rectangle before.
+    const Queued_request*                            m_imgui_scroll_to_item_request{nullptr};
+    Imgui_scroll_to_item_phase                       m_imgui_scroll_to_item_phase  {Imgui_scroll_to_item_phase::find};
+    uint32_t                                         m_imgui_scroll_to_item_id     {0}; // ImGuiID
+    nlohmann::json                                   m_imgui_scroll_to_item_before;
 
     // What a gesture tool resolved before it recorded its events (the item
     // rectangle an imgui_* action aimed at). step_input_gesture() merges it

@@ -166,6 +166,14 @@ what Dear ImGui submitted in one frame, which is what the editor's
   box) never report ItemInfo, so the ItemAdd hook applies ItemAdd's own
   clipping test (the item rectangle against the window clip rectangle) and
   records the result; an ItemInfo that follows replaces the status flags.
+- **Clipped items are recorded in full.** For the recorded frame the host
+  sets `ImGuiContext::ItemUnclipByLog` (restoring its previous value after),
+  the switch Dear ImGui's log capture uses: a widget outside its window's clip
+  rectangle is then submitted like a visible one, so it reports its label and
+  its real rectangle, without `ImGuiItemStatusFlags_Visible`. Drawing stays
+  clipped by the draw list, and `ImGuiListClipper` still skips the rows it
+  virtualizes. This is what lets an item scrolled out of view be found and
+  scrolled to (`imgui_scroll_to_item`).
 - **One recorder per `ImGuiContext`**, owned by the `Imgui_host` that owns
   the context; the hooks find it through a registry keyed by context.
 - **The first non-empty label wins.** A widget built out of another one

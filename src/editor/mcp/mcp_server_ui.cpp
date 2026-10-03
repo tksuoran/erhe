@@ -2081,6 +2081,105 @@ auto Mcp_server::action_imgui_scroll(const nlohmann::json& args) -> std::string
     return run_imgui_pointer_action(args, Imgui_pointer_action::scroll);
 }
 
+// imgui_scroll_to_item - doc/agents/mcp_ui_driving.md.
+//
+// Dear ImGui scrolls an item into view with ImGui::ScrollToItem() called right
+// after the item is submitted, so the scroll is done from inside the frame by
+// the item recorder (Imgui_item_recorder::request_scroll_to_item). Three
+// recorded frames:
+// 1. find the item by its selector, clipped items included (recorded frames
+//    submit them in full, doc/erhe/imgui.md "Item recorder");
+// 2. the recorder calls ScrollToItem() when that item's id is submitted;
+// 3. the first frame laid out with the new scroll reports where it is.
+auto Mcp_server::action_imgui_scroll_to_item(const nlohmann::json& args) -> std::string
+{
+    const auto fail = [this](const std::string& message) -> std::string {
+        m_imgui_scroll_to_item_request = nullptr;
+        m_imgui_scroll_to_item_phase   = Imgui_scroll_to_item_phase::find;
+        m_imgui_scroll_to_item_before  = nlohmann::json{};
+        return make_error_content(message);
+    };
+
+    std::string                    error;
+    erhe::imgui::Imgui_host* const host = resolve_imgui_host(args, error);
+    if (host == nullptr) {
+        return fail(error);
+    }
+    Imgui_item_selector selector;
+    if (!parse_imgui_item_selector(args, selector, error)) {
+        return fail(error);
+    }
+    const std::string align = args.value("align", std::string{"nearest"});
+    if ((align != "nearest") && (align != "center")) {
+        return fail("align is 'nearest' or 'center'");
+    }
+    if (m_imgui_scroll_to_item_request != m_current_request) {
+        m_imgui_scroll_to_item_request = m_current_request;
+        m_imgui_scroll_to_item_phase   = Imgui_scroll_to_item_phase::find;
+    }
+
+    if (request_recorded_imgui_frame(*host, error)) {
+        return {};
+    }
+    if (!error.empty()) {
+        return fail(error);
+    }
+
+    ImGuiContext* const               context  = host->imgui_context();
+    erhe::imgui::Imgui_item_recorder& recorder = host->get_item_recorder();
+    switch (m_imgui_scroll_to_item_phase) {
+        case Imgui_scroll_to_item_phase::find: {
+            Imgui_item_selector any_selector = selector;
+            any_selector.visible_only = false;
+            Imgui_item_match match;
+            if (!resolve_imgui_item(context, recorder, any_selector, match, error)) {
+                return fail(error);
+            }
+            m_imgui_scroll_to_item_before = item_match_to_json(context, match, any_selector, imgui_host_name(*host));
+            m_imgui_scroll_to_item_id     = match.record->id;
+            const ImGuiScrollFlags flags = (align == "center")
+                ? (ImGuiScrollFlags_KeepVisibleEdgeX | ImGuiScrollFlags_AlwaysCenterY)
+                : (ImGuiScrollFlags_KeepVisibleEdgeX | ImGuiScrollFlags_KeepVisibleEdgeY);
+            recorder.request_scroll_to_item(match.record->id, static_cast<int>(flags));
+            m_imgui_scroll_to_item_phase = Imgui_scroll_to_item_phase::scroll;
+            break;
+        }
+        case Imgui_scroll_to_item_phase::scroll: {
+            if (!recorder.take_scroll_to_item_result()) {
+                return fail("The item was not submitted in the frame that was to scroll to it (its window closed or its section collapsed)");
+            }
+            m_imgui_scroll_to_item_phase = Imgui_scroll_to_item_phase::report;
+            break;
+        }
+        case Imgui_scroll_to_item_phase::report: {
+            Imgui_item_selector id_selector = selector;
+            id_selector.has_id    = true;
+            id_selector.id        = m_imgui_scroll_to_item_id;
+            id_selector.has_index = false;
+            id_selector.index     = 0;
+            Imgui_item_match match;
+            if (!resolve_imgui_item(context, recorder, id_selector, match, error)) {
+                return fail(error + " - the item is still clipped after the scroll");
+            }
+            nlohmann::json result = item_match_to_json(context, match, selector, imgui_host_name(*host));
+            const float before_x = m_imgui_scroll_to_item_before.value("x", 0.0f);
+            const float before_y = m_imgui_scroll_to_item_before.value("y", 0.0f);
+            result["scrolled"] = (before_x != match.record->x0) || (before_y != match.record->y0);
+            result["before"]   = m_imgui_scroll_to_item_before;
+            m_imgui_scroll_to_item_request = nullptr;
+            m_imgui_scroll_to_item_phase   = Imgui_scroll_to_item_phase::find;
+            m_imgui_scroll_to_item_before  = nlohmann::json{};
+            return make_json_content(result).dump();
+        }
+    }
+
+    // Phases find and scroll go on in the next recorded frame.
+    if (request_recorded_imgui_frame(*host, error)) {
+        return {};
+    }
+    return fail(error.empty() ? std::string{"Could not record the next frame"} : error);
+}
+
 // capture_screenshot annotation (A7) ------------------------------------------
 //
 // The recorded items of the desktop host are drawn over the captured pixels as

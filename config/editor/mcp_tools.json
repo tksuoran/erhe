@@ -9656,6 +9656,44 @@
     "name": "imgui_scroll"
   },
   {
+    "description": "Scroll an ImGui item into view, also when it is currently clipped (scrolled out of its window). The item is found in a recorded frame that includes clipped items; in the next frame Dear ImGui's own ScrollToItem() runs right after the item is submitted, scrolling its window and each window that one is a child region of; the frame after that reports where the item now is. The result is the item's rectangle, center and status after the scroll, 'scrolled' (false when it was already in view and align is 'nearest') and 'before' (its entry before the scroll). Works on any ImGui host; nothing but the scroll changes. An item of a collapsed section or a closed window is not submitted at all, so it cannot be found.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "host": {
+          "description": "ImGui host name, or part of one, as get_imgui_hosts reports it (default: the desktop window host)",
+          "type": "string"
+        },
+        "window": {
+          "description": "The window the item is in, by the name or display_name get_imgui_windows reports (optional; naming it also reaches its child regions)",
+          "type": "string"
+        },
+        "label": {
+          "description": "Item label as shown, or with its '##id' part. Required unless id is given.",
+          "type": "string"
+        },
+        "id": {
+          "description": "ImGui item id, as get_imgui_items reports it. Use instead of label.",
+          "type": "integer"
+        },
+        "index": {
+          "description": "Which of several items sharing the label to scroll to (default 0), counting clipped items too: the order get_imgui_items reports with visible_only false",
+          "type": "integer"
+        },
+        "align": {
+          "description": "'nearest' (default): scroll as little as possible, nothing when the item is already fully in view. 'center': center the item vertically",
+          "enum": [
+            "nearest",
+            "center"
+          ],
+          "type": "string"
+        }
+      }
+    },
+    "name": "imgui_scroll_to_item"
+  },
+  {
     "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthographic cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthographic cameras, and moving an orthographic camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthographic views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
     "inputSchema": {
       "properties": {},

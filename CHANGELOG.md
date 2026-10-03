@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::imgui`: `Imgui_item_recorder::request_scroll_to_item()` /
+  `take_scroll_to_item_result()`: in the next recorded frame, Dear ImGui's
+  `ScrollToItem()` runs right after the item with the given id is submitted.
+  A recorded frame now submits clipped items in full
+  (`ImGuiContext::ItemUnclipByLog`), so they are recorded with their labels.
 - `erhe::graphics`: `Ring_buffer_pool` (`erhe_graphics/ring_buffer_pool.hpp`),
   the ring-buffer allocator behind `Device::allocate_ring_buffer_entry()` for
   the Vulkan, OpenGL and Metal backends: spill sizing and idle reclaim (one

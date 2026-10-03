@@ -53,6 +53,11 @@ report rectangles in it, and every `x` / `y` argument takes it.
   `get_imgui_items` list, when several rows share a label.
 - `id` (the ImGui id `get_imgui_items` reports) addresses an item exactly.
 - An unresolvable or ambiguous selector is an error naming what it found.
+- A recorded frame submits clipped items too (`doc/erhe/imgui.md` "Item
+  recorder"), so `get_imgui_items` with `visible_only` false lists items
+  scrolled out of view, with their labels. The actions aim at visible items
+  only: scroll a clipped one into view with `imgui_scroll_to_item` first. An
+  item in a collapsed section or a closed window is not submitted at all.
 - Only the desktop host is driven by `imgui_click` / `imgui_hover` /
   `imgui_scroll`. A rendertarget host (the hotbar and the other ImGui surfaces
   drawn into the scene) is inspected with the queries and driven through the
@@ -94,6 +99,7 @@ these rather than clicking at a guessed offset. See
 | `imgui_click` | item selector, `button`, `modifiers`, `double` | Resolve, then click the item's center; returns `target` |
 | `imgui_hover` | item selector, `modifiers` | Resolve, then leave the pointer on the item's center; returns `target` |
 | `imgui_scroll` | `window` \| item selector, `dx`, `dy`, `modifiers` | Resolve, then turn the wheel over it; positive `dy` scrolls up |
+| `imgui_scroll_to_item` | `host`, `window`, `label` \| `id`, `index`, `align` | Find the item - clipped items included - and have Dear ImGui's `ScrollToItem()` scroll its window (and parent windows) to it; returns the item after the scroll and `before`. `align`: `nearest` (default, no scroll when already in view) or `center`. Any host. Over three recorded frames |
 | `mouse_click` | `x`, `y`, `button`, `modifiers`, `double` | Move, settle, press and release without moving |
 | `mouse_drag` | `from`, `to`, `button`, `modifiers`, `frames`, `hold` | Move to `from`, settle, press, `frames` interpolated moves carrying `dx` / `dy`, release at `to` unless `hold` |
 | `mouse_release` | `button` | End a held drag where the pointer is |

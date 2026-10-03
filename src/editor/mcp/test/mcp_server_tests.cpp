@@ -5194,13 +5194,23 @@ TEST_F(Mcp_test, imgui_click_focuses_a_text_field_that_type_text_edits)
     Mcp_client& client = Mcp_env::get().client();
 
     const auto operations_item_count = [&]() -> int {
+        // Every submitted item, clipped ones too (a recorded frame submits
+        // them in full), so the count does not depend on the window's scroll.
         Mcp_client::Tool_result items = client.call_tool("get_imgui_items", json{
-            {"window", "Operations"},
-            {"limit",  1}
+            {"window",       "Operations"},
+            {"visible_only", false},
+            {"limit",        1}
         });
         EXPECT_FALSE(items.is_error) << items.text;
         return items.is_error ? -1 : items.payload.value("total", -1);
     };
+
+    // An earlier test may have left the Operations window scrolled down.
+    Mcp_client::Tool_result in_view = client.call_tool("imgui_scroll_to_item", json{
+        {"window", "Operations"},
+        {"label",  "Filter"}
+    });
+    ASSERT_FALSE(in_view.is_error) << in_view.text;
 
     const int unfiltered = operations_item_count();
     ASSERT_GT(unfiltered, 5) << "the Operations window is not showing its operations";
@@ -5247,6 +5257,15 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     ASSERT_FALSE(shown.is_error) << shown.text;
     advance_frames(client, 3);
 
+    // Dear ImGui chains clicks at one spot that come within
+    // io.MouseDoubleClickTime (0.30 s, wall clock) of each other into one
+    // click count, and the node toggles on a count of exactly two. Each
+    // gesture below starts a fresh chain: the clicks of the previous gesture
+    // (or of a previous run against the same editor) are waited out first.
+    const auto wait_out_double_click_time = []() {
+        std::this_thread::sleep_for(std::chrono::milliseconds{400});
+    };
+
     const auto is_opened = [&]() -> bool {
         Mcp_client::Tool_result rect = client.call_tool("get_imgui_item_rect", json{
             {"window", "Operation Stack"},
@@ -5255,8 +5274,20 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
         EXPECT_FALSE(rect.is_error) << rect.text;
         return !rect.is_error && rect.payload["status"].value("opened", false);
     };
-    ASSERT_FALSE(is_opened()) << "the tree node was already open";
+    // The open state lives in the editor's ImGui storage across calls; a
+    // previous run against the same editor may have left the node open.
+    if (is_opened()) {
+        wait_out_double_click_time();
+        client.call_tool("imgui_click", json{
+            {"window", "Operation Stack"},
+            {"label",  "Executed"},
+            {"double", true}
+        });
+        advance_frames(client, 3);
+    }
+    ASSERT_FALSE(is_opened()) << "the tree node could not be closed before the test";
 
+    wait_out_double_click_time();
     Mcp_client::Tool_result single = client.call_tool("imgui_click", json{
         {"window", "Operation Stack"},
         {"label",  "Executed"}
@@ -5265,6 +5296,7 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     advance_frames(client, 3);
     EXPECT_FALSE(is_opened()) << "a single click opened a node that only opens on a double click";
 
+    wait_out_double_click_time();
     Mcp_client::Tool_result double_click = client.call_tool("imgui_click", json{
         {"window", "Operation Stack"},
         {"label",  "Executed"},
@@ -5274,6 +5306,14 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     advance_frames(client, 3);
     EXPECT_TRUE(is_opened()) << "the two press/release pairs were not read as a double click";
 
+    // Leave the node closed, as the test found it.
+    wait_out_double_click_time();
+    client.call_tool("imgui_click", json{
+        {"window", "Operation Stack"},
+        {"label",  "Executed"},
+        {"double", true}
+    });
+    advance_frames(client, 3);
     client.call_tool("set_window_visibility", json{{"title", "Operation Stack"}, {"visible", false}});
     advance_frames(client, 2);
 }
@@ -5283,6 +5323,17 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
 TEST_F(Mcp_test, imgui_hover_and_scroll_act_on_the_resolved_target)
 {
     Mcp_client& client = Mcp_env::get().client();
+
+    // The actions aim at visible items; Merge may be below the visible part
+    // of the Operations window, so it is scrolled to the window's middle
+    // first, where one wheel notch keeps it in view whatever the window's
+    // height.
+    Mcp_client::Tool_result in_view = client.call_tool("imgui_scroll_to_item", json{
+        {"window", "Operations"},
+        {"label",  "Merge"},
+        {"align",  "center"}
+    });
+    ASSERT_FALSE(in_view.is_error) << in_view.text;
 
     Mcp_client::Tool_result hover = client.call_tool("imgui_hover", json{
         {"window", "Operations"},
@@ -5308,7 +5359,7 @@ TEST_F(Mcp_test, imgui_hover_and_scroll_act_on_the_resolved_target)
 
     Mcp_client::Tool_result scroll = client.call_tool("imgui_scroll", json{
         {"window", "Operations"},
-        {"dy",     -5.0f}
+        {"dy",     -1.0f}
     });
     ASSERT_FALSE(scroll.is_error) << scroll.text;
     EXPECT_EQ(scroll.payload["target"].value("window", ""), "Operations") << scroll.payload.dump();
@@ -5330,6 +5381,73 @@ TEST_F(Mcp_test, imgui_hover_and_scroll_act_on_the_resolved_target)
 
 // capture_screenshot.annotate_imgui_items reports the number -> item table and
 // draws the same numbered rectangles into the PNG.
+// imgui_scroll_to_item finds an item scrolled out of view and has Dear ImGui
+// scroll it in; the item is then visible to the actions.
+TEST_F(Mcp_test, imgui_scroll_to_item_brings_a_clipped_item_into_view)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    // Scroll the Operations window to its top, then take its last button.
+    Mcp_client::Tool_result to_top = client.call_tool("imgui_scroll_to_item", json{
+        {"window", "Operations"},
+        {"label",  "Platonic Solids"}
+    });
+    ASSERT_FALSE(to_top.is_error) << to_top.text;
+
+    Mcp_client::Tool_result all = client.call_tool("get_imgui_items", json{
+        {"window",       "Operations"},
+        {"visible_only", false},
+        {"limit",        10000}
+    });
+    ASSERT_FALSE(all.is_error) << all.text;
+    // A clipped item whose label no other item of the window shares, so the
+    // visible-only lookups below cannot resolve a visible namesake.
+    std::map<std::string, int> label_counts;
+    for (const json& item : all.payload["items"]) {
+        ++label_counts[item.value("display_label", std::string{})];
+    }
+    std::string clipped_label;
+    for (const json& item : all.payload["items"]) {
+        const bool        visible = item["status"].value("visible", true);
+        const std::string label   = item.value("display_label", std::string{});
+        if (!visible && !label.empty() && (item.value("label", std::string{}) == label) && (label_counts[label] == 1)) {
+            clipped_label = label;
+        }
+    }
+    if (clipped_label.empty()) {
+        GTEST_SKIP() << "the Operations window shows all its items; nothing is clipped";
+    }
+
+    Mcp_client::Tool_result before = client.call_tool("get_imgui_item_rect", json{
+        {"window", "Operations"},
+        {"label",  clipped_label}
+    });
+    EXPECT_TRUE(before.is_error) << "a clipped item resolved for an action: " << clipped_label;
+
+    Mcp_client::Tool_result scrolled = client.call_tool("imgui_scroll_to_item", json{
+        {"window", "Operations"},
+        {"label",  clipped_label},
+        {"align",  "center"}
+    });
+    ASSERT_FALSE(scrolled.is_error) << scrolled.text;
+    EXPECT_TRUE(scrolled.payload.value("scrolled", false)) << scrolled.payload.dump();
+    EXPECT_TRUE(scrolled.payload["status"].value("visible", false)) << scrolled.payload.dump();
+
+    Mcp_client::Tool_result after = client.call_tool("get_imgui_item_rect", json{
+        {"window", "Operations"},
+        {"label",  clipped_label}
+    });
+    ASSERT_FALSE(after.is_error) << after.text;
+
+    // Already in view: 'nearest' leaves the scroll alone.
+    Mcp_client::Tool_result again = client.call_tool("imgui_scroll_to_item", json{
+        {"window", "Operations"},
+        {"label",  clipped_label}
+    });
+    ASSERT_FALSE(again.is_error) << again.text;
+    EXPECT_FALSE(again.payload.value("scrolled", true)) << again.payload.dump();
+}
+
 TEST_F(Mcp_test, capture_screenshot_annotates_imgui_items)
 {
     Mcp_client& client = Mcp_env::get().client();

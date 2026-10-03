@@ -147,6 +147,9 @@ protected:
     Imgui_item_recorder m_item_recorder;
     bool                m_item_recording_requested{false};
     bool                m_item_recording_active   {false};
+    // ImGuiContext::ItemUnclipByLog before a recorded frame set it; restored
+    // after the frame (a log capture may have it set already).
+    bool                m_item_unclip_saved       {false};
 
 private:
     void apply_imgui_ini_path();

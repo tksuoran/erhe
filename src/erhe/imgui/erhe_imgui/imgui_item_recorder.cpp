@@ -291,6 +291,30 @@ void set_recorded_item_labels(const std::size_t first_index, const std::string_v
     recorder->set_labels_from(first_index, (window != nullptr) ? window->ID : 0, label);
 }
 
+void Imgui_item_recorder::request_scroll_to_item(const ImGuiID id, const int scroll_flags)
+{
+    m_scroll_to_item_id    = id;
+    m_scroll_to_item_flags = scroll_flags;
+    m_scroll_to_item_done  = false;
+}
+
+auto Imgui_item_recorder::take_scroll_to_item_result() -> bool
+{
+    const bool done = m_scroll_to_item_done;
+    m_scroll_to_item_id   = 0;
+    m_scroll_to_item_done = false;
+    return done;
+}
+
+void Imgui_item_recorder::scroll_to_item_if_requested(const ImGuiID id)
+{
+    if ((m_scroll_to_item_id == 0) || (id != m_scroll_to_item_id) || m_scroll_to_item_done) {
+        return;
+    }
+    ImGui::ScrollToItem(static_cast<ImGuiScrollFlags>(m_scroll_to_item_flags));
+    m_scroll_to_item_done = true;
+}
+
 auto Imgui_item_recorder::find_label(const ImGuiID id) const -> const char*
 {
     for (std::size_t i = m_records.size(); i > 0; --i) {
@@ -324,6 +348,7 @@ void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb
             ? ImGuiItemStatusFlags_Visible
             : 0;
     recorder->on_item_add(id, window_id, bb, item_data, clip_status_flags);
+    recorder->scroll_to_item_if_requested(id);
 }
 
 void ImGuiTestEngineHook_ItemInfo(ImGuiContext* ctx, ImGuiID id, const char* label, ImGuiItemStatusFlags flags)

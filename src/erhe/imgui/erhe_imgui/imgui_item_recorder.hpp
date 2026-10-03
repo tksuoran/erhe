@@ -111,6 +111,22 @@ public:
 
     [[nodiscard]] auto find_label(ImGuiID id) const -> const char*;
 
+    // Asks Dear ImGui to scroll the item with this id into view in the next
+    // recorded frame: when the ItemAdd hook sees the id, the item is ImGui's
+    // last item, and ImGui::ScrollToItem(flags) sets the scroll target of its
+    // window (and of the windows that window is a child region of). The
+    // target applies at the next Begin of the window, so the item shows at
+    // its new place in the frame after. A clipped item reaches ItemAdd too.
+    void request_scroll_to_item(ImGuiID id, int scroll_flags);
+
+    // Whether the requested item was reached in the last recorded frame (a
+    // collapsed section or a closed window submits nothing); clears the
+    // request either way.
+    [[nodiscard]] auto take_scroll_to_item_result() -> bool;
+
+    // Called by the ItemAdd hook with the item as ImGui's last item.
+    void scroll_to_item_if_requested(ImGuiID id);
+
     [[nodiscard]] static auto find_for_context(ImGuiContext* context) -> Imgui_item_recorder*;
 
 private:
@@ -119,6 +135,9 @@ private:
     std::vector<char>        m_labels;
     bool                     m_has_records    {false};
     uint64_t                 m_hook_call_count{0};
+    ImGuiID                  m_scroll_to_item_id   {0};
+    int                      m_scroll_to_item_flags{0};
+    bool                     m_scroll_to_item_done {false};
 };
 
 // Names the item Dear ImGui submitted last, for a widget whose visible text is

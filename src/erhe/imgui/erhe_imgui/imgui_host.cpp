@@ -312,6 +312,13 @@ void Imgui_host::begin_item_recording()
     m_item_recording_requested        = false;
     m_item_recording_active           = true;
     m_imgui_context->TestEngineHookItems = true;
+    // Submit clipped items in full for the recorded frame, the way a log
+    // capture does: a widget outside its window's clip rectangle then still
+    // reports its label and rectangle (without ImGuiItemStatusFlags_Visible),
+    // so an item scrolled out of view can be found and scrolled to. Drawing
+    // stays clipped, so the frame looks the same.
+    m_item_unclip_saved                  = m_imgui_context->ItemUnclipByLog;
+    m_imgui_context->ItemUnclipByLog     = true;
     m_item_recorder.begin_frame();
 }
 
@@ -322,6 +329,7 @@ void Imgui_host::end_item_recording()
     }
     m_item_recording_active              = false;
     m_imgui_context->TestEngineHookItems = false;
+    m_imgui_context->ItemUnclipByLog     = m_item_unclip_saved;
     m_item_recorder.end_frame();
 }
 

@@ -794,6 +794,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "imgui_click",                    &Mcp_server::action_imgui_click                   },
         { "imgui_hover",                    &Mcp_server::action_imgui_hover                   },
         { "imgui_scroll",                   &Mcp_server::action_imgui_scroll                  },
+        { "imgui_scroll_to_item",           &Mcp_server::action_imgui_scroll_to_item          },
         { "open_four_view",                 &Mcp_server::action_open_four_view                },
         { "get_four_views",                 &Mcp_server::query_four_views                     },
         { "get_geometry_graph",             &Mcp_server::query_geometry_graph                 },
