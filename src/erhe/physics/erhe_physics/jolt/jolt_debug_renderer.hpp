@@ -7,7 +7,6 @@
 
 #include <glm/glm.hpp>
 
-#include <atomic>
 
 namespace erhe::physics {
 
@@ -44,18 +43,19 @@ public:
     ) override;
 
 private:
-    class Batch_impl : public JPH::RefTargetVirtual
+    // Jolt's batch handle is a RefTargetVirtual; the reference count itself
+    // is Jolt's RefTarget (the pattern of Jolt's own debug renderers).
+    class Batch_impl
+        : public JPH::RefTargetVirtual
+        , public JPH::RefTarget<Batch_impl>
     {
     public:
         JPH_OVERRIDE_NEW_DELETE
 
-        void AddRef () override { ++m_ref_count; }
-        void Release() override { if (--m_ref_count == 0) delete this; }
+        void AddRef () override { JPH::RefTarget<Batch_impl>::AddRef(); }
+        void Release() override { JPH::RefTarget<Batch_impl>::Release(); }
 
         JPH::Array<Triangle> m_triangles;
-
-    private:
-        std::atomic<uint32_t> m_ref_count{0};
     };
 
     IDebug_draw* m_debug_draw{nullptr};

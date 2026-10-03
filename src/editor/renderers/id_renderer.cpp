@@ -257,20 +257,22 @@ void Id_renderer::render_meshes(
         }
         meshes_to_render = m_filtered_meshes;
     }
-    if (meshes_to_render.empty()) {
-        return;
+    if (!meshes_to_render.empty()) {
+        render_buckets(
+            render_encoder,
+            pipeline,
+            *m_render_pass.get(),
+            primitive_settings,
+            erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::VARIANT_ID_RENDER),
+            true, // use_id_ranges: record the id_offset->mesh table the readback walks
+            id_filter,
+            meshes_to_render
+        );
     }
-
-    render_buckets(
-        render_encoder,
-        pipeline,
-        *m_render_pass.get(),
-        primitive_settings,
-        erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::VARIANT_ID_RENDER),
-        true, // use_id_ranges: record the id_offset->mesh table the readback walks
-        id_filter,
-        meshes_to_render
-    );
+    // The scratch holds owning references: release them now (capacity kept)
+    // so a closed scene's meshes are not retained until the next skinned-only
+    // render (doc/editor/coding_rules.md).
+    m_filtered_meshes.clear();
 }
 
 void Id_renderer::render_buckets(
