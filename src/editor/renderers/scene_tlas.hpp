@@ -187,9 +187,9 @@ private:
     erhe::graphics::Shader_resource                     m_instance_block;
     std::unique_ptr<erhe::graphics::Ring_buffer_client> m_instance_record_buffer;
 
-    // Bottom level structure per unique Buffer_mesh. Entries are never
-    // evicted (milestone limitation; stale entries for edited/deleted
-    // geometry only cost memory, they drop out of the top level rebuild).
+    // Bottom level structure per unique Buffer_mesh; update() evicts the
+    // entries whose render shape no other owner holds
+    // (evict_unreferenced_blas()).
     std::unordered_map<const erhe::primitive::Buffer_mesh*, Blas_entry> m_blas_cache;
 
     // One top level structure per frame-in-flight slot. Slot count must be

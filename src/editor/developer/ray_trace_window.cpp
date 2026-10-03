@@ -50,7 +50,7 @@ void Ray_trace_window::imgui()
                 "Fix: Edit Scheme > Run > Options > GPU Frame Capture = Disabled, then relaunch."
             );
         } else {
-            ImGui::TextUnformatted("GPU ray tracing (ray query + position fetch) is not supported by this device / backend.");
+            ImGui::TextUnformatted("GPU ray tracing (ray query) is not supported by this device / backend.");
         }
         return;
     }
