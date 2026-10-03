@@ -1549,7 +1549,7 @@ auto save_scene_gltf(App_context& context, Scene_root& scene_root, const std::fi
         if (error_code) {
             canonical_path = path;
         }
-        if (context.prefab_library->get_prefabs().contains(Prefab_key{canonical_path, std::string{}})) {
+        if (context.prefab_library->get_prefabs().contains(Prefab_key{.source_path = canonical_path})) {
             context.prefab_library->reload(canonical_path);
         }
     }

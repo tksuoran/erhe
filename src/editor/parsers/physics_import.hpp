@@ -38,14 +38,14 @@ class Physics_import_item
 public:
     // The name the item takes; the description's name, else a synthesized
     // one, when empty.
-    std::string                                      name;
-    std::vector<std::pair<std::string, std::string>> properties; // qualified erhe property name -> D16 text
+    std::string                                      name{};
+    std::vector<std::pair<std::string, std::string>> properties{}; // qualified erhe property name -> D16 text
     Physics_property_set                             property_set{Physics_property_set::listed_values};
     // The prim of the loaded tree the item is placed under. The item rides
     // that tree's insert then, the way a material the file placed does; an
     // item with no parent gets a content-library attach operation of its own,
     // which is what creates its kind scope.
-    std::shared_ptr<erhe::Hierarchy>                 parent;
+    std::shared_ptr<erhe::Hierarchy>                 parent{};
 };
 
 // The state of one body the neutral record has no field for, by the node the

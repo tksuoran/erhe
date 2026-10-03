@@ -229,8 +229,8 @@ private:
 class New_bone
 {
 public:
-    std::string                               name;
-    std::shared_ptr<erhe::scene::Node>        parent;
+    std::string                               name{};
+    std::shared_ptr<erhe::scene::Node>        parent{};
     glm::vec3                                 head     {0.0f};
     glm::vec3                                 tail     {0.0f, 1.0f, 0.0f};
     bool                                      connected{false};
@@ -238,7 +238,7 @@ public:
     glm::vec3                                 scale    {1.0f};
     // The rest transform; the creation local TRS (head, rotation, scale)
     // when absent.
-    std::optional<erhe::scene::Trs_transform> rest;
+    std::optional<erhe::scene::Trs_transform> rest{};
 };
 
 // A new bone node carrying the bone flag and its Rig values (tail, connected,

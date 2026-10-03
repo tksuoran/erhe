@@ -71,8 +71,8 @@ public:
 class Instance_override final
 {
 public:
-    std::string                          relative_path;
-    std::vector<Instance_override_value> values;
+    std::string                          relative_path{};
+    std::vector<Instance_override_value> values{};
     bool                                 transform_overridden{false};
     glm::mat4                            transform           {1.0f};
     // The material the item's mesh binds, by the path of the material item -
@@ -82,11 +82,11 @@ public:
     // its own whose relative path ends in the name of the group, the way a
     // USD GeomSubset is a prim below its mesh and X4's variant bindings name
     // one.
-    std::string                          material_path;
+    std::string                          material_path{};
     // The authored xformOp stack of the transform, when the item carries one
     // (doc/erhe/usd_compatibility_design.md M8). An item without one is described by
     // `transform` alone.
-    std::optional<Xform_op_stack>        xform_op_stack;
+    std::optional<Xform_op_stack>        xform_op_stack{};
 };
 
 // One item inside a prefab instance that holds overrides, as the item itself:

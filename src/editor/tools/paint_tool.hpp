@@ -131,13 +131,13 @@ private:
     class Stroke_paint
     {
     public:
-        std::weak_ptr<erhe::scene::Mesh>              mesh;
+        std::weak_ptr<erhe::scene::Mesh>              mesh{};
         std::size_t                                   primitive_index{0};
-        std::shared_ptr<erhe::geometry::Geometry>     geometry;
-        std::vector<GEO::index_t>                     corners;
-        std::vector<glm::vec4>                        before_colors; // parallel to corners
-        std::vector<glm::vec4>                        after_colors;  // parallel to corners
-        std::unordered_map<GEO::index_t, std::size_t> corner_to_slot;
+        std::shared_ptr<erhe::geometry::Geometry>     geometry{};
+        std::vector<GEO::index_t>                     corners{};
+        std::vector<glm::vec4>                        before_colors{}; // parallel to corners
+        std::vector<glm::vec4>                        after_colors{};  // parallel to corners
+        std::unordered_map<GEO::index_t, std::size_t> corner_to_slot{};
     };
     std::vector<Stroke_paint> m_stroke_paints;
 

@@ -95,7 +95,7 @@ public:
 class Asset_load_request
 {
 public:
-    std::filesystem::path path;
+    std::filesystem::path path{};
 
     // Empty: open `path` as a NEW scene (erhe-authored scene or foreign glTF,
     // decided by the scan). Set: import `path` INTO this existing scene, and
@@ -103,7 +103,7 @@ public:
     //
     // Weak on purpose: a load must not keep its target scene alive, and the
     // task settles as cancelled if the scene closes while it is in flight.
-    std::weak_ptr<Scene_root> import_target;
+    std::weak_ptr<Scene_root> import_target{};
 
     // Import-only: route the parsed materials through Asset_manager as
     // references instead of copying them into the scene (R7).
@@ -115,7 +115,7 @@ public:
     bool prefab_template{false};
 
     // Node name for the parse root. Empty picks a default per mode.
-    std::string root_node_name;
+    std::string root_node_name{};
 };
 
 // One unit of asynchronous loading, owned by Asset_manager and advanced a

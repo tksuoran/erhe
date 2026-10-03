@@ -50,18 +50,18 @@ public:
     class Parameters
     {
     public:
-        std::shared_ptr<erhe::scene::Mesh>        mesh;
+        std::shared_ptr<erhe::scene::Mesh>        mesh{};
         std::size_t                               primitive_index{0};
-        std::shared_ptr<erhe::geometry::Geometry> geometry;
-        std::vector<GEO::index_t>                 vertices;          // affected geometry vertices
-        std::vector<glm::vec3>                    before_positions;  // mesh-local, parallel to vertices
-        std::vector<glm::vec3>                    after_positions;   // mesh-local, parallel to vertices
+        std::shared_ptr<erhe::geometry::Geometry> geometry{};
+        std::vector<GEO::index_t>                 vertices{};          // affected geometry vertices
+        std::vector<glm::vec3>                    before_positions{};  // mesh-local, parallel to vertices
+        std::vector<glm::vec3>                    after_positions{};   // mesh-local, parallel to vertices
         erhe::primitive::Build_info               build_info;
         erhe::primitive::Normal_style             normal_style{erhe::primitive::Normal_style::corner_normals};
         // Corner texcoords the move re-interpolates (empty for a plain move).
-        std::vector<Corner_texcoord_change>       corner_texcoords;
+        std::vector<Corner_texcoord_change>       corner_texcoords{};
         // Undo stack label; empty: "Move <n> mesh vertices".
-        std::string                               description;
+        std::string                               description{};
     };
 
     explicit Move_mesh_vertices_operation(Parameters&& parameters);

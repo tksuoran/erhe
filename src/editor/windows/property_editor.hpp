@@ -62,10 +62,10 @@ protected:
     public:
         bool                    push_group{false};
         bool                    pop_group{false};
-        std::string             label;
-        std::string             tooltip;
-        std::function<std::string()> tooltip_extra;
-        std::function<void()>   editor;
+        std::string             label{};
+        std::string             tooltip{};
+        std::function<std::string()> tooltip_extra{};
+        std::function<void()>   editor{};
         ImGuiTreeNodeFlags      flags{ImGuiTreeNodeFlags_None};
         float                   indent{0.0f};
         std::optional<uint32_t> label_text_color{};

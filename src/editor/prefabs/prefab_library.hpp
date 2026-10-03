@@ -77,9 +77,9 @@ public:
 class Prefab_key
 {
 public:
-    std::filesystem::path                            source_path; // canonical
-    std::string                                      prim_path;
-    std::vector<erhe::Composition_variant_selection> variant_selections;
+    std::filesystem::path                            source_path{}; // canonical
+    std::string                                      prim_path{};
+    std::vector<erhe::Composition_variant_selection> variant_selections{};
 
     [[nodiscard]] auto operator< (const Prefab_key& rhs) const -> bool
     {

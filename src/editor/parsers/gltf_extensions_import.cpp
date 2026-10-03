@@ -661,10 +661,10 @@ void import_node_graphs(
 class Library_folder_record
 {
 public:
-    std::string                                      path;       // category-rooted, "Materials/Metals"
-    std::vector<std::pair<std::string, std::string>> properties; // local values, name -> text
-    std::vector<std::string>                         items;      // names of the entries directly in the folder
-    std::string                                      style;      // the style item the folder uses, by name (empty: none)
+    std::string                                      path{};       // category-rooted, "Materials/Metals"
+    std::vector<std::pair<std::string, std::string>> properties{}; // local values, name -> text
+    std::vector<std::string>                         items{};      // names of the entries directly in the folder
+    std::string                                      style{};      // the style item the folder uses, by name (empty: none)
 };
 
 // The style item of that name in the library's Styles folder, or null.

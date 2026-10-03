@@ -26,27 +26,56 @@ void Property_editor::resume()
 
 void Property_editor::push_group(std::string&& label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
 {
-    m_entries.push_back(Entry{true, false, std::move(label), {}, {}, {}, flags, indent, {}, {}, open_state});
+    m_entries.push_back(
+        Entry{
+            .push_group = true,
+            .label      = std::move(label),
+            .flags      = flags,
+            .indent     = indent,
+            .open_state = open_state
+        }
+    );
 }
 
 void Property_editor::push_group(std::string&& label, const float indent, Property_group_states& states)
 {
-    m_entries.push_back(Entry{true, false, std::move(label), {}, {}, {}, ImGuiTreeNodeFlags_None, indent, {}, {}, nullptr, &states});
+    m_entries.push_back(
+        Entry{
+            .push_group   = true,
+            .label        = std::move(label),
+            .indent       = indent,
+            .group_states = &states
+        }
+    );
 }
 
 void Property_editor::pop_group()
 {
-    m_entries.push_back(Entry{false, true, {}, {}, {}});
+    m_entries.push_back(Entry{.pop_group = true});
 }
 
 void Property_editor::add_entry(std::string&& label, std::function<void()> editor, std::string&& tooltip, std::optional<uint32_t> label_text_color)
 {
-    m_entries.push_back(Entry{false, false, std::move(label), std::move(tooltip), {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color});
+    m_entries.push_back(
+        Entry{
+            .label            = std::move(label),
+            .tooltip          = std::move(tooltip),
+            .editor           = std::move(editor),
+            .label_text_color = label_text_color
+        }
+    );
 }
 
 void Property_editor::add_entry(std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
 {
-    m_entries.push_back(Entry{false, false, std::move(label), {}, {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
+    m_entries.push_back(
+        Entry{
+            .label                  = std::move(label),
+            .editor                 = std::move(editor),
+            .label_text_color       = label_text_color,
+            .label_background_color = label_background_color
+        }
+    );
 }
 
 void Property_editor::enable_filter()

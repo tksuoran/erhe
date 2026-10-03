@@ -62,9 +62,9 @@ public:
 class Property_group_rows
 {
 public:
-    std::string_view                                                                               group;
-    std::function<bool(const std::vector<std::shared_ptr<erhe::Item_base>>&)>                     applies;  // lists the group without property rows; unset = property rows only
-    std::function<void(Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>&)>   add_rows;
+    std::string_view                                                                               group{};
+    std::function<bool(const std::vector<std::shared_ptr<erhe::Item_base>>&)>                     applies{};  // lists the group without property rows; unset = property rows only
+    std::function<void(Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>&)>   add_rows{};
 };
 
 class Dependency_property_rows

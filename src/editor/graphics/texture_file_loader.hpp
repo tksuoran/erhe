@@ -47,9 +47,9 @@ public:
     class Preview
     {
     public:
-        std::shared_ptr<erhe::graphics::Texture> texture; // null while pending or on failure
+        std::shared_ptr<erhe::graphics::Texture> texture{}; // null while pending or on failure
         bool                                     pending{false};
-        std::string                              error;   // non-empty when the load failed
+        std::string                              error{};   // non-empty when the load failed
     };
 
     // Cached preview for one file. The first call starts the load and returns

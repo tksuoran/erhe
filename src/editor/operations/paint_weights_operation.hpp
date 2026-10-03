@@ -38,14 +38,14 @@ public:
     class Parameters
     {
     public:
-        std::shared_ptr<erhe::scene::Mesh>        mesh;
+        std::shared_ptr<erhe::scene::Mesh>        mesh{};
         std::size_t                               primitive_index{0};
-        std::shared_ptr<erhe::geometry::Geometry> geometry;
-        std::vector<GEO::index_t>                 vertices;             // touched geometry vertices
-        std::vector<glm::uvec4>                   before_joint_indices; // parallel to vertices
-        std::vector<glm::vec4>                    before_joint_weights; // parallel to vertices
-        std::vector<glm::uvec4>                   after_joint_indices;  // parallel to vertices
-        std::vector<glm::vec4>                    after_joint_weights;  // parallel to vertices
+        std::shared_ptr<erhe::geometry::Geometry> geometry{};
+        std::vector<GEO::index_t>                 vertices{};             // touched geometry vertices
+        std::vector<glm::uvec4>                   before_joint_indices{}; // parallel to vertices
+        std::vector<glm::vec4>                    before_joint_weights{}; // parallel to vertices
+        std::vector<glm::uvec4>                   after_joint_indices{};  // parallel to vertices
+        std::vector<glm::vec4>                    after_joint_weights{};  // parallel to vertices
         erhe::primitive::Build_info               build_info;
         erhe::primitive::Normal_style             normal_style{erhe::primitive::Normal_style::corner_normals};
     };
