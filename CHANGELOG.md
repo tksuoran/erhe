@@ -246,6 +246,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: draw-list color passes cull entries against the
+  view frustum: `Draw_color_parameters::view_frustum_planes` (set by
+  `Draw_list_renderer` for single-view passes), `Draw_statistics::culled_count`,
+  and `Draw_list_entry::world_aabb` kept current by the transform hook. The
+  draw-list overloads of `Primitive_buffer::update()` and
+  `Draw_indirect_buffer::update()` take a per-entry pass mask
+  (`std::span<const std::uint8_t>`) instead of the `Item_filter`.
 - `erhe::graphics`: `Scoped_debug_group` / `Scoped_queue_debug_group` take
   the label as `std::string_view` (or `const Debug_label&`) and keep no copy;
   the backends copy it onto the stack (`erhe_graphics/debug_label_buffer.hpp`).

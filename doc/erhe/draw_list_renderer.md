@@ -71,9 +71,8 @@ previous frame:
 - ID render / picking passes.
 - Entry-granular mirroring of mesh / primitive / material edits. Edits are
   handled, but coarsely, by re-registering the object or rebuilding (R12).
-- Culling (Q6): every registered entry that passes the flag filter is drawn,
-  exactly as `Forward_renderer` does. `Draw_list_entry` carries the world-space
-  AABB (R15) so culling slots in without a data-model change.
+- Shadow-pass culling: shadow lists draw every entry that passes the flag
+  filter (Q6 culls color passes only).
 - GPU-driven culling or draw generation (the design must not preclude it).
 
 ### Fallback
@@ -583,8 +582,20 @@ Drawing:
   change on a static-registered object asserts (R10a). `Scene_root::
   register_mesh` has no mobility source, so everything non-skinned registers as
   dynamic; the flag exists in the API for a future static source.
-- Q6: No culling; frustum culling on the entry AABB is the first future-work
-  item (section 3, "Not covered").
+- Q6: Frustum culling of color passes on the entry AABB. The transform hook
+  keeps `Draw_list_entry::world_aabb` current: `flush_pending()` rewrites a
+  moved object's records and sets its entries' AABB to `Mesh::get_aabb_world()`
+  in the same step. `Draw_list_renderer::render()` builds the view frustum
+  planes from the single view's `clip_from_world` (as `Camera_buffer` does)
+  and passes them as `Draw_color_parameters::view_frustum_planes`;
+  `draw_list_chunks()` makes one pass decision per entry - the flag filter,
+  then `erhe::math::aabb_in_convex_volume()` (planes only, conservative, so an
+  infinite reverse-Z far plane cannot reject) - and the primitive record and
+  draw command writers both consume that mask, so `ERHE_DRAW_ID` stays paired.
+  Skinned entries (bounds follow the joints, not the transform hook), entries
+  with an invalid AABB and multiview passes are never culled. Culled entries
+  are counted in `Draw_statistics::culled_count` (MCP `get_composition_passes`
+  `last_draw_list_culled_count`).
 - Q7: An invalidation hook rebuilds the draw lists. R1a keeps registration
   records complete enough to recreate all draw lists from scratch.
   `Mesh_memory` never moves allocations at runtime, so the hook's clients are
@@ -642,7 +653,8 @@ a hit and G3 hold.
 
 - `Draw_list_entry` (R15 / R16): fixed-size value type holding the owning
   object index, the mesh primitive index, the mirrored `Item_flags` word, the
-  index range (index count, first index, base vertex) and the world-space AABB.
+  index range (index count, first index, base vertex) and the world-space AABB
+  (culling, Q6).
 - `Draw_list` (R13 / R14): its key, a contiguous vector of entries, the
   contiguous `primitive_records` block that parallels it
   (`doc/erhe/draw_list_performance_improvements.md`), and the resolved-stages cache
@@ -771,6 +783,6 @@ for `Shader_variant_cache miss` in the first frames with the setting on.
 
 ## Future work
 
-- [plans/draw_list_renderer.md](../plans/draw_list_renderer.md): culling, static
+- [plans/draw_list_renderer.md](../plans/draw_list_renderer.md): entry AABBs for the shadow fit, static
   lists, determinant-flip re-listing, translucent sorting and the remaining
   material-set follow-ups.

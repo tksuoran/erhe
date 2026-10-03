@@ -268,7 +268,7 @@ auto Primitive_buffer::update(
     const std::size_t                   begin,
     const std::size_t                   end,
     const Draw_list_scene&              draw_list_scene,
-    const erhe::Item_filter&            filter,
+    const std::span<const std::uint8_t> entry_passes,
     const Primitive_interface_settings& settings,
     std::size_t&                        out_primitive_count
 ) -> erhe::graphics::Ring_buffer_range
@@ -277,6 +277,7 @@ auto Primitive_buffer::update(
 
     ERHE_VERIFY(begin <= end);
     ERHE_VERIFY(end <= draw_list.entries.size());
+    ERHE_VERIFY(entry_passes.size() == draw_list.entries.size());
     const std::size_t max_primitive_count = end - begin;
     const std::size_t entry_size          = m_primitive_interface.primitive_struct.get_size_bytes();
     const std::size_t max_byte_count      = max_primitive_count * entry_size;
@@ -305,7 +306,7 @@ auto Primitive_buffer::update(
         const float size      = settings.constant_size;
         for (std::size_t i = begin; i < end; ++i) {
             const Draw_list_entry& entry = draw_list.entries[i];
-            if (!filter(entry.flag_bits)) {
+            if (entry_passes[i] == 0) {
                 continue;
             }
             std::memcpy(dst + write_offset, records + i * entry_size, entry_size);
@@ -328,7 +329,7 @@ auto Primitive_buffer::update(
         const erhe::primitive::Primitive_mode primitive_mode = draw_list.key.primitive_mode;
         for (std::size_t i = begin; i < end; ++i) {
             const Draw_list_entry& entry = draw_list.entries[i];
-            if (!filter(entry.flag_bits)) {
+            if (entry_passes[i] == 0) {
                 continue;
             }
             erhe::scene::Mesh* mesh = draw_list_scene.get_object_mesh(entry.object_index);

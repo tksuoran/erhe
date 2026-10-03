@@ -149,7 +149,8 @@ void Composition_pass::render(const Render_context& context)
 
     m_last_scene_view_name       = context.scene_view.get_settings_key();
     m_last_mesh_count            = 0;
-    m_last_draw_list_entry_count = 0;
+    m_last_draw_list_entry_count  = 0;
+    m_last_draw_list_culled_count = 0;
 
     if (!data.enabled) {
         m_last_result = Composition_pass_result::disabled;
@@ -373,7 +374,8 @@ void Composition_pass::render(const Render_context& context)
                         .color_blend_override  = nullptr,
                     }
                 );
-                m_last_draw_list_entry_count = statistics.entry_count;
+                m_last_draw_list_entry_count  = statistics.entry_count;
+                m_last_draw_list_culled_count = statistics.culled_count;
                 m_last_result = Composition_pass_result::submitted_draw_lists;
                 return;
             }

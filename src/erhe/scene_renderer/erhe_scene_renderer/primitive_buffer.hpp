@@ -182,9 +182,9 @@ public:
 
     // Draw-list overload (doc/erhe/draw_list_renderer.md R8/R8a; the
     // material slot it resolves comes from the draw list's own Material_set):
-    // writes one primitive record per entry in [begin, end) of draw_list that
-    // passes filter (evaluated on the entry's mirrored flag bits), in entry
-    // order. Draw_indirect_buffer::update(Draw_list, ...) with the same
+    // writes one primitive record per entry in [begin, end) of draw_list whose
+    // entry_passes value (indexed like draw_list.entries) is non-zero, in
+    // entry order. Draw_indirect_buffer::update(Draw_list, ...) with the same
     // arguments emits exactly the matching draw commands. Records are copied
     // from draw_list.primitive_records (doc/erhe/draw_list_performance_improvements.md)
     // with only the pass-dependent color / size patched; settings that need
@@ -195,7 +195,7 @@ public:
         std::size_t                         begin,
         std::size_t                         end,
         const Draw_list_scene&              draw_list_scene,
-        const erhe::Item_filter&            filter,
+        std::span<const std::uint8_t>       entry_passes,
         const Primitive_interface_settings& settings,
         std::size_t&                        out_primitive_count
     ) -> erhe::graphics::Ring_buffer_range;

@@ -178,16 +178,17 @@ auto Draw_indirect_buffer::update(
 }
 
 auto Draw_indirect_buffer::update(
-    const Draw_list&         draw_list,
-    const std::size_t        begin,
-    const std::size_t        end,
-    const erhe::Item_filter& filter
+    const Draw_list&                    draw_list,
+    const std::size_t                   begin,
+    const std::size_t                   end,
+    const std::span<const std::uint8_t> entry_passes
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(begin <= end);
     ERHE_VERIFY(end <= draw_list.entries.size());
+    ERHE_VERIFY(entry_passes.size() == draw_list.entries.size());
     const std::size_t                 max_draw_count = end - begin;
     const std::size_t                 entry_size     = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
     const std::size_t                 max_byte_count = max_draw_count * entry_size;
@@ -200,7 +201,7 @@ auto Draw_indirect_buffer::update(
 
     for (std::size_t i = begin; i < end; ++i) {
         const Draw_list_entry& entry = draw_list.entries[i];
-        if (!filter(entry.flag_bits)) {
+        if (entry_passes[i] == 0) {
             continue;
         }
         uint32_t index_count = entry.index_count;

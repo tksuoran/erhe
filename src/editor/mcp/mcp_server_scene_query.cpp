@@ -145,6 +145,7 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             {"last_scene_view",      pass->get_last_scene_view_name()},
             {"last_mesh_count",      pass->get_last_mesh_count()},
             {"last_draw_list_entry_count", pass->get_last_draw_list_entry_count()},
+            {"last_draw_list_culled_count", pass->get_last_draw_list_culled_count()},
             {"last_cpu_time_us",     pass->get_last_cpu_time_us()},
             {"total_cpu_time_us",    pass->get_total_cpu_time_us()},
             {"render_call_count",    pass->get_render_call_count()}

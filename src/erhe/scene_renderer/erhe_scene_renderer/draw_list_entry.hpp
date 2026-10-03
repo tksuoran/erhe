@@ -38,8 +38,9 @@ public:
     uint32_t         index_count         {0};
     uint32_t         first_index         {0};
     uint32_t         base_vertex         {0};
-    // World-space bounds at registration (Q6: culling is future work; stale
-    // for dynamic objects, unused by the initial draw path).
+    // World-space bounds of the owning mesh, set at registration and by the
+    // transform hook; color passes cull on it (Q6). Not maintained for
+    // skinned objects, which are never culled.
     erhe::math::Aabb world_aabb          {};
 };
 

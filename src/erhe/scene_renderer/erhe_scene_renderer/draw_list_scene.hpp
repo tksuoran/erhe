@@ -8,6 +8,9 @@
 
 #include "erhe_item/item.hpp"
 
+#include <glm/glm.hpp>
+
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -80,6 +83,12 @@ public:
     // nullptr: pick color_blend_disabled / color_blend_premultiplied by the
     // list's blending class, as Forward_renderer::render() does.
     const erhe::graphics::Color_blend_state* color_blend_override{nullptr};
+    // Inward-facing world-space planes of the view frustum
+    // (erhe::math::extract_frustum_planes()); entries whose world AABB lies
+    // fully outside one plane are not drawn. Skinned entries are never
+    // culled (their bounds follow the joints, not the transform hook).
+    // nullptr: no culling (multiview passes).
+    const std::array<glm::vec4, 6>*         view_frustum_planes {nullptr};
     std::string_view                        debug_label         {};
 };
 
@@ -341,6 +350,7 @@ private:
         Draw_indirect_buffer&                    draw_indirect_buffer,
         const Primitive_interface_settings&      primitive_settings,
         const erhe::Item_filter&                 filter,
+        const std::array<glm::vec4, 6>*          view_frustum_planes,
         Draw_statistics&                         statistics
     );
 
@@ -371,6 +381,9 @@ private:
     std::vector<Pending_op>                                          m_flushing;
     // Debug label of one draw list, cleared at use (capacity kept).
     std::string                                                      m_list_label;
+    // Per-entry pass mask of the draw list being drawn (filter and frustum),
+    // resized at use (capacity kept).
+    std::vector<std::uint8_t>                                        m_entry_passes;
     std::size_t                                                      m_determinant_flip_count{0};
     std::size_t                                                      m_transform_update_count{0};
     std::size_t                                                      m_refresh_count{0};

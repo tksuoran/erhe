@@ -8,18 +8,15 @@ Extends `doc/erhe/draw_list_renderer.md`, and with it
 material state and its cached primitive records as they are. This document
 holds what those three leave open, in rough priority order.
 
-## 1. Frustum culling on the entry AABB
+## 1. Entry AABBs for the shadow fit and shadow culling
 
-Q6 in `doc/erhe/draw_list_renderer.md` deferred culling; `Draw_list_entry` already
-carries a world-space AABB (R15) so no data-model change is needed. The
-blocker is that the AABB is written at registration and goes stale for dynamic
-objects. Either recompute it per draw from the node, or maintain it from the
-transform hook - which must respect the threading contract (section 9.3): the
-hook enqueues, `flush_pending()` applies.
-
-The shadow frustum fit is the second consumer: `Shadow_renderer` still walks
-every content mesh per shadow render to gather AABBs, and could read the
-entries' once this update path exists.
+Color passes cull on the entry AABB, which the transform hook keeps current
+(Q6 in `doc/erhe/draw_list_renderer.md`). The shadow side does not use it yet:
+`Shadow_renderer` still walks every content mesh per shadow render to gather
+the caster / receiver AABBs of the frustum fit, and could read the entries'
+instead; the shadow lists could cull casters against each light's frustum the
+same way (point lights: per cube face). Skinned entries need posed bounds
+before either can include them.
 
 ## 2. Re-list on a negative-determinant flip
 

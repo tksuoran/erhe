@@ -21,6 +21,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <iterator>
@@ -567,8 +568,12 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     ERHE_VERIFY(mesh != nullptr);
     const erhe::scene::Node* node = mesh;
     const Primitive_struct& offsets = m_primitive_interface.offsets;
+    // The world bounds move with the node: keep the entries' culling AABB
+    // current from the same hook (skinned entries are not culled).
+    const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
     for (const Draw_list_entry_location& location : object.locations) {
         write_transform_fields(get_record(location), offsets, *node);
+        m_draw_lists[location.draw_list_index].entries[location.entry_index].world_aabb = world_aabb;
     }
     object.transform_serial = node->node_data.transforms.world_from_node_serial;
 }
@@ -1423,6 +1428,7 @@ void Draw_list_scene::draw_list_chunks(
     Draw_indirect_buffer&                    draw_indirect_buffer,
     const Primitive_interface_settings&      primitive_settings,
     const erhe::Item_filter&                 filter,
+    const std::array<glm::vec4, 6>*          view_frustum_planes,
     Draw_statistics&                         statistics
 )
 {
@@ -1431,6 +1437,24 @@ void Draw_list_scene::draw_list_chunks(
     const std::size_t max_per_chunk = std::max<std::size_t>(std::size_t{1}, primitive_buffer.get_max_primitive_count());
     const std::size_t entry_count   = draw_list.entries.size();
     bool list_drew = false;
+
+    // One pass decision per entry, shared by the record and the command
+    // writer so ERHE_DRAW_ID indexes stay paired: the filter on the mirrored
+    // flag bits, then the view frustum on the entry's world AABB.
+    m_entry_passes.resize(entry_count);
+    for (std::size_t i = 0; i < entry_count; ++i) {
+        const Draw_list_entry& entry = draw_list.entries[i];
+        bool passes = filter(entry.flag_bits);
+        if (passes && (view_frustum_planes != nullptr) && entry.world_aabb.is_valid()) {
+            const Draw_list_object& object = m_objects[entry.object_index];
+            if ((object.mobility != Draw_mobility::skinned) && !erhe::math::aabb_in_convex_volume(std::span<const glm::vec4>{*view_frustum_planes}, entry.world_aabb)) {
+                passes = false;
+                ++statistics.culled_count;
+            }
+        }
+        m_entry_passes[i] = passes ? 1 : 0;
+    }
+    const std::span<const std::uint8_t> entry_passes{m_entry_passes};
 
     erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
     const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer);
@@ -1443,7 +1467,7 @@ void Draw_list_scene::draw_list_chunks(
         // space (e.g. the "selected" passes when nothing is selected).
         bool any_passing = false;
         for (std::size_t i = begin; i < end; ++i) {
-            if (filter(draw_list.entries[i].flag_bits)) {
+            if (entry_passes[i] != 0) {
                 any_passing = true;
                 break;
             }
@@ -1453,12 +1477,12 @@ void Draw_list_scene::draw_list_chunks(
         }
 
         std::size_t primitive_count = 0;
-        erhe::graphics::Ring_buffer_range primitive_range = primitive_buffer.update(draw_list, begin, end, *this, filter, primitive_settings, primitive_count);
+        erhe::graphics::Ring_buffer_range primitive_range = primitive_buffer.update(draw_list, begin, end, *this, entry_passes, primitive_settings, primitive_count);
         if (primitive_count == 0) {
             primitive_range.release();
             continue;
         }
-        Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, filter);
+        Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, entry_passes);
         ERHE_VERIFY(draw_indirect_range.draw_indirect_count == primitive_count);
 
         if (!buffers_bound) {
@@ -1587,6 +1611,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 parameters.draw_indirect_buffer,
                 parameters.primitive_settings,
                 parameters.filter,
+                parameters.view_frustum_planes,
                 statistics
             );
         }
@@ -1641,6 +1666,7 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             parameters.draw_indirect_buffer,
             Primitive_interface_settings{},
             parameters.filter,
+            nullptr,
             statistics
         );
     }

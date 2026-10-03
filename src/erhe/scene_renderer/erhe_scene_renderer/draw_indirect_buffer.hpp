@@ -47,15 +47,16 @@ public:
     ) -> Draw_indirect_buffer_range;
 
     // Draw-list overload: one draw command per entry in [begin, end) of
-    // draw_list that passes filter, in entry order - the exact counterpart of
+    // draw_list whose entry_passes value (indexed like draw_list.entries) is
+    // non-zero, in entry order - the exact counterpart of
     // Primitive_buffer::update(Draw_list, ...) so ERHE_DRAW_ID indexes line
     // up. Uses the index_count / first_index / base_vertex baked into the
     // entries at registration; touches no Mesh.
     auto update(
-        const Draw_list&         draw_list,
-        std::size_t              begin,
-        std::size_t              end,
-        const erhe::Item_filter& filter
+        const Draw_list&               draw_list,
+        std::size_t                    begin,
+        std::size_t                    end,
+        std::span<const std::uint8_t>  entry_passes
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();

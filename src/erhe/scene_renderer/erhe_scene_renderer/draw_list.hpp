@@ -38,8 +38,9 @@ class Draw_statistics
 {
 public:
     std::size_t draw_list_count{0}; // lists that produced at least one draw
-    std::size_t entry_count    {0}; // entries drawn (after flag filtering)
+    std::size_t entry_count    {0}; // entries drawn (after flag filtering and culling)
     std::size_t draw_call_count{0}; // multi-draw submissions (chunks)
+    std::size_t culled_count   {0}; // entries passing the filter but outside the view frustum
 };
 
 // Resolved shader stages for one color view configuration (R19).

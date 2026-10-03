@@ -8,6 +8,9 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/projection.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -76,6 +79,20 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
     // Same convention as the bucket path: 0 for single view, N for multiview.
     const uint16_t multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
 
+    // Frustum culling of the entries (doc/erhe/draw_list_renderer.md
+    // "Frustum culling"): the planes of the single view's clip_from_world,
+    // built the way Camera_buffer builds the matrix. Multiview passes draw
+    // unculled.
+    std::array<glm::vec4, 6>        view_frustum_planes{};
+    const std::array<glm::vec4, 6>* view_frustum_planes_pointer{nullptr};
+    if ((base.views.size() == 1) && (base.views.front().projection != nullptr) && (base.views.front().node != nullptr)) {
+        const Camera_view_input& view            = base.views.front();
+        const glm::mat4          clip_from_world = view.projection->clip_from_node_transform(view.viewport, base.reverse_depth, base.depth_range, base.conventions).get_matrix() * view.node->node_from_world();
+        const float              clip_z_min      = (base.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
+        view_frustum_planes         = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
+        view_frustum_planes_pointer = &view_frustum_planes;
+    }
+
     Draw_statistics statistics{};
     for (erhe::graphics::Base_render_pipeline* base_render_pipeline : parameters.base_render_pipelines) {
         erhe::graphics::Scoped_debug_group pipeline_scope{
@@ -96,12 +113,14 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
                 .multiview_count      = multiview_count,
                 .environment          = environment,
                 .color_blend_override = parameters.color_blend_override,
+                .view_frustum_planes  = view_frustum_planes_pointer,
                 .debug_label          = base.debug_label
             }
         );
         statistics.draw_list_count += pass_statistics.draw_list_count;
         statistics.entry_count     += pass_statistics.entry_count;
         statistics.draw_call_count += pass_statistics.draw_call_count;
+        statistics.culled_count    += pass_statistics.culled_count;
     }
 
     m_pass_resources.end_pass(pass_state, render_encoder);
