@@ -344,13 +344,21 @@ endif()
 
 CPMAddPackage(
     NAME              geogram
-    # No local patches: both former fork fixes (thread-local ProgressTask,
-    # create_sub_elements quadratic growth #371) are upstreamed, and the
-    # stb_image symbol clash that forced the fork's image_serializer_stb
-    # removal no longer exists - geogram is the only stb_image implementation
-    # left in the dependency set (erhe image I/O moved to wuffs/fpng). The
-    # tksuoran fork exists only to carry a stable tag: erhe-2026-09-21 points
-    # at upstream main cdb63eff (2026-09-20).
+    # The tksuoran fork carries a stable tag plus erhe's local patches.
+    # erhe-2026-10-03c is upstream main b8318618 (2026-10-03, tagged
+    # erhe-2026-10-03-upstream in the fork) plus the fork's warnings/all
+    # branch rebased onto it: clang 18
+    # -Weverything fixes (statement-safe geo_assert macros, unused and broken
+    # PoissonRecon Allocator::rollBack() removed as upstream PoissonRecon did,
+    # TBBThreadManager overrides, explicit
+    # __float128 conversions, stb include-site pragmas, and
+    # -Wno-unsafe-buffer-usage / -Wno-switch-default). Each fix also has
+    # its own warnings/<class> branch in the fork, for upstreaming. The
+    # former fork fixes (thread-local ProgressTask, create_sub_elements
+    # quadratic growth #371) are upstreamed, and the stb_image symbol clash
+    # that forced the fork's image_serializer_stb removal no longer exists -
+    # geogram is the only stb_image implementation left in the dependency
+    # set (erhe image I/O moved to wuffs/fpng).
     #
     # Pin a TAG, not a raw commit SHA. GIT_SHALLOW clones with
     # "--depth 1 --no-single-branch", which fetches branch tips and tag refs
@@ -358,7 +366,7 @@ CPMAddPackage(
     # It stopped being the tip on 2026-08-16 and every cold-cache CI job failed
     # with "fatal: unable to read tree". Upstream cannot be tagged by us, hence
     # the fork.
-    GIT_TAG           erhe-2026-09-21
+    GIT_TAG           erhe-2026-10-03c
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY tksuoran/geogram
     # An upstream release tag would work here too (VERSION 1.9.8 +

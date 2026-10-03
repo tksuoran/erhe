@@ -99,7 +99,7 @@ code plus `GEO::MeshFacets::connect` / `delete_elements` / `create_polygon`
 `GEO::Geom::mesh_facet_normal` and attribute access (`attributes.cpp`:
 per-store spinlocks only), so `process()` of different meshes runs in parallel
 on worker threads; its atlas step is the `generate_mesh_atlas_texture_coordinates()`
-choke point above. The audit holds at the geogram pin `erhe-2026-09-21`; repeat
+choke point above. The audit holds at the geogram pin `erhe-2026-10-03c`; repeat
 it when a `process()` step is added or the pin moves. Geogram's `parallel_for`
 users at that pin: `delaunay`, `periodic_delaunay_3d`, `boxes_intersections`,
 `mesh_AABB`, `mesh_baking`, `mesh_reorder`, `mesh_repair`,
