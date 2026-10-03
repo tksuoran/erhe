@@ -732,10 +732,13 @@ private:
     const Queued_request*                            m_imgui_recording_request{nullptr};
 
     // imgui_scroll_to_item: the request stepping through its three recorded
-    // frames, the phase it is in, the item's id and its rectangle before.
+    // frames (identified by pointer and enqueue time, as a later request may
+    // reuse the address), the phase it is in, the item's id and its entry
+    // before the scroll.
     const Queued_request*                            m_imgui_scroll_to_item_request{nullptr};
     Imgui_scroll_to_item_phase                       m_imgui_scroll_to_item_phase  {Imgui_scroll_to_item_phase::find};
     uint32_t                                         m_imgui_scroll_to_item_id     {0}; // ImGuiID
+    std::chrono::steady_clock::time_point            m_imgui_scroll_to_item_enqueued_at{};
     nlohmann::json                                   m_imgui_scroll_to_item_before;
 
     // What a gesture tool resolved before it recorded its events (the item

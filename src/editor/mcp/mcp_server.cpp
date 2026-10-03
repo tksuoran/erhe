@@ -28,6 +28,9 @@
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/image_writer.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_imgui/imgui_host.hpp"
+#include "erhe_imgui/imgui_item_recorder.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/scene.hpp"
@@ -504,6 +507,25 @@ auto Mcp_server::process_queued_requests() -> int
                 // it is in flight reads it (its counters say when it was
                 // taken).
                 m_rc_texels_request = nullptr;
+            }
+            if (m_imgui_recording_request == req.get()) {
+                // The recorded frame it asked for is not read; the next
+                // request asks for its own.
+                m_imgui_recording_request = nullptr;
+            }
+            if (m_imgui_scroll_to_item_request == req.get()) {
+                // Withdraw a scroll the recorders have not run yet, so the
+                // next recorded frame some other tool asks for does not
+                // scroll that window as a side effect.
+                m_imgui_scroll_to_item_request = nullptr;
+                m_imgui_scroll_to_item_phase   = Imgui_scroll_to_item_phase::find;
+                m_imgui_scroll_to_item_before  = nlohmann::json{};
+                if (m_context.imgui_renderer != nullptr) {
+                    for (erhe::imgui::Imgui_host* const host : m_context.imgui_renderer->get_imgui_hosts()) {
+                        static_cast<void>(host->get_item_recorder().take_scroll_to_item_result());
+                    }
+                }
+                log_mcp->warn("MCP server: imgui_scroll_to_item expired; its pending scroll is withdrawn");
             }
             if (m_scene_image_capture && (m_scene_image_request == req.get())) {
                 m_scene_image_request = nullptr;

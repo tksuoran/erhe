@@ -2113,9 +2113,13 @@ auto Mcp_server::action_imgui_scroll_to_item(const nlohmann::json& args) -> std:
     if ((align != "nearest") && (align != "center")) {
         return fail("align is 'nearest' or 'center'");
     }
-    if (m_imgui_scroll_to_item_request != m_current_request) {
-        m_imgui_scroll_to_item_request = m_current_request;
-        m_imgui_scroll_to_item_phase   = Imgui_scroll_to_item_phase::find;
+    const bool continuing =
+        (m_imgui_scroll_to_item_request == m_current_request) &&
+        (m_imgui_scroll_to_item_enqueued_at == m_current_request->enqueued_at);
+    if (!continuing) {
+        m_imgui_scroll_to_item_request     = m_current_request;
+        m_imgui_scroll_to_item_enqueued_at = m_current_request->enqueued_at;
+        m_imgui_scroll_to_item_phase       = Imgui_scroll_to_item_phase::find;
     }
 
     if (request_recorded_imgui_frame(*host, error)) {
@@ -2134,6 +2138,21 @@ auto Mcp_server::action_imgui_scroll_to_item(const nlohmann::json& args) -> std:
             Imgui_item_match match;
             if (!resolve_imgui_item(context, recorder, any_selector, match, error)) {
                 return fail(error);
+            }
+            // The scroll and the report find the item by its ImGui id. Items
+            // submitted under one label without a PushID share that id, and
+            // ImGui scrolls to the first of them, so a later one cannot be
+            // told apart.
+            for (const erhe::imgui::Item_record& record : recorder.get_records()) {
+                if (&record == match.record) {
+                    break;
+                }
+                if ((record.id == match.record->id) && (record.window_id == match.record->window_id)) {
+                    return fail(
+                        "Item '" + std::string{match.label} + "' shares its ImGui id with an earlier item of the same label, "
+                        "so it cannot be scrolled to on its own (only the first of them can)"
+                    );
+                }
             }
             m_imgui_scroll_to_item_before = item_match_to_json(context, match, any_selector, imgui_host_name(*host));
             m_imgui_scroll_to_item_id     = match.record->id;

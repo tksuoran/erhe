@@ -9656,7 +9656,7 @@
     "name": "imgui_scroll"
   },
   {
-    "description": "Scroll an ImGui item into view, also when it is currently clipped (scrolled out of its window). The item is found in a recorded frame that includes clipped items; in the next frame Dear ImGui's own ScrollToItem() runs right after the item is submitted, scrolling its window and each window that one is a child region of; the frame after that reports where the item now is. The result is the item's rectangle, center and status after the scroll, 'scrolled' (false when it was already in view and align is 'nearest') and 'before' (its entry before the scroll). Works on any ImGui host; nothing but the scroll changes. An item of a collapsed section or a closed window is not submitted at all, so it cannot be found.",
+    "description": "Scroll an ImGui item into view, also when it is currently clipped (scrolled out of its window). The item is found in a recorded frame that includes clipped items; in the next frame Dear ImGui's own ScrollToItem() runs right after the item is submitted, scrolling its window and each window that one is a child region of; the frame after that reports where the item now is. The result is the item's rectangle, center and status after the scroll, 'scrolled' (false when it was already in view and align is 'nearest') and 'before' (its entry before the scroll). Works on any ImGui host; nothing but the scroll changes. An item of a collapsed section, a closed window, or a child region scrolled wholly out of its parent is not submitted at all, so it cannot be found (scroll the parent to the child region first). Items sharing a label without a PushID share one ImGui id; only the first of them can be scrolled to.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -9678,7 +9678,7 @@
           "type": "integer"
         },
         "index": {
-          "description": "Which of several items sharing the label to scroll to (default 0), counting clipped items too: the order get_imgui_items reports with visible_only false",
+          "description": "Which of several items sharing the label to scroll to (default 0), counting clipped items too: the order get_imgui_items reports with visible_only false. Refused when that item shares its ImGui id with an earlier one.",
           "type": "integer"
         },
         "align": {

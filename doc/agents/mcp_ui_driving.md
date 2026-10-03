@@ -57,7 +57,10 @@ report rectangles in it, and every `x` / `y` argument takes it.
   recorder"), so `get_imgui_items` with `visible_only` false lists items
   scrolled out of view, with their labels. The actions aim at visible items
   only: scroll a clipped one into view with `imgui_scroll_to_item` first. An
-  item in a collapsed section or a closed window is not submitted at all.
+  item in a collapsed section, a closed window, or a child region scrolled
+  wholly out of its parent is not submitted at all: scroll the parent to the
+  child region first. Items sharing a label without a `PushID` share one
+  ImGui id, and only the first of them can be scrolled to.
 - Only the desktop host is driven by `imgui_click` / `imgui_hover` /
   `imgui_scroll`. A rendertarget host (the hotbar and the other ImGui surfaces
   drawn into the scene) is inspected with the queries and driven through the

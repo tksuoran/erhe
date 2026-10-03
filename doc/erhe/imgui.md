@@ -172,7 +172,9 @@ what Dear ImGui submitted in one frame, which is what the editor's
   rectangle is then submitted like a visible one, so it reports its label and
   its real rectangle, without `ImGuiItemStatusFlags_Visible`. Drawing stays
   clipped by the draw list, and `ImGuiListClipper` still skips the rows it
-  virtualizes. This is what lets an item scrolled out of view be found and
+  virtualizes, and `Begin()` still skips the items of a child region
+  scrolled wholly out of its parent (only a log capture, `LogEnabled`,
+  submits those). This is what lets an item scrolled out of view be found and
   scrolled to (`imgui_scroll_to_item`).
 - **One recorder per `ImGuiContext`**, owned by the `Imgui_host` that owns
   the context; the hooks find it through a registry keyed by context.
