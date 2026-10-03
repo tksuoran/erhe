@@ -32,9 +32,11 @@ namespace {
             }
         },
         erhe::Composition_arc{
-            .source_path = "assets/lid.glb",
-            .name        = "Lid",
-            .kind        = erhe::Composition_arc_kind::payload
+            .source_path        = "assets/lid.glb",
+            .prim_path          = {},
+            .name               = "Lid",
+            .kind               = erhe::Composition_arc_kind::payload,
+            .variant_selections = {}
         }
     };
 }

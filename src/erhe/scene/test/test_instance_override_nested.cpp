@@ -24,7 +24,7 @@ void author_arc(erhe::Typed& prim)
 {
     prim.set_composition_arcs(
         std::vector<erhe::Composition_arc>{
-            erhe::Composition_arc{.source_path = "template.usda", .name = "template"}
+            erhe::Composition_arc{.source_path = "template.usda", .prim_path = {}, .name = "template", .variant_selections = {}}
         }
     );
 }
