@@ -246,6 +246,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Mesh_memory` rejects a temporary config at compile
+  time (deleted rvalue constructor); it keeps a reference to the config.
 - `erhe::scene_renderer`: draw-list color passes cull entries against the
   view frustum: `Draw_color_parameters::view_frustum_planes` (set by
   `Draw_list_renderer` for single-view passes), `Draw_statistics::culled_count`,

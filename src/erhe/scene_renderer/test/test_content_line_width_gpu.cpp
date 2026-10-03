@@ -143,7 +143,7 @@ protected:
         );
         ASSERT_TRUE(m_renderer);
 
-        m_mesh_memory = std::make_unique<Mesh_memory>(Mesh_memory_config{}, graphics_device);
+        m_mesh_memory = std::make_unique<Mesh_memory>(m_mesh_memory_config, graphics_device);
 
         // One vertical edge from (0, -0.5, 0) to (0, 0.5, 0) facing +z (the
         // camera): struct edge_line_vertex { vec4 position; vec4 normal; }.
@@ -286,6 +286,7 @@ protected:
     std::unique_ptr<erhe::graphics::Shader_stages> m_compute_stages;
     std::unique_ptr<erhe::graphics::Shader_stages> m_graphics_stages;
     std::unique_ptr<Content_wide_line_renderer>    m_renderer;
+    Mesh_memory_config                             m_mesh_memory_config{};
     std::unique_ptr<Mesh_memory>                   m_mesh_memory;
     std::shared_ptr<erhe::scene::Mesh>             m_mesh;
     std::shared_ptr<erhe::scene::Camera>           m_camera;

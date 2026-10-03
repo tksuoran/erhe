@@ -128,10 +128,14 @@ class Mesh_memory final
     , public erhe::primitive::Index_buffer_sink
 {
 public:
+    // Mesh_memory keeps a reference to the config and reads it at every
+    // allocation (settings edits apply to later builds), so the config must
+    // outlive it; a temporary is rejected at compile time.
     Mesh_memory(
         const Mesh_memory_config& mesh_memory_config,
         erhe::graphics::Device&   graphics_device
     );
+    Mesh_memory(Mesh_memory_config&& mesh_memory_config, erhe::graphics::Device& graphics_device) = delete;
     ~Mesh_memory() noexcept;
 
     auto get_vertex_input_from_vertex_format(const erhe::dataformat::Vertex_format& vertex_format) -> const Vertex_input_entry&;
