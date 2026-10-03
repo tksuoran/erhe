@@ -3,20 +3,8 @@
 Status: proposed
 
 This plan extends `doc/editor/mesh_component_selection.md` (face, edge and vertex
-selection with its viewport overlay) with the editing and the wider selection
+selection with its viewport overlay and gizmo transform) with the selection
 scope it does not cover.
-
-## Transform selected vertices
-
-Move, rotate and scale the selected vertices, and the implied vertices of
-selected edges and faces. This needs a transform pivot derived from the
-selection, integration with the existing transform tools and `Operation_stack`
-for undo, writing the transformed positions back into the `Geometry`, and
-re-uploading or rebuilding the affected `Primitive` GPU buffers.
-
-The component selection has to survive the edit, so the geometry-identity
-invalidation of `doc/editor/mesh_component_selection.md` section 3 has to relax to an
-index remap for an in-place edit.
 
 ## Skinned meshes
 

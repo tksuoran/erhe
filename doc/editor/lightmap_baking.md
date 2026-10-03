@@ -129,7 +129,7 @@ Per frame, while baking is enabled and `use_ray_query` is true:
 
    | Change | Response |
    |---|---|
-   | Light moved / recolored / toggled, ambient, emissive material edit | reset accumulation (zero the sample counts; keep the G-buffer, atlas and BLAS) |
+   | Light moved / recolored / toggled, ambient, emissive material edit, sun / sky edit | reset accumulation (zero the sample counts; keep the G-buffer, atlas and BLAS) |
    | Region transform changed | re-raster that region's G-buffer, refresh the TLAS, reset accumulation |
    | Geometry edited | rebuild the BLAS, re-unwrap if topology changed, then as above |
    | Lightmapped set or grid parameters changed | redo the atlas layout, full G-buffer, reset |
@@ -214,6 +214,17 @@ position.
 structures: explicit light sampling to every light with a traced shadow ray,
 plus one cosine-sampled hemisphere ray per texel per sample whose radiance is
 `albedo_hit * published_irradiance(hit lightmap UV)`.
+
+**Procedural sky in the gather.** A hemisphere ray that escapes the scene adds
+`pi * sky_radiance(dir)`, marching the Hillaire atmosphere
+(`sky_atmosphere_common.glsl`) against `Sky_renderer`'s transmittance and
+multi-scattering LUTs from the same virtual observer as the viewport sky; the
+sun disc is excluded because the directional light covers it. `Editor` fills
+`Lightmap_baker::Sky_lighting` (`set_sky_lighting`) before each tick: the sky
+contributes when the effective sky is enabled in atmosphere mode and the LUTs
+exist, with the sun direction from `Sky_renderer::resolve_sun_direction`, the
+sun intensity, march steps and observer altitude. These inputs are part of the
+lighting hash, so a sun or sky edit resets accumulation.
 
 **Phase 4 - post-processing.** Dilation (valid to invalid 8-neighborhood, about
 `padding` iterations), JNLM denoise, and the seam blend, in that order.
@@ -554,8 +565,8 @@ change.
 ## Future work
 
 - [plans/lightmap/lightmap_baking.md](../plans/lightmap/lightmap_baking.md) -
-  metals, sky lighting in the bake, GLB persistence, the command-line bake and
-  the open partition defects.
+  metals, the adaptive gather budget, dynamic occluder motion, the blocking
+  G-buffer re-raster, GLB persistence and the command-line bake.
 - [plans/lightmap/tiling.md](../plans/lightmap/tiling.md) - open defects and
   unexercised cases of the world-space partition.
 - [plans/lightmap/seam_driven_unwrap.md](../plans/lightmap/seam_driven_unwrap.md) -

@@ -17,22 +17,30 @@ in the current document. Make the key carry identity - a generation counter
 bumped by `commit_geometry_buffer_mesh()`, or the buffer ranges themselves - and
 drop entries whose generation no longer matches.
 
-## Metal backend
-
-Implement `Acceleration_structure` and the intersector on Metal
-(`MTLPrimitiveAccelerationStructureDescriptor`,
-`MTLInstanceAccelerationStructureDescriptor`, MSL
-`raytracing::intersector`), and use `gpuAddress()` where the Vulkan path uses
-buffer device addresses.
-
 ## Skinned meshes
 
-Skinned meshes have no BLAS, because it would need post-skinning positions.
-Build one over a post-skinning position buffer so they are traceable.
+`Scene_tlas::update()` skips every mesh with a skin, because its BLAS would need
+post-skinning positions. Build one over a post-skinning position buffer so they
+are traceable.
 
 ## TLAS refit
 
-Use UPDATE mode instead of a full rebuild where the instance set is unchanged.
+Every top level build runs in full build mode (Vulkan
+`VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR`, Metal
+`buildAccelerationStructure`). Use update / refit mode
+(`VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR` on a structure built with
+`VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR`, Metal
+`refitAccelerationStructure`) where the instance set is
+unchanged and only transforms moved.
+
+## Steady-state allocations in the Metal TLAS build
+
+`Acceleration_structure_impl::build()` for a Metal top level structure creates a
+local `std::unordered_map` to deduplicate bottom level structures and a new
+`NS::Array` for `setInstancedAccelerationStructures` on every build, which runs
+every frame. Keep the deduplication map as a cleared-and-reused member and
+replace the array only when the referenced set changes, so steady-state frames
+allocate nothing.
 
 ## Volume attenuation and transmission textures
 
@@ -45,9 +53,10 @@ factor is supported) belongs with it.
 
 ## Compose the ray traced image into the viewport
 
-A `Texture_rendergraph_node` in place of the fixed 960x540 developer-window
-target. This needs viewport-sized (resizing) output textures, sRGB and tone
-mapping consistency with post processing, and a policy for mixing raster and ray
+The ray traced output texture is viewport sized (divided by the configured
+downscale) and is shown only in the developer Ray Trace window. Composite it
+into the viewport through a `Texture_rendergraph_node`, with sRGB and tone
+mapping consistent with post processing and a policy for mixing raster and ray
 traced output. Accumulation and denoising belong to the same step.
 
 ## Measure and tune the bvh scene TLAS

@@ -2,11 +2,13 @@
 
 Status: in progress
 
+Implemented; awaiting the by-hand part of the live-editor testing
+(`interactive_test_pass.md`, see Implementation status at the end).
+
 This document specifies three slices of Phase 2 of the rigging roadmap in
 `rigging_tools.md`: the **effector orientation option** (section 1), the
 **chain visualization** (section 2) and the **drag behavior options**
-(section 3: mid-chain drag, solve from, pole alignment). Sections 1 and 2 are
-implemented (see Implementation status at the end); all three act on the
+(section 3: mid-chain drag, solve from, pole alignment). All three act on the
 interactive IK drag of
 `fabrik_ik.md` (Phase 1) as extended by `ik_settings.md` (per-bone locks and
 limits) and `pole_target.md` (the pole).
@@ -220,16 +222,16 @@ that group's width.
   and the degenerate inputs draw nothing spurious (fewer than two joints
   produces no lines at all, a chain of zero reach produces its segment lines
   and no markers).
-- Interactive, in a windowed editor: drag a bone of the `RiggedFigure`
-  fixture with "Bone IK" on and observe the chain, root and pole visuals
-  appear for the duration of the drag and vanish on release.
+- The drawing, in a running editor: drag a bone with "Bone IK" on and
+  observe the chain, root and pole visuals appear for the duration of the
+  drag and vanish on release (`interactive_test_pass.md` section 2, by hand
+  and automated).
 
-Headless verification of the drawing is not available and none is specified.
-The MCP `ik_drag` tool is one complete gesture within one call
-(`pole_target.md` R22): the drag has already been reset by the time any frame
-renders, so `capture_screenshot` can never catch an active drag. R16 exists
-so that the part of this slice that can be checked without a display - the
-line list - is checked by a test rather than by eye.
+The automated check holds a Transform tool drag open over MCP
+(`drag_selection` with `release` false, `doc/editor/transform.md` "Scripted
+drags"), so `capture_screenshot` captures frames of the active drag. The MCP
+`ik_drag` tool is one complete gesture within one call (`pole_target.md`
+R22), so no frame renders while its drag is active.
 
 ## 3. Drag behavior options
 
@@ -428,7 +430,6 @@ combos in the Transform window, as a user does:
   indication): chains are discovered per drag (`fabrik_ik.md` section 1), so
   outside a drag there is no chain to draw. That indication arrives with
   Phase 4's persistent chains.
-- Drawing the joint limits and locks of `ik_settings.md` as cones or arcs.
 
 ## Implementation status
 
@@ -460,6 +461,12 @@ Section 2 is implemented as specified:
   / `ik_root_color` / `ik_pole_color` / `ik_marker_width`
   (`src/editor/config/definitions/debug_visualizations_style.py`, struct
   version 2).
+- Joint limits - the joint limits and locks of `ik_settings.md` are drawn by
+  the joint constraint visualization (`doc/editor/tools.md`,
+  `src/editor/tools/joint_constraint_visualization.{hpp,cpp}`), which during
+  a drag reads each chain joint's constraint as the drag resolved it
+  (`Ik_drag::find_joint_constraint()`), locked axes pinned at the drag-start
+  rotation.
 
 Section 3 is implemented as specified:
 
@@ -477,7 +484,7 @@ Section 3 is implemented as specified:
   R3 / R4 hold under either effector orientation.
 - Transform tool setting - `Transform_tool_settings::ik_drag_options`
   replaces `effector_orientation` (R29); `Move_tool::imgui` draws the "Solve
-  From" combo after "Effector Orientation" (R30);
+  From" combo after "Mid-Chain Drag" (R30);
   `Transform_tool::try_translate_ik` passes the options to `Ik_drag::begin`.
 - MCP - the `solve_from` argument of `ik_drag`, echoed in the result, and
   `path` as the alternative to `target` (R31, R32; schema in
@@ -533,6 +540,11 @@ Section 3 is implemented as specified:
   `Ik_solver.pole_weight_applies_on_both_solver_paths`
   (`src/editor/transform/test/test_ik_solver.cpp`).
 
-Outstanding: interactive (windowed) verification of the Move tool combo, of a
-live gizmo drag under `follow_last_segment`, and of the chain visualization
-(R17's second bullet - a live drag is not reachable headlessly).
+The automated run of `interactive_test_pass.md` (sections 2, 6 and 8) clicks
+every combo of R8 and R30 in the Transform window and checks the chain
+visualization and each option over a Transform tool drag.
+
+Outstanding: the by-hand run of `interactive_test_pass.md` sections 6 and 8,
+the effector orientation and the drag behavior options under a live mouse
+drag of the gizmo (the automated run drives those drags through
+`drag_selection`).

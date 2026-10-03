@@ -29,9 +29,9 @@ geometry can live in different `VkBuffer`s.
 Device addresses need zero descriptor plumbing, and the infrastructure exists
 for acceleration structure builds already: the pools carry
 `Buffer_usage::shader_device_address` when `use_ray_query` is on, the device
-enables `bufferDeviceAddress`, and `Buffer::get_device_address()` is public. The
-whole feature is gated on Vulkan ray query, so the lack of a Metal analogue does
-not matter here (a Metal path would use `gpuAddress()`).
+enables `bufferDeviceAddress`, and `Buffer::get_device_address()` is public.
+On Metal it returns the buffer's `gpuAddress()`, so the same addressing works on
+both ray query backends.
 
 ### D2: reuse `Material_buffer`
 

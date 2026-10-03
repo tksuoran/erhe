@@ -326,14 +326,14 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 ### Plans (`plans/`)
 
 - [plans/android.md](plans/android.md) (proposed): Android: full editor on a phone
-- [plans/animation_keyframing.md](plans/animation_keyframing.md) (proposed): Keyframing and timeline for the Animation window
+- [plans/animation_keyframing.md](plans/animation_keyframing.md) (in progress): Keyframing and timeline for the Animation window: outstanding work
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
 - [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
 - [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
 - [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
 - [plans/command_script.md](plans/command_script.md) (proposed): Editor command scripts: outstanding work
 - [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
-- [plans/crash_signal.md](plans/crash_signal.md) (proposed): Positive crash signal for harness-run apps
+- [plans/crash_signal.md](plans/crash_signal.md) (in progress): Positive crash signal for harness-run apps
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
 - [plans/debug_renderer_anti_aliasing.md](plans/debug_renderer_anti_aliasing.md) (in progress): Debug renderer: analytic anti-aliasing for wide lines
 - [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
@@ -368,15 +368,15 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
 - [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
-- [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (proposed): FABRIK inverse kinematics requirements
-- [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (proposed): Rigging tools roadmap (IK, constraints, skinning, drivers)
-- [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (proposed): Rigging Phase 3 - skeleton editing and posing basics requirements
+- [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (in progress): FABRIK inverse kinematics requirements
+- [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (in progress): Rigging tools roadmap (IK, constraints, skinning, drivers)
+- [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (in progress): Rigging Phase 3 - skeleton editing and posing basics requirements
 - [plans/shadow_robustness.md](plans/shadow_robustness.md) (proposed): Shadow robustness future work (Metal verification, forward pass cost profiling and optimization)
 - [plans/shadows.md](plans/shadows.md) (proposed): Shadow follow-ups
 - [plans/spirv_cache.md](plans/spirv_cache.md) (proposed): SPIR-V cache robustness
 - [plans/texture_graph.md](plans/texture_graph.md) (proposed): Texture graph backlog
 - [plans/texture_memory.md](plans/texture_memory.md) (proposed): Per-scene texture memory cost
-- [plans/timeline_editor.md](plans/timeline_editor.md) (proposed): Animation timeline and curve editor
+- [plans/timeline_editor.md](plans/timeline_editor.md) (in progress): Animation window remaining work: dope sheet, tangent handles, interpolation editing
 - [plans/usd_compatibility.md](plans/usd_compatibility.md) (proposed): USD compatibility: remaining work
 - [plans/uv_editor.md](plans/uv_editor.md) (proposed): UV editor modeled on Blender's
 - [plans/virtualcity_vanishing_meshes.md](plans/virtualcity_vanishing_meshes.md) (proposed): Open defect: overlapping meshes vanish on first hover

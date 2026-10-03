@@ -25,8 +25,9 @@ Implemented scope:
   camera-facing quads, plus a highlight of the component under the pointer.
 - Desktop viewport only (see section 6).
 
-Editing the selection, skinned-mesh selection, and compute-shader selection
-over the GPU vertex and index buffers are
+The transform gizmo moves, rotates and scales the selection (section 8).
+Skinned-mesh selection, compute-shader vertex and edge selection over the GPU
+vertex and index buffers, and multiview overlays are
 `doc/plans/mesh_component_selection.md`.
 
 ## 2. Mode selector and command coexistence
@@ -601,7 +602,36 @@ snapshot). A device without compute falls back to a per-pixel CPU readback
 that dedups on the CPU; every supported GL device has compute, since OpenGL
 4.5 is the hard minimum.
 
-## 8. Testing notes
+## 8. Transforming the selection
+
+In a component mode with a live selection, the transform gizmo drives
+`Mesh_component_transform` (`src/editor/transform/mesh_component_transform.*`)
+in place of the object selection:
+
+- The affected vertices of each live entry are the selected vertices, the end
+  vertices of the selected edges, or the corner vertices of the selected
+  faces, de-duplicated per (mesh, primitive). Entries with a separate
+  collision shape are skipped.
+- The gizmo anchor is the world-space centroid of the affected vertices of all
+  entries. In the Selection reference mode its orientation comes from the
+  selected components (face normal / tangent, edge direction, vertex normal);
+  otherwise it is the first mesh's orientation.
+- During a drag each step writes the moved positions into the `Geometry` and
+  the GPU vertex and edge-line buffers; on release one
+  `Move_mesh_vertices_operation` per moved primitive (a `Compound_operation`
+  for several) rebuilds the primitive and is the undo entry. The edit keeps
+  the same `Geometry` object, so the selection stays live through it.
+- With `geometry_edit_mode` fork, a `Geometry` shared with another mesh is
+  forked on the first real move and the fork is recorded as its own undoable
+  operation, so the other meshes keep their shape.
+- `transform_mode` (`Mesh_transform_mode`, scene-view toolbar) picks move,
+  extrude (duplicate the selection boundary, bridge it with new faces, then
+  move along the gizmo delta, or along the group or vertex normals), or the
+  edge / vertex slides (`doc/editor/transform.md` "Scalar edits").
+- Escape (`Mesh_component_transform::cancel()`) restores the drag-start state
+  and queues nothing.
+
+## 9. Testing notes
 
 - Build the `editor` target on Vulkan and on OpenGL. The OpenGL non-compute
   "simple line" render path is shared by the new triangle direct path, so it
@@ -632,11 +662,11 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
   case `mesh_component_flush_and_select_all` covers the face-to-vertex flush
   and select all in CI.
 
-## 9. Future work
+## 10. Future work
 
 - [plans/mesh_component_selection.md](../plans/mesh_component_selection.md) -
-  editing the selection, skinned meshes, and compute selection over the
-  vertex and index buffers.
+  skinned meshes, compute vertex and edge selection over the vertex and
+  index buffers, and multiview overlays.
 - [plans/mesh_modeling.md](../plans/mesh_modeling.md) - the remaining
   modeling work: grid fill, the rest of bevel, knife project and bisect,
   proportional and symmetry editing, compute box select.

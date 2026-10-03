@@ -19,6 +19,27 @@ Multithreading: when diagnosing deadlocks or contention, get the callstacks of
 all threads - not just the stuck thread. The root cause is usually on another
 thread.
 
+## Crash reporting
+
+- `ERHE_FATAL` and a failing `ERHE_VERIFY` call `erhe_report_fatal()`
+  (`doc/erhe/verify.md`): the `file:line` message and the callstack go to
+  stdout / stderr and, once `erhe::log` is initialized, to `logs/log.txt`
+  (flushed before the abort). On Android they go to logcat tag `erhe`.
+- `editor::install_crash_handler()` (`src/editor/crash_handler.cpp`) runs
+  first in the editor's `main()`. On Windows without a debugger it disables
+  the Windows Error Reporting and CRT dialogs (debug CRT reports go to
+  stderr), handles unhandled SEH exceptions by printing
+  `[crash] unhandled exception (code=...)` plus the symbolized callstack to
+  stderr, and handles `abort()` (`SIGABRT`) by printing `[crash] abort() called`;
+  both then write `logs/editor_crash_<pid>_<tick>.dmp` (thread stacks and
+  data segments) and terminate with a nonzero exit code. With a debugger
+  attached it only makes `abort()` and debug CRT reports break into the
+  debugger without a modal dialog. On other platforms it does nothing; a
+  fault ends the process with the default signal disposition.
+- The editor logs `Main loop: completed frame <n>` for main-loop frames up to
+  12 (`log_startup`), the positive "reached steady state" line that run
+  scripts wait for (`doc/agents/editor_runs.md`).
+
 ## Windows: Visual Studio MCP server
 
 Use the **`visualstudio` MCP server**
@@ -136,3 +157,9 @@ in-editor MCP `capture_screenshot` is enough.
 
 Startup and frame profiling with Tracy (`ERHE_TRACY_ON_DEMAND`,
 `scripts/tracy_startup_profile.py`) is described in `doc/building.md`.
+
+## Future work
+
+- `doc/plans/crash_signal.md`: a per-run marker file (`startup_complete`,
+  `shutdown_clean`, `crashed at:`), a `std::terminate` handler, POSIX signal
+  handlers, and the `scripts/smoke_test.py` wrapper.
