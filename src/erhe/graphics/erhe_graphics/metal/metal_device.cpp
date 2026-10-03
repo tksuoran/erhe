@@ -292,7 +292,7 @@ Device_impl::~Device_impl() noexcept
     // destruction in turn enqueues handlers (e.g. for the swapchain texture
     // argument encoder), so we need to drain *after* this point.
     m_surface.reset();
-    m_ring_buffers.clear();
+    m_ring_buffer_pool.clear();
     if (m_texture_argument_encoder != nullptr) {
         m_texture_argument_encoder->release();
         m_texture_argument_encoder = nullptr;
@@ -375,9 +375,7 @@ void Device_impl::drain_completed_frames()
         if (completed_frame + 1 > m_latest_completed_frame) {
             m_latest_completed_frame = completed_frame + 1;
         }
-        for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
-            ring_buffer->frame_completed(completed_frame);
-        }
+        m_ring_buffer_pool.frame_completed(completed_frame);
         frame_completed(completed_frame);
     }
 }
@@ -832,59 +830,7 @@ auto Device_impl::allocate_ring_buffer_entry(
 ) -> Ring_buffer_range
 {
     const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
-    std::size_t alignment_byte_count_without_wrap{0};
-    std::size_t available_byte_count_without_wrap{0};
-    std::size_t available_byte_count_with_wrap{0};
-
-    // Pass 1: find buffer usable without wrap
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
-        if (!ring_buffer->match(usage)) {
-            continue;
-        }
-        ring_buffer->get_size_available_for_write(
-            required_alignment,
-            alignment_byte_count_without_wrap,
-            available_byte_count_without_wrap,
-            available_byte_count_with_wrap
-        );
-        if (available_byte_count_without_wrap >= byte_count) {
-            return ring_buffer->acquire(required_alignment, usage, byte_count);
-        }
-    }
-
-    // Pass 2: find buffer usable with wrap
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
-        if (!ring_buffer->match(usage)) {
-            continue;
-        }
-        ring_buffer->get_size_available_for_write(
-            required_alignment,
-            alignment_byte_count_without_wrap,
-            available_byte_count_without_wrap,
-            available_byte_count_with_wrap
-        );
-        if (available_byte_count_with_wrap >= byte_count) {
-            return ring_buffer->acquire(required_alignment, usage, byte_count);
-        }
-    }
-
-    // No existing buffer found, create new one. First buffer of a usage
-    // class gets 4x headroom; spill buffers are sized to the request (see
-    // the Vulkan backend for rationale).
-    bool has_existing = false;
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
-        if (ring_buffer->match(usage)) {
-            has_existing = true;
-            break;
-        }
-    }
-    const Ring_buffer_create_info create_info{
-        .size              = std::max(m_min_buffer_size, has_existing ? byte_count : 4 * byte_count),
-        .ring_buffer_usage = usage,
-        .debug_label       = "Ring_buffer"
-    };
-    m_ring_buffers.push_back(std::make_unique<Ring_buffer>(m_device, create_info));
-    return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
+    return m_ring_buffer_pool.allocate(required_alignment, usage, byte_count);
 }
 
 void Device_impl::start_frame_capture() {}

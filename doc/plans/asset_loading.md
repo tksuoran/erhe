@@ -137,8 +137,6 @@ From `doc/erhe/ring_buffer_memory.md`:
   reports "would exceed budget" so a loading thread can flush and wait -
   except on the render thread mid-frame, where waiting on its own frame would
   deadlock, so it allocates anyway and warns.
-- Idle reclaim on the GL and Metal backends; only the Vulkan backend erases
-  idle ring buffers today.
 
 ## 11. Re-test the presentation stall
 

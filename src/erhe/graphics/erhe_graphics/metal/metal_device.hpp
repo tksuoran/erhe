@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/metal/metal_pixel_format_table.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_pool.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
@@ -258,8 +259,7 @@ private:
     MTL::LogState*           m_mtl_log_state        {nullptr};
     MTL::ArgumentEncoder*    m_texture_argument_encoder{nullptr};
     Texture_arg_buffer_layout m_texture_arg_buffer_layout;
-    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
-    static constexpr std::size_t m_min_buffer_size{4 * 1024 * 1024};
+    Ring_buffer_pool         m_ring_buffer_pool{m_device, 4 * 1024 * 1024};
 
     // Per-thread Command_buffer storage. get_command_buffer(slot)
     // allocates a Command_buffer here; frame_completed sweeps entries

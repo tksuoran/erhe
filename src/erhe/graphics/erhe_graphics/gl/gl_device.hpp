@@ -3,6 +3,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gl/gl_binding_state.hpp"
+#include "erhe_graphics/ring_buffer_pool.hpp"
 #include "erhe_graphics/gl/gl_objects.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
 #include "erhe_graphics/gl/gl_context_index.hpp"
@@ -342,8 +343,7 @@ private:
 
     std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 
-    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
-    std::size_t                               m_min_buffer_size = 2 * 1024 * 1024; // TODO
+    Ring_buffer_pool                          m_ring_buffer_pool{m_device, 2 * 1024 * 1024};
 
     std::array<Frame_sync, 16>            m_frame_syncs;
     // Sizing hint only; see get_number_of_frames_in_flight().

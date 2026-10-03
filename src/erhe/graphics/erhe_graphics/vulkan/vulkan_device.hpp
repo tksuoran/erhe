@@ -3,6 +3,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
+#include "erhe_graphics/ring_buffer_pool.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_frame_pacing/frame_time_recorder.hpp"
@@ -652,8 +653,7 @@ private:
 
     // For ring buffer:
     bool                                      m_need_sync{false};
-    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
-    std::size_t                               m_min_buffer_size = 2 * 1024 * 1024; // TODO
+    Ring_buffer_pool                          m_ring_buffer_pool{m_device, 2 * 1024 * 1024};
 
     // GPU timers. m_gpu_timer_query_pool is sized for
     // s_max_gpu_timers * 2 * s_number_of_frames_in_flight queries, laid out

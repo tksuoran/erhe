@@ -66,6 +66,8 @@ erhe_target_sources_grouped(
     erhe_graphics/ring_buffer.hpp
     erhe_graphics/ring_buffer_range.cpp
     erhe_graphics/ring_buffer_range.hpp
+    erhe_graphics/ring_buffer_pool.cpp
+    erhe_graphics/ring_buffer_pool.hpp
     erhe_graphics/ring_buffer_client.cpp
     erhe_graphics/ring_buffer_client.hpp
     erhe_graphics/sampler.cpp

@@ -9,6 +9,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Ring_buffer_pool` (`erhe_graphics/ring_buffer_pool.hpp`),
+  the ring-buffer allocator behind `Device::allocate_ring_buffer_entry()` for
+  the Vulkan, OpenGL and Metal backends: spill sizing and idle reclaim (one
+  warm buffer per usage class), which only the Vulkan backend had.
 - `erhe::geometry`: `erhe_geometry/operation/flip_facets.hpp`:
   `flip_facets()` and `recalculate_facet_normals()` with `Normal_side`
   (outside / inside): flip and recalculate normals of

@@ -3,18 +3,19 @@
 Stability: mostly stable
 
 How the device's staging ring buffers stay bounded while a scene loads.
-`Device_impl::allocate_ring_buffer_entry()` is the allocator (one
-implementation per backend: `vulkan_device.cpp`, `gl_device.cpp`,
-`metal_device.cpp`); `Ring_buffer` and
-`erhe::Circular_ring_buffer_algorithm` are the storage and the arithmetic
-under it.
+`Ring_buffer_pool` (`erhe_graphics/ring_buffer_pool.hpp`) is the allocator,
+shared by the Vulkan, OpenGL and Metal backends: each `Device_impl` owns one
+(minimum buffer size 2 MiB on Vulkan and OpenGL, 4 MiB on Metal), forwards
+`allocate_ring_buffer_entry()` to it after deriving the buffer target's
+alignment, and calls its `frame_completed()` for every completed frame.
+`Ring_buffer` and `erhe::Circular_ring_buffer_algorithm` are the storage and
+the arithmetic under it.
 
 ## The allocator
 
 An acquisition is served in three passes. Pass 1 and pass 2 look for an
 existing `Ring_buffer` of the requested usage class with free space right now.
-When none has space, a new ring buffer is created and pushed onto
-`m_ring_buffers`.
+When none has space, a new ring buffer is created and added to the pool.
 
 Sizing distinguishes the first buffer of a usage class from a spill: the first
 gets `max(m_min_buffer_size, 4 * byte_count)` headroom, a spill - created
@@ -30,13 +31,14 @@ reclamation is at frame-fence granularity.
 ## Idle reclaim
 
 Ring buffers are erased again, not just reused. After the per-buffer
-`frame_completed` loop, `Device_impl::frame_completed()` (Vulkan) erases every
+`frame_completed` loop, `Ring_buffer_pool::frame_completed()` erases every
 ring buffer that is idle - the circular algorithm holds no live sync entry and
 no open acquired range (`Ring_buffer::is_idle()`) - and has been unused for 16
 completed frames (`get_last_used_frame()`), keeping one warm buffer per
 `Ring_buffer_usage` class so the steady state does not thrash. Destruction is
-deferred-safe: `Buffer_impl::~Buffer_impl` registers a completion handler for
-the VMA free. The post-load working set therefore returns to the warm set
+deferred-safe: an idle buffer has no in-flight range, and on Vulkan
+`Buffer_impl::~Buffer_impl` also registers a completion handler for the VMA
+free. The post-load working set therefore returns to the warm set
 instead of staying at the load's peak.
 
 ## Forward progress without frames
@@ -92,4 +94,4 @@ or synchronous import (no frames) - and check `logs/log.txt`:
 
 ## Future work
 
-- [plans/asset_loading.md](../plans/asset_loading.md) - dedicated one-shot staging for oversize uploads, a device-level ring-buffer budget, idle reclaim on the GL and Metal backends.
+- [plans/asset_loading.md](../plans/asset_loading.md) - dedicated one-shot staging for oversize uploads, a device-level ring-buffer budget.
