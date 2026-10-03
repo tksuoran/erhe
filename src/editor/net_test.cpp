@@ -159,28 +159,28 @@ public:
         s.append(Term::color_fg(Term::Color::Name::Cyan));
         s.append(Term::cursor_move(m_row_log, 1));
 
-        auto& tail  = erhe::log::get_tail_store_log();
+        erhe::log::Store_log_sink& tail = erhe::log::get_tail_store_log();
         //auto& frame = erhe::log::get_frame_store_log();
 
-        auto& tail_entries = tail->get_log();
-        const auto visible_count = (std::min)(
-            static_cast<size_t>(10),
-            tail_entries.size()
+        // access_entries() runs under the sink's lock.
+        tail.access_entries(
+            [&s](std::deque<erhe::log::Entry>& tail_entries) {
+                const std::size_t visible_count = (std::min)(static_cast<std::size_t>(10), tail_entries.size());
+                for (
+                    auto i = tail_entries.rbegin(), end = tail_entries.rbegin() + visible_count;
+                    i != end;
+                    ++i
+                ) {
+                    const erhe::log::Entry& entry = *i;
+                    s.append(Term::color_fg(Term::Color::Name::Blue));
+                    s.append(entry.timestamp.c_str());
+                    s.append(Term::color_fg(Term::Color::Name::Gray));
+                    s.append(entry.message);
+                    s.append(Term::clear_eol());
+                    s.append("\n");
+                }
+            }
         );
-        for (
-            auto i = tail_entries.rbegin(),
-            end = tail_entries.rbegin() + visible_count;
-            i != end;
-            ++i
-        ) {
-            auto& entry = *i;
-            s.append(Term::color_fg(Term::Color::Name::Blue));
-            s.append(entry.timestamp.c_str());
-            s.append(Term::color_fg(Term::Color::Name::Gray));
-            s.append(entry.message);
-            s.append(Term::clear_eol());
-            s.append("\n");
-        }
         //for (
         //    auto i = tail_entries.begin(),
         //    end = tail_entries.begin() + visible_count;
