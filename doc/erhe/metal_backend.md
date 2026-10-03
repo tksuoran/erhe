@@ -285,3 +285,7 @@ capture handles by value into a lambda and defer release until the device
 shuts down. Releasing a resource that an in-flight command buffer still
 references is what this prevents - it shows up as intermittent shutdown
 crashes.
+
+## Future work
+
+- [plans/metal_backend.md](../plans/metal_backend.md): GPU timers, `blit_framebuffer`, swapchain resize, present wait, format sorting, GPU multi-draw indirect

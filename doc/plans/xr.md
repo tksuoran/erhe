@@ -50,3 +50,17 @@ and `doc/erhe/multiview.md`.
   nothing exercises it; the capability gate requires exactly two views. A view
   configuration with more views (quad view) needs the gate widened and the
   per-eye fallback kept for the cases it still rejects.
+
+## Desktop mirror
+
+With `OpenXR_mirror`, `Headset_view` (`src/editor/xr/headset_view.cpp`) copies
+the first eye's render pass into the window's swapchain render pass with
+`Blit_command_encoder::blit_framebuffer`, centring and cropping by the size
+difference. Only the OpenGL backend implements that call: the Vulkan one
+logs a warning and copies nothing (`vulkan_blit_command_encoder.cpp`, both the
+swapchain and the offscreen case) and the Metal one is fatal. Implement it on
+Vulkan - the swapchain image of the destination render pass through
+`vkCmdBlitImage2` with the layout transitions around it, and the offscreen
+case the same way - and on Metal (`doc/plans/metal_backend.md` item 3), with
+a GPU test that blits between two render passes of different sizes and
+compares the backends' results.

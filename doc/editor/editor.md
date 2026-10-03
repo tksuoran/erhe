@@ -167,7 +167,7 @@ Geometry operations can run asynchronously via `tf::Executor`. `async_for_nodes_
 
 ### Initialization Order
 
-Initialization is serial. Parallel init, should it be wanted, builds on the GL worker-context API of `doc/erhe/gl_worker_thread_contexts.md`: a Taskflow graph over `Gl_context_provider` worker contexts with explicit dependency edges.
+Initialization is serial: `Editor::Editor()` constructs the parts in 25 named steps (`ERHE_INIT_STEP_BEGIN("<name>")` / `ERHE_INIT_STEP_END`), each a profile scope and a line on the init status display. Restoring parallel construction is planned (`doc/plans/parallel_editor_init.md`).
 
 ### Physics Integration
 
@@ -237,5 +237,6 @@ The HTTP server (cpp-httplib) runs on a background thread. All requests are queu
 
 ## Future work
 
+- Parallel part construction: `doc/plans/parallel_editor_init.md`
 - Keyframing and timeline: `doc/plans/animation_keyframing.md`
 - Dope sheet and curve editor: `doc/plans/timeline_editor.md`

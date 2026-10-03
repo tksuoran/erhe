@@ -18,6 +18,32 @@ build `build_ninja_linux`. Required packages are listed in `doc/building.md`.
 Executables land in `<build>/bin/`. Debugging with lldb: the
 **`erhe-cpp-debugging`** skill.
 
+## Headless runs and GPU tests
+
+`scripts/configure_ninja_linux_vulkan_headless.sh -DERHE_BUILD_TESTS=ON`
+configures `build_ninja_linux_vulkan_headless` (no window library). Its
+editor and the `*_gpu_tests` executables need no display: a locked or absent
+session does not stall them. Select the Vulkan driver explicitly and keep
+implicit layers (overlays, capture tools) out of the run:
+
+```bash
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/<driver>_icd.json \
+VK_LOADER_LAYERS_DISABLE='~implicit~' \
+build_ninja_linux_vulkan_headless/bin/erhe_graphics_gpu_tests
+```
+
+The GPU tests enable the Khronos validation layer and fail on any validation
+error, so the layer must know every structure erhe chains. erhe builds
+against the Vulkan headers it pins (`vulkan-headers` in `CMakeLists.txt`),
+which are newer than the validation layer of most distribution packages; an
+older layer reports `VUID-VkDeviceCreateInfo-pNext-pNext` ("unknown
+VkStructureType") at device creation and `Gpu_test.device_up_clean` fails.
+Use a validation layer from a Vulkan SDK at least as new as the pinned
+headers (`VK_ADD_LAYER_PATH=<sdk>/share/vulkan/explicit_layer.d`).
+
+Kill a stray editor with `pkill -x editor`; `pkill -f` patterns match the
+shell running the command as well.
+
 ## Memory growth diagnostics
 
 Two zero-install tools. Both launch the editor in an isolated working

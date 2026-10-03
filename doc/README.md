@@ -191,6 +191,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [erhe/shadows.md](erhe/shadows.md) (stable): Directional and point-light shadow mapping
 - [erhe/smoke.md](erhe/smoke.md) (stable): A standalone smoke test executable that stress-tests the `erhe::item` hierarchy system
 - [erhe/subdivision_crease_edges.md](erhe/subdivision_crease_edges.md) (stable): Catmull-Clark semi-sharp crease edges
+- [erhe/task.md](erhe/task.md) (stable): Spawn-site guards for Taskflow work: the GL worker-context blocking check at every schedule point
 - [erhe/texgen.md](erhe/texgen.md) (experimental): Procedural texture shader-code composition core: the codegen layer under the editor's texture graph (`doc/editor/texture_graph.md`)
 - [erhe/time.md](erhe/time.md) (stable): Time-related utilities providing high-precision sleep, scoped timers for profiling initialization and frame phases, and timestamp string formatting
 - [erhe/ui.md](erhe/ui.md) (stable): Font rasterization and text layout utilities
@@ -356,12 +357,14 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
+- [plans/metal_backend.md](plans/metal_backend.md) (proposed): Metal backend: parity work
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
 - [plans/mesh_modeling.md](plans/mesh_modeling.md) (in progress): Blender-style mesh modeling operations: remaining work
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
+- [plans/parallel_editor_init.md](plans/parallel_editor_init.md) (proposed): Parallel editor initialization: a Taskflow graph over the init steps
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification

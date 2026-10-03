@@ -96,6 +96,20 @@ The simulation duration is capped at 25 ms, so the simulation is unaffected;
 initialize the baseline to the current time anyway, so the reported host frame
 duration is meaningful from the first frame.
 
+## 12. Undo coverage for every document-edit MCP tool (medium effort, medium impact)
+
+`Mcp_test.document_edits_record_one_undo_entry_each`
+(`src/editor/mcp/test/mcp_server_tests.cpp`) asserts one undo entry, undo and
+redo for `create_light`, `edit_light`, `edit_camera`, `edit_material`,
+`set_item_property` and the two lightmap tile tools; the rule it checks
+(`doc/agents/mcp_api_guidelines.md` "Document edits are operations") covers
+every tool that changes the document. `config/editor/mcp_tools.json` does not
+say which of its tools those are. Give each tool a class - document edit,
+editor state, read-only - as a field in `mcp_tools.json`, route the document
+edits that still write fields directly through their operations, and have the
+test iterate every document-edit tool with a minimal valid argument set taken
+from the same file, so a new tool is covered when it is classified.
+
 ## Considered and rejected for now
 
 ### Narrow `App_context` into focused interfaces (large effort)

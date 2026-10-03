@@ -18,3 +18,12 @@ of the same brush.
 Make the copy share the source brush's geometry slot, so the recipe runs once
 per brush however many libraries hold a copy of it and a preparation on either
 side readies both.
+
+## Verify the brush fork undo path by hand
+
+Forking a brush by drag and drop - in the item tree and in the inventory
+window - goes through `make_resource_insert_operation`, so the fork is one undo
+entry. Both are ImGui drag-and-drop gestures, which the MCP server does not
+drive, so the path is compile-checked only: in a windowed editor, fork a brush
+both ways, then undo and redo each fork and check that the forked brush
+disappears and returns, and the source brush is untouched.

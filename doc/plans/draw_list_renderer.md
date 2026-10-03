@@ -18,6 +18,19 @@ instead; the shadow lists could cull casters against each light's frustum the
 same way (point lights: per cube face). Skinned entries need posed bounds
 before either can include them.
 
+
+Entry bounds also go stale during an in-place mesh-component edit: the live
+vertex / edge / face drag (`src/editor/transform/mesh_component_transform.cpp`)
+writes positions straight into the vertex buffers through
+`Mesh_memory::enqueue_vertex_data`, and `Primitive::get_bounding_box()` -
+which `Mesh::get_aabb_world()`, the shadow fit, framing and the entry AABB all
+derive from - keeps the pre-drag box until the commit swaps in the rebuilt
+primitive. A view that frames only where the vertices were dragged to culls
+the mesh for the rest of the drag. Keep the primitive's bounds current during
+the drag (grow them from the written positions, which the drag already has in
+local space) and have the drag enqueue the entry-bounds update the transform
+hook performs (`Draw_list_scene::enqueue_transform_update`), so every bounds
+consumer sees the moved geometry.
 ## 2. Re-list on a negative-determinant flip
 
 R10b reports and asserts instead of re-listing. The mechanism is the same as

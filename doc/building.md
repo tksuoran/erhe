@@ -85,6 +85,11 @@ scripts/configure_ninja_linux_vulkan.sh
 cmake --build build_ninja_linux_vulkan --target editor
 ```
 
+`scripts/configure_ninja_linux_vulkan_headless.sh` configures
+`build_ninja_linux_vulkan_headless` with `ERHE_WINDOW_LIBRARY=none`: the
+editor and the GPU tests run without a display (`doc/agents/linux.md`
+"Headless runs and GPU tests").
+
 ### macOS (command line)
 
 ```bash
