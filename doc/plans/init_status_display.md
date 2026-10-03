@@ -39,9 +39,9 @@ on a single shared GL context.
   `m_active_device_frame_command_buffer` member at line 410.
 - **Metal**: one `MTL::CommandBuffer` per worker thread tied to the
   device frame; all committed in `end_frame()`.
-- **GL**: `ERHE_GET_GL_CONTEXT` (defined inline in `editor.cpp` around
-  line 583) already gives each worker its own context. Add a thread-id
-  assertion in the device-frame helpers so violations fail loudly.
+- **GL**: each worker needs its own context
+  (`doc/erhe/gl_worker_thread_contexts.md`). Add a thread-id assertion in the
+  device-frame helpers so violations fail loudly.
 
 The interleaving rule for `Init_status_display::pump()` must also be
 reformulated so the main thread can present a swapchain frame while

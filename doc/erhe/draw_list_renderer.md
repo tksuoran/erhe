@@ -291,10 +291,8 @@ Registration:
   leaves `m_physics_world` null. The null graphics backend is still a `Device`
   with a `Mesh_memory`; it gets a `Draw_list_scene` like any other backend and
   stays in sync. The preview roots (material / brush previews) and the tools
-  root deliberately have none: they are constructed inside parallel init tasks
-  on worker threads, while a `Draw_list_scene` binds its owner thread, and they
-  are tiny scenes. Their passes take the fallback through the null check in the
-  routing rule.
+  root deliberately have none: they are tiny scenes. Their passes take the
+  fallback through the null check in the routing rule.
 - R2: `unregister` function that removes all entries belonging to an object.
   Removal does not invalidate the draw lists' suitability for hot-path
   iteration (compaction is an implementation choice; stale entries are never

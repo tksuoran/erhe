@@ -903,7 +903,7 @@ public:
             const Lightmap_config& lightmap_config = m_app_context.editor_settings->lightmap;
             if (m_lightmap_partitioner) {
                 // Commit or discard a finished async prepare job. After the
-                // operation stack (:694) and transform updates, so the
+                // operation stack update and transform updates, so the
                 // commit-time staleness validation sees this frame's scene
                 // mutations; before the baker tick, whose piece-hash change
                 // then triggers the relayout + deferred G-buffer bake.
@@ -1440,9 +1440,10 @@ public:
             auto& commands        = *m_commands       .get();
             auto& app_message_bus = *m_app_message_bus.get();
 
-#define ERHE_GET_GL_CONTEXT
-#define ERHE_TASK_HEADER(var) init_status_display.set_line(1, #var); init_status_display.pump(); { ERHE_PROFILE_SCOPE(#var);
-#define ERHE_TASK_FOOTER(ops) } init_status_display.set_line(1, ""); init_status_display.pump();
+// One serial initialization step: a status line, a profile scope and a C++
+// scope for the step's locals (doc/editor/editor.md "Initialization Order").
+#define ERHE_INIT_STEP_BEGIN(label) init_status_display.set_line(1, label); init_status_display.pump(); { ERHE_PROFILE_SCOPE(label);
+#define ERHE_INIT_STEP_END } init_status_display.set_line(1, ""); init_status_display.pump();
 
             // Window and graphics context creation - in main thread
             m_window = create_window(m_graphics_config, m_window_config, m_editor_settings);
@@ -1627,7 +1628,8 @@ public:
                 m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context, app_message_bus);
             }
             // Drive view_count from the OpenXR session's multiview
-            // capability. The session was created above (line ~789).
+            // capability. The session was created above (first-phase
+            // OpenXR initialization).
             // When multiview is enabled, the camera UBO holds two
             // entries (one per eye); shaders compiled with
             // ERHE_MULTIVIEW pick the right one via gl_ViewIndex.
@@ -1736,9 +1738,8 @@ public:
             init_status_display.set_line(0, "Initializing erhe editor...");
             init_status_display.pump();
 
-            ERHE_TASK_HEADER(programs_load_task)
+            ERHE_INIT_STEP_BEGIN("Programs (load)")
             {
-                ERHE_GET_GL_CONTEXT
                 init_status_display.set_line(1, "Loading shader stages");
 
                 m_programs->load_programs(
@@ -1750,40 +1751,35 @@ public:
                 );
                 init_status_display.set_line(1, "");
             }
-            ERHE_TASK_FOOTER( .name("Programs (load)") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(imgui_renderer_task)
+            ERHE_INIT_STEP_BEGIN("Imgui_renderer")
             {
-                ERHE_GET_GL_CONTEXT
                 m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_settings.imgui);
             }
-            ERHE_TASK_FOOTER( .name("Imgui_renderer") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(debug_renderer_task)
+            ERHE_INIT_STEP_BEGIN("Debug_renderer")
             {
-                ERHE_GET_GL_CONTEXT
                 m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_graphics_device.get(), xr_view_count);
                 Debug_visualizations::apply_debug_renderer_style(*m_debug_renderer, m_editor_settings.debug_visualizations_style);
             }
-            ERHE_TASK_FOOTER( .name("Debug_renderer") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(thumbnails_task)
+            ERHE_INIT_STEP_BEGIN("Thumbnails")
             {
-                ERHE_GET_GL_CONTEXT
                 m_thumbnails = std::make_unique<Thumbnails>(m_editor_settings.thumbnails, *m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_context, *m_app_message_bus.get());
             }
-            ERHE_TASK_FOOTER( .name("Thumbnails") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(rendergraph_task)
+            ERHE_INIT_STEP_BEGIN("Rendergraph")
             {
-                ERHE_GET_GL_CONTEXT
                 m_rendergraph = std::make_unique<erhe::rendergraph::Rendergraph>(*m_graphics_device.get());
             }
-            ERHE_TASK_FOOTER( .name("Rendergraph") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(forward_renderer_task)
+            ERHE_INIT_STEP_BEGIN("Forward_renderer")
             {
-                ERHE_GET_GL_CONTEXT
                 // Glyph curve data for GPU curve-based grid axis labels.
                 // Codepoint order defines the glyph slot convention shared
                 // with the shaders: slots 0..9 = '0'..'9', 10 = '-', 11 = '.'.
@@ -1817,11 +1813,10 @@ public:
                     *m_scene_pass_resources.get()
                 );
             }
-            ERHE_TASK_FOOTER( .name("Forward_renderer") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(shadow_renderer_task)
+            ERHE_INIT_STEP_BEGIN("Shadow_renderer")
             {
-                ERHE_GET_GL_CONTEXT
                 m_shadow_renderer = std::make_unique<erhe::scene_renderer::Shadow_renderer>(
                     *m_graphics_device.get(),
                     *m_app_context.current_command_buffer,
@@ -1830,22 +1825,20 @@ public:
                     *m_shader_variant_cache.get()
                 );
             }
-            ERHE_TASK_FOOTER( .name("Shadow_renderer") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(texel_renderer_task)
+            ERHE_INIT_STEP_BEGIN("Texel_renderer")
             {
-                ERHE_GET_GL_CONTEXT
                 m_texel_renderer = std::make_unique<erhe::scene_renderer::Texel_renderer>(
                     *m_graphics_device.get(),
                     *m_app_context.current_command_buffer,
                     *m_program_interface.get()
                 );
             }
-            ERHE_TASK_FOOTER( .name("Texel_renderer") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(content_wide_line_renderer_task)
+            ERHE_INIT_STEP_BEGIN("Content_wide_line_renderer")
             {
-                ERHE_GET_GL_CONTEXT
                 m_content_wide_line_interface = std::make_unique<erhe::scene_renderer::Content_wide_line_interface>(
                     *m_graphics_device,
                     &m_program_interface->joint_interface.joint_block,
@@ -1994,9 +1987,9 @@ public:
                     m_content_wide_line_multiview_graphics_stages.get()
                 );
             }
-            ERHE_TASK_FOOTER(.name("Content_wide_line_renderer"));
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(imgui_windows_task)
+            ERHE_INIT_STEP_BEGIN("Imgui_windows")
             {
                 m_imgui_windows = std::make_unique<erhe::imgui::Imgui_windows>(
                     *m_imgui_renderer.get(),
@@ -2006,18 +1999,16 @@ public:
                     get_imgui_config_path(m_app_context.OpenXR)
                 );
             }
-            ERHE_TASK_FOOTER( .name("Imgui_windows") .succeed(imgui_renderer_task, rendergraph_task) );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(icon_set_task)
+            ERHE_INIT_STEP_BEGIN("Icon_set")
             {
-                ERHE_GET_GL_CONTEXT
                 m_icon_set = std::make_unique<Icon_set>(m_app_context, *m_imgui_renderer.get());
             }
-            ERHE_TASK_FOOTER( .name("Icon_set") .succeed(imgui_renderer_task) );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(post_processing_task)
+            ERHE_INIT_STEP_BEGIN("Post_processing")
             {
-                ERHE_GET_GL_CONTEXT
                 m_post_processing = std::make_unique<Post_processing>(*m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_context);
                 m_sky_renderer = std::make_unique<Sky_renderer>(
                     *m_graphics_device.get(),
@@ -2066,11 +2057,10 @@ public:
                 // Lightmap_window::update() persists to <scene>.lightmap/.
                 m_lightmap_baker->set_save_on_evict(true);
             }
-            ERHE_TASK_FOOTER( .name("Post_processing") );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(id_renderer_task)
+            ERHE_INIT_STEP_BEGIN("Id_renderer")
             {
-                ERHE_GET_GL_CONTEXT
                 m_id_renderer = std::make_unique<Id_renderer>(
                     m_editor_settings.id_renderer,
                     *m_graphics_device.get(),
@@ -2080,11 +2070,10 @@ public:
                     *m_programs.get()
                 );
             }
-            ERHE_TASK_FOOTER(.name("Id_renderer"));
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(app_rendering_task)
+            ERHE_INIT_STEP_BEGIN("App_rendering")
             {
-                ERHE_GET_GL_CONTEXT
                 m_app_rendering = std::make_unique<App_rendering>(
                     *m_commands.get(),
                     *m_graphics_device.get(),
@@ -2094,9 +2083,9 @@ public:
                     *m_programs.get()
                 );
             }
-            ERHE_TASK_FOOTER(.name("App_rendering"));
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(some_windows_task)
+            ERHE_INIT_STEP_BEGIN("Some windows")
             {
                 m_operation_stack        = std::make_unique<Operation_stack                 >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context);
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), *m_executor.get());
@@ -2147,12 +2136,9 @@ public:
                 m_app_context.transform_update_stats_tracker = m_transform_update_stats_tracker.get();
                 m_pipelines              = std::make_unique<erhe::imgui::Pipelines          >(*m_imgui_renderer.get(), *m_imgui_windows.get());
             }
-            ERHE_TASK_FOOTER(
-                .name("Some windows")
-                .succeed(imgui_renderer_task, imgui_windows_task)
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(tools_task)
+            ERHE_INIT_STEP_BEGIN("Tools")
             {
                 m_tools = std::make_unique<Tools>(m_app_context, m_app_settings);
                 m_fly_camera_tool = std::make_unique<Fly_camera_tool>(
@@ -2171,14 +2157,10 @@ public:
                     *m_tools.get()
                 );
             }
-            ERHE_TASK_FOOTER(
-                .name("Tools")
-                .succeed(imgui_renderer_task, imgui_windows_task, app_rendering_task)
-            );
+            ERHE_INIT_STEP_END
         
-            ERHE_TASK_HEADER(default_scene_task)
+            ERHE_INIT_STEP_BEGIN("Default content library")
             {
-                ERHE_GET_GL_CONTEXT
                 // Only the template content library is created at init, because
                 // Scene_builder builds brushes into it. It is a palette source
                 // only: no scene ever owns it, and every scene (default or new)
@@ -2190,14 +2172,10 @@ public:
                 // loads a scene yields exactly one scene, with no empty default.
                 m_default_content_library = std::make_shared<Content_library>();
             }
-            ERHE_TASK_FOOTER(
-                .name("Default content library")
-                .succeed(imgui_renderer_task, imgui_windows_task)
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(scene_builder_task)
+            ERHE_INIT_STEP_BEGIN("Scene_builder")
             {
-                ERHE_GET_GL_CONTEXT
                 m_scene_builder = std::make_unique<Scene_builder>(
                     m_editor_settings.scene,                  //const Scene_config&                scene_config
                     m_editor_settings.post_processing &&
@@ -2223,17 +2201,10 @@ public:
                 m_weight_display = std::make_unique<Weight_display>(m_app_context, *m_app_message_bus.get());
                 m_app_context.weight_display = m_weight_display.get();
             }
-            ERHE_TASK_FOOTER(
-                .name("Scene_builder")
-                .succeed(
-                    default_scene_task, imgui_renderer_task, imgui_windows_task, rendergraph_task,
-                    app_rendering_task, post_processing_task, tools_task
-                )
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(headset_task)
+            ERHE_INIT_STEP_BEGIN("Headset (init)")
             {
-                ERHE_GET_GL_CONTEXT
                 m_headset_view = std::make_unique<Headset_view>(
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                     m_editor_settings.viewport,
@@ -2257,25 +2228,18 @@ public:
                 }
 #endif
             }
-            ERHE_TASK_FOOTER(
-                .name("Headset (init)")
-                .succeed(imgui_renderer_task, imgui_windows_task, rendergraph_task, app_rendering_task)
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(headset_attach_task)
+            ERHE_INIT_STEP_BEGIN("Headset (attach)")
             {
                 // The Headset_view attaches to the scene when one first exists, via
                 // the Scene_created_message handler (on_scene_created) rather than
                 // here -- no scene_root is created at init any more.
             }
-            ERHE_TASK_FOOTER(
-                .name("Headset (attach)")
-                .succeed(default_scene_task, headset_task, scene_builder_task)
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(transform_tools_task)
+            ERHE_INIT_STEP_BEGIN("Transform tools")
             {
-                ERHE_GET_GL_CONTEXT
                 m_move_tool   = std::make_unique<Move_tool  >(m_app_context, *m_icon_set.get(), *m_tools.get());
                 m_rotate_tool = std::make_unique<Rotate_tool>(m_app_context, *m_icon_set.get(), *m_tools.get());
                 m_scale_tool  = std::make_unique<Scale_tool >(m_app_context, *m_icon_set.get(), *m_tools.get());
@@ -2295,14 +2259,10 @@ public:
                     *m_scale_tool.get()
                 );
             }
-            ERHE_TASK_FOOTER(
-                .name("Transform tools")
-                .succeed(imgui_renderer_task, imgui_windows_task, headset_task, icon_set_task, tools_task)
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(group_1)
+            ERHE_INIT_STEP_BEGIN("Group 1")
             {
-                ERHE_GET_GL_CONTEXT
                 m_hud = std::make_unique<Hud>(
                     m_editor_settings.hud,
                     *m_commands.get(),
@@ -2361,23 +2321,10 @@ public:
                     *m_programs.get()
                 );
             }
-            ERHE_TASK_FOOTER(
-                .name("Group 1")
-                .succeed(
-                    imgui_renderer_task,
-                    imgui_windows_task,
-                    app_rendering_task,
-                    rendergraph_task,
-                    forward_renderer_task,
-                    tools_task,
-                    scene_builder_task,
-                    headset_task
-                )
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(material_preview_task)
+            ERHE_INIT_STEP_BEGIN("Material_preview")
             {
-                ERHE_GET_GL_CONTEXT
                 {
                     m_material_preview = std::make_unique<Material_preview>(
                         *m_graphics_device.get(),
@@ -2394,11 +2341,10 @@ public:
                     );
                 }
             }
-            ERHE_TASK_FOOTER(.name("Material_preview"));
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(brush_tool_task)
+            ERHE_INIT_STEP_BEGIN("Brush_tool")
             {
-                ERHE_GET_GL_CONTEXT
                 m_brush_tool = std::make_unique<Brush_tool>(
                     m_editor_settings.scene,
                     *m_commands.get(),
@@ -2409,14 +2355,10 @@ public:
                     *m_tools.get()
                 );
             }
-            ERHE_TASK_FOOTER(
-                .name("Brush_tool")
-                .succeed(headset_task, icon_set_task, tools_task)
-            );
+            ERHE_INIT_STEP_END
 
-            ERHE_TASK_HEADER(group_2)
+            ERHE_INIT_STEP_BEGIN("Group 2")
             {
-                ERHE_GET_GL_CONTEXT
                 m_create = std::make_unique<Create>(
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
@@ -2490,10 +2432,7 @@ public:
                     *m_tools.get()
                 );
             }
-            ERHE_TASK_FOOTER(
-                .name("Group 2")
-                .succeed(imgui_renderer_task, imgui_windows_task, icon_set_task, tools_task, headset_task)
-            );
+            ERHE_INIT_STEP_END
 
         } catch (std::runtime_error& e) {
             log_startup->error("exception: {}", e.what());
@@ -2907,7 +2846,7 @@ public:
         // Wait for all async tasks to complete, then clear task handles
         // and destroy the executor while m_mesh_memory is still alive.
         // Without this, implicit member destruction destroys m_mesh_memory
-        // (line 1501) before m_item_task_guard (line 1471), and clearing
+        // (declared after m_item_task_guard) before m_item_task_guard, and clearing
         // the task handles cascades through shared_ptr drops to
         // Free_list_allocator::free() on the already-destroyed allocator.
         if (m_executor) {

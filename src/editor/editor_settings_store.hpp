@@ -3,7 +3,6 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/user_state_config.hpp"
 
-#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <mutex>
@@ -121,18 +120,19 @@ private:
     // class comment).
     std::string                 m_file_path           {c_editor_settings_file_path};
     std::string                 m_user_state_file_path{c_user_state_file_path};
-    // Parts are constructed in parallel init tasks; registration must be
-    // thread safe. collect() runs on the main thread per frame.
+    // Registration (part constructors, which run serially on the main
+    // thread, doc/editor/editor.md "Initialization Order"), unregistration
+    // and collect() all run on the main thread; the mutex orders them
+    // against each other without relying on that.
     std::mutex                  m_callbacks_mutex;
     std::vector<Callback_entry> m_collect_callbacks;
     std::size_t                 m_next_callback_id{1};
     std::string                 m_last_saved_state;
     std::string                 m_last_saved_user_state;
     bool                        m_baseline_initialized{false};
-    // atomic: touch() may run from parallel init tasks (e.g. a Scene_view
-    // constructor registering its first settings entry); update() runs on
-    // the main thread per frame.
-    std::atomic<bool>           m_dirty               {false};
+    // Set by touch() and cleared by update() / flush() / save(), all on the
+    // main thread.
+    bool                        m_dirty               {false};
 };
 
 }
