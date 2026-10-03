@@ -4,6 +4,8 @@
 @docs::doc/editor/coding_rules.md
 
 [PATTERNS]
+!scratch-retention-instance::Id_renderer::m_filtered_meshes-cleared-after-render{714cffbc3}
+@init::serial-25-ERHE_INIT_STEP_BEGIN/END-steps{ce897bfe6};parallel-init-wanted-by-user->doc/plans/parallel_editor_init.md
 !rule::PartCtor¬ReadAppContext{nullptr-until-post-construct}→PassRefsExplicit
 !scene-close-bug-class::parts-caching-scene-hosted-refs-must-handle-close{weak_ptr-insufficient:own-resolve-cache-pins-item}→PREFERRED:per-part-close_scene-subscription{part-drops-own-refs-by-get_item_host()-check;since-856dedd3:Brush_tool+Material_paint_tool+Material_preview+Brdf_slice+Physics_tool+Operations+Animation_player/window}||validate-App_scenes::is_host_registered(get_item_host())-on-access{precedent:Geometry_graph_window::resolve_target};rationale:parts→item-refs-invisible-from-item-side→push-must-reach-parts{virtual-Item::handle_item_host_update-rejected-for-this:wrong-direction;per-item-observers=R-phase-Asset_manager-userships}
 !scene-close-watchdog::on_close_scene-only-QUEUES-scene{pending-shared_ptr};update_scene_close_leak_watches-ARMS-post-pump-in-tick{after-ALL-close_scene-subscribers,subscription-order-irrelevant}→60-frames→"scene-close leak:"-warn=bug{+"N holder(s)"=use_count-since-8df79fa1}|slot-pinned-items{Hotbar+Inventory-collect_pinned_items:brush+brush-material+material}→info-"intentionally pinned"{persistent-inventory-by-design}|asset-manager-pinned{Asset_manager::is_pinned:owned-strong-ref|declared-usership}→info-"intentionally pinned by the asset manager";clean="all N released (M intentionally pinned)"

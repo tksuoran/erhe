@@ -10,6 +10,8 @@
 @remaining::doc/plans/graphics_tests_agfx_port.md{52-blocked-tests-by-feature;open-findings}
 
 [TRAPS]
+!Gpu_test.device_up_clean-fails-with-distro-validation-layer-older-than-pinned-Vulkan-headers{VUID-VkDeviceCreateInfo-pNext-pNext-unknown-sType-1000558000=shader_relaxed_extended_instruction;use-SDK-layer;doc/agents/linux.md}
+@scene_renderer-gpu-tests::30/30-since-f4a126842{Content_line_width-fixture-passed-temporary-Mesh_memory_config->dangling-ref;rvalue-ctor-now-deleted}
 !Image_loader-default=premultiplied→goldens-read-with-Alpha_mode::straight
 !one-golden-set-all-backends::image-space-coords+texture_origin+native_depth_range;GL-bottom-left-origin-exercises-the-normalization
 !AMD-GL-driver::comparison-sampler-reads-never-after-a-never-draw-of-identical-source{state-probed-correct;not-erhe}

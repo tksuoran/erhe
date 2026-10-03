@@ -236,3 +236,9 @@ plan::asset-manager-plan.md{OUTSIDE-repo;R2-AS-LANDED-noted;next:R3-tool-state{b
 
 [BLOCKERS]
 none
+
+[2026-10-03]
+>done::audit-2026-09-30-section-8-near-term-1..9{238830d45,428368553,7f2335b3a,c14cf38e1,5da541602,64cce60f6,ce897bfe6,ac3f76786,e476817cf}✓
+>reviewed::fable-medium-x2->fixes{f4a126842,bb6f7fffd,714cffbc3,8be476605->61586c4bf,ddad3dc78->4f66c859f,a83e88a26,c9fc65c67}✓
+>docs::open-items-planned{1e9495002}+prompt_queue.txt-handoff
+©User>decided::keep-plans(no-deletion)+commands-links-profile-PUBLIC+Aabb-named-validity-variants(only-3d-needed)+use-ImGui-ScrollToItem+restore-parallel-init-eventually
