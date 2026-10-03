@@ -10,6 +10,8 @@
 #include "brushes/brush_thumbnail.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "operations/library_attach_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "graph_editor/graph_editor_window_base.hpp"
 #include "graph_editor/graph_node_drag_payload.hpp"
@@ -591,8 +593,12 @@ auto Inventory_window::find_or_create_brush_with_material(
         }
 
         if (contains_original) {
+            // The fork joins the library as an undoable insert next to the
+            // original, executed now so the slot can adopt it.
             std::shared_ptr<Brush> forked = original_brush->make_with_material(material);
-            content_library->add(forked);
+            m_context.operation_stack->execute_now(
+                make_resource_insert_operation(m_context, content_library, forked, original_brush->get_parent().lock())
+            );
             return forked;
         }
     }

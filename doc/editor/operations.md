@@ -108,6 +108,8 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Item_reposition_in_parent_operation` -- reorder siblings
   - `Node_transform_operation` -- undo/redo node transforms
   - `Material_change_operation` -- undo/redo a whole `Material_data` snapshot (MCP `edit_material`); the Properties window records `Property_set_operation`s instead
+  - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows, MCP `set_item_property`, and MCP `edit_light` / `edit_camera` (one per field, grouped into a `Compound_operation` with a `Node_transform_operation` for `edit_light`'s position)
+  - `Lightmap_tile_overrides_operation` -- a scene's lightmap quadtree leaf overrides before / after (the Lightmap window's and MCP's subdivide / merge); execute and undo let the Lightmap window re-prepare a live partition
   - `Merge_operation` -- merge multiple meshes
   - `Separate_selection_operation` (`operations/separate_operation.hpp`) --
     Blender's separate selection (P): the facets of each mesh's component

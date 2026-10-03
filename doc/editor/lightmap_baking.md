@@ -385,7 +385,8 @@ count or vertex density.
   overrides (`Scene_settings::lightmap_tile_overrides`, a list of
   `{level, ix, iz}` with a non-zero level, saved through the `ERHE_scene`
   extension). The baker reads them from the scene it bakes (layout hash and
-  grid split), holding no copy. With a live partition, changing an override launches an
+  grid split), holding no copy. Subdivide and merge are undoable
+  (`Lightmap_tile_overrides_operation`). With a live partition, changing an override launches an
   asynchronous re-prepare.
 - **kd tree emission.** Each quadtree split is one X plane and two Z planes, so
   the clipper (section 10) consumes an ordinary kd tree. A world-origin quadtree

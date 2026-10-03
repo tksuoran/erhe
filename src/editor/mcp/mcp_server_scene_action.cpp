@@ -3239,67 +3239,102 @@ auto Mcp_server::action_edit_light(const json& args) -> std::string
         return false;
     };
 
-    json changed = json::object();
-    {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{sr->item_host_mutex};
-
-        if (args.contains("type")) {
-            const std::string type_str = args.value("type", "");
-            if ((type_str != "directional") && (type_str != "point") && (type_str != "spot")) {
-                json r = make_text_content("Invalid light type '" + type_str + "' (expected directional, point or spot)");
-                r["isError"] = true;
-                return r.dump();
-            }
-            // Assigning Light::type re-buckets the light for rendering (forward
-            // variant + shadow technique). Other type-dependent fields (e.g.
-            // range) are left exactly as provided by the caller.
-            light->set_light_type(parse_light_type(type_str, light->get_light_type()));
-            changed["type"] = type_str;
+    // Every field is one Property_set_operation (the position one
+    // Node_transform_operation), executed now as one undo entry, the path
+    // the Properties window takes for the same fields.
+    std::vector<std::shared_ptr<Operation>> operations;
+    const auto set_property = [&](const erhe::property::Dependency_property& property, const erhe::property::Property_value& value) {
+        operations.push_back(
+            std::make_shared<Property_set_operation>(
+                light,
+                property,
+                light->read_local_state(property),
+                std::optional<erhe::property::Local_state>{erhe::property::Local_state{value}}
+            )
+        );
+    };
+    if (args.contains("type")) {
+        const std::string type_str = args.value("type", "");
+        if ((type_str != "directional") && (type_str != "point") && (type_str != "spot")) {
+            json r = make_text_content("Invalid light type '" + type_str + "' (expected directional, point or spot)");
+            r["isError"] = true;
+            return r.dump();
         }
-        glm::vec3 color{};
-        if (read_vec3("color", color)) {
-            light->set_color(color);
-            changed["color"] = {color.x, color.y, color.z};
-        }
-        if (args.contains("intensity")) {
-            light->set_intensity(args.value("intensity", light->get_intensity()));
-            changed["intensity"] = light->get_intensity();
-        }
-        if (args.contains("range")) {
-            light->set_range(args.value("range", light->get_range()));
-            changed["range"] = light->get_range();
-        }
-        if (args.contains("cast_shadow")) {
-            light->set_cast_shadow(args.value("cast_shadow", light->get_cast_shadow()));
-            changed["cast_shadow"] = light->get_cast_shadow();
-        }
-        if (args.contains("inner_spot_angle")) {
-            light->set_inner_spot_angle(args.value("inner_spot_angle", light->get_inner_spot_angle()));
-            changed["inner_spot_angle"] = light->get_inner_spot_angle();
-        }
-        if (args.contains("outer_spot_angle")) {
-            light->set_outer_spot_angle(args.value("outer_spot_angle", light->get_outer_spot_angle()));
-            changed["outer_spot_angle"] = light->get_outer_spot_angle();
-        }
-        glm::vec3 position{};
-        if (read_vec3("position", position)) {
-            erhe::scene::Node* node = light.get();
-            if (node != nullptr) {
-                node->set_world_from_node(erhe::math::create_translation<float>(position));
-                changed["position"] = {position.x, position.y, position.z};
-            } else {
-                changed["position_error"] = "light has no node";
-            }
-        }
+        // Light::type re-buckets the light for rendering (forward variant +
+        // shadow technique). Other type-dependent fields (e.g. range) are
+        // left exactly as provided by the caller.
+        set_property(erhe::scene::Light::light_type_property.get(), erhe::property::make_value(parse_light_type(type_str, light->get_light_type())));
+    }
+    glm::vec3 color{};
+    if (read_vec3("color", color)) {
+        set_property(erhe::scene::Light::color_property.get(), erhe::property::Property_value{color});
+    }
+    if (args.contains("intensity")) {
+        set_property(erhe::scene::Light::intensity_property.get(), erhe::property::Property_value{args.value("intensity", light->get_intensity())});
+    }
+    if (args.contains("range")) {
+        set_property(erhe::scene::Light::range_property.get(), erhe::property::Property_value{args.value("range", light->get_range())});
+    }
+    if (args.contains("cast_shadow")) {
+        set_property(erhe::scene::Light::cast_shadow_property.get(), erhe::property::Property_value{args.value("cast_shadow", light->get_cast_shadow())});
+    }
+    if (args.contains("inner_spot_angle")) {
+        set_property(erhe::scene::Light::inner_spot_angle_property.get(), erhe::property::Property_value{args.value("inner_spot_angle", light->get_inner_spot_angle())});
+    }
+    if (args.contains("outer_spot_angle")) {
+        set_property(erhe::scene::Light::outer_spot_angle_property.get(), erhe::property::Property_value{args.value("outer_spot_angle", light->get_outer_spot_angle())});
+    }
+    glm::vec3 position{};
+    const bool has_position = read_vec3("position", position);
+    if (has_position) {
+        // The light's world transform becomes a translation to `position`.
+        const std::shared_ptr<erhe::scene::Node> parent = light->get_parent_node();
+        const glm::mat4 world_from_light  = erhe::math::create_translation<float>(position);
+        const glm::mat4 parent_from_light = parent ? (parent->node_from_world() * world_from_light) : world_from_light;
+        operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = light,
+                    .parent_from_node_before = light->parent_from_node_transform(),
+                    .parent_from_node_after  = erhe::scene::Trs_transform{parent_from_light},
+                    .xform_op_stack_before   = light->copy_xform_op_stack()
+                }
+            )
+        );
+    }
+    if (!operations.empty()) {
+        m_context.operation_stack->execute_now(
+            (operations.size() == 1)
+                ? operations.front()
+                : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
+        );
     }
 
-    // type / cast_shadow / range decide how the light is shaded and shadow-
-    // mapped, and color / intensity decide whether it is active at all
-    // (Light::is_active): re-resolve the scene's light set.
-    if (
-        changed.contains("type")  || changed.contains("cast_shadow") || changed.contains("range") ||
-        changed.contains("color") || changed.contains("intensity")
-    ) {
+    json changed = json::object();
+    if (args.contains("type")) {
+        changed["type"] = args.value("type", "");
+    }
+    if (args.contains("color")) {
+        const glm::vec3 value = light->get_color();
+        changed["color"] = {value.x, value.y, value.z};
+    }
+    if (args.contains("intensity")) {
+        changed["intensity"] = light->get_intensity();
+    }
+    if (args.contains("range")) {
+        changed["range"] = light->get_range();
+    }
+    if (args.contains("cast_shadow")) {
+        changed["cast_shadow"] = light->get_cast_shadow();
+    }
+    if (args.contains("inner_spot_angle")) {
+        changed["inner_spot_angle"] = light->get_inner_spot_angle();
+    }
+    if (args.contains("outer_spot_angle")) {
+        changed["outer_spot_angle"] = light->get_outer_spot_angle();
+    }
+    if (has_position) {
+        changed["position"] = {position.x, position.y, position.z};
     }
 
     return make_json_content({
@@ -3334,43 +3369,66 @@ auto Mcp_server::action_edit_camera(const json& args) -> std::string
         return r.dump();
     }
 
+    // One Property_set_operation per field, executed now as one undo entry.
+    // z_near / z_far edit the clip range of the camera's projection type
+    // (Projection::get_z_near()): the orthographic pair for an orthographic
+    // camera, the perspective pair otherwise.
+    std::vector<std::shared_ptr<Operation>> operations;
+    const auto set_property = [&](const erhe::property::Dependency_property& property, const float value) {
+        operations.push_back(
+            std::make_shared<Property_set_operation>(
+                camera,
+                property,
+                camera->read_local_state(property),
+                std::optional<erhe::property::Local_state>{erhe::property::Local_state{erhe::property::Property_value{value}}}
+            )
+        );
+    };
+    const bool orthographic = camera->projection()->is_orthographic();
+    if (args.contains("exposure")) {
+        set_property(erhe::scene::Camera::exposure_property.get(), args.value("exposure", camera->get_exposure()));
+    }
+    if (args.contains("shadow_range")) {
+        set_property(erhe::scene::Camera::shadow_range_property.get(), args.value("shadow_range", camera->get_shadow_range()));
+    }
+    if (args.contains("fov_y")) {
+        set_property(erhe::scene::Camera::fov_y_property.get(), args.value("fov_y", camera->projection()->fov_y));
+    }
+    if (args.contains("z_near")) {
+        set_property(
+            orthographic ? erhe::scene::Camera::orthographic_z_near_property.get() : erhe::scene::Camera::perspective_z_near_property.get(),
+            args.value("z_near", camera->projection()->get_z_near())
+        );
+    }
+    if (args.contains("z_far")) {
+        set_property(
+            orthographic ? erhe::scene::Camera::orthographic_z_far_property.get() : erhe::scene::Camera::perspective_z_far_property.get(),
+            args.value("z_far", camera->projection()->get_z_far())
+        );
+    }
+    if (!operations.empty()) {
+        m_context.operation_stack->execute_now(
+            (operations.size() == 1)
+                ? operations.front()
+                : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
+        );
+    }
+
     json changed = json::object();
-    {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{sr->item_host_mutex};
-        if (args.contains("exposure")) {
-            camera->set_exposure(args.value("exposure", camera->get_exposure()));
-            changed["exposure"] = camera->get_exposure();
-        }
-        if (args.contains("shadow_range")) {
-            camera->set_shadow_range(args.value("shadow_range", camera->get_shadow_range()));
-            changed["shadow_range"] = camera->get_shadow_range();
-        }
-        if (args.contains("fov_y")) {
-            camera->set_fov_y(args.value("fov_y", camera->projection()->fov_y));
-            changed["fov_y"] = camera->projection()->fov_y;
-        }
-        // z_near / z_far edit the clip range of the camera's projection
-        // type (Projection::get_z_near()): the orthographic pair for an
-        // orthographic camera, the perspective pair otherwise.
-        const bool orthographic = camera->projection()->is_orthographic();
-        if (args.contains("z_near")) {
-            const float z_near = args.value("z_near", camera->projection()->get_z_near());
-            if (orthographic) {
-                camera->set_orthographic_z_near(z_near);
-            } else {
-                camera->set_perspective_z_near(z_near);
-            }
-            changed["z_near"] = camera->projection()->get_z_near();
-        }
-        if (args.contains("z_far")) {
-            const float z_far = args.value("z_far", camera->projection()->get_z_far());
-            if (orthographic) {
-                camera->set_orthographic_z_far(z_far);
-            } else {
-                camera->set_perspective_z_far(z_far);
-            }
-            changed["z_far"] = camera->projection()->get_z_far();
-        }
+    if (args.contains("exposure")) {
+        changed["exposure"] = camera->get_exposure();
+    }
+    if (args.contains("shadow_range")) {
+        changed["shadow_range"] = camera->get_shadow_range();
+    }
+    if (args.contains("fov_y")) {
+        changed["fov_y"] = camera->projection()->fov_y;
+    }
+    if (args.contains("z_near")) {
+        changed["z_near"] = camera->projection()->get_z_near();
+    }
+    if (args.contains("z_far")) {
+        changed["z_far"] = camera->projection()->get_z_far();
     }
 
     return make_json_content({

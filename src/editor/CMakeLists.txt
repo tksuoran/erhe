@@ -423,6 +423,8 @@ erhe_target_sources_grouped(
     operations/fork_geometry_operation.hpp
     operations/item_set_flag_bits_operation.cpp
     operations/item_set_flag_bits_operation.hpp
+    operations/lightmap_tile_overrides_operation.cpp
+    operations/lightmap_tile_overrides_operation.hpp
     operations/node_transform_operation.cpp
     operations/node_transform_operation.hpp
     operations/operations_window.cpp

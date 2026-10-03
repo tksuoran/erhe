@@ -69,6 +69,13 @@ public:
     // texture - the button only sets a flag.
     void update();
 
+    // The scene's lightmap tile overrides changed (Lightmap_tile_overrides_operation
+    // execute / undo): a live partition of that scene was clipped against
+    // the old grid and is re-prepared asynchronously. The legacy
+    // (non-partitioned) layout relayouts by itself through the tick's
+    // grid-parameters hash.
+    void on_tile_overrides_changed(Scene_root& scene_root);
+
     // Arms the baker's offline batch bake (one tile per frame from
     // update()): payloads + manifest land in <scene>.lightmap/ via
     // Lightmap_tile_io. False when there is no layout / baker. Also
@@ -108,8 +115,8 @@ private:
     // button's parameters); chart_order (optional) is the Reorder Charts
     // By Bake key set. False when nothing was launched.
     auto launch_prepare(std::shared_ptr<const Lightmap_partitioner::Params::Chart_order> chart_order = {}) -> bool;
-    // Shared tail of subdivide/merge: sort + write the override list into
-    // the scene settings and kick the relayout/re-prepare.
+    // Shared tail of subdivide/merge: sort the override list and execute
+    // it as a Lightmap_tile_overrides_operation (undoable).
     void apply_tile_overrides(std::vector<Lightmap_tile_key>&& overrides);
 
     App_context& m_context;

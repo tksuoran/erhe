@@ -1128,6 +1128,64 @@ TEST_F(Mcp_test, batch_groups_operations_into_one_undo_entry)
         << " expected " << orig_metallic;
 }
 
+// Every document edit an MCP tool makes is one operation: exactly one new undo
+// entry, an undo that steps back over it, and a redo that steps forward again
+// (doc/agents/mcp_api_guidelines.md "Document edits are operations"). Cases
+// run in order; each leaves its edit redone for the next.
+TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
+{
+    Mcp_env&           env    = Mcp_env::get();
+    Mcp_client&        client = env.client();
+    const std::string& scene  = env.scene_name();
+
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto check_one_entry = [&](const std::string& tool, const json& arguments) {
+        SCOPED_TRACE(tool);
+        ASSERT_TRUE(wait_until_idle(client, 30000));
+        const std::size_t depth0 = undo_depth();
+        const Mcp_client::Tool_result result = client.call_tool(tool, arguments);
+        ASSERT_FALSE(result.is_error) << result.text;
+        ASSERT_TRUE(wait_until_idle(client, 30000));
+        EXPECT_EQ(undo_depth(), depth0 + 1);
+        ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+        ASSERT_TRUE(wait_until_idle(client, 30000));
+        EXPECT_EQ(undo_depth(), depth0);
+        ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+        ASSERT_TRUE(wait_until_idle(client, 30000));
+        EXPECT_EQ(undo_depth(), depth0 + 1);
+    };
+
+    check_one_entry("create_light", json{{"scene_name", scene}, {"name", "undo test light"}, {"type", "point"}});
+    check_one_entry(
+        "edit_light",
+        json{{"scene_name", scene}, {"light_name", "undo test light"}, {"intensity", 7.5}, {"color", {1.0, 0.5, 0.25}}, {"position", {1.0, 2.0, 3.0}}}
+    );
+    check_one_entry("edit_material", json{{"scene_name", scene}, {"material_name", env.material_name()}, {"metallic", 0.25}});
+    check_one_entry("lightmap_subdivide_tile", json{{"level", 0}, {"ix", 0}, {"iz", 0}});
+    check_one_entry("lightmap_merge_tile",     json{{"level", 1}, {"ix", 0}, {"iz", 0}});
+
+    const Mcp_client::Tool_result cameras = client.call_tool("get_scene_cameras", json{{"scene_name", scene}});
+    ASSERT_FALSE(cameras.is_error) << cameras.text;
+    ASSERT_FALSE(cameras.payload.at("cameras").empty());
+    const std::size_t camera_id = cameras.payload.at("cameras")[0].at("id").get<std::size_t>();
+    check_one_entry("edit_camera", json{{"scene_name", scene}, {"camera_id", camera_id}, {"exposure", 2.0}, {"fov_y", 0.9}});
+    check_one_entry("set_item_property", json{{"item_id", camera_id}, {"property", "exposure"}, {"value", 3.0}});
+
+    // The undo restores the camera edit's values.
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    const Mcp_client::Tool_result restored = client.call_tool("get_scene_cameras", json{{"scene_name", scene}});
+    for (const json& camera : restored.payload.at("cameras")) {
+        if (camera.at("id").get<std::size_t>() == camera_id) {
+            EXPECT_NEAR(camera.at("exposure").get<double>(), cameras.payload.at("cameras")[0].at("exposure").get<double>(), 1e-6);
+            EXPECT_NEAR(camera.at("fov_y").get<double>(),    cameras.payload.at("cameras")[0].at("fov_y").get<double>(),    1e-6);
+        }
+    }
+}
+
 TEST_F(Mcp_test, batch_rejects_nested_and_malformed)
 {
     Mcp_client& client = Mcp_env::get().client();

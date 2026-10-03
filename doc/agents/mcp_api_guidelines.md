@@ -84,3 +84,19 @@ takes one (`set_node_transform`, `transform_selection`, `create_shape`,
 `1e-3` of 1 is normalized; a zero, non-finite or scaled quaternion is refused,
 because applying it would bake a scale into the rotation or produce NaNs that
 the caller never asked for.
+
+## Document edits are operations
+
+A tool that changes the document (scene content, item properties, materials,
+scene settings such as the lightmap tile overrides) builds the same
+`Operation` the UI uses for that edit and hands it to the `Operation_stack`
+(`execute_now()` when the reply reports the new state, `queue()` otherwise),
+several fields of one call grouped into one `Compound_operation`. The call
+then leaves exactly one undo entry, undo steps back over it, and the UI and
+MCP edits of the same field behave alike. Writing a field directly is not
+undoable and is a defect. `Mcp_test.document_edits_record_one_undo_entry_each`
+(`src/editor/mcp/test/mcp_server_tests.cpp`) asserts this for the document
+edit tools; a new one adds its case there. Editor state that is not the
+document (window visibility, frame pacing, log levels, graphics presets) is
+not undoable.
+

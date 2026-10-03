@@ -5,6 +5,7 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "items.hpp"
+#include "operations/lightmap_tile_overrides_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
@@ -603,19 +604,28 @@ void Lightmap_window::apply_tile_overrides(std::vector<Lightmap_tile_key>&& over
     // Deterministic order: the tick hashes the list, and the scene file
     // should not churn on no-op round trips.
     std::sort(overrides.begin(), overrides.end());
-    std::vector<Lightmap_tile_override>& stored = scene_root->get_scene_settings().lightmap_tile_overrides;
-    stored.clear();
-    stored.reserve(overrides.size());
+    std::vector<Lightmap_tile_override> after;
+    after.reserve(overrides.size());
     for (const Lightmap_tile_key& key : overrides) {
-        stored.push_back(Lightmap_tile_override{.level = key.level, .ix = key.ix, .iz = key.iz});
+        after.push_back(Lightmap_tile_override{.level = key.level, .ix = key.ix, .iz = key.iz});
     }
-    log_render->info("Lightmap_window: {} tile overrides applied", stored.size());
-    // A live partition was clipped against the old grid - re-prepare
-    // asynchronously. The legacy (non-partitioned) layout relayouts by
-    // itself through the tick's grid-parameters hash.
+    m_context.operation_stack->execute_now(
+        std::make_shared<Lightmap_tile_overrides_operation>(
+            Lightmap_tile_overrides_operation::Parameters{
+                .scene_root = scene_root,
+                .before     = scene_root->get_scene_settings().lightmap_tile_overrides,
+                .after      = std::move(after)
+            }
+        )
+    );
+}
+
+void Lightmap_window::on_tile_overrides_changed(Scene_root& scene_root)
+{
+    log_render->info("Lightmap_window: {} tile overrides applied", scene_root.get_scene_settings().lightmap_tile_overrides.size());
     if ((m_context.lightmap_partitioner != nullptr) &&
         m_context.lightmap_partitioner->is_prepared() &&
-        (m_context.lightmap_partitioner->get_scene_root() == scene_root.get()) &&
+        (m_context.lightmap_partitioner->get_scene_root() == &scene_root) &&
         !m_context.lightmap_partitioner->is_prepare_in_flight()) {
         launch_prepare();
     }
@@ -631,11 +641,6 @@ auto Lightmap_window::launch_prepare(std::shared_ptr<const Lightmap_partitioner:
         return false;
     }
     const Lightmap_config& config = m_context.editor_settings->lightmap;
-    // The split estimate reads the baker's grid parameters; push the live
-    // config first (the editor tick mirrors it only once per frame).
-    if (m_context.lightmap_baker != nullptr) {
-        m_context.lightmap_baker->set_cell_size(config.cell_size_m);
-    }
     const bool launched = m_context.lightmap_partitioner->request_prepare(
         *scene_root.get(),
         Lightmap_partitioner::Params{

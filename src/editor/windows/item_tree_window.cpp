@@ -22,6 +22,7 @@
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/item_reposition_in_parent_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"
 #include "prefabs/instance_structure.hpp"
@@ -851,9 +852,11 @@ template <typename On_drop>
 }
 
 // Material dropped onto a brush: a brush with the brush's geometry and that
-// material joins the brush's parent, unless the library already has one.
+// material joins the brush's parent (an undoable insert), unless the library
+// already has one.
 void fork_brush_with_material(
-    Content_library&                                  library,
+    App_context&                                      context,
+    const std::shared_ptr<Content_library>&           library,
     const std::shared_ptr<Brush>&                     target_brush,
     const std::shared_ptr<erhe::primitive::Material>& material
 )
@@ -865,18 +868,14 @@ void fork_brush_with_material(
         log_brush->warn("Brush '{}' has no geometry: not forked with material '{}'", target_brush->get_name(), material->get_name());
         return;
     }
-    for (const std::shared_ptr<Brush>& existing_brush : library.get_all<Brush>()) {
+    for (const std::shared_ptr<Brush>& existing_brush : library->get_all<Brush>()) {
         if ((existing_brush->get_geometry() == original_geometry) && (existing_brush->get_material() == material)) {
             return;
         }
     }
     const std::shared_ptr<Brush> forked = target_brush->make_with_material(material);
     const std::shared_ptr<erhe::Hierarchy> brush_parent = target_brush->get_parent().lock();
-    if (brush_parent) {
-        forked->set_parent(brush_parent);
-    } else {
-        library.add(forked);
-    }
+    context.operation_stack->queue(make_resource_insert_operation(context, library, forked, brush_parent));
 }
 
 } // anonymous namespace
@@ -1030,8 +1029,8 @@ auto Item_tree::action_drop_target(
         return whole_row_drop_target(
             row,
             payload_type,
-            [&target_library, &target_brush, &material]() {
-                fork_brush_with_material(*target_library, target_brush, material);
+            [this, &target_library, &target_brush, &material]() {
+                fork_brush_with_material(m_context, target_library, target_brush, material);
             }
         );
     }
