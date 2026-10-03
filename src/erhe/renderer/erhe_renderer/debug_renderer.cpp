@@ -140,7 +140,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
 
     const auto shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
 
-    // Compute path (wide lines): SSBO line vertices → compute shader → SSBO triangle vertices → render triangles
+    // Compute path (wide lines): SSBO line vertices -> compute shader -> SSBO triangle vertices -> render triangles
     {
         line_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
             graphics_device,

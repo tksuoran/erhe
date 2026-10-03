@@ -152,7 +152,6 @@ a specific engine.
   has no velocity state, so `Box3d_rigid_body` holds the velocity of a body outside the world and
   applies it on entry. The null backend never simulates and has no activation state: its
   `is_active()` is always false.
-- `erhe_physics/imotion_state.hpp` is an empty placeholder file; nothing includes it.
 - Unit tests live in `test/` (`-DERHE_BUILD_TESTS=ON` -> `erhe_physics_tests`). The suite
   builds for the simulating backends (`jolt`, `box3d`). Every build runs the
   backend-neutral tests, which step a real `IWorld` through the interface (body

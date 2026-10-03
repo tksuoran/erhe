@@ -39,7 +39,7 @@ hides the underlying graphics API behind a pimpl pattern.
 - `Bind_group_layout(device, create_info)` -- Create a descriptor layout plus synthesized sampler declarations.
 - `Shader_stages(device, prototype)` -- Create shader program from compiled prototype.
 - `Texture_heap(device, fallback_texture, fallback_sampler, bind_group_layout)` -- Create a material-texture heap bound to a layout.
-- `Scoped_render_pass(render_pass)` -- RAII render pass begin/end.
+- `Scoped_render_pass(render_pass, command_buffer, render_pass_before, render_pass_after)` -- RAII render pass begin/end recorded into `command_buffer`; the optional neighbouring passes refine the synchronization between passes.
 - `Gpu_timer(render_pass, label)` / `Gpu_timer(device, label)` + `Scoped_gpu_timer(timer, command_buffer)` -- GPU timing of a render pass or of an explicit command buffer range.
 - `Render_command_encoder::set_render_pipeline()` / `set_bind_group_layout()` / `set_sampled_image(binding_point, texture, sampler)` / `draw_indexed_primitives()` -- Issue draw calls.
 
@@ -62,8 +62,9 @@ The contract for each entry point:
   fence + binary semaphore back into `Device_sync_pool`.
 - `get_command_buffer(thread_slot)` -- allocate a fresh primary cb
   from the slot's per-thread pool. The wrapper carries an implicit
-  fence + binary semaphore (used by `Command_buffer::wait_for_fence`
-  / `wait_for_semaphore` / `signal_*`). Lifetime is tied to the next
+  fence + binary semaphore (used by `Command_buffer::wait_for_cpu` /
+  `wait_for_gpu` / `signal_cpu` / `signal_gpu`, which name another
+  `Command_buffer` as the target). Lifetime is tied to the next
   pool reset for this slot.
 - `Command_buffer::wait_for_swapchain(out_frame_state)` /
   `begin_swapchain(info, out_frame_state)` -- wait on the next
@@ -76,7 +77,7 @@ The contract for each entry point:
   per render pass is the recommended pattern.
 - `submit_command_buffers(span)` -- submit. Walks each cb,
   performs CPU-side `vkWaitForFences` for any
-  `wait_for_fence(other)` registered, splices the wait/signal
+  `wait_for_cpu(other)` registered, splices the wait/signal
   semaphores into a single `VkSubmitInfo2`, runs `vkQueueSubmit2`,
   and finally drives `vkQueuePresentKHR` / `swap_buffers` /
   `presentDrawable` on every swapchain whose cb engaged it via
@@ -103,15 +104,20 @@ that lists every resource the shaders reference:
 ```cpp
 Bind_group_layout_binding {
     uint32_t       binding_point;
-    Binding_type   type;              // uniform_buffer | storage_buffer | combined_image_sampler
+    Binding_type   type;              // uniform_buffer | storage_buffer | combined_image_sampler |
+                                      // storage_image | acceleration_structure
     uint32_t       descriptor_count;
 
-    // combined_image_sampler only
-    Sampler_aspect sampler_aspect;    // color / depth / stencil
-    std::string_view name;            // e.g. "s_shadow_compare"
-    Glsl_type        glsl_type;       // e.g. sampler_2d_array_shadow
-    bool             is_texture_heap; // true for bindless / sampler-array / argument-buffer
-    uint32_t         array_size;      // array length when is_texture_heap, else 0
+    // combined_image_sampler / storage_image
+    Sampler_aspect   sampler_aspect;    // color / depth / stencil
+    std::string_view name;              // e.g. "s_shadow_compare"
+    Glsl_type        glsl_type;         // e.g. sampler_2d_array_shadow
+    std::string_view image_format;      // storage_image only, e.g. "rgba16f"
+    bool             is_texture_heap;   // true for bindless / sampler-array / argument-buffer
+    uint32_t         array_size;        // array length when is_texture_heap, else 0
+    const Sampler*   immutable_sampler; // optional; Vulkan immutable sampler (MoltenVK comparison samplers)
+
+    uint32_t         stage_flags;       // Shader_stage_flags; mandatory on Vulkan (none is an error)
 };
 ```
 
@@ -163,10 +169,11 @@ The public API is backend-neutral:
 
 ```cpp
 Texture_heap heap{device, fallback_texture, fallback_sampler, &bind_group_layout};
-heap.reset_heap();
+heap.reset_heap(command_buffer);
 uint64_t handle = heap.allocate(texture, sampler);
-heap.bind();      // makes handles resident / updates descriptors / encodes arg buffer
-heap.unbind();    // releases residency / clears bindings
+heap.bind(render_encoder);    // or a Compute_command_encoder; makes handles resident /
+                              // updates descriptors / encodes arg buffer
+heap.unbind(command_buffer);  // releases residency / clears bindings
 ```
 
 `reset_heap()` starts an independent per-pass snapshot: several passes recorded

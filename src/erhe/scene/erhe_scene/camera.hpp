@@ -28,7 +28,7 @@ class Camera : public erhe::Item<Item_base, Xformable, Camera, erhe::Item_kind::
 {
 public:
     Camera();
-    explicit Camera(const Camera&);
+    Camera(const Camera&) = delete;
     Camera& operator=(const Camera&) = delete;
     ~Camera() noexcept override;
 

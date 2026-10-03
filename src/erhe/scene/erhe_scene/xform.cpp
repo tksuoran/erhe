@@ -8,8 +8,6 @@ Xform::~Xform() noexcept = default;
 
 // The transform level owns a scene host, so a plain copy is not a clone;
 // Xform(src, for_clone) is the clone path.
-Xform::Xform(const Xform&) { ERHE_FATAL("TODO"); }
-Xform& Xform::operator=(const Xform&) { ERHE_FATAL("TODO"); }
 
 Xform::Xform(const std::string_view name)
     : Item{name}

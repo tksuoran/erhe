@@ -1,4 +1,4 @@
-"""erhe_codegen — Python definitions for C++ struct/enum code generation."""
+"""erhe_codegen -- Python definitions for C++ struct/enum code generation."""
 
 from erhe_codegen.types import (
     Bool,

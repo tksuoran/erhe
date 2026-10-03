@@ -164,7 +164,7 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
 
     static constexpr const char* c_preamble_include_name = "erhe_preamble.glsl";
 
-    // Read the top-level shader file raw — do NOT pre-expand #includes. The
+    // Read the top-level shader file raw -- do NOT pre-expand #includes. The
     // glslang Includer resolves them during parse so each one becomes its own
     // named source string (and thus its own DebugSource with Text).
     std::string main_source;

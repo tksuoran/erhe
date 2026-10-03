@@ -1,4 +1,4 @@
-﻿#include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/buffer_pool.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"

@@ -71,12 +71,12 @@ public:
     Layer_id                            id;
 };
 
-class Scene : public erhe::Item<erhe::Item_base, erhe::Item_base, Scene>
+class Scene : public erhe::Item<erhe::Item_base, erhe::Item_base, Scene, erhe::Item_kind::not_clonable>
 {
 public:
     Scene(std::string_view name, Scene_host* host = nullptr);
-    explicit Scene(const Scene& src);
-    Scene& operator=(const Scene& src);
+    Scene(const Scene&) = delete;
+    Scene& operator=(const Scene&) = delete;
     ~Scene() noexcept override;
 
     // Implements Item_base

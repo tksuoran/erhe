@@ -1,4 +1,4 @@
-﻿#include "erhe_xr/xr_session.hpp"
+#include "erhe_xr/xr_session.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
@@ -37,7 +37,7 @@
 
 //#if defined(_MSC_VER) && !defined(__clang__)
 //#   pragma warning(push)
-//#   pragma warning(disable : 26812) // The enum type is unscoped. Prefer ‘enum class’ over ‘enum’ (Enum.3).
+//#   pragma warning(disable : 26812) // The enum type is unscoped. Prefer 'enum class' over 'enum' (Enum.3).
 //#endif
 
 #include <openxr/openxr.h>

@@ -32,8 +32,8 @@ class Point_instancer
 {
 public:
     Point_instancer();
-    explicit Point_instancer(const Point_instancer& src);
-    Point_instancer& operator=(const Point_instancer& src);
+    Point_instancer(const Point_instancer&) = delete;
+    Point_instancer& operator=(const Point_instancer&) = delete;
     explicit Point_instancer(std::string_view name);
     Point_instancer(const Point_instancer& src, for_clone);
     ~Point_instancer() noexcept override;

@@ -222,8 +222,6 @@ existing bucket whose `accept()` returns true or starts a new bucket.
 
 - Thread safety: `Buffer_pool` does not take a mutex internally. Build code
   serializes its own allocation flow.
-- The `format_pools.{hpp,cpp}` files exist on disk but are empty / fully
-  commented out -- there is no `Format_pools` type in the current build.
 - `Buffer_mesh::edge_line_vertex_buffer_range` is populated by
   `Build_context_root::allocate_edge_line_vertex_buffer()` whenever the
   primitive request includes edge lines and `Buffer_info::edge_line_vertex_stream`

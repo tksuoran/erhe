@@ -329,7 +329,7 @@ def _deserialize_value_code(t: TypeBase, target: str, indent: str) -> list[str]:
         lines.append(f"{indent}    from_string(str, {target});")
         lines.append(f"{indent}}}")
     elif isinstance(t, OptionalType):
-        # Optional: null → nullopt, otherwise deserialize inner value
+        # Optional: null -> nullopt, otherwise deserialize inner value
         inner_cpp = t.element_type.cpp_type
         lines.append(f"{indent}if (val.is_null()) {{")
         lines.append(f"{indent}    {target} = std::nullopt;")

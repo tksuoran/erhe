@@ -14,7 +14,6 @@ namespace erhe::graphics {
 class Device;
 class Gpu_timer;
 class Render_command_encoder;
-class Renderbuffer;
 class Texture;
 class Swapchain;
 class Surface;

@@ -11,7 +11,6 @@
 namespace erhe::graphics {
     class Render_pass;
     class Device;
-    class Renderbuffer;
     class Swapchain;
     class Texture;
 }

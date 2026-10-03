@@ -229,8 +229,6 @@ Node_data::Node_data(const Node_data& src, for_clone)
 }
 
 Xformable::Xformable() = default;
-Xformable::Xformable(const Xformable&) { ERHE_FATAL("TODO"); }
-Xformable& Xformable::operator=(const Xformable&) { ERHE_FATAL("TODO"); }
 
 Xformable::Xformable(const std::string_view name)
     : Item{name}
@@ -466,54 +464,27 @@ void Xformable::update_transform(uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 
-    //if (is_transform_world_normative()) {
-    //    const auto& current_parent = get_parent_node();
-    //    if (!current_parent) {
-    //        return;
-    //    }
-    //
-    //    serial = std::max(serial, current_parent->node_data.transforms.world_from_node_serial);
-    //
-    //    // if (node_data.transforms.update_serial >= serial) {
-    //    //     return;
-    //    // }
-    //
-    //    node_data.transforms.parent_from_node.set(
-    //        current_parent->node_from_world() * world_from_node(),
-    //        node_from_world() * current_parent->world_from_node()
-    //    );
-    //    handle_transform_update(serial);
-    //} else 
-    {
-        const auto& current_parent = get_parent_node();
-        if (!current_parent) {
-            return;
-        }
-
-        serial = std::max(serial, current_parent->node_data.transforms.parent_from_node_serial);
-
-        // if (node_data.transforms.update_serial >= serial) {
-        //     return;
-        // }
-        // if (is_shown_in_ui()) {
-        //     log_frame->trace("{} TX update parent {}", get_name(), current_parent->get_name());
-        // }
-
-        const glm::mat4 world_from_node = current_parent->world_from_node() * parent_from_node();
-        // Affine transform: det(mat4) == det(upper-left mat3), and the inverse
-        // is deferred (set(matrix) leaves it to the first node_from_world()
-        // read) - this loop runs for every node under a moving subtree.
-        const float determinant = glm::determinant(glm::mat3{world_from_node});
-
-        node_data.transforms.world_from_node.set(world_from_node);
-
-        if (determinant < 0.0f) {
-            enable_flag_bits(erhe::Item_flags::negative_determinant);
-        } else {
-            disable_flag_bits(erhe::Item_flags::negative_determinant);
-        }
-        handle_transform_update(serial);
+    const auto& current_parent = get_parent_node();
+    if (!current_parent) {
+        return;
     }
+
+    serial = std::max(serial, current_parent->node_data.transforms.parent_from_node_serial);
+
+    const glm::mat4 world_from_node = current_parent->world_from_node() * parent_from_node();
+    // Affine transform: det(mat4) == det(upper-left mat3), and the inverse
+    // is deferred (set(matrix) leaves it to the first node_from_world()
+    // read) - this loop runs for every node under a moving subtree.
+    const float determinant = glm::determinant(glm::mat3{world_from_node});
+
+    node_data.transforms.world_from_node.set(world_from_node);
+
+    if (determinant < 0.0f) {
+        enable_flag_bits(erhe::Item_flags::negative_determinant);
+    } else {
+        disable_flag_bits(erhe::Item_flags::negative_determinant);
+    }
+    handle_transform_update(serial);
 }
 
 void Xformable::update_world_from_node()
@@ -1001,15 +972,6 @@ void Xformable::set_node_from_world(const Transform& node_from_world)
         node_data.transforms.parent_from_node = node_data.transforms.world_from_node;
     }
     handle_local_transform_written(World_transform_state::up_to_date);
-}
-
-auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)-> unsigned int
-{
-    unsigned int mask{0};
-
-    if (lhs.transforms.parent_from_node != rhs.transforms.parent_from_node) mask |= Node_data::bit_transform;
-    if (lhs.transforms.world_from_node  != rhs.transforms.world_from_node ) mask |= Node_data::bit_transform;
-    return mask;
 }
 
 void set_prim_parent(const std::shared_ptr<Xformable>& prim, const std::shared_ptr<erhe::Hierarchy>& parent)

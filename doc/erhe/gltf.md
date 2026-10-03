@@ -30,7 +30,7 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
 - `query_gltf_device_options(device)` -- Main-thread query filling `Gltf_device_options`.
 
 ## Dependencies
-- **erhe libraries:** `erhe::graphics` (private), `erhe::scene` (private), `erhe::primitive` (private), `erhe::geometry` (private), `erhe::file` (private), `erhe::log` (private), `erhe::profile` (private)
+- **erhe libraries:** `erhe::scene` and `erhe::math` (public: `Gltf_data`, `Physics_description` and `Gltf_scan::bounding_box` use their types), `erhe::graphics` (private), `erhe::primitive` (private), `erhe::geometry` (private), `erhe::file` (private), `erhe::log` (private), `erhe::profile` (private), `erhe::task` (private)
 - **External:** fastgltf (conditionally, via `ERHE_GLTF_LIBRARY`), Taskflow (for parallel loading), fmt
 
 ## Notes

@@ -11,20 +11,17 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 - `Debug_renderer_bucket` -- Groups draw calls by pipeline config (primitive type, stencil, visibility). Internally manages GPU ring buffers.
 - `Debug_renderer_config` -- Selects primitive type, stencil reference, visible/hidden draw flags, and x-ray mode (hidden pass blends at full strength instead of the dim constant factor) for a bucket.
 - `Text_renderer` -- Renders 2D text at 3D positions using a font atlas texture. Uses `erhe::ui::Font` for glyph layout.
-- `Texture_renderer` -- Simple fullscreen texture blit.
-- `Draw_indirect_buffer` -- Builds GPU draw-indirect command buffers from a span of meshes filtered by `Item_filter`.
 - `View` -- Camera view data (clip_from_world matrix, viewport rect, FOV sides, pixel scale).
 
 ## Public API
 - `Debug_renderer::get(config)` returns a `Primitive_renderer` for a given config.
 - Call `begin_frame()`, draw with `Primitive_renderer`, then `compute()` and `render()`, finally `end_frame()`.
 - `Text_renderer::print(position, color, text)` queues text; `render(encoder, viewport)` draws it.
-- `Draw_indirect_buffer::update(meshes, mode, filter)` fills indirect draw commands.
 
 ## Dependencies
 - erhe::graphics (Device, Ring_buffer_client, Shader_stages, Pipeline, Texture)
 - erhe::scene (Camera, Transform -- for sphere/cone rendering)
-- erhe::primitive (Primitive_mode for draw indirect)
+- erhe::primitive
 - erhe::ui (Font for text rendering)
 - erhe::math (Viewport)
 - erhe::dataformat (Vertex_format)

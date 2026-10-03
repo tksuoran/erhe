@@ -63,13 +63,13 @@ where:
 
 **LS fit**: The scalar `t` minimizes distance to the hex target planes:
 ```
-minimize Σ(n_i · P(t) + d_i)²
+minimize sum(n_i . P(t) + d_i)^2
 ```
 This has a closed-form solution:
 ```
-a_i = n_i · centroid + d_i
-b_i = n_i · normal
-t = -Σ(a_i * b_i) / Σ(b_i²)
+a_i = n_i . centroid + d_i
+b_i = n_i . normal
+t = -sum(a_i * b_i) / sum(b_i^2)
 ```
 
 **Why this works**: The 1D parametrization constrains V' to move only along
@@ -120,7 +120,7 @@ On the **destination** geometry (visible when hovering hex faces):
   quality metrics (QualityRef for chamfer_old, Quality3 for chamfer3)
 - `test_chamfer_diagnostics.cpp`: per-iteration face quality metrics
   (convexity, planarity, winding) and edge coplanarity using chamfer_old
-- `self_intersection.hpp/cpp`: generic O(n²) triangle-pair self-intersection
+- `self_intersection.hpp/cpp`: generic O(n^2) triangle-pair self-intersection
   checker
 
 ## Edge Coplanarity (Tetrahedron, 3 Iterations)
@@ -183,7 +183,7 @@ positions from the offset result.
 ### Unconstrained 3D LS for Inset Vertices (chamfer3, earlier version)
 
 **Approach**: Same as the current chamfer3 Steps 1-2, but Step 3 used full
-3D LS fitting (minimize Σ(n_i·x + d_i)² with Tikhonov regularization toward
+3D LS fitting (minimize sum(n_i.x + d_i)^2 with Tikhonov regularization toward
 the original vertex position). No ray constraint.
 
 **Why it failed**: The 3D LS solution has three degrees of freedom. When hex

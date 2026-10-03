@@ -30,8 +30,8 @@ class Gprim
 {
 public:
     Gprim();
-    explicit Gprim(const Gprim& src);
-    Gprim& operator=(const Gprim& src);
+    Gprim(const Gprim&) = delete;
+    Gprim& operator=(const Gprim&) = delete;
     explicit Gprim(std::string_view name);
     Gprim(const Gprim& src, for_clone);
     ~Gprim() noexcept override;

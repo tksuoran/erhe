@@ -21,7 +21,6 @@ namespace erhe::geometry {
 namespace erhe::graphics {
     class Command_buffer;
     class Render_pass;
-    class Renderbuffer;
     class Texture;
 }
 namespace erhe::imgui {

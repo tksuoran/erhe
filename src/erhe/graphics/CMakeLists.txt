@@ -153,8 +153,6 @@ if (ERHE_GRAPHICS_API_OPENGL)
         erhe_graphics/gl/gl_render_command_encoder.hpp
         erhe_graphics/gl/gl_render_pass.cpp
         erhe_graphics/gl/gl_render_pass.hpp
-        #erhe_graphics/gl/gl_renderbuffer.cpp
-        #erhe_graphics/gl/gl_renderbuffer.hpp
         erhe_graphics/gl/gl_sampler.cpp
         erhe_graphics/gl/gl_sampler.hpp
         erhe_graphics/gl/gl_scoped_debug_group.cpp

@@ -127,7 +127,7 @@ implement it.
 positions as weighted averages of source vertex positions:
 
 ```
-dst_pos = Σ(weight_i * src_pos_i) / Σ(weight_i)
+dst_pos = sum(weight_i * src_pos_i) / sum(weight_i)
 ```
 
 It also interpolates all typed attributes (normals, texcoords, colors,

@@ -1,4 +1,4 @@
-﻿#include "erhe_geometry/shapes/regular_polygon.hpp"
+#include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_geometry/geometry.hpp"
 
 #include <geogram/mesh/mesh.h>

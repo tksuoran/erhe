@@ -194,8 +194,8 @@ public:
         "Spot"
     };
 
-    explicit Light(const Light&);
-    Light& operator=(const Light&);
+    Light(const Light&) = delete;
+    Light& operator=(const Light&) = delete;
     ~Light() noexcept override;
 
     explicit Light(std::string_view name);

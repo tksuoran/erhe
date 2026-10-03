@@ -1,4 +1,4 @@
-﻿#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 

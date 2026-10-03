@@ -857,11 +857,11 @@ public:
         // The inradius (r) of an icosahedron is related to the edge length (a) of
         // its triangular faces by the formula:
 
-        // r = a * √(10 + 2 * √5) / (4 * √3)
+        // r = a * sqrt(10 + 2 * sqrt5) / (4 * sqrt3)
 
         // Now, to find the radius of the circumscribed sphere (R), we can use the relationship:
 
-        // R = (2 * r) / √3
+        // R = (2 * r) / sqrt3
 
         const float r     =  1.0f; // inscribed sphere radius
         const float R     = (2.0f * r) / std::sqrt(3.0f);

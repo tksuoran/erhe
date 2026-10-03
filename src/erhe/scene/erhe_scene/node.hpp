@@ -58,10 +58,6 @@ public:
 
     Node_transforms                               transforms;
     Scene_host* host{nullptr};
-
-    static constexpr unsigned int bit_transform{1u << 0};
-
-    static auto diff_mask(const Node_data& lhs, const Node_data& rhs) -> unsigned int;
 };
 
 // Whether the world transform still matches the local one when a write
@@ -89,8 +85,8 @@ class Xformable
 {
 public:
     Xformable();
-    explicit Xformable(const Xformable&);
-    Xformable& operator=(const Xformable&);
+    Xformable(const Xformable&) = delete;
+    Xformable& operator=(const Xformable&) = delete;
 
     explicit Xformable(std::string_view name);
     Xformable(const Xformable& src, for_clone);

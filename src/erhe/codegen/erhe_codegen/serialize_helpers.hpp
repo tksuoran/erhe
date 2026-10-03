@@ -15,7 +15,7 @@
 
 namespace erhe::codegen {
 
-// Serialization helpers (append to output string) — implemented in .cpp
+// Serialization helpers (append to output string) -- implemented in .cpp
 void serialize_string(std::string& out, std::string_view value);
 void serialize_bool  (std::string& out, bool value);
 void serialize_int   (std::string& out, int64_t value);
@@ -71,7 +71,7 @@ inline void collapse_single_line_object(std::string& out)
     out = "{ " + member + " }";
 }
 
-// Deserialization helpers (scalar) — inline to avoid simdjson ABI mismatch
+// Deserialization helpers (scalar) -- inline to avoid simdjson ABI mismatch
 // (simdjson::ondemand::value resolves to a platform-specific namespace like
 // simdjson::haswell::ondemand::value, which can differ between translation
 // units compiled with different /arch flags)
@@ -173,7 +173,7 @@ inline void deserialize_field(simdjson::ondemand::value val, T& out)
     if (!val.get_uint64().get(tmp)) { out = static_cast<T>(tmp); }
 }
 
-// Deserialization helpers (glm) — inline for same reason
+// Deserialization helpers (glm) -- inline for same reason
 inline void deserialize_field(simdjson::ondemand::value val, glm::vec2& out)
 {
     simdjson::ondemand::array arr;
@@ -265,7 +265,7 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::mat4& out)
     }
 }
 
-// Serialization helpers (glm) — implemented in .cpp
+// Serialization helpers (glm) -- implemented in .cpp
 void serialize_vec2 (std::string& out, const glm::vec2&  value);
 void serialize_vec3 (std::string& out, const glm::vec3&  value);
 void serialize_vec4 (std::string& out, const glm::vec4&  value);
@@ -273,7 +273,7 @@ void serialize_ivec2(std::string& out, const glm::ivec2& value);
 void serialize_ivec3(std::string& out, const glm::ivec3& value);
 void serialize_mat4 (std::string& out, const glm::mat4&  value);
 
-// Serialization helpers (vector/array) — templates in header
+// Serialization helpers (vector/array) -- templates in header
 template <typename T, std::size_t N>
 void serialize_array(std::string& out, const std::array<T, N>& value)
 {
@@ -296,7 +296,7 @@ void serialize_vector(std::string& out, const std::vector<T>& value)
     out += ']';
 }
 
-// Deserialization helpers (vector/array) — templates in header
+// Deserialization helpers (vector/array) -- templates in header
 template <typename T, std::size_t N>
 void deserialize_field(simdjson::ondemand::value val, std::array<T, N>& out)
 {

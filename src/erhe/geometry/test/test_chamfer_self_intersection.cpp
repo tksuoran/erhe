@@ -159,7 +159,7 @@ TEST(ChamferReference, Cube_SingleChamfer_VertexPositions)
     const GEO::Mesh& mesh = chamfered->get_mesh();
 
     // Verify face/vertex counts match Conway chamfer topology: F+E faces, 2E+? vertices
-    // Cube: 6 faces, 12 edges, 8 vertices → chamfer: 6+12=18 faces
+    // Cube: 6 faces, 12 edges, 8 vertices -> chamfer: 6+12=18 faces
     EXPECT_EQ(mesh.facets.nb(), 18u);
 
     // Verify planarity is near-zero (the hallmark of a correct chamfer)
@@ -197,7 +197,7 @@ TEST(ChamferReference, Tetrahedron_SingleChamfer_Quality)
     std::unique_ptr<erhe::geometry::Geometry> chamfered = apply_chamfer(*solid);
     const GEO::Mesh& mesh = chamfered->get_mesh();
 
-    // Tetrahedron: 4 faces, 6 edges → chamfer: 4+6=10 faces
+    // Tetrahedron: 4 faces, 6 edges -> chamfer: 4+6=10 faces
     EXPECT_EQ(mesh.facets.nb(), 10u);
 
     // Verify planarity

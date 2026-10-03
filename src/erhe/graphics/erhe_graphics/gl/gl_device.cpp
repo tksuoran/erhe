@@ -2059,7 +2059,7 @@ auto Device_impl::create_query(gl::Query_target target) -> Gl_query
 
 auto Device_impl::create_program() -> Gl_program
 {
-    // glCreateProgram is not DSA — available since GL 2.0.
+    // glCreateProgram is not DSA -- available since GL 2.0.
     ERHE_VERIFY_GL_THREAD_HAS_CONTEXT();
     GLuint name = gl::create_program();
     ERHE_VERIFY(name != 0);
@@ -2068,7 +2068,7 @@ auto Device_impl::create_program() -> Gl_program
 
 auto Device_impl::create_shader(gl::Shader_type type) -> Gl_shader
 {
-    // glCreateShader is not DSA — available since GL 2.0.
+    // glCreateShader is not DSA -- available since GL 2.0.
     ERHE_VERIFY_GL_THREAD_HAS_CONTEXT();
     GLuint name = gl::create_shader(type);
     ERHE_VERIFY(name != 0);

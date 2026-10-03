@@ -29,7 +29,7 @@ def _needs_include(types: set[type], type_names: set[str]) -> dict[str, bool]:
 
 
 def _all_leaf_types_in(types: set[type]) -> set:
-    """Helper — not actually useful with type classes, just return the set."""
+    """Helper -- not actually useful with type classes, just return the set."""
     return types
 
 

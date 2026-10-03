@@ -151,7 +151,6 @@ Camera::~Camera() noexcept = default;
 
 // See Xform: the transform level owns children and a scene host, so a plain
 // copy is not a clone; Camera(src, for_clone) is the clone path.
-Camera::Camera(const Camera&) { ERHE_FATAL("TODO"); }
 
 Camera::Camera(const std::string_view name)
     : Item{name}

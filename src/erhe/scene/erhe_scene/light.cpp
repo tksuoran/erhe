@@ -210,8 +210,6 @@ Light::~Light() noexcept = default;
 
 // See Xform: the transform level owns children and a scene host, so a plain
 // copy is not a clone; Light(src, for_clone) is the clone path.
-Light::Light(const Light&) { ERHE_FATAL("TODO"); }
-Light& Light::operator=(const Light&) { ERHE_FATAL("TODO"); }
 
 Light::Light(const std::string_view name)
     : Item{name}

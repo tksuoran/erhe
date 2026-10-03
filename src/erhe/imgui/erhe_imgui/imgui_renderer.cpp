@@ -1295,7 +1295,7 @@ void Imgui_renderer::render_draw_data(
                         if (texture_id.array_layer >= 0) {
                             // Array texture: uses reserved slot 0, one per batch
                             if (batch_array_texture != nullptr && (batch_array_texture != texture || batch_array_sampler != &sampler)) {
-                                break; // different array texture — need new batch
+                                break; // different array texture -- need new batch
                             }
                             batch_array_texture = texture;
                             batch_array_sampler = &sampler;

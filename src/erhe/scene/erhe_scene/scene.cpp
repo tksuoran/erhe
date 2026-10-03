@@ -407,16 +407,6 @@ void Scene::update_subtree_transforms(erhe::Hierarchy& prim, const bool carry_bo
     }
 }
 
-Scene::Scene(const Scene&)
-{
-    ERHE_FATAL("This probably won't work");
-}
-
-Scene& Scene::operator=(const Scene&)
-{
-    ERHE_FATAL("This probably won't work");
-}
-
 Scene::Scene(const std::string_view name, Scene_host* const host)
     : Item  {name}
     , m_host{host}

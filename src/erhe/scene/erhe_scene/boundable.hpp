@@ -24,8 +24,8 @@ class Boundable
 {
 public:
     Boundable();
-    explicit Boundable(const Boundable& src);
-    Boundable& operator=(const Boundable& src);
+    Boundable(const Boundable&) = delete;
+    Boundable& operator=(const Boundable&) = delete;
     explicit Boundable(std::string_view name);
     Boundable(const Boundable& src, for_clone);
     ~Boundable() noexcept override;

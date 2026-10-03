@@ -53,7 +53,7 @@ public:
 
     erhe::graphics::Fragment_outputs                 fragment_outputs;
 
-    // Compute path (wide lines): SSBO line vertices → compute shader → triangle vertices
+    // Compute path (wide lines): SSBO line vertices -> compute shader -> triangle vertices
     erhe::dataformat::Vertex_format                  triangle_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_struct;
     std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_buffer_block;

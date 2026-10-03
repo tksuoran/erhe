@@ -21,8 +21,8 @@ class Xform
 {
 public:
     Xform();
-    explicit Xform(const Xform& src);
-    Xform& operator=(const Xform& src);
+    Xform(const Xform&) = delete;
+    Xform& operator=(const Xform&) = delete;
     explicit Xform(std::string_view name);
     Xform(const Xform& src, for_clone);
     ~Xform() noexcept override;

@@ -8,6 +8,7 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 ## Key Types
 - `Forward_renderer` -- Renders meshes with full lighting, materials, and shadows. Takes `Render_parameters` specifying camera, lights, skins, materials, mesh spans, pipeline states, and viewport.
 - `Shadow_renderer` -- Generates shadow maps by rendering meshes from each light's perspective into a texture array.
+- `Draw_indirect_buffer` -- Builds GPU draw-indirect command buffers from a span of meshes filtered by `Item_filter` (`update(meshes, mode, filter)`).
 - `Program_interface` -- Defines the shader resource layout (vertex format, camera/light/material/primitive/joint/cube blocks). Creates shader prototypes with all blocks pre-configured.
 - `Camera_buffer` -- Ring buffer client uploading camera matrices, viewport, exposure, and grid settings, plus the pass's view origin and `clip_from_view_relative` (`get_view_origin()`, `get_clip_from_view_relative()`; doc/erhe/shadows.md "View-relative positions").
 - `Light_buffer` -- Ring buffer client uploading light data (position, direction, color, shadow transforms) and shadow map texture handles.
@@ -28,7 +29,7 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 
 ## Dependencies
 - erhe::graphics (Device, Ring_buffer_client, Shader_resource, Shader_stages, Texture, Sampler, Render_pass, Buffer, Gpu_timer)
-- erhe::renderer (Draw_indirect_buffer)
+- erhe::renderer (renderer_config: generated renderer configuration)
 - erhe::scene (Camera, Light, Mesh, Skin, Node, Mesh_layer)
 - erhe::primitive (Material, Primitive_mode)
 - erhe::dataformat (Format, Vertex_format)

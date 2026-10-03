@@ -40,7 +40,6 @@
 namespace editor {
 
 using erhe::graphics::Render_pass;
-using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;

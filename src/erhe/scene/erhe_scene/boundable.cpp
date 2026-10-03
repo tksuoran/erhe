@@ -7,8 +7,6 @@ Boundable::Boundable()           = default;
 Boundable::~Boundable() noexcept = default;
 
 // See Xform: the transform level's copy is not a clone.
-Boundable::Boundable(const Boundable&) { ERHE_FATAL("TODO"); }
-Boundable& Boundable::operator=(const Boundable&) { ERHE_FATAL("TODO"); }
 
 Boundable::Boundable(const std::string_view name)
     : Item{name}

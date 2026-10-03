@@ -242,6 +242,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene`: the copy constructors and copy assignments of `Xformable`,
+  `Xform`, `Boundable`, `Gprim`, `Point_instancer`, `Light`, `Camera` and
+  `Scene` are deleted (they aborted at run time); cloning goes through the
+  `for_clone` constructors; `Scene` is `Item_kind::not_clonable` (`clone()`
+  returns null). `Node_data::diff_mask()` and
+  `Node_data::bit_transform` removed.
+- `erhe::graphics`: `Scoped_buffer_mapping` (`erhe_graphics/scoped_buffer_mapping.hpp`)
+  removed; it had no users.
 - `erhe::physics`: `IWorld::debug_draw()` takes `(IDebug_draw&, glm::vec3
   camera_position)` instead of `erhe::renderer::Jolt_debug_renderer&`;
   `IDebug_draw` is reduced to `draw_line(from, to, color)` (RGBA), which the

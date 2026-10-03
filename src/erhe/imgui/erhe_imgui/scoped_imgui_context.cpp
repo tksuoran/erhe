@@ -1,4 +1,4 @@
-﻿#include "erhe_imgui/scoped_imgui_context.hpp"
+#include "erhe_imgui/scoped_imgui_context.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 

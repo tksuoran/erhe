@@ -240,7 +240,7 @@ auto collect_edge_constraint_lines(
 //   ||(x - pi) - ((x - pi) . di) * di||^2 = (x - pi)^T (I - di di^T) (x - pi)
 //
 // Summing over all lines and differentiating:
-//   M x = c   where M = Σ (I - di di^T),  c = Σ (I - di di^T) pi
+//   M x = c   where M = sum (I - di di^T),  c = sum (I - di di^T) pi
 //
 // Add regularization: (M + eps*I) x = c + eps * reference_point
 auto least_squares_closest_point_to_lines(
@@ -253,7 +253,7 @@ auto least_squares_closest_point_to_lines(
 {
     constexpr float epsilon = 1e-4f;
 
-    // Build M = Σ wi*(I - di*di^T) + eps*I  and  c = Σ wi*(I - di*di^T)*pi + eps*ref
+    // Build M = sum wi*(I - di*di^T) + eps*I  and  c = sum wi*(I - di*di^T)*pi + eps*ref
     float m00 = epsilon, m01 = 0.0f, m02 = 0.0f;
     float                m11 = epsilon, m12 = 0.0f;
     float                               m22 = epsilon;
@@ -500,7 +500,7 @@ void Chamfer::build()
             continue;
         }
 
-        // Build LS system: minimize Σ (n_i . x + d_i)^2 + eps * ||x - ref||^2
+        // Build LS system: minimize sum (n_i . x + d_i)^2 + eps * ||x - ref||^2
         constexpr float epsilon = 1e-4f;
         float m00 = epsilon, m01 = 0.0f, m02 = 0.0f;
         float                m11 = epsilon, m12 = 0.0f;

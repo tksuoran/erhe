@@ -9,52 +9,7 @@
 
 #include "erhe_log/log_glm.hpp"
 
-//#include <sstream>
-
 namespace editor {
-
-//auto Node_operation::describe() const -> std::string
-//{
-//    std::stringstream ss;
-//    bool first = true;
-//    for (const auto& entry : m_entries) {
-//        if (first) {
-//            first = false;
-//        } else {
-//            ss << ", ";
-//        }
-//        ss << entry.node->get_name();
-//        using erhe::scene::Node_data;
-//        const auto changed = Node_data::diff_mask(entry.before, entry.after);
-//        if (changed & Node_data::bit_transform) ss << " transform";
-//    }
-//    return ss.str();
-//}
-//
-//void Node_operation::execute(App_context&)
-//{
-//    log_operations->trace("Op Execute {}", describe());
-//
-//    for (auto& entry : m_entries) {
-//        entry.node->node_data = entry.after;
-//    }
-//}
-//
-//void Node_operation::undo(App_context&)
-//{
-//    log_operations->trace("Op Undo {}", describe());
-//
-//    for (const auto& entry : m_entries) {
-//        entry.node->node_data = entry.before;
-//    }
-//}
-//
-//void Node_operation::add_entry(Entry&& entry)
-//{
-//    m_entries.emplace_back(entry);
-//}
-
-// ----------------------------------------------------------------------------
 
 Node_transform_operation::Node_transform_operation(const Parameters& parameters)
     : m_parameters{parameters}

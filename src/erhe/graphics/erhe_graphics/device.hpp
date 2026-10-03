@@ -254,8 +254,8 @@ public:
     bool use_base_instance           {false};
     bool use_clear_texture           {false};
     bool use_texture_view            {false};
-    bool use_debug_output            {false}; // GL 4.3 or ARB_debug_output — debug callback
-    bool use_debug_groups            {false}; // GL 4.3 — push/pop debug group (not in ARB_debug_output)
+    bool use_debug_output            {false}; // GL 4.3 or ARB_debug_output -- debug callback
+    bool use_debug_groups            {false}; // GL 4.3 -- push/pop debug group (not in ARB_debug_output)
 
     // The device can source a vertex attribute from a 3-component 16-bit snorm
     // buffer (format_16_vec3_snorm). Vulkan guarantees

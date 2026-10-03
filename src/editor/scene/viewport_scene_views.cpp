@@ -52,7 +52,6 @@ using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 using erhe::graphics::Render_pass;
-using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
 namespace {

@@ -23,11 +23,10 @@ class Texture;
 enum class Image_layout : unsigned int;
 enum class Memory_barrier_mask : unsigned int;
 
-// Public erhe::graphics handle for a backend command buffer. Currently a
-// stub: the actual recording API will land as we iterate. Intent is for
-// callers (notably erhe::xr) to hold an explicit Command_buffer instead
-// of relying on the implicit single-cb-per-frame model so that
-// submission timing is decoupled from Device::end_frame().
+// Public erhe::graphics handle for a backend command buffer. Callers
+// (notably erhe::xr) hold an explicit Command_buffer instead of relying on
+// an implicit single-cb-per-frame model, so submission timing is decoupled
+// from Device::end_frame().
 class Command_buffer final
 {
 public:
