@@ -186,10 +186,20 @@ if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
         # value, but only when ERHE_PHYSICS_LIBRARY=jolt.)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif ()
+endif ()
 
-    # Shared oneTBB, providing the TBB::tbb target for OpenVDB (mandatory
-    # dependency) and Geogram (optional, see GEOGRAM_WITH_TBB below). oneTBB
-    # supports only the dynamic library configuration; a static build warns at
+# Shared oneTBB via CPM, providing the TBB::tbb / tbb targets. OpenVDB needs
+# it (mandatory dependency). Geogram needs it on Linux regardless of
+# GEOGRAM_WITH_TBB: its src/lib/geogram/CMakeLists.txt links the bare name
+# "tbb" for parallel STL on every Linux build, which resolves to this target
+# when it exists and to the system libtbb otherwise. erhe does not depend on
+# a system TBB package, so the target is always defined there.
+set(ERHE_FETCH_ONETBB OFF)
+if ((${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb") OR (CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+    set(ERHE_FETCH_ONETBB ON)
+endif ()
+if (ERHE_FETCH_ONETBB)
+    # oneTBB supports only the dynamic library configuration; a static build warns at
     # configure time. BUILD_SHARED_LIBS is saved/restored around the package
     # because oneTBB keys shared-vs-static off it. Its DLL is redirected
     # into the shared output directory with every executable.
@@ -233,7 +243,9 @@ if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
     # pragmas in the oneTBB headers (tbb12.lib / tbb12_debug.lib by bare name,
     # no library path) must not fire. Same define Geogram's onetbb.cmake applies.
     target_compile_definitions(tbb PUBLIC __TBB_NO_IMPLICIT_LINKAGE=1)
+endif ()
 
+if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
     # OpenVDB calls find_package(TBB REQUIRED) instead of checking for an
     # existing target. Satisfy it with a find_package redirection (CMake
     # >= 3.24) that resolves to the build-tree targets defined above.
