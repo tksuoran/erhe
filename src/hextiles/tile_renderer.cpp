@@ -347,15 +347,9 @@ void Tile_renderer::compose_tileset_texture(erhe::graphics::Command_buffer& comm
         const std::size_t src_bytes_per_row   = m_tileset_image.info.width  * erhe::dataformat::get_format_size_bytes(m_tileset_image.info.format);
         const std::size_t src_bytes_per_image = m_tileset_image.info.height * src_bytes_per_row;
         encoder.copy_from_buffer(
-            buffer_range.get_buffer()->get_buffer(),          // source_buffer
-            buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
-            src_bytes_per_row,                                // source_bytes_per_row
-            src_bytes_per_image,                              // source_bytes_per_image
-            glm::ivec3{m_tileset_image.info.width, ty0_single_unit_tiles * Tile_shape::height, 1}, // source_size
-            m_tileset_texture.get(),                          // destination_texture
-            0,                                                // destination_slice
-            0,                                                // destination_level
-            glm::ivec3{0, 0, 0}                               // destination_origin
+            erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = src_bytes_per_row, .bytes_per_image = src_bytes_per_image},
+            glm::ivec3{m_tileset_image.info.width, ty0_single_unit_tiles * Tile_shape::height, 1},
+            erhe::graphics::Texture_location{.texture = m_tileset_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
         );
         buffer_range.release();
     }
@@ -418,23 +412,9 @@ void Tile_renderer::compose_tileset_texture(erhe::graphics::Command_buffer& comm
             buffer_range.bytes_written(src_bytes_per_image);
             buffer_range.close();
             encoder.copy_from_buffer(
-                buffer_range.get_buffer()->get_buffer(),          // source_buffer
-                buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
-                src_bytes_per_row,                                // source_bytes_per_row
-                src_bytes_per_image,                              // source_bytes_per_image
-                glm::ivec3{                                       // source_size
-                    scratch.info.width,                           //   x
-                    scratch.info.height,                          //   y
-                    1                                             //   z
-                },
-                m_tileset_texture.get(),                          // destination_texture
-                0,                                                // destination_slice
-                0,                                                // destination_level
-                glm::ivec3{                                       // destination_origin
-                    0,                                                                     // x
-                    (ty0_single_unit_tiles + i * Unit_group::height) * Tile_shape::height, // y
-                    0                                                                      // z
-                }
+                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = src_bytes_per_row, .bytes_per_image = src_bytes_per_image},
+                glm::ivec3{ scratch.info.width, scratch.info.height, 1 },
+                erhe::graphics::Texture_location{.texture = m_tileset_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{ 0, (ty0_single_unit_tiles + i * Unit_group::height) * Tile_shape::height, 0 }}
             );
             buffer_range.release();
         }
@@ -479,23 +459,9 @@ void Tile_renderer::compose_tileset_texture(erhe::graphics::Command_buffer& comm
                         buffer_range.bytes_written(src_bytes_per_image);
                         buffer_range.close();
                         encoder.copy_from_buffer(
-                            buffer_range.get_buffer()->get_buffer(),          // source_buffer
-                            buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
-                            src_bytes_per_row,                                // source_bytes_per_row
-                            src_bytes_per_image,                              // source_bytes_per_image
-                            glm::ivec3{                                       // source_size
-                                scratch.info.width,                           //   x
-                                scratch.info.height,                          //   y
-                                1                                             //   z
-                            },
-                            m_tileset_texture.get(),                          // destination_texture
-                            0,                                                // destination_slice
-                            0,                                                // destination_level
-                            glm::ivec3{                                       // destination_origin
-                                tx * Tile_shape::full_width,                  //   x
-                                ty * Tile_shape::height,                      //   y
-                                0                                             //   z
-                            }
+                            erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = src_bytes_per_row, .bytes_per_image = src_bytes_per_image},
+                            glm::ivec3{ scratch.info.width, scratch.info.height, 1 },
+                            erhe::graphics::Texture_location{.texture = m_tileset_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{ tx * Tile_shape::full_width, ty * Tile_shape::height, 0 }}
                         );
                         buffer_range.release();
 

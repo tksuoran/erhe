@@ -142,15 +142,9 @@ TEST_F(Gpu_test, texture_cube_sample_faces)
             [&](erhe::graphics::Command_buffer& command_buffer) {
                 erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
                 blit.copy_from_buffer(
-                    face_buffer.get(),
-                    0,                                          // source_offset
-                    static_cast<std::uintptr_t>(face_bytes),    // source_bytes_per_row (1 texel row)
-                    static_cast<std::uintptr_t>(face_bytes),    // source_bytes_per_image (1 row)
-                    glm::ivec3{1, 1, 1},                        // source_size (1x1 face)
-                    cube_texture.get(),
-                    static_cast<std::uintptr_t>(face),          // destination_slice (cube face / array layer)
-                    0,                                          // destination_level
-                    glm::ivec3{0, 0, 0}                         // destination_origin
+                    erhe::graphics::Buffer_texel_location{.buffer = face_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(face_bytes), .bytes_per_image = static_cast<std::uintptr_t>(face_bytes)},
+                    glm::ivec3{1, 1, 1},
+                    erhe::graphics::Texture_location{.texture = cube_texture.get(), .slice = static_cast<std::uintptr_t>(face), .level = 0, .origin = glm::ivec3{0, 0, 0}}
                 );
             }
         );

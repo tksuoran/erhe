@@ -973,15 +973,9 @@ auto Device_impl::create_dummy_texture(Command_buffer& init_command_buffer, cons
         const int src_bytes_per_image = 2 * src_bytes_per_row;
         Blit_command_encoder encoder{m_device, init_command_buffer};
         encoder.copy_from_buffer(
-            buffer_range.get_buffer()->get_buffer(),         // source_buffer
-            buffer_range.get_byte_start_offset_in_buffer(),  // source_offset
-            src_bytes_per_row,                               // source_bytes_per_row
-            src_bytes_per_image,                             // source_bytes_per_image
-            glm::ivec3{2, 2, 1},                             // source_size
-            texture.get(),                                   // destination_texture
-            0,                                               // destination_slice
-            0,                                               // destination_level
-            glm::ivec3{0, 0, 0}                              // destination_origin
+            erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = src_bytes_per_row, .bytes_per_image = src_bytes_per_image},
+            glm::ivec3{2, 2, 1},
+            erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
         );
 
         buffer_range.release();

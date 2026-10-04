@@ -419,15 +419,9 @@ void Scene_image_capture::record_readback(erhe::graphics::Command_buffer& comman
     {
         Blit_command_encoder blit = m_context.graphics_device->make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            texture.get(),
-            0,                                    // source_slice
-            0,                                    // source_level
-            glm::ivec3{0, 0, 0},                  // source_origin
-            glm::ivec3{m_width, m_height, 1},     // source_size
-            m_readback_buffer.get(),              // destination_buffer
-            0,                                    // destination_offset
-            static_cast<std::uintptr_t>(bytes_per_row),
-            static_cast<std::uintptr_t>(byte_count)
+            erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+            glm::ivec3{m_width, m_height, 1},
+            erhe::graphics::Buffer_texel_location{.buffer = m_readback_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
         );
     }
     // Transfer writes -> host reads once the frame's fence has signalled.

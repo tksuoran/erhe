@@ -340,15 +340,9 @@ auto Ray_trace_renderer::read_output_rgba8(std::vector<uint8_t>& out_pixels) -> 
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            m_output_texture.get(),
-            0,                             // source_slice
-            0,                             // source_level
-            glm::ivec3{0, 0, 0},           // source_origin
-            glm::ivec3{width, height, 1},  // source_size
-            &readback,                     // destination_buffer
-            0,                             // destination_offset
-            static_cast<std::uintptr_t>(bytes_per_row),
-            static_cast<std::uintptr_t>(byte_count)
+            erhe::graphics::Texture_location{.texture = m_output_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+            glm::ivec3{width, height, 1},
+            erhe::graphics::Buffer_texel_location{.buffer = &readback, .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
         );
     }
     command_buffer.transition_texture_layout(*m_output_texture, Image_layout::shader_read_only_optimal);

@@ -2208,15 +2208,9 @@ void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_b
         const std::size_t bytes_per_row = static_cast<std::size_t>(width) * texel_bytes;
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            &texture,
-            0,                             // source_slice
-            0,                             // source_level
-            glm::ivec3{0, 0, 0},           // source_origin
-            glm::ivec3{width, height, 1},  // source_size
-            m_readback_buffer.get(),       // destination_buffer
-            static_cast<std::uintptr_t>(destination_offset),
-            static_cast<std::uintptr_t>(bytes_per_row),
-            static_cast<std::uintptr_t>(bytes_per_row * static_cast<std::size_t>(height))
+            erhe::graphics::Texture_location{.texture = &texture, .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+            glm::ivec3{width, height, 1},
+            erhe::graphics::Buffer_texel_location{.buffer = m_readback_buffer.get(), .offset = static_cast<std::uintptr_t>(destination_offset), .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(bytes_per_row * static_cast<std::size_t>(height))}
         );
     };
     for (int i = 0; i < m_layout.cascade_count; ++i) {
@@ -2694,15 +2688,9 @@ auto Radiance_cascades_renderer::record_probe_overlay_readback(
         const std::size_t bytes_per_row = static_cast<std::size_t>(width) * texel_bytes;
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            &texture,
-            0,                             // source_slice
-            0,                             // source_level
-            glm::ivec3{0, 0, 0},           // source_origin
-            glm::ivec3{width, height, 1},  // source_size
-            m_overlay_buffer.get(),        // destination_buffer
-            static_cast<std::uintptr_t>(destination_offset),
-            static_cast<std::uintptr_t>(bytes_per_row),
-            static_cast<std::uintptr_t>(bytes_per_row * static_cast<std::size_t>(height))
+            erhe::graphics::Texture_location{.texture = &texture, .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+            glm::ivec3{width, height, 1},
+            erhe::graphics::Buffer_texel_location{.buffer = m_overlay_buffer.get(), .offset = static_cast<std::uintptr_t>(destination_offset), .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(bytes_per_row * static_cast<std::size_t>(height))}
         );
     };
     if (copy.has_state) {

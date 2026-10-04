@@ -131,15 +131,9 @@ void Image_transfer::record_copies(
         const glm::ivec3 source_size = glm::ivec3{level_width, level_height, image_info.depth};
 
         encoder.copy_from_buffer(
-            &source_buffer,
-            source_offset + level_offset,
-            bytes_per_row,
-            level_byte_count,
+            erhe::graphics::Buffer_texel_location{.buffer = &source_buffer, .offset = source_offset + level_offset, .bytes_per_row = bytes_per_row, .bytes_per_image = level_byte_count},
             source_size,
-            destination_texture,
-            destination_slice,
-            static_cast<std::uintptr_t>(level),
-            destination_origin
+            erhe::graphics::Texture_location{.texture = destination_texture, .slice = destination_slice, .level = static_cast<std::uintptr_t>(level), .origin = destination_origin}
         );
         level_offset += level_byte_count;
     }

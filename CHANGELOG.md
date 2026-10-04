@@ -251,6 +251,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: the three nine-parameter `Blit_command_encoder` copies
+  take region value types: `copy_from_texture(Texture_location source,
+  glm::ivec3 size, Texture_location destination)`,
+  `copy_from_buffer(Buffer_texel_location, size, Texture_location)` and
+  `copy_from_texture(Texture_location, size, Buffer_texel_location)`.
+  `Texture_location` names a texture, slice, level and origin;
+  `Buffer_texel_location` a buffer, offset, bytes per row and bytes per image.
 - `erhe::math`: `Aabb::is_valid()` is replaced by `Aabb::is_valid_3d()`, which
   requires `min <= max` on all three axes (the old check accepted a box valid
   on any one axis, and a box with a NaN bound).

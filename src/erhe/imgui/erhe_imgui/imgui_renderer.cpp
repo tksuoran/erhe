@@ -1010,15 +1010,9 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
 
             erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
             encoder.copy_from_buffer(
-                buffer_range.get_buffer()->get_buffer(),          // source_buffer
-                buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
-                tex->GetPitch(),                                  // source_bytes_per_row
-                tex->GetSizeInBytes(),                            // source_bytes_per_image
-                glm::ivec3{tex->Width, tex->Height, 1},           // source_size
-                texture.get(),                                    // destination_texture
-                0,                                                // destination_slice
-                0,                                                // destination_level
-                glm::ivec3{0, 0, 0}                               // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = tex->GetPitch(), .bytes_per_image = tex->GetSizeInBytes()},
+                glm::ivec3{tex->Width, tex->Height, 1},
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
             buffer_range.release();
         }
@@ -1062,15 +1056,9 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
             buffer_range.close();
 
             encoder.copy_from_buffer(
-                buffer_range.get_buffer()->get_buffer(),                        // source_buffer
-                buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, // source_offset
-                tex->GetPitch(),                                                // source_bytes_per_row
-                tex->GetSizeInBytes(),                                          // source_bytes_per_image
-                glm::ivec3{r.w, r.h, 1},                                        // source_size
-                texture,                                                        // destination_texture
-                0,                                                              // destination_slice
-                0,                                                              // destination_level
-                glm::ivec3{r.x, r.y, 0}                                         // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, .bytes_per_row = tex->GetPitch(), .bytes_per_image = tex->GetSizeInBytes()},
+                glm::ivec3{r.w, r.h, 1},
+                erhe::graphics::Texture_location{.texture = texture, .slice = 0, .level = 0, .origin = glm::ivec3{r.x, r.y, 0}}
             );
             buffer_range.release();
         };

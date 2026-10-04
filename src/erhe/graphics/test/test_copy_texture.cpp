@@ -118,15 +118,9 @@ TEST_F(Gpu_test, copy_from_texture_whole_image)
             // Fill the source texture from the staging buffer. This leaves the
             // source texture tracked + physically in SHADER_READ_ONLY_OPTIMAL.
             blit.copy_from_buffer(
-                staging.get(),
-                0,                                        // source_offset
-                static_cast<std::uintptr_t>(width) * 4u, // source_bytes_per_row
-                static_cast<std::uintptr_t>(bytes),       // source_bytes_per_image
-                glm::ivec3{width, height, 1},             // source_size
-                source_texture.get(),
-                0,                                        // destination_slice
-                0,                                        // destination_level
-                glm::ivec3{0, 0, 0}                       // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = staging.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(width) * 4u, .bytes_per_image = static_cast<std::uintptr_t>(bytes)},
+                glm::ivec3{width, height, 1},
+                erhe::graphics::Texture_location{.texture = source_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
 
             // Texture -> texture copy of the whole image. The source enters in
@@ -194,28 +188,16 @@ TEST_F(Gpu_test, copy_from_texture_sub_rect)
             erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
 
             blit.copy_from_buffer(
-                staging.get(),
-                0,
-                static_cast<std::uintptr_t>(width) * 4u,
-                static_cast<std::uintptr_t>(bytes),
+                erhe::graphics::Buffer_texel_location{.buffer = staging.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(width) * 4u, .bytes_per_image = static_cast<std::uintptr_t>(bytes)},
                 glm::ivec3{width, height, 1},
-                source_texture.get(),
-                0,
-                0,
-                glm::ivec3{0, 0, 0}
+                erhe::graphics::Texture_location{.texture = source_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
 
             // Sub-rect texture -> texture copy with non-zero origins.
             blit.copy_from_texture(
-                source_texture.get(),
-                0,                                  // source_slice
-                0,                                  // source_level
-                glm::ivec3{src_x, src_y, 0},        // source_origin
-                glm::ivec3{rect_w, rect_h, 1},      // source_size
-                destination_texture.get(),
-                0,                                  // destination_slice
-                0,                                  // destination_level
-                glm::ivec3{dst_x, dst_y, 0}         // destination_origin
+                erhe::graphics::Texture_location{.texture = source_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{src_x, src_y, 0}},
+                glm::ivec3{rect_w, rect_h, 1},
+                erhe::graphics::Texture_location{.texture = destination_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{dst_x, dst_y, 0}}
             );
 
             command_buffer.transition_texture_layout(*destination_texture, erhe::graphics::Image_layout::transfer_src_optimal);
@@ -570,15 +552,9 @@ protected:
             [&](erhe::graphics::Command_buffer& command_buffer) {
                 erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
                 blit.copy_from_texture(
-                    source.get(),
-                    static_cast<std::uintptr_t>(source_subresource.layer),          // source_slice
-                    static_cast<std::uintptr_t>(source_subresource.level),          // source_level
-                    glm::ivec3{source_memory.x, source_memory.y, 0},                // source_origin
-                    glm::ivec3{source_image.width, source_image.height, 1},         // source_size
-                    destination.get(),
-                    static_cast<std::uintptr_t>(destination_subresource.layer),     // destination_slice
-                    static_cast<std::uintptr_t>(destination_subresource.level),     // destination_level
-                    glm::ivec3{destination_memory.x, destination_memory.y, 0}       // destination_origin
+                    erhe::graphics::Texture_location{.texture = source.get(), .slice = static_cast<std::uintptr_t>(source_subresource.layer), .level = static_cast<std::uintptr_t>(source_subresource.level), .origin = glm::ivec3{source_memory.x, source_memory.y, 0}},
+                    glm::ivec3{source_image.width, source_image.height, 1},
+                    erhe::graphics::Texture_location{.texture = destination.get(), .slice = static_cast<std::uintptr_t>(destination_subresource.layer), .level = static_cast<std::uintptr_t>(destination_subresource.level), .origin = glm::ivec3{destination_memory.x, destination_memory.y, 0}}
                 );
             }
         );

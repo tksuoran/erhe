@@ -100,15 +100,9 @@ TEST_F(Gpu_test, copy_from_buffer_to_texture)
             erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
             // source_bytes_per_image = width*height*4 == whole image; copy the full extent.
             blit.copy_from_buffer(
-                source_buffer.get(),
-                0,                                                      // source_offset
-                static_cast<std::uintptr_t>(width) * 4u,               // source_bytes_per_row
-                static_cast<std::uintptr_t>(bytes),                    // source_bytes_per_image
-                glm::ivec3{width, height, 1},                          // source_size
-                destination.get(),
-                0,                                                     // destination_slice
-                0,                                                     // destination_level
-                glm::ivec3{0, 0, 0}                                    // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = source_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(width) * 4u, .bytes_per_image = static_cast<std::uintptr_t>(bytes)},
+                glm::ivec3{width, height, 1},
+                erhe::graphics::Texture_location{.texture = destination.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
             // copy_from_buffer leaves the image tracked + physically in
             // SHADER_READ_ONLY_OPTIMAL; read_texture_rgba8 needs transfer_src_optimal.
@@ -471,15 +465,9 @@ protected:
             [&](erhe::graphics::Command_buffer& command_buffer) {
                 erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
                 blit.copy_from_buffer(
-                    source.get(),
-                    static_cast<std::uintptr_t>(source_offset),
-                    static_cast<std::uintptr_t>(bytes_per_row),
-                    static_cast<std::uintptr_t>(bytes_per_image),
+                    erhe::graphics::Buffer_texel_location{.buffer = source.get(), .offset = static_cast<std::uintptr_t>(source_offset), .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(bytes_per_image)},
                     glm::ivec3{image_region.width, image_region.height, 1},
-                    texture.get(),
-                    static_cast<std::uintptr_t>(target.layer),          // destination_slice
-                    static_cast<std::uintptr_t>(target.level),          // destination_level
-                    glm::ivec3{memory_region.x, memory_region.y, 0}     // destination_origin
+                    erhe::graphics::Texture_location{.texture = texture.get(), .slice = static_cast<std::uintptr_t>(target.layer), .level = static_cast<std::uintptr_t>(target.level), .origin = glm::ivec3{memory_region.x, memory_region.y, 0}}
                 );
             }
         );
@@ -538,15 +526,9 @@ protected:
             [&](erhe::graphics::Command_buffer& command_buffer) {
                 erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
                 blit.copy_from_texture(
-                    texture.get(),
-                    static_cast<std::uintptr_t>(target.layer),          // source_slice
-                    static_cast<std::uintptr_t>(target.level),          // source_level
-                    glm::ivec3{memory_region.x, memory_region.y, 0},    // source_origin
+                    erhe::graphics::Texture_location{.texture = texture.get(), .slice = static_cast<std::uintptr_t>(target.layer), .level = static_cast<std::uintptr_t>(target.level), .origin = glm::ivec3{memory_region.x, memory_region.y, 0}},
                     glm::ivec3{image_region.width, image_region.height, 1},
-                    destination.get(),
-                    static_cast<std::uintptr_t>(destination_offset),
-                    static_cast<std::uintptr_t>(bytes_per_row),
-                    static_cast<std::uintptr_t>(payload_bytes)
+                    erhe::graphics::Buffer_texel_location{.buffer = destination.get(), .offset = static_cast<std::uintptr_t>(destination_offset), .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(payload_bytes)}
                 );
             }
         );

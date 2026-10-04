@@ -128,15 +128,9 @@ TEST_F(Gpu_test, texture_2d_array_sample_layers)
             [&](erhe::graphics::Command_buffer& command_buffer) {
                 erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
                 blit.copy_from_buffer(
-                    layer_buffer.get(),
-                    0,                                                  // source_offset
-                    static_cast<std::uintptr_t>(layer_size) * 4u,       // source_bytes_per_row
-                    static_cast<std::uintptr_t>(layer_bytes),           // source_bytes_per_image
-                    glm::ivec3{layer_size, layer_size, 1},              // source_size
-                    array_texture.get(),
-                    static_cast<std::uintptr_t>(layer),                 // destination_slice (array layer)
-                    0,                                                  // destination_level
-                    glm::ivec3{0, 0, 0}                                 // destination_origin
+                    erhe::graphics::Buffer_texel_location{.buffer = layer_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(layer_size) * 4u, .bytes_per_image = static_cast<std::uintptr_t>(layer_bytes)},
+                    glm::ivec3{layer_size, layer_size, 1},
+                    erhe::graphics::Texture_location{.texture = array_texture.get(), .slice = static_cast<std::uintptr_t>(layer), .level = 0, .origin = glm::ivec3{0, 0, 0}}
                 );
             }
         );

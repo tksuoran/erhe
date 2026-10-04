@@ -139,18 +139,16 @@ void Blit_command_encoder_impl::blit_framebuffer(
     static_cast<void>(dst_impl);
 }
 
-void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* source_texture,
-    std::uintptr_t source_slice,
-    std::uintptr_t source_level,
-    glm::ivec3     source_origin,
-    glm::ivec3     source_size,
-    const Texture* destination_texture,
-    std::uintptr_t destination_slice,
-    std::uintptr_t destination_level,
-    glm::ivec3     destination_origin
-)
+void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, glm::ivec3 source_size, const Texture_location& destination)
 {
+    const Texture* source_texture      = source.texture;
+    std::uintptr_t source_slice        = source.slice;
+    std::uintptr_t source_level        = source.level;
+    glm::ivec3     source_origin       = source.origin;
+    const Texture* destination_texture = destination.texture;
+    std::uintptr_t destination_slice   = destination.slice;
+    std::uintptr_t destination_level   = destination.level;
+    glm::ivec3     destination_origin  = destination.origin;
     if ((source_texture == nullptr) || (destination_texture == nullptr)) {
         return;
     }
@@ -183,18 +181,16 @@ void Blit_command_encoder_impl::copy_from_texture(
 }
 
 // Buffer to texture copy
-void Blit_command_encoder_impl::copy_from_buffer(
-    const Buffer*  source_buffer,
-    std::uintptr_t source_offset,
-    std::uintptr_t source_bytes_per_row,
-    std::uintptr_t source_bytes_per_image,
-    glm::ivec3     source_size,
-    const Texture* destination_texture,
-    std::uintptr_t destination_slice,
-    std::uintptr_t destination_level,
-    glm::ivec3     destination_origin
-)
+void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& source, glm::ivec3 source_size, const Texture_location& destination)
 {
+    const Buffer*  source_buffer          = source.buffer;
+    std::uintptr_t source_offset          = source.offset;
+    std::uintptr_t source_bytes_per_row   = source.bytes_per_row;
+    std::uintptr_t source_bytes_per_image = source.bytes_per_image;
+    const Texture* destination_texture    = destination.texture;
+    std::uintptr_t destination_slice      = destination.slice;
+    std::uintptr_t destination_level      = destination.level;
+    glm::ivec3     destination_origin     = destination.origin;
     const VkBuffer          vk_source_buffer        = source_buffer->get_impl().get_vk_buffer();
     const Texture_impl&     destination_impl        = destination_texture->get_impl();
     const Image_subresource destination_subresource = get_subresource(destination_impl, destination_level, destination_slice);
@@ -247,18 +243,16 @@ void Blit_command_encoder_impl::copy_from_buffer(
 }
 
 // Copy from texture to buffer
-void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* source_texture,
-    std::uintptr_t source_slice,
-    std::uintptr_t source_level,
-    glm::ivec3     source_origin,
-    glm::ivec3     source_size,
-    const Buffer*  destination_buffer,
-    std::uintptr_t destination_offset,
-    std::uintptr_t destination_bytes_per_row,
-    std::uintptr_t destination_bytes_per_image
-)
+void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, glm::ivec3 source_size, const Buffer_texel_location& destination)
 {
+    const Texture* source_texture              = source.texture;
+    std::uintptr_t source_slice                = source.slice;
+    std::uintptr_t source_level                = source.level;
+    glm::ivec3     source_origin               = source.origin;
+    const Buffer*  destination_buffer          = destination.buffer;
+    std::uintptr_t destination_offset          = destination.offset;
+    std::uintptr_t destination_bytes_per_row   = destination.bytes_per_row;
+    std::uintptr_t destination_bytes_per_image = destination.bytes_per_image;
     if ((source_texture == nullptr) || (destination_buffer == nullptr)) {
         return;
     }
@@ -401,15 +395,9 @@ void Blit_command_encoder_impl::copy_from_texture(
                 continue;
             }
             copy_from_texture(
-                source_texture,
-                source_slice + slice,
-                source_level + level,
-                glm::ivec3{0, 0, 0},
+                erhe::graphics::Texture_location{.texture = source_texture, .slice = source_slice + slice, .level = source_level + level, .origin = glm::ivec3{0, 0, 0}},
                 glm::ivec3{width, height, 1},
-                destination_texture,
-                destination_slice + slice,
-                destination_level + level,
-                glm::ivec3{0, 0, 0}
+                erhe::graphics::Texture_location{.texture = destination_texture, .slice = destination_slice + slice, .level = destination_level + level, .origin = glm::ivec3{0, 0, 0}}
             );
         }
     }

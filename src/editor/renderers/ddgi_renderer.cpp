@@ -1544,15 +1544,9 @@ void Ddgi_renderer::copy_probe_data(erhe::graphics::Command_buffer& command_buff
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            m_probe_data_texture.get(),
-            0,                             // source_slice
-            0,                             // source_level
-            glm::ivec3{0, 0, 0},           // source_origin
-            glm::ivec3{width, height, 1},  // source_size
-            &destination,                  // destination_buffer
-            0,                             // destination_offset
-            static_cast<std::uintptr_t>(bytes_per_row),
-            static_cast<std::uintptr_t>(byte_count)
+            erhe::graphics::Texture_location{.texture = m_probe_data_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+            glm::ivec3{width, height, 1},
+            erhe::graphics::Buffer_texel_location{.buffer = &destination, .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
         );
     }
 }

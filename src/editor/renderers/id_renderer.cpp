@@ -689,10 +689,9 @@ void Id_renderer::submit_scan_compute(
     {
         erhe::graphics::Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            m_color_texture.get(), 0, 0,
-            glm::ivec3{scan_x, scan_y, 0},
+            erhe::graphics::Texture_location{.texture = m_color_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{scan_x, scan_y, 0}},
             glm::ivec3{scan_w, scan_h, 1},
-            input_buf, input_off, row_stride_bytes, input_bytes
+            erhe::graphics::Buffer_texel_location{.buffer = input_buf, .offset = input_off, .bytes_per_row = row_stride_bytes, .bytes_per_image = input_bytes}
         );
         blit.fill_buffer(bitmask_buf, bitmask_off, bitmask_bytes, 0);
         blit.fill_buffer(output_buf,  output_off,  output_bytes,  0);
@@ -952,30 +951,18 @@ void Id_renderer::render(const Render_parameters& parameters)
         std::uintptr_t destination_bytes_per_image = s_extent * destination_bytes_per_row;
 
         encoder.copy_from_texture(
-            source_texture             ,
-            source_slice               ,
-            source_level               ,
-            source_origin              ,
-            source_size                ,
-            destination_buffer         ,
-            destination_offset         ,
-            destination_bytes_per_row  ,
-            destination_bytes_per_image
+            erhe::graphics::Texture_location{.texture = source_texture, .slice = source_slice, .level = source_level, .origin = source_origin},
+            source_size,
+            erhe::graphics::Buffer_texel_location{.buffer = destination_buffer, .offset = destination_offset, .bytes_per_row = destination_bytes_per_row, .bytes_per_image = destination_bytes_per_image}
         );
 
         source_texture     = m_depth_texture.get();
         destination_offset += destination_bytes_per_image;
 
         encoder.copy_from_texture(
-            source_texture             ,
-            source_slice               ,
-            source_level               ,
-            source_origin              ,
-            source_size                ,
-            destination_buffer         ,
-            destination_offset         ,
-            destination_bytes_per_row  ,
-            destination_bytes_per_image
+            erhe::graphics::Texture_location{.texture = source_texture, .slice = source_slice, .level = source_level, .origin = source_origin},
+            source_size,
+            erhe::graphics::Buffer_texel_location{.buffer = destination_buffer, .offset = destination_offset, .bytes_per_row = destination_bytes_per_row, .bytes_per_image = destination_bytes_per_image}
         );
 
         entry.state        = Transfer_entry::State::Waiting_for_read;

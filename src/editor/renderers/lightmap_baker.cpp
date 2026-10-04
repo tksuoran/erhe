@@ -331,14 +331,9 @@ constexpr uint64_t c_budget_denominator = 3;
     {
         Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            &texture,
-            0, 0,
-            glm::ivec3{0, 0, 0},
+            erhe::graphics::Texture_location{.texture = &texture, .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
             glm::ivec3{width, height, 1},
-            &readback,
-            0,
-            bytes_per_row,
-            byte_count
+            erhe::graphics::Buffer_texel_location{.buffer = &readback, .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = byte_count}
         );
     }
     command_buffer.transition_texture_layout(texture, Image_layout::shader_read_only_optimal);
@@ -3896,13 +3891,9 @@ void Lightmap_baker::record_pending_slot_white_clears(erhe::graphics::Command_bu
         for (const int slot : m_slots_pending_white_clear) {
             const glm::ivec2 slot_origin = m_layout.get_slot_origin(slot);
             blit.copy_from_texture(
-                m_dilate_texture.get(),
-                0, 0,
-                glm::ivec3{0, 0, 0},
+                erhe::graphics::Texture_location{.texture = m_dilate_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
                 glm::ivec3{tile_size, tile_size, 1},
-                m_display_texture.get(),
-                0, 0,
-                glm::ivec3{slot_origin.x, slot_origin.y, 0}
+                erhe::graphics::Texture_location{.texture = m_display_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
             );
         }
     }
@@ -4979,13 +4970,9 @@ void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& comm
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            m_lightmap_texture.get(),
-            0, 0,
-            glm::ivec3{0, 0, 0},
+            erhe::graphics::Texture_location{.texture = m_lightmap_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
             glm::ivec3{tile_size, tile_size, 1},
-            m_display_texture.get(),
-            0, 0,
-            glm::ivec3{slot_origin.x, slot_origin.y, 0}
+            erhe::graphics::Texture_location{.texture = m_display_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
         );
     }
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
@@ -5832,14 +5819,9 @@ auto Lightmap_baker::restore_tile(
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_buffer(
-            &staging,
-            0,
-            bytes_per_row,
-            byte_count,
+            erhe::graphics::Buffer_texel_location{.buffer = &staging, .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = byte_count},
             glm::ivec3{tile_size, tile_size, 1},
-            m_display_texture.get(),
-            0, 0,
-            glm::ivec3{slot_origin.x, slot_origin.y, 0}
+            erhe::graphics::Texture_location{.texture = m_display_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
         );
     }
     command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
@@ -5915,14 +5897,9 @@ auto Lightmap_baker::read_back_tile(const int tile, std::vector<uint16_t>& out_r
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            m_display_texture.get(),
-            0, 0,
-            glm::ivec3{slot_origin.x, slot_origin.y, 0},
+            erhe::graphics::Texture_location{.texture = m_display_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}},
             glm::ivec3{tile_size, tile_size, 1},
-            &readback,
-            0,
-            bytes_per_row,
-            byte_count
+            erhe::graphics::Buffer_texel_location{.buffer = &readback, .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = byte_count}
         );
     }
     command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);

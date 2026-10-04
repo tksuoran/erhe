@@ -141,15 +141,9 @@ TEST_F(Gpu_test, texture_3d_sample_voxels)
         [&](erhe::graphics::Command_buffer& command_buffer) {
             erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
             blit.copy_from_buffer(
-                volume_buffer.get(),
-                0,                                              // source_offset
-                static_cast<std::uintptr_t>(row_bytes),         // source_bytes_per_row
-                static_cast<std::uintptr_t>(slice_bytes),       // source_bytes_per_image (one slice)
-                glm::ivec3{c_dim, c_dim, c_dim},                // source_size (full volume)
-                volume.get(),
-                0,                                              // destination_slice
-                0,                                              // destination_level
-                glm::ivec3{0, 0, 0}                             // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = volume_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(row_bytes), .bytes_per_image = static_cast<std::uintptr_t>(slice_bytes)},
+                glm::ivec3{c_dim, c_dim, c_dim},
+                erhe::graphics::Texture_location{.texture = volume.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
         }
     );
@@ -369,15 +363,9 @@ TEST_F(Gpu_test, texture_3d_sample_image)
         [&](erhe::graphics::Command_buffer& command_buffer) {
             erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
             blit.copy_from_buffer(
-                volume_buffer.get(),
-                0,                                                                          // source_offset
-                static_cast<std::uintptr_t>(row_bytes),                                     // source_bytes_per_row
-                static_cast<std::uintptr_t>(slice_bytes),                                   // source_bytes_per_image
-                glm::ivec3{c_image_volume_size, c_image_volume_size, c_image_slice_count},  // source_size
-                volume.get(),
-                0,                                                                          // destination_slice
-                0,                                                                          // destination_level
-                glm::ivec3{0, 0, 0}                                                         // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = volume_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(row_bytes), .bytes_per_image = static_cast<std::uintptr_t>(slice_bytes)},
+                glm::ivec3{c_image_volume_size, c_image_volume_size, c_image_slice_count},
+                erhe::graphics::Texture_location{.texture = volume.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
         }
     );

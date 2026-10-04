@@ -271,15 +271,9 @@ TEST_F(Multi_dispatch_test, texture)
             command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::pixel_buffer_barrier_bit);
             erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
             blit.copy_from_buffer(
-                data_buffer.get(),
-                0,                                                        // source_offset
-                static_cast<std::uintptr_t>(c_image_size) * 4u,           // source_bytes_per_row
-                static_cast<std::uintptr_t>(data_bytes),                  // source_bytes_per_image
-                glm::ivec3{c_image_size, c_image_size, 1},                // source_size
-                texture.get(),
-                0,                                                        // destination_slice
-                0,                                                        // destination_level
-                glm::ivec3{0, 0, 0}                                       // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = data_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(c_image_size) * 4u, .bytes_per_image = static_cast<std::uintptr_t>(data_bytes)},
+                glm::ivec3{c_image_size, c_image_size, 1},
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
             command_buffer.transition_texture_layout(*texture, erhe::graphics::Image_layout::transfer_src_optimal);
         }

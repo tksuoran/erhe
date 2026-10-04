@@ -147,15 +147,9 @@ protected:
                     [&](erhe::graphics::Command_buffer& command_buffer) {
                         erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
                         blit.copy_from_buffer(
-                            volume_buffer.get(),
-                            0,                                                              // source_offset
-                            static_cast<std::uintptr_t>(c_source_size) * 4u,                // source_bytes_per_row
-                            static_cast<std::uintptr_t>(slice_bytes),                       // source_bytes_per_image
-                            glm::ivec3{c_source_size, c_source_size, c_layer_count},        // source_size
-                            source.get(),
-                            0,                                                              // destination_slice
-                            0,                                                              // destination_level
-                            glm::ivec3{0, 0, 0}                                             // destination_origin
+                            erhe::graphics::Buffer_texel_location{.buffer = volume_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(c_source_size) * 4u, .bytes_per_image = static_cast<std::uintptr_t>(slice_bytes)},
+                            glm::ivec3{c_source_size, c_source_size, c_layer_count},
+                            erhe::graphics::Texture_location{.texture = source.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
                         );
                     }
                 );

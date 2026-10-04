@@ -92,18 +92,16 @@ void Blit_command_encoder_impl::blit_framebuffer(
 }
 
 // Texture to texture copy, single level, single array slice
-void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* const source_texture,
-    const std::uintptr_t source_slice,
-    const std::uintptr_t source_level,
-    const glm::ivec3     source_origin,
-    const glm::ivec3     source_size,
-    const Texture* const destination_texture,
-    const std::uintptr_t destination_slice,
-    const std::uintptr_t destination_level,
-    const glm::ivec3     destination_origin
-)
+void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, const glm::ivec3 source_size, const Texture_location& destination)
 {
+    const Texture* const source_texture      = source.texture;
+    const std::uintptr_t source_slice        = source.slice;
+    const std::uintptr_t source_level        = source.level;
+    const glm::ivec3     source_origin       = source.origin;
+    const Texture* const destination_texture = destination.texture;
+    const std::uintptr_t destination_slice   = destination.slice;
+    const std::uintptr_t destination_level   = destination.level;
+    const glm::ivec3     destination_origin  = destination.origin;
     ERHE_VERIFY_GL_THREAD_HAS_CONTEXT();
     // Publication consumer: either texture may have been created on
     // another context.
@@ -162,18 +160,16 @@ void Blit_command_encoder_impl::copy_from_texture(
 }
 
 // Buffer to texture copy
-void Blit_command_encoder_impl::copy_from_buffer(
-    const Buffer* const  source_buffer,
-    const std::uintptr_t source_offset,
-    const std::uintptr_t source_bytes_per_row,
-    const std::uintptr_t source_bytes_per_image,
-    const glm::ivec3     source_size,
-    const Texture* const destination_texture,
-    const std::uintptr_t destination_slice,
-    const std::uintptr_t destination_level,
-    const glm::ivec3     destination_origin
-)
+void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& source, const glm::ivec3 source_size, const Texture_location& destination)
 {
+    const Buffer* const  source_buffer          = source.buffer;
+    const std::uintptr_t source_offset          = source.offset;
+    const std::uintptr_t source_bytes_per_row   = source.bytes_per_row;
+    const std::uintptr_t source_bytes_per_image = source.bytes_per_image;
+    const Texture* const destination_texture    = destination.texture;
+    const std::uintptr_t destination_slice      = destination.slice;
+    const std::uintptr_t destination_level      = destination.level;
+    const glm::ivec3     destination_origin     = destination.origin;
     ERHE_VERIFY_GL_THREAD_HAS_CONTEXT();
     // Publication consumer: staging buffer and texture may each have been
     // created on another context.
@@ -387,18 +383,16 @@ void Blit_command_encoder_impl::copy_from_buffer_compressed(
 }
 
 // Copy from texture to buffer
-void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* const source_texture,
-    const std::uintptr_t source_slice,
-    const std::uintptr_t source_level,
-    const glm::ivec3     source_origin,
-    const glm::ivec3     source_size,
-    const Buffer* const  destination_buffer,
-    const std::uintptr_t destination_offset,
-    const std::uintptr_t destination_bytes_per_row,
-    const std::uintptr_t destination_bytes_per_image
-)
+void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, const glm::ivec3 source_size, const Buffer_texel_location& destination)
 {
+    const Texture* const source_texture              = source.texture;
+    const std::uintptr_t source_slice                = source.slice;
+    const std::uintptr_t source_level                = source.level;
+    const glm::ivec3     source_origin               = source.origin;
+    const Buffer* const  destination_buffer          = destination.buffer;
+    const std::uintptr_t destination_offset          = destination.offset;
+    const std::uintptr_t destination_bytes_per_row   = destination.bytes_per_row;
+    const std::uintptr_t destination_bytes_per_image = destination.bytes_per_image;
     // Readback stays main-thread-only (gl-worker-thread-contexts.md,
     // "Context identity and guards").
     ERHE_VERIFY_GL_THREAD_MAIN_CONTEXT();

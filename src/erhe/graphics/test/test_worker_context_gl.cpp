@@ -165,15 +165,9 @@ TEST_F(Worker_context_gl_test, worker_texture_create_and_upload)
             worker_command_buffer.begin();
             erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(worker_command_buffer);
             blit.copy_from_buffer(
-                staging.get(),
-                0,                                                   // source_offset
-                bytes_per_row,                                       // source_bytes_per_row
-                texture_bytes,                                       // source_bytes_per_image
-                glm::ivec3{texture_width, texture_height, 1},        // source_size
-                texture.get(),
-                0,                                                   // destination_slice
-                0,                                                   // destination_level
-                glm::ivec3{0, 0, 0}                                  // destination_origin
+                erhe::graphics::Buffer_texel_location{.buffer = staging.get(), .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = texture_bytes},
+                glm::ivec3{texture_width, texture_height, 1},
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
             worker_command_buffer.end();
         }
@@ -213,9 +207,9 @@ TEST_F(Worker_context_gl_test, worker_generate_mipmaps)
             worker_command_buffer.begin();
             erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(worker_command_buffer);
             blit.copy_from_buffer(
-                staging.get(), 0, bytes_per_row, texture_bytes,
+                erhe::graphics::Buffer_texel_location{.buffer = staging.get(), .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = texture_bytes},
                 glm::ivec3{texture_width, texture_height, 1},
-                texture.get(), 0, 0, glm::ivec3{0, 0, 0}
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
             blit.generate_mipmaps(texture.get());
             worker_command_buffer.end();
@@ -427,9 +421,9 @@ TEST_F(Worker_context_gl_test, worker_blit_between_accessor_held_framebuffers)
             worker_command_buffer.begin();
             erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(worker_command_buffer);
             blit.copy_from_buffer(
-                staging.get(), 0, bytes_per_row, texture_bytes,
+                erhe::graphics::Buffer_texel_location{.buffer = staging.get(), .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = texture_bytes},
                 glm::ivec3{texture_width, texture_height, 1},
-                source_texture.get(), 0, 0, glm::ivec3{0, 0, 0}
+                erhe::graphics::Texture_location{.texture = source_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
 
             erhe::graphics::Render_pass_descriptor source_descriptor{};
@@ -609,9 +603,9 @@ TEST_F(Worker_context_gl_test, main_written_staging_consumed_by_worker)
             worker_command_buffer.begin();
             erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(worker_command_buffer);
             blit.copy_from_buffer(
-                staging.get(), 0, bytes_per_row, texture_bytes,
+                erhe::graphics::Buffer_texel_location{.buffer = staging.get(), .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = texture_bytes},
                 glm::ivec3{texture_width, texture_height, 1},
-                texture.get(), 0, 0, glm::ivec3{0, 0, 0}
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
             worker_command_buffer.end();
         }

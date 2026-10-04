@@ -373,14 +373,9 @@ void Lightmap_streamer::upload_pending(Scene_root& scene_root)
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         const std::uintptr_t bytes_per_row = static_cast<std::uintptr_t>(m_manifest.tile_size) * 8u; // RGBA16F
         blit.copy_from_buffer(
-            &staging,
-            0,
-            bytes_per_row,
-            bytes_per_row * static_cast<std::uintptr_t>(m_manifest.tile_size),
+            erhe::graphics::Buffer_texel_location{.buffer = &staging, .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = bytes_per_row * static_cast<std::uintptr_t>(m_manifest.tile_size)},
             glm::ivec3{m_manifest.tile_size, m_manifest.tile_size, 1},
-            m_texture.get(),
-            0, 0,
-            glm::ivec3{slot_origin.x, slot_origin.y, 0}
+            erhe::graphics::Texture_location{.texture = m_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
         );
     }
     command_buffer.transition_texture_layout(*m_texture, Image_layout::shader_read_only_optimal);

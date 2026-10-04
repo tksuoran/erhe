@@ -51,67 +51,17 @@ void Blit_command_encoder::blit_framebuffer(
 {
     m_impl->blit_framebuffer(source_renderpass, source_origin, source_size, destination_renderpass, destination_origin);
 }
-void Blit_command_encoder::copy_from_texture(
-    const Texture* source_texture,
-    std::uintptr_t source_slice,
-    std::uintptr_t source_level,
-    glm::ivec3     source_origin,
-    glm::ivec3     source_size,
-    const Texture* destination_texture,
-    std::uintptr_t destination_slice,
-    std::uintptr_t destination_level,
-    glm::ivec3     destination_origin
-)
+void Blit_command_encoder::copy_from_texture(const Texture_location& source, const glm::ivec3 source_size, const Texture_location& destination)
 {
-    m_impl->copy_from_texture(source_texture, source_slice,source_level, source_origin, source_size, destination_texture, destination_slice, destination_level, destination_origin);
+    m_impl->copy_from_texture(source, source_size, destination);
 }
-void Blit_command_encoder::copy_from_buffer(
-    const Buffer*  source_buffer,
-    std::uintptr_t source_offset,
-    std::uintptr_t source_bytes_per_row,
-    std::uintptr_t source_bytes_per_image,
-    glm::ivec3     source_size,
-    const Texture* destination_texture,
-    std::uintptr_t destination_slice,
-    std::uintptr_t destination_level,
-    glm::ivec3     destination_origin
-)
+void Blit_command_encoder::copy_from_buffer(const Buffer_texel_location& source, const glm::ivec3 source_size, const Texture_location& destination)
 {
-    m_impl->copy_from_buffer(
-        source_buffer,
-        source_offset,
-        source_bytes_per_row,
-        source_bytes_per_image,
-        source_size,
-        destination_texture,
-        destination_slice,
-        destination_level,
-        destination_origin
-    );
+    m_impl->copy_from_buffer(source, source_size, destination);
 }
-void Blit_command_encoder::copy_from_texture(
-    const Texture* source_texture,
-    std::uintptr_t source_slice,
-    std::uintptr_t source_level,
-    glm::ivec3     source_origin,
-    glm::ivec3     source_size,
-    const Buffer*  destination_buffer,
-    std::uintptr_t destination_offset,
-    std::uintptr_t destination_bytes_per_row,
-    std::uintptr_t destination_bytes_per_image
-)
+void Blit_command_encoder::copy_from_texture(const Texture_location& source, const glm::ivec3 source_size, const Buffer_texel_location& destination)
 {
-    m_impl->copy_from_texture(
-        source_texture,
-        source_slice,
-        source_level,
-        source_origin,
-        source_size,
-        destination_buffer,
-        destination_offset,
-        destination_bytes_per_row,
-        destination_bytes_per_image
-    );
+    m_impl->copy_from_texture(source, source_size, destination);
 }
 void Blit_command_encoder::generate_mipmaps(const Texture* texture)
 {
