@@ -46,6 +46,51 @@ on culling.
   cannot include a backend header. The null-backend CI build existed
   already (`Windows (VS 2026 / headless)`).
 
+## Next
+
+Selected 2026-10-04, in this order. All three can be built and verified on
+Windows; the macOS-only items under "Open parts of worked items" wait for a
+macOS session.
+
+1. **Shadow culling on the draw-list entry AABBs** (finishes item 9; read
+   `doc/plans/draw_list_renderer.md` item 1 and `doc/erhe/draw_list_renderer.md`
+   Q6). `Shadow_renderer` reads the caster / receiver AABBs of the frustum
+   fit from the entries instead of walking every content mesh per shadow
+   render, and the shadow lists cull casters against each light's frustum
+   (point lights per cube face), with the same conservative planes-only test
+   and pass-decision mask the color path uses (e476817cf). Skinned entries
+   and invalid AABBs are never culled. The in-place mesh-component drag that
+   leaves bounds stale (same plan item) is part of this task, because shadow
+   culling makes the stale bounds visible as missing shadows. Verify: the
+   shadow gate (`doc/erhe/shadows.md` "Shadow verification") stays at
+   0 FAIL, the `Shadow_gpu_test` and `Mcp_test` shadow cases pass, and a
+   culled-count statistic per shadow pass (next to `Draw_statistics::culled_count`)
+   shows casters outside the light frustum skipped.
+2. **Editor bits out of `Item_flags` / `Item_type`** (item 11; read the
+   scene slice report sections 1.1 and 6 item 2, `doc/erhe/item.md`).
+   A reserved application bit range with application-registered label
+   tables replaces the about 22 editor-only flags and 24 editor-only type
+   indices; `Item_host::hosted_selection` moves into the editor's
+   `Selection`; the flag and type tables split out of `item.hpp` and the
+   geogram and profiler includes leave `primitive/build_info.hpp` and
+   `item_host.hpp`. The glTF `ERHE_*` extensions serialize flags by name
+   (`gltf_item_flags.hpp`), so saved scenes must load unchanged: verify with
+   the glTF round-trip script and `erhe_gltf_tests`, plus the item, scene and
+   USD unit tests (USD `purpose` derives from four of the editor bits).
+   Measure the `texture.hpp` / `node.hpp` preprocessed size before and after
+   (`doc/erhe/graphics.md` "Header dependencies" has the method).
+3. **CI hardening** (the open half of item 17; read the infra slice report
+   section 10 items 5-8, `doc/testing.md`, `.github/workflows/`). A Linux
+   Clang matrix entry building with AddressSanitizer and UBSan
+   (`ERHE_USE_ASAN` exists for GCC / Clang since 091b5879f; add a UBSan
+   option beside it) running the deviceless tests; `-Werror` on Clang / GCC
+   per target, leaf libraries first; version embedding (`erhe_version.hpp`
+   from `project(VERSION)` plus `git describe`, logged at startup next to
+   the dependency commits). Software-Vulkan (lavapipe) GPU tests in CI are
+   a separate step after these. The workflow changes can only be verified by
+   a CI run, which needs the user to push; build the flags locally first
+   (a Clang tree on Windows covers `-Werror` and ASan).
+
 ## Open parts of worked items
 
 - Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
