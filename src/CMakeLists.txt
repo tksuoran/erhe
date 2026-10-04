@@ -15,7 +15,10 @@ if (MSVC)
     # from the root scope and keep CMake's default W0; the vendored
     # third-party under src/ (imgui, mango, ...) receives no SYSTEM
     # includes, so this is a no-op for it.
+    # The variable is internal before CMake 4 (VS 2022's bundled CMake 3.30
+    # reads _CMAKE_INCLUDE_SYSTEM_FLAG_CXX_WARNING); clear both spellings.
     set(CMAKE_INCLUDE_SYSTEM_FLAG_CXX_WARNING "")
+    set(_CMAKE_INCLUDE_SYSTEM_FLAG_CXX_WARNING "")
 endif ()
 
 if (WIN32)
