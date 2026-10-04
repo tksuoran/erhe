@@ -16,6 +16,7 @@ namespace erhe::dataformat {
 
 namespace erhe::graphics {
 
+class Buffer;
 class Frame_state;
 class Frame_end_info;
 class Render_pass_impl;
