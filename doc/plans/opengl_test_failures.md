@@ -3,7 +3,12 @@
 Status: in progress
 
 Defects of the OpenGL backend found while running `erhe_graphics_gpu_tests`
-against the OpenGL tree during the 2026-09-30 audit item 10 work. The OpenGL
+against the OpenGL tree during the 2026-09-30 audit item 10 work. Two of the
+three findings are resolved: the one-sample multisample target (e80b64ab2)
+and the `Texel_fetch_test.texture_3d` zeros, which turned out to be an NVIDIA
+GLSL compiler defect with a standalone reproduction and a documented
+workaround in the test shader
+(`doc/reference/nvidia_texel_fetch_3d_driver_report.md`). The OpenGL
 tests there ran on the NVIDIA proprietary GL driver (the `GL Renderer:` line of
 the device startup log names the driver; `erhe.graphics.startup` is off by
 default in the GPU tests, so the line appears only when that logger's level is
@@ -12,40 +17,7 @@ disable. Run suites serially and one failure at a time (`doc/testing.md`
 "Running"). The Linux build trees and the headless run recipe are in
 `doc/agents/linux.md`.
 
-## 1. `Texel_fetch_test.texture_3d` reads zeros
-
-`texelFetch` on a `sampler3D` returns `(0, 0, 0, 0)` for every texel; the 2D
-and 2D array cases of the same test pass, and Vulkan passes all three. The
-failure exists without any of this session's changes.
-
-Established by experiment (all experiments reverted):
-
-- The volume data is correct: the same texture sampled with `texture()` at
-  the texel centres passes, and `texture_3d_sample_image` (same creation and
-  `copy_from_buffer` upload) passes.
-- The shader sees the right texture: `textureSize(s_texture, 0)` is
-  (16, 16, 4) and `textureQueryLevels` is 1.
-- `texelFetch(s_texture, ivec3(5, 0, 0), 0)` returns the correct texel when
-  the same shader also contains a `texture()` call on `s_texture`; with
-  `texelFetch` as the only access it returns zeros.
-- No effect: binding no sampler object (`glBindSampler(unit, 0)`), setting
-  the texture object's `GL_TEXTURE_MIN_FILTER` to `GL_NEAREST`, moving the
-  binding from unit 0 to unit 3, omitting
-  `#extension GL_ARB_bindless_texture : enable` from the prelude.
-- The generated fragment source is correct GLSL (`layout(binding = 0)
-  uniform sampler3D s_texture;`, `texelFetch(s_texture, ivec3(texel, layer), 0)`).
-- Under Mesa zink (`__GLX_VENDOR_LIBRARY_NAME=mesa`,
-  `__EGL_VENDOR_LIBRARY_FILENAMES=.../50_mesa.json`) the 3D case fails too,
-  and `texture_2d` and `stencil_two_draw_mask` fail as well.
-
-Next steps: a standalone reproduction outside erhe (raw GL: immutable
-`glTextureStorage3D` 16x16x4 RGBA8, `glTextureSubImage3D`, a fragment shader
-whose only access is `texelFetch`) decides between an erhe state problem and
-a driver defect; compare the GL state at the draw with RenderDoc or apitrace
-against the variant that adds `texture()`. Only a driver defect may end in a
-documented workaround, and then with the reproduction attached.
-
-## 2. Heap corruption at `Worker_context_gl_test` teardown
+## 1. Heap corruption at `Worker_context_gl_test` teardown
 
 Running the `Worker_context_gl_test` suite (with or without the rest of
 `erhe_graphics_gpu_tests`) aborts at "Global test environment tear-down"
@@ -55,13 +27,31 @@ and is excluded with `--gtest_filter='Worker_context_gl_test.*-*guard_aborts*'`;
 the corruption occurs with and without it). The failure exists without any of
 this session's changes.
 
-Diagnose with an AddressSanitizer build: configure an OpenGL tree with
-`-DERHE_USE_ASAN=ON -DERHE_BUILD_TESTS=ON` (`doc/building.md` options; on
-Linux run cmake directly with the flags of
-`scripts/configure_ninja_linux_opengl.sh`, into its own build directory),
-build `erhe_graphics_gpu_tests`, run the suite and read the first ASAN
-report: it names the write and the allocation and free stacks. Fix the
-owner of the memory, not the symptom (`AGENTS.md` "No Band-Aid Fixes").
-Likely suspects are the worker context and `Gl_binding_state` scrub queues
-torn down after the context or thread that owns them
+Established (2026-10-04):
+
+- The abort is inside the NVIDIA driver's `glXDestroyContext` for a worker
+  `Context_window`, reached from `Device_impl::~Device_impl` destroying
+  `m_worker_context_windows` (gl_device.cpp) from
+  `Gpu_test_environment::TearDown`. The free that trips the check is in a
+  non-main glibc arena (`av=0x7fffd8000030`, a thread arena), so the
+  corrupted chunk was allocated by code running on a worker thread: the
+  worker context work (erhe worker code or the driver's per-thread state),
+  not the main thread. Backtrace recipe:
+  `MALLOC_CHECK_=3 gdb -q -batch -ex run -ex 'bt 40' --args <tree>/bin/erhe_graphics_gpu_tests --gtest_filter='Worker_context_gl_test.*-*guard_aborts*'`.
+  `MALLOC_CHECK_=3` does not catch the write earlier.
+- `ERHE_USE_ASAN` now applies on Linux and macOS (`cmake/GNU.cmake`,
+  `cmake/Clang.cmake`; before 2026-10-04 only `cmake/msvc.cmake` honored it).
+  `build/Ninja_OpenGL_Asan` is configured with it (`doc/agents/linux.md`
+  "AddressSanitizer"); linking needs the compiler's sanitizer runtime, which
+  the Ubuntu clang 18 toolchain ships in the separate `libclang-rt-18-dev`
+  package (absent on the machine the diagnosis ran on, so no ASAN report yet).
+
+Next steps: install the sanitizer runtime, build `erhe_graphics_gpu_tests` in
+the ASAN tree, run the suite and read the first ASAN report: it names the
+write and the allocation and free stacks. Fix the owner of the memory, not
+the symptom (`AGENTS.md` "No Band-Aid Fixes"). Hypotheses to check first: a
+worker context left current on a thread that exits (the driver's thread-exit
+teardown and the later `glXDestroyContext` then both release per-thread
+state), and the worker context and `Gl_binding_state` scrub queues torn down
+after the context or thread that owns them
 (`doc/erhe/gl_worker_thread_contexts.md`).

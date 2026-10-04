@@ -245,6 +245,14 @@ so one golden serves every backend.
   function. Removing the immutable sampler changes nothing. erhe hands the
   driver the right state, so the cases are left failing there rather than
   worked around in the test.
+- `texelFetch` on a `sampler3D` on NVIDIA OpenGL (595.91.07) returns zeros
+  when the z coordinate is written as `(LAYER_COUNT - 1) - (tile.x + ...)`
+  from the integer-divided pixel coordinate; a standalone reproduction
+  outside erhe shows the same
+  ([`nvidia_texel_fetch_3d_driver_report.md`](../reference/nvidia_texel_fetch_3d_driver_report.md)).
+  `Texel_fetch_test` clamps the layer expression (a no-op for its values),
+  which the compiler handles correctly, so the test keeps checking erhe's 3D
+  upload and fetch path on that driver.
 
 ## CI
 

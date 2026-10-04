@@ -405,6 +405,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [reference/gltf_sample_renderer_comparison.md](reference/gltf_sample_renderer_comparison.md): erhe vs Khronos glTF-Sample-Renderer feature comparison
 - [reference/nova3d_comparison.md](reference/nova3d_comparison.md): Nova3D vs erhe AI creation tooling comparison
 - [reference/nvidia_present_timing_driver_report.md](reference/nvidia_present_timing_driver_report.md): NVIDIA VK_EXT_present_timing driver issue report
+- [reference/nvidia_texel_fetch_3d_driver_report.md](reference/nvidia_texel_fetch_3d_driver_report.md): NVIDIA OpenGL texelFetch sampler3D zeros driver report, with standalone reproduction
 - [reference/property_system_wpf_comparison.md](reference/property_system_wpf_comparison.md): erhe::property vs WPF dependency properties
 - [reference/quest_profiling_2026_05_01.md](reference/quest_profiling_2026_05_01.md): Quest 3 GPU profiling report (2026-05-01)
 - [reference/shadow_robustness_review_2026_09_29.md](reference/shadow_robustness_review_2026_09_29.md): Shadow robustness series change summary, correctness analysis, potential issues and improvements (2026-09-29)

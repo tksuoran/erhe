@@ -82,6 +82,13 @@ constexpr std::array<int, c_layer_count> c_layer_blue{ 40, 110, 180, 250 };
 enum class Fetch_kind : unsigned int { texture_2d, texture_2d_array, texture_3d };
 
 // FETCH selects the texelFetch coordinate: 0 = 2D, 1 = 2D array, 2 = 3D.
+//
+// The clamp on layer is a no-op (every tile maps to a valid layer) that works
+// around an NVIDIA GLSL compiler defect: texelFetch on a sampler3D returns
+// zeros when the z coordinate is written as (LAYER_COUNT - 1) - (tile.x + ...)
+// from the integer-divided pixel coordinate, and reads correctly when the same
+// expression is clamped (doc/reference/nvidia_texel_fetch_3d_driver_report.md,
+// with the standalone reproduction and the variant table).
 constexpr const char* c_fragment_source = R"glsl(
 void main()
 {
@@ -89,7 +96,7 @@ void main()
     ivec2 tile  = pixel / (SOURCE_SIZE * TEXEL_PIXELS);
     ivec2 local = (pixel % (SOURCE_SIZE * TEXEL_PIXELS)) / TEXEL_PIXELS;
     ivec2 texel = ivec2((SOURCE_SIZE - 1) - local.x, local.y);
-    int   layer = (LAYER_COUNT - 1) - (tile.x + (2 * tile.y));
+    int   layer = clamp((LAYER_COUNT - 1) - (tile.x + (2 * tile.y)), 0, LAYER_COUNT - 1);
 #if FETCH == 0
     vec4 fetched = texelFetch(s_texture, texel, 0);
 #else
