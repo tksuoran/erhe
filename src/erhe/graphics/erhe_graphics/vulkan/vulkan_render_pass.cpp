@@ -966,9 +966,11 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             // a single resolve attachment serves both depth and stencil resolves.
             if (depth_resolves || stencil_resolves) {
                 ERHE_VERIFY(depth_msaa); // resolves are only meaningful for MSAA
-                const Render_pass_attachment_descriptor& resolve_attachment = (m_depth_attachment.resolve_texture != nullptr)
-                    ? m_depth_attachment
-                    : m_stencil_attachment;
+                // One selection rule for the target, here and in
+                // end_render_pass: the attachment that resolves.
+                const Render_pass_attachment_descriptor* const resolve_driver = get_depth_stencil_resolve_driver();
+                ERHE_VERIFY(resolve_driver != nullptr);
+                const Render_pass_attachment_descriptor& resolve_attachment = *resolve_driver;
                 const Texture* resolve_texture = resolve_attachment.resolve_texture;
                 ERHE_VERIFY(resolve_texture != nullptr);
                 ERHE_VERIFY(resolve_texture->get_sample_count() <= 1);
