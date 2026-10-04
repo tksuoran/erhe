@@ -47,6 +47,7 @@ public:
     int                  stencil_size    {0};
     int                  image_texel_size{0};
 
+    // Ascending; includes 1 for every supported format.
     std::vector<int>     texture_2d_sample_counts{};
     int                  texture_2d_array_max_width{0};
     int                  texture_2d_array_max_height{0};
@@ -636,6 +637,8 @@ public:
     // allocate images with more usage bits than the app requests.
     [[nodiscard]] auto probe_image_format_support         (erhe::dataformat::Format format, uint64_t usage_mask) const -> bool;
 
+    // The depth / stencil formats usable as an attachment (depth- or
+    // stencil-renderable), not every format the device can sample.
     [[nodiscard]] auto get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>;
                   void sort_depth_stencil_formats         (std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const;
     [[nodiscard]] auto choose_depth_stencil_format        (const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format;

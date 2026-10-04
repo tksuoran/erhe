@@ -652,21 +652,29 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             }
 
             {
+                // GL_SAMPLES on texture_2d_multisample lists the multisample
+                // counts only; single-sample is available for every supported
+                // format, and Format_properties lists it (as Vulkan and Metal do).
                 int num_sample_counts = get_int(gl::Internal_format_p_name::num_sample_counts, gl::Texture_target::texture_2d_multisample);
+                properties.texture_2d_sample_counts.push_back(1);
                 if (num_sample_counts > 0) {
                     if (num_virtual_page_sizes > 0) {
                         ss << ", ";
                     }
                     ss << fmt::format("sample counts:", c_str(format));
-                    properties.texture_2d_sample_counts.resize(num_sample_counts);
+                    properties.texture_2d_sample_counts.resize(1 + num_sample_counts);
                     gl::get_internalformat_iv(
                         gl::Texture_target::texture_2d_multisample,
                         format,
                         gl::Internal_format_p_name::samples,
                         num_sample_counts,
-                        properties.texture_2d_sample_counts.data()
+                        properties.texture_2d_sample_counts.data() + 1
                     );
                     std::sort(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end());
+                    properties.texture_2d_sample_counts.erase(
+                        std::unique(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end()),
+                        properties.texture_2d_sample_counts.end()
+                    );
                     for (int count : properties.texture_2d_sample_counts) {
                         ss << fmt::format(" {}", count);
                     }
@@ -838,8 +846,11 @@ auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erh
         erhe::dataformat::Format::format_d32_sfloat_s8_uint
     };
     for (const erhe::dataformat::Format format : formats) {
-        Format_properties properties = get_format_properties(format);
-        if (!properties.supported) {
+        // A format can be supported as a texture without being usable as a
+        // depth / stencil attachment (Mesa: GL_STENCIL_INDEX8 textures are
+        // not stencil-renderable); only attachable formats are listed.
+        const Format_properties properties = get_format_properties(format);
+        if (!properties.supported || !(properties.depth_renderable || properties.stencil_renderable)) {
             continue;
         }
         result.push_back(format);

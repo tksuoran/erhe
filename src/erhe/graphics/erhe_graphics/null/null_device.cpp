@@ -366,7 +366,8 @@ auto Device_impl::get_format_properties(const erhe::dataformat::Format format) c
 {
     static_cast<void>(format);
     Format_properties properties{};
-    properties.supported = true;
+    properties.supported                = true;
+    properties.texture_2d_sample_counts = {1};
     return properties;
 }
 
