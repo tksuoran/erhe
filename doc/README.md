@@ -340,6 +340,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
 - [plans/debug_renderer_anti_aliasing.md](plans/debug_renderer_anti_aliasing.md) (in progress): Debug renderer: analytic anti-aliasing for wide lines
 - [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
+- [plans/scene_roundtrip_failures.md](plans/scene_roundtrip_failures.md) (proposed): The three failing checks of `scripts/scene_roundtrip_verify.py` (physics drift, device loss on the draw-list path, two USD diffs): facts established, repro, next steps
 - [plans/editor.md](plans/editor.md) (proposed): Editor: outstanding feature work
 - [plans/editor_improvements.md](plans/editor_improvements.md) (proposed): Prioritized backlog of editor architecture improvements
 - [plans/frame_pacing.md](plans/frame_pacing.md) (proposed): Frame pacing: outstanding work
