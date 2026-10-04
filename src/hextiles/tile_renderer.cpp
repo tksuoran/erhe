@@ -412,7 +412,7 @@ void Tile_renderer::compose_tileset_texture(erhe::graphics::Command_buffer& comm
             buffer_range.bytes_written(src_bytes_per_image);
             buffer_range.close();
             encoder.copy_from_buffer(
-                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = src_bytes_per_row, .bytes_per_image = src_bytes_per_image},
+                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = static_cast<std::uintptr_t>(src_bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(src_bytes_per_image)},
                 glm::ivec3{ scratch.info.width, scratch.info.height, 1 },
                 erhe::graphics::Texture_location{.texture = m_tileset_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{ 0, (ty0_single_unit_tiles + i * Unit_group::height) * Tile_shape::height, 0 }}
             );
@@ -459,7 +459,7 @@ void Tile_renderer::compose_tileset_texture(erhe::graphics::Command_buffer& comm
                         buffer_range.bytes_written(src_bytes_per_image);
                         buffer_range.close();
                         encoder.copy_from_buffer(
-                            erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = src_bytes_per_row, .bytes_per_image = src_bytes_per_image},
+                            erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = static_cast<std::uintptr_t>(src_bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(src_bytes_per_image)},
                             glm::ivec3{ scratch.info.width, scratch.info.height, 1 },
                             erhe::graphics::Texture_location{.texture = m_tileset_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{ tx * Tile_shape::full_width, ty * Tile_shape::height, 0 }}
                         );

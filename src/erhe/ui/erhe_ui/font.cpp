@@ -514,7 +514,7 @@ void Font::post_process(erhe::graphics::Command_buffer& init_command_buffer)
     // the GPU) before the font texture is sampled.
     erhe::graphics::Blit_command_encoder encoder{m_graphics_device, init_command_buffer};
     encoder.copy_from_buffer(
-        erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = 2 * m_texture_width, .bytes_per_image = 2 * m_texture_width * m_texture_height},
+        erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = static_cast<std::uintptr_t>(2 * m_texture_width), .bytes_per_image = static_cast<std::uintptr_t>(2 * m_texture_width * m_texture_height)},
         glm::ivec3{m_texture_width, m_texture_height, 1},
         erhe::graphics::Texture_location{.texture = m_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
     );

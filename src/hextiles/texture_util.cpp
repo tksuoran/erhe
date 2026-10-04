@@ -121,7 +121,7 @@ auto load_texture(erhe::graphics::Device& graphics_device, erhe::graphics::Comma
 
     erhe::graphics::Blit_command_encoder encoder = graphics_device.make_blit_command_encoder(command_buffer);
     encoder.copy_from_buffer(
-        erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = src_bytes_per_row, .bytes_per_image = src_bytes_per_image},
+        erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = static_cast<std::uintptr_t>(src_bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(src_bytes_per_image)},
         glm::ivec3{2, 2, 1},
         erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
     );

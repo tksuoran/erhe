@@ -1010,7 +1010,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
 
             erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
             encoder.copy_from_buffer(
-                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = tex->GetPitch(), .bytes_per_image = tex->GetSizeInBytes()},
+                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = static_cast<std::uintptr_t>(tex->GetPitch()), .bytes_per_image = static_cast<std::uintptr_t>(tex->GetSizeInBytes())},
                 glm::ivec3{tex->Width, tex->Height, 1},
                 erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
             );
@@ -1056,7 +1056,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
             buffer_range.close();
 
             encoder.copy_from_buffer(
-                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, .bytes_per_row = tex->GetPitch(), .bytes_per_image = tex->GetSizeInBytes()},
+                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, .bytes_per_row = static_cast<std::uintptr_t>(tex->GetPitch()), .bytes_per_image = static_cast<std::uintptr_t>(tex->GetSizeInBytes())},
                 glm::ivec3{r.w, r.h, 1},
                 erhe::graphics::Texture_location{.texture = texture, .slice = 0, .level = 0, .origin = glm::ivec3{r.x, r.y, 0}}
             );
