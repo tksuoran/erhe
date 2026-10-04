@@ -62,8 +62,9 @@ touching `vulkan/vulkan_device.cpp` recompiled one object and touching
 then the archive and the executables, and no consumer library recompiled
 (measured on the Linux Vulkan Debug tree); the include diet above is what
 keeps consumers out of backend headers. The CI `Windows (VS 2026 /
-headless)` job builds every target with `ERHE_GRAPHICS_API=none`, so the
-interface compiles against the null backend on every push.
+headless)` job builds the editor and the test targets with
+`ERHE_GRAPHICS_API=none`, so the interface compiles against the null backend
+on every push.
 
 ## Key Types
 - `Device` -- Central graphics device. Creates command encoders, manages ring buffers, queries capabilities, handles frame lifecycle (`wait_frame`/`begin_frame`/`end_frame`).

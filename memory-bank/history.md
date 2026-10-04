@@ -254,3 +254,4 @@ none
 >audit-item-12-include-diet::afbe3d5b5+075bc6cc4{device.hpp-177k->75k-lines;texture_reference.hpp;coordinate_conventions.hpp;review-fixes;hextiles-load_texture-deleted}✓
 >layout-tracking-follow-ups::e35933c80{clear_texture-view-range;stencil-only-resolve-driver;make_view-base-level/layer;3-gpu-tests}✓
 >handoff::prompt_queue.txt{1:erhe_graphics-interface/backend-split}
+>audit-item-12-split::5342524d6+b9eb1061b{erhe_graphics_interface-OBJECT+erhe_graphics-backend;3-Linux-trees-verified(Vk-Debug-185-gpu-tests,GL-Debug,API=none-Debug);null-backend-Buffer-fwd-decl-fix;finding:null-editor-crash-get_command_buffer-stub->followups-doc}✓
