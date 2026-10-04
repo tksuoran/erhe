@@ -704,15 +704,23 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     }
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
-    SDL_GL_SetAttribute(SDL_GL_RED_SIZE,       configuration.color_bit_depth);
-    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,     configuration.color_bit_depth);
-    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,      configuration.color_bit_depth);
+    // The configured color depth is a request: the effective depth is read
+    // back from the created context below and stored in m_configuration, and
+    // every consumer (sRGB framebuffer enable, swapchain format) keys off that
+    // effective value. A GL driver without a 10-bit visual (NVIDIA GLX on an
+    // 8-bit X screen) rejects the request, so creation retries at 8 bits.
+    const auto set_color_depth_attributes = [](const int color_bit_depth) {
+        SDL_GL_SetAttribute(SDL_GL_RED_SIZE,   color_bit_depth);
+        SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, color_bit_depth);
+        SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,  color_bit_depth);
+        SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, color_bit_depth <= 8 ? 1 : 0);
+    };
+    set_color_depth_attributes(configuration.color_bit_depth);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,     configuration.use_depth   ? 24 : 0);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,   configuration.use_stencil ?  8 : 0);
     // For debugging:
     // SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 0);
 
-    SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, configuration.color_bit_depth <= 8 ? 1 : 0);
     if (configuration.msaa_sample_count > 0) {
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, configuration.msaa_sample_count);
@@ -739,6 +747,18 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     {
         ERHE_PROFILE_SCOPE("SDL_CreateWindow");
         sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.size.x, configuration.size.y, window_flags);
+#if defined(ERHE_GRAPHICS_API_OPENGL)
+        if ((sdl_window == nullptr) && (configuration.color_bit_depth > 8)) {
+            const char* const sdl_error = SDL_GetError();
+            log_window->warn(
+                "No GL visual with {}-bit color: {}; retrying with 8-bit color",
+                configuration.color_bit_depth,
+                (sdl_error != nullptr) ? sdl_error : ""
+            );
+            set_color_depth_attributes(8);
+            sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.size.x, configuration.size.y, window_flags);
+        }
+#endif
     }
     m_sdl_window = sdl_window;
 
