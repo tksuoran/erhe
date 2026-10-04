@@ -546,7 +546,7 @@ Metal the bounded memory doc/erhe/ring_buffer_memory.md promises.
 
 ### 6.4 Shader compilation pipeline and SPIR-V cache
 
-Cost: low for doc/plans/spirv_cache.md (settings hash in the salt, atomic
+Cost: low for the SPIR-V cache plan (settings hash in the salt, atomic
 rename); medium for a persisted `VkPipelineCache` (device.hpp:490-507) and
 Metal `MTLBinaryArchive`. Benefit: medium; first-frame time on Quest is
 dominated by pipeline compilation (device.hpp:495-498).

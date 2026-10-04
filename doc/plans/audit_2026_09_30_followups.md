@@ -2,12 +2,11 @@
 
 Status: in progress
 
-The 2026-09-30 audit lives on branch `origin/audit-2026-09-30`
-(`audit_erhe_2026_09_30.md` under `reference/` on that branch, section 8;
-slice reports beside it; list with `git ls-tree -r --name-only
-origin/audit-2026-09-30 | grep audit_erhe_2026_09_30` and read with
-`git show origin/audit-2026-09-30:<path>`). Near-term items 1-9
-are done. From the medium-term list (items 10-20) the chosen set is 10, 18 and
+The 2026-09-30 audit is `doc/reference/audit_erhe_2026_09_30.md` (options
+in section 8, the slice reports beside it); its "Status of the section 8
+options" table records what has been worked, by commit. Near-term items 1-9
+are done except the parts listed under "Open parts of worked items" below.
+From the medium-term list (items 10-20) the first set was 10, 18 and
 the include-diet half of 12: item 10 closes the only known GPU correctness hole
 and was an open agfx-port finding, item 18 dominates Quest first-frame time,
 and the include diet is the precondition of the `erhe_graphics` interface /
@@ -47,11 +46,14 @@ on culling.
   cannot include a backend header. The null-backend CI build existed
   already (`Windows (VS 2026 / headless)`).
 
-## Next
+## Open parts of worked items
 
-1. Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
-   (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
-   opt-in); needs a macOS session to build and verify.
+- Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
+  (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
+  opt-in); needs a macOS session to build and verify.
+- Item 6, Metal half: GPU timers (read 0), `blit_framebuffer` (fatal) and
+  swapchain resize on Metal; needs a macOS session.
+- Item 9, shadow half: `doc/plans/draw_list_renderer.md` item 1.
 
 Each item is one commit with builds, tests and docs as `AGENTS.md` requires,
 and each commit gets a Fable review at medium effort.

@@ -27,6 +27,33 @@
 | GPU foundation (`erhe::graphics`, `gl`, `dataformat`, `buffer`, `codegen`, shaders) | `doc/reference/audit_erhe_2026_09_30_graphics.md` | complete |
 | Scene and data model (`item`, `scene`, `property`, `primitive`, `geometry`, `gltf`, `usd`, `physics`, `math`, `commands`) | `doc/reference/audit_erhe_2026_09_30_scene.md` | complete |
 
+## Status of the section 8 options (2026-10-04)
+
+The audit text below is the 2026-09-30 snapshot and is not rewritten; the
+slice reports stay verbatim. This table records which section 8 options have
+been worked since, by commit. Remaining work of the worked items and the
+next selected items are in `doc/plans/audit_2026_09_30_followups.md`.
+
+| # | Option | State | Commits |
+|---|---|---|---|
+| 1 | Cheap infrastructure items | Done: concurrentqueue and cpp-terminal pinned by hash, one GoogleTest pin, `erhe_smoke` under ctest, the base-layer leaks removed (`erhe_physics` via `IDebug_draw`, XR in `erhe_commands` only with OpenXR, `erhe_log` without geogram, `erhe_utility` without SDL, dead edges dropped), `ERHE_FATAL` / `ERHE_VERIFY` reported to `logs/log.txt` | 238830d45 |
+| 2 | Delete the dead code | Done: dead sources and the 41 in-tree review / readme files deleted, `Node_data::diff_mask` removed, the fatal copy constructors `= delete`, non-ASCII lines and stale doc snippets fixed | 428368553 |
+| 3 | glTF unit tests | Done: `erhe_gltf_tests` (device-free parse and GLB round trips); the `variants.gltf` bug fixed at its root | 7f2335b3a |
+| 4 | Steady-state allocations and per-frame pushes | Done for the section 5 list; `Light` getters read a mirror | c14cf38e1 |
+| 5 | Route every mutation through operations | Done, with `Mcp_test.document_edits_record_one_undo_entry_each` | 5da541602 |
+| 6 | Shared `Ring_buffer_pool` and Metal parity | Pool done for all three backends; the Metal parity items (timers, `blit_framebuffer`, resize) are open and need macOS | 64cce60f6 |
+| 7 | Vestigial taskflow annotations | Done | ce897bfe6 |
+| 8 | Plan hygiene | The eight drifted plans rewritten; deleting plans was declined by the user | ac3f76786 |
+| 9 | Frustum culling on draw-list entries | Color passes cull; the shadow side (fit AABBs from the entries, per-light caster culling) is open as item 1 of `doc/plans/draw_list_renderer.md` | e476817cf |
+| 10 | Per-subresource Vulkan layouts, blit region types | Done, plus the review follow-ups and the OpenGL failures the GPU tests found | 4fc17d988, 1d5d45f28, 51dfc09fb, e35933c80, 8628689ad, 5ef90f13c, e80b64ab2, 6837a428f, cafc0773e |
+| 12 | Include diet, interface / backend split | Done | afbe3d5b5, 5342524d6, b9eb1061b |
+| 17 | Sanitizers, `-Werror`, CI GPU tests, version | `ERHE_USE_ASAN` applies with GCC and Clang; the CI job, `-Werror`, CI GPU tests and version embedding are open | 091b5879f |
+| 18 | Shader pipeline persistence | glslang SPIR-V cache key and atomic writes, persisted `VkPipelineCache` done; Metal `MTLBinaryArchive` open, needs macOS | f9ab02789, b67d84982 |
+
+Options 11, 13-16, 19-27 have not been started. Of the 2026-06-21
+recommendations in section 7, number 2 (pin concurrentqueue) and number 4
+(centralize GoogleTest) are done by 238830d45.
+
 ## 1. Executive summary
 
 erhe is a 340k-line library set plus a 230k-line editor, developed by one
@@ -440,7 +467,7 @@ code that helps or hinders. The cross-slice ranking, by benefit over cost:
     graph onto `Graph_editor_window_base`.
 17. Sanitizer CI job, incremental `-Werror` on Clang/GCC, software-Vulkan
     GPU tests in CI, version embedding and a first CHANGELOG release.
-18. Shader pipeline persistence: `doc/plans/spirv_cache.md` (settings hash in
+18. Shader pipeline persistence: the SPIR-V cache plan (settings hash in
     the salt, atomic rename), a persisted `VkPipelineCache` and Metal
     `MTLBinaryArchive`; first-frame time on Quest is dominated by pipeline
     compilation.
