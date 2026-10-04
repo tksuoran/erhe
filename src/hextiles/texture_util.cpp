@@ -1,12 +1,6 @@
 #include "texture_util.hpp"
 #include "hextiles_log.hpp"
 
-#include "erhe_graphics/blit_command_encoder.hpp"
-#include "erhe_graphics/command_buffer.hpp"
-#include "erhe_graphics/device.hpp"
-#include "erhe_graphics/ring_buffer.hpp"
-#include "erhe_graphics/ring_buffer_client.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -77,58 +71,6 @@ auto load_png(const std::filesystem::path& path) -> Image
         return {};
     }
     return image;
-}
-
-auto load_texture(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
-{
-    const Image image = load_png(path);
-    if (image.data.size() == 0) {
-        log_image->error("Image empty {}", path.string());
-        return {};
-    }
-    erhe::graphics::Texture_create_info texture_create_info{
-        .device      = graphics_device,
-        .usage_mask  =
-            erhe::graphics::Image_usage_flag_bit_mask::sampled |
-            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-        .pixelformat = image.info.format,
-        .use_mipmaps = (image.info.level_count > 1),
-        .width       = image.info.width,
-        .height      = image.info.height,
-        .depth       = image.info.depth,
-        .level_count = image.info.level_count,
-        .row_stride  = image.info.row_stride,
-        .debug_label = erhe::utility::Debug_label{path.string()}
-    };
-
-    auto texture = std::make_shared<erhe::graphics::Texture>(graphics_device, texture_create_info);
-
-    const int src_bytes_per_row   = image.info.row_stride;
-    const int src_bytes_per_image = image.info.height * src_bytes_per_row;
-
-    std::span<const std::uint8_t>      src_span{image.data.data(), image.data.size()};
-    std::size_t                        byte_count = src_span.size_bytes();
-    erhe::graphics::Ring_buffer_client texture_upload_buffer{
-        graphics_device,
-        erhe::graphics::Buffer_target::transfer_src,
-        "hextiles load_texture() texture upload"
-    };
-    erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-    std::span<std::byte>               dst_span     = buffer_range.get_span();
-    memcpy(dst_span.data(), src_span.data(), byte_count);
-    buffer_range.bytes_written(byte_count);
-    buffer_range.close();
-
-    erhe::graphics::Blit_command_encoder encoder = graphics_device.make_blit_command_encoder(command_buffer);
-    encoder.copy_from_buffer(
-        erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = static_cast<std::uintptr_t>(src_bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(src_bytes_per_image)},
-        glm::ivec3{2, 2, 1},
-        erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
-    );
-
-    buffer_range.release();
-
-    return texture;
 }
 
 #if 0

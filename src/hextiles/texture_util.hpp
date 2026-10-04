@@ -25,6 +25,5 @@ public:
 };
 
 auto load_png    (const std::filesystem::path& path) -> Image;
-auto load_texture(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
 
 }

@@ -16,7 +16,8 @@ only what its declarations need by value: `enums.hpp`, `ring_buffer_range.hpp`,
 `math_util.hpp` and glm) and `erhe_utility/debug_label.hpp`. `Graphics_config`,
 `Surface_create_info`, `Shader_monitor`, `Shader_source_cache`, `Spirv_cache`
 and `erhe::frame_pacing::Frame_time_recorder` are forward-declared; the
-`Device` owns the last four through `unique_ptr` for that reason. A translation
+`Device` owns the last three through `unique_ptr` for that reason (the
+`Shader_monitor` is a by-value member of each backend's `Device_impl`). A translation
 unit that uses one of them includes its header. `texture.hpp` is the one
 interface header whose cost is structural: `Texture` is an `erhe::Item`, so
 the header brings `erhe_item/item.hpp` and the property system with it; code

@@ -16,11 +16,6 @@ enum class Vendor : unsigned int {
     Intel   = 3
 };
 
-// Rotation the presentation surface applies to rendered content before it is
-// shown (Vulkan VkSurfaceCapabilitiesKHR::currentTransform). On Android a
-// landscape-locked app on a portrait-native panel reports rotate_90 / rotate_270;
-// the renderer pre-rotates its final pass to match (see Imgui_renderer). Always
-// identity on desktop / non-Vulkan backends.
 // Result of Device::wait_for_displayed_frame (frame pacing FR5 present-wait
 // clamp, implementation plan step P2.2).
 enum class Present_wait_result : unsigned int {
@@ -30,6 +25,11 @@ enum class Present_wait_result : unsigned int {
                      // GL backend, or the id predates the current swapchain
 };
 
+// Rotation the presentation surface applies to rendered content before it is
+// shown (Vulkan VkSurfaceCapabilitiesKHR::currentTransform). On Android a
+// landscape-locked app on a portrait-native panel reports rotate_90 / rotate_270;
+// the renderer pre-rotates its final pass to match (see Imgui_renderer). Always
+// identity on desktop / non-Vulkan backends.
 enum class Surface_transform : unsigned int {
     identity   = 0,
     rotate_90  = 1,
