@@ -580,7 +580,6 @@ TEST_F(Gpu_test, msaa_stencil_only_resolve_tracks_target_layout)
 {
     constexpr int width        = 16;
     constexpr int height       = 16;
-    constexpr int sample_count = 4;
 
     erhe::graphics::Device& graphics_device = device();
 
