@@ -46,7 +46,7 @@ void Scene_builder_viewport_resources_operation::execute(App_context& context)
         m_parameters.name,
         m_parameters.scene_root,
         m_parameters.camera,
-        std::max(2, msaa_sample_count), //// TODO Fix rendergraph
+        msaa_sample_count,
         rendergraph_output_node,
         m_parameters.enable_post_processing
     );

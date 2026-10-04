@@ -500,6 +500,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Fixed
 
+- `erhe::graphics`: on OpenGL a `Texture_create_info::sample_count` of 1
+  creates a single-sample texture, as on Vulkan and Metal (it selected the
+  multisample target, so a 1-sample depth attachment paired with a 0-sample
+  color attachment made an incomplete framebuffer); the OpenGL
+  `Render_pass::get_sample_count()` treats attachment counts 0 and 1 as the
+  same single-sample count and returns 1 for a pass without attachments.
 - `erhe::primitive`: building a Geometry from a `Triangle_soup` whose
   indices do not start at 0 (or skip vertices) no longer indexes outside its
   tables: positions are colocated over the used vertices only, and only the

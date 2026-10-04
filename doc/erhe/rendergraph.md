@@ -310,7 +310,8 @@ Shadow_render_node --(shadow_maps)--> Viewport_scene_view
 
 ## Implementation Notes
 
-- `Render_target` handles MSAA resolve internally when `sample_count > 0`.
+- `Render_target` handles MSAA resolve internally when `sample_count > 1`
+  (a texture sample count of 0 or 1 is single-sample on every backend).
 - The `none` key (0) in `Texture_rendergraph_node_create_info` means "do not
   register an output pin". Used for nodes that conditionally produce output.
 - `get_graph()` exposes the internal `erhe::graph::Graph` (node / link

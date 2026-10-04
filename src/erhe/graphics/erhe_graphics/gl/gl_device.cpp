@@ -847,8 +847,9 @@ auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erh
     };
     for (const erhe::dataformat::Format format : formats) {
         // A format can be supported as a texture without being usable as a
-        // depth / stencil attachment (Mesa: GL_STENCIL_INDEX8 textures are
-        // not stencil-renderable); only attachable formats are listed.
+        // depth / stencil attachment (the NVIDIA driver reports
+        // GL_STENCIL_INDEX8 textures as not stencil-renderable); only
+        // attachable formats are listed.
         const Format_properties properties = get_format_properties(format);
         if (!properties.supported || !(properties.depth_renderable || properties.stencil_renderable)) {
             continue;

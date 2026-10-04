@@ -112,6 +112,15 @@ void convert_texture_offset_to_gl      (gl::Texture_target target, int& x, int& 
 [[nodiscard]] auto byte_count                  (gl::Pixel_type pixel_type) -> size_t;
 [[nodiscard]] auto get_gl_pixel_byte_count     (erhe::dataformat::Format pixelformat) -> size_t;
 [[nodiscard]] auto get_format_and_type         (erhe::dataformat::Format pixelformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool;
+// Texture_create_info::sample_count 0 and 1 both mean single-sample
+// (texture_2d); only 2 and above select a multisample target. This is the
+// contract every backend follows (get_vulkan_sample_count, Metal
+// to_mtl_texture_type) and the only GL place that interprets the count.
+[[nodiscard]] constexpr auto is_multisample_sample_count(int sample_count) -> bool
+{
+    return sample_count > 1;
+}
+
 [[nodiscard]] auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool array) -> gl::Texture_target;
 
 

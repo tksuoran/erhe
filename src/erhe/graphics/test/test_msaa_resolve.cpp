@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -51,6 +52,20 @@ constexpr const char* c_fragment_source = R"glsl(
 void main()
 {
     out_color = vec4(0.0, 1.0, 0.0, 1.0);
+}
+)glsl";
+
+// The same triangle at depth TRIANGLE_Z, for the single-sample tests that
+// render with a depth test against a cleared ("far") depth attachment.
+constexpr const char* c_vertex_source_depth = R"glsl(
+void main()
+{
+    vec2 positions[3] = vec2[3](
+        vec2(-1.0, -1.0),
+        vec2( 1.0, -1.0),
+        vec2(-1.0,  1.0)
+    );
+    gl_Position = vec4(positions[gl_VertexID], TRIANGLE_Z, 1.0);
 }
 )glsl";
 
@@ -385,6 +400,172 @@ TEST_F(Gpu_test, msaa_color_resolve_to_layer)
     EXPECT_GT(pure_red,     0) << "resolve_layer 1 holds no fully-uncovered (red) texels";
     EXPECT_GT(intermediate, 0) << "resolve_layer 1 holds no averaged edge texels";
     expect_image_matches_golden("msaa_color_resolve", width, height, color_format, std::as_bytes(std::span<const uint8_t>{layer_1}));
+}
+
+// Texture_create_info::sample_count 0 and 1 both mean single-sample, on every
+// backend. The editor's Render_target builds its color texture with 0 and its
+// depth texture with the preset's count, so a preset of 1 pairs a 0-sample
+// color attachment with a 1-sample depth attachment; the pair must form one
+// single-sample render pass (on GL it once became GL_FRAMEBUFFER_INCOMPLETE_
+// MULTISAMPLE because 1 selected the multisample target). The triangle of
+// msaa_color_resolve is drawn without a resolve: a single-sample render has
+// only pure clear-color and pure triangle-color texels.
+class Single_sample_test : public Gpu_test
+{
+protected:
+    void render_pair(const int color_sample_count, const int depth_sample_count)
+    {
+        constexpr int width  = 32;
+        constexpr int height = 32;
+        constexpr erhe::dataformat::Format color_format = erhe::dataformat::Format::format_8_vec4_unorm;
+        constexpr erhe::dataformat::Format depth_format = erhe::dataformat::Format::format_d32_sfloat;
+
+        erhe::graphics::Device& graphics_device = device();
+        const bool   reverse_depth = graphics_device.get_reverse_depth();
+        const float  triangle_z    = reverse_depth ? 0.9f : 0.1f; // near
+        const double depth_clear   = reverse_depth ? 0.0  : 1.0;  // cleared to "far"
+
+        const std::shared_ptr<erhe::graphics::Texture> color_target = std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info{
+                .device       = graphics_device,
+                .usage_mask   =
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src,
+                .type         = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat  = color_format,
+                .sample_count = color_sample_count,
+                .width        = width,
+                .height       = height,
+                .debug_label  = erhe::utility::Debug_label{"Single sample color"}
+            }
+        );
+        const std::shared_ptr<erhe::graphics::Texture> depth_target = std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info{
+                .device       = graphics_device,
+                .usage_mask   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment,
+                .type         = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat  = depth_format,
+                .sample_count = depth_sample_count,
+                .width        = width,
+                .height       = height,
+                .debug_label  = erhe::utility::Debug_label{"Single sample depth"}
+            }
+        );
+        // A single-sample request is kept as given; only multisample requests round.
+        EXPECT_EQ(color_target->get_sample_count(), color_sample_count);
+        EXPECT_EQ(depth_target->get_sample_count(), depth_sample_count);
+
+        const erhe::graphics::Bind_group_layout empty_layout{
+            graphics_device,
+            erhe::graphics::Bind_group_layout_create_info{
+                .bindings          = {},
+                .debug_label       = erhe::utility::Debug_label{"Single sample empty layout"},
+                .uses_texture_heap = false
+            }
+        };
+        const erhe::graphics::Fragment_outputs fragment_outputs{
+            { erhe::graphics::Fragment_output{ .name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0 } }
+        };
+        erhe::graphics::Shader_stages_create_info shader_create_info{
+            .name             = "single_sample",
+            .defines          = { { "TRIANGLE_Z", std::to_string(triangle_z) } },
+            .fragment_outputs = &fragment_outputs,
+            .no_vertex_input  = true,
+            .shaders = {
+                { erhe::graphics::Shader_type::vertex_shader,   std::string_view{c_vertex_source_depth} },
+                { erhe::graphics::Shader_type::fragment_shader, std::string_view{c_fragment_source} }
+            },
+            .bind_group_layout = &empty_layout
+        };
+        erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(graphics_device, shader_create_info);
+        ASSERT_TRUE(prototype.is_valid()) << "single sample shader failed to compile/link";
+        erhe::graphics::Shader_stages shader_stages{graphics_device, std::move(prototype)};
+
+        erhe::graphics::Render_pass_descriptor descriptor{};
+        descriptor.color_attachments[0].texture       = color_target.get();
+        descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 1.0, 0.0, 0.0, 1.0 }; // red
+        descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+        descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+        descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+        descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::undefined;
+        descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+        descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
+        descriptor.depth_attachment.texture           = depth_target.get();
+        descriptor.depth_attachment.clear_value[0]    = depth_clear;
+        descriptor.depth_attachment.load_action       = erhe::graphics::Load_action::Clear;
+        descriptor.depth_attachment.store_action      = erhe::graphics::Store_action::Dont_care;
+        descriptor.depth_attachment.usage_before      = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        descriptor.depth_attachment.layout_before     = erhe::graphics::Image_layout::undefined;
+        descriptor.depth_attachment.usage_after       = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        descriptor.depth_attachment.layout_after      = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+        descriptor.render_target_width  = width;
+        descriptor.render_target_height = height;
+        descriptor.debug_label = erhe::utility::Debug_label{"Single sample"};
+
+        erhe::graphics::Render_pipeline_create_info pipeline_create_info;
+        pipeline_create_info.base.input_assembly    = erhe::graphics::Input_assembly_state::triangle;
+        pipeline_create_info.base.rasterization     = erhe::graphics::Rasterization_state::cull_mode_none;
+        pipeline_create_info.base.depth_stencil     =
+            erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
+        pipeline_create_info.base.bind_group_layout = &empty_layout;
+        pipeline_create_info.base.color_blend       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+        pipeline_create_info.shader_stages          = &shader_stages;
+        pipeline_create_info.vertex_input           = nullptr;
+        pipeline_create_info.set_format_from_render_pass(descriptor);
+        ASSERT_EQ(pipeline_create_info.sample_count, 1u) << "a 0/1-sample attachment pair must give a single-sample pipeline";
+        const erhe::graphics::Render_pipeline pipeline{graphics_device, pipeline_create_info};
+        ASSERT_TRUE(pipeline.is_valid()) << "single sample pipeline is not valid";
+
+        submit_and_wait(
+            [&](erhe::graphics::Command_buffer& command_buffer) {
+                erhe::graphics::Render_pass            render_pass{graphics_device, descriptor};
+                erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
+                const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+                ASSERT_EQ(render_pass.get_sample_count(), 1u) << "a 0/1-sample attachment pair must give a single-sample render pass";
+                encoder.set_viewport_rect(0, 0, width, height);
+                encoder.set_scissor_rect (0, 0, width, height);
+                encoder.set_bind_group_layout(&empty_layout);
+                encoder.set_render_pipeline(pipeline);
+                encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+            }
+        );
+
+        const std::vector<uint8_t> pixels = read_texture_rgba8(*color_target);
+        ASSERT_EQ(pixels.size(), static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+
+        int pure_green = 0;
+        int pure_red   = 0;
+        int other      = 0;
+        for (int i = 0; i < width * height; ++i) {
+            const int r = pixels[(static_cast<std::size_t>(i) * 4u) + 0];
+            const int g = pixels[(static_cast<std::size_t>(i) * 4u) + 1];
+            const int b = pixels[(static_cast<std::size_t>(i) * 4u) + 2];
+            if ((g >= 250) && (r <= 5) && (b <= 5)) {
+                ++pure_green;
+            } else if ((r >= 250) && (g <= 5) && (b <= 5)) {
+                ++pure_red;
+            } else {
+                ++other;
+            }
+        }
+        EXPECT_GT(pure_green, 0) << "no triangle (green) texels";
+        EXPECT_GT(pure_red,   0) << "no clear (red) texels";
+        EXPECT_EQ(other,      0) << "a single-sample render has no averaged edge texels";
+    }
+};
+
+TEST_F(Single_sample_test, color_1_depth_1)
+{
+    render_pair(1, 1);
+}
+
+// The Render_target shape: color texture requested with 0, depth with the
+// preset's 1.
+TEST_F(Single_sample_test, color_0_depth_1)
+{
+    render_pair(0, 1);
 }
 
 } // namespace erhe::graphics::test

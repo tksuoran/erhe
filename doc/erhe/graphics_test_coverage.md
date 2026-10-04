@@ -56,6 +56,7 @@ limitation, not a coverage gap to fill).
 - [x] Render into one subresource (`texture_level` / `texture_layer`): level 1 of a two-level 2D texture, layer 2 of a 2D array, face 3 (-Y) of a cube map, with Clear or with Load plus a draw; every other level / layer / face reads back byte-exact equal to its seed; the `*_mixed_layouts` cases leave the target in transfer_src_optimal while the other subresources stay in shader_read_only_optimal, which fails validation unless the backend tracks layouts per subresource (`test_render_target_subresource.cpp`, `Render_target_subresource_test`)
 - [x] Multisample (4x MSAA) color render + average resolve to single-sample target (`test_msaa_resolve.cpp`)
 - [x] MSAA resolve into layer 1 of a two-layer array (`resolve_layer`); seeded layer 0 reads back unchanged (`test_msaa_resolve.cpp`, `Gpu_test.msaa_color_resolve_to_layer`)
+- [x] Texture sample counts 0 and 1 are both single-sample: a color attachment requested with 1 (and with 0, the `Render_target` shape) plus a depth attachment requested with 1 form a single-sample render pass and pipeline, and the triangle renders with only pure clear / pure triangle texels (`test_msaa_resolve.cpp`, `Single_sample_test`)
 
 ## Compute
 

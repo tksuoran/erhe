@@ -13,6 +13,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
 #include <mutex>
 #include <optional>
 
@@ -366,8 +367,13 @@ auto Render_pass_impl::ensure_created_on_current_context() const -> unsigned int
 
 auto Render_pass_impl::get_sample_count() const -> unsigned int
 {
+    // Texture sample counts 0 and 1 both mean single-sample (gl_texture.hpp
+    // is_multisample_sample_count); every attachment must agree once
+    // normalized, and a pass without attachments is single-sample like on
+    // the other backends.
     std::optional<int> sample_count{};
-    auto update_sample_count = [&sample_count](const int sample_count_in){
+    auto update_sample_count = [&sample_count](const int sample_count_in_raw){
+        const int sample_count_in = std::max(1, sample_count_in_raw);
         if (!sample_count.has_value()) {
             sample_count = sample_count_in;
         } else {
@@ -389,7 +395,7 @@ auto Render_pass_impl::get_sample_count() const -> unsigned int
     if (m_stencil_attachment.texture != nullptr) {
         update_sample_count(m_stencil_attachment.texture->get_sample_count());
     }
-    return sample_count.has_value() ? sample_count.value() : 0;
+    return sample_count.has_value() ? static_cast<unsigned int>(sample_count.value()) : 1u;
 }
 
 auto Render_pass_impl::check_status() const -> bool

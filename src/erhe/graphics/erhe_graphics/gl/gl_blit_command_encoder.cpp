@@ -107,16 +107,8 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
     // another context.
     source_texture->get_impl().wait_publication();
     destination_texture->get_impl().wait_publication();
-    const gl::Texture_target gl_source_texture_target = convert_to_gl_texture_target(
-        source_texture->get_texture_type(),
-        source_texture->get_sample_count() != 0,
-        source_texture->get_array_layer_count() != 0
-    );
-    const gl::Texture_target gl_destination_texture_target = convert_to_gl_texture_target(
-        destination_texture->get_texture_type(),
-        destination_texture->get_sample_count() != 0,
-        destination_texture->get_array_layer_count() != 0
-    );
+    const gl::Texture_target gl_source_texture_target = source_texture->get_impl().get_gl_texture_target();
+    const gl::Texture_target gl_destination_texture_target = destination_texture->get_impl().get_gl_texture_target();
     int gl_width  = source_size.x;
     int gl_height = source_size.y;
     int gl_depth  = source_size.z;
@@ -182,11 +174,7 @@ void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& so
     ERHE_VERIFY(destination_origin.y + source_size.y <= destination_texture->get_height());
     ERHE_VERIFY(destination_origin.z + source_size.z <= destination_texture->get_depth ());
 
-    const gl::Texture_target gl_destination_texture_target = convert_to_gl_texture_target(
-        destination_texture->get_texture_type(),
-        destination_texture->get_sample_count() != 0,
-        destination_texture->get_array_layer_count() != 0
-    );
+    const gl::Texture_target gl_destination_texture_target = destination_texture->get_impl().get_gl_texture_target();
     int gl_width  = source_size.x;
     int gl_height = source_size.y;
     int gl_depth  = source_size.z;
@@ -400,11 +388,7 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
     // readback buffer may each have been created on another context.
     source_texture->get_impl().wait_publication();
     destination_buffer->get_impl().wait_publication();
-    const gl::Texture_target gl_source_texture_target = convert_to_gl_texture_target(
-        source_texture->get_texture_type(),
-        source_texture->get_sample_count() != 0,
-        source_texture->get_array_layer_count() != 0
-    );
+    const gl::Texture_target gl_source_texture_target = source_texture->get_impl().get_gl_texture_target();
     int gl_width  = source_size.x;
     int gl_height = source_size.y;
     int gl_depth  = source_size.z;
@@ -544,16 +528,8 @@ void Blit_command_encoder_impl::copy_from_texture(
     // another context.
     source_texture->get_impl().wait_publication();
     destination_texture->get_impl().wait_publication();
-    const gl::Texture_target gl_source_texture_target = convert_to_gl_texture_target(
-        source_texture->get_texture_type(),
-        source_texture->get_sample_count() != 0,
-        source_texture->get_array_layer_count() != 0
-    );
-    const gl::Texture_target gl_destination_texture_target = convert_to_gl_texture_target(
-        destination_texture->get_texture_type(),
-        destination_texture->get_sample_count() != 0,
-        destination_texture->get_array_layer_count() != 0
-    );
+    const gl::Texture_target gl_source_texture_target = source_texture->get_impl().get_gl_texture_target();
+    const gl::Texture_target gl_destination_texture_target = destination_texture->get_impl().get_gl_texture_target();
     int gl_width  = std::min(source_texture->get_width(),  destination_texture->get_width ());
     int gl_height = std::min(source_texture->get_height(), destination_texture->get_height());
     int gl_depth  = std::min(source_texture->get_depth(),  destination_texture->get_depth ());

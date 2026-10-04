@@ -29,7 +29,7 @@ public:
     bool                       use_mipmaps           {false};
     bool                       fixed_sample_locations{true};
     bool                       sparse                {false};
-    int                        sample_count          {0};
+    int                        sample_count          {0}; // 0 and 1 are single-sample; 2 and above multisample
     int                        width                 {1};
     int                        height                {1};
     int                        depth                 {1};

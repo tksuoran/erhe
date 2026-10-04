@@ -648,7 +648,7 @@ auto Texture_impl::get_gl_texture_target() const -> gl::Texture_target
 {
     return convert_to_gl_texture_target(
         m_type,
-        m_sample_count != 0,
+        is_multisample_sample_count(m_sample_count),
         m_array_layer_count != 0
     );
 }
@@ -658,7 +658,7 @@ namespace {
 auto create_texture_handle(Device& device, const Texture_create_info& create_info) -> Gl_texture
 {
     const gl::Texture_target target = convert_to_gl_texture_target(
-        create_info.type, create_info.sample_count != 0, create_info.array_layer_count != 0
+        create_info.type, is_multisample_sample_count(create_info.sample_count), create_info.array_layer_count != 0
     );
     if (create_info.wrap_texture_name != 0) {
         return Gl_texture{static_cast<GLuint>(create_info.wrap_texture_name), false};
@@ -701,11 +701,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         );
     }
 
-    gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
-        m_type,
-        m_sample_count != 0,
-        m_array_layer_count != 0
-    );
+    gl::Texture_target gl_texture_target = get_gl_texture_target();
 
     log_texture->trace(
         "New GL {} {} {} {} {}x{}x{} [{}] {} sample count = {}",
@@ -719,15 +715,36 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         gl::object_label(gl::Object_identifier::texture, gl_name(), -1, debug_label.data());
     }
 
-    // TODO consider different texture targets
-    if (create_info.sample_count > 0) {
+    // Round a multisample request to the smallest multisample count the
+    // format supports that is at least the request, or to the largest one
+    // when the request exceeds them all. A single-sample request (0 or 1) is
+    // kept as given. The GL object already has the multisample target
+    // (create_texture_handle), so the rounding never reaches the list's
+    // single-sample entry; a format without any multisample count cannot be
+    // asked for a multisample texture (Format_properties::texture_2d_sample_counts
+    // tells the caller).
+    if (is_multisample_sample_count(create_info.sample_count)) {
         const Format_properties format_properties = device.get_format_properties(create_info.pixelformat);
+        int rounded_sample_count = 0;
         for (int sample_count : format_properties.texture_2d_sample_counts) {
-            m_sample_count = sample_count;
+            if (!is_multisample_sample_count(sample_count)) {
+                continue;
+            }
+            rounded_sample_count = sample_count;
             if (sample_count >= create_info.sample_count) {
                 break;
             }
         }
+        if (rounded_sample_count == 0) {
+            ERHE_FATAL(
+                "Texture '%.*s': format %s has no multisample sample count (requested %d)",
+                static_cast<int>(m_debug_label.size()),
+                m_debug_label.data(),
+                erhe::dataformat::c_str(m_pixelformat),
+                create_info.sample_count
+            );
+        }
+        m_sample_count = rounded_sample_count;
     }
 
     const auto dimensions = get_storage_dimensions(gl_texture_target);
@@ -872,19 +889,19 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         convert_texture_dimensions_to_gl(gl_texture_target, gl_width, gl_height, gl_depth, m_array_layer_count);
         switch (dimensions) {
             case 0: {
-                ERHE_VERIFY(m_sample_count == 0);
+                ERHE_VERIFY(!is_multisample_sample_count(m_sample_count));
                 if (m_buffer != nullptr) {
                     gl::texture_buffer(gl_name(), internal_format, m_buffer->get_impl().gl_name());
                 }
                 break;
             }
             case 1: {
-                ERHE_VERIFY(m_sample_count == 0);
+                ERHE_VERIFY(!is_multisample_sample_count(m_sample_count));
                 gl::texture_storage_1d(gl_name(), m_level_count, internal_format, gl_width);
                 break;
             }
             case 2: {
-                if (m_sample_count == 0) {
+                if (!is_multisample_sample_count(m_sample_count)) {
                     gl::texture_storage_2d(gl_name(), m_level_count, internal_format, gl_width, gl_height);
                 } else {
                     gl::texture_storage_2d_multisample(
@@ -988,11 +1005,7 @@ auto Texture_impl::get_texture_type() const -> Texture_type
 
 auto Texture_impl::is_layered() const -> bool
 {
-    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
-        m_type,
-        m_sample_count != 0,
-        m_array_layer_count != 0
-    );
+    const gl::Texture_target gl_texture_target = get_gl_texture_target();
 
     switch (gl_texture_target) {
         //using enum gl::Texture_target;

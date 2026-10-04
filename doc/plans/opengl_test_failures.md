@@ -12,37 +12,7 @@ disable. Run suites serially and one failure at a time (`doc/testing.md`
 "Running"). The Linux build trees and the headless run recipe are in
 `doc/agents/linux.md`.
 
-## 1. A one-sample request creates a multisample GL texture
-
-`Format_properties::texture_2d_sample_counts` lists 1 on every backend since
-5ef90f13c (`device.hpp` states the contract), so the Settings window MSAA combo
-(`src/editor/app_settings.cpp`, `src/editor/windows/settings_window.cpp`) now
-offers 1 on GL. The rest of the engine treats a sample count of 1 as
-single-sample (`get_vulkan_sample_count`, `metal_texture.cpp`,
-`render_pipeline.cpp`, `gl_render_pass.cpp` resolve check,
-`viewport_scene_view.cpp` `is_msaa`), but the GL `Texture_impl`
-(`src/erhe/graphics/erhe_graphics/gl/gl_texture.cpp`) chooses the
-`texture_2d_multisample` target whenever `sample_count != 0`.
-`Render_target::reconfigure(1)` (`src/erhe/rendergraph/erhe_rendergraph/render_target.cpp`)
-then pairs a single-sample color texture with a 1-sample multisample depth
-texture: `GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE`.
-
-Fix: in GL `Texture_impl`, treat `sample_count <= 1` as single-sample
-everywhere it picks the target or the storage call (the `!= 0` / `== 0` tests
-on the sample count, the `texture_storage_2d` branch, the
-`ERHE_VERIFY(m_sample_count == 0)` checks, the count-rounding loop over
-`texture_2d_sample_counts`, `is_layered`). Then the
-`std::max(2, msaa_sample_count) // TODO Fix rendergraph` in
-`src/editor/operations/scene_builder_viewport_resources_operation.cpp` can be
-revisited. Verify with a GPU test that renders into a `sample_count = 1`
-color + depth pair on GL and Vulkan, and an editor run with the MSAA preset at
-1.
-
-Also correct the comment in `Device_impl::get_supported_depth_stencil_formats`
-(`gl_device.cpp`): it attributes the non-stencil-renderable
-`GL_STENCIL_INDEX8` texture to Mesa; the driver observed was NVIDIA's.
-
-## 2. `Texel_fetch_test.texture_3d` reads zeros
+## 1. `Texel_fetch_test.texture_3d` reads zeros
 
 `texelFetch` on a `sampler3D` returns `(0, 0, 0, 0)` for every texel; the 2D
 and 2D array cases of the same test pass, and Vulkan passes all three. The
@@ -75,7 +45,7 @@ a driver defect; compare the GL state at the draw with RenderDoc or apitrace
 against the variant that adds `texture()`. Only a driver defect may end in a
 documented workaround, and then with the reproduction attached.
 
-## 3. Heap corruption at `Worker_context_gl_test` teardown
+## 2. Heap corruption at `Worker_context_gl_test` teardown
 
 Running the `Worker_context_gl_test` suite (with or without the rest of
 `erhe_graphics_gpu_tests`) aborts at "Global test environment tear-down"
