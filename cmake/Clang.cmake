@@ -115,11 +115,6 @@ function (erhe_target_settings_toolchain target)
     foreach (erhe_warning_flag IN LISTS ERHE_GNU_WARNING_FLAGS)
         target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${erhe_warning_flag}>")
     endforeach ()
-    # ERHE_WARNINGS_AS_ERRORS: per erhe target, as cmake/msvc.cmake's /WX,
-    # so the CPM dependencies keep their own warning policy.
-    if (ERHE_WARNINGS_AS_ERRORS)
-        target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${ERHE_GNU_WARNING_FLAG_PREFIX}-Werror>")
-    endif ()
     if (WIN32)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)

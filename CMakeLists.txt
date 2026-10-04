@@ -68,7 +68,7 @@ set_option(ERHE_VOXEL_LIBRARY              "Voxel/SDF library to use with erhe. 
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
 set_option(ERHE_USE_UBSAN                  "Enable UndefinedBehaviorSanitizer (Clang / GCC / AppleClang)"               "OFF"      "ON;OFF")
-set_option(ERHE_WARNINGS_AS_ERRORS         "Compile erhe targets with warnings as errors (-Werror / /WX)"                "ON"       "ON;OFF")
+set_option(ERHE_WARNINGS_AS_ERRORS         "Compile erhe targets with warnings as errors (MSVC /WX only)"               "ON"       "ON;OFF")
 set_option(ERHE_USE_FPNG                   "Build the fpng image writer (fast PNG save), independent of window lib"     "ON"       "ON;OFF")
 set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
 set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"                                                      "OFF"      "ON;OFF")

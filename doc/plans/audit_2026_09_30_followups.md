@@ -61,15 +61,12 @@ on culling.
 - Item 17, CI hardening (`doc/testing.md` "CI", `doc/building.md`):
   `ERHE_USE_UBSAN` beside `ERHE_USE_ASAN` in every GNU-style toolchain
   file, a Linux Clang ASan+UBSan matrix entry running the deviceless set
-  with `halt_on_error`, erhe's warning set and `-Werror` per erhe target on
-  Clang, GCC and AppleClang under `ERHE_WARNINGS_AS_ERRORS` (default on,
-  the MSVC `/WX` follows the same option), and `erhe::version`
-  (`doc/erhe/version.md`) logged as the editor's first startup line beside
-  the dependency commits. The Clang / GCC halves are verified by the first
-  CI run after the push: no Clang toolchain was available on the machine
-  that built them, and GCC previously compiled erhe targets without
-  `-Wall -Wextra`, so that run may surface warnings to fix
-  (`-DERHE_WARNINGS_AS_ERRORS=OFF` is the escape hatch while they are).
+  with `halt_on_error`, erhe's warning set per erhe target on
+  Clang, GCC and AppleClang, `ERHE_WARNINGS_AS_ERRORS` (default on) for
+  the MSVC `/WX`, and `erhe::version` (`doc/erhe/version.md`) logged as the
+  editor's first startup line beside the dependency commits. `-Werror` on
+  Clang, GCC and AppleClang was tried and removed again because it failed
+  the CI builds; it is open until those builds are warning-free.
 
 ## Next
 

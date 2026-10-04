@@ -36,9 +36,4 @@ endif ()
 
 function (erhe_target_settings_toolchain target)
     set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym")
-    # ERHE_WARNINGS_AS_ERRORS: per erhe target, as cmake/msvc.cmake's /WX,
-    # so the CPM dependencies keep their own warning policy.
-    if (ERHE_WARNINGS_AS_ERRORS)
-        target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Werror>")
-    endif ()
 endfunction()

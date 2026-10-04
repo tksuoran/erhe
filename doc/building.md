@@ -156,7 +156,7 @@ attempt and the launch must be retried.
 | `ERHE_BUILD_TESTS` | Build the `erhe_<name>_tests` gtest targets | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_UBSAN` | UndefinedBehaviorSanitizer (Clang, GCC, AppleClang; ignored on MSVC) | `ON`, `OFF` | `OFF` |
-| `ERHE_WARNINGS_AS_ERRORS` | Warnings as errors on every erhe target (`-Werror`, `/WX`); the CPM dependencies keep their own policy | `ON`, `OFF` | `ON` |
+| `ERHE_WARNINGS_AS_ERRORS` | Warnings as errors on every erhe target with MSVC (`/WX`); the CPM dependencies keep their own policy | `ON`, `OFF` | `ON` |
 | `ERHE_USE_FPNG` | Build the fpng image writer (fast PNG save) | `ON`, `OFF` | `ON` |
 | `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` | `OFF` |
 
@@ -207,11 +207,11 @@ runtime option is set, which is what the CI sanitizer entry does
 `ERHE_USE_ASAN`.
 
 **ERHE_WARNINGS_AS_ERRORS** -- Each toolchain file applies erhe's warning
-set per erhe target (`erhe_target_settings_toolchain`) and, with this option,
-`-Werror` (`/WX` on MSVC) on the same targets; a dependency configured in the
-tree is never affected. Default on, so a warning is a build error on every
-compiler; switch it off to get a tree to build while a warning is being
-fixed.
+set per erhe target (`erhe_target_settings_toolchain`). With MSVC this option
+adds `/WX` on the same targets; a dependency configured in the tree is never
+affected. Default on; switch it off to get an MSVC tree to build while a
+warning is being fixed. Clang, GCC and AppleClang report erhe's warnings
+without failing the build.
 
 ## Windows Build Scripts
 

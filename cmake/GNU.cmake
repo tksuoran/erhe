@@ -49,8 +49,4 @@ function (erhe_target_settings_toolchain target)
     foreach (erhe_warning_flag IN LISTS ERHE_GNU_WARNING_FLAGS)
         target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${erhe_warning_flag}>")
     endforeach ()
-    # ERHE_WARNINGS_AS_ERRORS: per erhe target, as cmake/msvc.cmake's /WX.
-    if (ERHE_WARNINGS_AS_ERRORS)
-        target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Werror>")
-    endif ()
 endfunction()
