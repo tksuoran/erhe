@@ -242,3 +242,8 @@ none
 >reviewed::fable-medium-x2->fixes{f4a126842,bb6f7fffd,714cffbc3,8be476605->61586c4bf,ddad3dc78->4f66c859f,a83e88a26,c9fc65c67}✓
 >docs::open-items-planned{1e9495002}+prompt_queue.txt-handoff
 ©User>decided::keep-plans(no-deletion)+commands-links-profile-PUBLIC+Aabb-named-validity-variants(only-3d-needed)+use-ImGui-ScrollToItem+restore-parallel-init-eventually
+
+[2026-10-04]
+>audit-2026-09-30-item-10::DONE{4fc17d988-Vk-per-subresource-layout-tracking+resolve_level/layer-fix;1d5d45f28-Texture_location/Buffer_texel_location;51dfc09fb-narrowing-fix}✓
+>GL-depth-stencil-format-selection::5ef90f13c{sample-count-1-listed;only-renderable-ds-formats}✓{review-found:GL-1-sample-texture-multisample->open}
+>handoff::prompt_queue.txt{1:doc/plans/opengl_test_failures.md;2:doc/plans/audit_2026_09_30_followups.md}

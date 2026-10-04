@@ -329,6 +329,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/android.md](plans/android.md) (proposed): Android: full editor on a phone
 - [plans/animation_keyframing.md](plans/animation_keyframing.md) (in progress): Keyframing and timeline for the Animation window: outstanding work
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
+- [plans/audit_2026_09_30_followups.md](plans/audit_2026_09_30_followups.md) (in progress): 2026-09-30 audit: medium-term set and follow-ups
 - [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
 - [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
 - [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
@@ -364,6 +365,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
+- [plans/opengl_test_failures.md](plans/opengl_test_failures.md) (in progress): OpenGL backend: failures found by the GPU tests
 - [plans/parallel_editor_init.md](plans/parallel_editor_init.md) (proposed): Parallel editor initialization: a Taskflow graph over the init steps
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups

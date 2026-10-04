@@ -11,6 +11,9 @@
 
 [TRAPS]
 !Gpu_test.device_up_clean-fails-with-distro-validation-layer-older-than-pinned-Vulkan-headers{VUID-VkDeviceCreateInfo-pNext-pNext-unknown-sType-1000558000=shader_relaxed_extended_instruction;use-SDK-layer;doc/agents/linux.md}
+!GL-gpu-tests-open-failures::doc/plans/opengl_test_failures.md{texelFetch-sampler3D-zeros-only-without-texture()-call;Worker_context_gl_test-teardown-malloc_consolidate->ASAN;1-sample-texture->texture_2d_multisample}
+!startup-logger-off-in-gpu-tests::erhe.graphics.startup{GL-Renderer-line}-not-logged-unless-level-raised->dont-assume-driver
+!Vk-layout-tracking::per-subresource-since-4fc17d988{Image_layout_state-shared-by-views;*_mixed_layouts+msaa_color_resolve_to_layer-tests}
 @scene_renderer-gpu-tests::30/30-since-f4a126842{Content_line_width-fixture-passed-temporary-Mesh_memory_config->dangling-ref;rvalue-ctor-now-deleted}
 !Image_loader-default=premultiplied→goldens-read-with-Alpha_mode::straight
 !one-golden-set-all-backends::image-space-coords+texture_origin+native_depth_range;GL-bottom-left-origin-exercises-the-normalization
