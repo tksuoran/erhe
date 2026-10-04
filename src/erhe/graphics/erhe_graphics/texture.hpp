@@ -21,7 +21,13 @@ class Texture_create_info
 public:
     [[nodiscard]] auto get_texture_level_count() const -> int;
 
-    static auto make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info;
+    // A view of view_source starting at the given level and layer: the
+    // extents are those of the source at view_base_level, and the level and
+    // layer counts are what remains of the source past the bases, so the
+    // view's own get_width() / get_level_count() describe exactly the
+    // subresources it covers. The caller sets usage_mask (and type, for a
+    // single-layer view of an array).
+    static auto make_view(Device& device, const std::shared_ptr<Texture>& view_source, int view_base_level = 0, int view_base_array_layer = 0) -> Texture_create_info;
 
     Device&                    device;
     uint64_t                   usage_mask            {0};

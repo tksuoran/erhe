@@ -3,6 +3,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/fragment_output.hpp"
@@ -566,6 +567,160 @@ TEST_F(Single_sample_test, color_1_depth_1)
 TEST_F(Single_sample_test, color_0_depth_1)
 {
     render_pair(0, 1);
+}
+
+// A multisampled depth-stencil attachment whose STENCIL is resolved while
+// the depth is not: the resolve target's final layout is the stencil
+// attachment's layout_after, and the tracked layout agrees. The target is
+// first cleared (tracked DEPTH_STENCIL_READ_ONLY_OPTIMAL), the pass leaves
+// it in shader_read_only_optimal, and the barrier of the following
+// transition reads the tracked layout - a stale or mismatching one is a
+// validation error, which fails the test.
+TEST_F(Gpu_test, msaa_stencil_only_resolve_tracks_target_layout)
+{
+    constexpr int width        = 16;
+    constexpr int height       = 16;
+    constexpr int sample_count = 4;
+
+    erhe::graphics::Device& graphics_device = device();
+
+    // A depth-stencil format that is stencil-renderable at 4 samples.
+    erhe::dataformat::Format format = erhe::dataformat::Format::format_undefined;
+    for (const erhe::dataformat::Format candidate : graphics_device.get_supported_depth_stencil_formats()) {
+        if (erhe::dataformat::get_stencil_size_bits(candidate) == 0) {
+            continue;
+        }
+        const erhe::graphics::Format_properties props = graphics_device.get_format_properties(candidate);
+        const std::vector<int>& counts = props.texture_2d_sample_counts;
+        if (props.stencil_renderable && (std::find(counts.begin(), counts.end(), sample_count) != counts.end())) {
+            format = candidate;
+            break;
+        }
+    }
+    if (format == erhe::dataformat::Format::format_undefined) {
+        GTEST_SKIP() << "no depth-stencil format is stencil-renderable at 4 samples on this device";
+    }
+    if ((graphics_device.get_info().supported_stencil_resolve_modes & erhe::graphics::Resolve_mode_flag_bit_mask::sample_zero) == 0) {
+        GTEST_SKIP() << "sample_zero stencil resolve is not supported on this device";
+    }
+
+    const std::shared_ptr<erhe::graphics::Texture> msaa_target = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device       = graphics_device,
+            .usage_mask   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment,
+            .type         = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat  = format,
+            .sample_count = sample_count,
+            .width        = width,
+            .height       = height,
+            .debug_label  = erhe::utility::Debug_label{"MSAA depth-stencil"}
+        }
+    );
+    const std::shared_ptr<erhe::graphics::Texture> resolve_target = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device       = graphics_device,
+            .usage_mask   =
+                erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+            .type         = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat  = format,
+            .sample_count = 1,
+            .width        = width,
+            .height       = height,
+            .debug_label  = erhe::utility::Debug_label{"Stencil resolve target"}
+        }
+    );
+
+    // Give the resolve target a tracked layout before the pass.
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            command_buffer.clear_texture(*resolve_target, std::array<double, 4>{0.0, 0.0, 0.0, 0.0});
+        }
+    );
+
+    const erhe::graphics::Bind_group_layout empty_layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings          = {},
+            .debug_label       = erhe::utility::Debug_label{"Stencil resolve empty layout"},
+            .uses_texture_heap = false
+        }
+    };
+    erhe::graphics::Shader_stages_create_info shader_create_info{
+        .name             = "stencil_only_resolve",
+        .no_vertex_input  = true,
+        .shaders = {
+            { erhe::graphics::Shader_type::vertex_shader, std::string_view{c_vertex_source} }
+        },
+        .bind_group_layout = &empty_layout
+    };
+    erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(graphics_device, shader_create_info);
+    ASSERT_TRUE(prototype.is_valid()) << "stencil-only shader failed to compile/link";
+    erhe::graphics::Shader_stages shader_stages{graphics_device, std::move(prototype)};
+
+    erhe::graphics::Render_pass_descriptor descriptor{};
+    descriptor.depth_attachment.texture           = msaa_target.get();
+    descriptor.depth_attachment.clear_value[0]    = 1.0;
+    descriptor.depth_attachment.load_action       = erhe::graphics::Load_action::Clear;
+    descriptor.depth_attachment.store_action      = erhe::graphics::Store_action::Dont_care;
+    descriptor.depth_attachment.usage_before      = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    descriptor.depth_attachment.layout_before     = erhe::graphics::Image_layout::undefined;
+    descriptor.depth_attachment.usage_after       = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    descriptor.depth_attachment.layout_after      = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    descriptor.stencil_attachment.texture         = msaa_target.get();
+    descriptor.stencil_attachment.clear_value[0]  = 0.0;
+    descriptor.stencil_attachment.load_action     = erhe::graphics::Load_action::Clear;
+    descriptor.stencil_attachment.store_action    = erhe::graphics::Store_action::Multisample_resolve;
+    descriptor.stencil_attachment.resolve_texture = resolve_target.get();
+    descriptor.stencil_attachment.resolve_mode    = erhe::graphics::Resolve_mode::sample_zero;
+    descriptor.stencil_attachment.usage_before    = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    descriptor.stencil_attachment.layout_before   = erhe::graphics::Image_layout::undefined;
+    descriptor.stencil_attachment.usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    descriptor.stencil_attachment.layout_after    = erhe::graphics::Image_layout::shader_read_only_optimal;
+    descriptor.render_target_width  = width;
+    descriptor.render_target_height = height;
+    descriptor.debug_label = erhe::utility::Debug_label{"Stencil-only resolve"};
+
+    erhe::graphics::Depth_stencil_state depth_stencil = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled;
+    depth_stencil.stencil_test_enable    = true;
+    depth_stencil.stencil_front.z_pass_op = erhe::graphics::Stencil_op::replace;
+    depth_stencil.stencil_front.function  = erhe::graphics::Compare_operation::always;
+    depth_stencil.stencil_front.reference = 1u;
+    depth_stencil.stencil_back            = depth_stencil.stencil_front;
+
+    erhe::graphics::Render_pipeline_create_info pipeline_create_info;
+    pipeline_create_info.base.input_assembly    = erhe::graphics::Input_assembly_state::triangle;
+    pipeline_create_info.base.rasterization     = erhe::graphics::Rasterization_state::cull_mode_none;
+    pipeline_create_info.base.depth_stencil     = depth_stencil;
+    pipeline_create_info.base.bind_group_layout = &empty_layout;
+    pipeline_create_info.base.color_blend       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+    pipeline_create_info.shader_stages          = &shader_stages;
+    pipeline_create_info.vertex_input           = nullptr;
+    pipeline_create_info.set_format_from_render_pass(descriptor);
+    const erhe::graphics::Render_pipeline pipeline{graphics_device, pipeline_create_info};
+    ASSERT_TRUE(pipeline.is_valid()) << "stencil-only pipeline is not valid";
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            {
+                erhe::graphics::Render_pass            render_pass{graphics_device, descriptor};
+                erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
+                const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+                encoder.set_viewport_rect(0, 0, width, height);
+                encoder.set_scissor_rect (0, 0, width, height);
+                encoder.set_bind_group_layout(&empty_layout);
+                encoder.set_render_pipeline(pipeline);
+                encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+            }
+            // Transitions from the tracked layout; the validation layer
+            // compares that with the layout the render pass left.
+            command_buffer.transition_texture_layout(*resolve_target, erhe::graphics::Image_layout::transfer_src_optimal);
+        }
+    );
 }
 
 } // namespace erhe::graphics::test

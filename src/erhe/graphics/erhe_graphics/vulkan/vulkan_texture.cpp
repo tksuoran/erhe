@@ -128,6 +128,16 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         m_is_view        = true;
         m_layout_state   = source_impl.m_layout_state;
         ERHE_VERIFY(m_layout_state);
+        // The view's extents are those of the image level it starts at, and
+        // its levels and layers lie inside the image: get_width() and
+        // get_all_subresources() of a view describe exactly what it covers
+        // (Texture_create_info::make_view builds such a create_info).
+        const unsigned int base_level = static_cast<unsigned int>(m_view_base_level);
+        ERHE_VERIFY(m_width  == source_impl.get_width (base_level));
+        ERHE_VERIFY(m_height == source_impl.get_height(base_level));
+        ERHE_VERIFY(m_depth  == source_impl.get_depth (base_level));
+        ERHE_VERIFY(static_cast<uint32_t>(m_view_base_level) + static_cast<uint32_t>(m_level_count) <= m_layout_state->get_level_count());
+        ERHE_VERIFY(static_cast<uint32_t>(m_view_base_array_layer) + std::max(uint32_t{1}, static_cast<uint32_t>(m_array_layer_count)) <= m_layout_state->get_layer_count());
         return;
     }
 
@@ -471,18 +481,13 @@ auto get_destination_scope(const VkImageLayout layout) -> Layout_scope
 
 auto Texture_impl::get_all_subresources() const -> Image_subresource_range
 {
-    // A view inherits the source's level and layer counts (make_view), so
-    // clamp to what remains of the image past the view's base.
-    const uint32_t image_level_count = m_layout_state->get_level_count();
-    const uint32_t image_layer_count = m_layout_state->get_layer_count();
-    const uint32_t base_level        = static_cast<uint32_t>(m_view_base_level);
-    const uint32_t base_layer        = static_cast<uint32_t>(m_view_base_array_layer);
-    ERHE_VERIFY((base_level < image_level_count) && (base_layer < image_layer_count));
+    // Exact for a view too: the constructor verified that the view's levels
+    // and layers lie inside the image.
     return Image_subresource_range{
         .base_level  = 0,
-        .level_count = std::min(static_cast<uint32_t>(m_level_count), image_level_count - base_level),
+        .level_count = static_cast<uint32_t>(m_level_count),
         .base_layer  = 0,
-        .layer_count = std::min(std::max(uint32_t{1}, static_cast<uint32_t>(m_array_layer_count)), image_layer_count - base_layer)
+        .layer_count = std::max(uint32_t{1}, static_cast<uint32_t>(m_array_layer_count))
     };
 }
 

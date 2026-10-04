@@ -6,12 +6,6 @@
 
 #include <vector>
 
-namespace erhe::graphics {
-    class Command_buffer;
-    class Device;
-    class Texture;
-}
-
 namespace hextiles {
 
 class Image

@@ -990,17 +990,18 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                     .stencilStoreOp = (resolve_aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
                     .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
                     // The resolve target picks up the user's intended
-                    // post-pass layout via depth_attachment.layout_after, so
-                    // sampling the resolved depth in the next pass works
+                    // post-pass layout via the driving attachment's
+                    // layout_after (end_render_pass records the same), so
+                    // sampling the resolved data in the next pass works
                     // without an explicit barrier.
-                    .finalLayout    = to_vk_image_layout(m_depth_attachment.layout_after)
+                    .finalLayout    = to_vk_image_layout(resolve_attachment.layout_after)
                 });
                 ERHE_VULKAN_SYNC_TRACE(
                     "[RP_ATTACHMENT] pass=\"{}\" role=depth_stencil_resolve tex=\"{}\" samples=1 loadOp=DONT_CARE storeOp=STORE stencilLoadOp=DONT_CARE stencilStoreOp={} initialLayout=UNDEFINED finalLayout={}",
                     m_debug_label.data(),
                     resolve_texture->get_debug_label().data(),
                     vk_store_op_str((resolve_aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE),
-                    vk_layout_str(to_vk_image_layout(m_depth_attachment.layout_after))
+                    vk_layout_str(to_vk_image_layout(resolve_attachment.layout_after))
                 );
                 depth_resolve_reference.attachment = attachment_index;
                 depth_resolve_reference.aspectMask = resolve_aspect;
@@ -1549,6 +1550,31 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     }
 }
 
+auto Render_pass_impl::get_depth_stencil_resolve_driver() const -> const Render_pass_attachment_descriptor*
+{
+    const auto resolves = [](const Render_pass_attachment_descriptor& attachment) -> bool {
+        return
+            attachment.is_defined() &&
+            (attachment.texture != nullptr) &&
+            (attachment.resolve_texture != nullptr) &&
+            (
+                (attachment.store_action == Store_action::Multisample_resolve) ||
+                (attachment.store_action == Store_action::Store_and_multisample_resolve)
+            );
+    };
+    if (!m_depth_attachment.is_defined() || (m_depth_attachment.texture == nullptr)) {
+        return nullptr;
+    }
+    if (resolves(m_depth_attachment)) {
+        return &m_depth_attachment;
+    }
+    const bool has_stencil = (m_stencil_attachment.texture == m_depth_attachment.texture);
+    if (has_stencil && resolves(m_stencil_attachment)) {
+        return &m_stencil_attachment;
+    }
+    return nullptr;
+}
+
 void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_after)
 {
     static_cast<void>(command_buffer);
@@ -1701,11 +1727,14 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
                 source_layout
             );
 
-            if (has_depth_resolve_request) {
-                const VkImageLayout resolve_final_layout = to_vk_image_layout(m_depth_attachment.layout_after);
-                m_depth_attachment.resolve_texture->get_impl().set_layout(
-                    get_attachment_range(m_depth_attachment.resolve_level, m_depth_attachment.resolve_layer, m_attachment_layer_count),
-                    resolve_final_layout
+            // The depth/stencil resolve target takes the finalLayout the
+            // constructor gave it: the layout_after of the attachment that
+            // drives the resolve (depth when it resolves, else stencil).
+            const Render_pass_attachment_descriptor* const resolve_driver = get_depth_stencil_resolve_driver();
+            if (resolve_driver != nullptr) {
+                resolve_driver->resolve_texture->get_impl().set_layout(
+                    get_attachment_range(resolve_driver->resolve_level, resolve_driver->resolve_layer, m_attachment_layer_count),
+                    to_vk_image_layout(resolve_driver->layout_after)
                 );
             }
         }

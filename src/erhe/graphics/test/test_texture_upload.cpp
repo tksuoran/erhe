@@ -112,4 +112,83 @@ TEST_F(Gpu_test, texture_clear_constant)
     EXPECT_EQ(bad, 0) << bad << " texels did not match the clear color {32,64,96,255}";
 }
 
+// Command_buffer::clear_texture on a texture VIEW clears only the view's own
+// subresources. A 2-layer array is seeded with distinct colors, a view of
+// layer 1 is cleared: layer 1 takes the clear color and layer 0 keeps its
+// seed. (Clearing the whole VkImage would also touch layer 0, which is not
+// in TRANSFER_DST_OPTIMAL at that point - a validation error - and would
+// destroy its contents.)
+TEST_F(Gpu_test, texture_clear_layer_view_spares_other_layers)
+{
+    constexpr int width       = 4;
+    constexpr int height      = 4;
+    constexpr int layer_count = 2;
+
+    erhe::graphics::Device& graphics_device = device();
+    constexpr uint64_t usage_mask =
+        erhe::graphics::Image_usage_flag_bit_mask::sampled      |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst;
+    const std::shared_ptr<erhe::graphics::Texture> texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device            = graphics_device,
+            .usage_mask        = usage_mask,
+            .type              = erhe::graphics::Texture_type::texture_2d_array,
+            .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm,
+            .width             = width,
+            .height            = height,
+            .array_layer_count = layer_count,
+            .level_count       = 1,
+            .debug_label       = erhe::utility::Debug_label{"clear view source"}
+        }
+    );
+
+    const std::size_t    texel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    std::vector<uint8_t> layer0_seed(texel_count * 4u);
+    std::vector<uint8_t> layer1_seed(texel_count * 4u);
+    for (std::size_t i = 0; i < texel_count; ++i) {
+        layer0_seed[i * 4u + 0] = 10u; layer0_seed[i * 4u + 1] = 20u; layer0_seed[i * 4u + 2] = 30u; layer0_seed[i * 4u + 3] = 255u;
+        layer1_seed[i * 4u + 0] = 40u; layer1_seed[i * 4u + 1] = 50u; layer1_seed[i * 4u + 2] = 60u; layer1_seed[i * 4u + 3] = 255u;
+    }
+    seed_subresource_rgba8(*texture, 0, 0, layer0_seed);
+    seed_subresource_rgba8(*texture, 1, 0, layer1_seed);
+
+    erhe::graphics::Texture_create_info view_create_info = erhe::graphics::Texture_create_info::make_view(graphics_device, texture, 0, 1);
+    view_create_info.type        = erhe::graphics::Texture_type::texture_2d;
+    view_create_info.usage_mask  = usage_mask;
+    view_create_info.debug_label = erhe::utility::Debug_label{"clear view of layer 1"};
+    const std::shared_ptr<erhe::graphics::Texture> view = std::make_shared<erhe::graphics::Texture>(graphics_device, view_create_info);
+    ASSERT_EQ(view->get_array_layer_count(), 1);
+
+    // {200, 100, 0, 255} as unorm doubles.
+    const std::array<double, 4> clear_value{ 200.0 / 255.0, 100.0 / 255.0, 0.0, 1.0 };
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            command_buffer.clear_texture(*view, clear_value);
+        }
+    );
+
+    const std::vector<uint8_t> layer0 = read_subresource_rgba8(*texture, 0, 0);
+    const std::vector<uint8_t> layer1 = read_subresource_rgba8(*texture, 1, 0);
+    ASSERT_EQ(layer0.size(), texel_count * 4u);
+    ASSERT_EQ(layer1.size(), texel_count * 4u);
+    int layer0_changed = 0;
+    int layer1_bad     = 0;
+    for (std::size_t i = 0; i < texel_count; ++i) {
+        if ((layer0[i * 4u + 0] != 10u) || (layer0[i * 4u + 1] != 20u) || (layer0[i * 4u + 2] != 30u)) {
+            ++layer0_changed;
+        }
+        const bool ok =
+            (std::abs(static_cast<int>(layer1[i * 4u + 0]) - 200) <= 1) &&
+            (std::abs(static_cast<int>(layer1[i * 4u + 1]) - 100) <= 1) &&
+            (layer1[i * 4u + 2] <= 1u);
+        if (!ok) {
+            ++layer1_bad;
+        }
+    }
+    EXPECT_EQ(layer0_changed, 0) << layer0_changed << " layer-0 texels were touched by clearing the layer-1 view";
+    EXPECT_EQ(layer1_bad,     0) << layer1_bad     << " layer-1 texels did not take the clear color";
+}
+
 } // namespace erhe::graphics::test

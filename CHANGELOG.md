@@ -256,6 +256,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `Texture_create_info::make_view()` takes the view's base
+  level and base array layer (default 0) and sets the view's extents to the
+  source's at that level and its level and layer counts to what remains past
+  the bases; a view whose extents do not match its image level is rejected.
 - `erhe::graphics`: `device.hpp` forward-declares `Graphics_config`,
   `Surface_create_info`, `Shader_monitor`, `Shader_source_cache`, `Spirv_cache`
   and `erhe::frame_pacing::Frame_time_recorder` instead of including their

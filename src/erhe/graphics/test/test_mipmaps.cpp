@@ -145,4 +145,87 @@ TEST_F(Gpu_test, generate_mipmaps_downsamples_to_midgray)
     }
 }
 
+// generate_mipmaps on a texture VIEW that starts at level 1 of an 8x8,
+// 4-level image. The view's level 0 is the image's level 1 (4x4), so the
+// blits must use 4x4 -> 2x2 -> 1x1 extents (a chain sized from the image's
+// level 0 would blit an 8x8 source region out of a 4x4 level). Level 1 is
+// seeded with a left-black / right-white split; the image's level 3 (1x1)
+// then averages to mid-gray, and level 0 (never part of the view) keeps
+// its seed.
+TEST_F(Gpu_test, generate_mipmaps_on_level_view)
+{
+    constexpr int width       = 8;
+    constexpr int height      = 8;
+    constexpr int level_count = 4; // 8 -> 4 -> 2 -> 1
+
+    erhe::graphics::Device& graphics_device = device();
+    constexpr uint64_t usage_mask =
+        erhe::graphics::Image_usage_flag_bit_mask::sampled      |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst;
+    const std::shared_ptr<erhe::graphics::Texture> texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = graphics_device,
+            .usage_mask  = usage_mask,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
+            .width       = width,
+            .height      = height,
+            .level_count = level_count,
+            .debug_label = erhe::utility::Debug_label{"mipmap view source"}
+        }
+    );
+
+    const auto make_split = [](const int w, const int h, const uint8_t left, const uint8_t right) -> std::vector<uint8_t> {
+        std::vector<uint8_t> texels(static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4u);
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                const std::size_t i = (static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)) * 4u;
+                const uint8_t     v = (x < (w / 2)) ? left : right;
+                texels[i + 0] = v;
+                texels[i + 1] = v;
+                texels[i + 2] = v;
+                texels[i + 3] = 255u;
+            }
+        }
+        return texels;
+    };
+    // Level 0: solid 77 (not part of the view; must survive). Level 1: black | white.
+    const std::vector<uint8_t> level0_seed = make_split(width, height, 77u, 77u);
+    const std::vector<uint8_t> level1_seed = make_split(width / 2, height / 2, 0u, 255u);
+    seed_subresource_rgba8(*texture, 0, 0, level0_seed);
+    seed_subresource_rgba8(*texture, 0, 1, level1_seed);
+
+    erhe::graphics::Texture_create_info view_create_info = erhe::graphics::Texture_create_info::make_view(graphics_device, texture, 1, 0);
+    view_create_info.usage_mask  = usage_mask;
+    view_create_info.debug_label = erhe::utility::Debug_label{"mipmap view from level 1"};
+    const std::shared_ptr<erhe::graphics::Texture> view = std::make_shared<erhe::graphics::Texture>(graphics_device, view_create_info);
+    ASSERT_EQ(view->get_width(),       width / 2);
+    ASSERT_EQ(view->get_height(),      height / 2);
+    ASSERT_EQ(view->get_level_count(), level_count - 1);
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
+            blit.generate_mipmaps(view.get());
+        }
+    );
+
+    // Image level 3 (the view's last level) is the average of the split.
+    {
+        const std::vector<std::byte> raw = read_texture_level_bytes(*texture, 3, 4u);
+        ASSERT_EQ(raw.size(), 4u);
+        const int r = static_cast<int>(std::to_integer<uint8_t>(raw[0]));
+        EXPECT_GE(r, 110) << "level-3 red not mid-gray: " << r;
+        EXPECT_LE(r, 145) << "level-3 red not mid-gray: " << r;
+    }
+    // Image level 0 was outside the view and keeps its seed.
+    {
+        const std::vector<uint8_t> level0 = read_subresource_rgba8(*texture, 0, 0);
+        ASSERT_EQ(level0.size(), level0_seed.size());
+        EXPECT_EQ(level0, level0_seed) << "level 0 was modified by generating mipmaps of the level-1 view";
+    }
+}
+
 } // namespace erhe::graphics::test

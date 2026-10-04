@@ -415,7 +415,13 @@ layer) of one `VkImage`; the texture that creates or wraps the image owns it
 through a `shared_ptr`, and every texture view of the image shares it, so a
 transition recorded through a view is seen through the source and the other
 views. `Texture_impl` addresses it with an `Image_subresource_range` relative
-to itself (a view adds its base level / layer):
+to itself (a view adds its base level / layer). A view's extents and its
+level and layer counts are exactly those of the image subresources it
+covers: `Texture_create_info::make_view(device, source, base_level,
+base_layer)` builds them from the source's level `base_level`, and the
+`Texture_impl` constructor verifies them against the image, so
+`get_all_subresources()` and `get_width()` of a view are exact (the mipmap
+chain of `generate_mipmaps` on a view is sized from them):
 
 - `transition_layout(cb, range, new_layout)` records one
   `VkImageMemoryBarrier2` per run of levels sharing their old layout, per
@@ -430,13 +436,21 @@ to itself (a view adds its base level / layer):
   `UNDEFINED`, so a region copy into a subresource keeps the texels outside
   the region. The blit encoder's copies move only the copied subresource;
   a copy source returns to its tracked layout afterwards.
+  `Command_buffer::clear_texture` clears and transitions the texture's own
+  subresources (`get_all_subresources()`), so clearing a view leaves the
+  rest of the image, and its tracked layouts, alone.
 
 A render pass decides each attachment's `initialLayout` when it is built
 (UNDEFINED when the attachment's subresources are all still UNDEFINED and the
 load action is not `Load`) and, in `start_render_pass`, transitions the
 attachment's subresources to any non-UNDEFINED `initialLayout`. Resolve
-attachment views honor `resolve_level` / `resolve_layer`. Optional
-layout-transition tracing can be logged to `logs/vulkan.txt`.
+attachment views honor `resolve_level` / `resolve_layer`. The depth/stencil
+resolve target's `finalLayout`, and the layout `end_render_pass` records for
+it, is the `layout_after` of the attachment that drives the resolve
+(`Render_pass_impl::get_depth_stencil_resolve_driver`: the depth attachment
+when it resolves, else the stencil attachment), so a stencil-only resolve
+tracks its target like a depth resolve does. Optional layout-transition
+tracing can be logged to `logs/vulkan.txt`.
 
 ## Resources
 

@@ -50,28 +50,12 @@ and each commit gets a Fable review at medium effort.
 
 ## Follow-ups found by review
 
-Latent defects of the layout tracking (4fc17d988), none reachable by a
-current caller; fix each with a test that reaches it:
-
-- `Command_buffer_impl::clear_texture` (`vulkan_command_buffer.cpp`) clears
-  `0 .. VK_REMAINING` of the whole `VkImage` but transitions only the
-  texture's own range (`get_all_subresources()`), so clearing a texture view
-  with a non-zero base level / layer touches subresources not in
-  `TRANSFER_DST_OPTIMAL` and leaves their tracked layout stale. Build the
-  clear range from `get_all_subresources()` plus the view base.
-- Stencil-only multisample resolve (`vulkan_render_pass.cpp`): the
-  constructor resolves through `m_stencil_attachment.resolve_texture` when
-  depth has none, but `end_render_pass` records the resolve target's
-  `finalLayout` only for a depth resolve, and the resolve attachment's
-  `finalLayout` reads the depth attachment's `layout_after`. Remember which
-  attachment drove the resolve and record its range and final layout.
-- `generate_mipmaps` (`vulkan_blit_command_encoder.cpp`) takes the blit
-  extents from `get_width()` / `get_height()`, which for a texture view are the
-  source's level-0 size (`Texture_create_info::make_view` TODO), while the
-  regions add the view's base level. Derive the extents from the image level.
-
-Dead code: `load_texture()` in `src/hextiles/texture_util.cpp` has no callers
-and copies only a 2x2 extent of the loaded image; delete it.
+The three latent layout-tracking defects of 4fc17d988 (clearing a texture
+view cleared the whole image, a stencil-only multisample resolve recorded
+no layout for its target, `generate_mipmaps` on a level view sized the
+chain from the image's level 0) and the dead `load_texture()` of hextiles
+are fixed; each defect has a `erhe_graphics_gpu_tests` case that reaches it
+(`doc/erhe/vulkan_backend.md` "Image layout tracking").
 
 `Gpu_test.device_up_clean` fails on machines whose Vulkan validation layer is
 older than the pinned Vulkan headers (an unknown `sType` in the device create

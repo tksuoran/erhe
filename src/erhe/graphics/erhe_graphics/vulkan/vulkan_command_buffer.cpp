@@ -504,6 +504,13 @@ void Command_buffer_impl::clear_texture(const Texture& texture, std::array<doubl
         ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
         : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+    // The subresources this texture covers: all of the image for a texture,
+    // the view's own levels and layers for a view. transition_layout() moves
+    // exactly these to TRANSFER_DST, so the clear must not reach past them.
+    const Image_subresource_range all        = tex_impl.get_all_subresources();
+    const uint32_t                base_level = all.base_level + static_cast<uint32_t>(tex_impl.get_view_base_level());
+    const uint32_t                base_layer = all.base_layer + static_cast<uint32_t>(tex_impl.get_view_base_array_layer());
+
     tex_impl.transition_layout(m_vk_command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     if (is_depth || is_stencil) {
         const VkClearDepthStencilValue clear_depth_stencil{
@@ -513,7 +520,7 @@ void Command_buffer_impl::clear_texture(const Texture& texture, std::array<doubl
         VkImageAspectFlags aspect_mask = 0;
         if (is_depth)   aspect_mask |= VK_IMAGE_ASPECT_DEPTH_BIT;
         if (is_stencil) aspect_mask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-        const VkImageSubresourceRange range{aspect_mask, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+        const VkImageSubresourceRange range{aspect_mask, base_level, all.level_count, base_layer, all.layer_count};
         vkCmdClearDepthStencilImage(m_vk_command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_depth_stencil, 1, &range);
     } else {
         const VkClearColorValue clear_color{
@@ -524,7 +531,7 @@ void Command_buffer_impl::clear_texture(const Texture& texture, std::array<doubl
                 static_cast<float>(value[3])
             }
         };
-        const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+        const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, base_level, all.level_count, base_layer, all.layer_count};
         vkCmdClearColorImage(m_vk_command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &range);
     }
     tex_impl.transition_layout(m_vk_command_buffer, final_layout);

@@ -43,6 +43,12 @@ public:
     void end_render_pass  (Command_buffer& command_buffer, Render_pass* render_pass_after);
 
 private:
+    // The attachment whose resolve_texture receives the depth/stencil
+    // resolve and whose layout_after is that target's final layout: the
+    // depth attachment when it resolves, else the stencil attachment when
+    // it does, else nullptr.
+    [[nodiscard]] auto get_depth_stencil_resolve_driver() const -> const Render_pass_attachment_descriptor*;
+
     friend class Device_impl;
 
     Device&                                          m_device;

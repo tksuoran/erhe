@@ -183,22 +183,35 @@ auto Texture_create_info::get_texture_level_count() const -> int
         : 1;
 }
 
-auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info
+auto Texture_create_info::make_view(
+    Device&                         device,
+    const std::shared_ptr<Texture>& view_source,
+    const int                       view_base_level,
+    const int                       view_base_array_layer
+) -> Texture_create_info
 {
+    const int source_level_count = view_source->get_level_count();
+    const int source_layer_count = view_source->get_array_layer_count();
+    ERHE_VERIFY((view_base_level >= 0) && (view_base_level < source_level_count));
+    ERHE_VERIFY((view_base_array_layer >= 0) && (view_base_array_layer < std::max(1, source_layer_count)));
+    const unsigned int base_level = static_cast<unsigned int>(view_base_level);
+
     Texture_create_info create_info{device};
     create_info.type                   = view_source->get_texture_type();
     create_info.pixelformat            = view_source->get_pixelformat();
-    create_info.use_mipmaps            = view_source->get_level_count() > 1;
     create_info.fixed_sample_locations = view_source->get_fixed_sample_locations();
     create_info.sparse                 = view_source->is_sparse();
     create_info.sample_count           = view_source->get_sample_count();
-    create_info.width                  = view_source->get_width(); // TODO view_min_level
-    create_info.height                 = view_source->get_height();
-    create_info.depth                  = view_source->get_depth();
-    create_info.array_layer_count      = view_source->get_array_layer_count();
-    create_info.level_count            = view_source->get_level_count();
+    create_info.width                  = view_source->get_width (base_level);
+    create_info.height                 = view_source->get_height(base_level);
+    create_info.depth                  = view_source->get_depth (base_level);
+    create_info.array_layer_count      = (source_layer_count > 0) ? (source_layer_count - view_base_array_layer) : 0;
+    create_info.level_count            = source_level_count - view_base_level;
+    create_info.use_mipmaps            = create_info.level_count > 1;
     create_info.debug_label            = erhe::utility::Debug_label{ fmt::format("View of {}", view_source->get_debug_label().string_view()) };
     create_info.view_source            = view_source;
+    create_info.view_base_level        = view_base_level;
+    create_info.view_base_array_layer  = view_base_array_layer;
     return create_info;
 }
 
