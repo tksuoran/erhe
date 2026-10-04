@@ -1,28 +1,46 @@
-set(_target "erhe_graphics")
-add_library(${_target})
-add_library(erhe::graphics ALIAS ${_target})
+# erhe_graphics is two targets (doc/erhe/graphics.md "Interface and backend
+# targets"):
+#
+#   erhe_graphics_interface  The backend-neutral half: every public header and
+#                            each translation unit that includes no backend
+#                            header. An object library whose dependencies are
+#                            the neutral ones only - no volk, VMA, erhe::gl,
+#                            metal-cpp or SPIRV-Cross - so a backend include in
+#                            one of its sources fails to compile on the OpenGL,
+#                            Vulkan and Metal backends.
+#
+#   erhe_graphics            The backend half, and the target consumers link as
+#                            erhe::graphics: the selected backend directory plus
+#                            the translation units of the interface classes that
+#                            include a backend header (the pimpl bridges:
+#                            device.cpp, buffer.cpp, texture.cpp, ...). It
+#                            archives the interface objects, so one library
+#                            holds both halves and no consumer links the
+#                            interface target directly.
+#
+# The rule for placing a file: a header or a translation unit that includes
+# only erhe_graphics/*.hpp and neutral dependencies goes to the interface
+# target; a translation unit that includes erhe_graphics/<backend>/, erhe_gl/,
+# volk, metal-cpp or vulkan_external_creators.hpp goes to the backend target.
+
+set(_interface_target "erhe_graphics_interface")
+add_library(${_interface_target} OBJECT)
 erhe_target_sources_grouped(
-    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_graphics/acceleration_structure.cpp
+    ${_interface_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_graphics/acceleration_structure.hpp
-    erhe_graphics/bind_group_layout.cpp
     erhe_graphics/bind_group_layout.hpp
-    erhe_graphics/blit_command_encoder.cpp
     erhe_graphics/blit_command_encoder.hpp
-    erhe_graphics/buffer.cpp
     erhe_graphics/buffer.hpp
     erhe_graphics/buffer_transfer_queue.cpp
     erhe_graphics/buffer_transfer_queue.hpp
-    erhe_graphics/command_buffer.cpp
     erhe_graphics/command_buffer.hpp
     erhe_graphics/command_encoder.cpp
     erhe_graphics/command_encoder.hpp
-    erhe_graphics/compute_command_encoder.cpp
     erhe_graphics/compute_command_encoder.hpp
-    erhe_graphics/compute_pipeline_state.cpp
     erhe_graphics/compute_pipeline_state.hpp
-    erhe_graphics/device.cpp
+    erhe_graphics/debug_label_buffer.hpp
     erhe_graphics/device.hpp
+    erhe_graphics/draw_indirect.hpp
     erhe_graphics/enums.cpp
     erhe_graphics/enums.hpp
     erhe_graphics/fragment_output.cpp
@@ -31,11 +49,8 @@ erhe_target_sources_grouped(
     erhe_graphics/fragment_outputs.hpp
     erhe_graphics/glsl_file_loader.cpp
     erhe_graphics/glsl_file_loader.hpp
-    erhe_graphics/shader_source_cache.cpp
-    erhe_graphics/shader_source_cache.hpp
     erhe_graphics/glsl_format_source.cpp
     erhe_graphics/glsl_format_source.hpp
-    erhe_graphics/gpu_timer.cpp
     erhe_graphics/gpu_timer.hpp
     erhe_graphics/graphics_log.cpp
     erhe_graphics/graphics_log.hpp
@@ -47,49 +62,36 @@ erhe_target_sources_grouped(
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
     erhe_graphics/image_writer.hpp
-    erhe_graphics/image_writer_null.hpp
     erhe_graphics/image_writer_fpng.hpp
+    erhe_graphics/image_writer_null.hpp
     erhe_graphics/multi_copy_buffer.cpp
     erhe_graphics/multi_copy_buffer.hpp
-    erhe_graphics/native_format.cpp
     erhe_graphics/native_format.hpp
-    erhe_graphics/renderdoc_app.h
-    erhe_graphics/render_command_encoder.cpp
     erhe_graphics/render_command_encoder.hpp
-    erhe_graphics/render_pass.cpp
     erhe_graphics/render_pass.hpp
-    erhe_graphics/render_pipeline.cpp
     erhe_graphics/render_pipeline.hpp
     erhe_graphics/render_pipeline_state.cpp
     erhe_graphics/render_pipeline_state.hpp
     erhe_graphics/ring_buffer.cpp
     erhe_graphics/ring_buffer.hpp
-    erhe_graphics/ring_buffer_range.cpp
-    erhe_graphics/ring_buffer_range.hpp
-    erhe_graphics/ring_buffer_pool.cpp
-    erhe_graphics/ring_buffer_pool.hpp
     erhe_graphics/ring_buffer_client.cpp
     erhe_graphics/ring_buffer_client.hpp
-    erhe_graphics/sampler.cpp
+    erhe_graphics/ring_buffer_pool.cpp
+    erhe_graphics/ring_buffer_pool.hpp
+    erhe_graphics/ring_buffer_range.cpp
+    erhe_graphics/ring_buffer_range.hpp
     erhe_graphics/sampler.hpp
-    erhe_graphics/scoped_container_access.cpp
     erhe_graphics/scoped_container_access.hpp
-    erhe_graphics/scoped_worker_context.cpp
-    erhe_graphics/scoped_worker_context.hpp
-    erhe_graphics/scoped_debug_group.cpp
     erhe_graphics/scoped_debug_group.hpp
-    erhe_graphics/debug_label_buffer.hpp
-    erhe_graphics/scoped_transient_object_pool.cpp
-    erhe_graphics/scoped_transient_object_pool.hpp
-    erhe_graphics/scoped_gpu_zone.cpp
     erhe_graphics/scoped_gpu_zone.hpp
-    erhe_graphics/shader_monitor.cpp
+    erhe_graphics/scoped_transient_object_pool.hpp
+    erhe_graphics/scoped_worker_context.hpp
     erhe_graphics/shader_monitor.hpp
     erhe_graphics/shader_resource.cpp
     erhe_graphics/shader_resource.hpp
-    erhe_graphics/shader_stages.cpp
+    erhe_graphics/shader_source_cache.cpp
+    erhe_graphics/shader_source_cache.hpp
     erhe_graphics/shader_stages.hpp
-    erhe_graphics/shader_stages_create_info.cpp
     erhe_graphics/span.hpp
     erhe_graphics/state/color_blend_state.cpp
     erhe_graphics/state/color_blend_state.hpp
@@ -103,20 +105,196 @@ erhe_target_sources_grouped(
     erhe_graphics/state/rasterization_state.hpp
     erhe_graphics/state/scissor_state.cpp
     erhe_graphics/state/scissor_state.hpp
-    erhe_graphics/state/vertex_input_state.cpp
     erhe_graphics/state/vertex_input_state.hpp
     erhe_graphics/state/viewport_state.cpp
     erhe_graphics/state/viewport_state.hpp
-    erhe_graphics/surface.cpp
     erhe_graphics/surface.hpp
-    erhe_graphics/swapchain.cpp
     erhe_graphics/swapchain.hpp
-    erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
-    erhe_graphics/texture_reference.hpp
-    erhe_graphics/texture_heap.cpp
     erhe_graphics/texture_heap.hpp
+    erhe_graphics/texture_reference.hpp
 )
+
+if (ERHE_SPIRV)
+    erhe_target_sources_grouped(
+        ${_interface_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/glsl_includer.cpp
+        erhe_graphics/glsl_includer.hpp
+        erhe_graphics/glsl_to_spirv.hpp
+        erhe_graphics/spirv_cache.cpp
+        erhe_graphics/spirv_cache.hpp
+    )
+    # glsl_includer.hpp and spirv_cache.hpp include glslang.
+    target_link_libraries(${_interface_target}
+        PUBLIC
+            glslang
+            glslang::glslang-default-resource-limits
+    )
+endif()
+
+target_include_directories(${_interface_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(${_interface_target}
+    PUBLIC
+        concurrentqueue
+        erhe::circular_ring_buffer
+        erhe::dataformat
+        erhe::frame_pacing
+        erhe::item
+        erhe::math
+        fmt::fmt
+        glm::glm-header-only
+        mango
+    PRIVATE
+        etl::etl
+        erhe::defer
+        erhe::file
+        erhe::hash
+        erhe::log
+        erhe::profile
+        erhe::time
+        erhe::utility
+        erhe::verify
+)
+
+# KTX2 / Basis Universal transcoder (image_loader_ktx2): compiled straight
+# into the interface target from the download-only basis_universal package,
+# like fpng below. BASISD defaults already enable KTX2 + zstd supercompression
+# support; the zstd source bundled with basis_universal provides the ZSTD_*
+# symbols.
+target_sources(${_interface_target} PRIVATE
+    "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+    "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
+)
+# External sources must not consume this target's C++ precompiled header
+# (zstd.c is C and PCH consumption is a hard error there).
+set_source_files_properties(
+    "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+    "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+)
+if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+    # zstd picks its BMI2 path at compile time. The MSVC branch is
+    #   #elif defined(_MSC_VER) && defined(__AVX2__) -> STATIC_BMI2 1
+    # ("MSVC does not have a BMI2 specific flag, but every CPU that supports
+    # AVX2 also supports BMI2"), and BIT_getLowerBits then calls _bzhi_u64.
+    # clang-cl defines _MSC_VER, and Clang.cmake gives the whole build an AVX2
+    # baseline (-mavx2 ...) for Jolt ABI / PCH consistency - so __AVX2__ IS
+    # defined, but that flag list carries -mbmi (BMI1), not -mbmi2, and clang
+    # rejects the intrinsic outright: "always_inline function '_bzhi_u64'
+    # requires target feature 'bmi2'". cl.exe never reaches the branch, because
+    # nothing defines __AVX2__ there.
+    # Turning the static path off - rather than widening the ISA baseline with
+    # -mbmi2 - leaves zstd on the runtime dispatch clang selects anyway through
+    # DYNAMIC_BMI2, and changes the code generated for no other file.
+    set_source_files_properties(
+        "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
+        PROPERTIES COMPILE_DEFINITIONS "STATIC_BMI2=0"
+    )
+endif ()
+if (MSVC)
+    # Third-party source: exempt from warnings-as-errors; C4828 fires on a
+    # non-UTF-8 byte inside a basis_universal comment under /utf-8. The
+    # warning also fires in image_loader_ktx2.cpp, which includes the
+    # offending basis_universal header - that file keeps /WX and disables
+    # only C4828.
+    set_source_files_properties(
+        "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+        "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
+        PROPERTIES COMPILE_OPTIONS "/WX-;/wd4828"
+    )
+    set_source_files_properties(
+        erhe_graphics/image_loader_ktx2.cpp
+        PROPERTIES COMPILE_OPTIONS "/wd4828"
+    )
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Same third-party exemption for clang (NDK/Quest builds): anon-enum
+    # arithmetic inside basisu_transcoder_internal.h is upstream's code.
+    set_source_files_properties(
+        "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+        PROPERTIES COMPILE_OPTIONS "-Wno-deprecated-anon-enum-enum-conversion"
+    )
+endif ()
+target_include_directories(${_interface_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
+
+# DDS reader (image_loader_dds): header-only dds_image package fetched
+# download-only at the top level (dds_image_SOURCE_DIR).
+target_include_directories(${_interface_target} SYSTEM PRIVATE "${dds_image_SOURCE_DIR}/include")
+
+# Image writer backend selection. The fpng (fast PNG) backend is used whenever
+# ERHE_USE_FPNG is set; this is independent of ERHE_WINDOW_LIBRARY so a headless
+# build can still save images. fpng is a single source file fetched download-only
+# at the top level (fpng_SOURCE_DIR); it is compiled straight into the interface
+# target. The null backend is compiled otherwise.
+if (ERHE_USE_FPNG)
+    erhe_target_sources_grouped(
+        ${_interface_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/image_writer_fpng.cpp
+    )
+    target_sources(${_interface_target} PRIVATE "${fpng_SOURCE_DIR}/src/fpng.cpp")
+    target_include_directories(${_interface_target} PRIVATE "${fpng_SOURCE_DIR}/src")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        # Third-party source: uint8_t-vs-4096 tautological compare is
+        # upstream fpng code (harmless dead branch on this platform).
+        set_source_files_properties(
+            "${fpng_SOURCE_DIR}/src/fpng.cpp"
+            PROPERTIES COMPILE_OPTIONS "-Wno-tautological-constant-out-of-range-compare"
+        )
+    endif ()
+else ()
+    erhe_target_sources_grouped(
+        ${_interface_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/image_writer_null.cpp
+    )
+endif ()
+
+erhe_target_settings(${_interface_target} "erhe")
+
+# ---- Backend target ----
+
+set(_target "erhe_graphics")
+add_library(${_target})
+add_library(erhe::graphics ALIAS ${_target})
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_graphics/acceleration_structure.cpp
+    erhe_graphics/bind_group_layout.cpp
+    erhe_graphics/blit_command_encoder.cpp
+    erhe_graphics/buffer.cpp
+    erhe_graphics/command_buffer.cpp
+    erhe_graphics/compute_command_encoder.cpp
+    erhe_graphics/compute_pipeline_state.cpp
+    erhe_graphics/device.cpp
+    erhe_graphics/gpu_timer.cpp
+    erhe_graphics/native_format.cpp
+    erhe_graphics/render_command_encoder.cpp
+    erhe_graphics/render_pass.cpp
+    erhe_graphics/render_pipeline.cpp
+    erhe_graphics/renderdoc_app.h
+    erhe_graphics/sampler.cpp
+    erhe_graphics/scoped_container_access.cpp
+    erhe_graphics/scoped_debug_group.cpp
+    erhe_graphics/scoped_gpu_zone.cpp
+    erhe_graphics/scoped_transient_object_pool.cpp
+    erhe_graphics/scoped_worker_context.cpp
+    erhe_graphics/shader_monitor.cpp
+    erhe_graphics/shader_stages.cpp
+    erhe_graphics/shader_stages_create_info.cpp
+    erhe_graphics/state/vertex_input_state.cpp
+    erhe_graphics/surface.cpp
+    erhe_graphics/swapchain.cpp
+    erhe_graphics/texture.cpp
+    erhe_graphics/texture_heap.cpp
+    erhe_graphics/vulkan_external_creators.hpp
+)
+
+if (ERHE_SPIRV)
+    # Glslang_shader_stages takes the backend's Shader_stages_prototype_impl.
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/glsl_to_spirv.cpp
+    )
+endif()
 
 if (ERHE_GRAPHICS_API_OPENGL)
     erhe_target_sources_grouped(
@@ -249,18 +427,13 @@ if (ERHE_GRAPHICS_API_VULKAN)
         )
     endif ()
 
-    # get_target_property(ERHE_VMA_INCLUDES GPUOpen::VulkanMemoryAllocator INTERFACE_INCLUDE_DIRECTORIES)
-    # get_target_property(ERHE_VMA_LIBS     GPUOpen::VulkanMemoryAllocator INTERFACE_LINK_LIBRARIES)
-    # message(STATUS "GPUOpen::VulkanMemoryAllocator INTERFACE_INCLUDE_DIRECTORIES         = ${ERHE_VMA_INCLUDES}")
-    # message(STATUS "GPUOpen::VulkanMemoryAllocator INTERFACE_LINK_LIBRARIES linked libs  = ${ERHE_VMA_LIBS}")
-
     target_compile_definitions(
         ${_target}
         PRIVATE
             VMA_STATIC_VULKAN_FUNCTIONS
             VMA_DYNAMIC_VULKAN_FUNCTIONS=0
             VK_ENABLE_BETA_EXTENSIONS
-	)
+    )
 
     target_link_libraries(
         ${_target}
@@ -384,23 +557,6 @@ if (ERHE_GRAPHICS_API_NONE)
     )
 endif ()
 
-if (ERHE_SPIRV)
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_graphics/glsl_includer.cpp
-        erhe_graphics/glsl_includer.hpp
-        erhe_graphics/glsl_to_spirv.cpp
-        erhe_graphics/glsl_to_spirv.hpp
-        erhe_graphics/spirv_cache.cpp
-        erhe_graphics/spirv_cache.hpp
-    )
-    target_link_libraries(${_target}
-        PUBLIC
-            glslang
-            glslang::glslang-default-resource-limits
-    )
-endif()
-
 # Graphics config codegen
 set(_gfx_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 set(_gfx_config_out  "${CMAKE_CURRENT_BINARY_DIR}/erhe_graphics/generated")
@@ -442,20 +598,15 @@ erhe_codegen_source_settings(${_gfx_config_hpps})
 target_sources(${_target} PRIVATE ${_gfx_config_hpps})
 source_group("codegen generated" FILES ${_gfx_config_hpps})
 
-target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+# The generated config headers live in the binary directory; device.cpp, the
+# backend Device_impl headers and the consumers' serialization sources include
+# them.
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(${_target}
     PUBLIC
-        concurrentqueue
-        erhe::circular_ring_buffer
-        erhe::dataformat
-        erhe::frame_pacing
-        erhe::item
-        erhe::math
+        ${_interface_target}
         erhe::window
-        fmt::fmt
-        glm::glm-header-only
-        mango
     PRIVATE
         etl::etl
         erhe::defer
@@ -467,96 +618,6 @@ target_link_libraries(${_target}
         erhe::utility
         erhe::verify
 )
-
-# KTX2 / Basis Universal transcoder (image_loader_ktx2): compiled straight
-# into this target from the download-only basis_universal package, like fpng
-# below. BASISD defaults already enable KTX2 + zstd supercompression support;
-# the zstd source bundled with basis_universal provides the ZSTD_* symbols.
-target_sources(${_target} PRIVATE
-    "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
-    "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
-)
-# External sources must not consume this target's C++ precompiled header
-# (zstd.c is C and PCH consumption is a hard error there).
-set_source_files_properties(
-    "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
-    "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
-    PROPERTIES SKIP_PRECOMPILE_HEADERS ON
-)
-if (CMAKE_C_COMPILER_ID MATCHES "Clang")
-    # zstd picks its BMI2 path at compile time. The MSVC branch is
-    #   #elif defined(_MSC_VER) && defined(__AVX2__) -> STATIC_BMI2 1
-    # ("MSVC does not have a BMI2 specific flag, but every CPU that supports
-    # AVX2 also supports BMI2"), and BIT_getLowerBits then calls _bzhi_u64.
-    # clang-cl defines _MSC_VER, and Clang.cmake gives the whole build an AVX2
-    # baseline (-mavx2 ...) for Jolt ABI / PCH consistency - so __AVX2__ IS
-    # defined, but that flag list carries -mbmi (BMI1), not -mbmi2, and clang
-    # rejects the intrinsic outright: "always_inline function '_bzhi_u64'
-    # requires target feature 'bmi2'". cl.exe never reaches the branch, because
-    # nothing defines __AVX2__ there.
-    # Turning the static path off - rather than widening the ISA baseline with
-    # -mbmi2 - leaves zstd on the runtime dispatch clang selects anyway through
-    # DYNAMIC_BMI2, and changes the code generated for no other file.
-    set_source_files_properties(
-        "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
-        PROPERTIES COMPILE_DEFINITIONS "STATIC_BMI2=0"
-    )
-endif ()
-if (MSVC)
-    # Third-party source: exempt from warnings-as-errors; C4828 fires on a
-    # non-UTF-8 byte inside a basis_universal comment under /utf-8. The
-    # warning also fires in image_loader_ktx2.cpp, which includes the
-    # offending basis_universal header - that file keeps /WX and disables
-    # only C4828.
-    set_source_files_properties(
-        "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
-        "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
-        PROPERTIES COMPILE_OPTIONS "/WX-;/wd4828"
-    )
-    set_source_files_properties(
-        erhe_graphics/image_loader_ktx2.cpp
-        PROPERTIES COMPILE_OPTIONS "/wd4828"
-    )
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # Same third-party exemption for clang (NDK/Quest builds): anon-enum
-    # arithmetic inside basisu_transcoder_internal.h is upstream's code.
-    set_source_files_properties(
-        "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
-        PROPERTIES COMPILE_OPTIONS "-Wno-deprecated-anon-enum-enum-conversion"
-    )
-endif ()
-target_include_directories(${_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
-
-# DDS reader (image_loader_dds): header-only dds_image package fetched
-# download-only at the top level (dds_image_SOURCE_DIR).
-target_include_directories(${_target} SYSTEM PRIVATE "${dds_image_SOURCE_DIR}/include")
-
-# Image writer backend selection. The fpng (fast PNG) backend is used whenever
-# ERHE_USE_FPNG is set; this is independent of ERHE_WINDOW_LIBRARY so a headless
-# build can still save images. fpng is a single source file fetched download-only
-# at the top level (fpng_SOURCE_DIR); it is compiled straight into this target.
-# The null backend is compiled otherwise.
-if (ERHE_USE_FPNG)
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_graphics/image_writer_fpng.cpp
-    )
-    target_sources(${_target} PRIVATE "${fpng_SOURCE_DIR}/src/fpng.cpp")
-    target_include_directories(${_target} PRIVATE "${fpng_SOURCE_DIR}/src")
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        # Third-party source: uint8_t-vs-4096 tautological compare is
-        # upstream fpng code (harmless dead branch on this platform).
-        set_source_files_properties(
-            "${fpng_SOURCE_DIR}/src/fpng.cpp"
-            PROPERTIES COMPILE_OPTIONS "-Wno-tautological-constant-out-of-range-compare"
-        )
-    endif ()
-else ()
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_graphics/image_writer_null.cpp
-    )
-endif ()
 
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")
     add_subdirectory(test)

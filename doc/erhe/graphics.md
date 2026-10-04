@@ -26,6 +26,45 @@ that only passes a `Texture` by pointer or `shared_ptr`, or implements
 No header outside `src/erhe/graphics/` includes a backend header
 (`erhe_graphics/vulkan/`, `gl/`, `metal/`, `null/`).
 
+## Interface and backend targets
+
+`src/erhe/graphics/CMakeLists.txt` builds the library as two targets:
+
+- `erhe_graphics_interface`, an object library holding every public header
+  and each translation unit that includes no backend header (`enums.cpp`,
+  `shader_resource.cpp`, the ring buffers, the image loaders and writers,
+  the `state/` types, `spirv_cache.cpp`, ...). Its dependencies are the
+  neutral ones only: no volk, VMA, `erhe::gl`, metal-cpp or SPIRV-Cross. A
+  backend include added to one of its sources fails to compile on the
+  OpenGL, Vulkan and Metal backends, because the backend header's own
+  includes are not on its path; that is the check that keeps the interface
+  neutral.
+- `erhe_graphics` (`erhe::graphics`), the backend target: the selected
+  backend directory plus the translation units of the interface classes that
+  include a backend header, which are the pimpl bridges (`device.cpp`,
+  `buffer.cpp`, `texture.cpp`, `render_pass.cpp`, ...), `native_format.cpp`,
+  `shader_stages_create_info.cpp` (GL extension preamble),
+  `scoped_transient_object_pool.cpp` (Metal autorelease pool),
+  `state/vertex_input_state.cpp` and `glsl_to_spirv.cpp` (takes the backend's
+  `Shader_stages_prototype_impl`). It archives the interface objects, so
+  consumers link `erhe::graphics` only and no target links the interface
+  directly.
+
+The placement rule for a new file: a header, or a translation unit that
+includes only `erhe_graphics/*.hpp` and neutral dependencies, goes to the
+interface target; a translation unit that includes
+`erhe_graphics/<backend>/`, `erhe_gl/`, volk, metal-cpp or
+`vulkan_external_creators.hpp` goes to the backend target.
+
+The split does not change what a backend-only edit rebuilds: before it,
+touching `vulkan/vulkan_device.cpp` recompiled one object and touching
+`vulkan/vulkan_device.hpp` the 26 objects inside the library that include it,
+then the archive and the executables, and no consumer library recompiled
+(measured on the Linux Vulkan Debug tree); the include diet above is what
+keeps consumers out of backend headers. The CI `Windows (VS 2026 /
+headless)` job builds every target with `ERHE_GRAPHICS_API=none`, so the
+interface compiles against the null backend on every push.
+
 ## Key Types
 - `Device` -- Central graphics device. Creates command encoders, manages ring buffers, queries capabilities, handles frame lifecycle (`wait_frame`/`begin_frame`/`end_frame`).
 - `Device_info` -- GPU capability queries: GLSL version, limits, feature flags (bindless textures, sparse textures, persistent buffers, compute shaders, multi-draw indirect). `texture_heap_path` selects which of the four sampler-binding strategies the backend uses (see below).
@@ -253,8 +292,10 @@ the matching binding to pick the correct image view aspect (`color` /
 VUID-VkDescriptorImageInfo-imageView-01976.
 
 ## Dependencies
-- **erhe libraries:** `erhe::dataformat` (public), `erhe::item` (public), `erhe::utility` (public), `erhe::gl` (for OpenGL backend), `erhe::log`, `erhe::verify`, `erhe::profile`
-- **External:** glm, OpenGL, Vulkan, or Metal (selected at CMake time)
+- **erhe libraries (interface target, public):** `erhe::circular_ring_buffer`, `erhe::dataformat`, `erhe::frame_pacing`, `erhe::item`, `erhe::math`
+- **erhe libraries (backend target):** `erhe::window` (public; the surface and swapchain backends), `erhe::gl` (private, OpenGL backend only)
+- **erhe libraries (both targets, private):** `erhe::defer`, `erhe::file`, `erhe::hash`, `erhe::log`, `erhe::profile`, `erhe::time`, `erhe::utility`, `erhe::verify`
+- **External:** glm, fmt, mango, concurrentqueue and glslang (with `ERHE_SPIRV`) on the interface target; volk and VMA (Vulkan), metal-cpp and SPIRV-Cross (Metal) on the backend target, selected at CMake time
 
 ## Notes
 - All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), and `null/` (headless).

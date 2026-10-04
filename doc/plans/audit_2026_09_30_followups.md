@@ -34,16 +34,24 @@ on culling.
   131k lines: `Texture` is an `erhe::Item`, so the rest is `item.hpp` (item
   11). No header outside `src/erhe/graphics/` includes a backend header, so
   the interface / backend split has nothing to untangle first.
+- Item 12, second half, the interface / backend split (`doc/erhe/graphics.md`
+  "Interface and backend targets"): `erhe_graphics_interface` is an object
+  library of the public headers and the backend-free translation units with
+  only the neutral dependencies, and `erhe_graphics` holds the selected
+  backend plus the pimpl bridges and archives the interface objects, so
+  consumers still link `erhe::graphics` only. The rebuild half of the item's
+  stated benefit was already delivered by the include diet: measured before
+  the split, a backend-only edit recompiled objects inside the library only
+  (1 for `vulkan_device.cpp`, 26 for `vulkan_device.hpp`) and no consumer
+  library; the split adds the compile-time check that interface sources
+  cannot include a backend header. The null-backend CI build existed
+  already (`Windows (VS 2026 / headless)`).
 
 ## Next
 
 1. Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
    (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
    opt-in); needs a macOS session to build and verify.
-2. Item 12, second half: split `erhe_graphics` into an interface target and
-   a backend target (`doc/cmake_conventions.md`), so the 15 consumer
-   libraries stop rebuilding on backend-only changes and the interface
-   compiles against the null backend in CI.
 
 Each item is one commit with builds, tests and docs as `AGENTS.md` requires,
 and each commit gets a Fable review at medium effort.
@@ -61,3 +69,11 @@ are fixed; each defect has a `erhe_graphics_gpu_tests` case that reaches it
 older than the pinned Vulkan headers (an unknown `sType` in the device create
 `pNext` chain); that is a machine setup issue (`doc/agents/linux.md`), not a
 code defect.
+
+The null backend builds but the editor does not run on it: the null
+`Device_impl::get_command_buffer()` is a stub that returns a dereferenced
+null pointer (`null_device.cpp`, "iteration target"), and the editor
+constructor calls `begin()` on the result. The CI headless job builds that
+configuration and runs no editor, so this is an open item of the null
+backend, found while verifying the interface / backend split on a Linux
+`ERHE_GRAPHICS_API=none` tree.
