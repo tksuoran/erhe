@@ -97,6 +97,19 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
     vmaSetAllocationName(allocator, m_vma_allocation, create_info.debug_label.data());
+    if (log_buffer->should_log(spdlog::level::debug)) {
+        // Ties the VkBuffer / VkDeviceMemory handles a device fault report
+        // names back to a buffer (the texture path logs the same).
+        VmaAllocationInfo allocation_info{};
+        vmaGetAllocationInfo(allocator, m_vma_allocation, &allocation_info);
+        log_buffer->debug(
+            "Buffer created: '{}' capacity=0x{:x} buffer=0x{:x} memory=0x{:x} offset=0x{:x} size=0x{:x}",
+            create_info.debug_label.data(), m_capacity_byte_count,
+            reinterpret_cast<std::uintptr_t>(m_vk_buffer),
+            reinterpret_cast<std::uintptr_t>(allocation_info.deviceMemory),
+            allocation_info.offset, allocation_info.size
+        );
+    }
 
     if (!create_info.debug_label.empty()) {
         m_debug_label = create_info.debug_label;
@@ -182,10 +195,29 @@ Buffer_impl::~Buffer_impl() noexcept
         return;
     }
 
+    if (log_buffer->should_log(spdlog::level::debug)) {
+        log_buffer->debug(
+            "Buffer destroyed: '{}' buffer=0x{:x} (frame {}; freed when it completes)",
+            m_debug_label.data(),
+            reinterpret_cast<std::uintptr_t>(vk_buffer),
+            m_device_impl.get_frame_index()
+        );
+    }
+
     m_device_impl.add_completion_handler(
         [persistently_mapped, vma_allocation, vk_buffer, allocator](Device_impl&) {
             if (persistently_mapped) {
                 vmaUnmapMemory(allocator, vma_allocation);
+            }
+            if (log_buffer->should_log(spdlog::level::debug)) {
+                VmaAllocationInfo allocation_info{};
+                vmaGetAllocationInfo(allocator, vma_allocation, &allocation_info);
+                log_buffer->debug(
+                    "Buffer freed: buffer=0x{:x} memory=0x{:x} offset=0x{:x} size=0x{:x}",
+                    reinterpret_cast<std::uintptr_t>(vk_buffer),
+                    reinterpret_cast<std::uintptr_t>(allocation_info.deviceMemory),
+                    allocation_info.offset, allocation_info.size
+                );
             }
             vmaDestroyBuffer(allocator, vk_buffer, vma_allocation);
         }

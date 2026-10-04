@@ -153,6 +153,44 @@ schema `scripts/renderdoc_tools.json`) and the worked examples are in
 `doc/agents/renderdoc_fork.md`. For just seeing the final frame, the
 in-editor MCP `capture_screenshot` is enough.
 
+## GPU faults (`VK_ERROR_DEVICE_LOST`)
+
+A device loss is a GPU-side fault; the CPU callstack only says which submit
+noticed it. The run-book, in order:
+
+1. `logs/device_error.txt` / `logs/log.txt` carry the `VK_EXT_device_fault`
+   report (fault address, write / read, page range).
+2. Run with the validation layers (`vulkan_validation_layers`) to rule out an
+   API misuse; `vulkan_gpu_assisted_validation` adds shader-side bounds checks
+   (slow, and it can hang the GPU instead of reporting).
+3. Run with the LunarG Crash Diagnostic Layer, installed with the Vulkan SDK.
+   It is an explicit layer, so enable it through the loader:
+   `VK_LOADER_LAYERS_ENABLE=VK_LAYER_LUNARG_crash_diagnostic`, with a
+   `VK_LAYER_SETTINGS_PATH` file holding
+   `lunarg_crash_diagnostic.instrument_all_commands = true`,
+   `lunarg_crash_diagnostic.sync_after_commands = true` and
+   `lunarg_crash_diagnostic.dump_commands = all`. On the fault it writes
+   `%USERPROFILE%\cdl\<timestamp>\cdl_dump.yaml`: the fault address with
+   the objects bound around it, every command of the faulting command buffer
+   with its completion state, and the last started command. With
+   `sync_after_commands` the fault is attributed to the command that performed
+   the write (a render pass counts as one command).
+4. Raise `erhe.graphics.texture`, `erhe.graphics.buffer`,
+   `erhe.graphics.render_pass` and `erhe.graphics.debug` to `debug` in
+   `config/editor/logging.json` (`doc/erhe/vulkan_backend.md` "Logging and
+   debugging") so the same `logs/log.txt` names the object that owned the
+   fault address, the pass's attachments, and the bind / unbind history of
+   the address.
+5. Change one thing per run against the shortest repro you can build (a
+   single MCP `load_scene` is often enough) until the fault moves or stops.
+   `scripts/device_loss_repro.py` launches, loads one scene and waits;
+   `scripts/gpu_fault_report.py` joins the newest dump with the traces.
+   A short repro that survives is evidence, not proof: confirm against the
+   full scenario before calling a change a fix.
+
+Precedent: the point-light cube shadow fault of 2026-10-04
+(`doc/erhe/shadows.md` "Point-light cube-map shadows").
+
 ## Profiling
 
 Startup and frame profiling with Tracy (`ERHE_TRACY_ON_DEMAND`,

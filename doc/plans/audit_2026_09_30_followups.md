@@ -96,8 +96,10 @@ and each commit gets a Fable review at medium effort.
 ## Follow-ups found by review
 
 `scripts/scene_roundtrip_verify.py` (run 2026-10-04 for item 11, against the
-windowed Vulkan editor) fails three checks on 7c7c0c0bf, before any of this
-set's work, so they are pre-existing: (a) `reload-diff: nodes identical` -
+windowed Vulkan editor) fails three checks on 7c7c0c0bf; state and findings
+in `doc/plans/scene_roundtrip_failures.md` ((a) fixed, (b) open with the
+trigger isolated, (c) one fixed in the script, one open):
+(a) `reload-diff: nodes identical` -
 the dynamic bodies `P6 Box` / `P6 Sphere` keep falling between the snapshot
 and the reload; the glTF leg does not pause physics before its snapshot the
 way the USD leg does (`toggle_physics`); (b) `VK_ERROR_DEVICE_LOST` with a

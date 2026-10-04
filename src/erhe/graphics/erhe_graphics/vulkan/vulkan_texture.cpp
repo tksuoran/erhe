@@ -82,6 +82,15 @@ Texture_impl::~Texture_impl() noexcept
     m_vk_image       = VK_NULL_HANDLE;
     m_vma_allocation = VK_NULL_HANDLE;
 
+    if (log_texture->should_log(spdlog::level::debug) && (vk_image != VK_NULL_HANDLE)) {
+        log_texture->debug(
+            "Texture destroyed: '{}' image=0x{:x} (frame {}; freed when it completes)",
+            m_debug_label.data(),
+            reinterpret_cast<std::uintptr_t>(vk_image),
+            m_device_impl.get_frame_index()
+        );
+    }
+
     m_device_impl.add_completion_handler(
         [image_views_to_destroy = std::move(image_views_to_destroy), vk_image, vma_allocation](Device_impl& device_impl) {
             VkDevice vulkan_device = device_impl.get_vulkan_device();
@@ -90,6 +99,16 @@ Texture_impl::~Texture_impl() noexcept
             }
             if (vk_image != VK_NULL_HANDLE && vma_allocation != VK_NULL_HANDLE) {
                 VmaAllocator& allocator = device_impl.get_allocator();
+                if (log_texture->should_log(spdlog::level::debug)) {
+                    VmaAllocationInfo allocation_info{};
+                    vmaGetAllocationInfo(allocator, vma_allocation, &allocation_info);
+                    log_texture->debug(
+                        "Texture freed: image=0x{:x} memory=0x{:x} offset=0x{:x} size=0x{:x}",
+                        reinterpret_cast<std::uintptr_t>(vk_image),
+                        reinterpret_cast<std::uintptr_t>(allocation_info.deviceMemory),
+                        allocation_info.offset, allocation_info.size
+                    );
+                }
                 vmaDestroyImage(allocator, vk_image, vma_allocation);
             }
         }
@@ -207,6 +226,22 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     }
     vmaSetAllocationName(allocator, m_vma_allocation, create_info.debug_label.data());
     device.get_impl().set_debug_label(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(m_vk_image), m_debug_label.data());
+    if (log_texture->should_log(spdlog::level::debug)) {
+        // The device fault report (VK_EXT_device_fault, the crash diagnostic
+        // layer) names VkImage and VkDeviceMemory handles; this line and the
+        // matching one in the destructor tie them back to a texture.
+        VmaAllocationInfo allocation_info{};
+        vmaGetAllocationInfo(allocator, m_vma_allocation, &allocation_info);
+        log_texture->debug(
+            "Texture created: '{}' {}x{}x{} layers={} levels={} image=0x{:x} memory=0x{:x} offset=0x{:x} size=0x{:x}",
+            m_debug_label.data(),
+            image_create_info.extent.width, image_create_info.extent.height, image_create_info.extent.depth,
+            image_create_info.arrayLayers, image_create_info.mipLevels,
+            reinterpret_cast<std::uintptr_t>(m_vk_image),
+            reinterpret_cast<std::uintptr_t>(allocation_info.deviceMemory),
+            allocation_info.offset, allocation_info.size
+        );
+    }
     m_layout_state = std::make_shared<Image_layout_state>(image_create_info.mipLevels, image_create_info.arrayLayers);
 }
 

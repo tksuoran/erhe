@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Graphics_config::vulkan.vulkan_gpu_assisted_validation`
+  (config version 2), GPU-assisted validation in place of synchronization
+  validation; debug-level resource and address traces (`erhe.graphics.texture`,
+  `erhe.graphics.buffer`, `erhe.graphics.render_pass`, `erhe.graphics.debug`
+  `[VA]` through `VK_EXT_device_address_binding_report`), see
+  `doc/erhe/vulkan_backend.md` "Logging and debugging".
+
 - `erhe::version` (`erhe_version/version.hpp`): `get_project_version()`,
   `get_git_describe()`, `get_description()`, the build identity stamped
   into one translation unit at every build (`erhe_version_stamp`).

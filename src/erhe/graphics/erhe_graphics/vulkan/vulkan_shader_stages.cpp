@@ -125,12 +125,15 @@ Shader_stages_impl::~Shader_stages_impl()
 
 void Shader_stages_impl::destroy_modules()
 {
-    VkDevice vulkan_device = m_device.get_impl().get_vulkan_device();
+    Device_impl& device_impl   = m_device.get_impl();
+    VkDevice     vulkan_device = device_impl.get_vulkan_device();
     if (m_vertex_module != VK_NULL_HANDLE) {
+        device_impl.retire_pipelines_using(reinterpret_cast<uint64_t>(m_vertex_module));
         vkDestroyShaderModule(vulkan_device, m_vertex_module, nullptr);
         m_vertex_module = VK_NULL_HANDLE;
     }
     if (m_fragment_module != VK_NULL_HANDLE) {
+        device_impl.retire_pipelines_using(reinterpret_cast<uint64_t>(m_fragment_module));
         vkDestroyShaderModule(vulkan_device, m_fragment_module, nullptr);
         m_fragment_module = VK_NULL_HANDLE;
     }

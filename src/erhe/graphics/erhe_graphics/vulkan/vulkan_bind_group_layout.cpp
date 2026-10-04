@@ -228,6 +228,8 @@ Bind_group_layout_impl::~Bind_group_layout_impl() noexcept
     m_pipeline_layout      = VK_NULL_HANDLE;
     m_descriptor_set_layout = VK_NULL_HANDLE;
 
+    m_device_impl.retire_pipelines_using(reinterpret_cast<uint64_t>(pipeline_layout));
+
     m_device_impl.add_completion_handler(
         [vulkan_device, pipeline_layout, descriptor_set_layout](Device_impl&) {
             if (pipeline_layout != VK_NULL_HANDLE) {

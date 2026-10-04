@@ -893,6 +893,15 @@ Device_impl::Device_impl(
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_fault_features_ext);
         query_features_chain_last        = query_features_chain_last->pNext;
     }
+    VkPhysicalDeviceAddressBindingReportFeaturesEXT query_address_binding_report_features{
+        .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ADDRESS_BINDING_REPORT_FEATURES_EXT,
+        .pNext                = nullptr,
+        .reportAddressBinding = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_EXT_device_address_binding_report) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_address_binding_report_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
     VkPhysicalDevicePresentWait2FeaturesKHR query_present_wait2_features{
         .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
         .pNext        = nullptr,
@@ -1257,18 +1266,25 @@ Device_impl::Device_impl(
             VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT    |
             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        // Address binding events arrive at info severity; the callback logs
+        // them at debug level under erhe.graphics.debug and returns.
+        VkDebugUtilsMessageSeverityFlagsEXT message_severities =
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        if (m_device_extensions.m_VK_EXT_device_address_binding_report && log_debug->should_log(spdlog::level::debug)) {
+            message_types      |= VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+            message_severities |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+        }
         const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info{
             .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
             .pNext           = nullptr,
             .flags           = 0,
-            .messageSeverity =
-                // Verbose/info severities produce a steady stream of driver-
-                // side chatter even without validation layers (e.g. MoltenVK
-                // emits "Created 3 swapchain images..." on every swapchain
-                // recreation, which on live resize fires per frame). Re-enable
-                // them if you need loader-level diagnostics.
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+            // Verbose/info severities produce a steady stream of driver-
+            // side chatter even without validation layers (e.g. MoltenVK
+            // emits "Created 3 swapchain images..." on every swapchain
+            // recreation, which on live resize fires per frame), so info is
+            // only requested for the address binding events above.
+            .messageSeverity = message_severities,
             .messageType     = message_types,
             .pfnUserCallback = Device_impl_debug_utils_messenger_callback,
             .pUserData       = static_cast<void*>(this)
@@ -1548,6 +1564,17 @@ Device_impl::Device_impl(
         m_device_fault_report_ext = (query_fault_features_ext.deviceFault == VK_TRUE);
     }
     log_startup->info("  deviceFault                    = {}", has_device_fault_report());
+    VkPhysicalDeviceAddressBindingReportFeaturesEXT set_address_binding_report_features{
+        .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ADDRESS_BINDING_REPORT_FEATURES_EXT,
+        .pNext                = nullptr,
+        .reportAddressBinding = query_address_binding_report_features.reportAddressBinding
+    };
+    if (m_device_extensions.m_VK_EXT_device_address_binding_report) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_address_binding_report_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        m_report_address_binding = (query_address_binding_report_features.reportAddressBinding == VK_TRUE);
+    }
+    log_startup->info("  reportAddressBinding           = {}", m_report_address_binding);
     VkPhysicalDevicePresentWait2FeaturesKHR set_present_wait2_features{
         .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
         .pNext        = nullptr,

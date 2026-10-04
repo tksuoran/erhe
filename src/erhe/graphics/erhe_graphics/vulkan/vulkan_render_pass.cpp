@@ -1170,12 +1170,38 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         // emit any one-shot UNDEFINED -> layout_before barrier the render
         // pass machinery itself can't drive.
 
-        log_render_pass->debug(
-            "Off-screen render pass created: {}x{}, {} color attachments, depth={}",
-            m_render_target_width, m_render_target_height,
-            color_attachment_references.size(),
-            has_depth_stencil ? "yes" : "no"
-        );
+        if (log_render_pass->should_log(spdlog::level::debug)) {
+            // Handles included so a device fault report (render pass handle,
+            // image handles) maps back to this pass and its attachments.
+            std::stringstream attachments;
+            for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
+                if (att.is_defined() && (att.texture != nullptr)) {
+                    attachments << fmt::format(
+                        " color:'{}'=image 0x{:x} layer {} level {}",
+                        att.texture->get_debug_label().data(),
+                        reinterpret_cast<std::uintptr_t>(att.texture->get_impl().get_vk_image()),
+                        att.texture_layer, att.texture_level
+                    );
+                }
+            }
+            if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
+                attachments << fmt::format(
+                    " depth:'{}'=image 0x{:x} layer {} level {}",
+                    m_depth_attachment.texture->get_debug_label().data(),
+                    reinterpret_cast<std::uintptr_t>(m_depth_attachment.texture->get_impl().get_vk_image()),
+                    m_depth_attachment.texture_layer, m_depth_attachment.texture_level
+                );
+            }
+            log_render_pass->debug(
+                "Off-screen render pass created: '{}' {}x{} render_pass=0x{:x} framebuffer=0x{:x} layers={}{}",
+                descriptor.debug_label.string_view(),
+                m_render_target_width, m_render_target_height,
+                reinterpret_cast<std::uintptr_t>(m_render_pass),
+                reinterpret_cast<std::uintptr_t>(m_framebuffer),
+                m_attachment_layer_count,
+                attachments.str()
+            );
+        }
     }
 }
 
@@ -1191,6 +1217,11 @@ Render_pass_impl::~Render_pass_impl() noexcept
     const VkRenderPass  render_pass = m_render_pass;
     m_framebuffer = VK_NULL_HANDLE;
     m_render_pass = VK_NULL_HANDLE;
+
+    // Pipelines were built against this VkRenderPass and are keyed on its
+    // handle value; the next render pass the driver creates may get the
+    // same value.
+    m_device_impl.retire_pipelines_using(reinterpret_cast<uint64_t>(render_pass));
 
     m_device_impl.add_completion_handler(
         [framebuffer, render_pass](Device_impl& device_impl) {

@@ -1158,7 +1158,10 @@ the per-face coordinate flip, is in
   interpolated point does not reach the stored value
   ([`point_light_shadows.md`](point_light_shadows.md) "Stored distance"). A
   shared 2D depth scratch is reused for every face, for rasterization only
-  (store `DONT_CARE`).
+  (store `DONT_CARE`). Known fault under investigation: on the NVIDIA Vulkan
+  driver a face pass of this path can write outside its images and lose the
+  device; the facts and the open workaround work are in
+  `doc/plans/scene_roundtrip_failures.md` item 2.
 - **Coordinate flip (convention-driven).** A cube face is sampled by direction
   through the fixed cube-map (s,t) convention, which is vertically inverted
   relative to the framebuffer row order, so the caster needs its clip-space Y

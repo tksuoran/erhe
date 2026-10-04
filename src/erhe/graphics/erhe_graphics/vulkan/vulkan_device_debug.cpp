@@ -262,6 +262,39 @@ auto Device_impl::debug_utils_messenger_callback(
         // BestPractices-Verbose-Success-Logging
         return VK_FALSE;
     }
+    if ((message_types & VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT) != 0) {
+        // VK_EXT_device_address_binding_report: a GPU virtual address range
+        // was bound to or unbound from the listed objects. Logged so a device
+        // fault report's address can be matched to the object that owned it
+        // (and when it was freed) in the same log.
+        const VkBaseInStructure* next = reinterpret_cast<const VkBaseInStructure*>(callback_data->pNext);
+        while (next != nullptr) {
+            if (next->sType == VK_STRUCTURE_TYPE_DEVICE_ADDRESS_BINDING_CALLBACK_DATA_EXT) {
+                const VkDeviceAddressBindingCallbackDataEXT* binding = reinterpret_cast<const VkDeviceAddressBindingCallbackDataEXT*>(next);
+                std::stringstream objects;
+                for (uint32_t i = 0; i < callback_data->objectCount; ++i) {
+                    objects << fmt::format(
+                        " {}=0x{:x}'{}'",
+                        c_str(callback_data->pObjects[i].objectType),
+                        callback_data->pObjects[i].objectHandle,
+                        (callback_data->pObjects[i].pObjectName != nullptr) ? callback_data->pObjects[i].pObjectName : ""
+                    );
+                }
+                log_debug->debug(
+                    "[VA] {} 0x{:x}..0x{:x} size=0x{:x}{}{}",
+                    (binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT) ? "bind  " : "unbind",
+                    binding->baseAddress,
+                    binding->baseAddress + binding->size,
+                    binding->size,
+                    ((binding->flags & VK_DEVICE_ADDRESS_BINDING_INTERNAL_OBJECT_BIT_EXT) != 0) ? " internal" : "",
+                    objects.str()
+                );
+                break;
+            }
+            next = next->pNext;
+        }
+        return VK_FALSE;
+    }
     if (callback_data->messageIdNumber == 0xde900250) {
         // https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/issues/530
         // vkGetPhysicalDeviceMemoryProperties(): vkGetPhysicalDeviceMemoryProperties is a legacy command and this VkInstance was created with VK_VERSION_1_1 which contains vkGetPhysicalDeviceMemoryProperties2 that can be used instead.
@@ -350,6 +383,17 @@ auto Device_impl::debug_utils_messenger_callback(
     if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT   ) != 0) severity = Message_severity::info;
     if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) severity = Message_severity::warning;
     if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) != 0) severity = Message_severity::error;
+
+    // The Crash Diagnostic Layer (VK_LAYER_LUNARG_crash_diagnostic) reports
+    // its own progress through the messenger with id name "CDL" - "Device
+    // error encountered and log being recorded" arrives as an error right
+    // before it writes the dump. It is a notice about the dump, not a fault
+    // of ours: the device loss itself is reported by the failing submit.
+    // Keep it at warning so the application does not abort before the dump
+    // exists (doc/agents/debugging.md).
+    if ((callback_data->pMessageIdName != nullptr) && (strcmp(callback_data->pMessageIdName, "CDL") == 0)) {
+        severity = Message_severity::warning;
+    }
 
     // We trigger this when we intentionally clear textures with 1,0,1,1
     // to see if we miss rendering and end up seeing clear color.

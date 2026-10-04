@@ -655,36 +655,38 @@ def snapshot_scene(scene_name, material_names, detail_nodes):
     return snap
 
 
-def diff_json(a, b, path, mismatches, limit=40):
+def diff_json(loaded, original, path, mismatches, limit=40):
+    """Every caller passes the reloaded state first and the original second;
+    the messages name the sides the same way (`loaded != original`)."""
     if len(mismatches) >= limit:
         return
-    if type(a) is not type(b):
-        mismatches.append(f"{path}: type {type(a).__name__} != {type(b).__name__}")
+    if type(loaded) is not type(original):
+        mismatches.append(f"{path}: type {type(loaded).__name__} != {type(original).__name__}")
         return
-    if isinstance(a, dict):
-        for key in sorted(set(a) | set(b)):
-            if key not in a:
-                mismatches.append(f"{path}.{key}: only in loaded")
-            elif key not in b:
+    if isinstance(loaded, dict):
+        for key in sorted(set(loaded) | set(original)):
+            if key not in loaded:
                 mismatches.append(f"{path}.{key}: only in original")
+            elif key not in original:
+                mismatches.append(f"{path}.{key}: only in loaded")
             else:
-                diff_json(a[key], b[key], f"{path}.{key}", mismatches, limit)
-    elif isinstance(a, list):
-        if len(a) != len(b):
-            mismatches.append(f"{path}: length {len(a)} != {len(b)}")
-            preview_a = [e.get("name") if isinstance(e, dict) else e for e in a]
-            preview_b = [e.get("name") if isinstance(e, dict) else e for e in b]
-            only_a = [x for x in preview_a if x not in preview_b]
-            only_b = [x for x in preview_b if x not in preview_a]
-            if only_a or only_b:
-                mismatches.append(f"{path}: only-original={only_a[:6]} only-loaded={only_b[:6]}")
+                diff_json(loaded[key], original[key], f"{path}.{key}", mismatches, limit)
+    elif isinstance(loaded, list):
+        if len(loaded) != len(original):
+            mismatches.append(f"{path}: length loaded {len(loaded)} != original {len(original)}")
+            preview_loaded   = [e.get("name") if isinstance(e, dict) else e for e in loaded]
+            preview_original = [e.get("name") if isinstance(e, dict) else e for e in original]
+            only_loaded   = [x for x in preview_loaded if x not in preview_original]
+            only_original = [x for x in preview_original if x not in preview_loaded]
+            if only_loaded or only_original:
+                mismatches.append(f"{path}: only-loaded={only_loaded[:6]} only-original={only_original[:6]}")
             return
-        for index, (ea, eb) in enumerate(zip(a, b)):
-            label = ea.get("name", index) if isinstance(ea, dict) else index
-            diff_json(ea, eb, f"{path}[{label}]", mismatches, limit)
+        for index, (el, eo) in enumerate(zip(loaded, original)):
+            label = el.get("name", index) if isinstance(el, dict) else index
+            diff_json(el, eo, f"{path}[{label}]", mismatches, limit)
     else:
-        if a != b:
-            mismatches.append(f"{path}: {a!r} != {b!r}")
+        if loaded != original:
+            mismatches.append(f"{path}: loaded {loaded!r} != original {original!r}")
 
 
 # --------------------------------------------------------------------------

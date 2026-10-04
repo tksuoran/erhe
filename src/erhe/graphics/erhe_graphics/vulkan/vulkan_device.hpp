@@ -75,7 +75,7 @@ public:
     bool m_VK_EXT_full_screen_exclusive         {false};
     bool m_VK_KHR_calibrated_timestamps         {false};
     bool m_VK_EXT_calibrated_timestamps         {false};
-    bool m_VK_EXT_device_address_binding_report {false};
+    bool m_VK_EXT_device_address_binding_report {false}; // see Device_impl::m_report_address_binding
     bool m_VK_KHR_load_store_op_none            {false};
     bool m_VK_EXT_load_store_op_none            {false};
     bool m_VK_KHR_push_descriptor               {false};
@@ -401,6 +401,13 @@ public:
     [[nodiscard]] auto get_texture_set_layout           () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto get_cached_pipeline              (std::size_t hash) -> VkPipeline;
     [[nodiscard]] auto create_graphics_pipeline         (const VkGraphicsPipelineCreateInfo& create_info, std::size_t hash) -> VkPipeline;
+
+    // The graphics pipeline map is keyed on raw handle values (pipeline
+    // layout, shader modules, render pass). The owner of such a handle calls
+    // this before destroying it, so that a new object given the same handle
+    // value cannot be served a pipeline built for the old one. The retired
+    // pipelines are destroyed once the frames in flight have completed.
+    void               retire_pipelines_using          (uint64_t handle);
     [[nodiscard]] auto get_or_create_graphics_pipeline  (const VkGraphicsPipelineCreateInfo& create_info, std::size_t hash) -> VkPipeline;
     [[nodiscard]] auto get_or_create_compatible_render_pass(
         unsigned int                                   color_attachment_count,
@@ -655,8 +662,14 @@ private:
     VkDescriptorSetLayout                         m_descriptor_set_layout    {VK_NULL_HANDLE};
     VkDescriptorSetLayout                         m_texture_set_layout       {VK_NULL_HANDLE};
     VkDescriptorPool                              m_per_frame_descriptor_pool{VK_NULL_HANDLE};
-    std::mutex                                    m_pipeline_map_mutex;
-    std::unordered_map<std::size_t, VkPipeline>   m_pipeline_map;
+    class Cached_pipeline
+    {
+    public:
+        VkPipeline              pipeline{VK_NULL_HANDLE};
+        std::array<uint64_t, 4> handles {}; // layout, vertex module, fragment module, render pass
+    };
+    std::mutex                                       m_pipeline_map_mutex;
+    std::unordered_map<std::size_t, Cached_pipeline> m_pipeline_map;
     std::mutex                                    m_compatible_render_pass_mutex;
     std::unordered_map<std::size_t, VkRenderPass> m_compatible_render_pass_map;
 
@@ -686,6 +699,7 @@ private:
     bool         m_frame_bracket_begun{false};
     bool         m_frame_bracket_ended{false};
     bool         m_host_query_reset   {false};
+    bool         m_report_address_binding{false};
     bool         m_gpu_calibration_valid       {false};
     double       m_gpu_calibration_host_seconds{0.0};
     uint64_t     m_gpu_calibration_device_ticks{0};

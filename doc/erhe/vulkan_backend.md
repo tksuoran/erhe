@@ -683,6 +683,24 @@ OpenGL `GL_OVR_multiview2` route is out of scope.
   When enabled it turns on core, synchronization (submit-time), and
   best-practices checks. Validation messages flow through the device message
   callback; in the editor, errors become `ERHE_FATAL` aborts.
+  `Graphics_config::vulkan.vulkan_gpu_assisted_validation` (config key
+  `vulkan_gpu_assisted_validation`, config version 2) replaces the
+  synchronization checks with GPU-assisted validation for the run.
+- Resource and address traces at `debug` level, off by default in
+  `config/editor/logging.json`: `erhe.graphics.texture` and
+  `erhe.graphics.buffer` log every image / buffer creation, destruction and
+  deferred free with the `VkImage` / `VkBuffer` handle and the
+  `VkDeviceMemory` handle, offset and size; `erhe.graphics.render_pass` logs
+  every off-screen render pass creation with its `VkRenderPass` and
+  `VkFramebuffer` handles and each attachment's image, layer and level;
+  `erhe.graphics.debug` logs every GPU virtual address bind and unbind
+  (`[VA] bind|unbind <begin>..<end> size=... <object handles>`) through
+  `VK_EXT_device_address_binding_report` when the device supports it. Together
+  they turn a device fault report's address into the object that owned it
+  and when it was freed (`doc/agents/debugging.md` "GPU faults").
+- Messages from the Crash Diagnostic Layer (message id name `CDL`) are kept at
+  warning severity, so the editor does not abort before the layer has written
+  its dump.
 - High-volume sync/descriptor traces (`[RP_BEGIN]`, `[BARRIER]`, `[IMG_BARRIER]`,
   ...) are compiled out by default and gated behind `ERHE_LOG_VULKAN` (the
   `ERHE_VULKAN_SYNC_TRACE` / `ERHE_VULKAN_DESC_TRACE` / `ERHE_VULKAN_SYNC_LOG`

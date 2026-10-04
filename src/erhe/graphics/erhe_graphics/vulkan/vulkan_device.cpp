@@ -254,9 +254,9 @@ Device_impl::~Device_impl() noexcept
     }
     m_frame_bracket_enabled = false;
 
-    for (auto& [hash, pipeline] : m_pipeline_map) {
-        if (pipeline != VK_NULL_HANDLE) {
-            vkDestroyPipeline(m_vulkan_device, pipeline, nullptr);
+    for (auto& [hash, entry] : m_pipeline_map) {
+        if (entry.pipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(m_vulkan_device, entry.pipeline, nullptr);
         }
     }
     m_pipeline_map.clear();
@@ -465,30 +465,54 @@ auto Device_impl::get_cached_pipeline(const std::size_t hash) -> VkPipeline
     std::lock_guard<std::mutex> lock{m_pipeline_map_mutex};
     auto it = m_pipeline_map.find(hash);
     if (it != m_pipeline_map.end()) {
-        return it->second;
+        return it->second.pipeline;
     }
     return VK_NULL_HANDLE;
 }
 
+void Device_impl::retire_pipelines_using(const uint64_t handle)
+{
+    if (handle == 0) {
+        return;
+    }
+    std::vector<VkPipeline> to_destroy;
+    {
+        std::lock_guard<std::mutex> lock{m_pipeline_map_mutex};
+        for (auto it = m_pipeline_map.begin(); it != m_pipeline_map.end();) {
+            const Cached_pipeline& entry = it->second;
+            const bool uses_handle = std::find(entry.handles.begin(), entry.handles.end(), handle) != entry.handles.end();
+            if (uses_handle) {
+                if (entry.pipeline != VK_NULL_HANDLE) {
+                    to_destroy.push_back(entry.pipeline);
+                }
+                it = m_pipeline_map.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    for (VkPipeline pipeline : to_destroy) {
+        add_completion_handler([device = m_vulkan_device, pipeline](Device_impl&) {
+            vkDestroyPipeline(device, pipeline, nullptr);
+        });
+    }
+}
+
 void Device_impl::clear_render_pipeline_cache()
 {
-    // The Vulkan pipeline cache hashes raw VkShaderModule handle values
-    // (see Render_command_encoder_impl::set_render_pipeline_state).
-    // When the upstream shader cache (e.g. Shader_variant_cache) destroys
-    // its modules, the driver may recycle those handle values for new
-    // modules, and a future bind whose hash collides with an old entry
-    // would receive a stale VkPipeline carrying the previous shader code.
-    // Drop every cached pipeline here and let the next bind rebuild
-    // against the fresh modules. Pipelines are queued for destruction
-    // through the per-frame completion handler so any in-flight GPU work
-    // that still references them stays valid.
+    // Drop every cached pipeline and let the next bind rebuild. The shader
+    // monitor calls this after a reload; the per-handle invalidation
+    // (retire_pipelines_using) already covers the modules it replaced, this
+    // is the wholesale form. Pipelines are queued for destruction through
+    // the per-frame completion handler so any in-flight GPU work that still
+    // references them stays valid.
     std::vector<VkPipeline> to_destroy;
     {
         std::lock_guard<std::mutex> lock{m_pipeline_map_mutex};
         to_destroy.reserve(m_pipeline_map.size());
-        for (auto& [hash, pipeline] : m_pipeline_map) {
-            if (pipeline != VK_NULL_HANDLE) {
-                to_destroy.push_back(pipeline);
+        for (auto& [hash, entry] : m_pipeline_map) {
+            if (entry.pipeline != VK_NULL_HANDLE) {
+                to_destroy.push_back(entry.pipeline);
             }
         }
         m_pipeline_map.clear();
@@ -512,8 +536,16 @@ auto Device_impl::create_graphics_pipeline(const VkGraphicsPipelineCreateInfo& c
     set_debug_label(VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(pipeline),
         fmt::format("Pipeline hash={:016x}", hash).c_str());
 
+    Cached_pipeline entry{};
+    entry.pipeline   = pipeline;
+    entry.handles[0] = reinterpret_cast<uint64_t>(create_info.layout);
+    for (uint32_t i = 0; (i < create_info.stageCount) && (i < 2u); ++i) {
+        entry.handles[1 + i] = reinterpret_cast<uint64_t>(create_info.pStages[i].module);
+    }
+    entry.handles[3] = reinterpret_cast<uint64_t>(create_info.renderPass);
+
     std::lock_guard<std::mutex> lock{m_pipeline_map_mutex};
-    m_pipeline_map[hash] = pipeline;
+    m_pipeline_map[hash] = entry;
     return pipeline;
 }
 
@@ -1184,6 +1216,10 @@ auto Device_impl::query_device_extensions(
     if (!device_extensions_out.m_VK_KHR_device_fault) {
         check_device_extension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME, device_extensions_out.m_VK_EXT_device_fault, 0.0f);
     }
+    // GPU virtual address bind / unbind events through the debug messenger:
+    // what a device fault report's address was bound to, and when
+    // (doc/agents/debugging.md).
+    check_device_extension(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME, device_extensions_out.m_VK_EXT_device_address_binding_report, 0.0f);
     return total_score;
 }
 
