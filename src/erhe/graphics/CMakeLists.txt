@@ -207,12 +207,19 @@ if (MSVC)
         erhe_graphics/image_loader_ktx2.cpp
         PROPERTIES COMPILE_OPTIONS "/wd4828"
     )
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # Same third-party exemption for clang (NDK/Quest builds): anon-enum
-    # arithmetic inside basisu_transcoder_internal.h is upstream's code.
+else ()
+    # Same third-party exemption for GCC / Clang: -Wno-error follows the
+    # target's -Werror on the command line. The enum arithmetic inside
+    # basisu_transcoder_internal.h is upstream's code; its warning is also
+    # silenced so it does not drown out erhe's own diagnostics.
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(_basisu_enum_warning "-Wno-deprecated-anon-enum-enum-conversion")
+    else ()
+        set(_basisu_enum_warning "-Wno-deprecated-enum-enum-conversion")
+    endif ()
     set_source_files_properties(
         "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
-        PROPERTIES COMPILE_OPTIONS "-Wno-deprecated-anon-enum-enum-conversion"
+        PROPERTIES COMPILE_OPTIONS "-Wno-error;${_basisu_enum_warning}"
     )
 endif ()
 target_include_directories(${_interface_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
@@ -233,12 +240,23 @@ if (ERHE_USE_FPNG)
     )
     target_sources(${_interface_target} PRIVATE "${fpng_SOURCE_DIR}/src/fpng.cpp")
     target_include_directories(${_interface_target} PRIVATE "${fpng_SOURCE_DIR}/src")
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        # Third-party source: uint8_t-vs-4096 tautological compare is
-        # upstream fpng code (harmless dead branch on this platform).
+    # Third-party source: exempt from warnings-as-errors, as basisu above.
+    # The uint8_t-vs-4096 tautological compare is upstream fpng code
+    # (harmless dead branch on this platform).
+    if (MSVC)
         set_source_files_properties(
             "${fpng_SOURCE_DIR}/src/fpng.cpp"
-            PROPERTIES COMPILE_OPTIONS "-Wno-tautological-constant-out-of-range-compare"
+            PROPERTIES COMPILE_OPTIONS "/WX-"
+        )
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set_source_files_properties(
+            "${fpng_SOURCE_DIR}/src/fpng.cpp"
+            PROPERTIES COMPILE_OPTIONS "-Wno-error;-Wno-tautological-constant-out-of-range-compare"
+        )
+    else ()
+        set_source_files_properties(
+            "${fpng_SOURCE_DIR}/src/fpng.cpp"
+            PROPERTIES COMPILE_OPTIONS "-Wno-error"
         )
     endif ()
 else ()

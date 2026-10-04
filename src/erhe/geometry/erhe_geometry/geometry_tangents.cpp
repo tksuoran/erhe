@@ -74,16 +74,18 @@ auto compute_mesh_tangents(
                 return mesh.facets.corner(face.geo_facet, iVert);
             }
             ERHE_VERIFY(iVert > 0);
-            //     0________1
-            //     /\1    2/\
-            //    /2 \    / 1\
-            //   /    \  /    \
-            // 5/1_____\/_____2\2
-            //  \2     /\     1/
-            //   \    /  \    /
-            //    \1 /    \ 2/
-            //     \/2____1\/
-            //     4        3
+            /*
+                   0________1
+                   /\1    2/\
+                  /2 \    / 1\
+                 /    \  /    \
+               5/1_____\/_____2\2
+                \2     /\     1/
+                 \    /  \    /
+                  \1 /    \ 2/
+                   \/2____1\/
+                   4        3
+            */
             const GEO::index_t corner_count  = mesh.facets.nb_corners(face.geo_facet);
             const uint32_t     corner_offset = (iVert - 1 + face.virtual_triangle_offset) % corner_count;
             const GEO::index_t corner        = mesh.facets.corner(face.geo_facet, corner_offset);
