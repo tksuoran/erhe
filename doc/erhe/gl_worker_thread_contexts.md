@@ -149,7 +149,10 @@ Traps).
   deleted on its own context, so destroying a `Vertex_input_state` /
   `Render_pass` queues the other contexts' instances; each context drains
   its own queue at the next acquire and at teardown; the main context drains
-  at an explicit per-frame point (it never re-acquires).
+  at an explicit per-frame point (it never re-acquires). The queues (and
+  the live-slot flags) are declared in `Device_impl` before the worker pool
+  and the default vertex input state, so they outlive every destructor that
+  enqueues into them during `~Device_impl`.
 - **`Gpu_timer_impl` is excluded** from the accessor mechanism and is
   main-thread-only: its per-context state is a ring of four queries, and
   nothing wants worker-side GPU timing. Its migration hooks and

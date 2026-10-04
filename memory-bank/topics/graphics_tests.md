@@ -11,7 +11,7 @@
 
 [TRAPS]
 !Gpu_test.device_up_clean-fails-with-distro-validation-layer-older-than-pinned-Vulkan-headers{VUID-VkDeviceCreateInfo-pNext-pNext-unknown-sType-1000558000=shader_relaxed_extended_instruction;use-SDK-layer;doc/agents/linux.md}
-!GL-gpu-tests-open-failure::doc/plans/opengl_test_failures.md{Worker_context_gl_test-teardown-malloc_consolidate-in-glXDestroyContext-of-worker-context+thread-arena->ASAN-needs-libclang-rt-dev}
+✓GL-gpu-tests-all-pass-2026-10-04{3-GL-backend-fixes:1-sample-MS-target(e80b64ab2)+texelFetch-3D-NVIDIA-driver-defect(6837a428f;doc/reference/nvidia_texel_fetch_3d_driver_report.md)+Device_impl-member-order(deferred-queues-declared-before-pool+default-VAO;found-via-ASAN-tree;doc/agents/linux.md-AddressSanitizer)}
 !NVIDIA-GL-texelFetch-sampler3D-zeros::driver-defect{z-from-integer-divided-pixel-coord;standalone-repro+variants->doc/reference/nvidia_texel_fetch_3d_driver_report.md;test-shader-clamps-layer-as-documented-workaround}
 !sample_count-0-and-1-single-sample-all-backends::e80b64ab2{GL-is_multisample_sample_count;Single_sample_test}
 !ERHE_USE_ASAN-applies-on-GNU+Clang-since-2026-10-04{before:msvc-only}

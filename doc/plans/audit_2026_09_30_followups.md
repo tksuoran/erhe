@@ -19,8 +19,9 @@ on culling.
 
 - Item 10: per-subresource Vulkan layout tracking (4fc17d988) and the
   `Texture_location` / `Buffer_texel_location` blit region types (1d5d45f28,
-  narrowing fix 51dfc09fb). The OpenGL failures found while testing it are in
-  [`opengl_test_failures.md`](opengl_test_failures.md).
+  narrowing fix 51dfc09fb), and the three OpenGL backend failures the GPU
+  tests found while testing it (one-sample multisample target, NVIDIA
+  `texelFetch` 3D driver defect, `Device_impl` member destruction order).
 
 ## Next
 

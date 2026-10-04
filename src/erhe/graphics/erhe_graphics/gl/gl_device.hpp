@@ -262,44 +262,12 @@ private:
     Device_info                   m_info;
     erhe::window::Context_window* m_context_window{nullptr};
 
-    // Worker share-context pool: entry i backs context slot i + 1 (slot 0
-    // is the main context). Populated in create_per_context_resources()
-    // (Device::Device's body - share-context creation make-currents the
-    // main context, so it is main-thread and must not run while a frame is
-    // in flight); empty when there is no window to share from. Declared
-    // BEFORE m_default_vertex_input_state: destroying the per-context
-    // default VAOs queues deferred deletes on pool slots, and the pool
-    // contexts must still exist at that point (the queued names then die
-    // with their contexts). Teardown requires no worker holding a pool
-    // context current (SDL_GL_DestroyContext un-currents only the calling
-    // thread); the application quiesces its executor before destroying the
-    // Device.
-    std::vector<std::unique_ptr<erhe::window::Context_window>> m_worker_context_windows;
-    std::mutex              m_worker_context_pool_mutex;
-    std::condition_variable m_worker_context_pool_condition;
-    std::vector<int>        m_free_worker_context_slots;
-    // Holder of each pool slot (index = slot - 1), for the acquire
-    // watchdog's report; guarded by m_worker_context_pool_mutex. Proposal E
-    // of doc/erhe/gl_worker_context_enforcement.md: a wedged pool looks BUSY
-    // (parked parents spin in _corun_until), so without a report naming the
-    // holders nothing points at the context pool at all.
-    class Worker_context_slot_holder
-    {
-    public:
-        std::thread::id      thread_id   {};
-        std::source_location acquire_site{};
-    };
-    std::array<Worker_context_slot_holder, gl_worker_context_pool_size> m_worker_context_slot_holders;
-
-    // Persistent empty VAO bound for draws whose pipeline declares no vertex
-    // input (core-profile GL rejects glDraw* with VAO 0). Created eagerly by
-    // create_per_context_resources() - from Device::Device's BODY, because
-    // Vertex_input_state construction goes through Device::get_impl() and
-    // Device::m_impl is still null while Device_impl's constructor runs.
-    // Declared after the worker context pool so it is destroyed first,
-    // while the pool contexts (and the main context) still exist.
-    std::unique_ptr<Vertex_input_state> m_default_vertex_input_state;
-
+    // The deferred queues and the live-slot flags are declared BEFORE the
+    // worker context pool and the default vertex input state: the
+    // destructors of those members (and of every per-context object
+    // destroyed from them) enqueue here, so the queues must be the last
+    // of this group to be destroyed. Members are destroyed in reverse
+    // declaration order.
     // See queue_*_delete_on_context() above. One queue per context; the
     // mutex serializes producers (destructors on other contexts) against
     // the owning context's drain.
@@ -340,6 +308,44 @@ private:
     // the constructor; worker slots are set when the pool context is
     // created (commit 12).
     std::array<std::atomic<bool>, gl_context_slot_count> m_context_slot_live{};
+
+    // Worker share-context pool: entry i backs context slot i + 1 (slot 0
+    // is the main context). Populated in create_per_context_resources()
+    // (Device::Device's body - share-context creation make-currents the
+    // main context, so it is main-thread and must not run while a frame is
+    // in flight); empty when there is no window to share from. Declared
+    // BEFORE m_default_vertex_input_state: destroying the per-context
+    // default VAOs queues deferred deletes on pool slots, and the pool
+    // contexts must still exist at that point (the queued names then die
+    // with their contexts). Teardown requires no worker holding a pool
+    // context current (SDL_GL_DestroyContext un-currents only the calling
+    // thread); the application quiesces its executor before destroying the
+    // Device.
+    std::vector<std::unique_ptr<erhe::window::Context_window>> m_worker_context_windows;
+    std::mutex              m_worker_context_pool_mutex;
+    std::condition_variable m_worker_context_pool_condition;
+    std::vector<int>        m_free_worker_context_slots;
+    // Holder of each pool slot (index = slot - 1), for the acquire
+    // watchdog's report; guarded by m_worker_context_pool_mutex. Proposal E
+    // of doc/erhe/gl_worker_context_enforcement.md: a wedged pool looks BUSY
+    // (parked parents spin in _corun_until), so without a report naming the
+    // holders nothing points at the context pool at all.
+    class Worker_context_slot_holder
+    {
+    public:
+        std::thread::id      thread_id   {};
+        std::source_location acquire_site{};
+    };
+    std::array<Worker_context_slot_holder, gl_worker_context_pool_size> m_worker_context_slot_holders;
+
+    // Persistent empty VAO bound for draws whose pipeline declares no vertex
+    // input (core-profile GL rejects glDraw* with VAO 0). Created eagerly by
+    // create_per_context_resources() - from Device::Device's BODY, because
+    // Vertex_input_state construction goes through Device::get_impl() and
+    // Device::m_impl is still null while Device_impl's constructor runs.
+    // Declared after the worker context pool so it is destroyed first,
+    // while the pool contexts (and the main context) still exist.
+    std::unique_ptr<Vertex_input_state> m_default_vertex_input_state;
 
     std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 

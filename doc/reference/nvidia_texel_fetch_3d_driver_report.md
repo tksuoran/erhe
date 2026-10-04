@@ -2,7 +2,7 @@
 
 Standalone reproduction (raw GLX + GL 4.6 core, no erhe code) of the
 `Texel_fetch_test.texture_3d` failure of `erhe_graphics_gpu_tests` on the
-OpenGL backend (`doc/plans/opengl_test_failures.md` item 1). Measured
+OpenGL backend. Measured
 2026-10-04 on Linux, `GL_RENDERER` NVIDIA (RTX 5070 laptop), `GL_VERSION`
 `4.6.0 NVIDIA 595.91.07`.
 

@@ -365,7 +365,6 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
-- [plans/opengl_test_failures.md](plans/opengl_test_failures.md) (in progress): OpenGL backend: failures found by the GPU tests
 - [plans/parallel_editor_init.md](plans/parallel_editor_init.md) (proposed): Parallel editor initialization: a Taskflow graph over the init steps
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups

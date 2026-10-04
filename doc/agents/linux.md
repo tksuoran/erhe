@@ -54,7 +54,10 @@ plus the option and `-DERHE_BUILD_TESTS=ON`, for example
 the compiler's sanitizer runtime: with Ubuntu's clang that is the
 `libclang-rt-<version>-dev` package (`ld: cannot find
 libclang_rt.asan-x86_64.a` says it is missing). Run with
-`ASAN_OPTIONS=detect_leaks=0` unless leaks are the question.
+`ASAN_OPTIONS=detect_leaks=0` unless leaks are the question. Without
+`llvm-symbolizer` on the PATH the report prints raw `<exe>+0x...` offsets;
+feed them to `addr2line -C -f -i -e <tree>/bin/<exe>` to get the symbolized
+stacks.
 
 ## Memory growth diagnostics
 
