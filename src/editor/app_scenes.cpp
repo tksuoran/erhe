@@ -335,7 +335,7 @@ void App_scenes::dispatch_display_color_builds(const std::shared_ptr<Scene_root>
             .buffer_info = build.skinned
                 ? m_context.mesh_memory->make_skinned_primitive_buffer_info()
                 : m_context.mesh_memory->make_primitive_buffer_info(),
-            .constant_color = GEO::vec4f{build.color.x, build.color.y, build.color.z, build.color.w}
+            .constant_color = build.color
         };
         async_for_nodes_with_mesh(
             m_context,
@@ -477,7 +477,7 @@ void App_scenes::rebuild_display_color(Scene_root& scene_root, const std::shared
         .buffer_info = mesh.skin
             ? m_context.mesh_memory->make_skinned_primitive_buffer_info()
             : m_context.mesh_memory->make_primitive_buffer_info(),
-        .constant_color = GEO::vec4f{color.x, color.y, color.z, color.w}
+        .constant_color = color
     };
 
     std::vector<erhe::scene::Mesh_primitive> new_primitives = mesh.get_primitives();

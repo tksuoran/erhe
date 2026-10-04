@@ -1,4 +1,5 @@
 #include "tools/debug_visualizations.hpp"
+#include "editor_item_bits.hpp"
 
 #include "config/generated/debug_visualizations_settings.hpp"
 #include "config/generated/debug_visualizations_style.hpp"
@@ -106,12 +107,12 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const std::shared_ptr<erhe::Item_base>& item)
 {
-    return should_visualize(mode, item->is_selected(), item->is_hovered());
+    return should_visualize(mode, item->is_selected(), editor::is_hovered(*item));
 }
 
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const erhe::Item_base* const item)
 {
-    return should_visualize(mode, item->is_selected(), item->is_hovered());
+    return should_visualize(mode, item->is_selected(), editor::is_hovered(*item));
 }
 
 }
@@ -133,11 +134,11 @@ auto Debug_visualizations::skins_shown(const Debug_visualizations_settings& sett
                 continue;
             }
             bool selected = mesh->is_selected();
-            bool hovered  = mesh->is_hovered();
+            bool hovered  = editor::is_hovered(*mesh);
             for (const std::shared_ptr<erhe::scene::Node>& joint : mesh->skin->skin_data.joints) {
                 if (joint) {
                     selected = selected || joint->is_selected();
-                    hovered  = hovered  || joint->is_hovered();
+                    hovered  = hovered  || editor::is_hovered(*joint);
                 }
             }
             if (should_visualize(settings.skins, selected, hovered)) {
@@ -334,7 +335,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
         // style's colors alternating with depth.
         const std::optional<vec3> display_color = get_bone_display_color(*joint);
         line_renderer.set_line_color(
-            joint->is_hovered()          ? style.bone_hover_color            :
+            editor::is_hovered(*joint)          ? style.bone_hover_color            :
             joint->is_selected()         ? style.bone_selected_color         :
             display_color.has_value()    ? glm::vec4{display_color.value(), 1.0f} :
             (((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b)
@@ -500,7 +501,7 @@ void Debug_visualizations::light_visualization(
     ERHE_PROFILE_FUNCTION();
 
     using namespace erhe::utility;
-    if (!test_bit_set(light->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
+    if (!test_bit_set(light->get_flag_bits(), editor::Editor_item_flags::show_debug_visualizations)) {
         return;
     }
 
@@ -691,7 +692,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
         // Casters: classify every visible shadow caster against the selected
         // light's shadow caster volume F_shadow (the same test the fit applies
         // to its gathered casters - erhe::math::aabb_in_convex_volume), tag the
-        // mesh with Item_flags::affects_shadow, and draw it in the affecting or
+        // mesh with editor::Editor_item_flags::affects_shadow, and draw it in the affecting or
         // culled color. shadow_volume_planes is empty when fit_to_casters did
         // not run, in which case there is nothing to classify against.
         if (m_settings.shadow_fit_casters && !fit_debug.shadow_volume_planes.empty()) {
@@ -710,7 +711,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                             continue;
                         }
                         const bool affects = erhe::math::aabb_in_convex_volume(fit_debug.shadow_volume_planes, aabb);
-                        mesh->set_flag_bits(erhe::Item_flags::affects_shadow, affects);
+                        mesh->set_flag_bits(editor::Editor_item_flags::affects_shadow, affects);
                         line_renderer.add_cube(
                             glm::mat4{1.0f},
                             affects ? style.shadow_fit_casters_color : style.shadow_fit_casters_culled_color,
@@ -1231,7 +1232,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     }
 
     using namespace erhe::utility;
-    if (!test_bit_set(camera->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
+    if (!test_bit_set(camera->get_flag_bits(), editor::Editor_item_flags::show_debug_visualizations)) {
         return;
     }
 
@@ -2209,11 +2210,11 @@ void Debug_visualizations::render(const Render_context& context)
                     // Without this, skins=Selected shows no skeleton lines
                     // exactly when working with bones in the line style.
                     bool selected = mesh->is_selected();
-                    bool hovered  = mesh->is_hovered();
+                    bool hovered  = editor::is_hovered(*mesh);
                     for (const std::shared_ptr<erhe::scene::Node>& joint : mesh->skin->skin_data.joints) {
                         if (joint) {
                             selected = selected || joint->is_selected();
-                            hovered  = hovered  || joint->is_hovered();
+                            hovered  = hovered  || editor::is_hovered(*joint);
                         }
                     }
                     if (bone_mode || should_visualize(m_settings.skins, selected, hovered)) {

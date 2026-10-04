@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometry_graph/geometry_graph.hpp"
+#include "editor_item_bits.hpp"
 // Complete type needed: Graph_asset::set_item_host (a virtual, instantiated
 // with the class) forwards the host to the nodes.
 #include "geometry_graph/geometry_graph_node.hpp"
@@ -68,7 +69,7 @@ public:
 
     // Implements erhe::Item_base
     static constexpr std::string_view static_type_name{"Graph_mesh"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::graph_mesh; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | editor::Editor_item_types::graph_mesh; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom

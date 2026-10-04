@@ -2,6 +2,7 @@
 #include "erhe_item/item_log.hpp"
 #include "erhe_property/property_log.hpp"
 #include "erhe_log/log.hpp"
+#include "test_application_flags.hpp"
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -23,6 +24,7 @@ int main(int argc, char** argv)
     //    via erhe::file, which now has a valid logger)
     erhe::property::initialize_logging();
     erhe::item::initialize_logging();
+    register_test_application_flags();
 
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_item/item_flags.hpp"
+#include "erhe_item/item_type.hpp"
 #include "erhe_item/unique_id.hpp"
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_utility/debug_label.hpp"
@@ -31,432 +33,6 @@ enum class Purpose : unsigned int {
 
 // Enumerator table for Purpose properties.
 extern const erhe::property::Enum_info c_purpose_enum_info;
-
-class Item_flags
-{
-public:
-    static constexpr uint64_t none                      = 0u;
-    static constexpr uint64_t no_message                = (1u <<  0);
-    static constexpr uint64_t no_transform_update       = (1u <<  1);
-    static constexpr uint64_t transform_world_normative = (1u <<  2);
-    static constexpr uint64_t show_in_ui                = (1u <<  3);
-    static constexpr uint64_t show_debug_visualizations = (1u <<  4);
-    static constexpr uint64_t shadow_cast               = (1u <<  5);
-    static constexpr uint64_t selected                  = (1u <<  6);
-    static constexpr uint64_t lock_viewport_selection   = (1u <<  7);
-    static constexpr uint64_t lock_viewport_transform   = (1u <<  8);
-    static constexpr uint64_t visible                   = (1u <<  9);
-    static constexpr uint64_t invisible_parent          = (1u << 10);
-    static constexpr uint64_t render_wireframe          = (1u << 11); // TODO
-    static constexpr uint64_t render_bounding_volume    = (1u << 12); // TODO
-    static constexpr uint64_t content                   = (1u << 13);
-    static constexpr uint64_t id                        = (1u << 14);
-    static constexpr uint64_t tool                      = (1u << 15);
-    static constexpr uint64_t brush                     = (1u << 16);
-    static constexpr uint64_t controller                = (1u << 17);
-    static constexpr uint64_t rendertarget              = (1u << 18);
-    static constexpr uint64_t expand                    = (1u << 19);
-    static constexpr uint64_t hovered_in_viewport       = (1u << 20);
-    static constexpr uint64_t hovered_in_item_tree      = (1u << 21);
-    static constexpr uint64_t negative_determinant      = (1u << 22);
-    static constexpr uint64_t lock_edit                 = (1u << 23);
-    static constexpr uint64_t show_in_developer_ui      = (1u << 24);
-    // Transient, set by the shadow frustum fit debug visualization: this
-    // shadow caster's world bounds intersect the selected light's shadow
-    // caster volume (F_shadow), i.e. it can contribute to that light's shadow
-    // map. Recomputed each frame the visualization runs; not authored or
-    // serialized (like selected / hovered_*).
-    static constexpr uint64_t affects_shadow            = (1u << 25);
-    // The item is not part of prefab content: the flag persists in node
-    // extras when the scene is saved, and instantiating a prefab template
-    // filters flagged items out of the instance. Set on editor-generated
-    // helpers (e.g. the default camera / lights import_gltf adds to a scene
-    // that has none) so they never leak into prefab instances.
-    static constexpr uint64_t exclude_from_prefab       = (1u << 26);
-    // Implicit container node created when a glTF file is opened/imported,
-    // holding the file's scene roots. Not part of the file content: glTF
-    // export writes its children in its place (composing its transform),
-    // and import re-creates it -- so open/save cycles do not nest one more
-    // wrapper node per cycle.
-    static constexpr uint64_t import_root               = (1u << 27);
-    // Skeleton bone: authored and persistent (saved by name like the other
-    // persistent flags; doc/plans/rigging/skeleton_editing.md R1). A Skin
-    // entering a scene sets it on the nodes it lists in skin_data.joints, and
-    // a node keeps it when no skin lists it. Item_type is per-CLASS
-    // (Item<>::get_type() returns Self::get_static_type()), so a plain Node
-    // can never report Item_type::bone - bone-ness has to be a per-instance
-    // flag. Drives the item tree's bone icon and is_bone().
-    static constexpr uint64_t bone                      = (1u << 28);
-    // Editor-generated pick/display proxy for a bone: a Mesh in the scene's bone
-    // layer, parented under the joint node it represents. Content-adjacent but
-    // not content - excluded from the item tree, save, export and prefabs, and
-    // never selectable as itself (picking it resolves to the joint Node).
-    static constexpr uint64_t bone_proxy                = (1u << 29);
-    // Static geometry that participates in lightmap baking: gets automatic
-    // lightmap UVs (texcoord channel 2), an atlas region, and baked lighting.
-    // Authored + serialized (by name, like all flags). See
-    // doc/editor/lightmap_baking.md.
-    static constexpr uint64_t lightmapped               = (1u << 30);
-    // Editor-generated render-only stand-in for another item (e.g. the
-    // lightmap partitioner's world-space piece meshes). Renders (and casts
-    // shadows) in place of its proxy_hidden source but is never user-facing:
-    // no show_in_ui, no Item_flags::id, raytrace mask 0
-    // (raytrace_node_mask), skipped by glTF export and not serialized -
-    // proxies are derived data, rebuilt by their owner.
-    static constexpr uint64_t render_proxy              = (uint64_t{1} << 31);
-    // The item is visually replaced by a render_proxy: excluded from the
-    // visual and shadow render passes, but still fully live - visible flag
-    // set, ID-rendered, raytrace-pickable, selectable, editable and
-    // exported. Not serialized (the proxy owner re-applies it).
-    static constexpr uint64_t proxy_hidden              = (uint64_t{1} << 32);
-    // Transient companion of hovered_in_viewport, maintained by Hover_tool on
-    // every ancestor of the viewport-hovered node (and refreshed when the
-    // scene tree structure changes). Lets item trees highlight the closest
-    // visible ancestor of a hovered node folded out of view with a plain
-    // per-row flag test instead of walking the hierarchy.
-    static constexpr uint64_t descendant_hovered_in_viewport = (uint64_t{1} << 33);
-    // Graph-editor hover (maintained by the geometry graph window): the scene
-    // node referenced by the graph node under the mouse on the node-editor
-    // canvas. Exactly zero or one node carries hovered_in_graph at a time;
-    // when it changes, every ancestor gets child_hovered_in_graph and every
-    // descendant gets ancestor_hovered_in_graph (all three cleared and
-    // re-derived together, and refreshed when the scene tree structure
-    // changes). Lets item trees highlight graph hovering with plain per-row
-    // flag tests, like viewport hovering.
-    static constexpr uint64_t hovered_in_graph          = (uint64_t{1} << 34);
-    static constexpr uint64_t child_hovered_in_graph    = (uint64_t{1} << 35);
-    static constexpr uint64_t ancestor_hovered_in_graph = (uint64_t{1} << 36);
-    // Masks a bone from IK: dragging a bone with the translate tool solves the
-    // chain of ancestor bones up to (and including, as the fixed-position
-    // root) the first ik_lock bone. Dragging an ik_lock bone itself falls
-    // back to plain FK translation. Authored + serialized (by name; see
-    // gltf_item_flags.cpp). See doc/plans/rigging/fabrik_ik.md.
-    static constexpr uint64_t ik_lock                   = (uint64_t{1} << 37);
-    // Effective USD `active` state (doc/erhe/usd_compatibility_design.md X2): the
-    // item's own active property AND its own defined property AND the bit of
-    // its parent. USD prunes the whole subtree of an inactive prim, and its
-    // default traversal predicate reaches neither an undefined prim (composed
-    // specifier `over`) nor anything below one, regardless of a descendant's
-    // own opinion - so both subtree effects are carried by this derived bit
-    // rather than by property inheritance. Clear means the item and
-    // everything below it is out of rendering, picking, simulation and every
-    // consumer that walks content; the item tree still shows the row, dimmed.
-    static constexpr uint64_t active                    = (uint64_t{1} << 38);
-    // Content the editor injects into a scene for the duration of the
-    // session, so that a file which authors none of it is still usable: the
-    // default camera a camera-less file is looked at through. It is not part
-    // of what the file says, so every exporter leaves it out and it is never
-    // serialized - the next open injects it again. The user's own content
-    // never carries the bit, so a camera the user creates is saved.
-    static constexpr uint64_t session_only              = (uint64_t{1} << 39);
-    // The generated proxy geometry a `cards` draw mode supplies in place of
-    // the subtree it replaces (doc/erhe/usd_compatibility.md, "Draw modes"): a
-    // child prim of the pruning model prim that the pruning itself must not
-    // reach, since it is the replacement. Carried by the proxy mesh and by
-    // the materials it owns; the item tree never shows it, no exporter
-    // writes it (it is session_only as well), and a viewport pick of it
-    // selects the model prim.
-    static constexpr uint64_t draw_mode_proxy           = (uint64_t{1} << 40);
-    // The one item of the editor-wide selection that is the reference item
-    // for commands and the one the UI highlights (doc/editor/active_item.md).
-    // Written only by editor::Selection; at most one item carries it, and it
-    // is independent of the selected bit - an item can be active while
-    // unselected. Transient session state, never serialized.
-    static constexpr uint64_t active_item               = (uint64_t{1} << 41);
-    // Per-component transform channel locks (Blender protectflag
-    // equivalent): a locked component of the LOCAL (parent-from-node)
-    // transform is not changed by interactive editing - the Transform
-    // tool, numeric transform fields, and IK (a locked rotation axis acts
-    // as an IK DOF lock). Not enforced against animation, physics, or
-    // programmatic set_* calls. Authored + serialized by name (see
-    // gltf_item_flags.cpp). See doc/plans/rigging/ik_settings.md.
-    static constexpr uint64_t lock_translation_x        = (uint64_t{1} << 42);
-    static constexpr uint64_t lock_translation_y        = (uint64_t{1} << 43);
-    static constexpr uint64_t lock_translation_z        = (uint64_t{1} << 44);
-    static constexpr uint64_t lock_rotation_x           = (uint64_t{1} << 45);
-    static constexpr uint64_t lock_rotation_y           = (uint64_t{1} << 46);
-    static constexpr uint64_t lock_rotation_z           = (uint64_t{1} << 47);
-    static constexpr uint64_t lock_scale_x              = (uint64_t{1} << 48);
-    static constexpr uint64_t lock_scale_y              = (uint64_t{1} << 49);
-    static constexpr uint64_t lock_scale_z              = (uint64_t{1} << 50);
-    // The item is anchored to one scene view and drawn only in that view
-    // (the editor hotbar quad follows the hovered view's camera). The mesh
-    // keeps one visible state for the whole frame; the render pass that
-    // draws view anchored items decides per view whether it runs. Session
-    // state of editor furniture, never serialized.
-    static constexpr uint64_t view_anchored             = (uint64_t{1} << 51);
-    static constexpr uint64_t count                     = 52;
-
-    static constexpr uint64_t lock_translation_mask     = lock_translation_x | lock_translation_y | lock_translation_z;
-    static constexpr uint64_t lock_rotation_mask        = lock_rotation_x    | lock_rotation_y    | lock_rotation_z;
-    static constexpr uint64_t lock_scale_mask           = lock_scale_x       | lock_scale_y       | lock_scale_z;
-    static constexpr uint64_t lock_channel_mask         = lock_translation_mask | lock_rotation_mask | lock_scale_mask;
-
-    // High-frequency presentation-state bits (selection, hover, per-frame debug
-    // visualization, transform-derived state) that never affect item tree row
-    // structure or filtering. Changes to only these bits do not bump the item
-    // mutation serial, so they do not invalidate cached item tree rows.
-    static constexpr uint64_t transient =
-        selected | hovered_in_viewport | hovered_in_item_tree | descendant_hovered_in_viewport |
-        hovered_in_graph | child_hovered_in_graph | ancestor_hovered_in_graph |
-        negative_determinant | affects_shadow | active_item;
-
-    // Derived bits (D23 in doc/erhe/property_system.md): the effective value
-    // of the visible and active properties (Item_base) and of the
-    // shadow_cast / lightmapped properties (erhe::scene::Mesh), written
-    // only by the property changed callbacks. set_flag_bits rejects them;
-    // write the property instead (set_visible,
-    // set_value(Item_base::active_property, ...),
-    // set_value(Mesh::shadow_cast_property, ...)).
-    static constexpr uint64_t derived = visible | active | shadow_cast | lightmapped;
-
-    // The flag bits an item's default Purpose is derived from
-    // (Item_base::derive_purpose_from_flags): any of these set, or
-    // show_in_ui clear, means editor-only content (Purpose::guide). A
-    // change of one of them refreshes the purpose property's default layer.
-    static constexpr uint64_t purpose_guide_when_set   = tool | brush | controller | rendertarget;
-    static constexpr uint64_t purpose_guide_when_clear = show_in_ui;
-    static constexpr uint64_t purpose_inputs           = purpose_guide_when_set | purpose_guide_when_clear;
-
-    static constexpr const char* c_bit_labels[] =
-    {
-        "No Message",
-        "No Transform Update",
-        "Transform World Normative",
-        "Show In UI",
-        "Show Debug",
-        "Shadow Cast",
-        "Selected",
-        "Lock Selection",
-        "Lock Transform",
-        "Visible",
-        "Invisible Parent",
-        "Render Wireframe",
-        "Render Bounding Volume",
-        "Content",
-        "ID",
-        "Tool",
-        "Brush",
-        "Controller",
-        "Rendertarget",
-        "Expand",
-        "Hovered in Viewport",
-        "Hovered in Item Tree",
-        "Negative Determinant",
-        "Lock Edit",
-        "Show In Developer UI",
-        "Affects Shadow",
-        "Exclude From Prefab",
-        "Import Root",
-        "Bone",
-        "Bone Proxy",
-        "Lightmapped",
-        "Render Proxy",
-        "Proxy Hidden",
-        "Descendant Hovered in Viewport",
-        "Hovered in Graph",
-        "Child Hovered in Graph",
-        "Ancestor Hovered in Graph",
-        "IK Lock",
-        "Active",
-        "Session Only",
-        "Draw Mode Proxy",
-        "Active Item",
-        "Lock Translation X",
-        "Lock Translation Y",
-        "Lock Translation Z",
-        "Lock Rotation X",
-        "Lock Rotation Y",
-        "Lock Rotation Z",
-        "Lock Scale X",
-        "Lock Scale Y",
-        "Lock Scale Z",
-        "View Anchored",
-    };
-
-    [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
-};
-
-class Item_type
-{
-public:
-    static constexpr uint64_t index_animation              =  1;
-    static constexpr uint64_t index_animation_channel      =  2;
-    static constexpr uint64_t index_animation_sampler      =  3;
-    static constexpr uint64_t index_bone                   =  4;
-    static constexpr uint64_t index_brush                  =  5;
-    static constexpr uint64_t index_camera                 =  6;
-    static constexpr uint64_t index_composer               =  7;
-    static constexpr uint64_t index_grid                   =  8;
-    static constexpr uint64_t index_light                  =  9;
-    static constexpr uint64_t index_light_layer            = 10;
-    static constexpr uint64_t index_material               = 11;
-    static constexpr uint64_t index_mesh                   = 12;
-    static constexpr uint64_t index_mesh_layer             = 13;
-    static constexpr uint64_t index_composition_pass       = 14;
-    static constexpr uint64_t index_rendertarget           = 15;
-    static constexpr uint64_t index_scene                  = 16;
-    static constexpr uint64_t index_skin                   = 17;
-    static constexpr uint64_t index_texture                = 18;
-    static constexpr uint64_t index_xformable              = 19;
-    static constexpr uint64_t index_asset_folder           = 20;
-    static constexpr uint64_t index_asset_file_gltf        = 21;
-    static constexpr uint64_t index_asset_file_geogram     = 22;
-    static constexpr uint64_t index_asset_file_other       = 23;
-    static constexpr uint64_t index_content_library_folder = 24;
-    static constexpr uint64_t index_content_library_node   = 25;
-    // The `editor::Joint` prim (doc/erhe/property_system.md section 4.17).
-    // erhe::usd tests the bit to leave a joint prim out of the prims it
-    // writes: a joint is written as the UsdPhysics joint prim of the body it
-    // joins, from the physics description.
-    static constexpr uint64_t index_joint                  = 26;
-    static constexpr uint64_t index_raytrace               = 27;
-    static constexpr uint64_t index_render_style           = 29;
-    static constexpr uint64_t index_graph                  = 30;
-    static constexpr uint64_t index_graph_node             = 31;
-    static constexpr uint64_t index_graph_link             = 32;
-    static constexpr uint64_t index_rendergraph_node       = 33;
-    static constexpr uint64_t index_physics_material       = 34;
-    static constexpr uint64_t index_collision_filter       = 35;
-    static constexpr uint64_t index_physics_joint_settings = 36;
-    static constexpr uint64_t index_asset_file_scene       = 37;
-    static constexpr uint64_t index_graph_texture          = 38;
-    static constexpr uint64_t index_graph_mesh             = 39;
-    static constexpr uint64_t index_asset_file_texture     = 41;
-    static constexpr uint64_t index_style                  = 42;
-    static constexpr uint64_t index_asset_file_usd         = 43;
-    // A more specific class takes the LOWER index: the editor's icon set
-    // picks the icon of the lowest set type bit that has one, so a Scope
-    // shows the scope icon rather than the icon of the Typed level it also
-    // carries (src/editor/graphics/icon_set.cpp).
-    static constexpr uint64_t index_scope                  = 44;
-    static constexpr uint64_t index_typed                  = 45;
-    static constexpr uint64_t index_imageable              = 46;
-    static constexpr uint64_t index_xform                  = 47;
-    static constexpr uint64_t index_boundable              = 48;
-    static constexpr uint64_t index_gprim                  = 49;
-    static constexpr uint64_t index_point_instancer        = 50;
-    static constexpr uint64_t count                        = 51; // index 51 is free
-
-    static constexpr uint64_t none                   =  uint64_t{0};
-    static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
-    static constexpr uint64_t animation_channel      = (uint64_t{1} << index_animation_channel     );
-    static constexpr uint64_t animation_sampler      = (uint64_t{1} << index_animation_sampler     );
-    static constexpr uint64_t bone                   = (uint64_t{1} << index_bone                  );
-    static constexpr uint64_t brush                  = (uint64_t{1} << index_brush                 );
-    static constexpr uint64_t camera                 = (uint64_t{1} << index_camera                );
-    static constexpr uint64_t composer               = (uint64_t{1} << index_composer              );
-    static constexpr uint64_t grid                   = (uint64_t{1} << index_grid                  );
-    static constexpr uint64_t light                  = (uint64_t{1} << index_light                 );
-    static constexpr uint64_t light_layer            = (uint64_t{1} << index_light_layer           );
-    static constexpr uint64_t material               = (uint64_t{1} << index_material              );
-    static constexpr uint64_t mesh                   = (uint64_t{1} << index_mesh                  );
-    static constexpr uint64_t mesh_layer             = (uint64_t{1} << index_mesh_layer            );
-    static constexpr uint64_t composition_pass       = (uint64_t{1} << index_composition_pass      );
-    static constexpr uint64_t rendertarget           = (uint64_t{1} << index_rendertarget          );
-    static constexpr uint64_t scene                  = (uint64_t{1} << index_scene                 );
-    static constexpr uint64_t skin                   = (uint64_t{1} << index_skin                  );
-    static constexpr uint64_t texture                = (uint64_t{1} << index_texture               );
-    static constexpr uint64_t xformable              = (uint64_t{1} << index_xformable             );
-    static constexpr uint64_t asset_folder           = (uint64_t{1} << index_asset_folder          );
-    static constexpr uint64_t asset_file_gltf        = (uint64_t{1} << index_asset_file_gltf       );
-    static constexpr uint64_t asset_file_geogram     = (uint64_t{1} << index_asset_file_geogram    );
-    static constexpr uint64_t asset_file_other       = (uint64_t{1} << index_asset_file_other      );
-    static constexpr uint64_t content_library_folder = (uint64_t{1} << index_content_library_folder);
-    static constexpr uint64_t content_library_node   = (uint64_t{1} << index_content_library_node  );
-    static constexpr uint64_t joint                  = (uint64_t{1} << index_joint                 );
-    static constexpr uint64_t raytrace               = (uint64_t{1} << index_raytrace              );
-    static constexpr uint64_t render_style           = (uint64_t{1} << index_render_style          );
-    static constexpr uint64_t graph                  = (uint64_t{1} << index_graph                 );
-    static constexpr uint64_t graph_node             = (uint64_t{1} << index_graph_node            );
-    static constexpr uint64_t graph_link             = (uint64_t{1} << index_graph_link            );
-    static constexpr uint64_t rendergraph_node       = (uint64_t{1} << index_rendergraph_node      );
-    static constexpr uint64_t physics_material       = (uint64_t{1} << index_physics_material      );
-    static constexpr uint64_t collision_filter       = (uint64_t{1} << index_collision_filter      );
-    static constexpr uint64_t physics_joint_settings = (uint64_t{1} << index_physics_joint_settings);
-    static constexpr uint64_t asset_file_scene       = (uint64_t{1} << index_asset_file_scene      );
-    static constexpr uint64_t graph_texture          = (uint64_t{1} << index_graph_texture         );
-    static constexpr uint64_t graph_mesh             = (uint64_t{1} << index_graph_mesh            );
-    static constexpr uint64_t asset_file_texture     = (uint64_t{1} << index_asset_file_texture    );
-    static constexpr uint64_t style                  = (uint64_t{1} << index_style                 );
-    static constexpr uint64_t asset_file_usd         = (uint64_t{1} << index_asset_file_usd        );
-    static constexpr uint64_t typed                  = (uint64_t{1} << index_typed                 );
-    static constexpr uint64_t scope                  = (uint64_t{1} << index_scope                 );
-    static constexpr uint64_t imageable              = (uint64_t{1} << index_imageable             );
-    static constexpr uint64_t xform                  = (uint64_t{1} << index_xform                 );
-    static constexpr uint64_t boundable              = (uint64_t{1} << index_boundable             );
-    static constexpr uint64_t gprim                  = (uint64_t{1} << index_gprim                 );
-    static constexpr uint64_t point_instancer        = (uint64_t{1} << index_point_instancer       );
-
-    // NOTE: The names here must match the C++ class names
-    static constexpr const char* c_bit_labels[] = {
-        "none",
-        "Animation",
-        "Animation_channel",
-        "Animation_sampler",
-        "Bone",
-        "Brush",
-        "Camera",
-        "Composer",
-        "Grid",
-        "Light",
-        "Light_layer",
-        "Material",
-        "Mesh",
-        "Mesh_layer",
-        "Composition_pass",
-        "Rendertarget",
-        "Scene",
-        "Skin",
-        "Texture",
-        "Xformable",
-        "Asset_folder",
-        "Asset_file_gltf",
-        "Asset_file_geogram",
-        "Asset_file_other",
-        "Content_library_folder",
-        "Content_library_node",
-        "Joint",
-        "Raytrace",
-        "(unused)", // bit 28 has no type
-        "Render_style",
-        "Graph",
-        "Graph_node",
-        "Graph_link",
-        "Rendergraph_node",
-        "Physics_material",
-        "Collision_filter",
-        "Physics_joint_settings",
-        "Asset_file_scene",
-        "Graph_texture",
-        "Graph_mesh",
-        "(unused)", // bit 40 has no type
-        "Asset_file_texture",
-        "Style",
-        "Asset_file_usd",
-        "Typed",
-        "Scope",
-        "Imageable",
-        "Xform",
-        "Boundable",
-        "Gprim",
-        "Point_instancer"
-    };
-};
-
-class Item_filter
-{
-public:
-    [[nodiscard]] auto operator()(uint64_t filter_bits) const -> bool;
-    [[nodiscard]] auto operator==(const Item_filter&) const -> bool = default;
-
-    [[nodiscard]] auto describe() const -> std::string;
-
-    uint64_t require_all_bits_set          {0};
-    uint64_t require_at_least_one_bit_set  {0};
-    uint64_t require_all_bits_clear        {0};
-    uint64_t require_at_least_one_bit_clear{0};
-};
 
 // Monotonic counter incremented whenever item state that can affect item tree
 // rows changes: hierarchy children, item names, and
@@ -592,7 +168,6 @@ public:
     [[nodiscard]] auto is_no_transform_update      () const -> bool;
     [[nodiscard]] auto is_transform_world_normative() const -> bool;
     [[nodiscard]] auto is_selected                 () const -> bool;
-    [[nodiscard]] auto is_hovered                  () const -> bool;
     [[nodiscard]] auto is_visible                  () const -> bool;
     // The effective Item_flags::active bit: false for an inactive item and
     // for every item below one.
@@ -600,8 +175,6 @@ public:
     [[nodiscard]] auto is_shown_in_ui              () const -> bool;
     [[nodiscard]] auto is_hidden                   () const -> bool;
     [[nodiscard]] auto is_lock_edit                 () const -> bool;
-    [[nodiscard]] auto is_lock_viewport_selection   () const -> bool;
-    [[nodiscard]] auto is_lock_viewport_transform   () const -> bool;
     [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path*;
     [[nodiscard]] auto get_gltf_uid                () const -> const std::string&;
     [[nodiscard]] auto get_tags                    () const -> const std::set<std::string>&;
@@ -647,14 +220,14 @@ public:
     // the purpose its flags imply and an authored value - local, from a
     // style, or inherited from an ancestor - overrides it.
     static const erhe::property::Property<Purpose> purpose_property;
-    // The Purpose the flag bits imply: guide when any of
-    // Item_flags::purpose_guide_when_set is set or show_in_ui is clear,
-    // default_ otherwise. A pure function of the bits - no state, no
-    // allocation.
-    [[nodiscard]] static constexpr auto derive_purpose_from_flags(const uint64_t flag_bits) -> Purpose
+    // The Purpose the flag bits imply: guide when any of the registered
+    // Item_flags::get_purpose_guide_when_set_bits() is set or show_in_ui is
+    // clear, default_ otherwise. A pure function of the bits and the
+    // registered masks - no allocation.
+    [[nodiscard]] static auto derive_purpose_from_flags(const uint64_t flag_bits) -> Purpose
     {
         const bool guide =
-            ((flag_bits & Item_flags::purpose_guide_when_set) != 0u) ||
+            ((flag_bits & Item_flags::get_purpose_guide_when_set_bits()) != 0u) ||
             ((flag_bits & Item_flags::purpose_guide_when_clear) == 0u);
         return guide ? Purpose::guide : Purpose::default_;
     }
@@ -675,16 +248,12 @@ public:
     // the seal can be lifted through it.
     static const erhe::property::Property<std::string> name_property;
     static const erhe::property::Property<std::string> tags_property;
-    static const erhe::property::Property<bool> lock_viewport_transform_property;
     static const erhe::property::Property<bool> lock_edit_property;
-    static const erhe::property::Property<bool> lock_viewport_selection_property;
     static const erhe::property::Property<bool> show_in_ui_property;
-    static const erhe::property::Property<bool> show_debug_visualizations_property;
     static const erhe::property::Property<bool> exclude_from_prefab_property;
     static const erhe::property::Property<bool> no_message_property;
     static const erhe::property::Property<bool> no_transform_update_property;
     static const erhe::property::Property<bool> transform_world_normative_property;
-    static const erhe::property::Property<bool> show_in_developer_ui_property;
     static const erhe::property::Property<bool> ik_lock_property;
     // Registers a persistent Item_flags bit as a bridged boolean property
     // (D18) of owner_type (Item_base::property_owner_type() or a descendant,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_property/dependency_property.hpp"
+#include "editor_item_bits.hpp"
 #include "erhe_property/property_value.hpp"
 #include "erhe_scene/imageable.hpp"
 
@@ -63,7 +64,7 @@ public:
     static constexpr std::string_view static_type_name{"Joint"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t
     {
-        return erhe::scene::Imageable::get_static_type() | erhe::Item_type::joint;
+        return erhe::scene::Imageable::get_static_type() | editor::Editor_item_types::joint;
     }
 
     // Overrides Typed: the class fixes the USD typeName token. erhe simulates

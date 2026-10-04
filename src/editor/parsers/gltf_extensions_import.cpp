@@ -1,4 +1,5 @@
 #include "parsers/gltf_extensions_import.hpp"
+#include "editor_item_bits.hpp"
 
 #include "parsers/gltf_extensions_names.hpp"
 
@@ -455,7 +456,7 @@ void import_brushes(
         const std::string folder_path = entry.value("folder_path", std::string{});
         const std::shared_ptr<erhe::Scope> folder = folder_path.empty()
             ? std::shared_ptr<erhe::Scope>{}
-            : resolve_library_folder(content_library->get_scope(erhe::Item_type::brush), folder_path);
+            : resolve_library_folder(content_library->get_scope(editor::Editor_item_types::brush), folder_path);
         operations.push_back(
             make_library_attach_operation(
                 context,

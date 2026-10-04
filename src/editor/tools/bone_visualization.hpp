@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "editor_item_bits.hpp"
 #include "scene/rig_properties.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
@@ -56,7 +57,7 @@ class Scene_root;
 // bones of every scene that use the color.
 //
 // Proxies live in the content scene (so they inherit joint transforms for free)
-// but are flagged Item_flags::bone_proxy, which keeps them out of the item tree,
+// but are flagged editor::Editor_item_flags::bone_proxy, which keeps them out of the item tree,
 // save, export and prefabs, and out of picking unless bone mode asks for them.
 //
 // Every input drives its own part of the state; there is no per-frame update:

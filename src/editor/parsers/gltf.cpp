@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "parsers/gltf.hpp"
+#include "editor_item_bits.hpp"
 
 #include "parsers/gltf_extensions_export.hpp"
 #include "parsers/gltf_extensions_import.hpp"
@@ -1514,7 +1515,9 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) 
         .physics_data          = &physics_data,
         .external_assets       = collect_prefab_external_assets(*root_node, path.parent_path()),
         .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library()),
-        .animations            = collect_gltf_export_animations(scene_root.get_content_library())
+        .animations            = collect_gltf_export_animations(scene_root.get_content_library()),
+        .excluded_item_flag_bits = Editor_item_flags::rendertarget,
+        .excluded_item_type_bits = Editor_item_types::joint
     };
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export

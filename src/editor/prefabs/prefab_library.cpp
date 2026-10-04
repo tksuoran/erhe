@@ -1,4 +1,5 @@
 #include "prefabs/prefab_library.hpp"
+#include "editor_item_bits.hpp"
 
 #include "assets/asset_load_task.hpp"
 #include "assets/asset_manager.hpp"
@@ -96,8 +97,8 @@ void seal_instance_subtree(const std::shared_ptr<erhe::Hierarchy>& item)
 {
     constexpr uint64_t seal_flags =
         erhe::Item_flags::lock_edit               |
-        erhe::Item_flags::lock_viewport_selection |
-        erhe::Item_flags::lock_viewport_transform;
+        editor::Editor_item_flags::lock_viewport_selection |
+        editor::Editor_item_flags::lock_viewport_transform;
     item->enable_flag_bits(seal_flags);
     for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
         if (child) {
@@ -776,7 +777,7 @@ auto instantiate_prefab(
 
     constexpr uint64_t node_flags =
         erhe::Item_flags::content |
-        erhe::Item_flags::expand  |
+        editor::Editor_item_flags::expand  |
         erhe::Item_flags::show_in_ui;
 
     std::shared_ptr<erhe::scene::Node> instance_root = std::make_shared<erhe::scene::Xform>(prefab->name);

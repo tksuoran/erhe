@@ -260,6 +260,8 @@ public:
     Gltf_export_extension_payloads extension_payloads;
     std::vector<std::string> extensions_used;
     std::unordered_set<const erhe::scene::Mesh*> excluded_meshes;
+    uint64_t excluded_item_flag_bits{0};
+    uint64_t excluded_item_type_bits{0};
     std::vector<Gltf_export_extra_mesh> extra_meshes;
     std::vector<std::shared_ptr<erhe::primitive::Material>> extra_materials;
     std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder;

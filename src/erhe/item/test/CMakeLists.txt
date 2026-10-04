@@ -1,6 +1,8 @@
 set(_target "erhe_item_tests")
 add_executable(${_target}
     main.cpp
+    test_application_flags.cpp
+    test_application_flags.hpp
     hierarchy_smoke.cpp
     hierarchy_smoke.hpp
     test_unique_id.cpp

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "editor_item_bits.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_property/owner_type.hpp"
 
@@ -30,7 +31,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Style"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::style; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | editor::Editor_item_types::style | erhe::Item_type::style_source; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom

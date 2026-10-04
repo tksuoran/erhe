@@ -206,6 +206,8 @@ erhe_target_sources_grouped(
     developer/tool_properties_window.cpp
     developer/tool_properties_window.hpp
     editor.cpp
+    editor_item_bits.cpp
+    editor_item_bits.hpp
     editor.hpp
     editor_default_layout.cpp
     editor_default_layout.hpp

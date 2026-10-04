@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "editor_item_bits.hpp"
 #include "scene/generated/scene_settings.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
@@ -160,7 +161,7 @@ public:
     [[nodiscard]] auto controller  () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto tool        () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto rendertarget() const -> erhe::scene::Mesh_layer*;
-    // Editor-generated bone pick/display proxies (see Item_flags::bone_proxy).
+    // Editor-generated bone pick/display proxies (see editor::Editor_item_flags::bone_proxy).
     // A separate layer so they can be rendered, id-rendered and raytraced as a
     // group without ever being mistaken for scene content.
     [[nodiscard]] auto bone        () const -> erhe::scene::Mesh_layer*;

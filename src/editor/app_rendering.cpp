@@ -1,4 +1,5 @@
 #include "app_rendering.hpp"
+#include "editor_item_bits.hpp"
 #include "grid/grid_frame.hpp"
 
 #include "app_context.hpp"
@@ -149,8 +150,8 @@ App_rendering::App_rendering(
     // selectable (see Item_flags).
     const Item_filter filter_not_selected{
         .require_all_bits_set         = Item_flags::visible | Item_flags::active,
-        .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller,
-        .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree | Item_flags::proxy_hidden
+        .require_at_least_one_bit_set = Item_flags::content  | editor::Editor_item_flags::controller,
+        .require_all_bits_clear       = Item_flags::selected | editor::Editor_item_flags::hovered_in_item_tree | Item_flags::proxy_hidden
     };
     const Item_filter filter_selected{
         .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::active,
@@ -159,7 +160,7 @@ App_rendering::App_rendering(
     };
     const Item_filter filter_selected_or_hovered{
         .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::active,
-        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
+        .require_at_least_one_bit_set = Item_flags::selected | editor::Editor_item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = Item_flags::proxy_hidden
     };
     // Selection silhouette for proxy_hidden items: the source draws no fill
@@ -170,12 +171,12 @@ App_rendering::App_rendering(
     // the proxies', so the outline lands exactly around the rendered surface).
     const Item_filter filter_selected_or_hovered_proxy_hidden{
         .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::active | Item_flags::proxy_hidden,
-        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
+        .require_at_least_one_bit_set = Item_flags::selected | editor::Editor_item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = 0
     };
     const Item_filter filter_selected_or_hovered_outline{
         .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::active,
-        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
+        .require_at_least_one_bit_set = Item_flags::selected | editor::Editor_item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = 0
     };
 
@@ -447,7 +448,7 @@ App_rendering::App_rendering(
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::render_wireframe,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | editor::Editor_item_flags::render_wireframe,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
@@ -456,7 +457,9 @@ App_rendering::App_rendering(
                     .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
                     .constant_color0 = glm::vec4{0.55f, 0.45f, 0.7f, 1.0f},
                     .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
-                    .constant_size   = 1.5f
+                    .constant_size   = 1.5f,
+                    .hovered_flag_bits = editor::Editor_item_flags::hovered,
+                    .active_item_flag_bits = editor::Editor_item_flags::active_item
                 }
             }
         },
@@ -545,7 +548,7 @@ App_rendering::App_rendering(
             .blending_mode_policy{Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::brush,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | editor::Editor_item_flags::brush,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
@@ -590,15 +593,15 @@ App_rendering::App_rendering(
             .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode               {Primitive_mode::polygon_fill},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::bone_proxy,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | editor::Editor_item_flags::bone_proxy,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
             .shader_debug_override        {erhe::scene_renderer::Shader_debug::vdotn_tinted},
             .shader_debug_override_filter {
-                .require_all_bits_set         = Item_flags::bone_proxy,
+                .require_all_bits_set         = editor::Editor_item_flags::bone_proxy,
                 .require_at_least_one_bit_set = 0,
-                .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_viewport
+                .require_all_bits_clear       = Item_flags::selected | editor::Editor_item_flags::hovered_in_viewport
             },
             // Proxy visibility cannot gate this: in bone selection mode the
             // proxies must stay visible to be pickable whether or not the solid
@@ -654,9 +657,9 @@ App_rendering::App_rendering(
             .blending_mode_policy{Blending_mode_policy::allow_all},
             .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::rendertarget,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | editor::Editor_item_flags::rendertarget,
                 .require_at_least_one_bit_set = 0,
-                .require_all_bits_clear       = Item_flags::view_anchored
+                .require_all_bits_clear       = editor::Editor_item_flags::view_anchored
             }
         },
         not_selected
@@ -677,7 +680,7 @@ App_rendering::App_rendering(
             .blending_mode_policy{Blending_mode_policy::allow_all},
             .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::rendertarget | Item_flags::view_anchored,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | editor::Editor_item_flags::rendertarget | editor::Editor_item_flags::view_anchored,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },

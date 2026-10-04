@@ -1,4 +1,6 @@
 #include "erhe_primitive/mesh_optimizer.hpp"
+
+#include <geogram/basic/numeric.h>
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_dataformat/vertex_format.hpp"

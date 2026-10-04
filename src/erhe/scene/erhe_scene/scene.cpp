@@ -413,9 +413,8 @@ Scene::Scene(const std::string_view name, Scene_host* const host)
     , m_root_node  {std::make_shared<Xform>("root")}
 {
     enable_flag_bits(
-        erhe::Item_flags::content             |
-        erhe::Item_flags::no_transform_update |
-        erhe::Item_flags::expand
+        erhe::Item_flags::content |
+        erhe::Item_flags::no_transform_update
     );
 
     // The implicit root node has a valid (identity) transform

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometry_graph/geometry_payload.hpp"
+#include "editor_item_bits.hpp"
 #include "graph_editor/graph_editor_node.hpp"
 
 #include <glm/gtc/quaternion.hpp>
@@ -100,7 +101,7 @@ public:
     // The scene node this graph node references, if any (a resolved
     // transform driver - Transform_from_node, Lattice_node). Main thread,
     // live nodes only; used by the graph editor's hover -> scene highlight
-    // (Item_flags::hovered_in_graph and friends).
+    // (editor::Editor_item_flags::hovered_in_graph and friends).
     [[nodiscard]] virtual auto get_referenced_scene_node() const -> std::shared_ptr<erhe::scene::Node> { return {}; }
 
     // Evaluation-snapshot hooks (Geometry_graph_window::launch_evaluation).

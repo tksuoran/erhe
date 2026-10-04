@@ -66,8 +66,8 @@ operation-consistent.
   (`doc/editor/asset_manager.md`).
 - The Properties window's material texture combo resolves the library through
   the material's host, so it cannot offer another scene's textures.
-- Per-scene selection puts resources in their host's `hosted_selection`
-  bucket, so scoped clear and command-target semantics are uniform and MCP
+- Per-scene selection puts resources in `Selection`'s per-host bucket
+  (`get_hosted_selection`), so scoped clear and command-target semantics are uniform and MCP
   `get_selection` reports a scene for them. Ctrl-A in a viewport stays scene
   content only: resources are hosted for RESOLUTION, and the library trees
   stay their selection entry point.

@@ -1,4 +1,5 @@
 #include "scene/scene_commands.hpp"
+#include "editor_item_bits.hpp"
 
 #include "config/generated/make_mesh_args.hpp"
 #include "config/generated/graphics_preset_entry.hpp"
@@ -529,7 +530,7 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
     camera->set_perspective_z_near(0.03f);
     camera->set_perspective_z_far (64.0f);
-    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
+    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | editor::Editor_item_flags::show_debug_visualizations);
     camera->set_exposure(1.0f);
     camera->set_shadow_range(22.0f);
     camera->set_parent_from_node(
@@ -1180,7 +1181,7 @@ auto Scene_commands::create_new_rendertarget(erhe::Hierarchy* parent) -> std::sh
     }
 
     mesh->layer_id = scene_root->layers().rendertarget()->id;
-    mesh->enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::show_in_ui);
+    mesh->enable_flag_bits(editor::Editor_item_flags::rendertarget | erhe::Item_flags::show_in_ui);
 
     // Node specifies transform for rendertarget in 3D scene
     auto node = std::make_shared<erhe::scene::Xform>("rendertarget node");
@@ -1191,7 +1192,7 @@ auto Scene_commands::create_new_rendertarget(erhe::Hierarchy* parent) -> std::sh
     node->set_world_from_node(world_from_node);
     erhe::scene::set_mesh_parent(mesh, node);
     node->enable_flag_bits(
-        erhe::Item_flags::rendertarget |
+        editor::Editor_item_flags::rendertarget |
         erhe::Item_flags::show_in_ui
     );
 

@@ -1,4 +1,5 @@
 #include "xr/headset_view.hpp"
+#include "editor_item_bits.hpp"
 #include "erhe_graphics/surface.hpp"
 
 #include "config/generated/editor_settings_config.hpp"
@@ -875,9 +876,9 @@ void Headset_view::update_hover_with_id_render()
     using namespace erhe::utility;
     const uint64_t flags = (id_query.mesh != nullptr) && scene_mesh ? scene_mesh->get_flag_bits() : 0;
     const bool hover_content      = id_query.mesh && test_bit_set(flags, erhe::Item_flags::content     );
-    const bool hover_tool         = id_query.mesh && test_bit_set(flags, erhe::Item_flags::tool        );
-    const bool hover_brush        = id_query.mesh && test_bit_set(flags, erhe::Item_flags::brush       );
-    const bool hover_rendertarget = id_query.mesh && test_bit_set(flags, erhe::Item_flags::rendertarget);
+    const bool hover_tool         = id_query.mesh && test_bit_set(flags, editor::Editor_item_flags::tool        );
+    const bool hover_brush        = id_query.mesh && test_bit_set(flags, editor::Editor_item_flags::brush       );
+    const bool hover_rendertarget = id_query.mesh && test_bit_set(flags, editor::Editor_item_flags::rendertarget);
 
     // Merge into the slot the mesh's role flag matches; merge_hover only
     // overrides a raytrace result when this candidate is closer along the

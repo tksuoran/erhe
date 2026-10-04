@@ -1,4 +1,5 @@
 #include "graphics/icon_set.hpp"
+#include "editor_item_bits.hpp"
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
 
@@ -72,10 +73,10 @@ Icon_set::Icon_set(
     icons.vive_trackpad     = "\xee\xa8\xb1";
     icons.vive_trigger      = "\xee\xa8\xb2";
 
-    type_icons.resize(erhe::Item_type::count);
+    type_icons.resize(erhe::Item_type::index_count);
     type_icons[erhe::Item_type::index_scene               ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_content_library_node] = { .code = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
-    type_icons[erhe::Item_type::index_brush               ] = {
+    type_icons[editor::Editor_item_types::index_content_library_node] = { .code = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_brush               ] = {
         .code = icons.brush_small,
         .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}
     };
@@ -83,24 +84,23 @@ Icon_set::Icon_set(
     type_icons[erhe::Item_type::index_xformable           ] = { .code = icons.node};       // .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
     type_icons[erhe::Item_type::index_mesh                ] = { .code = icons.mesh,        .color = glm::vec4{0.6f, 1.0f, 0.6f, 1.0f}};
     type_icons[erhe::Item_type::index_skin                ] = { .code = icons.skin,        .color = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_bone                ] = { .code = icons.bone,        .color = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_animation           ] = { .code = icons.anim,        .color = glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_camera              ] = { .code = icons.camera};     // .color = glm::vec4{0.4f, 0.0f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_light               ] = { .code = icons.point_light};// .color = glm::vec4{1.0f, 0.8f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_joint               ] = { .code = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_raytrace            ] = { .code = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_grid                ] = { .code = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_joint               ] = { .code = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_raytrace            ] = { .code = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_grid                ] = { .code = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
     type_icons[erhe::Item_type::index_texture             ] = { .code = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_folder        ] = { .code = icons.folder,      .color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_gltf     ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_geogram  ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 0.8f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_texture  ] = { .code = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_usd      ] = { .code = icons.scene,       .color = glm::vec4{0.9f, 0.6f, 0.2f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_other    ] = { .code = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_asset_folder        ] = { .code = icons.folder,      .color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_asset_file_gltf     ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_asset_file_geogram  ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 0.8f, 1.0f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_asset_file_texture  ] = { .code = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_asset_file_usd      ] = { .code = icons.scene,       .color = glm::vec4{0.9f, 0.6f, 0.2f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_asset_file_other    ] = { .code = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
     type_icons[erhe::Item_type::index_physics_material      ] = { .code = icons.material, .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_collision_filter      ] = { .code = icons.physics,  .color = glm::vec4{0.5f, 0.8f, 0.5f, 1.0f}};
     type_icons[erhe::Item_type::index_physics_joint_settings] = { .code = icons.physics,  .color = glm::vec4{1.0f, 0.8f, 0.2f, 1.0f}};
-    type_icons[erhe::Item_type::index_style                 ] = { .code = icons.material, .color = glm::vec4{0.9f, 0.5f, 0.9f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_style                 ] = { .code = icons.material, .color = glm::vec4{0.9f, 0.5f, 0.9f, 1.0f}};
     // Prim class levels (doc/erhe/usd_compatibility_design.md C5). get_item_icon()
     // takes the lowest set type bit that carries an icon, so a level's icon
     // is reached only when no more specific class of the prim has one: Scope
@@ -144,7 +144,7 @@ auto Icon_set::get_feature_icons() const -> const std::vector<Feature_icon>&
 void Icon_set::add_icons(const uint64_t item_type, const float size)
 {
     using namespace erhe::utility;
-    for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++ bit_position) {
+    for (uint64_t bit_position = 0; bit_position < erhe::Item_type::index_count; ++ bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
         if (test_bit_set(item_type, bit_mask)) {
             const auto& icon_opt = type_icons.at(bit_position);

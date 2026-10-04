@@ -13,3 +13,4 @@ AssetSlots{R2-95ec5eec}::Slot_entry-brush/material=Asset_reference{labels-name-s
 
 [TRAPS]
 ✓variants.gltf-"invalid vector subscript"::diagnosed-2026-10-03{fixture-primitive-1-indices-4..7-into-4-vertex-accessor(invalid-glTF)+Triangle_soup->Geometry-assumed-indices-start-at-0;fixed-both+importer-skips-out-of-range-indices;regression=erhe_gltf_tests{out_of_range_indices.gltf}}
+!known-2026-10-04::scene_roundtrip_verify.py-fails-3-on-baseline-7c7c0c0bf{reload-diff-dynamic-bodies-keep-falling(glTF-leg-no-toggle_physics);DEVICE_LOST-write-fault-on-authored.usda-after-glTF-leg(draw-list-path-only);USD-textured-local_property_names+references_override}->doc/plans/audit_2026_09_30_followups.md"Follow-ups found by review"

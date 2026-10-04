@@ -1,4 +1,5 @@
 #include "brushes/brush.hpp"
+#include "editor_item_bits.hpp"
 #include "brushes/brush_geometry_queue.hpp"
 #include "brushes/brush_placement.hpp"
 
@@ -59,7 +60,7 @@ Brush::Brush(const Brush_data& create_info)
     m_data.geometry           = {};
     m_data.geometry_generator = {};
 
-    enable_flag_bits(erhe::Item_flags::brush | erhe::Item_flags::show_in_ui);
+    enable_flag_bits(editor::Editor_item_flags::brush | erhe::Item_flags::show_in_ui);
 
     m_geometry_slot.set_prepared_callback(
         [this](const erhe::geometry::Geometry& geometry) -> void
@@ -539,7 +540,7 @@ auto place_brush_in_scene(
         erhe::Item_flags::show_in_ui;
     constexpr uint64_t node_flags =
         erhe::Item_flags::content     |
-        erhe::Item_flags::expand      |
+        editor::Editor_item_flags::expand      |
         erhe::Item_flags::show_in_ui;
 
     const Instance_create_info create_info{

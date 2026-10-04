@@ -45,6 +45,19 @@ on culling.
   library; the split adds the compile-time check that interface sources
   cannot include a backend header. The null-backend CI build existed
   already (`Windows (VS 2026 / headless)`).
+- Item 11, editor bits out of `Item_flags` / `Item_type`
+  (`doc/erhe/item.md` "Application bits", `doc/editor/coding_rules.md`
+  "Editor item flags and types"): the 22 editor-only flag bits and the 22
+  editor-only type indices are the editor's (`src/editor/editor_item_bits.hpp`)
+  in the reserved application ranges, registered with their labels and
+  glTF names at startup; `Item_host::hosted_selection` is `Selection`'s;
+  the flag and type tables are `item_flags.hpp` / `item_type.hpp`, the
+  profiler include left `item_host.hpp` (`profile_mutex.hpp`) and geogram
+  left `build_info.hpp`. Measured with MSVC on the Windows ninja tree
+  (`/EP`, no PCH): `texture.cpp` 174294 -> 174209 and `node.cpp`
+  180292 -> 180207 non-empty preprocessed lines - the table split is not a
+  diet, because what `item.hpp` costs its consumers is the property system
+  and the standard library behind `Item_base`, not the tables.
 
 ## Next
 
@@ -52,20 +65,7 @@ Selected 2026-10-04, in this order. All three can be built and verified on
 Windows; the macOS-only items under "Open parts of worked items" wait for a
 macOS session.
 
-1. **Editor bits out of `Item_flags` / `Item_type`** (item 11; read the
-   scene slice report sections 1.1 and 6 item 2, `doc/erhe/item.md`).
-   A reserved application bit range with application-registered label
-   tables replaces the about 22 editor-only flags and 24 editor-only type
-   indices; `Item_host::hosted_selection` moves into the editor's
-   `Selection`; the flag and type tables split out of `item.hpp` and the
-   geogram and profiler includes leave `primitive/build_info.hpp` and
-   `item_host.hpp`. The glTF `ERHE_*` extensions serialize flags by name
-   (`gltf_item_flags.hpp`), so saved scenes must load unchanged: verify with
-   the glTF round-trip script and `erhe_gltf_tests`, plus the item, scene and
-   USD unit tests (USD `purpose` derives from four of the editor bits).
-   Measure the `texture.hpp` / `node.hpp` preprocessed size before and after
-   (`doc/erhe/graphics.md` "Header dependencies" has the method).
-2. **CI hardening** (the open half of item 17; read the infra slice report
+1. **CI hardening** (the open half of item 17; read the infra slice report
    section 10 items 5-8, `doc/testing.md`, `.github/workflows/`). A Linux
    Clang matrix entry building with AddressSanitizer and UBSan
    (`ERHE_USE_ASAN` exists for GCC / Clang since 091b5879f; add a UBSan
@@ -89,6 +89,20 @@ Each item is one commit with builds, tests and docs as `AGENTS.md` requires,
 and each commit gets a Fable review at medium effort.
 
 ## Follow-ups found by review
+
+`scripts/scene_roundtrip_verify.py` (run 2026-10-04 for item 11, against the
+windowed Vulkan editor) fails three checks on 7c7c0c0bf, before any of this
+set's work, so they are pre-existing: (a) `reload-diff: nodes identical` -
+the dynamic bodies `P6 Box` / `P6 Sphere` keep falling between the snapshot
+and the reload; the glTF leg does not pause physics before its snapshot the
+way the USD leg does (`toggle_physics`); (b) `VK_ERROR_DEVICE_LOST` with a
+`VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID` fault on the first frame after
+the USD leg opens `authored.usda` (one point light with shadow) following
+the glTF leg, on the draw-list path only (with `set_draw_lists_enabled`
+false the run completes); (c) with draw lists off, two USD checks:
+`textured round-trip diff: local_property_names` (the reloaded `Gridded`
+material carries `base_color_texture_wrap_u` / `_v` locally) and
+`references_override: the def below a carrier authored nothing`.
 
 The three latent layout-tracking defects of 4fc17d988 (clearing a texture
 view cleared the whole image, a stencil-only multisample resolve recorded

@@ -526,6 +526,14 @@ public:
     // controlled meshes (doc/editor/gltf_scene_roundtrip.md phase 3
     // exclusion hook).
     std::unordered_set<const erhe::scene::Mesh*> excluded_meshes{};
+    // Items the application keeps out of the file: a prim whose flag bits
+    // meet excluded_item_flag_bits (the editor's rendertarget meshes, UI
+    // quads rendered into every frame with no serializable source image)
+    // exports without its mesh, and a prim whose type bits meet
+    // excluded_item_type_bits (the editor's joint prims, written from the
+    // physics description instead) is skipped in the node pass.
+    uint64_t excluded_item_flag_bits{0};
+    uint64_t excluded_item_type_bits{0};
     // Extra unreferenced meshes to export (see Gltf_export_extra_mesh).
     std::vector<Gltf_export_extra_mesh> extra_meshes{};
     // KHR_materials_variants to write (see Gltf_export_material_variant):

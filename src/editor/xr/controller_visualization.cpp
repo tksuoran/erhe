@@ -1,4 +1,5 @@
 #include "xr/controller_visualization.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
@@ -171,7 +172,7 @@ Controller_visualization::Controller_visualization(
         hand.placeholder_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
         hand.placeholder_mesh->add_primitive(primitive, controller_material);
         hand.node->show();
-        hand.placeholder_mesh->enable_flag_bits(erhe::Item_flags::controller);
+        hand.placeholder_mesh->enable_flag_bits(editor::Editor_item_flags::controller);
         hand.placeholder_mesh->layer_id = m_content_layer_id;
         erhe::scene::set_mesh_parent(hand.placeholder_mesh, hand.node);
         hand.node->set_parent(view_root);
@@ -264,7 +265,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
             mesh->hide();
             continue;
         }
-        mesh->enable_flag_bits(erhe::Item_flags::controller);
+        mesh->enable_flag_bits(editor::Editor_item_flags::controller);
         mesh->layer_id = m_content_layer_id;
         // Renderable fill triangles only: no edges, and deliberately no
         // raytrace - the controller ray originates next to the model and

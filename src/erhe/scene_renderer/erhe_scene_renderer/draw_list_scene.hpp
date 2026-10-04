@@ -387,9 +387,11 @@ private:
         std::span<const glm::vec4>               frustum_planes,
         Draw_statistics&                         statistics
     );
-    // The bounds the entries and the object carry, from the mesh's primitives
-    // (add_entries, refresh_object_records) or the node transform alone
-    // (write_object_transform).
+    // The bounds the entries and the object carry, from the mesh's
+    // primitives: at registration (add_entries) and on the bounds hook
+    // (Pending_op::Kind::bounds). The transform hook rewrites the entries'
+    // world AABB alone (write_object_transform): the node extent does not
+    // move with the node.
     void write_object_bounds(uint32_t object_index);
 
     // Declared BEFORE m_objects: a Draw_list_object holds Material_slot_ids

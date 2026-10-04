@@ -119,7 +119,7 @@ window and persist with the scene.
 
 - Nine new item flag bits: `lock_translation_x/y/z`, `lock_rotation_x/y/z`,
   `lock_scale_x/y/z` in `erhe::Item_flags` (`src/erhe/item/erhe_item/
-  item.hpp`: bits, `c_bit_labels`, `count`), each registered in the
+  item_flags.hpp`: bits, `c_bit_labels`, `count`), each registered in the
   persistent-flag allowlist (`src/erhe/gltf/erhe_gltf/gltf_item_flags.cpp`)
   so they ride the existing `ERHE_node.flags` serialization, and they work on
   **any** item, not just bones.
@@ -166,7 +166,7 @@ window and persist with the scene.
   them on its registered path as a "Channel Locks" group ("Translation X"
   .. "Scale Z") for nodes, undoable through `Property_set_operation` and
   reachable from MCP `set_item_property`; the developer-mode flag list
-  still picks the bits up from `c_bit_labels`.
+  still picks the bits up from `Item_flags::label()`.
 
 ### 3. Solver interface
 

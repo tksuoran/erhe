@@ -1,4 +1,5 @@
 #include "tools/selection_tool.hpp"
+#include "editor_item_bits.hpp"
 
 #include "tools/bone_visualization.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -412,7 +413,7 @@ auto Selection::get_selected_items() const -> const std::vector<std::shared_ptr<
 
 auto Selection::get_hosted_selection(erhe::Item_host* host) -> const std::vector<std::shared_ptr<erhe::Item_base>>&
 {
-    std::vector<std::shared_ptr<erhe::Item_base>>& bucket = (host != nullptr) ? host->hosted_selection : m_non_hosted_selection;
+    std::vector<std::shared_ptr<erhe::Item_base>>& bucket = m_hosted_selection[host];
     bucket.clear();
     for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
         if (item && (item->get_item_host() == host)) {
@@ -452,6 +453,10 @@ auto Selection::clear_selection(erhe::Item_host* host, const Active_item active_
     // terminators are strong references set independently of the selection
     // (tree shift-click), so a stale pair must not outlive its host scene.
     m_range_selection.reset_terminators_for_host(host);
+    // The host's get_hosted_selection() bucket goes with it: a closing
+    // scene's bucket would otherwise keep its items alive under a dead key
+    // until the same pointer is queried again.
+    m_hosted_selection.erase(host);
 
     if (removed_any) {
         log_selection->trace("Cleared selection for host {}", (host != nullptr) ? host->get_host_name() : "(none)");
@@ -561,7 +566,7 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
         // in a delete would make undo resurrect it NEXT TO the fresh proxy the
         // re-registered skin creates, duplicating proxies on every
         // delete+undo cycle.
-        if ((item.get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+        if ((item.get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0) {
             return;
         }
         recursive_selection.push_back(item.shared_from_this());
@@ -833,10 +838,10 @@ void Selection::write_active_item(const std::shared_ptr<erhe::Item_base>& item)
         return;
     }
     if (old_item) {
-        old_item->set_flag_bits(erhe::Item_flags::active_item, false);
+        old_item->set_flag_bits(editor::Editor_item_flags::active_item, false);
     }
     if (item) {
-        item->set_flag_bits(erhe::Item_flags::active_item, true);
+        item->set_flag_bits(editor::Editor_item_flags::active_item, true);
     }
     m_active_item = item;
 }
@@ -1249,13 +1254,13 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
     erhe::scene::Node* const target_node = redirected ? prefab_instance_root : node;
 
     if (!redirected) {
-        const bool mesh_lock_viewport_select = test_bit_set(mesh->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
+        const bool mesh_lock_viewport_select = test_bit_set(mesh->get_flag_bits(), editor::Editor_item_flags::lock_viewport_selection);
         if (mesh_lock_viewport_select) {
             return;
         }
     }
 
-    const bool node_lock_viewport_select = test_bit_set(target_node->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
+    const bool node_lock_viewport_select = test_bit_set(target_node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_selection);
     if (node_lock_viewport_select) {
         return;
     }
@@ -1401,17 +1406,17 @@ void Selection::sanity_check()
         });
     }
 
-    // Exactly the active item carries Item_flags::active_item
+    // Exactly the active item carries editor::Editor_item_flags::active_item
     // (doc/editor/active_item.md D2).
     const std::shared_ptr<erhe::Item_base> active_item = m_active_item.lock();
-    if (active_item && !erhe::utility::test_bit_set(active_item->get_flag_bits(), erhe::Item_flags::active_item)) {
+    if (active_item && !erhe::utility::test_bit_set(active_item->get_flag_bits(), editor::Editor_item_flags::active_item)) {
         log_selection->error("Active item '{}' does not carry the active_item flag", active_item->get_name());
         ++error_count;
     }
     for (const auto& scene_root : scene_roots) {
         const auto& scene = scene_root->get_scene();
         scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-            const bool has_bit = erhe::utility::test_bit_set(node->get_flag_bits(), erhe::Item_flags::active_item);
+            const bool has_bit = erhe::utility::test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::active_item);
             if (has_bit && (std::static_pointer_cast<erhe::Item_base>(node) != active_item)) {
                 log_selection->error("Node '{}' carries the active_item flag without being the active item", node->get_name());
                 ++error_count;
@@ -1484,7 +1489,7 @@ void Selection::update_last_selected(const std::shared_ptr<erhe::Item_base>& ite
     // get_default_material() (tools/tool.cpp), the Brush_tool brush fallback
     // and the Operations make-mesh material. Every hierarchy-typed reference
     // (Node, Mesh, Hierarchy) reads the active item instead.
-    constexpr uint64_t recorded_types = erhe::Item_type::material | erhe::Item_type::brush;
+    constexpr uint64_t recorded_types = erhe::Item_type::material | editor::Editor_item_types::brush;
     const uint64_t type = item->get_type();
     if ((type & recorded_types) == 0) {
         return;

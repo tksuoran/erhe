@@ -35,6 +35,30 @@ closest existing category or add a new one in `editor_log.{hpp,cpp}` (declare
 `make_logger("editor.<name>")`). Per-category levels live in
 `config/editor/logging.json`.
 
+## Editor item flags and types
+
+`erhe::Item_flags` and `erhe::Item_type` hold only what the `erhe::*`
+libraries read (`doc/erhe/item.md` "Application bits"). Every editor-only
+flag bit and class type index is in `src/editor/editor_item_bits.hpp`:
+`Editor_item_flags` (`tool`, `brush`, the hover bits, `active_item`, ...),
+`Editor_item_types` (`brush`, `joint`, `style`, ...) and
+`Editor_item_properties` (the flag-bridged "Locks" and developer-visibility
+properties). `register_editor_item_bits()` registers their labels,
+persistent names and masks; `run_editor()` calls it before any item exists,
+and an editor test executable that exercises purpose derivation or flag
+serialization calls it from its `main()`.
+
+- A new editor flag is the next `application_bit(i)` of `Editor_item_flags`
+  plus its `Item_flag_info` row in `editor_item_bits.cpp` (label; the
+  persistent name, or `nullptr` for transient state); a transient bit joins
+  `Editor_item_flags::transient`. A new editor class takes the next
+  `application_index(i)` of `Editor_item_types` and its class-name row.
+- Library code never names an editor bit: it takes a mask
+  (`Gltf_export_arguments::excluded_item_flag_bits`,
+  `Primitive_interface_settings::hovered_flag_bits`) or tests a capability
+  bit the editor class ORs into its static type (`Item_type::texture_reference`,
+  `style_source`).
+
 ## Scene-hosted references in editor parts
 
 Scenes can be closed at runtime (Hierarchy "Close" context menu, MCP

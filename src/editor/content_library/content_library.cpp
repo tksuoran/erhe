@@ -1,4 +1,5 @@
 #include "content_library/content_library.hpp"
+#include "editor_item_bits.hpp"
 #include "content_library/style.hpp"
 
 #include "assets/asset_manager.hpp"
@@ -35,17 +36,17 @@ public:
 };
 
 constexpr std::array<Kind_row, 11> c_kinds{
-    Kind_row{erhe::Item_type::brush,                  "Brushes"          },
+    Kind_row{editor::Editor_item_types::brush,                  "Brushes"          },
     Kind_row{erhe::Item_type::animation,              "Animations"       },
     Kind_row{erhe::Item_type::skin,                   "Skins"            },
     Kind_row{erhe::Item_type::material,               "Materials"        },
     Kind_row{erhe::Item_type::texture,                "Textures"         },
-    Kind_row{erhe::Item_type::graph_texture,          "Graph Textures"   },
-    Kind_row{erhe::Item_type::graph_mesh,             "Graph Meshes"     },
+    Kind_row{editor::Editor_item_types::graph_texture,          "Graph Textures"   },
+    Kind_row{editor::Editor_item_types::graph_mesh,             "Graph Meshes"     },
     Kind_row{erhe::Item_type::physics_material,       "Physics Materials"},
     Kind_row{erhe::Item_type::collision_filter,       "Collision Filters"},
     Kind_row{erhe::Item_type::physics_joint_settings, "Physics Joints"   },
-    Kind_row{erhe::Item_type::style,                  "Styles"           }
+    Kind_row{editor::Editor_item_types::style,                  "Styles"           }
 };
 
 constexpr auto make_all_kind_bits() -> uint64_t
@@ -505,10 +506,10 @@ void copy_subtree(
             } else {
                 dst_scope->disable_flag_bits(erhe::Item_flags::show_in_ui);
             }
-            if ((src_scope->get_flag_bits() & erhe::Item_flags::expand) != 0) {
-                dst_scope->enable_flag_bits(erhe::Item_flags::expand);
+            if ((src_scope->get_flag_bits() & editor::Editor_item_flags::expand) != 0) {
+                dst_scope->enable_flag_bits(editor::Editor_item_flags::expand);
             } else {
-                dst_scope->disable_flag_bits(erhe::Item_flags::expand);
+                dst_scope->disable_flag_bits(editor::Editor_item_flags::expand);
             }
             dst_scope->set_parent(&dst_parent);
             copy_subtree(source, *src_scope, *dst_scope, target);
@@ -567,12 +568,12 @@ auto copy_library_item_to_library(const std::shared_ptr<erhe::Item_base>& item, 
     // Textures and graph assets are shared GPU / graph resources - a copy
     // would alias the device object, so they are not copied across libraries.
     const bool copyable =
-        (kind_type_bit == erhe::Item_type::brush)                  ||
+        (kind_type_bit == editor::Editor_item_types::brush)                  ||
         (kind_type_bit == erhe::Item_type::material)               ||
         (kind_type_bit == erhe::Item_type::physics_material)       ||
         (kind_type_bit == erhe::Item_type::collision_filter)       ||
         (kind_type_bit == erhe::Item_type::physics_joint_settings) ||
-        (kind_type_bit == erhe::Item_type::style);
+        (kind_type_bit == editor::Editor_item_types::style);
     if (!copyable) {
         return {};
     }

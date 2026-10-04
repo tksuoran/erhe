@@ -1,4 +1,5 @@
 #include "scene/scene_root.hpp"
+#include "editor_item_bits.hpp"
 #include "physics/physics_drag_constraint.hpp"
 #include "scene/item_lookup.hpp"
 
@@ -94,12 +95,12 @@ using erhe::scene::Scene;
 
 Scene_layers::Scene_layers()
 {
-    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::Item_flags::brush,        Mesh_layer_id::brush);
+    m_brush        = std::make_shared<Mesh_layer>("brush",        editor::Editor_item_flags::brush,        Mesh_layer_id::brush);
     m_content      = std::make_shared<Mesh_layer>("content",      erhe::Item_flags::content,      Mesh_layer_id::content);
-    m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::Item_flags::controller,   Mesh_layer_id::controller);
-    m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::Item_flags::rendertarget, Mesh_layer_id::rendertarget);
-    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::Item_flags::tool,         Mesh_layer_id::tool);
-    m_bone         = std::make_shared<Mesh_layer>("bone",         erhe::Item_flags::bone_proxy,   Mesh_layer_id::bone);
+    m_controller   = std::make_shared<Mesh_layer>("controller",   editor::Editor_item_flags::controller,   Mesh_layer_id::controller);
+    m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", editor::Editor_item_flags::rendertarget, Mesh_layer_id::rendertarget);
+    m_tool         = std::make_shared<Mesh_layer>("tool",         editor::Editor_item_flags::tool,         Mesh_layer_id::tool);
+    m_bone         = std::make_shared<Mesh_layer>("bone",         editor::Editor_item_flags::bone_proxy,   Mesh_layer_id::bone);
 
     m_light        = std::make_shared<Light_layer>("lights", 0);
 }
@@ -190,6 +191,7 @@ Scene_root::Scene_root(
     }
 
     m_scene = std::make_shared<Scene>(name, this);
+    m_scene->enable_flag_bits(Editor_item_flags::expand); // the item tree shows the scene unfolded
 
     // The node systems of this scene's value groups are added before the
     // scene holds any node, so every node that enters reaches them
@@ -220,7 +222,7 @@ Scene_root::Scene_root(
     // The Scene item is selectable and shown as the top row of the Hierarchy
     // window (issue #240); make it pass the window's show_in_ui filter.
     m_scene->enable_flag_bits(erhe::Item_flags::show_in_ui);
-    m_scene->get_root_node()->enable_flag_bits(erhe::Item_flags::invisible_parent);
+    m_scene->get_root_node()->enable_flag_bits(editor::Editor_item_flags::invisible_parent);
     if (enable_physics) {
         m_physics_world = erhe::physics::IWorld::create_unique();
         m_physics_world->set_on_body_activated(
@@ -499,13 +501,13 @@ auto Scene_root::make_browser_window(
             ? erhe::Item_filter{
                 .require_all_bits_set           = 0,
                 .require_at_least_one_bit_set   = 0,
-                .require_all_bits_clear         = 0,//erhe::Item_flags::tool | erhe::Item_flags::brush,
+                .require_all_bits_clear         = 0,//editor::Editor_item_flags::tool | editor::Editor_item_flags::brush,
                 .require_at_least_one_bit_clear = 0
             }
             : erhe::Item_filter{
                 .require_all_bits_set           = 0,
                 .require_at_least_one_bit_set   = erhe::Item_flags::show_in_ui,
-                .require_all_bits_clear         = 0, //erhe::Item_flags::tool | erhe::Item_flags::brush,
+                .require_all_bits_clear         = 0, //editor::Editor_item_flags::tool | editor::Editor_item_flags::brush,
                 .require_at_least_one_bit_clear = 0
             }
     );
@@ -1261,7 +1263,7 @@ auto Scene_root::make_browser_window(
             // (copy_library_item_to_library rejects textures and graph assets,
             // which are shared GPU / graph resources).
             const uint64_t copyable_types =
-                erhe::Item_type::brush |
+                editor::Editor_item_types::brush |
                 erhe::Item_type::material |
                 erhe::Item_type::physics_material |
                 erhe::Item_type::collision_filter |

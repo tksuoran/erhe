@@ -1,4 +1,5 @@
 #include "scene/scene_builder.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_settings.hpp"
 
@@ -138,7 +139,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
     camera->set_perspective_z_near(z_near);
     camera->set_perspective_z_far (z_far);
-    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
+    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | editor::Editor_item_flags::show_debug_visualizations);
     camera->set_exposure(exposure);
     camera->set_shadow_range(shadow_range);
 
@@ -727,7 +728,7 @@ void Scene_builder::make_json_brushes(
 auto Scene_builder::get_brushes() -> erhe::Scope&
 {
     const std::shared_ptr<Content_library>& content_library = m_content_library;
-    return *content_library->get_scope(erhe::Item_type::brush).get();
+    return *content_library->get_scope(editor::Editor_item_types::brush).get();
 }
 
 void Scene_builder::make_brushes(
@@ -864,8 +865,8 @@ auto Scene_builder::add_room(const Add_room_args& args) -> bool
     erhe::math::Aabb aabb = floor_brush->get_bounding_box();
 
     Instance_create_info floor_brush_instance_create_info{
-        .node_flags      = Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::expand,
-        .mesh_flags      = Item_flags::content | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::lock_edit,
+        .node_flags      = Item_flags::content | Item_flags::show_in_ui | editor::Editor_item_flags::lock_viewport_selection | editor::Editor_item_flags::lock_viewport_transform | editor::Editor_item_flags::expand,
+        .mesh_flags      = Item_flags::content | Item_flags::id | Item_flags::show_in_ui | editor::Editor_item_flags::lock_viewport_selection | editor::Editor_item_flags::lock_viewport_transform | Item_flags::lock_edit,
         .mesh_shadow_cast = false,
         .mesh_lightmapped = true,
         .scene_root      = m_scene_root.get(),
@@ -1331,7 +1332,7 @@ auto Scene_builder::make_directional_light(
     light->set_range(0.0f);
     light->set_cast_shadow(cast_shadow);
     light->layer_id    = m_scene_root->layers().light()->id;
-    light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
+    light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | editor::Editor_item_flags::show_debug_visualizations);
 
     const mat4 m = erhe::math::create_look_at(
         position,                // eye
@@ -1389,7 +1390,7 @@ auto Scene_builder::make_point_light(
     light->set_range(25.0f);
     light->set_cast_shadow(cast_shadow);
     light->layer_id    = m_scene_root->layers().light()->id;
-    light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
+    light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | editor::Editor_item_flags::show_debug_visualizations);
 
     const mat4 m = erhe::math::create_translation<float>(position);
     light->set_parent_from_node(m);

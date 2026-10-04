@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "editor_item_bits.hpp"
 #include "tools/tool_window.hpp"
 
 #include "app_message.hpp"
@@ -44,7 +45,7 @@ private:
     void on_hover_mesh      (Hover_mesh_message& message);
     void on_hover_tree_node (Hover_tree_node_message& message);
 
-    // Maintains Item_flags::descendant_hovered_in_viewport on the ancestor
+    // Maintains editor::Editor_item_flags::descendant_hovered_in_viewport on the ancestor
     // chain of the viewport-hovered node: clears the previously flagged chain
     // (recorded here, so still correct after a reparent), then flags the
     // current one. Runs when the hovered node changes and again whenever the

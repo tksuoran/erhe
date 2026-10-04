@@ -10,10 +10,14 @@ erhe_target_sources_grouped(
     erhe_item/hierarchy.hpp
     erhe_item/item.cpp
     erhe_item/item.hpp
+    erhe_item/item_flags.cpp
+    erhe_item/item_flags.hpp
     erhe_item/item_host.cpp
     erhe_item/item_host.hpp
     erhe_item/item_log.cpp
     erhe_item/item_log.hpp
+    erhe_item/item_type.cpp
+    erhe_item/item_type.hpp
     erhe_item/scope.cpp
     erhe_item/scope.hpp
     erhe_item/typed.cpp

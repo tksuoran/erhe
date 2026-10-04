@@ -1,4 +1,5 @@
 #include "scene/item_lookup.hpp"
+#include "editor_item_bits.hpp"
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
@@ -257,7 +258,7 @@ void collect_reference_candidates(
         // and only when it would not form a style chain cycle - a style has a
         // style of its own, so it is never a candidate for itself or for
         // anything already on its chain (D25 style chain).
-        if ((item->get_type() & erhe::Item_type::style) != 0) {
+        if ((item->get_type() & editor::Editor_item_types::style) != 0) {
             if (!erhe::Item_base::style_applies(*item, target)) {
                 return;
             }
@@ -267,7 +268,7 @@ void collect_reference_candidates(
         }
         const bool shown =
             item->is_shown_in_ui() ||
-            (developer_mode && ((item->get_flag_bits() & erhe::Item_flags::show_in_developer_ui) != 0));
+            (developer_mode && ((item->get_flag_bits() & editor::Editor_item_flags::show_in_developer_ui) != 0));
         if (shown) {
             out.push_back(item);
         }

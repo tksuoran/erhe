@@ -1,4 +1,5 @@
 #include "operations/item_insert_remove_operation.hpp"
+#include "editor_item_bits.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "erhe_item/item_host.hpp"
 
@@ -76,7 +77,7 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
             // VERIFY), and undo would resurrect a proxy next to the fresh one
             // the re-registered skin creates. Selection::delete_items skips
             // them the same way.
-            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+            if ((child->get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0) {
                 continue;
             }
             m_parent_changes.push_back(
@@ -133,7 +134,7 @@ void Item_insert_remove_operation::execute(App_context& context)
         m_parent_changes.clear();
         for (const auto& child : children) {
             // See the constructor: bone proxies are never recorded.
-            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+            if ((child->get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0) {
                 continue;
             }
             log_operations->trace("  child -> parent {}", child->get_name(), m_before_parent->get_name());

@@ -139,7 +139,8 @@ void Primitive_buffer::write_primitive(
     const uint32_t count = static_cast<uint32_t>(index_range.index_count);
     ERHE_VERIFY(count > 0);
 
-    const bool      use_primary_color    = mesh->is_selected() || !mesh->is_hovered();
+    const bool      hovered              = (mesh->get_flag_bits() & settings.hovered_flag_bits) != 0u;
+    const bool      use_primary_color    = mesh->is_selected() || !hovered;
     const glm::mat4 world_from_node      = node->world_from_node();
     const bool      negative_determinant = (node->get_flag_bits() & erhe::Item_flags::negative_determinant) == erhe::Item_flags::negative_determinant;
     constexpr glm::mat4 invert_normal{
@@ -310,10 +311,10 @@ auto Primitive_buffer::update(
                 continue;
             }
             std::memcpy(dst + write_offset, records + i * entry_size, entry_size);
-            // Same selection as write_primitive(): Item_base::is_selected() /
-            // is_hovered() on the mirrored flag word.
+            // Same selection as write_primitive(): Item_base::is_selected() and
+            // the hover bits on the mirrored flag word.
             const bool selected = (entry.flag_bits & erhe::Item_flags::selected) != 0u;
-            const bool hovered  = (entry.flag_bits & (erhe::Item_flags::hovered_in_viewport | erhe::Item_flags::hovered_in_item_tree)) != 0u;
+            const bool hovered  = (entry.flag_bits & settings.hovered_flag_bits) != 0u;
             const glm::vec4& selected_color = settings.get_selected_color(entry.flag_bits);
             const glm::vec4& color = wireframe
                 ? wireframe_color

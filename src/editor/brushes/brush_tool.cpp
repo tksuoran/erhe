@@ -1,4 +1,5 @@
 #include "brushes/brush_tool.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -813,14 +814,14 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     m_preview_mesh = std::make_shared<erhe::scene::Mesh>(name);
     m_preview_mesh->add_primitive(brush_scaled.primitive, material);
     m_preview_node->enable_flag_bits(
-        erhe::Item_flags::brush      |
+        editor::Editor_item_flags::brush      |
         erhe::Item_flags::no_message |
-        erhe::Item_flags::show_in_developer_ui
+        editor::Editor_item_flags::show_in_developer_ui
     );
     m_preview_mesh->enable_flag_bits(
-        erhe::Item_flags::brush       |
+        editor::Editor_item_flags::brush       |
         erhe::Item_flags::no_message  |
-        erhe::Item_flags::show_in_developer_ui
+        editor::Editor_item_flags::show_in_developer_ui
     );
 
     m_preview_mesh->layer_id = scene_root->layers().brush()->id;

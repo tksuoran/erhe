@@ -4,6 +4,7 @@
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
+#include "test_application_flags.hpp"
 
 #include <gtest/gtest.h>
 
@@ -38,9 +39,9 @@ TEST(Item_sealing, lock_edit_seals_and_unseals)
     EXPECT_TRUE(item->set_value(erhe::Item_base::visible_property.get(), erhe::property::Property_value{false}));
     EXPECT_FALSE(item->is_visible());
 
-    item->enable_flag_bits(erhe::Item_flags::lock_edit | erhe::Item_flags::lock_viewport_selection);
+    item->enable_flag_bits(erhe::Item_flags::lock_edit | Test_item_flags::lock_viewport_selection);
     EXPECT_TRUE(item->is_sealed());
-    item->disable_flag_bits(erhe::Item_flags::lock_viewport_selection); // lock_edit untouched
+    item->disable_flag_bits(Test_item_flags::lock_viewport_selection); // lock_edit untouched
     EXPECT_TRUE(item->is_sealed());
     item->set_flag_bits(erhe::Item_flags::lock_edit, false);
     EXPECT_FALSE(item->is_sealed());

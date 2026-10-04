@@ -3,6 +3,7 @@
 #endif
 
 #include "geometry_graph/geometry_graph_window.hpp"
+#include "editor_item_bits.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_node_factory.hpp"
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
@@ -909,9 +910,9 @@ void Geometry_graph_window::update_graph_hover_flags()
     // Clear all three bits from everything previously flagged, then
     // re-derive (Hover_tool's viewport-hover ancestor pattern).
     constexpr uint64_t all_graph_hover_bits =
-        erhe::Item_flags::hovered_in_graph |
-        erhe::Item_flags::child_hovered_in_graph |
-        erhe::Item_flags::ancestor_hovered_in_graph;
+        editor::Editor_item_flags::hovered_in_graph |
+        editor::Editor_item_flags::child_hovered_in_graph |
+        editor::Editor_item_flags::ancestor_hovered_in_graph;
     for (const std::weak_ptr<erhe::Hierarchy>& flagged_weak : m_graph_hover_flagged_items) {
         const std::shared_ptr<erhe::Hierarchy> flagged = flagged_weak.lock();
         if (flagged) {
@@ -921,17 +922,17 @@ void Geometry_graph_window::update_graph_hover_flags()
     m_graph_hover_flagged_items.clear();
 
     if (hovered) {
-        hovered->enable_flag_bits(erhe::Item_flags::hovered_in_graph);
+        hovered->enable_flag_bits(editor::Editor_item_flags::hovered_in_graph);
         m_graph_hover_flagged_items.push_back(hovered);
         std::shared_ptr<erhe::Hierarchy> ancestor = hovered->get_parent().lock();
         while (ancestor) {
-            ancestor->enable_flag_bits(erhe::Item_flags::child_hovered_in_graph);
+            ancestor->enable_flag_bits(editor::Editor_item_flags::child_hovered_in_graph);
             m_graph_hover_flagged_items.push_back(ancestor);
             ancestor = ancestor->get_parent().lock();
         }
         hovered->for_each_child<erhe::Hierarchy>(
             [this](erhe::Hierarchy& descendant) -> bool {
-                descendant.enable_flag_bits(erhe::Item_flags::ancestor_hovered_in_graph);
+                descendant.enable_flag_bits(editor::Editor_item_flags::ancestor_hovered_in_graph);
                 m_graph_hover_flagged_items.push_back(
                     std::static_pointer_cast<erhe::Hierarchy>(descendant.shared_from_this())
                 );

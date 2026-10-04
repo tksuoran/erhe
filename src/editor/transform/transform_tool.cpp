@@ -1,5 +1,6 @@
 ﻿#include "transform/transform_tool.hpp"
 #include "transform/channel_locks.hpp"
+#include "editor_item_bits.hpp"
 #include "transform/move_tool.hpp"
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
@@ -775,7 +776,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
+        const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform);
         if (node_lock_viewport_transform) {
             continue;
         }
@@ -821,7 +822,7 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
+        const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform);
         if (node_lock_viewport_transform) {
             continue;
         }
@@ -859,7 +860,7 @@ auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
             const std::shared_ptr<erhe::scene::Node>& effector = shared.entries.front().node;
             const bool effector_locked =
                 effector &&
-                erhe::utility::test_bit_set(effector->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
+                erhe::utility::test_bit_set(effector->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform);
             if (effector && !effector_locked && m_ik_drag.begin(effector, shared.settings.ik_drag_options)) {
                 // Append the ancestor joints and, under Pin Chain End, the
                 // lower chain's joints below the effector, so
@@ -923,7 +924,7 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = test_all_rhs_bits_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
+            const bool node_lock_viewport_transform = test_all_rhs_bits_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform);
             if (node_lock_viewport_transform) {
                 continue;
             }
@@ -964,7 +965,7 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
+            const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform);
             if (node_lock_viewport_transform) {
                 continue;
             }

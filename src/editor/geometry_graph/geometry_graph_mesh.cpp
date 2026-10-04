@@ -1,4 +1,5 @@
 #include "geometry_graph/geometry_graph_mesh.hpp"
+#include "editor_item_bits.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 
 #include "erhe_property/attached_group.hpp"
@@ -55,7 +56,7 @@ const Property<Object_reference> Geometry_graph_mesh::graph_mesh_property = Prop
             .group                = c_group,
             .tooltip              = "The geometry graph asset whose bake this node shows",
             .label                = "Graph Mesh",
-            .reference_item_types = erhe::Item_type::graph_mesh
+            .reference_item_types = editor::Editor_item_types::graph_mesh
         }
     },
     validate_graph_mesh

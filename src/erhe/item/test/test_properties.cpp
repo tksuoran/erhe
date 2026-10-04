@@ -3,6 +3,7 @@
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
+#include "test_application_flags.hpp"
 #include "erhe_property/dependency_property.hpp"
 
 #include <gtest/gtest.h>
@@ -282,11 +283,12 @@ TEST(Item_properties, name_and_flag_bridges)
     EXPECT_TRUE(widget->set_value(erhe::Item_base::name_property.get(), Property_value{std::string{"widget"}}));
     EXPECT_EQ(widget->get_name(), "widget");
 
-    EXPECT_FALSE(widget->get_value(erhe::Item_base::lock_viewport_selection_property));
-    EXPECT_TRUE(widget->set_value(erhe::Item_base::lock_viewport_selection_property.get(), Property_value{true}));
-    EXPECT_TRUE(widget->is_lock_viewport_selection());
-    widget->set_flag_bits(erhe::Item_flags::lock_viewport_selection, false);
-    EXPECT_FALSE(widget->get_value(erhe::Item_base::lock_viewport_selection_property));
+    // An application flag bit bridged as a property (register_flag_bit_property).
+    EXPECT_FALSE(widget->get_value(Test_item_properties::lock_viewport_selection_property));
+    EXPECT_TRUE(widget->set_value(Test_item_properties::lock_viewport_selection_property.get(), Property_value{true}));
+    EXPECT_NE(widget->get_flag_bits() & Test_item_flags::lock_viewport_selection, 0u);
+    widget->set_flag_bits(Test_item_flags::lock_viewport_selection, false);
+    EXPECT_FALSE(widget->get_value(Test_item_properties::lock_viewport_selection_property));
     widget->enable_flag_bits(erhe::Item_flags::show_in_ui);
     EXPECT_TRUE(widget->get_value(erhe::Item_base::show_in_ui_property));
 }

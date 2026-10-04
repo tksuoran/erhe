@@ -1,4 +1,5 @@
 #include "assets/asset_workflow.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
@@ -40,6 +41,8 @@ auto write_material_container_file(
         .root_node             = *root_node,
         .binary                = path.extension() != std::filesystem::path{".gltf"},
         .image_source_provider = image_source_provider,
+        .excluded_item_flag_bits = Editor_item_flags::rendertarget,
+        .excluded_item_type_bits = Editor_item_types::joint,
         .extra_materials       = materials,
     };
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);

@@ -4,6 +4,8 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/enums.hpp"
 
+#include <geogram/basic/numeric.h>
+
 #include <atomic>
 #include <memory>
 #include <mutex>

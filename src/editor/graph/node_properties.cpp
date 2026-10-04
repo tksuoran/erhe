@@ -1,4 +1,5 @@
 #include "graph/node_properties.hpp"
+#include "editor_item_bits.hpp"
 #include "graph/shader_graph_node.hpp"
 
 #include "app_context.hpp"
@@ -63,11 +64,15 @@ void Node_properties_window::item_flags(const std::shared_ptr<erhe::Item_base>& 
     using Item_flags = erhe::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();
-    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
+    for (uint64_t bit_position = 0; bit_position < 64; ++ bit_position) {
         if (((uint64_t{1} << bit_position) & Item_flags::derived) != 0u) {
             continue; // visible / shadow_cast / lightmapped: property rows (D23)
         }
-        m_property_editor.add_entry(Item_flags::c_bit_labels[bit_position], [item, bit_position, flags, this]() {
+        const char* const bit_label = Item_flags::label(bit_position);
+        if (bit_label == nullptr) {
+            continue; // a bit neither the library nor the editor defines
+        }
+        m_property_editor.add_entry(bit_label, [item, bit_position, flags, this]() {
             const uint64_t bit_mask = uint64_t{1} << bit_position;
             bool           value    = test_bit_set(flags, bit_mask);
             if (ImGui::Checkbox("##Node_properties_window::item_flags(", &value)) {

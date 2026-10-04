@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderers/composer.hpp"
+#include "editor_item_bits.hpp"
 #include "renderers/composition_pass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
@@ -217,7 +218,7 @@ public:
     // Overlay pass that draws rendertarget meshes (e.g. the hotbar), ignoring
     // camera exposure and rendered after post-processing when enabled (#230).
     std::shared_ptr<Composition_pass> rendertarget;
-    // Same, for the meshes flagged Item_flags::view_anchored: runs only in the
+    // Same, for the meshes flagged editor::Editor_item_flags::view_anchored: runs only in the
     // view the hotbar is anchored to.
     std::shared_ptr<Composition_pass> rendertarget_view_anchored;
 

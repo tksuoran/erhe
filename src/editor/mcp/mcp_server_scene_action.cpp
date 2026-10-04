@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "editor_item_bits.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
@@ -3134,7 +3135,7 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
         light->layer_id    = sr->layers().light()->id;
         if (args.contains("inner_spot_angle")) { light->set_inner_spot_angle(args.value("inner_spot_angle", light->get_inner_spot_angle())); }
         if (args.contains("outer_spot_angle")) { light->set_outer_spot_angle(args.value("outer_spot_angle", light->get_outer_spot_angle())); }
-        light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::show_debug_visualizations);
+        light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | editor::Editor_item_flags::show_debug_visualizations);
         // The node is attached to the scene via the queued insert operation below;
         // set the world transform now (preserved by Node::set_parent).
         node->set_world_from_node(erhe::math::create_translation<float>(position));

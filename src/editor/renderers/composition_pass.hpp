@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_renderer/enums.hpp"
+#include "editor_item_bits.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -148,7 +149,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Composition_pass"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::composition_pass; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::composition_pass; }
 
     Composition_pass_data data;
 

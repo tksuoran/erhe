@@ -23,28 +23,19 @@ public:
     std::string_view name;
 };
 
+// The library bits; the application's persistent bits come from
+// erhe::Item_flags::get_application_flags() (Item_flag_info::persistent_name),
+// listed after these.
 constexpr Serialized_item_flag c_persistent_item_flags[] = {
     { erhe::Item_flags::no_message,                "no_message"                },
     { erhe::Item_flags::no_transform_update,       "no_transform_update"       },
     { erhe::Item_flags::transform_world_normative, "transform_world_normative" },
     { erhe::Item_flags::show_in_ui,                "show_in_ui"                },
-    { erhe::Item_flags::show_debug_visualizations, "show_debug_visualizations" },
     { erhe::Item_flags::shadow_cast,               "shadow_cast"               },
-    { erhe::Item_flags::lock_viewport_selection,   "lock_viewport_selection"   },
-    { erhe::Item_flags::lock_viewport_transform,   "lock_viewport_transform"   },
     { erhe::Item_flags::visible,                   "visible"                   },
-    { erhe::Item_flags::invisible_parent,          "invisible_parent"          },
-    { erhe::Item_flags::render_wireframe,          "render_wireframe"          },
-    { erhe::Item_flags::render_bounding_volume,    "render_bounding_volume"    },
     { erhe::Item_flags::content,                   "content"                   },
     { erhe::Item_flags::id,                        "id"                        },
-    { erhe::Item_flags::tool,                      "tool"                      },
-    { erhe::Item_flags::brush,                     "brush"                     },
-    { erhe::Item_flags::controller,                "controller"                },
-    { erhe::Item_flags::rendertarget,              "rendertarget"              },
-    { erhe::Item_flags::expand,                    "expand"                    },
     { erhe::Item_flags::lock_edit,                 "lock_edit"                 },
-    { erhe::Item_flags::show_in_developer_ui,      "show_in_developer_ui"      },
     { erhe::Item_flags::exclude_from_prefab,       "exclude_from_prefab"       },
     { erhe::Item_flags::lightmapped,               "lightmapped"               },
     { erhe::Item_flags::ik_lock,                   "ik_lock"                   },
@@ -60,50 +51,66 @@ constexpr Serialized_item_flag c_persistent_item_flags[] = {
     { erhe::Item_flags::lock_scale_z,              "lock_scale_z"              }
 };
 
+// Calls f(bit, name) for every persistent flag: the library table, then the
+// registered application flags that carry a persistent name.
+template <typename F>
+void for_each_persistent_flag(F&& f)
+{
+    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
+        f(flag.bit, flag.name);
+    }
+    for (const erhe::Item_flag_info& flag : erhe::Item_flags::get_application_flags()) {
+        if (flag.persistent_name != nullptr) {
+            f(flag.bit, std::string_view{flag.persistent_name});
+        }
+    }
+}
+
 } // anonymous namespace
 
 auto persistent_item_flags_to_json(const uint64_t flag_bits) -> std::string
 {
     std::string out{"["};
     const char* separator = "";
-    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
-        if ((flag.bit & erhe::Item_flags::derived) != 0u) {
-            continue; // properties (item_local_properties_to_json)
+    for_each_persistent_flag([&](const uint64_t bit, const std::string_view name) {
+        if ((bit & erhe::Item_flags::derived) != 0u) {
+            return; // properties (item_local_properties_to_json)
         }
-        if ((flag_bits & flag.bit) != 0) {
+        if ((flag_bits & bit) != 0) {
             out += separator;
             out += '"';
-            out += flag.name;
+            out += name;
             out += '"';
             separator = ",";
         }
-    }
+    });
     out += "]";
     return out;
 }
 
 auto persistent_item_flag_from_name(const std::string_view name) -> uint64_t
 {
-    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
-        if (name == flag.name) {
-            return flag.bit;
+    uint64_t result = 0;
+    for_each_persistent_flag([&](const uint64_t bit, const std::string_view flag_name) {
+        if (name == flag_name) {
+            result = bit;
         }
-    }
-    return 0;
+    });
+    return result;
 }
 
 void apply_persistent_item_flags(erhe::Item_base& item, const uint64_t listed_bits)
 {
-    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
-        if ((flag.bit & erhe::Item_flags::derived) != 0u) {
-            continue;
+    for_each_persistent_flag([&](const uint64_t bit, const std::string_view) {
+        if ((bit & erhe::Item_flags::derived) != 0u) {
+            return;
         }
-        if ((listed_bits & flag.bit) != 0) {
-            item.enable_flag_bits(flag.bit);
+        if ((listed_bits & bit) != 0) {
+            item.enable_flag_bits(bit);
         } else {
-            item.disable_flag_bits(flag.bit);
+            item.disable_flag_bits(bit);
         }
-    }
+    });
 }
 
 namespace {

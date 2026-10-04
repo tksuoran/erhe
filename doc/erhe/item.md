@@ -13,7 +13,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - **`Item_flags`** - Bitmask constants for item state (visible, selected, hovered, opaque, etc.) with `to_string()`. `visible`, `active`, `shadow_cast` and `lightmapped` (`Item_flags::derived`) are mirrors of the `Item_base::visible_property` / `active_property` / `shadow_cast_property` / `lightmapped_property` effective values (`doc/erhe/property_system.md` D23): `set_flag_bits` rejects them (logged, dropped); write the property (`set_visible`, `show`, `hide`, `set_value`). The bit is written by the property changed callback, so an inherited change and a tree move keep it current and every `Item_filter` / `is_visible()` reader stays a bit test.
 - `active` is the odd one out: its property is NOT inherits-flagged, because USD's prim `active` metadatum is the prim's own opinion, while the pruning it causes covers the whole subtree whatever a descendant says of itself (`doc/erhe/usd_compatibility_design.md` X2). So `Item_flags::active` is the item's own value AND its inheritance parent's bit, recomputed for the item and - only when the bit moved - for the subtree by `rederive_active_flag_bits()`. That runs from the property changed callback and from the structural moves that change the parent (`Hierarchy::set_parent`, `set_inheritance_container`); never per frame. `defined_property` (the prim's composed USD specifier, `def` or `over`) is the item's own opinion in exactly the same way and feeds the same bit, so an undefined prim and its subtree are out the way USD's default traversal predicate leaves them out. A third opinion feeds the same bit from the parent's side: `prunes_children()` / `set_prunes_children()`, the `UsdGeomModelAPI` draw mode of a model prim (`doc/erhe/usd_compatibility.md`, "Draw modes"). A prim whose draw mode asks for a proxy keeps its own bit - it carries the proxy - and every child prim's subtree leaves through `Hierarchy::is_pruned_by_parent()`, which the derivation ANDs in. One child prim is exempt: the generated geometry a `cards` draw mode supplies stands in for the subtree that left, so `Item_flags::draw_mode_proxy` on it makes `is_pruned_by_parent()` answer false. It is derived state of the item, never written into `active`, so a save persists the draw mode and not its consequence; the one change site is the scene's draw-mode system reacting to the prim's own value, and `set_prunes_children()` rederives the children alone. `is_active()` reads it, and every consumer that requires `visible` requires `active` too - rendering, ID picking, raytracing, shadow casting, lightmap baking, DDGI and the physics world (`Node_physics` enters and leaves the Jolt world on the flip).
 - **`Purpose`** - USD purpose token (`default_` / `render` / `proxy` / `guide`, see "Purpose") with `c_purpose_enum_info`, the enumerator table `Item_base::purpose_property` is registered with.
-- **`Item_type`** - Bitmask constants for item types (mesh, camera, light, node, etc.) used by the `is<T>()` template.
+- **`Item_type`** - Bitmask constants for item types (mesh, camera, light, node, etc.) used by the `is<T>()` template, plus two capability bits that are not classes: `texture_reference` (the item implements `erhe::graphics::Texture_reference`, what a material texture slot accepts) and `style_source` (the item can be another object's style, what `Item_base::style_property` accepts). Both tables have an application range, see "Application bits".
 - **`Item_filter`** - Four-criteria bitmask filter (all-set, any-set, all-clear, any-clear) with AND semantics.
 - **`Item<Base, Intermediate, Self, Kind>`** - CRTP template providing `clone()`, `get_type()`, `get_type_name()`. Three clone modes: copy constructor, custom clone constructor, not clonable.
 - **`Hierarchy`** - Parent/child tree built on `Item_base`. Supports reparenting, depth tracking, recursive traversal (`for_each`), removal (splice or recursive), and cloning with `adopt_orphan_children()`. Implements the `Dependency_object` inheritance virtuals (`get_inheritance_parent`, `for_each_inheritance_child`) so `inherits`-flagged properties flow down the tree; `set_parent` captures an inheritance snapshot before the move and applies it after, so the subtree's property-changed notifications carry the old values. `child_count_property` is a computed property (D26, owner types `node | content_library_node`) reading `get_child_count()`; `handle_add_child` / `handle_remove_child` push it to expressions.
@@ -26,7 +26,8 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 ### Item_base
 - `get_id()`, `get_name()`, `set_name()`, `describe(level)`
 - `get_flag_bits()`, `set_flag_bits()`, `enable_flag_bits()`, `disable_flag_bits()`
-- `is_visible()`, `is_selected()`, `is_hovered()`, `show()`, `hide()`, `set_visible()`, `set_selected()` - `show` / `hide` / `set_visible` write a local `visible_property` value; `clear_value(visible_property)` returns to the inherited / default value
+- `is_visible()`, `is_selected()`, `show()`, `hide()`, `set_visible()`, `set_selected()` - `show` / `hide` / `set_visible` write a local `visible_property` value; `clear_value(visible_property)` returns to the inherited / default value
+- `register_flag_bit_property(name, owner_type, bit, ui)` (static) - a persistent flag bit as a bridged boolean property (D18) of `owner_type`; the library's own persistent bits are registered this way (`lock_edit_property`, `show_in_ui_property`, `exclude_from_prefab_property`, `ik_lock_property`, the channel locks), and the application registers its bits' properties the same way (the editor's `Editor_item_properties`)
 - `visible_property`, `shadow_cast_property`, `lightmapped_property` - owner type 0 (listed for every item type), default true / false / false, `inherits`
 - `active_property`, `is_active()`, `rederive_active_flag_bits()`, `prunes_children()` / `set_prunes_children()` - owner type 0, default true, NOT `inherits`; the subtree effect is the derived bit, see "Item_flags" above
 - `defined_property` - owner type 0, default true, NOT `inherits`; the USD specifier of the prim the item is, ANDed into the same derived bit
@@ -64,6 +65,48 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `erhe::is<T>(item)` - bitmask-based type check (raw pointer and shared_ptr overloads)
 - `resolve_item_host()`, `resolve_item_host_mutex()` - find the first non-null host among items
 
+## Application bits
+
+`Item_flags` and `Item_type` each hold only the bits the `erhe::*` libraries
+read, and reserve a range for the application (`src/erhe/item/erhe_item/
+item_flags.hpp`, `item_type.hpp`; `item.hpp` includes both, and a consumer
+that needs only bit positions - an `Item_filter`, a draw list - includes
+them alone):
+
+- `Item_flags`: library bits 0 to `count - 1`; bits
+  `application_first_bit` (32) to 63 are `application_bit(i)`. The
+  application names them in a class of its own (the editor:
+  `Editor_item_flags`, `src/editor/editor_item_bits.hpp`) and calls
+  `register_application_flags(flags, transient_bits, purpose_guide_when_set_bits)`
+  once at startup, before any item exists, with one `Item_flag_info` per
+  bit: its UI label and the name the glTF `ERHE_*` extensions serialize it
+  by (`nullptr` for transient state, which is never serialized). The library
+  reads the registration back through `label(bit_position)` (`to_string`),
+  `get_application_flags()` (`erhe::gltf`'s persistent flag names, listed
+  after the library's own), `get_transient_bits()` (the item mutation serial:
+  `transient` is the library part, `selected` and `negative_determinant`)
+  and `get_purpose_guide_when_set_bits()` / `get_purpose_inputs()` (the
+  purpose derivation below). Persistent names are stable identifiers, bit
+  positions are not: a saved scene loads unchanged whichever range a flag
+  moved to.
+- `Item_type`: indices 1 to `application_index_count` (31) are
+  `application_index(i)` / `application_bit(i)`, the library types follow
+  from `library_first_index` (32) to `library_end_index`. The application
+  range is the LOW one because a more specific class takes the lower index
+  (the editor's icon set draws the icon of the lowest set type bit that has
+  one) and an application class derives from the library levels, never the
+  reverse. `register_application_types()` takes the class names (the
+  editor's `Editor_item_types`); `label(index)` answers for both ranges and
+  `nullptr` elsewhere, so a loop over `index_count` (64) bit positions needs
+  no table size.
+- A library facility that accepts an application class does so through a
+  capability bit the class ORs into its static type (`Item_type::
+  texture_reference`, `style_source`) or a mask the application passes in
+  (`erhe::gltf::Gltf_export_arguments` / `erhe::usd::Usd_save_arguments`
+  `excluded_item_flag_bits` / `excluded_item_type_bits`,
+  `erhe::scene_renderer::Primitive_interface_settings::hovered_flag_bits` /
+  `active_item_flag_bits`), never through a name of the class or the bit.
+
 ## Purpose
 
 `Purpose` is the USD purpose vocabulary (`doc/erhe/usd_compatibility_design.md`
@@ -75,8 +118,9 @@ than ON - a tool, a brush preview, a controller, a rendertarget panel.
 `Item_base::purpose_property` is an `inherits`-flagged enumeration whose
 DEFAULT layer is per-object (`doc/erhe/property_system.md` D31): it is
 `derive_purpose_from_flags(get_flag_bits())`, which answers `guide` when any
-of `Item_flags::purpose_guide_when_set` (`tool`, `brush`, `controller`,
-`rendertarget`) is set or `show_in_ui` is clear, and `default_` otherwise.
+of the registered `Item_flags::get_purpose_guide_when_set_bits()` (the
+editor registers `tool`, `brush`, `controller`, `rendertarget`) is set or
+`show_in_ui` is clear, and `default_` otherwise.
 So an item reports the purpose its flags already imply without authoring
 anything, a local value (or one from a style, or one inherited from an
 ancestor) overrides it, and clearing that value returns to the derived
@@ -293,7 +337,7 @@ and is the identifier a USD prim path is.
 - A clone constructor wires its own members directly and calls no API that ends in `hierarchy_sanity_check()`: the parent/child invariant the check tests does not hold until the fix-up above has run, so a check from a constructor reports every cloned child as `parent == (none)`. `erhe::scene::Xformable(src, for_clone)` wires its cloned state directly for this reason.
 - Copy constructor uses `set_depth_recursive()` to ensure correct depths for the entire cloned subtree.
 - Tags (`m_tags`) are intentionally not copied during cloning - cloned items start with an empty tag set.
-- `Item_flags::count` and `Item_type::count` are the number of defined bits, not bitmasks. The `c_bit_labels` arrays have exactly `count` entries each.
+- `Item_flags::count` and `Item_type::library_count` are the number of library bits, not bitmasks; the `c_bit_labels` arrays have exactly that many entries, and `label()` covers the application range as well ("Application bits").
 
 ## Testing
 

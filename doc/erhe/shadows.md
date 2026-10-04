@@ -1436,7 +1436,7 @@ minimum).
   `erhe::math::aabb_in_convex_volume` - the same test the fit applies - drawing
   affecting casters in the "Casters" color and culled (non-affecting) ones in
   the "Casters Culled" color, and tagging each mesh with the transient
-  `Item_flags::affects_shadow` bit so the classification is visible elsewhere
+  `Editor_item_flags::affects_shadow` bit so the classification is visible elsewhere
   (e.g. the item tree flag display).
 - **XR note** - the tight fit needs the main camera viewport only for the
   view frustum aspect ratio; headset cameras use fov sides instead, so

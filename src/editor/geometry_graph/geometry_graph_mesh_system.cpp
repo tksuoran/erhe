@@ -1,4 +1,5 @@
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
+#include "editor_item_bits.hpp"
 
 #include "content_library/content_library.hpp"
 #include "geometry_graph/geometry_graph_mesh.hpp"
@@ -206,7 +207,7 @@ void Geometry_graph_mesh_system::apply(erhe::scene::Node& node, Geometry_graph_m
             // visible + render_wireframe only: no `content` (skipped by all
             // fill / point passes), no shadow_cast, no id (not pickable); the
             // primitive has no raytrace shape, so hover misses it too.
-            entry.ghost_mesh->enable_flag_bits(erhe::Item_flags::render_wireframe);
+            entry.ghost_mesh->enable_flag_bits(editor::Editor_item_flags::render_wireframe);
             erhe::scene::set_mesh_parent(entry.ghost_mesh, node.shared_node_from_this());
         }
         entry.ghost_mesh->clear_primitives();

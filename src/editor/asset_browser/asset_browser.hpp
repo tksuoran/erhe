@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "editor_item_bits.hpp"
 
 #include "windows/item_tree_window.hpp"
 
@@ -69,7 +70,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_folder"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_folder; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::asset_folder; }
 };
 
 class Asset_file_gltf : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_gltf>
@@ -83,7 +84,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_gltf"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_gltf; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::asset_file_gltf; }
 
     bool                            is_scanned{false};
     std::vector<std::string>        contents;
@@ -129,7 +130,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_geogram"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_geogram; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::asset_file_geogram; }
 
     std::vector<std::string> contents;
 };
@@ -148,7 +149,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_usd"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_usd; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::asset_file_usd; }
 };
 
 // An image file the editor can decode (PNG / JPEG / KTX2 / DDS - see
@@ -165,7 +166,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_texture"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_texture; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::asset_file_texture; }
 };
 
 class Asset_file_other : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_other>
@@ -179,7 +180,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_other"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_other; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::asset_file_other; }
 };
 
 // One directory walk's result: the node tree the walk built and the path-key

@@ -1,4 +1,5 @@
 #include "renderers/composition_pass.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "app_rendering.hpp"
@@ -86,7 +87,9 @@ auto make_selection_outline_settings(const App_context& context) -> erhe::scene_
             outline.selection_highlight_width_low,
             outline.selection_highlight_width_high,
             t2
-        )
+        ),
+        .hovered_flag_bits = editor::Editor_item_flags::hovered,
+        .active_item_flag_bits = editor::Editor_item_flags::active_item
     };
 }
 
@@ -101,7 +104,7 @@ auto get_pass_primitive_settings(const Composition_pass_data& data, const Render
     if (data.get_appearance) {
         return get_primitive_settings(data.get_appearance(context), data.primitive_mode);
     }
-    return erhe::scene_renderer::Primitive_interface_settings{};
+    return erhe::scene_renderer::Primitive_interface_settings{.hovered_flag_bits = editor::Editor_item_flags::hovered, .active_item_flag_bits = editor::Editor_item_flags::active_item};
 }
 
 auto c_str(const Composition_pass_result result) -> const char*

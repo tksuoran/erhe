@@ -1,4 +1,5 @@
 #include "operations/operations_window.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
@@ -3613,7 +3614,9 @@ void Operations::export_callback(const char* const* filelist, int filter)
                 .physics_data          = &physics_data,
                 .external_assets       = collect_prefab_external_assets(*root_node, path.value().parent_path()),
                 .image_source_provider = make_gltf_image_source_provider(scene_root->get_content_library()),
-                .animations            = collect_gltf_export_animations(scene_root->get_content_library())
+                .animations            = collect_gltf_export_animations(scene_root->get_content_library()),
+                .excluded_item_flag_bits = Editor_item_flags::rendertarget,
+                .excluded_item_type_bits = Editor_item_types::joint
             }
         );
         erhe::file::write_file(path.value(), gltf);

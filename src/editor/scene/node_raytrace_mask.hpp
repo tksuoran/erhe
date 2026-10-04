@@ -1,5 +1,7 @@
 #pragma once
 
+#include "editor_item_bits.hpp"
+
 #include <cstdint>
 
 namespace editor
@@ -30,7 +32,7 @@ public:
     // surface.
     static constexpr uint32_t skinned      = (1u << 7);
 
-    // Editor-generated bone pick proxy (Item_flags::bone_proxy). Its own bit,
+    // Editor-generated bone pick proxy (editor::Editor_item_flags::bone_proxy). Its own bit,
     // not `content`, so bone picking is opt-in: only a ray that asks for bones
     // hits them, and in object mode the proxies are invisible to picking even
     // though they sit in the content scene.

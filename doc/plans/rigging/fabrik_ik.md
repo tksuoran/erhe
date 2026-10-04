@@ -63,7 +63,7 @@ reach, without changing any bone lengths.
   by name - which requires registering it in the persistent-flag table in
   `erhe_gltf/gltf_item_flags.cpp` (flag persistence is an explicit allowlist,
   not automatic), in addition to the `Item_flags` bit, `c_bit_labels` entry,
-  and `count` bump in `item.hpp` - and editable from the item Properties
+  and `count` bump in `item_flags.hpp` - and editable from the item Properties
   window flag list like existing flags.
 - The flag has no effect on non-bone nodes in the first version.
 

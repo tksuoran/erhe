@@ -960,10 +960,11 @@ void Build_context::build_vertex_color(size_t usage_index)
     const std::optional<GEO::vec4f> facet_color  = mesh_attributes.facet_color (usage_index).try_get(mesh_facet);
     const std::optional<GEO::vec4f> vertex_color = mesh_attributes.vertex_color(usage_index).try_get(mesh_vertex);
 
+    const glm::vec4& constant_color = root.build_info.constant_color;
     GEO::vec4f color =
         corner_color.has_value() ? corner_color.value() :
         facet_color .has_value() ? facet_color .value() :
-        vertex_color.has_value() ? vertex_color.value() : root.build_info.constant_color;
+        vertex_color.has_value() ? vertex_color.value() : GEO::vec4f{constant_color.x, constant_color.y, constant_color.z, constant_color.w};
 
     attribute_writers.color_0->write(root.vertex_attributes.color[usage_index], color);
 }

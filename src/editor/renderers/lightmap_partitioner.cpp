@@ -1,4 +1,5 @@
 #include "renderers/lightmap_partitioner.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -790,7 +791,7 @@ void Lightmap_partitioner::commit_prepare()
                 erhe::Item_flags::content                 |
                 erhe::Item_flags::render_proxy            |
                 erhe::Item_flags::no_transform_update     |
-                erhe::Item_flags::lock_viewport_transform
+                editor::Editor_item_flags::lock_viewport_transform
             );
             kept.push_back(std::move(entry));
         }
@@ -831,7 +832,7 @@ void Lightmap_partitioner::commit_prepare()
             erhe::Item_flags::content                 |
             erhe::Item_flags::render_proxy            |
             erhe::Item_flags::no_transform_update     |
-            erhe::Item_flags::lock_viewport_transform
+            editor::Editor_item_flags::lock_viewport_transform
         );
         m_group_node->set_parent(scene_root.get_scene().get_root_node());
         for (Original_entry& entry : entries) {

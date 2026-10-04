@@ -1,4 +1,5 @@
 #include "preview/brush_preview.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -86,7 +87,7 @@ void Brush_preview::make_preview_scene()
 
     m_node = std::make_shared<erhe::scene::Xform>("Brush Preview Node");
     m_node->enable_flag_bits(
-        erhe::Item_flags::brush   |
+        editor::Editor_item_flags::brush   |
         erhe::Item_flags::no_message
     );
     const auto paremt = m_scene_root_shared->get_hosted_scene()->get_root_node();
@@ -293,7 +294,9 @@ void Brush_preview::render_preview(
                 .constant_color0 = edge_lines->color,
                 .constant_color1 = edge_lines->color,
                 .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
-                .constant_size   = edge_lines->width
+                .constant_size   = edge_lines->width,
+                .hovered_flag_bits = editor::Editor_item_flags::hovered,
+                .active_item_flag_bits = editor::Editor_item_flags::active_item
             };
         }
     }
@@ -318,9 +321,9 @@ void Brush_preview::render_preview(
     } else {
         m_mesh = std::make_shared<erhe::scene::Mesh>("Brush Preview Mesh");
         m_mesh->enable_flag_bits(
-            erhe::Item_flags::brush       |
+            editor::Editor_item_flags::brush       |
             erhe::Item_flags::no_message  |
-            erhe::Item_flags::show_in_developer_ui
+            editor::Editor_item_flags::show_in_developer_ui
         );
         m_mesh->layer_id = { Mesh_layer_id::brush };
     }

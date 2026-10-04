@@ -3760,8 +3760,10 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     }
 
     erhe::usd::Usd_save_arguments save_arguments{
-        .path      = path,
-        .root_node = root_node
+        .path                    = path,
+        .root_node               = root_node,
+        .excluded_item_flag_bits = Editor_item_flags::rendertarget,
+        .excluded_item_type_bits = Editor_item_types::joint
     };
     save_arguments.time_codes_per_second = scene_root.get_usd_time_codes().time_codes_per_second;
 

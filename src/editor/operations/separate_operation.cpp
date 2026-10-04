@@ -157,7 +157,7 @@ Separate_selection_operation::Separate_selection_operation(Parameters&& paramete
         // properties below), not the import root marker, and lock_edit last.
         const uint64_t original_flags = original->get_flag_bits();
         const uint64_t excluded_flags =
-            erhe::Item_flags::transient | erhe::Item_flags::derived | erhe::Item_flags::import_root | erhe::Item_flags::lock_edit;
+            erhe::Item_flags::get_transient_bits() | erhe::Item_flags::derived | erhe::Item_flags::import_root | erhe::Item_flags::lock_edit;
         separated->enable_flag_bits(original_flags & ~excluded_flags);
         if (erhe::utility::test_bit_set(original_flags, erhe::Item_flags::shadow_cast)) {
             separated->set_value(erhe::scene::Mesh::shadow_cast_property, true);

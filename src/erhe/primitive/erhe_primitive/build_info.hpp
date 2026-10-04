@@ -2,7 +2,7 @@
 
 #include "erhe_primitive/buffer_info.hpp"
 
-#include <geogram/mesh/mesh.h>
+#include <glm/glm.hpp>
 
 #include <cstdint>
 #include <vector>
@@ -29,7 +29,7 @@ class Build_info
 public:
     Primitive_types primitive_types;
     Buffer_info     buffer_info;
-    GEO::vec4f      constant_color{1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4       constant_color{1.0f, 1.0f, 1.0f, 1.0f};
     bool            keep_geometry {false};
     Normal_style    normal_style  {Normal_style::corner_normals};
     bool            vertex_id_vec3{false};

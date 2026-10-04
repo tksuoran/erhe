@@ -1,4 +1,5 @@
 #include "windows/property_origin.hpp"
+#include "editor_item_bits.hpp"
 
 #include "prefabs/instance_structure.hpp"
 #include "scene/item_lookup.hpp"
@@ -135,7 +136,7 @@ constexpr std::size_t c_max_walk = 32;
         // A prim that carries no schema - an `over` below an instance carrier
         // (X2), a `class` prim of a style (X3) - spells every value as a
         // custom attribute.
-        const bool is_typeless_prim = (position.carrier != nullptr) || ((item.get_type() & erhe::Item_type::style) != 0u);
+        const bool is_typeless_prim = (position.carrier != nullptr) || ((item.get_type() & editor::Editor_item_types::style) != 0u);
         return erhe::usd::get_usd_authored_as(
             owner,
             name,

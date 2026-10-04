@@ -1,4 +1,5 @@
 #include "parsers/gltf_extensions_export.hpp"
+#include "editor_item_bits.hpp"
 
 #include "parsers/gltf_extensions_names.hpp"
 
@@ -708,7 +709,7 @@ void add_gltf_editor_state(
                     );
                 }
             };
-        const std::shared_ptr<erhe::Scope> brushes_scope = content_library->find_scope(erhe::Item_type::brush);
+        const std::shared_ptr<erhe::Scope> brushes_scope = content_library->find_scope(editor::Editor_item_types::brush);
         if (brushes_scope) {
             collect_brush_folder(*brushes_scope, std::string{});
         }

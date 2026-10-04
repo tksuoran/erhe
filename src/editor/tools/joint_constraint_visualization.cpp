@@ -1,4 +1,5 @@
 #include "tools/joint_constraint_visualization.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "renderers/render_context.hpp"
@@ -44,7 +45,7 @@ namespace {
 
 [[nodiscard]] auto is_hovered(const erhe::scene::Node* node) -> bool
 {
-    return (node != nullptr) && node->is_hovered();
+    return (node != nullptr) && editor::is_hovered(*node);
 }
 
 [[nodiscard]] auto is_hovered_mesh(const erhe::scene::Node* node) -> bool
@@ -257,7 +258,7 @@ void Joint_constraint_visualization::physics_joints(
         if (!shown && (filter != Joint_constraint_filter::off)) {
             // A Joint prim hovered in the item tree shows in both hovered
             // modes.
-            shown = state.joint->is_hovered();
+            shown = editor::is_hovered(*state.joint);
             for (const erhe::scene::Node* const node : nodes) {
                 if (filter == Joint_constraint_filter::hovered_mesh) {
                     shown = shown || is_hovered_mesh(node);
@@ -358,7 +359,7 @@ void Joint_constraint_visualization::ik_limits(
         m_hovered_mesh_bones.clear();
         for (erhe::scene::Mesh_layer* layer : scene_root.layers().mesh_layers()) {
             for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
-                if (!mesh || !mesh->is_hovered()) {
+                if (!mesh || !editor::is_hovered(*mesh)) {
                     continue;
                 }
                 if (mesh->skin) {
@@ -390,7 +391,7 @@ void Joint_constraint_visualization::ik_limits(
         const erhe::Item_base* const item    = static_cast<const erhe::Item_base*>(node.get());
         const bool                   is_bone = erhe::scene::is_bone(item);
         if (filter == Joint_constraint_filter::hovered_bone) {
-            if (is_bone && node->is_hovered()) {
+            if (is_bone && editor::is_hovered(*node)) {
                 add_ik_bone(*node, ik_drag, line_style, joint_size);
             }
             return true;

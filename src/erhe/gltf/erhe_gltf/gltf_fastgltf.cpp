@@ -6436,10 +6436,11 @@ private:
                 // the next open injects the default again.
                 continue;
             }
-            if ((erhe_child_prim->get_type() & erhe::Item_type::joint) != 0) {
-                // A joint prim is written as the KHR_physics_rigid_bodies
-                // joint of the node whose body is its first party, from the
-                // physics description, not as a node of its own.
+            if ((erhe_child_prim->get_type() & m_arguments.excluded_item_type_bits) != 0) {
+                // The editor's joint prim: written as the
+                // KHR_physics_rigid_bodies joint of the node whose body is
+                // its first party, from the physics description, not as a
+                // node of its own.
                 continue;
             }
             const erhe::scene::Node* erhe_child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
@@ -6475,7 +6476,7 @@ private:
                     if (m_arguments.excluded_meshes.contains(erhe_child_mesh)) {
                         continue;
                     }
-                    if ((erhe_child_mesh->get_flag_bits() & erhe::Item_flags::rendertarget) != 0) {
+                    if ((erhe_child_mesh->get_flag_bits() & m_arguments.excluded_item_flag_bits) != 0) {
                         continue;
                     }
                 }
@@ -6551,7 +6552,7 @@ private:
         if (erhe_mesh && m_arguments.excluded_meshes.contains(erhe_mesh.get())) {
             erhe_mesh.reset();
         }
-        if (erhe_mesh && ((erhe_mesh->get_flag_bits() & erhe::Item_flags::rendertarget) != 0)) {
+        if (erhe_mesh && ((erhe_mesh->get_flag_bits() & m_arguments.excluded_item_flag_bits) != 0)) {
             // Belt and braces for the child-node content filter above: a
             // rendertarget mesh (UI quad rendered into every frame) has no
             // serializable texture source; the node exports without it.

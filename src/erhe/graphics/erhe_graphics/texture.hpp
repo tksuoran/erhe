@@ -73,7 +73,7 @@ public:
     static const erhe::property::Property<int>         width_property;
     static const erhe::property::Property<int>         height_property;
     static const erhe::property::Property<std::string> pixelformat_property;
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::texture; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::texture | erhe::Item_type::texture_reference; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim
     // type for a texture - it writes one as a `UsdUVTexture` shading

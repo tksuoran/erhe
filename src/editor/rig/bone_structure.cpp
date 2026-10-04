@@ -1,4 +1,5 @@
 #include "rig/bone_structure.hpp"
+#include "editor_item_bits.hpp"
 #include "rig/bone_hierarchy.hpp"
 #include "rig/bone_mirror.hpp"
 #include "rig/bone_naming.hpp"
@@ -444,7 +445,7 @@ auto subdivide_bones(
         // The target's children, before any piece is added.
         std::vector<std::shared_ptr<erhe::Hierarchy>> children;
         for (const std::shared_ptr<erhe::Hierarchy>& child : bone->get_children()) {
-            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+            if ((child->get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0) {
                 continue; // editor-generated display proxies stay with their bone
             }
             children.push_back(child);
@@ -597,7 +598,7 @@ auto delete_bones(
 
         std::vector<std::shared_ptr<erhe::scene::Node>> child_nodes;
         for (const std::shared_ptr<erhe::Hierarchy>& child : bone->get_children()) {
-            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+            if ((child->get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0) {
                 continue; // removed with the bone, as Item_insert_remove_operation does
             }
             const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
@@ -967,7 +968,7 @@ enum class Tail_record : unsigned int {
     for (const Bone_frame_change& change : changes) {
         add(change.bone);
         for (const std::shared_ptr<erhe::Hierarchy>& child : change.bone->get_children()) {
-            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+            if ((child->get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0) {
                 continue; // editor-generated display proxies follow their bone
             }
             const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometry_graph/geometry_graph.hpp"
+#include "editor_item_bits.hpp"
 #include "graph_editor/graph_editor_window_base.hpp"
 
 #include "config/generated/preview_edge_lines_config.hpp"
@@ -279,7 +280,7 @@ private:
     // few per frame. Called from update_evaluation().
     void update_node_previews();
 
-    // Graph-hover -> scene highlight (Item_flags::hovered_in_graph and
+    // Graph-hover -> scene highlight (editor::Editor_item_flags::hovered_in_graph and
     // friends). record_canvas_hover() runs right after the canvas draw and
     // stores the scene node referenced by the hovered graph node (at most
     // one graph node is hovered per frame); update_graph_hover_flags()

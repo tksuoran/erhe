@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "tools/hover_tool.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -116,7 +117,7 @@ void Hover_tool::update_ancestor_hover_flags()
     for (const std::weak_ptr<erhe::Hierarchy>& ancestor_weak : m_flagged_hover_ancestors) {
         const std::shared_ptr<erhe::Hierarchy> ancestor = ancestor_weak.lock();
         if (ancestor) {
-            ancestor->disable_flag_bits(erhe::Item_flags::descendant_hovered_in_viewport);
+            ancestor->disable_flag_bits(editor::Editor_item_flags::descendant_hovered_in_viewport);
         }
     }
     m_flagged_hover_ancestors.clear();
@@ -125,7 +126,7 @@ void Hover_tool::update_ancestor_hover_flags()
     if (hovered_node) {
         std::shared_ptr<erhe::Hierarchy> ancestor = hovered_node->get_parent().lock();
         while (ancestor) {
-            ancestor->enable_flag_bits(erhe::Item_flags::descendant_hovered_in_viewport);
+            ancestor->enable_flag_bits(editor::Editor_item_flags::descendant_hovered_in_viewport);
             m_flagged_hover_ancestors.push_back(ancestor);
             ancestor = ancestor->get_parent().lock();
         }
@@ -153,11 +154,11 @@ void Hover_tool::on_hover_mesh(Hover_mesh_message& message)
         log_pointer->debug("Hover_tool::on_hover_mesh()");
         if (old_hovered_node) {
             log_pointer->debug("clearing hovered bit for {}", old_hovered_node->get_name());
-            old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+            old_hovered_node->disable_flag_bits(editor::Editor_item_flags::hovered_in_viewport);
         }
         if (hovered_node) {
             log_pointer->debug("setting hovered bit for {}", hovered_node->get_name());
-            hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+            hovered_node->enable_flag_bits(editor::Editor_item_flags::hovered_in_viewport);
         } else {
             log_pointer->debug("no new hovered mesh / node");
         }
@@ -177,7 +178,7 @@ void Hover_tool::on_hover_tree_node(Hover_tree_node_message& message)
 {
     std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_item_tree.lock();
     if (old_hovered_node) {
-        old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
+        old_hovered_node->disable_flag_bits(editor::Editor_item_flags::hovered_in_item_tree);
     }
 
     std::shared_ptr<erhe::scene::Node> hovered_node = std::dynamic_pointer_cast<erhe::scene::Node>(message.item);
@@ -186,7 +187,7 @@ void Hover_tool::on_hover_tree_node(Hover_tree_node_message& message)
         return;
     }
 
-    hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
+    hovered_node->enable_flag_bits(editor::Editor_item_flags::hovered_in_item_tree);
     m_hovered_node_in_item_tree = hovered_node;
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "content_library/content_library.hpp"
+#include "editor_item_bits.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
@@ -316,7 +317,9 @@ private:
 
     Scene_view*                                   m_hover_scene_view{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection;
-    std::vector<std::shared_ptr<erhe::Item_base>> m_non_hosted_selection; // get_hosted_selection(nullptr) bucket
+    // get_hosted_selection() buckets, one per Item_host (nullptr: the items
+    // with no host); each is cleared and refilled at query time, capacity kept.
+    std::unordered_map<erhe::Item_host*, std::vector<std::shared_ptr<erhe::Item_base>>> m_hosted_selection;
     std::vector<std::shared_ptr<erhe::Item_base>> m_command_target_selection; // get_command_target_selection() scratch
     std::weak_ptr<Scene_root>                     m_active_scene_root;
     Range_selection                               m_range_selection;
@@ -328,7 +331,7 @@ private:
     bool                                          m_hover_tool   {false};
 
     // Applied by end_selection_change / set_active_item, never written
-    // directly: write_active_item maintains the Item_flags::active_item bit
+    // directly: write_active_item maintains the editor::Editor_item_flags::active_item bit
     // and m_active_item_before records the state a pending change started
     // from, so exactly one message is sent per change.
     void write_active_item(const std::shared_ptr<erhe::Item_base>& item);

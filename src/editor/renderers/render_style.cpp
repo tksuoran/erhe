@@ -1,4 +1,5 @@
 #include "renderers/render_style.hpp"
+#include "editor_item_bits.hpp"
 
 auto is_primitive_mode_enabled(
     const Render_style_data&        style,
@@ -28,8 +29,8 @@ auto get_primitive_settings(
     using Primitive_size_source = erhe::scene_renderer::Primitive_size_source;
     using Primitive_interface_settings = erhe::scene_renderer::Primitive_interface_settings;
     switch (primitive_mode) {
-        case Primitive_mode::not_set          : return Primitive_interface_settings{};
-        case Primitive_mode::polygon_fill     : return Primitive_interface_settings{};
+        case Primitive_mode::not_set          : return Primitive_interface_settings{.hovered_flag_bits = editor::Editor_item_flags::hovered, .active_item_flag_bits = editor::Editor_item_flags::active_item};
+        case Primitive_mode::polygon_fill     : return Primitive_interface_settings{.hovered_flag_bits = editor::Editor_item_flags::hovered, .active_item_flag_bits = editor::Editor_item_flags::active_item};
 
         case Primitive_mode::edge_lines:
             return Primitive_interface_settings{
@@ -37,7 +38,9 @@ auto get_primitive_settings(
                 .constant_color0 = appearance.line_color,
                 .constant_color1 = appearance.line_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = appearance.line_width
+                .constant_size   = appearance.line_width,
+                .hovered_flag_bits = editor::Editor_item_flags::hovered,
+                .active_item_flag_bits = editor::Editor_item_flags::active_item
             };
 
         case Primitive_mode::corner_points:
@@ -46,10 +49,12 @@ auto get_primitive_settings(
                 .constant_color0 = appearance.corner_color,
                 .constant_color1 = appearance.corner_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = appearance.point_size
+                .constant_size   = appearance.point_size,
+                .hovered_flag_bits = editor::Editor_item_flags::hovered,
+                .active_item_flag_bits = editor::Editor_item_flags::active_item
             };
 
-        case Primitive_mode::corner_normals   : return Primitive_interface_settings{};
+        case Primitive_mode::corner_normals   : return Primitive_interface_settings{.hovered_flag_bits = editor::Editor_item_flags::hovered, .active_item_flag_bits = editor::Editor_item_flags::active_item};
 
         case Primitive_mode::solid_wireframe:
             // Wireframe color / width are read by standard.frag (via the
@@ -59,7 +64,9 @@ auto get_primitive_settings(
                 .constant_color0 = appearance.solid_wireframe_color,
                 .constant_color1 = appearance.solid_wireframe_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = appearance.solid_wireframe_width
+                .constant_size   = appearance.solid_wireframe_width,
+                .hovered_flag_bits = editor::Editor_item_flags::hovered,
+                .active_item_flag_bits = editor::Editor_item_flags::active_item
             };
 
         case Primitive_mode::polygon_centroids:
@@ -68,11 +75,13 @@ auto get_primitive_settings(
                 .constant_color0 = appearance.centroid_color,
                 .constant_color1 = appearance.centroid_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = appearance.point_size
+                .constant_size   = appearance.point_size,
+                .hovered_flag_bits = editor::Editor_item_flags::hovered,
+                .active_item_flag_bits = editor::Editor_item_flags::active_item
             };
 
-        case Primitive_mode::count            : return Primitive_interface_settings{};
-        default:                                return Primitive_interface_settings{};
+        case Primitive_mode::count            : return Primitive_interface_settings{.hovered_flag_bits = editor::Editor_item_flags::hovered, .active_item_flag_bits = editor::Editor_item_flags::active_item};
+        default:                                return Primitive_interface_settings{.hovered_flag_bits = editor::Editor_item_flags::hovered, .active_item_flag_bits = editor::Editor_item_flags::active_item};
     }
 }
 

@@ -19,7 +19,7 @@ namespace {
 // Peek the drag-drop payload and, if it carries an erhe::Item_base* of an allowed type, return it.
 // Drag sources (item tree, content library) set the payload type to the item's leaf class name and
 // the data to an erhe::Item_base* (see windows/item_tree_window.cpp). Those class names match
-// erhe::Item_type::c_bit_labels[], so each set bit of allowed_types maps to one acceptable payload
+// erhe::Item_type::label(), so each set bit of allowed_types maps to one acceptable payload
 // type string. Note: a mask using a base-type bit (e.g. imageable) does not match a leaf
 // payload string (e.g. "Mesh"); pass the leaf type bits whose class-name labels you want to accept.
 [[nodiscard]] auto try_accept_item_payload(const uint64_t allowed_types) -> std::shared_ptr<erhe::Item_base>
@@ -31,12 +31,16 @@ namespace {
         return *static_cast<erhe::Item_base**>(payload->Data);
     };
 
-    for (uint64_t i = 1; i < erhe::Item_type::count; ++i) {
+    for (uint64_t i = 1; i < erhe::Item_type::index_count; ++i) {
         const uint64_t bit = (uint64_t{1} << i);
         if ((allowed_types & bit) == 0) {
             continue;
         }
-        erhe::Item_base* const raw = read_item(ImGui::AcceptDragDropPayload(erhe::Item_type::c_bit_labels[i]));
+        const char* const type_label = erhe::Item_type::label(i);
+        if (type_label == nullptr) {
+            continue;
+        }
+        erhe::Item_base* const raw = read_item(ImGui::AcceptDragDropPayload(type_label));
         if ((raw != nullptr) && ((raw->get_type() & allowed_types) != 0)) {
             return raw->shared_from_this();
         }

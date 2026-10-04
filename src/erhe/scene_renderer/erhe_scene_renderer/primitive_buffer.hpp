@@ -145,6 +145,13 @@ public:
     std::optional<glm::vec4> constant_color_active {};
     Primitive_size_source    size_source           {Primitive_size_source::constant_size};
     float                    constant_size         {1.0f};
+    // The application's item flag bits the writers read the presentation
+    // state from: an entry with any of hovered_flag_bits is hovered, and a
+    // selected entry with all of active_item_flag_bits (when non-zero) is
+    // the active item. The library names neither; the editor passes its own
+    // (Editor_item_flags::hovered / active_item).
+    uint64_t                 hovered_flag_bits     {0};
+    uint64_t                 active_item_flag_bits {0};
 
     // The color an entry with these item flag bits draws in when it is drawn
     // as selected: the active item's own color when this pass supplies one,
@@ -153,8 +160,8 @@ public:
     // renderer, in the draw lists and in the wide-line renderer.
     [[nodiscard]] auto get_selected_color(const uint64_t item_flag_bits) const -> const glm::vec4&
     {
-        const uint64_t both = erhe::Item_flags::selected | erhe::Item_flags::active_item;
-        return (((item_flag_bits & both) == both) && constant_color_active.has_value())
+        const uint64_t both = erhe::Item_flags::selected | active_item_flag_bits;
+        return ((active_item_flag_bits != 0u) && ((item_flag_bits & both) == both) && constant_color_active.has_value())
             ? constant_color_active.value()
             : constant_color0;
     }

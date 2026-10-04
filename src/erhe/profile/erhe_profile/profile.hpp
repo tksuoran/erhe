@@ -6,6 +6,8 @@
 #include <new>
 #include <vector>
 
+#include "erhe_profile/profile_mutex.hpp"
+
 #ifdef _MSC_VER
 #pragma warning(disable : 4714)
 #endif
@@ -77,9 +79,6 @@
 #       define ERHE_PROFILE_FRAME_END FrameMark;
 #   endif
 
-#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) tracy::Lockable<Type> mutex_variable
-#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) TracyLockable(Type, mutex_variable)
-#   define ERHE_PROFILE_LOCKABLE_BASE(Type) LockableBase(Type)
 
 #   define ERHE_PROFILE_MEM_ALLOC(ptr, size) TracyAlloc(ptr, size)
 #   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size) TracyAllocS(ptr, size, 40)
@@ -102,9 +101,6 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id)
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
-#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
-#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
-#   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
 
 #elif defined(ERHE_PROFILE_LIBRARY_NVTX)
 #   define ERHE_CONCAT(x,y) ERHE_CONCAT_INDIRECT(x,y)
@@ -125,9 +121,6 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
-#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
-#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
-#   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
 
 #else
 #   define ERHE_PROFILE_FUNCTION();
@@ -139,9 +132,6 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
-#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
-#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
-#   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
 #   define ERHE_PROFILE_MEM_ALLOC(ptr, size)
 #   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size)
 #   define ERHE_PROFILE_MEM_ALLOC_N(ptr, size, name)

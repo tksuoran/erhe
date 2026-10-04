@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "editor_item_bits.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
@@ -1032,7 +1033,7 @@ auto Mcp_server::action_copy_library_item(const json& args) -> std::string
 
     const auto pick_kind = [](const std::string& type) -> uint64_t {
         if (type == "material")         return erhe::Item_type::material;
-        if (type == "brush")            return erhe::Item_type::brush;
+        if (type == "brush")            return editor::Editor_item_types::brush;
         if (type == "physics_material") return erhe::Item_type::physics_material;
         if (type == "collision_filter") return erhe::Item_type::collision_filter;
         if (type == "physics_joint")    return erhe::Item_type::physics_joint_settings;

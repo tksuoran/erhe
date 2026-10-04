@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "windows/item_tree_window.hpp"
+#include "editor_item_bits.hpp"
 #include "windows/inventory_slot_payload.hpp"
 
 #include "app_context.hpp"
@@ -79,7 +80,7 @@ namespace {
 // added and removed by the constructor / destructor below.
 std::vector<Item_tree*> g_item_trees;
 
-// True when the payload is named for an erhe item class (Item_type::c_bit_labels),
+// True when the payload is named for an erhe item class (Item_type::label()),
 // which is how every item drag in the editor names its payload. Only such a
 // payload carries an Item_base*: ImGui's own docking drag ("_IMWINDOW") carries
 // an ImGuiWindow* of the same size, so the pointer must never be read before
@@ -89,8 +90,9 @@ std::vector<Item_tree*> g_item_trees;
     if (payload == nullptr) {
         return false;
     }
-    for (uint64_t i = 1; i < erhe::Item_type::count; ++i) {
-        if (payload->IsDataType(erhe::Item_type::c_bit_labels[i])) {
+    for (uint64_t i = 1; i < erhe::Item_type::index_count; ++i) {
+        const char* const type_label = erhe::Item_type::label(i);
+        if ((type_label != nullptr) && payload->IsDataType(type_label)) {
             return true;
         }
     }
@@ -155,7 +157,7 @@ Item_tree::Item_tree(App_context& context)
     , m_filter{
         .require_all_bits_set           = 0,
         .require_at_least_one_bit_set   = erhe::Item_flags::show_in_ui,
-        .require_all_bits_clear         = 0, //erhe::Item_flags::tool | erhe::Item_flags::brush,
+        .require_all_bits_clear         = 0, //editor::Editor_item_flags::tool | editor::Editor_item_flags::brush,
         .require_at_least_one_bit_clear = 0
     }
 {
@@ -1266,10 +1268,10 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
     }
 
     // Graph hovering highlights like viewport hovering: the geometry graph
-    // window maintains Item_flags::hovered_in_graph on the scene node
+    // window maintains editor::Editor_item_flags::hovered_in_graph on the scene node
     // referenced by the hovered graph node (plus child/ancestor companions).
-    const bool hovered_in_graph = erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::hovered_in_graph);
-    if (item->is_hovered() || hovered_in_graph || hovered_in_folded_subtree) {
+    const bool hovered_in_graph = erhe::utility::test_bit_set(item->get_flag_bits(), editor::Editor_item_flags::hovered_in_graph);
+    if (editor::is_hovered(*item) || hovered_in_graph || hovered_in_folded_subtree) {
         const ImVec2 rect_min = ImGui::GetItemRectMin();
         const ImVec2 rect_max = ImGui::GetItemRectMax();
         const ImRect rect{rect_min, rect_max};
@@ -1821,7 +1823,7 @@ void Item_tree::imgui_row(const Flat_row& row)
     // The active item of the selection (doc/editor/active_item.md D5) accents
     // its row: a brighter header while it is selected, a tinted label while it
     // is not. The bit is read off the item, so no Selection lookup per row.
-    const bool is_active_item = erhe::utility::test_bit_set(row.item->get_flag_bits(), erhe::Item_flags::active_item);
+    const bool is_active_item = erhe::utility::test_bit_set(row.item->get_flag_bits(), editor::Editor_item_flags::active_item);
 
     const ImGuiTreeNodeFlags flags =
         row.tree_node_flags |
@@ -1877,7 +1879,7 @@ void Item_tree::imgui_row(const Flat_row& row)
                     !is_open &&
                     erhe::utility::test_any_rhs_bits_set(
                         row.item->get_flag_bits(),
-                        erhe::Item_flags::descendant_hovered_in_viewport | erhe::Item_flags::child_hovered_in_graph
+                        editor::Editor_item_flags::descendant_hovered_in_viewport | editor::Editor_item_flags::child_hovered_in_graph
                     );
                 item_update_selection(row.item, hovered_in_folded_subtree);
             }
@@ -2075,7 +2077,7 @@ auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Sho
 void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& item, const float indent)
 {
     // Special handling for invisible parents (scene root)
-    if (erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
+    if (erhe::utility::test_bit_set(item->get_flag_bits(), editor::Editor_item_flags::invisible_parent)) {
         const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (hierarchy) {
             for (const auto& child_node : hierarchy->get_children()) {
@@ -2109,7 +2111,7 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     }
 
     const bool expand =
-        erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::expand) ||
+        erhe::utility::test_bit_set(item->get_flag_bits(), editor::Editor_item_flags::expand) ||
         force_expand;
 
     const std::shared_ptr<erhe::Item_base>& label_item   = get_label_item(item);
@@ -2218,7 +2220,7 @@ void Item_tree::imgui_tree(float ui_scale)
 
     if ((m_filter.require_at_least_one_bit_set & erhe::Item_flags::show_in_ui) != 0) {
         m_filter.require_at_least_one_bit_set = m_context.developer_mode
-            ? (erhe::Item_flags::show_in_ui | erhe::Item_flags::show_in_developer_ui)
+            ? (erhe::Item_flags::show_in_ui | editor::Editor_item_flags::show_in_developer_ui)
             : erhe::Item_flags::show_in_ui;
     }
 

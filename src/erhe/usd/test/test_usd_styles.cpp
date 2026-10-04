@@ -117,7 +117,7 @@ public:
     static constexpr std::string_view static_type_name{"Style"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t
     {
-        return erhe::Typed::get_static_type() | erhe::Item_type::style;
+        return erhe::Typed::get_static_type() | erhe::Item_type::application_bit(0);
     }
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Style"; }
     [[nodiscard]] auto get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type> override

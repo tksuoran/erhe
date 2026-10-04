@@ -1,6 +1,7 @@
 ﻿#include "rendertarget_mesh.hpp"
 
 #include "app_context.hpp"
+#include "editor_item_bits.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -67,7 +68,7 @@ Rendertarget_mesh::Rendertarget_mesh(
 {
     ERHE_VERIFY(material_home);
 
-    enable_flag_bits(erhe::Item_flags::rendertarget);
+    enable_flag_bits(editor::Editor_item_flags::rendertarget);
 
     resize_rendertarget(command_buffer, graphics_device, mesh_memory, width, height);
 }
@@ -223,7 +224,7 @@ void Rendertarget_mesh::resize_rendertarget(
 
     mesh_memory.flush(command_buffer);
 
-    enable_flag_bits(erhe::Item_flags::id |erhe::Item_flags::rendertarget);
+    enable_flag_bits(erhe::Item_flags::id |editor::Editor_item_flags::rendertarget);
 }
 
 auto Rendertarget_mesh::get_texture() const -> std::shared_ptr<erhe::graphics::Texture>

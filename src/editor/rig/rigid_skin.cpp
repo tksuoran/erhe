@@ -1,4 +1,5 @@
 #include "rig/rigid_skin.hpp"
+#include "editor_item_bits.hpp"
 
 #include "rig/bone_bind.hpp"
 
@@ -32,7 +33,7 @@ namespace {
 
 [[nodiscard]] auto is_bone_proxy(const erhe::scene::Mesh& mesh) -> bool
 {
-    return (mesh.get_flag_bits() & erhe::Item_flags::bone_proxy) != 0;
+    return (mesh.get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0;
 }
 
 // The vertex range one part contributed to the merged geometry.

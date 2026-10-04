@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_context.hpp"
+#include "editor_item_bits.hpp"
 #include "assets/asset_key.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
@@ -318,7 +319,7 @@ auto Content_library::combo(
         }
         for (const std::shared_ptr<T>& candidate : get_all<T>()) {
             const bool shown = candidate->is_shown_in_ui() ||
-                (context.developer_mode && ((candidate->get_flag_bits() & erhe::Item_flags::show_in_developer_ui) != 0));
+                (context.developer_mode && ((candidate->get_flag_bits() & editor::Editor_item_flags::show_in_developer_ui) != 0));
             if (!shown) {
                 continue;
             }

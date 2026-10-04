@@ -1,6 +1,7 @@
 #pragma once
 
 #include "grid/grid_frame.hpp"
+#include "editor_item_bits.hpp"
 #include "renderers/render_context.hpp"
 
 #include "erhe_item/item.hpp"
@@ -53,7 +54,7 @@ public:
     Grid();
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Grid"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::grid; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::grid; }
 
     // Registered properties (erhe::property, doc/erhe/property_system.md
     // section 4.11), stored in the entry store and inheriting from the

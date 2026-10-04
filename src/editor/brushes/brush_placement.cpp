@@ -1,4 +1,5 @@
 #include "brushes/brush_placement.hpp"
+#include "editor_item_bits.hpp"
 #include "brushes/brush.hpp"
 
 #include "erhe_property/attached_group.hpp"
@@ -64,7 +65,7 @@ const Property<Object_reference> Brush_placement::brush_property = Property<Obje
             .group                = c_group,
             .tooltip              = "The brush this node was placed with; session state, never saved",
             .label                = "Brush",
-            .reference_item_types = erhe::Item_type::brush
+            .reference_item_types = editor::Editor_item_types::brush
         }
     },
     validate_brush

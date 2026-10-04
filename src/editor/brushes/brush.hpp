@@ -1,6 +1,7 @@
 #pragma once
 
 #include "brushes/brush_geometry_slot.hpp"
+#include "editor_item_bits.hpp"
 #include "brushes/reference_frame.hpp"
 #include "physics/collision_generator.hpp"
 #include "scene/scene_root.hpp"
@@ -103,7 +104,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Brush"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::brush; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | editor::Editor_item_types::brush; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom

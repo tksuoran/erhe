@@ -1,6 +1,7 @@
 ﻿#include "tools/hotbar.hpp"
 
 #include "graph_editor/graph_editor_window_base.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "brushes/brush.hpp"
@@ -470,7 +471,7 @@ void Hotbar::init_hotbar()
     // composition layer there is no scene mesh.)
     Rendertarget_mesh* const rendertarget_mesh = m_quad_view->get_rendertarget_mesh();
     if (rendertarget_mesh != nullptr) {
-        rendertarget_mesh->enable_flag_bits(erhe::Item_flags::view_anchored);
+        rendertarget_mesh->enable_flag_bits(editor::Editor_item_flags::view_anchored);
     }
 
     Rendertarget_imgui_host* imgui_host = m_quad_view->get_imgui_host();

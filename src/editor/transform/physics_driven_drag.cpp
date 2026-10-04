@@ -1,4 +1,5 @@
 #include "transform/physics_driven_drag.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "app_message.hpp"
@@ -41,7 +42,7 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
         if (!node) {
             continue;
         }
-        if (erhe::utility::test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform)) {
+        if (erhe::utility::test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform)) {
             continue; // the drag does not move it
         }
         erhe::physics::IRigid_body* const rigid_body = get_node_rigid_body(*node.get());

@@ -1,4 +1,5 @@
 #include "erhe_item/item.hpp"
+#include "test_application_flags.hpp"
 
 #include <gtest/gtest.h>
 
@@ -105,18 +106,20 @@ TEST(ItemBase, SetVisible)
     EXPECT_FALSE(item->is_visible());
 }
 
-TEST(ItemBase, IsHovered)
+TEST(ItemBase, ApplicationFlagBits)
 {
+    // Application bits (Item_flags::application_bit) are plain flag bits:
+    // set, tested and cleared like the library's own.
     auto item = std::make_shared<Concrete_item>();
-    EXPECT_FALSE(item->is_hovered());
+    EXPECT_EQ(item->get_flag_bits() & Test_item_flags::hovered_in_viewport, 0u);
 
-    item->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
-    EXPECT_TRUE(item->is_hovered());
-    item->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
-    EXPECT_FALSE(item->is_hovered());
+    item->enable_flag_bits(Test_item_flags::hovered_in_viewport);
+    EXPECT_NE(item->get_flag_bits() & Test_item_flags::hovered_in_viewport, 0u);
+    item->disable_flag_bits(Test_item_flags::hovered_in_viewport);
+    EXPECT_EQ(item->get_flag_bits() & Test_item_flags::hovered_in_viewport, 0u);
 
-    item->enable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
-    EXPECT_TRUE(item->is_hovered());
+    item->enable_flag_bits(Test_item_flags::hovered_in_item_tree);
+    EXPECT_NE(item->get_flag_bits() & Test_item_flags::hovered_in_item_tree, 0u);
 }
 
 TEST(ItemBase, IsShownInUi)

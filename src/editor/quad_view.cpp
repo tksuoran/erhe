@@ -1,4 +1,5 @@
 #include "quad_view.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "rendertarget_imgui_host.hpp"
@@ -98,7 +99,7 @@ Quad_view::Quad_view(
         );
         m_rendertarget_mesh->layer_id = scene_root.layers().rendertarget()->id;
         m_rendertarget_mesh->enable_flag_bits(
-            erhe::Item_flags::show_in_developer_ui
+            editor::Editor_item_flags::show_in_developer_ui
         );
 
         m_rendertarget_node = std::make_shared<erhe::scene::Xform>(std::string{debug_label} + " RT node");
@@ -107,7 +108,7 @@ Quad_view::Quad_view(
         // the standalone scene rendertarget node - the glTF exporter saves
         // only content-flagged children, so the hotbar / hud quad never leaks
         // into a saved scene (its texture has no serializable image source).
-        m_rendertarget_node->enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::show_in_developer_ui);
+        m_rendertarget_node->enable_flag_bits(editor::Editor_item_flags::rendertarget | editor::Editor_item_flags::show_in_developer_ui);
         // Hidden until the owner (hotbar, hud) calls set_visible; the mesh
         // inherits the node's visibility.
         m_rendertarget_node->hide();

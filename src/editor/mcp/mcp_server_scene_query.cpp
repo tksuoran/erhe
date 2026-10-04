@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "editor_item_bits.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
@@ -1905,7 +1906,7 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
     // prim of the tree and needs not be under its kind scope
     // (doc/erhe/usd_compatibility_design.md U4), so the index - not a walk of the
     // `Brushes` scope - is what lists them.
-    const std::shared_ptr<erhe::Scope> brushes_scope = library->find_scope(erhe::Item_type::brush);
+    const std::shared_ptr<erhe::Scope> brushes_scope = library->find_scope(editor::Editor_item_types::brush);
     json brushes = json::array();
     for (const std::shared_ptr<Brush>& brush : library->get_all<Brush>()) {
         if (!brush) {

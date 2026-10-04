@@ -200,7 +200,9 @@ const Property<bool> Material::use_aniso_control_property = Property<bool>::regi
 // is a shader variant change.
 using Texture_slot = std::shared_ptr<erhe::graphics::Texture_reference>;
 using Slot_traits  = erhe::property::Member_value_traits<Texture_slot>;
-constexpr uint64_t c_texture_types = erhe::Item_type::texture | erhe::Item_type::graph_texture;
+// Any item that resolves to a texture (a Texture, or an application class
+// implementing Texture_reference, which carries the same capability bit).
+constexpr uint64_t c_texture_types = erhe::Item_type::texture_reference;
 
 auto texture_ui(const std::string_view label, const Property_ui::Visible_when visible_when = {}) -> Property_ui
 {

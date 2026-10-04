@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "editor_item_bits.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
@@ -395,7 +396,9 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         .physics_data          = &physics_data,
         .external_assets       = collect_prefab_external_assets(*root_node, export_path.parent_path()),
         .image_source_provider = make_gltf_image_source_provider(sr->get_content_library()),
-        .animations            = collect_gltf_export_animations(sr->get_content_library())
+        .animations            = collect_gltf_export_animations(sr->get_content_library()),
+        .excluded_item_flag_bits = Editor_item_flags::rendertarget,
+        .excluded_item_type_bits = Editor_item_types::joint
     };
     if (editor_state) {
         // Full scene persistence: editor-domain ERHE_* extensions + baked

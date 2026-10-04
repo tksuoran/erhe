@@ -4243,6 +4243,10 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
 
     ERHE_PROFILE_FUNCTION();
 
+    // Before any item exists: the editor's flag bits and type indices
+    // (editor_item_bits.hpp).
+    register_editor_item_bits();
+
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)
     nvtxInitialize(nullptr);
 #endif

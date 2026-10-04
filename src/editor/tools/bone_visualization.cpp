@@ -1,4 +1,5 @@
 #include "tools/bone_visualization.hpp"
+#include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -343,8 +344,8 @@ auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& jo
     // prefabs; id is added/removed by apply_proxy_flags() to gate picking.
     // Deliberately no `content` bit - a proxy must never be mistaken for scene
     // content.
-    proxy.mesh->enable_flag_bits(erhe::Item_flags::bone_proxy);
-    proxy.node->enable_flag_bits(erhe::Item_flags::bone_proxy);
+    proxy.mesh->enable_flag_bits(editor::Editor_item_flags::bone_proxy);
+    proxy.node->enable_flag_bits(editor::Editor_item_flags::bone_proxy);
 
     erhe::scene::set_mesh_parent(proxy.mesh, proxy.node);
     proxy.node->set_parent(joint);
@@ -439,7 +440,7 @@ void Bone_visualization::update_proxy_material(Proxy& proxy)
     // a hovered proxy to its joint), so it is read from there.
     // The bone's own display color (R17) when neither applies.
     const bool selected = joint->is_selected();
-    const bool hovered  = joint->is_hovered();
+    const bool hovered  = editor::is_hovered(*joint);
     const std::shared_ptr<erhe::primitive::Material> material =
         hovered  ? m_hover_material    :
         selected ? m_selected_material : get_display_material(*joint);
@@ -457,9 +458,9 @@ void Bone_visualization::update_proxy_material(Proxy& proxy)
         proxy.mesh->disable_flag_bits(erhe::Item_flags::selected);
     }
     if (hovered) {
-        proxy.mesh->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+        proxy.mesh->enable_flag_bits(editor::Editor_item_flags::hovered_in_viewport);
     } else {
-        proxy.mesh->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+        proxy.mesh->disable_flag_bits(editor::Editor_item_flags::hovered_in_viewport);
     }
     proxy.selected = selected;
     proxy.hovered  = hovered;

@@ -33,15 +33,15 @@ activation). At most one item is active at any time; there may be none.
 The item's own `active` property (`Item_base::active_property`, the USD prim
 `active` metadata, derived bit `Item_flags::active`) is a different concept and
 keeps its name. The identifiers of this one say `active_item` everywhere:
-`Selection::get_active_item()`, `Item_flags::active_item`,
+`Selection::get_active_item()`, `Editor_item_flags::active_item`,
 `Active_item_changed_message`, MCP field `active_item`.
 
 ### D2. State and lifetime
 
 - `Selection` holds `std::weak_ptr<erhe::Item_base> m_active_item`.
-- `Item_flags::active_item` is bit 41 (`count` becomes 42), listed in
-  `Item_flags::transient`, and written only by `Selection` through
-  `set_flag_bits`. The bit reaches draw-list entries through the existing
+- `Editor_item_flags::active_item` is an application bit
+  (`src/editor/editor_item_bits.hpp`), registered as transient, and written
+  only by `Selection` through `set_flag_bits`. The bit reaches draw-list entries through the existing
   `Mesh::handle_flag_bits_update` -> `Scene_root::on_mesh_flags_changed` ->
   `enqueue_set_flags` path, so rendering needs no new plumbing.
 - Because the active item can be outside the selection, its lifetime is

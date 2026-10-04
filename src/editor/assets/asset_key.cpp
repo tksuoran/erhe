@@ -1,4 +1,5 @@
 #include "assets/asset_key.hpp"
+#include "editor_item_bits.hpp"
 
 #include "content_library/content_library.hpp"
 
@@ -89,7 +90,7 @@ auto Asset_key_hash::operator()(const Asset_key& key) const -> std::size_t
 namespace {
 
 const std::array<Asset_type_info, 5> c_asset_type_infos{
-    Asset_type_info{Asset_type::brush,     "brush",     erhe::Item_type::brush     },
+    Asset_type_info{Asset_type::brush,     "brush",     editor::Editor_item_types::brush     },
     Asset_type_info{Asset_type::material,  "material",  erhe::Item_type::material  },
     Asset_type_info{Asset_type::animation, "animation", erhe::Item_type::animation },
     Asset_type_info{Asset_type::mesh,      "mesh",      erhe::Item_type::mesh      },

@@ -6,6 +6,7 @@ erhe_target_sources_grouped(
     erhe_profile/jemalloc_new_delete.hpp
     erhe_profile/profile.cpp
     erhe_profile/profile.hpp
+    erhe_profile/profile_mutex.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

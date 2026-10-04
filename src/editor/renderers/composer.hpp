@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "editor_item_bits.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <cstdint>
@@ -26,7 +27,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Composer"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::composer; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return editor::Editor_item_types::composer; }
 
     // Public API
     // Renders the composition passes selected by phase:

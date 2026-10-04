@@ -4,6 +4,7 @@
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
+#include "test_application_flags.hpp"
 
 #include <gtest/gtest.h>
 
@@ -50,10 +51,10 @@ TEST(Item_purpose, item_without_show_in_ui_is_guide)
 TEST(Item_purpose, editor_only_flags_derive_guide)
 {
     const uint64_t bits[] = {
-        erhe::Item_flags::tool,
-        erhe::Item_flags::brush,
-        erhe::Item_flags::controller,
-        erhe::Item_flags::rendertarget
+        Test_item_flags::tool,
+        Test_item_flags::brush,
+        Test_item_flags::controller,
+        Test_item_flags::rendertarget
     };
     for (const uint64_t bit : bits) {
         const std::shared_ptr<Leaf> item = make_content_item("i");
@@ -77,19 +78,19 @@ TEST(Item_purpose, flag_change_notifies_observers)
             observed = get_as<erhe::Purpose>(args.new_value);
         }
     );
-    item->enable_flag_bits(erhe::Item_flags::tool);
+    item->enable_flag_bits(Test_item_flags::tool);
     EXPECT_EQ(changes, 1);
     EXPECT_EQ(observed, erhe::Purpose::guide);
 
     // A flag that purpose is not derived from changes nothing.
-    item->enable_flag_bits(erhe::Item_flags::show_debug_visualizations);
+    item->enable_flag_bits(Test_item_flags::show_debug_visualizations);
     EXPECT_EQ(changes, 1);
 }
 
 TEST(Item_purpose, local_value_overrides_the_derived_default)
 {
     const std::shared_ptr<Leaf> item = make_content_item("i");
-    item->enable_flag_bits(erhe::Item_flags::tool);
+    item->enable_flag_bits(Test_item_flags::tool);
     EXPECT_EQ(item->get_purpose(), erhe::Purpose::guide);
 
     item->set_value(erhe::Item_base::purpose_property, erhe::Purpose::render);
@@ -115,7 +116,7 @@ TEST(Item_purpose, authored_value_inherits_through_the_hierarchy)
     EXPECT_EQ(leaf->get_value_source(erhe::Item_base::purpose_property.get()), Value_source::inherited);
 
     // A descendant's own derived default is below the inherited value.
-    leaf->enable_flag_bits(erhe::Item_flags::tool);
+    leaf->enable_flag_bits(Test_item_flags::tool);
     EXPECT_EQ(leaf->get_purpose(), erhe::Purpose::render);
 
     root->clear_value(erhe::Item_base::purpose_property.get());
@@ -126,7 +127,7 @@ TEST(Item_purpose, authored_value_inherits_through_the_hierarchy)
 TEST(Item_purpose, an_unauthored_purpose_is_not_a_local_value)
 {
     const std::shared_ptr<Leaf> item = make_content_item("i");
-    item->enable_flag_bits(erhe::Item_flags::tool);
+    item->enable_flag_bits(Test_item_flags::tool);
     int local_count = 0;
     item->for_each_local_value(
         [&local_count](const Dependency_property& property, const Property_value&) {

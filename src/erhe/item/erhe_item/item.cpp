@@ -26,78 +26,6 @@ void bump_item_mutation_serial()
     ++s_item_mutation_serial;
 }
 
-auto Item_flags::to_string(const uint64_t flags) -> std::string
-{
-    std::stringstream ss;
-
-    using Item_flags = Item_flags;
-    bool first = true;
-    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
-        const uint64_t bit_mask = (uint64_t{1} << bit_position);
-        const bool     value    = erhe::utility::test_bit_set(flags, bit_mask);
-        if (value) {
-            if (!first) {
-                ss << " | ";
-            }
-            ss << Item_flags::c_bit_labels[bit_position];
-            first = false;
-        }
-    }
-    return ss.str();
-}
-
-auto Item_filter::operator()(const uint64_t visibility_mask) const -> bool
-{
-    if ((visibility_mask & require_all_bits_set) != require_all_bits_set) {
-        return false;
-    }
-    if (require_at_least_one_bit_set != 0u) {
-        if ((visibility_mask & require_at_least_one_bit_set) == 0u) {
-            return false;
-        }
-    }
-    if ((visibility_mask & require_all_bits_clear) != 0u) {
-        return false;
-    }
-    if (require_at_least_one_bit_clear != 0u) {
-        if ((visibility_mask & require_at_least_one_bit_clear) == require_at_least_one_bit_clear) {
-            return false;
-        }
-    }
-    return true;
-}
-
-auto Item_filter::describe() const -> std::string
-{
-    bool first = true;
-    std::stringstream ss;
-    if (require_all_bits_set != 0) {
-        ss << "require_all_bits_set = " << Item_flags::to_string(this->require_all_bits_set);
-        first = false;
-    }
-    if (require_at_least_one_bit_set != 0) {
-        if (!first) {
-            ss << ", ";
-        }
-        ss << "require_at_least_one_bit_set = " << Item_flags::to_string(this->require_at_least_one_bit_set);
-        first = false;
-    }
-    if (require_all_bits_clear != 0) {
-        if (!first) {
-            ss << ", ";
-        }
-        ss << "require_all_bits_clear = " << Item_flags::to_string(this->require_all_bits_clear);
-        first = false;
-    }
-    if (require_at_least_one_bit_clear != 0) {
-        if (!first) {
-            ss << ", ";
-        }
-        ss << "require_at_least_one_bit_clear = " << Item_flags::to_string(this->require_at_least_one_bit_clear);
-    }
-    return ss.str();
-}
-
 // -----------------------------------------------------------------------------
 
 // The name: a bridged property (D18) over the member, registered first so
@@ -141,12 +69,6 @@ const erhe::property::Property<std::string> Item_base::name_property = erhe::pro
 const erhe::property::Property<bool> Item_base::visible_property = erhe::property::Property<bool>::register_property(
     "visible", Item_base::property_owner_type(),
     erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .inherits = true, .ui = erhe::property::Property_ui{.label = "Visible"}}
-);
-
-// Registered between Visible and Active so the row sits between theirs.
-const erhe::property::Property<bool> Item_base::show_debug_visualizations_property = Item_base::register_flag_bit_property(
-    "show_debug_visualizations", Item_base::property_owner_type(), Item_flags::show_debug_visualizations,
-    erhe::property::Property_ui{.label = "Show Debug Visualizations"}
 );
 
 // USD prim `active` metadata (doc/erhe/usd_compatibility_design.md X2). Not
@@ -205,7 +127,7 @@ const erhe::property::Property<erhe::property::Object_reference> Item_base::styl
         // assignment through Property_set_operation rebuilds the draw
         // lists (D11); serialize marks the item's container dirty.
         .flags  = erhe::property::Property_flags::serialize | erhe::property::Property_flags::affects_draw_list_partition | erhe::property::Property_flags::affects_shader_variant,
-        .ui     = erhe::property::Property_ui{.label = "Style", .reference_item_types = Item_type::style, .show_clear_button = true},
+        .ui     = erhe::property::Property_ui{.label = "Style", .reference_item_types = Item_type::style_source, .show_clear_button = true},
         .bridge = erhe::property::Property_bridge{
             .get = [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
                 return erhe::property::Object_reference{std::const_pointer_cast<erhe::property::Dependency_object>(object.get_style())};
@@ -236,7 +158,6 @@ const erhe::property::Property<erhe::property::Object_reference> Item_base::styl
 // registered path, so a multi-selection edits them together with mixed-value
 // display and one undo entry per edit. The name is registered first of all
 // (above), so its row leads every item section.
-
 
 // The tag set as one comma-separated string; set splits on commas and
 // drops surrounding whitespace and empty entries.
@@ -345,15 +266,9 @@ namespace {
 
 } // anonymous namespace
 
-const erhe::property::Property<bool> Item_base::lock_viewport_transform_property = register_flag_property(
-    "lock_viewport_transform", Item_flags::lock_viewport_transform, "Transform", "Locks", "Viewport transform tools leave the item alone", false
-);
 const erhe::property::Property<bool> Item_base::lock_edit_property = register_flag_property(
     "lock_edit", Item_flags::lock_edit, "Edit", "Locks", "Seals the item: every other property is read-only while set", false,
     erhe::property::Property_flags::writable_when_sealed
-);
-const erhe::property::Property<bool> Item_base::lock_viewport_selection_property = register_flag_property(
-    "lock_viewport_selection", Item_flags::lock_viewport_selection, "Selection", "Locks", "Viewport picking skips the item", false
 );
 const erhe::property::Property<bool> Item_base::show_in_ui_property = register_flag_property(
     "show_in_ui", Item_flags::show_in_ui, "Show In UI", "", "Listed in the item tree and the pickers", true
@@ -369,9 +284,6 @@ const erhe::property::Property<bool> Item_base::no_transform_update_property = r
 );
 const erhe::property::Property<bool> Item_base::transform_world_normative_property = register_flag_property(
     "transform_world_normative", Item_flags::transform_world_normative, "Transform World Normative", "", "", true
-);
-const erhe::property::Property<bool> Item_base::show_in_developer_ui_property = register_flag_property(
-    "show_in_developer_ui", Item_flags::show_in_developer_ui, "Show In Developer UI", "", "", true
 );
 // Offered on bones, in the same "IK" group as the editor's Ik.* rows.
 const erhe::property::Property<bool> Item_base::ik_lock_property = Item_base::register_flag_bit_property(
@@ -557,7 +469,7 @@ void Item_base::set_flag_bits(const uint64_t requested_mask, const bool value)
     const auto old_flag_bits = m_flag_bits;
     // M3: the purpose property's default layer is derived from these bits
     // (D31), so its effective value has to be read before they move.
-    const bool purpose_inputs_change = ((mask & Item_flags::purpose_inputs) != 0u);
+    const bool purpose_inputs_change = ((mask & Item_flags::get_purpose_inputs()) != 0u);
     erhe::property::Value_source   old_purpose_source{};
     erhe::property::Property_value old_purpose{};
     if (purpose_inputs_change) {
@@ -569,7 +481,7 @@ void Item_base::set_flag_bits(const uint64_t requested_mask, const bool value)
     } else {
         m_flag_bits = m_flag_bits & ~mask;
     }
-    if (purpose_inputs_change && (((old_flag_bits ^ m_flag_bits) & Item_flags::purpose_inputs) != 0u)) {
+    if (purpose_inputs_change && (((old_flag_bits ^ m_flag_bits) & Item_flags::get_purpose_inputs()) != 0u)) {
         refresh_computed_default(purpose_property.get(), old_purpose, old_purpose_source);
     }
 
@@ -577,7 +489,7 @@ void Item_base::set_flag_bits(const uint64_t requested_mask, const bool value)
         if (((old_flag_bits ^ m_flag_bits) & Item_flags::lock_edit) != 0u) {
             sync_seal_with_lock_edit();
         }
-        if (((old_flag_bits ^ m_flag_bits) & ~Item_flags::transient) != 0u) {
+        if (((old_flag_bits ^ m_flag_bits) & ~Item_flags::get_transient_bits()) != 0u) {
             bump_item_mutation_serial();
         }
         handle_flag_bits_update(old_flag_bits, m_flag_bits);
@@ -607,11 +519,6 @@ auto Item_base::is_transform_world_normative() const -> bool
 auto Item_base::is_selected() const -> bool
 {
     return erhe::utility::test_bit_set(m_flag_bits, Item_flags::selected);
-}
-
-auto Item_base::is_hovered() const -> bool
-{
-    return erhe::utility::test_any_rhs_bits_set(m_flag_bits, Item_flags::hovered_in_viewport | Item_flags::hovered_in_item_tree);
 }
 
 void Item_base::set_selected(const bool selected)
@@ -662,16 +569,6 @@ auto Item_base::is_hidden() const -> bool
 auto Item_base::is_lock_edit() const -> bool
 {
     return (m_flag_bits & Item_flags::lock_edit) == Item_flags::lock_edit;
-}
-
-auto Item_base::is_lock_viewport_selection() const -> bool
-{
-    return (m_flag_bits & Item_flags::lock_viewport_selection) == Item_flags::lock_viewport_selection;
-}
-
-auto Item_base::is_lock_viewport_transform() const -> bool
-{
-    return (m_flag_bits & Item_flags::lock_viewport_transform) == Item_flags::lock_viewport_transform;
 }
 
 void Item_base::set_lock_edit(bool value)

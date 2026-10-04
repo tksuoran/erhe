@@ -1,6 +1,7 @@
 #pragma once
 
 #include "texture_graph/texture_graph.hpp"
+#include "editor_item_bits.hpp"
 // Complete type needed: Graph_asset::set_item_host (a virtual, instantiated
 // with the class) forwards the host to the nodes.
 #include "texture_graph/texture_graph_node.hpp"
@@ -40,7 +41,7 @@ public:
 
     // Implements erhe::Item_base
     static constexpr std::string_view static_type_name{"Graph_texture"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::graph_texture; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | editor::Editor_item_types::graph_texture | erhe::Item_type::texture_reference; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom

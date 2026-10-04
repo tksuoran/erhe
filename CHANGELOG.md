@@ -23,11 +23,57 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   in place (the mesh-component drag); the host refreshes the bounds of
   every mesh naming the primitive.
 
+- `erhe::item`: `erhe_item/item_flags.hpp` (`Item_flags`, `Item_filter`,
+  `Item_flag_info`) and `erhe_item/item_type.hpp` (`Item_type`,
+  `Item_type_info`), split out of `item.hpp`, which includes both. The
+  application ranges: `Item_flags::application_bit(i)` (bits 32 to 63) with
+  `register_application_flags()`, `get_application_flags()`, `label()`,
+  `get_transient_bits()`, `get_purpose_guide_when_set_bits()`,
+  `get_purpose_inputs()`; `Item_type::application_index(i)` /
+  `application_bit(i)` (indices 1 to 31, the library types from
+  `library_first_index` 32) with `register_application_types()`,
+  `get_application_types()`, `label()`, `index_count`. The capability
+  types `Item_type::texture_reference` and `style_source`.
+  `Item_base::register_flag_bit_property()` is public.
+- `erhe::profile`: `erhe_profile/profile_mutex.hpp`, the profiler-aware
+  mutex macros alone (`profile.hpp` includes it).
+- `erhe::gltf`: `Gltf_export_arguments::excluded_item_flag_bits` /
+  `excluded_item_type_bits`; `erhe::usd`: the same on `Usd_save_arguments`.
+- `erhe::scene_renderer`: `Primitive_interface_settings::hovered_flag_bits` /
+  `active_item_flag_bits`.
+
 ### Changed
 
+- `erhe::item`: the editor-only `Item_flags` bits (`tool`, `brush`,
+  `controller`, `rendertarget`, `expand`, the hover bits,
+  `show_in_developer_ui`, `show_debug_visualizations`, `affects_shadow`,
+  `bone_proxy`, `active_item`, `view_anchored`, the viewport locks,
+  `invisible_parent`, `render_wireframe`, `render_bounding_volume`) and the
+  editor-only `Item_type` indices (`brush`, `composer`, `grid`,
+  `composition_pass`, `rendertarget`, the asset and content-library
+  entries, `joint`, `raytrace`, `render_style`, the graph types, `style`)
+  are the editor's (`src/editor/editor_item_bits.hpp`), as are their
+  flag-bridged properties; the library bits were renumbered (glTF
+  serializes flags by name). `Item_flags::purpose_guide_when_set` /
+  `purpose_inputs` / `transient` as constants are replaced by the
+  registered masks; `derive_purpose_from_flags()` is no longer
+  `constexpr`. `Item_type::count` is gone (`index_count`, `library_count`).
+  `Item_type::bone`, `light_layer`, `mesh_layer`, `animation_channel` and
+  `animation_sampler` (no class carried them) are removed.
+- `erhe::primitive`: `Build_info::constant_color` is a `glm::vec4`;
+  `build_info.hpp` no longer includes geogram.
 - `erhe::scene_renderer`: `Draw_color_parameters::view_frustum_planes` is a
   `std::span<const glm::vec4>` (empty: no culling) instead of a pointer to a
   six-plane array.
+
+### Removed
+
+- `erhe::item`: `Item_host::hosted_selection` (the editor's `Selection`
+  keeps its per-host buckets), `Item_base::is_hovered()`,
+  `is_lock_viewport_selection()`, `is_lock_viewport_transform()` and the
+  `lock_viewport_transform_property`, `lock_viewport_selection_property`,
+  `show_debug_visualizations_property`, `show_in_developer_ui_property`
+  statics (the editor's `Editor_item_properties`).
 
 - `erhe::graphics`: `erhe_graphics/vulkan/vulkan_pipeline_cache_file.hpp`:
   `Pipeline_cache_identity`, `make_pipeline_cache_path()`,

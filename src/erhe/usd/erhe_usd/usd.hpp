@@ -1254,6 +1254,14 @@ public:
     // prim: an erhe item path excludes the root's own name (M1), so the
     // root's children are the stage's top-level prims.
     std::shared_ptr<const erhe::scene::Node>                root_node;
+    // Items the application keeps out of the stage, as the glTF exporter's
+    // Gltf_export_arguments: a prim whose flag bits meet
+    // excluded_item_flag_bits (the editor's rendertarget meshes) is written
+    // without its mesh, and a prim whose type bits meet
+    // excluded_item_type_bits (the editor's joint prims, written from the
+    // physics description) is not planned as a prim.
+    uint64_t                                                excluded_item_flag_bits{0};
+    uint64_t                                                excluded_item_type_bits{0};
     // The scene's own materials, in the order `textures` indexes them. Where
     // a material prim goes on the stage is decided by the tree - a material
     // is a prim of it (doc/erhe/usd_compatibility_design.md U4) - so this list is

@@ -2346,10 +2346,11 @@ private:
             if (m_skel_animation_items.count(child_prim) != 0) {
                 continue; // rebuilt by the Skeleton prim from the joint channels
             }
-            if ((child_prim->get_type() & erhe::Item_type::joint) != 0) {
-                // A joint prim is written from the physics description, as the
-                // UsdPhysics joint prim of the body it joins, wherever that
-                // body's prim sits (doc/erhe/usd_compatibility.md, "Physics").
+            if ((child_prim->get_type() & m_arguments.excluded_item_type_bits) != 0) {
+                // The editor's joint prim: written from the physics
+                // description, as the UsdPhysics joint prim of the body it
+                // joins, wherever that body's prim sits
+                // (doc/erhe/usd_compatibility.md, "Physics").
                 continue;
             }
             // A skin and an animation are library resources of the editor,
@@ -3958,7 +3959,7 @@ private:
         std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(
             const_cast<erhe::scene::Node&>(node).shared_from_this()
         );
-        if (mesh && ((mesh->get_flag_bits() & erhe::Item_flags::rendertarget) != 0)) {
+        if (mesh && ((mesh->get_flag_bits() & m_arguments.excluded_item_flag_bits) != 0)) {
             // A rendertarget mesh is a UI quad rendered into every frame; it
             // has no serializable source image, so the node exports without it.
             mesh.reset();
