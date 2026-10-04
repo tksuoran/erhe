@@ -148,7 +148,7 @@ private:
 
         // Create points for each unique vertex. colocate() maps each used
         // slot to the used slot of its representative (old_to_new).
-        GEO::vector<GEO::index_t> old_to_new(used_count, GEO::NO_INDEX);
+        GEO::vector<GEO::index_t> old_to_new(static_cast<GEO::index_t>(used_count), GEO::NO_INDEX);
         const double tolerance = 0.00001; // 0.01mm if node has scale = 1.0, 1mm if node scale is 100.0
         const GEO::index_t point_count = GEO::Geom::colocate(
             m_vertex_positions.data()->data(),                    // const double* points,
@@ -166,7 +166,7 @@ private:
 
         const GEO::index_t base_vertex = m_mesh.vertices.create_vertices(point_count);
         m_mesh.vertices.set_double_precision();
-        GEO::vector<GEO::index_t> point_from_representative(used_count, GEO::NO_INDEX);
+        GEO::vector<GEO::index_t> point_from_representative(static_cast<GEO::index_t>(used_count), GEO::NO_INDEX);
         for (GEO::index_t i = 0, end = static_cast<GEO::index_t>(representatives.size()); i < end; ++i) {
             const GEO::index_t representative = representatives[i];
             point_from_representative.at(representative) = i;

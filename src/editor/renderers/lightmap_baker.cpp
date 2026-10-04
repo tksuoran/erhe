@@ -723,6 +723,10 @@ vec3 committed_face_normal(rayQueryEXT ray_query)
     return normalize(cross(p1 - p0, p2 - p0));
 }
 
+)GLSL"
+// Split into adjacent literals: MSVC rejects a single string literal piece
+// longer than 16380 bytes (C2026); concatenation is unaffected.
+R"GLSL(
 void main()
 {
     ivec2 texel = ivec2(gl_GlobalInvocationID.xy) + ivec2(0, int(lightmap_gather.base_texel_y));

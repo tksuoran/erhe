@@ -49,7 +49,7 @@ auto Shader_key::get_defines() const -> std::vector<std::pair<std::string, std::
     // They stay in the key for variant hashing and identity (and describe() still
     // shows them - that re-enumerates ERHE_SHADER_INT independently of this).
 #define ERHE_X(PARAM) \
-    if ((Shader_int::PARAM != Shader_int::VERTEX_POSITION_ENCODING) && \
+    if constexpr ((Shader_int::PARAM != Shader_int::VERTEX_POSITION_ENCODING) && \
         (Shader_int::PARAM != Shader_int::VERTEX_TEXCOORD_ENCODING) && \
         (Shader_int::PARAM != Shader_int::VERTEX_TBN_ENCODING)      && \
         (Shader_int::PARAM != Shader_int::VERTEX_JOINT_WEIGHTS_ENCODING)) { \
