@@ -7,6 +7,13 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-empty-body>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
+# ERHE_USE_ASAN (doc/building.md): AddressSanitizer for every target,
+# including the CPM dependencies configured in this tree.
+if (ERHE_USE_ASAN)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address)
+endif ()
+
 # Workaround for https://github.com/BrunoLevy/geogram/issues/257
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:-std=gnu99>")
 

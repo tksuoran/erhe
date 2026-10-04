@@ -44,6 +44,18 @@ headers (`VK_ADD_LAYER_PATH=<sdk>/share/vulkan/explicit_layer.d`).
 Kill a stray editor with `pkill -x editor`; `pkill -f` patterns match the
 shell running the command as well.
 
+## AddressSanitizer
+
+`-DERHE_USE_ASAN=ON` adds `-fsanitize=address` to every target of the tree
+(`cmake/GNU.cmake`, `cmake/Clang.cmake`). Configure a separate tree with
+cmake directly, passing the flags of the matching `scripts/configure_*.sh`
+plus the option and `-DERHE_BUILD_TESTS=ON`, for example
+`build/Ninja_OpenGL_Asan` with `-DERHE_GRAPHICS_API=opengl`. Linking needs
+the compiler's sanitizer runtime: with Ubuntu's clang that is the
+`libclang-rt-<version>-dev` package (`ld: cannot find
+libclang_rt.asan-x86_64.a` says it is missing). Run with
+`ASAN_OPTIONS=detect_leaks=0` unless leaks are the question.
+
 ## Memory growth diagnostics
 
 Two zero-install tools. Both launch the editor in an isolated working

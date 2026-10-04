@@ -39,13 +39,17 @@ if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 endif ()
 
-# TODO For now, to enable sanitizers, uncomment lines here
+# ERHE_USE_ASAN (doc/building.md): AddressSanitizer for every target,
+# including the CPM dependencies configured in this tree.
+if (ERHE_USE_ASAN)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address)
+endif ()
+
+# TODO For now, to enable the other sanitizers, uncomment lines here
 
 #add_compile_options(-fsanitize=undefined)
 #add_link_options(-fsanitize=undefined)
-
-#add_compile_options(-fsanitize=address)
-#add_link_options(-fsanitize=address)
 
 # No implicit-conversion because Tracy uses moodycamel
 #add_compile_options(-fsanitize=undefined,float-divide-by-zero,local-bounds -fno-sanitize-recover=all)
