@@ -247,3 +247,10 @@ none
 >audit-2026-09-30-item-10::DONE{4fc17d988-Vk-per-subresource-layout-tracking+resolve_level/layer-fix;1d5d45f28-Texture_location/Buffer_texel_location;51dfc09fb-narrowing-fix}✓
 >GL-depth-stencil-format-selection::5ef90f13c{sample-count-1-listed;only-renderable-ds-formats}✓{review-found:GL-1-sample-texture-multisample->open}
 >handoff::prompt_queue.txt{1:doc/plans/opengl_test_failures.md;2:doc/plans/audit_2026_09_30_followups.md}
+
+[2026-10-04]
+>GL-gpu-test-teardown-heap-corruption::cafc0773e{ASAN-tree-found-use-after-free;Device_impl-deferred-queues-declared-before-pool+default-VAO;doc/plans/opengl_test_failures.md-removed}✓
+>audit-item-18-glslang+Vulkan::f9ab02789+b67d84982{Spirv_cache-settings-hash+atomic-put;VkPipelineCache-persisted-per-identity;review-fixes;Metal-half->followups-doc}✓
+>audit-item-12-include-diet::afbe3d5b5+075bc6cc4{device.hpp-177k->75k-lines;texture_reference.hpp;coordinate_conventions.hpp;review-fixes;hextiles-load_texture-deleted}✓
+>layout-tracking-follow-ups::e35933c80{clear_texture-view-range;stencil-only-resolve-driver;make_view-base-level/layer;3-gpu-tests}✓
+>handoff::prompt_queue.txt{1:erhe_graphics-interface/backend-split}
