@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_math/aabb.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #include <geogram/basic/numeric.h>
@@ -204,6 +205,11 @@ private:
         glm::mat4                                 node_from_world{1.0f};
         std::vector<GEO::index_t>                 vertices;     // unique affected
         std::vector<glm::vec3>                    before_local; // captured at begin(), parallel to vertices
+        // The primitive's renderable-mesh bounding box at begin(). The drag
+        // grows the live box from every written position (so the bounds
+        // consumers - shadow fit, culling, framing - see the moved
+        // geometry); cancel of an in-place edit restores this.
+        erhe::math::Aabb                          before_bounding_box;
 
         // The Primitive begin() bracketed with an optimization hold (null when
         // none was taken). Released via release_optimization_hold() on exactly
@@ -283,6 +289,8 @@ private:
     void fork_shared_groups(App_context& context);
     // Writes one vertex position into the geometry and the GPU buffers.
     void write_vertex(App_context& context, const Group& group, GEO::index_t vertex, const glm::vec3& local_position);
+    // The group's mesh re-reads its primitive bounds (Mesh::notify_primitive_bounds_changed).
+    static void notify_group_bounds(const Group& group);
     // Re-samples the corner texcoords of the facets around this group's slid
     // vertices at their new positions (section 4.6 "correct UVs") into out.
     void collect_corrected_texcoords(const Group& group, std::vector<Corner_texcoord_change>& out);

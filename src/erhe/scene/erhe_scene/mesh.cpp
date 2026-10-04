@@ -400,6 +400,21 @@ void Mesh::set_primitive_material(const std::size_t primitive_index, const std::
     m_primitives[primitive_index].set_value(Mesh_primitive::material_property, erhe::property::Object_reference{material});
 }
 
+void Mesh::notify_primitive_bounds_changed()
+{
+    invalidate_dependents(world_bounds_min_property);
+    invalidate_dependents(world_bounds_max_property);
+    const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
+    if (!shared_this) {
+        return;
+    }
+    Scene_host* scene_host = get_scene_host();
+    if (scene_host == nullptr) {
+        return;
+    }
+    scene_host->on_mesh_bounds_changed(shared_this);
+}
+
 void Mesh::notify_primitive_material_changed()
 {
     const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());

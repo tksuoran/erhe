@@ -1,5 +1,6 @@
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
@@ -326,7 +327,6 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
     constexpr erhe::primitive::Primitive_mode primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
     constexpr Draw_purpose purposes[] = { Draw_purpose::color, Draw_purpose::shadow };
 
-    const erhe::math::Aabb                          world_aabb = mesh->get_aabb_world();
     const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
     if (primitives.size() > 0xffffu) {
         log_draw_list->error("Mesh '{}' has {} primitives, exceeds Draw_list_entry limit of 65535; not registered", mesh->get_name(), primitives.size());
@@ -366,7 +366,7 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             entry.base_vertex          = (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
                 ? buffer_mesh.expanded_base_vertex()
                 : buffer_mesh.base_vertex();
-            entry.world_aabb           = world_aabb;
+            // world_aabb: write_object_bounds() below, once per object.
 
             object.locations.push_back(
                 Draw_list_entry_location{
@@ -390,6 +390,7 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             }
         }
     }
+    write_object_bounds(object_index);
 }
 
 void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
@@ -559,6 +560,32 @@ void Draw_list_scene::write_entry_record(const Draw_list_object& object, const D
     write_slot_fields(record, offsets, object, m_material_set, *mesh, mesh_primitive, buffer_mesh);
     std::memcpy(record + offsets.base_vertex, &entry.base_vertex, sizeof(uint32_t));
     write_position_quantization_fields(record, offsets, buffer_mesh);
+}
+
+void Draw_list_scene::write_object_bounds(const uint32_t object_index)
+{
+    Draw_list_object&        object = m_objects[object_index];
+    const erhe::scene::Mesh* mesh   = object.info.mesh.get();
+    ERHE_VERIFY(mesh != nullptr);
+    // Skinned entries carry no bounds: they are never culled, and the shadow
+    // fit bounds the object from its posed joints at gather time.
+    const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
+    for (const Draw_list_entry_location& location : object.locations) {
+        m_draw_lists[location.draw_list_index].entries[location.entry_index].world_aabb = world_aabb;
+    }
+    // The caster vertex shader's node-space input bound (Caster_vertex_extent).
+    glm::vec3 node_abs_extent{0.0f};
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+        if (!mesh_primitive.primitive) {
+            continue;
+        }
+        const erhe::math::Aabb node_aabb = mesh_primitive.primitive->get_bounding_box();
+        if (!node_aabb.is_valid_3d()) {
+            continue;
+        }
+        node_abs_extent = glm::max(node_abs_extent, glm::max(glm::abs(node_aabb.min), glm::abs(node_aabb.max)));
+    }
+    object.node_abs_extent = node_abs_extent;
 }
 
 void Draw_list_scene::write_object_transform(const uint32_t object_index)
@@ -1161,6 +1188,12 @@ void Draw_list_scene::enqueue_refresh(const std::shared_ptr<erhe::scene::Mesh>& 
     m_pending.push_back(Pending_op{.kind = Pending_op::Kind::refresh, .mesh = mesh});
 }
 
+void Draw_list_scene::enqueue_bounds_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    const std::lock_guard<std::mutex> lock{m_pending_mutex};
+    m_pending.push_back(Pending_op{.kind = Pending_op::Kind::bounds, .mesh = mesh});
+}
+
 auto Draw_list_scene::get_pending_count() const -> std::size_t
 {
     const std::lock_guard<std::mutex> lock{m_pending_mutex};
@@ -1277,6 +1310,13 @@ void Draw_list_scene::flush_pending()
                 const Draw_list_object_id id = find_object(op.mesh.get());
                 if (id.is_valid()) {
                     refresh_object_records(id.index);
+                }
+                break;
+            }
+            case Pending_op::Kind::bounds: {
+                const Draw_list_object_id id = find_object(op.mesh.get());
+                if (id.is_valid() && (m_objects[id.index].info.mesh != nullptr)) {
+                    write_object_bounds(id.index);
                 }
                 break;
             }
@@ -1428,7 +1468,7 @@ void Draw_list_scene::draw_list_chunks(
     Draw_indirect_buffer&                    draw_indirect_buffer,
     const Primitive_interface_settings&      primitive_settings,
     const erhe::Item_filter&                 filter,
-    const std::array<glm::vec4, 6>*          view_frustum_planes,
+    const std::span<const glm::vec4>         frustum_planes,
     Draw_statistics&                         statistics
 )
 {
@@ -1440,14 +1480,15 @@ void Draw_list_scene::draw_list_chunks(
 
     // One pass decision per entry, shared by the record and the command
     // writer so ERHE_DRAW_ID indexes stay paired: the filter on the mirrored
-    // flag bits, then the view frustum on the entry's world AABB.
+    // flag bits, then the pass frustum (view or light) on the entry's world
+    // AABB.
     m_entry_passes.resize(entry_count);
     for (std::size_t i = 0; i < entry_count; ++i) {
         const Draw_list_entry& entry = draw_list.entries[i];
         bool passes = filter(entry.flag_bits);
-        if (passes && (view_frustum_planes != nullptr) && entry.world_aabb.is_valid_3d()) {
+        if (passes && !frustum_planes.empty() && entry.world_aabb.is_valid_3d()) {
             const Draw_list_object& object = m_objects[entry.object_index];
-            if ((object.mobility != Draw_mobility::skinned) && !erhe::math::aabb_in_convex_volume(std::span<const glm::vec4>{*view_frustum_planes}, entry.world_aabb)) {
+            if ((object.mobility != Draw_mobility::skinned) && !erhe::math::aabb_in_convex_volume(frustum_planes, entry.world_aabb)) {
                 passes = false;
                 ++statistics.culled_count;
             }
@@ -1666,11 +1707,75 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             parameters.draw_indirect_buffer,
             Primitive_interface_settings{},
             parameters.filter,
-            nullptr,
+            parameters.light_frustum_planes,
             statistics
         );
     }
     return statistics;
+}
+
+void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_gather_parameters& parameters) const
+{
+    ERHE_PROFILE_FUNCTION();
+    assert_main_thread();
+
+    parameters.caster_world_aabbs.clear();
+    parameters.receiver_world_aabbs.clear();
+    parameters.caster_vertex_extents.clear();
+
+    constexpr uint64_t visible_active = erhe::Item_flags::visible | erhe::Item_flags::active;
+    for (const Draw_list_object& object : m_objects) {
+        if (!object.alive || object.locations.empty()) {
+            continue;
+        }
+        if (!layer_selected(parameters.layers, object.layer_id)) {
+            continue;
+        }
+        if ((object.flag_bits & visible_active) != visible_active) {
+            continue;
+        }
+        // A caster holds at least one shadow entry: classification already
+        // left out the primitives that never cast (unlit when excluded,
+        // translucent), so a mesh made only of those is a receiver only.
+        bool is_caster = false;
+        if (parameters.caster_filter(object.flag_bits)) {
+            for (const Draw_list_entry_location& location : object.locations) {
+                if (m_draw_lists[location.draw_list_index].key.purpose == Draw_purpose::shadow) {
+                    is_caster = true;
+                    break;
+                }
+            }
+        }
+        if (!is_caster && !parameters.gather_receivers) {
+            continue;
+        }
+        const erhe::scene::Mesh* mesh = object.info.mesh.get();
+        ERHE_VERIFY(mesh != nullptr);
+        // Every entry of an object carries the object's world AABB; a skinned
+        // object's entries carry none (its bounds follow the joints), so it
+        // is bounded here from its posed joints.
+        const Draw_list_entry_location& first_location = object.locations.front();
+        const erhe::math::Aabb aabb = (object.mobility == Draw_mobility::skinned)
+            ? mesh->get_aabb_world()
+            : m_draw_lists[first_location.draw_list_index].entries[first_location.entry_index].world_aabb;
+        if (!aabb.is_valid_3d()) {
+            continue;
+        }
+        if (parameters.gather_receivers) {
+            parameters.receiver_world_aabbs.push_back(aabb);
+        }
+        if (is_caster) {
+            parameters.caster_world_aabbs.push_back(aabb);
+            const glm::mat4 world_from_node = mesh->world_from_node();
+            parameters.caster_vertex_extents.push_back(
+                Caster_vertex_extent{
+                    .world_from_node_linear = glm::mat3{world_from_node},
+                    .world_translation      = glm::vec3{world_from_node[3]},
+                    .node_abs_extent        = object.node_abs_extent
+                }
+            );
+        }
+    }
 }
 
 } // namespace erhe::scene_renderer

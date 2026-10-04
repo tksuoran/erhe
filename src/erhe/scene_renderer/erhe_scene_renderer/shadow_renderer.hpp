@@ -10,6 +10,7 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
@@ -21,6 +22,7 @@
 #include <initializer_list>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -73,6 +75,21 @@ enum class Shadow_cull_mode : unsigned int
     cull_none  = 2
 };
 inline constexpr std::size_t shadow_cull_mode_count = 3;
+
+// What the draw-list path of one Shadow_renderer::render() drew and culled,
+// per shadow pass: one entry per 2D shadow layer (indexed by
+// Light_projection_transforms::shadow_index) and one per point cube (by
+// point_shadow_index, the six faces summed), plus the total. Empty on the
+// bucket path. The vectors keep their capacity across frames.
+class Shadow_draw_statistics
+{
+public:
+    void clear();
+
+    std::vector<Draw_statistics> shadow_map_2d;
+    std::vector<Draw_statistics> point_cubes;
+    Draw_statistics              total{};
+};
 
 class Shadow_renderer
 {
@@ -183,12 +200,16 @@ public:
         // Draw-list path (doc/erhe/draw_list_renderer.md R4/R4a):
         // when non-null, casters are drawn from the scene's persistent shadow
         // draw lists (restricted to draw_list_layers; an EMPTY span selects
-        // every layer) instead of re-bucketing
-        // mesh_spans. mesh_spans is still used for the frustum-fit bounds
-        // gathering. Depth-only / distance / cube sub-variants are selected
-        // per pass exactly as for the bucket path.
+        // every layer) instead of re-bucketing mesh_spans, the frustum-fit
+        // bounds are read from the registered objects
+        // (Draw_list_scene::gather_shadow_bounds) instead of mesh_spans, and
+        // each pass culls the entries against its light frustum (Q6).
+        // Depth-only / distance / cube sub-variants are selected per pass
+        // exactly as for the bucket path.
         Draw_list_scene*                                                   draw_list_scene{nullptr};
         std::span<const erhe::scene::Layer_id>                             draw_list_layers{};
+        // Filled per pass by the draw-list path when non-null; cleared first.
+        Shadow_draw_statistics*                                            draw_statistics{nullptr};
 
         // Unlit (KHR_materials_unlit) primitives are backdrop geometry (sky
         // domes, emissive decals), not occluders: skip them when bucketing

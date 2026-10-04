@@ -3,6 +3,8 @@
 #include "erhe_scene_renderer/draw_list_key.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -58,6 +60,11 @@ public:
     erhe::scene::Layer_id                 layer_id            {0};
     // Last mirrored Item_flags word (R12a).
     uint64_t                              flag_bits           {0};
+    // Largest |coordinate| per axis over the node-space bounds of the mesh's
+    // primitives (Caster_vertex_extent::node_abs_extent): the shadow fit's
+    // caster vertex rounding input, kept beside the entries' world AABB and
+    // rewritten by the same hooks (registration, refresh).
+    glm::vec3                             node_abs_extent     {0.0f};
     // Every entry belonging to this object, for O(entries of this object)
     // unregister / flag update / rebuild.
     std::vector<Draw_list_entry_location> locations;

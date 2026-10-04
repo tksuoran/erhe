@@ -179,6 +179,11 @@ public:
     // way to change it, so the scene host (draw list primitive records) always
     // sees the change (Scene_host::on_mesh_primitive_data_changed).
     void set_primitive_lightmap_uv_scale_offset(std::size_t primitive_index, const glm::vec4& lightmap_uv_scale_offset);
+    // A primitive's bounds changed without a primitive-list change: an
+    // in-place vertex edit grew its renderable mesh's bounding box. The
+    // computed world bounds follow, and the scene host re-reads the bounds
+    // of every mesh naming the primitive (Scene_host::on_mesh_bounds_changed).
+    void notify_primitive_bounds_changed();
     void set_rt_mask         (uint32_t rt_mask);
     void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);
     void detach_rt_from_scene();

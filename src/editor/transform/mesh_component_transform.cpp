@@ -532,6 +532,13 @@ void Mesh_component_transform::capture_start()
         }
         group.world_from_node = node->world_from_node();
         group.node_from_world = node->node_from_world();
+        group.before_bounding_box = erhe::math::Aabb{};
+        {
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+            if ((group.primitive_index < primitives.size()) && primitives[group.primitive_index].primitive && primitives[group.primitive_index].primitive->render_shape) {
+                group.before_bounding_box = primitives[group.primitive_index].primitive->render_shape->get_renderable_mesh().bounding_box;
+            }
+        }
         const GEO::Mesh& geo_mesh = group.geometry->get_mesh();
         group.before_local.reserve(group.vertices.size());
         for (const GEO::index_t vertex : group.vertices) {
@@ -671,6 +678,8 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
         if (moved) {
             update_group_normals(context, group, Normal_source::live_positions);
         }
+        // Once per group per apply: the bounds consumers re-read the grown box.
+        notify_group_bounds(group);
     }
 }
 
@@ -1728,6 +1737,28 @@ void Mesh_component_transform::write_vertex(App_context& context, const Group& g
     set_pointf(geo_mesh.vertices, vertex, GEO::vec3f{local_position.x, local_position.y, local_position.z});
     enqueue_gpu_position(context, group, vertex, local_position);
     enqueue_gpu_edge_line_positions(context, group, vertex, local_position);
+    // The primitive's bounds follow the written position: Primitive::
+    // get_bounding_box() is what Mesh::get_aabb_world(), the shadow fit,
+    // framing and the draw-list entry AABB derive from, and the commit swaps
+    // in a rebuilt primitive with exact bounds. The box only grows during
+    // the drag; the bounding sphere stays as built until the rebuild.
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+    if (!mesh) {
+        return;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if ((group.primitive_index >= primitives.size()) || !primitives[group.primitive_index].primitive || !primitives[group.primitive_index].primitive->render_shape) {
+        return;
+    }
+    primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh().bounding_box.include(local_position);
+}
+
+void Mesh_component_transform::notify_group_bounds(const Group& group)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+    if (mesh) {
+        mesh->notify_primitive_bounds_changed();
+    }
 }
 
 void Mesh_component_transform::fork_shared_groups(App_context& context)
@@ -2402,6 +2433,7 @@ void Mesh_component_transform::apply_scalar(App_context& context, const Scalar_i
         // At the start position the built normals come back exactly; otherwise
         // the involved faces' normals follow the new positions.
         update_group_normals(context, group, moved ? Normal_source::live_positions : Normal_source::stored_attributes);
+        notify_group_bounds(group);
     }
 }
 
@@ -2423,6 +2455,7 @@ void Mesh_component_transform::apply_inset(App_context& context, const Scalar_in
             write_vertex(context, group, group.vertices[i], local_after);
         }
         update_group_normals(context, group, moved ? Normal_source::live_positions : Normal_source::stored_attributes);
+        notify_group_bounds(group);
     }
 }
 
@@ -2454,6 +2487,13 @@ void Mesh_component_transform::cancel(App_context& context)
                 write_vertex(context, group, group.vertices[i], group.before_local[i]);
             }
             update_group_normals(context, group, Normal_source::stored_attributes);
+            // The in-place edit's primitive stays: its box, grown by the
+            // drag, goes back to what it was at begin().
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+            if ((group.primitive_index < primitives.size()) && primitives[group.primitive_index].primitive && primitives[group.primitive_index].primitive->render_shape) {
+                primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh().bounding_box = group.before_bounding_box;
+            }
+            notify_group_bounds(group);
         }
 
         // Release the hold begin() took (transferred by fork / extrude). The

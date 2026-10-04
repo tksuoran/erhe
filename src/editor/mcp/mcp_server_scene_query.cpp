@@ -266,6 +266,14 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
                 // The cached record's material GPU slot - what the draw uses.
                 {"material_index",       draw_list_scene->get_entry_material_index(location)}
             };
+            // The cached culling bounds (doc/erhe/draw_list_renderer.md Q6);
+            // absent for a skinned entry, which carries none.
+            if (entry.world_aabb.is_valid_3d()) {
+                e["world_aabb"] = {
+                    {"min", json::array({entry.world_aabb.min.x, entry.world_aabb.min.y, entry.world_aabb.min.z})},
+                    {"max", json::array({entry.world_aabb.max.x, entry.world_aabb.max.y, entry.world_aabb.max.z})}
+                };
+            }
             if (entry.mesh_primitive_index < mesh_primitives.size()) {
                 const erhe::primitive::Material* material = mesh_primitives[entry.mesh_primitive_index].material.get();
                 if (material != nullptr) {
@@ -1222,7 +1230,8 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
     // layer (within *_shadow_light_count). Shadow casters beyond the shadow
     // limit report cast_shadow true / shadow_mapped false; lights beyond the
     // unshadowed limit report shaded false.
-    const erhe::scene_renderer::Light_projections* light_projections = nullptr;
+    const erhe::scene_renderer::Light_projections*       light_projections = nullptr;
+    const erhe::scene_renderer::Shadow_draw_statistics* draw_statistics   = nullptr;
     if (m_context.app_rendering != nullptr) {
         for (const std::shared_ptr<Shadow_render_node>& shadow_node : m_context.app_rendering->get_all_shadow_nodes()) {
             if (!shadow_node) {
@@ -1231,10 +1240,20 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
             const std::shared_ptr<Scene_root> node_scene_root = shadow_node->get_scene_view().get_scene_root();
             if (node_scene_root.get() == sr) {
                 light_projections = &shadow_node->get_light_projections();
+                draw_statistics   = &shadow_node->get_last_draw_statistics();
                 break;
             }
         }
     }
+    // The draw-list shadow path's per-pass counts (entries drawn, entries
+    // culled against the light frustum) of the same shadow pass.
+    const auto add_draw_statistics = [](json& light_json, const std::vector<erhe::scene_renderer::Draw_statistics>& slots, const std::size_t slot) {
+        if (slot >= slots.size()) {
+            return;
+        }
+        light_json["shadow_draw_list_entry_count"]  = slots[slot].entry_count;
+        light_json["shadow_draw_list_culled_count"] = slots[slot].culled_count;
+    };
 
     json lights = json::array();
     for (const auto& ll : sr->get_scene().get_light_layers()) {
@@ -1262,9 +1281,15 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                 light_json["shadow_mapped"] = transforms->is_shadow_mapped();
                 if (transforms->shadow_index != no_index) {
                     light_json["shadow_index"] = transforms->shadow_index;
+                    if (draw_statistics != nullptr) {
+                        add_draw_statistics(light_json, draw_statistics->shadow_map_2d, transforms->shadow_index);
+                    }
                 }
                 if (transforms->point_shadow_index != no_index) {
                     light_json["point_shadow_index"] = transforms->point_shadow_index;
+                    if (draw_statistics != nullptr) {
+                        add_draw_statistics(light_json, draw_statistics->point_cubes, transforms->point_shadow_index);
+                    }
                 }
             }
             lights.push_back(light_json);

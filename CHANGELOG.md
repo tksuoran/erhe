@@ -9,6 +9,26 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Draw_list_scene::gather_shadow_bounds()` with
+  `Shadow_bounds_gather_parameters`: the shadow frustum fit's caster /
+  receiver bounds and caster vertex extents from the registered objects
+  (`Draw_list_object::node_abs_extent`). `Draw_shadow_parameters::
+  light_frustum_planes`: shadow passes cull entries against the light
+  frustum. `Shadow_draw_statistics` and `Shadow_renderer::Render_parameters::
+  draw_statistics`: per shadow pass draw-list counts.
+  `Draw_list_scene::enqueue_bounds_update()`: rewrite an object's entry
+  AABBs and node extent at the next flush.
+- `erhe::scene`: `Mesh::notify_primitive_bounds_changed()` and the new
+  `Scene_host::on_mesh_bounds_changed()` virtual: a primitive's bounds grew
+  in place (the mesh-component drag); the host refreshes the bounds of
+  every mesh naming the primitive.
+
+### Changed
+
+- `erhe::scene_renderer`: `Draw_color_parameters::view_frustum_planes` is a
+  `std::span<const glm::vec4>` (empty: no culling) instead of a pointer to a
+  six-plane array.
+
 - `erhe::graphics`: `erhe_graphics/vulkan/vulkan_pipeline_cache_file.hpp`:
   `Pipeline_cache_identity`, `make_pipeline_cache_path()`,
   `read_pipeline_cache_file()` and `write_pipeline_cache_file()`, the

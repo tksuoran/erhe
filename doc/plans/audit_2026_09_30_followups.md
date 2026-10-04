@@ -52,21 +52,7 @@ Selected 2026-10-04, in this order. All three can be built and verified on
 Windows; the macOS-only items under "Open parts of worked items" wait for a
 macOS session.
 
-1. **Shadow culling on the draw-list entry AABBs** (finishes item 9; read
-   `doc/plans/draw_list_renderer.md` item 1 and `doc/erhe/draw_list_renderer.md`
-   Q6). `Shadow_renderer` reads the caster / receiver AABBs of the frustum
-   fit from the entries instead of walking every content mesh per shadow
-   render, and the shadow lists cull casters against each light's frustum
-   (point lights per cube face), with the same conservative planes-only test
-   and pass-decision mask the color path uses (e476817cf). Skinned entries
-   and invalid AABBs are never culled. The in-place mesh-component drag that
-   leaves bounds stale (same plan item) is part of this task, because shadow
-   culling makes the stale bounds visible as missing shadows. Verify: the
-   shadow gate (`doc/erhe/shadows.md` "Shadow verification") stays at
-   0 FAIL, the `Shadow_gpu_test` and `Mcp_test` shadow cases pass, and a
-   culled-count statistic per shadow pass (next to `Draw_statistics::culled_count`)
-   shows casters outside the light frustum skipped.
-2. **Editor bits out of `Item_flags` / `Item_type`** (item 11; read the
+1. **Editor bits out of `Item_flags` / `Item_type`** (item 11; read the
    scene slice report sections 1.1 and 6 item 2, `doc/erhe/item.md`).
    A reserved application bit range with application-registered label
    tables replaces the about 22 editor-only flags and 24 editor-only type
@@ -79,7 +65,7 @@ macOS session.
    USD unit tests (USD `purpose` derives from four of the editor bits).
    Measure the `texture.hpp` / `node.hpp` preprocessed size before and after
    (`doc/erhe/graphics.md` "Header dependencies" has the method).
-3. **CI hardening** (the open half of item 17; read the infra slice report
+2. **CI hardening** (the open half of item 17; read the infra slice report
    section 10 items 5-8, `doc/testing.md`, `.github/workflows/`). A Linux
    Clang matrix entry building with AddressSanitizer and UBSan
    (`ERHE_USE_ASAN` exists for GCC / Clang since 091b5879f; add a UBSan
@@ -98,7 +84,6 @@ macOS session.
   opt-in); needs a macOS session to build and verify.
 - Item 6, Metal half: GPU timers (read 0), `blit_framebuffer` (fatal) and
   swapchain resize on Metal; needs a macOS session.
-- Item 9, shadow half: `doc/plans/draw_list_renderer.md` item 1.
 
 Each item is one commit with builds, tests and docs as `AGENTS.md` requires,
 and each commit gets a Fable review at medium effort.

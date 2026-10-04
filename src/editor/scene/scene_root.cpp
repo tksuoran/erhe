@@ -1969,6 +1969,25 @@ void Scene_root::on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scen
     }
 }
 
+// Bounds hook: raised once per edited mesh per frame of a live
+// mesh-component drag, so it only enqueues the draw-list bounds rewrite -
+// no material diff - for the mesh and for every other mesh naming the grown
+// primitive (an in-place edit of a shared primitive moves every instance).
+// The sharer list is a thread_local scratch (the hook contract is any
+// thread), cleared after use so it keeps no mesh alive.
+void Scene_root::on_mesh_bounds_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (!m_draw_list_scene || !mesh) {
+        return;
+    }
+    static thread_local std::vector<std::shared_ptr<erhe::scene::Mesh>> s_sharers;
+    collect_meshes_sharing_primitives(mesh, mesh->get_primitives(), s_sharers);
+    for (const std::shared_ptr<erhe::scene::Mesh>& sharer : s_sharers) {
+        m_draw_list_scene->enqueue_bounds_update(sharer);
+    }
+    s_sharers.clear();
+}
+
 // Display color hook: any thread, enqueue only (Scene_host contract). The
 // rebuild itself is App_scenes::rebuild_display_colors(), on the main thread.
 void Scene_root::on_mesh_display_color_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)

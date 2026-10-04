@@ -270,6 +270,7 @@ public:
     void on_mesh_transform_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_display_color_changed (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
+    void on_mesh_bounds_changed        (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_light_changed          (const std::shared_ptr<erhe::scene::Light>& light) override;
 
     // The registered meshes of this scene that reference any Primitive of

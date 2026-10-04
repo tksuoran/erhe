@@ -64,6 +64,34 @@ namespace {
     return true;
 }
 
+// The draw-list statistics of one shadow pass, into the slot the pass
+// renders (a slot already holding a cube face's statistics sums).
+void accumulate_pass_statistics(Shadow_draw_statistics* statistics, std::vector<Draw_statistics>& slots, const std::size_t slot, const Draw_statistics& pass)
+{
+    if (statistics == nullptr) {
+        return;
+    }
+    if (slots.size() <= slot) {
+        slots.resize(slot + 1);
+    }
+    Draw_statistics& entry = slots[slot];
+    entry.draw_list_count += pass.draw_list_count;
+    entry.entry_count     += pass.entry_count;
+    entry.draw_call_count += pass.draw_call_count;
+    entry.culled_count    += pass.culled_count;
+    statistics->total.draw_list_count += pass.draw_list_count;
+    statistics->total.entry_count     += pass.entry_count;
+    statistics->total.draw_call_count += pass.draw_call_count;
+    statistics->total.culled_count    += pass.culled_count;
+}
+
+}
+
+void Shadow_draw_statistics::clear()
+{
+    shadow_map_2d.clear();
+    point_cubes.clear();
+    total = Draw_statistics{};
 }
 
 Shadow_renderer::Shadow_renderer(
@@ -318,7 +346,21 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         (parameters.fit_settings != nullptr) &&
         parameters.fit_settings->fit_to_casters &&
         parameters.fit_settings->fit_to_receivers;
-    {
+    if (parameters.draw_list_scene != nullptr) {
+        // The registered objects carry the bounds already (the entries' world
+        // AABB, kept current by the transform / refresh hooks, Q6); no
+        // per-mesh box transform here.
+        parameters.draw_list_scene->gather_shadow_bounds(
+            Shadow_bounds_gather_parameters{
+                .layers                = parameters.draw_list_layers,
+                .caster_filter         = shadow_filter,
+                .gather_receivers      = gather_receivers,
+                .caster_world_aabbs    = caster_world_aabbs,
+                .receiver_world_aabbs  = receiver_world_aabbs,
+                .caster_vertex_extents = caster_vertex_extents
+            }
+        );
+    } else {
         ERHE_PROFILE_SCOPE("shadow: gather caster/receiver bounds");
         for (const auto& meshes : mesh_spans) {
             for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
@@ -476,6 +518,18 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     const bool        use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
     const std::size_t cull_index      = static_cast<std::size_t>(parameters.cull_mode);
 
+    // Draw-list entry culling against the light frustum of each pass (Q6):
+    // the planes of the clip_from_world the pass rasterizes with, in the
+    // convention Draw_list_renderer builds the view planes. A depth-clamped
+    // directional pass keeps casters beyond its depth planes (pancaked), so
+    // it culls on the four side planes only; every other pass clips at all
+    // six.
+    const float clip_z_min = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
+    std::array<glm::vec4, 6> light_frustum_planes{};
+    if (parameters.draw_statistics != nullptr) {
+        parameters.draw_statistics->clear();
+    }
+
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
         const auto& light = parameters.light_set.get_lights()[light_slot];
@@ -593,22 +647,29 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             : &erhe::graphics::Color_blend_state::color_writes_disabled; // depth-only
 
         if (parameters.draw_list_scene != nullptr) {
-            static_cast<void>(
-                parameters.draw_list_scene->draw_shadow(
-                    Draw_shadow_parameters{
-                        .render_encoder       = encoder,
-                        .render_pass          = parameters.render_passes[shadow_index].get(),
-                        .base_render_pipeline = base_pipeline,
-                        .color_blend          = color_blend,
-                        .primitive_buffer     = m_primitive_buffer,
-                        .draw_indirect_buffer = m_draw_indirect_buffer,
-                        .filter               = shadow_filter,
-                        .layers               = parameters.draw_list_layers,
-                        .sub_variant          = parameters.use_distance ? Shadow_sub_variant::depth_only_distance : Shadow_sub_variant::depth_only,
-                        .debug_label          = "shadow draw lists"
-                    }
-                )
+            const bool depth_clamped = use_depth_clamp && (light->get_light_type() == erhe::scene::Light_type::directional);
+            light_frustum_planes = erhe::math::extract_frustum_planes(light_projection_transform->clip_from_world.get_matrix(), clip_z_min, 1.0f);
+            const std::span<const glm::vec4> cull_planes = depth_clamped
+                ? std::span<const glm::vec4>{light_frustum_planes}.first(erhe::math::plane_near)
+                : std::span<const glm::vec4>{light_frustum_planes};
+            const Draw_statistics pass_statistics = parameters.draw_list_scene->draw_shadow(
+                Draw_shadow_parameters{
+                    .render_encoder       = encoder,
+                    .render_pass          = parameters.render_passes[shadow_index].get(),
+                    .base_render_pipeline = base_pipeline,
+                    .color_blend          = color_blend,
+                    .primitive_buffer     = m_primitive_buffer,
+                    .draw_indirect_buffer = m_draw_indirect_buffer,
+                    .filter               = shadow_filter,
+                    .layers               = parameters.draw_list_layers,
+                    .sub_variant          = parameters.use_distance ? Shadow_sub_variant::depth_only_distance : Shadow_sub_variant::depth_only,
+                    .light_frustum_planes = cull_planes,
+                    .debug_label          = "shadow draw lists"
+                }
             );
+            if (parameters.draw_statistics != nullptr) {
+                accumulate_pass_statistics(parameters.draw_statistics, parameters.draw_statistics->shadow_map_2d, shadow_index, pass_statistics);
+            }
         } else {
             draw_shadow_casters(
                 parameters.command_buffer,
@@ -765,22 +826,29 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 material_set.bind(encoder);
 
                 if (parameters.draw_list_scene != nullptr) {
-                    static_cast<void>(
-                        parameters.draw_list_scene->draw_shadow(
-                            Draw_shadow_parameters{
-                                .render_encoder       = encoder,
-                                .render_pass          = cube_passes[pass_index].get(),
-                                .base_render_pipeline = cube_base_pipeline,
-                                .color_blend          = &erhe::graphics::Color_blend_state::color_blend_disabled,
-                                .primitive_buffer     = m_primitive_buffer,
-                                .draw_indirect_buffer = m_draw_indirect_buffer,
-                                .filter               = shadow_filter,
-                                .layers               = parameters.draw_list_layers,
-                                .sub_variant          = Shadow_sub_variant::cube,
-                                .debug_label          = "shadow cube draw lists"
-                            }
-                        )
+                    // The face frustum: the same projection and face pose the
+                    // camera block above was written from.
+                    const glm::mat4 clip_from_face  = lpt->projection.clip_from_node_transform(parameters.point_shadow_viewport, parameters.reverse_depth, parameters.depth_range, cube_conventions).get_matrix();
+                    const glm::mat4 clip_from_world = clip_from_face * face_transform.get_inverse_matrix();
+                    light_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
+                    const Draw_statistics pass_statistics = parameters.draw_list_scene->draw_shadow(
+                        Draw_shadow_parameters{
+                            .render_encoder       = encoder,
+                            .render_pass          = cube_passes[pass_index].get(),
+                            .base_render_pipeline = cube_base_pipeline,
+                            .color_blend          = &erhe::graphics::Color_blend_state::color_blend_disabled,
+                            .primitive_buffer     = m_primitive_buffer,
+                            .draw_indirect_buffer = m_draw_indirect_buffer,
+                            .filter               = shadow_filter,
+                            .layers               = parameters.draw_list_layers,
+                            .sub_variant          = Shadow_sub_variant::cube,
+                            .light_frustum_planes = std::span<const glm::vec4>{light_frustum_planes},
+                            .debug_label          = "shadow cube draw lists"
+                        }
                     );
+                    if (parameters.draw_statistics != nullptr) {
+                        accumulate_pass_statistics(parameters.draw_statistics, parameters.draw_statistics->point_cubes, point_shadow_index, pass_statistics);
+                    }
                 } else {
                     draw_shadow_casters(
                         parameters.command_buffer,

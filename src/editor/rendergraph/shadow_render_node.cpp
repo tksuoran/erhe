@@ -687,6 +687,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .point_shadow_viewport    = m_point_viewport,
             .draw_list_scene          = draw_list_scene,
             .draw_list_layers         = draw_list_layers,
+            .draw_statistics          = &m_last_draw_statistics,
             .exclude_unlit_casters    = exclude_unlit_casters
         }
     );

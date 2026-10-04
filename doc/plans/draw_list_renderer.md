@@ -10,27 +10,13 @@ holds what those three leave open, in rough priority order.
 
 ## 1. Entry AABBs for the shadow fit and shadow culling
 
-Color passes cull on the entry AABB, which the transform hook keeps current
-(Q6 in `doc/erhe/draw_list_renderer.md`). The shadow side does not use it yet:
-`Shadow_renderer` still walks every content mesh per shadow render to gather
-the caster / receiver AABBs of the frustum fit, and could read the entries'
-instead; the shadow lists could cull casters against each light's frustum the
-same way (point lights: per cube face). Skinned entries need posed bounds
-before either can include them.
+Done: Q6 in `doc/erhe/draw_list_renderer.md` covers the shadow passes, the
+fit's bounds come from the registered objects, and the in-place
+mesh-component drag keeps the primitive bounds current. (The number stays so
+that the audit reports' references to this item resolve.) Left from it:
+posed bounds for skinned entries, which are gathered from the joints for the
+fit and never culled.
 
-
-Entry bounds also go stale during an in-place mesh-component edit: the live
-vertex / edge / face drag (`src/editor/transform/mesh_component_transform.cpp`)
-writes positions straight into the vertex buffers through
-`Mesh_memory::enqueue_vertex_data`, and `Primitive::get_bounding_box()` -
-which `Mesh::get_aabb_world()`, the shadow fit, framing and the entry AABB all
-derive from - keeps the pre-drag box until the commit swaps in the rebuilt
-primitive. A view that frames only where the vertices were dragged to culls
-the mesh for the rest of the drag. Keep the primitive's bounds current during
-the drag (grow them from the written positions, which the drag already has in
-local space) and have the drag enqueue the entry-bounds update the transform
-hook performs (`Draw_list_scene::enqueue_transform_update`), so every bounds
-consumer sees the moved geometry.
 ## 2. Re-list on a negative-determinant flip
 
 R10b reports and asserts instead of re-listing. The mechanism is the same as

@@ -71,8 +71,6 @@ previous frame:
 - ID render / picking passes.
 - Entry-granular mirroring of mesh / primitive / material edits. Edits are
   handled, but coarsely, by re-registering the object or rebuilding (R12).
-- Shadow-pass culling: shadow lists draw every entry that passes the flag
-  filter (Q6 culls color passes only).
 - GPU-driven culling or draw generation (the design must not preclude it).
 
 ### Fallback
@@ -582,20 +580,41 @@ Drawing:
   change on a static-registered object asserts (R10a). `Scene_root::
   register_mesh` has no mobility source, so everything non-skinned registers as
   dynamic; the flag exists in the API for a future static source.
-- Q6: Frustum culling of color passes on the entry AABB. The transform hook
-  keeps `Draw_list_entry::world_aabb` current: `flush_pending()` rewrites a
-  moved object's records and sets its entries' AABB to `Mesh::get_aabb_world()`
-  in the same step. `Draw_list_renderer::render()` builds the view frustum
-  planes from the single view's `clip_from_world` (as `Camera_buffer` does)
-  and passes them as `Draw_color_parameters::view_frustum_planes`;
-  `draw_list_chunks()` makes one pass decision per entry - the flag filter,
-  then `erhe::math::aabb_in_convex_volume()` (planes only, conservative, so an
-  infinite reverse-Z far plane cannot reject) - and the primitive record and
-  draw command writers both consume that mask, so `ERHE_DRAW_ID` stays paired.
-  Skinned entries (bounds follow the joints, not the transform hook), entries
-  with an invalid AABB and multiview passes are never culled. Culled entries
-  are counted in `Draw_statistics::culled_count` (MCP `get_composition_passes`
-  `last_draw_list_culled_count`).
+- Q6: Frustum culling of color and shadow passes on the entry AABB.
+  `Draw_list_entry::world_aabb` is written per object by
+  `write_object_bounds()` - at registration, by the transform hook
+  (`flush_pending()` rewrites a moved object's records and sets its entries'
+  AABB to `Mesh::get_aabb_world()` in the same step) and by the bounds hook
+  (`Mesh::notify_primitive_bounds_changed()` ->
+  `Scene_host::on_mesh_bounds_changed()` -> `enqueue_bounds_update()` for
+  every mesh naming the primitive, which the in-place mesh-component drag
+  raises once per edited mesh per frame after growing a primitive's box from
+  the positions it wrote) - together with `Draw_list_object::node_abs_extent`,
+  the shadow fit's caster vertex rounding input. `Draw_list_renderer::render()`
+  builds the view frustum planes from the single view's `clip_from_world`
+  (as `Camera_buffer` does) and passes them as
+  `Draw_color_parameters::view_frustum_planes`; `Shadow_renderer::render()`
+  passes each shadow pass's light frustum as
+  `Draw_shadow_parameters::light_frustum_planes` (the pass's own
+  `clip_from_world`; a point light per cube face; a depth-clamped
+  directional pass keeps casters beyond its depth planes, so it culls on the
+  four side planes only). `draw_list_chunks()` makes one pass decision per
+  entry - the flag filter, then `erhe::math::aabb_in_convex_volume()`
+  (planes only, conservative, so an infinite reverse-Z far plane cannot
+  reject) - and the primitive record and draw command writers both consume
+  that mask, so `ERHE_DRAW_ID` stays paired. Skinned entries (bounds follow
+  the joints, not the transform hook), entries with an invalid AABB and
+  multiview passes are never culled. Culled entries are counted in
+  `Draw_statistics::culled_count`: per composition pass in MCP
+  `get_composition_passes` (`last_draw_list_culled_count`), per shadow pass
+  in `Shadow_draw_statistics` (`Shadow_render_node::get_last_draw_statistics()`,
+  MCP `get_scene_lights` `shadow_draw_list_entry_count` /
+  `shadow_draw_list_culled_count`). The shadow frustum fit reads its caster
+  and receiver bounds from the same objects
+  (`Draw_list_scene::gather_shadow_bounds()`: the entries' AABB, the posed
+  joint bounds for a skinned object) instead of transforming every content
+  mesh's box per shadow render; a caster is an object with at least one
+  shadow entry.
 - Q7: An invalidation hook rebuilds the draw lists. R1a keeps registration
   records complete enough to recreate all draw lists from scratch.
   `Mesh_memory` never moves allocations at runtime, so the hook's clients are

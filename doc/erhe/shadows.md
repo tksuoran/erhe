@@ -118,7 +118,11 @@ Pipeline order, with the box recorded per step for debugging
 stabilization.
 
 **fit_to_casters.** `Shadow_renderer::render()` gathers one world-space AABB
-per visible shadow-casting mesh. The fit then, per light:
+per visible shadow-casting mesh: from the registered draw-list objects on the
+draw-list path (`Draw_list_scene::gather_shadow_bounds()`, the entries' AABB
+that the transform and refresh hooks keep current; `doc/erhe/draw_list_renderer.md`
+Q6), from `Mesh::get_aabb_world()` of every content mesh on the bucket path.
+The fit then, per light:
 
 1. Builds the shadow caster volume F_shadow: the main camera view frustum,
    *truncated to the maximum shadow distance* (`Camera::get_shadow_range()`),

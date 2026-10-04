@@ -52,11 +52,18 @@ public:
     // on_mesh_primitive_data_changed: a per-primitive upload value that does
     // not affect draw list identity changed
     // (Mesh::set_primitive_lightmap_uv_scale_offset).
+    // on_mesh_bounds_changed: a primitive of the mesh grew its bounds in
+    // place (Mesh::notify_primitive_bounds_changed, raised by the live
+    // mesh-component drag once per edited mesh per frame); the primitive may
+    // be shared, so the implementation refreshes the bounds of every mesh
+    // naming it. Nothing else about the mesh changed: no material, no
+    // upload value.
     virtual void on_mesh_primitives_changed     (const std::shared_ptr<Mesh>& mesh) = 0;
     virtual void on_mesh_material_changed       (const std::shared_ptr<Mesh>& mesh) = 0;
     virtual void on_mesh_flags_changed          (const std::shared_ptr<Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) = 0;
     virtual void on_mesh_transform_changed      (const std::shared_ptr<Mesh>& mesh) = 0;
     virtual void on_mesh_primitive_data_changed (const std::shared_ptr<Mesh>& mesh) = 0;
+    virtual void on_mesh_bounds_changed         (const std::shared_ptr<Mesh>& mesh) = 0;
     // on_mesh_display_color_changed: Gprim.display_color changed. The color is
     // the mesh's own vertex color, so the implementation rebuilds the mesh's
     // primitives with it - it needs the buffer sinks, which is why the mesh

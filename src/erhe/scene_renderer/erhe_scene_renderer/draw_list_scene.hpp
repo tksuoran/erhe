@@ -30,6 +30,7 @@ namespace erhe::graphics {
 
 namespace erhe::scene_renderer {
 
+class Caster_vertex_extent;
 class Draw_indirect_buffer;
 class Mesh_memory;
 class Primitive_buffer;
@@ -87,8 +88,8 @@ public:
     // (erhe::math::extract_frustum_planes()); entries whose world AABB lies
     // fully outside one plane are not drawn. Skinned entries are never
     // culled (their bounds follow the joints, not the transform hook).
-    // nullptr: no culling (multiview passes).
-    const std::array<glm::vec4, 6>*         view_frustum_planes {nullptr};
+    // Empty: no culling (multiview passes).
+    std::span<const glm::vec4>              view_frustum_planes {};
     std::string_view                        debug_label         {};
 };
 
@@ -104,7 +105,31 @@ public:
     erhe::Item_filter                       filter              {};
     std::span<const erhe::scene::Layer_id>  layers              {};
     Shadow_sub_variant                      sub_variant         {Shadow_sub_variant::depth_only};
+    // Inward-facing world-space planes of this pass's light frustum (one
+    // cube face for a point light), same convention and same per-entry test
+    // as Draw_color_parameters::view_frustum_planes. The caller leaves out
+    // the planes its pipeline does not clip at (the depth planes of a
+    // depth-clamped directional pass). Empty: no culling.
+    std::span<const glm::vec4>              light_frustum_planes{};
     std::string_view                        debug_label         {};
+};
+
+// What Shadow_renderer's frustum fit reads from the registered objects
+// (Draw_list_scene::gather_shadow_bounds): one world AABB per caster and,
+// when asked, per receiver, plus the caster vertex rounding inputs. The
+// vectors are the caller's scratch, cleared here and filled (capacity kept).
+class Shadow_bounds_gather_parameters
+{
+public:
+    std::span<const erhe::scene::Layer_id>  layers              {};
+    // Casters: objects passing this filter (the shadow pass filter) that
+    // hold at least one shadow entry.
+    erhe::Item_filter                       caster_filter       {};
+    // Receivers: every visible, active object; gathered only when set.
+    bool                                    gather_receivers    {false};
+    std::vector<erhe::math::Aabb>&          caster_world_aabbs;
+    std::vector<erhe::math::Aabb>&          receiver_world_aabbs;
+    std::vector<Caster_vertex_extent>&      caster_vertex_extents;
 };
 
 
@@ -205,6 +230,10 @@ public:
     // changed (Mesh_primitive::lightmap_uv_scale_offset): rewrite the object's
     // records in flush_pending() without re-classification.
     void enqueue_refresh   (const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    // A primitive of the mesh grew its bounds in place (the live
+    // mesh-component drag; Scene_host::on_mesh_bounds_changed): rewrite the
+    // object's entry AABBs and node extent in flush_pending(), nothing else.
+    void enqueue_bounds_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     // Main thread, once per frame before any draw. The caller (Scene_root)
     // holds its item_host_mutex around this call so registration never reads
     // a Buffer_mesh that a worker is replacing.
@@ -222,6 +251,11 @@ public:
     // sub-variant) resolves once, lazily. Returns what was drawn.
     auto draw_color (const Draw_color_parameters&  parameters) -> Draw_statistics;
     auto draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics;
+    // The shadow frustum fit's inputs from the registered objects (main
+    // thread): the entries' world AABB per object, the posed bounds for a
+    // skinned object (its entries carry none), the node-space extent kept on
+    // the object. Objects whose bounds are invalid contribute nothing.
+    void gather_shadow_bounds(const Shadow_bounds_gather_parameters& parameters) const;
     // True when at least one entry would be drawn for the selection: lets a
     // caller skip its per-pass prologue (buffer uploads / binds) entirely,
     // the way Forward_renderer::render() early-outs on empty mesh spans.
@@ -262,7 +296,7 @@ private:
     class Pending_op
     {
     public:
-        enum class Kind : uint8_t { rebuild_all, register_, unregister, reregister, material_update, set_flags, transform, refresh };
+        enum class Kind : uint8_t { rebuild_all, register_, unregister, reregister, material_update, set_flags, transform, refresh, bounds };
         Kind                               kind      {Kind::register_};
         std::shared_ptr<erhe::scene::Mesh> mesh      {};
         Draw_mobility                      mobility  {Draw_mobility::dynamic};
@@ -350,9 +384,13 @@ private:
         Draw_indirect_buffer&                    draw_indirect_buffer,
         const Primitive_interface_settings&      primitive_settings,
         const erhe::Item_filter&                 filter,
-        const std::array<glm::vec4, 6>*          view_frustum_planes,
+        std::span<const glm::vec4>               frustum_planes,
         Draw_statistics&                         statistics
     );
+    // The bounds the entries and the object carry, from the mesh's primitives
+    // (add_entries, refresh_object_records) or the node transform alone
+    // (write_object_transform).
+    void write_object_bounds(uint32_t object_index);
 
     // Declared BEFORE m_objects: a Draw_list_object holds Material_slot_ids
     // into this set, so the set must outlive the objects that name its slots.

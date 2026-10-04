@@ -3,6 +3,7 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/light_set.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
 
 #include <array>
 #include <memory>
@@ -63,6 +64,9 @@ public:
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;
     [[nodiscard]] auto get_light_projections() -> erhe::scene_renderer::Light_projections&;
+    // What the draw-list shadow path of the last execute drew and culled per
+    // pass (doc/erhe/draw_list_renderer.md Q6); empty on the bucket path.
+    [[nodiscard]] auto get_last_draw_statistics() const -> const erhe::scene_renderer::Shadow_draw_statistics& { return m_last_draw_statistics; }
     [[nodiscard]] auto get_texture          () const -> std::shared_ptr<erhe::graphics::Texture>;
     [[nodiscard]] auto get_viewport         () const -> erhe::math::Viewport;
 
@@ -120,6 +124,7 @@ private:
     std::vector<std::unique_ptr<erhe::graphics::Gpu_timer>>   m_gpu_timers;
     erhe::math::Viewport                                      m_viewport{0, 0, 0, 0};
     erhe::scene_renderer::Light_projections                   m_light_projections;
+    erhe::scene_renderer::Shadow_draw_statistics              m_last_draw_statistics;
     erhe::scene::Shadow_frustum_fit_settings                  m_fit_settings; // refreshed from editor settings each frame
 
     // Diagnostics: log the fit view camera / projection / viewport only when
