@@ -564,7 +564,15 @@ Device_impl::Device_impl(
         instance_create_info.pNext = &validation_features;
         validation_features.pNext = &layer_settings_create_info;
         enabled_validation_features.push_back(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
-        enabled_validation_features.push_back(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
+        if (graphics_config.vulkan.vulkan_gpu_assisted_validation) {
+            // GPU-assisted validation instruments the shaders; it takes the
+            // place of synchronization validation for the run (doc/agents/debugging.md).
+            enabled_validation_features.push_back(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
+            enabled_validation_features.push_back(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT);
+            log_context->info("Vulkan GPU-assisted validation enabled");
+        } else {
+            enabled_validation_features.push_back(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
+        }
         validation_features.enabledValidationFeatureCount = static_cast<uint32_t>(enabled_validation_features.size());
         validation_features.pEnabledValidationFeatures = enabled_validation_features.data();
 
@@ -581,10 +589,14 @@ Device_impl::Device_impl(
         validation_settings.add_bool("object_lifetime",                   true);
         validation_settings.add_bool("stateless_param",                   true);
         validation_settings.add_bool("thread_safety",                     true);
-        validation_settings.add_bool("validate_sync",                     true);
-        validation_settings.add_bool("syncval_submit_time_validation",    true);
-        validation_settings.add_bool("syncval_shader_accesses_heuristic", true);
-        validation_settings.add_bool("syncval_message_extra_properties",  true);
+        if (graphics_config.vulkan.vulkan_gpu_assisted_validation) {
+            validation_settings.add_bool("validate_gpu_based",                true);
+        } else {
+            validation_settings.add_bool("validate_sync",                     true);
+            validation_settings.add_bool("syncval_submit_time_validation",    true);
+            validation_settings.add_bool("syncval_shader_accesses_heuristic", true);
+            validation_settings.add_bool("syncval_message_extra_properties",  true);
+        }
 
         // https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/11207
         validation_settings.add_bool("validate_best_practices",           true);
@@ -2433,40 +2445,49 @@ Device_impl::Device_impl(
                     timestamp_valid_bits, m_gpu_timer_timestamp_period, s_max_gpu_timers
                 );
                 // Frame-spanning GPU timestamp bracket ring (step P0.3):
-                // needs host query reset so wait_frame can recycle pairs
-                // without a command buffer.
+                // one two-query pool per slot (vulkan_device.hpp), host
+                // reset by wait_frame when the slot comes round again.
                 if (m_host_query_reset) {
-                    const VkQueryPoolCreateInfo bracket_pool_create_info{
-                        .sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-                        .pNext              = nullptr,
-                        .flags              = 0,
-                        .queryType          = VK_QUERY_TYPE_TIMESTAMP,
-                        .queryCount         = static_cast<uint32_t>(s_frame_bracket_ring * 2u),
-                        .pipelineStatistics = 0
-                    };
-                    const VkResult bracket_result = vkCreateQueryPool(
-                        m_vulkan_device, &bracket_pool_create_info, nullptr, &m_frame_bracket_query_pool
-                    );
-                    if (bracket_result != VK_SUCCESS) {
-                        log_context->warn(
-                            "vkCreateQueryPool() for the frame bracket failed with {} {}; frame GPU spans disabled",
-                            static_cast<int32_t>(bracket_result), c_str(bracket_result)
+                    bool bracket_ok = true;
+                    for (std::size_t slot = 0; slot < s_frame_bracket_ring; ++slot) {
+                        const VkQueryPoolCreateInfo bracket_pool_create_info{
+                            .sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                            .pNext              = nullptr,
+                            .flags              = 0,
+                            .queryType          = VK_QUERY_TYPE_TIMESTAMP,
+                            .queryCount         = 2,
+                            .pipelineStatistics = 0
+                        };
+                        const VkResult bracket_result = vkCreateQueryPool(
+                            m_vulkan_device, &bracket_pool_create_info, nullptr, &m_frame_bracket_query_pools[slot]
                         );
-                        m_frame_bracket_query_pool = VK_NULL_HANDLE;
-                    } else {
+                        if (bracket_result != VK_SUCCESS) {
+                            log_context->warn(
+                                "vkCreateQueryPool() for frame bracket slot {} failed with {} {}; frame GPU spans disabled",
+                                slot, static_cast<int32_t>(bracket_result), c_str(bracket_result)
+                            );
+                            m_frame_bracket_query_pools[slot] = VK_NULL_HANDLE;
+                            bracket_ok = false;
+                            break;
+                        }
                         set_debug_label(
                             VK_OBJECT_TYPE_QUERY_POOL,
-                            reinterpret_cast<uint64_t>(m_frame_bracket_query_pool),
+                            reinterpret_cast<uint64_t>(m_frame_bracket_query_pools[slot]),
                             "Frame bracket query pool"
                         );
-                        vkResetQueryPool(
-                            m_vulkan_device,
-                            m_frame_bracket_query_pool,
-                            0,
-                            static_cast<uint32_t>(s_frame_bracket_ring * 2u)
-                        );
+                        vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[slot], 0, 2);
+                    }
+                    if (bracket_ok) {
+                        m_frame_bracket_enabled = true;
                         m_frame_bracket_frame_id.fill(-1);
                         log_startup->info("Frame GPU timestamp bracket enabled (ring of {})", s_frame_bracket_ring);
+                    } else {
+                        for (VkQueryPool& pool : m_frame_bracket_query_pools) {
+                            if (pool != VK_NULL_HANDLE) {
+                                vkDestroyQueryPool(m_vulkan_device, pool, nullptr);
+                                pool = VK_NULL_HANDLE;
+                            }
+                        }
                     }
                 } else {
                     log_startup->info("Frame GPU timestamp bracket disabled: hostQueryReset not supported");

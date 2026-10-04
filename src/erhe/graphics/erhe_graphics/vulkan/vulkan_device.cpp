@@ -246,10 +246,13 @@ Device_impl::~Device_impl() noexcept
         vkDestroyQueryPool(m_vulkan_device, m_gpu_timer_query_pool, nullptr);
         m_gpu_timer_query_pool = VK_NULL_HANDLE;
     }
-    if (m_frame_bracket_query_pool != VK_NULL_HANDLE) {
-        vkDestroyQueryPool(m_vulkan_device, m_frame_bracket_query_pool, nullptr);
-        m_frame_bracket_query_pool = VK_NULL_HANDLE;
+    for (VkQueryPool& pool : m_frame_bracket_query_pools) {
+        if (pool != VK_NULL_HANDLE) {
+            vkDestroyQueryPool(m_vulkan_device, pool, nullptr);
+            pool = VK_NULL_HANDLE;
+        }
     }
+    m_frame_bracket_enabled = false;
 
     for (auto& [hash, pipeline] : m_pipeline_map) {
         if (pipeline != VK_NULL_HANDLE) {
@@ -1681,15 +1684,10 @@ auto Device_impl::wait_frame() -> bool
     // brackets non-blocking, and host-reset this frame's query pair.
     update_gpu_calibration();
     poll_frame_bracket_results();
-    if (m_frame_bracket_query_pool != VK_NULL_HANDLE) {
+    if (m_frame_bracket_enabled) {
         ERHE_PROFILE_SCOPE("vkResetQueryPool");
         const std::size_t bracket_slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
-        vkResetQueryPool(
-            m_vulkan_device,
-            m_frame_bracket_query_pool,
-            static_cast<uint32_t>(bracket_slot * 2u),
-            2
-        );
+        vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[bracket_slot], 0, 2);
         m_frame_bracket_frame_id[bracket_slot] = static_cast<std::int64_t>(m_frame_index);
         m_frame_bracket_begun = false;
         m_frame_bracket_ended = false;
@@ -2885,24 +2883,24 @@ auto Device_impl::reference_seconds_to_host_calibrated_value(const double second
 
 void Device_impl::record_frame_bracket_begin(VkCommandBuffer cb)
 {
-    if ((m_frame_bracket_query_pool == VK_NULL_HANDLE) || m_frame_bracket_begun) {
+    if (!m_frame_bracket_enabled || m_frame_bracket_begun) {
         return;
     }
-    const uint32_t base = static_cast<uint32_t>(2u * (m_frame_index % s_frame_bracket_ring));
+    const std::size_t slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
     // Bottom-of-pipe begin: fires when previously submitted work has drained,
     // i.e. when the GPU actually becomes free to start this frame (execution
     // span, not queued span). See doc/frame_pacing/inputs.md section 3.3.
-    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pool, base);
+    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pools[slot], 0);
     m_frame_bracket_begun = true;
 }
 
 void Device_impl::record_frame_bracket_end(VkCommandBuffer cb)
 {
-    if ((m_frame_bracket_query_pool == VK_NULL_HANDLE) || !m_frame_bracket_begun || m_frame_bracket_ended) {
+    if (!m_frame_bracket_enabled || !m_frame_bracket_begun || m_frame_bracket_ended) {
         return;
     }
-    const uint32_t base = static_cast<uint32_t>(2u * (m_frame_index % s_frame_bracket_ring));
-    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pool, base + 1u);
+    const std::size_t slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
+    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pools[slot], 1);
     m_frame_bracket_ended = true;
 }
 
@@ -2910,7 +2908,7 @@ void Device_impl::poll_frame_bracket_results()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if ((m_frame_bracket_query_pool == VK_NULL_HANDLE) || !m_gpu_calibration_valid) {
+    if (!m_frame_bracket_enabled || !m_gpu_calibration_valid) {
         return;
     }
     for (std::size_t slot = 0; slot < s_frame_bracket_ring; ++slot) {
@@ -2921,8 +2919,8 @@ void Device_impl::poll_frame_bracket_results()
         uint64_t data[4] = {0, 0, 0, 0}; // (value, availability) x 2
         const VkResult result = vkGetQueryPoolResults(
             m_vulkan_device,
-            m_frame_bracket_query_pool,
-            static_cast<uint32_t>(slot * 2u),
+            m_frame_bracket_query_pools[slot],
+            0,
             2,
             sizeof(data),
             data,

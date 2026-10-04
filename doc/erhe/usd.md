@@ -627,10 +627,11 @@ one record of the carrier prim's own composition arc list
   does not exist until the caller attaches the arcs' targets, and a binding
   can name a material another carrier's arc supplies, so the caller applies
   every carrier's overrides once every arc of the file is instantiated.
-- A `def` below a referencing prim adds a prim to a reference, which a
+- A typed `def` below a referencing prim adds a prim to a reference, which a
   reference does not allow (doc/erhe/usd_compatibility_design.md, "Out of scope"):
-  it is named in one warning and
-  dropped.
+  it is named in one warning and dropped. A typeless `def` names an existing
+  child of the target and is read as the override of that child, the way an
+  `over` is.
 
 ### Class prims and inherits arcs
 

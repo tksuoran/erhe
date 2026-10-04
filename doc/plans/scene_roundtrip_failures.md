@@ -23,6 +23,33 @@ verifying audit item 11; recorded first in
 - Result files: the script prints `[PASS]` / `[FAIL]` lines and a summary;
   the editor's `logs/log.txt` holds the device fault report.
 
+## State 2026-10-04 (second session)
+
+- Item 1 FIXED: `section_build_scene` pauses physics (`toggle_physics`
+  enabled=false) before the bodies exist and `section_prefab_scene` resumes
+  it; `reload-diff: round-trip diff: nodes identical` passes.
+- Item 3b FIXED in the script: a typeless `def` below a reference carrier IS
+  an override since ca9b2b651 (unit test
+  `Override_import.a_typed_def_below_a_carrier_is_dropped_and_a_typeless_def_is_an_override`);
+  the check now asserts that rule (typed def dropped, typeless def = override
+  of `arm`, survives reload). Not yet seen passing at runtime (the device loss
+  below ends the run first); `doc/erhe/usd.md` wording updated to match.
+- Item 3a (wrap_u/wrap_v local values) still open; no fix yet.
+- Item 2 (device loss): running the script under the validation layers needed
+  two fixes/additions: the frame bracket query pool is now one pool per ring
+  slot (host reset of a shared pool tripped
+  VUID-vkResetQueryPool-firstQuery-02741 and aborted the editor at startup),
+  and `erhe_graphics.json` `vulkan.vulkan_gpu_assisted_validation` (new,
+  version 2) swaps synchronization validation for GPU-assisted validation.
+  Core + sync validation report nothing before the fault. The fault also hit
+  once in `section_asset_references` (glTF leg), so it is state-dependent,
+  not tied to `authored.usda`. NEXT: set both `vulkan_validation_layers` and
+  `vulkan_gpu_assisted_validation` to true (temporarily), launch, run the
+  script, read `logs/log.txt` / `logs/device_error.txt` for the GPU-AV
+  message; suspects are the draw-list compute writes (indirect commands /
+  counters / per-light shadow lists) after scene close or light-set growth.
+  The GPU-AV option has been built but not yet exercised at runtime.
+
 ## 1. `reload-diff: round-trip diff: nodes identical` (2 mismatches)
 
 `section_reload_and_diff` (glTF leg): `P6 Box` and `P6 Sphere` differ in

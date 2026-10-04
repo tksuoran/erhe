@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Vulkan_config",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="Vulkan-specific Graphics Settings",
     long_desc="Debug overrides for the Vulkan backend.",
     developer=False,
@@ -24,6 +24,16 @@ struct("Vulkan_config",
             default="true",
             short_desc="Enable Vulkan Validation Layers",
             long_desc="Enables Vulkan validation layers (VK_LAYER_KHRONOS_validation). Only meaningful for Vulkan backend.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "vulkan_gpu_assisted_validation",
+            Bool,
+            added_in=2,
+            default="false",
+            short_desc="Enable GPU-assisted validation",
+            long_desc="With the validation layers enabled, instruments shaders for GPU-assisted validation (VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT: out-of-bounds descriptor and buffer-device-address accesses, invalid indirect draw parameters) in place of synchronization validation. Turns a GPU page fault into a named binding. Slow; for diagnosing VK_ERROR_DEVICE_LOST. Only meaningful for Vulkan backend.",
             visible=True,
             developer=False
         ),

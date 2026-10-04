@@ -779,6 +779,15 @@ def section_build_scene():
     print(f"  (scene: {scene})")
     node_ids = {}
 
+    # The fixture's dynamic bodies have no ground under them: with the
+    # simulation running they fall from the moment they exist, and the live
+    # snapshot, the saved file and the reloaded scene would each catch them
+    # at a different point of that fall. Nothing in the glTF leg checks a
+    # simulation step, so physics stays off until section_prefab_scene has
+    # taken its last snapshot (the USD physics leg pauses and resumes on its
+    # own for the same reason).
+    mutate("toggle_physics", {"enabled": False})
+
     def block_shapes():
         # Shapes (geometry-normative meshes). "P6 Brush" doubles as the brush
         # library source; the physics pair keeps unique names so name-keyed
@@ -1560,6 +1569,9 @@ def section_prefab_scene():
         for mismatch in mismatches[:10]:
             print(f"       {mismatch}")
 
+    # The last glTF-leg snapshot is taken; section_build_scene paused physics.
+    mutate("toggle_physics", {"enabled": True})
+
 
 # --------------------------------------------------------------------------
 # Section 5: foreign tools (Khronos validator, Blender)
@@ -2266,11 +2278,20 @@ def usd_references_leg(S):
           plate.get("active") is False, str(plate))
     check(S, "references_override: the nested over authored its erhe value",
           "shadow_cast" in plate.get("local", []), str(plate))
-    # A `def` below a referencing prim adds structure to a reference, which is
-    # out of scope (plan section 5): it must not arrive as an override.
+    # A typed `def` below a referencing prim adds structure to a reference,
+    # which is out of scope (doc/erhe/usd_compatibility_design.md "Out of
+    # scope"): `def Xform "extra"` is dropped and no item of that name exists.
+    # A typeless `def` names an existing child of the target and is its
+    # override, the way an `over` is (X2): `def "arm"` authors `visible`.
     def_state = usd_instance_item_state(scene_name, "DefCarrier")
-    check(S, "references_override: the def below a carrier authored nothing",
-          all(not entry["local"] and entry["active"] for entry in def_state.values()),
+    def_arm = def_state.get("Widget/arm", {})
+    check(S, "references_override: the typed def below a carrier added no prim",
+          not any(path.endswith("extra") for path in def_state), str(sorted(def_state)))
+    check(S, "references_override: the typeless def below a carrier is the override of 'arm'",
+          (def_arm.get("local") == ["visible"]) and (def_arm.get("active") is True), str(def_arm))
+    check(S, "references_override: nothing else below DefCarrier authored a value",
+          all(not entry["local"] and entry["active"]
+              for path, entry in def_state.items() if path != "Widget/arm"),
           str(def_state))
 
     saved = USD_SAVE_DIR / "usd_roundtrip_references_override.usda"
@@ -2284,6 +2305,9 @@ def usd_references_leg(S):
     after = usd_instance_item_state(reloaded_name, "Carrier")
     check(S, "references_override: the overrides survive save and reload", after == before,
           f"{after} != {before}")
+    def_after = usd_instance_item_state(reloaded_name, "DefCarrier")
+    check(S, "references_override: the typeless def's override survives save and reload",
+          def_after == def_state, f"{def_after} != {def_state}")
     usd_close_scene(S, reloaded_name)
 
 

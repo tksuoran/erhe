@@ -672,9 +672,16 @@ private:
     // (ctor/dtor, write_begin/write_end, wait_frame result-read).
     VkQueryPool m_gpu_timer_query_pool      {VK_NULL_HANDLE};
 
-    // Frame-spanning GPU timestamp bracket state (step P0.3).
+    // Frame-spanning GPU timestamp bracket state (step P0.3). One pool of
+    // two queries (begin, end) per ring slot: wait_frame host-resets the
+    // slot it is about to reuse, and a host reset is only valid once every
+    // submitted command buffer referencing that pool has completed - with
+    // one pool per slot that is exactly frame (F - ring), retired long ago,
+    // while a single shared pool would still be referenced by the frames in
+    // flight (VUID-vkResetQueryPool-firstQuery-02741).
     static constexpr std::size_t s_frame_bracket_ring = 16;
-    VkQueryPool  m_frame_bracket_query_pool{VK_NULL_HANDLE};
+    std::array<VkQueryPool, s_frame_bracket_ring> m_frame_bracket_query_pools{};
+    bool         m_frame_bracket_enabled{false};
     std::array<std::int64_t, s_frame_bracket_ring> m_frame_bracket_frame_id{};
     bool         m_frame_bracket_begun{false};
     bool         m_frame_bracket_ended{false};
