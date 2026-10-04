@@ -2201,7 +2201,7 @@ Device_impl::Device_impl(
     // check there keeps another device's or driver build's data out).
     {
         const std::vector<uint8_t> initial_data = read_pipeline_cache_file(m_pipeline_cache_path, m_pipeline_cache_identity);
-        const VkPipelineCacheCreateInfo pipeline_cache_create_info{
+        VkPipelineCacheCreateInfo pipeline_cache_create_info{
             .sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
             .pNext           = nullptr,
             .flags           = 0,
@@ -2209,10 +2209,22 @@ Device_impl::Device_impl(
             .pInitialData    = initial_data.empty() ? nullptr : initial_data.data()
         };
         result = vkCreatePipelineCache(m_vulkan_device, &pipeline_cache_create_info, nullptr, &m_pipeline_cache);
+        if ((result != VK_SUCCESS) && !initial_data.empty()) {
+            // The header matched this device but the driver rejected the
+            // payload. Create an empty cache instead, so this run has a
+            // cache and the destructor replaces the rejected file.
+            log_context->warn(
+                "vkCreatePipelineCache() with {} bytes from {} failed with {} {}; starting with an empty cache",
+                initial_data.size(), m_pipeline_cache_path.string(), static_cast<int32_t>(result), c_str(result)
+            );
+            pipeline_cache_create_info.initialDataSize = 0;
+            pipeline_cache_create_info.pInitialData    = nullptr;
+            result = vkCreatePipelineCache(m_vulkan_device, &pipeline_cache_create_info, nullptr, &m_pipeline_cache);
+        }
         if (result != VK_SUCCESS) {
             log_context->error("vkCreatePipelineCache() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         } else {
-            log_context->info("Pipeline cache {}: {} bytes of initial data", m_pipeline_cache_path.string(), initial_data.size());
+            log_context->info("Pipeline cache {}: {} bytes of initial data", m_pipeline_cache_path.string(), pipeline_cache_create_info.initialDataSize);
         }
     }
 

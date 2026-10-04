@@ -394,7 +394,7 @@ public:
     [[nodiscard]] auto get_memory_heap                  (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
     [[nodiscard]] auto get_pipeline_cache               () const -> VkPipelineCache;
     // vkGetPipelineCacheData -> the file of m_pipeline_cache_path (destructor).
-    void               write_pipeline_cache            ();
+    void               write_pipeline_cache            () noexcept;
     [[nodiscard]] auto get_descriptor_set_layout        () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto has_push_descriptor              () const -> bool;
     [[nodiscard]] auto get_texture_set_layout           () const -> VkDescriptorSetLayout;
