@@ -7,7 +7,7 @@
 #include "graph_editor/graph_asset.hpp"
 
 #include "erhe_item/item.hpp"
-#include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_reference.hpp"
 
 #include <string_view>
 #include <vector>

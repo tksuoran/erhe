@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gl/gl_binding_state.hpp"
 #include "erhe_graphics/ring_buffer_pool.hpp"

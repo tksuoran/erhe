@@ -8,11 +8,29 @@ GPU resource management, render pipeline state, shader compilation, command enco
 ring buffers, texture/sampler management, render passes, and a device abstraction that
 hides the underlying graphics API behind a pimpl pattern.
 
+## Header dependencies
+
+`device.hpp` is included by every consumer of the library, so it carries
+only what its declarations need by value: `enums.hpp`, `ring_buffer_range.hpp`,
+`erhe_math/coordinate_conventions.hpp` (the `Device_info` conventions, without
+`math_util.hpp` and glm) and `erhe_utility/debug_label.hpp`. `Graphics_config`,
+`Surface_create_info`, `Shader_monitor`, `Shader_source_cache`, `Spirv_cache`
+and `erhe::frame_pacing::Frame_time_recorder` are forward-declared; the
+`Device` owns the last four through `unique_ptr` for that reason. A translation
+unit that uses one of them includes its header. `texture.hpp` is the one
+interface header whose cost is structural: `Texture` is an `erhe::Item`, so
+the header brings `erhe_item/item.hpp` and the property system with it; code
+that only passes a `Texture` by pointer or `shared_ptr`, or implements
+`Texture_reference`, forward-declares it or includes `texture_reference.hpp`.
+No header outside `src/erhe/graphics/` includes a backend header
+(`erhe_graphics/vulkan/`, `gl/`, `metal/`, `null/`).
+
 ## Key Types
 - `Device` -- Central graphics device. Creates command encoders, manages ring buffers, queries capabilities, handles frame lifecycle (`wait_frame`/`begin_frame`/`end_frame`).
 - `Device_info` -- GPU capability queries: GLSL version, limits, feature flags (bindless textures, sparse textures, persistent buffers, compute shaders, multi-draw indirect). `texture_heap_path` selects which of the four sampler-binding strategies the backend uses (see below).
 - `Buffer` -- GPU buffer (vertex, index, uniform, storage, etc.) with mapping and flush operations. Uses pimpl for backend. Pure GPU resource wrapper - allocation is handled externally by `Free_list_allocator` (in `erhe::buffer`).
 - `Texture` -- GPU texture (1D/2D/3D/cube) with mipmap, MSAA, sparse, and array layer support. It is a typed prim (`erhe::Typed`, `doc/erhe/item.md` "Prim classes") with the fixed `typeName` token `Texture`, so a texture a loader registers as scene content can be parented in a prim tree; a render target, shadow map or other device-internal texture is the same class and is never placed in one.
+- `Texture_reference` / `Texture_reference_user` (`texture_reference.hpp`) -- The interface a class resolving to a texture implements (`Texture` itself, a render graph node, a texture graph output) and the interface of a holder that must learn when the resolved texture changes (a material slot). The header forward-declares `Texture`, so a class deriving from either includes it, not `texture.hpp`.
 - `Sampler` -- Texture sampler with filtering, addressing, LOD, and anisotropy settings.
 - `Shader_stages` -- Compiled and linked shader program. Created from `Shader_stages_prototype`.
 - `Shader_stages_create_info` -- Describes shader sources, defines, interface blocks, vertex format, fragment outputs, and the active `Bind_group_layout`. The layout's synthesized default uniform block supplies the sampler declarations that get injected into the shader preamble -- callers do not pass a `Shader_resource` for samplers directly.

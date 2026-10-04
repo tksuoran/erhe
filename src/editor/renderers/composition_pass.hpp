@@ -12,6 +12,8 @@
 
 #include <glm/glm.hpp>
 
+namespace erhe::graphics { class Shader_stages; }
+
 #include <functional>
 #include <optional>
 

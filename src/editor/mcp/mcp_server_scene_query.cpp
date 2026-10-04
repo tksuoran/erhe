@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"

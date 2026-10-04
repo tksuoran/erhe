@@ -1,4 +1,5 @@
 #include "hextiles.hpp"
+#include "erhe_graphics/surface.hpp"
 #include "hextiles_log.hpp"
 #include "hextiles_settings.hpp"
 

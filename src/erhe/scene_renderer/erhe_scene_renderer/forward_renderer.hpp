@@ -29,6 +29,7 @@ namespace erhe {
     class Item_filter;
 }
 namespace erhe::graphics {
+    class Shader_stages;
     class Color_blend_state;
     class Command_buffer;
     class Device;

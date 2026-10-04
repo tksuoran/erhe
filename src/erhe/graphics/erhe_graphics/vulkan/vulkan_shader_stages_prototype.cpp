@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"

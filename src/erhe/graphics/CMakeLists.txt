@@ -113,6 +113,7 @@ erhe_target_sources_grouped(
     erhe_graphics/swapchain.hpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
+    erhe_graphics/texture_reference.hpp
     erhe_graphics/texture_heap.cpp
     erhe_graphics/texture_heap.hpp
 )

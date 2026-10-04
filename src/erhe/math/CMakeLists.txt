@@ -12,6 +12,7 @@ erhe_target_sources_grouped(
     erhe_math/math_log.cpp
     erhe_math/math_log.hpp
     erhe_math/math_util.cpp
+    erhe_math/coordinate_conventions.hpp
     erhe_math/math_util.hpp
     erhe_math/sphere.cpp
     erhe_math/sphere.hpp

@@ -25,18 +25,25 @@ on culling.
   cache key hashes the compile settings and entries are written atomically,
   and the `VkPipelineCache` is persisted per device identity
   (`doc/erhe/vulkan_backend.md` "Shaders" and "Pipeline cache persistence").
+- Item 12, first half, the include diet (`doc/erhe/graphics.md` "Header
+  dependencies"). Measured on the Linux Vulkan Debug tree with clang 18:
+  `device.hpp` preprocesses to 75k lines (was 177k); of the tree's 2209
+  translation units the ones depending on `shader_monitor.hpp` went from 358
+  to 35, on `frame_time_recorder.hpp` from 360 to 31, on `math_util.hpp` from
+  397 to 213, on `texture.hpp` from 267 to 136. `texture.hpp` itself stays at
+  131k lines: `Texture` is an `erhe::Item`, so the rest is `item.hpp` (item
+  11). No header outside `src/erhe/graphics/` includes a backend header, so
+  the interface / backend split has nothing to untangle first.
 
 ## Next
 
 1. Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
    (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
-   opt-in); needs a
-   macOS session to build and verify.
-2. Item 12, first half: include diet on `erhe_graphics/device.hpp` and
-   `texture.hpp` (`texture.hpp` pulls `erhe_item/item.hpp` and `typed.hpp`, and
-   with them the property system; `enums.hpp` is in every graphics header).
-   The interface / backend CMake split follows only if the diet leaves it
-   clean.
+   opt-in); needs a macOS session to build and verify.
+2. Item 12, second half: split `erhe_graphics` into an interface target and
+   a backend target (`doc/cmake_conventions.md`), so the 15 consumer
+   libraries stop rebuilding on backend-only changes and the interface
+   compiles against the null backend in CI.
 
 Each item is one commit with builds, tests and docs as `AGENTS.md` requires,
 and each commit gets a Fable review at medium effort.

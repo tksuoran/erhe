@@ -1,6 +1,7 @@
 ﻿#include "rendergraph/post_processing.hpp"
 
 #include "app_context.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_rendergraph/rendergraph.hpp"

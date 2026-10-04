@@ -1,17 +1,8 @@
 #pragma once
 
-#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
-#include "erhe_graphics/shader_monitor.hpp"
-#include "erhe_graphics/shader_source_cache.hpp"
-#if defined(ERHE_SPIRV)
-#   include "erhe_graphics/spirv_cache.hpp"
-#endif
-#include "erhe_graphics/surface.hpp"
-#include "erhe_graphics/swapchain.hpp"
-#include "erhe_graphics/generated/graphics_config.hpp"
-#include "erhe_frame_pacing/frame_time_recorder.hpp"
-#include "erhe_math/math_util.hpp"
+#include "erhe_math/coordinate_conventions.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <array>
@@ -23,7 +14,10 @@
 #include <string>
 #include <vector>
 
-namespace erhe::window { class Context_window; }
+struct Graphics_config;
+
+namespace erhe::frame_pacing { class Frame_time_recorder; }
+namespace erhe::window       { class Context_window; }
 
 namespace erhe::graphics {
 
@@ -70,7 +64,11 @@ class Render_pipeline;
 class Render_pipeline_create_info;
 class Ring_buffer;
 class Sampler;
+class Shader_monitor;
+class Shader_source_cache;
+class Spirv_cache;
 class Surface;
+class Surface_create_info;
 class Swapchain;
 class Texture;
 class Vulkan_external_creators;
@@ -722,12 +720,15 @@ public:
 private:
     Device_message_callback      m_device_message_callback{};
     std::unique_ptr<Device_impl> m_impl;
-    erhe::frame_pacing::Frame_time_recorder m_frame_time_recorder{};
+    // Owned through unique_ptr so this header forward-declares their
+    // types: Frame_time_recorder brings <chrono>, the caches <filesystem>
+    // and <map>, into every translation unit that includes device.hpp.
+    std::unique_ptr<erhe::frame_pacing::Frame_time_recorder> m_frame_time_recorder;
     double                       m_display_refresh_duration_seconds{0.0};
 #if defined(ERHE_SPIRV)
-    Spirv_cache                  m_spirv_cache;
+    std::unique_ptr<Spirv_cache> m_spirv_cache;
 #endif
-    Shader_source_cache          m_shader_source_cache;
+    std::unique_ptr<Shader_source_cache> m_shader_source_cache;
     Shader_error_callback        m_shader_error_callback  {};
     State_dump_callback          m_state_dump_callback    {};
     Trace_callback               m_trace_callback         {};

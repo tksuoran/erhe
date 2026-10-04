@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
 #include <functional>

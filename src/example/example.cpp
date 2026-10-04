@@ -1,4 +1,5 @@
 #include "example.hpp"
+#include "erhe_graphics/surface.hpp"
 
 #include "example_log.hpp"
 #include "frame_controller.hpp"

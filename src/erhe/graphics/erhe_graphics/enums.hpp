@@ -21,6 +21,15 @@ enum class Vendor : unsigned int {
 // landscape-locked app on a portrait-native panel reports rotate_90 / rotate_270;
 // the renderer pre-rotates its final pass to match (see Imgui_renderer). Always
 // identity on desktop / non-Vulkan backends.
+// Result of Device::wait_for_displayed_frame (frame pacing FR5 present-wait
+// clamp, implementation plan step P2.2).
+enum class Present_wait_result : unsigned int {
+    displayed   = 0, // the frame is known to have reached the display
+    timeout     = 1, // not displayed within the bounded timeout
+    unsupported = 2  // no present-wait path: capability tier OFF, headless,
+                     // GL backend, or the id predates the current swapchain
+};
+
 enum class Surface_transform : unsigned int {
     identity   = 0,
     rotate_90  = 1,

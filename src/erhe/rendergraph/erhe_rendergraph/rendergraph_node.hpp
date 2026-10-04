@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_reference.hpp"
 #include "erhe_rendergraph/resource_routing.hpp"
 #include "erhe_graph/node.hpp"
 #include "erhe_math/viewport.hpp"

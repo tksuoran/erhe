@@ -2,6 +2,16 @@
 
 #include "erhe_graphics/device.hpp"
 
+#include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/shader_source_cache.hpp"
+#if defined(ERHE_SPIRV)
+#   include "erhe_graphics/spirv_cache.hpp"
+#endif
+#include "erhe_graphics/surface.hpp"
+#include "erhe_graphics/swapchain.hpp"
+#include "erhe_frame_pacing/frame_time_recorder.hpp"
+
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_verify/verify.hpp"
@@ -43,9 +53,11 @@ Device::Device(
 #else
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config)}
 #endif
+    , m_frame_time_recorder{std::make_unique<erhe::frame_pacing::Frame_time_recorder>()}
 #if defined(ERHE_SPIRV)
-    , m_spirv_cache{std::filesystem::path{"spirv_cache"}}
+    , m_spirv_cache{std::make_unique<Spirv_cache>(std::filesystem::path{"spirv_cache"})}
 #endif
+    , m_shader_source_cache{std::make_unique<Shader_source_cache>()}
 {
 #if !defined(ERHE_GRAPHICS_API_VULKAN)
     static_cast<void>(vulkan_external_creators);
@@ -282,12 +294,12 @@ auto Device::get_impl() const -> const Device_impl&
 #if defined(ERHE_SPIRV)
 auto Device::get_spirv_cache() -> Spirv_cache&
 {
-    return m_spirv_cache;
+    return *m_spirv_cache;
 }
 #endif
 auto Device::get_shader_source_cache() -> Shader_source_cache&
 {
-    return m_shader_source_cache;
+    return *m_shader_source_cache;
 }
 void Device::set_shader_error_callback(Shader_error_callback callback)
 {
@@ -336,7 +348,7 @@ void Device::set_active_render_pass(Render_pass* render_pass)
 
 auto Device::get_frame_time_recorder() -> erhe::frame_pacing::Frame_time_recorder&
 {
-    return m_frame_time_recorder;
+    return *m_frame_time_recorder;
 }
 
 void Device::set_display_refresh_duration_seconds(const double seconds)

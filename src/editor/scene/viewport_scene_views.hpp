@@ -10,6 +10,8 @@
 #include <memory>
 #include <mutex>
 
+namespace erhe::graphics { class Device; }
+
 namespace erhe::imgui {
     class Imgui_host;
     class Imgui_windows;

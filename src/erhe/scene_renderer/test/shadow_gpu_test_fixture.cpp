@@ -1,4 +1,5 @@
 #include "shadow_gpu_test_fixture.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "scene_renderer_test_logging.hpp"
 
 #include "erhe_scene_renderer/camera_buffer.hpp"

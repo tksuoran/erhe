@@ -34,7 +34,6 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"

@@ -1,4 +1,5 @@
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_graphics/shader_source_cache.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 

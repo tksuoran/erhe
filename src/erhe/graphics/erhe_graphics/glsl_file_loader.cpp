@@ -1,4 +1,5 @@
 #include "erhe_graphics/glsl_file_loader.hpp"
+#include "erhe_graphics/shader_source_cache.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/graphics_log.hpp"

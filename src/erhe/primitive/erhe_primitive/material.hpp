@@ -7,7 +7,7 @@
 #include "erhe_property/property_set.hpp"
 // Complete types needed: Material is a Texture_reference_user (it registers
 // with the reference a slot holds) and holds Texture_reference by shared_ptr.
-#include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_reference.hpp"
 
 #include <glm/glm.hpp>
 

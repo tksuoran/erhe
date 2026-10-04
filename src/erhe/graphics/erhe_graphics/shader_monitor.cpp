@@ -1,4 +1,5 @@
 #include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/shader_source_cache.hpp"
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_device.hpp"

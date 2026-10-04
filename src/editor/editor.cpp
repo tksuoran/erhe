@@ -1,6 +1,8 @@
 ﻿#include "editor.hpp"
 
 #include "ai_driver.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/surface.hpp"
 #include "app_context.hpp"
 #include "config/generated/add_cameras_args.hpp"
 #include "config/generated/add_cameras_args_serialization.hpp"

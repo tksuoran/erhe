@@ -1,4 +1,5 @@
 #include "xr/headset_view.hpp"
+#include "erhe_graphics/surface.hpp"
 
 #include "config/generated/editor_settings_config.hpp"
 #include "erhe_xr/generated/headset_config.hpp"

@@ -4,6 +4,8 @@
 
 namespace erhe::graphics {
 
+class Buffer;
+
 class Command_buffer;
 
 class Command_encoder_impl

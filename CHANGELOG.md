@@ -256,6 +256,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `device.hpp` forward-declares `Graphics_config`,
+  `Surface_create_info`, `Shader_monitor`, `Shader_source_cache`, `Spirv_cache`
+  and `erhe::frame_pacing::Frame_time_recorder` instead of including their
+  headers (and no longer includes `buffer.hpp`, `surface.hpp`,
+  `swapchain.hpp` or `erhe_math/math_util.hpp`); a translation unit using
+  one of them includes its header. `Present_wait_result` moved from
+  `swapchain.hpp` to `enums.hpp`. `Texture_reference` and
+  `Texture_reference_user` moved to `erhe_graphics/texture_reference.hpp`,
+  which `texture.hpp` includes.
+- `erhe::math`: `Coordinate_conventions`, `Depth_range`, `Framebuffer_origin`,
+  `Texture_origin` and `Clip_space_y_flip` moved from `math_util.hpp` to
+  `erhe_math/coordinate_conventions.hpp`, which `math_util.hpp` includes.
 - `erhe::graphics`: `Spirv_cache::get()` and `Spirv_cache::put()` take a
   `uint64_t compile_settings_hash` that is part of the entry key (the hash
   of every glslang setting affecting the output, computed by

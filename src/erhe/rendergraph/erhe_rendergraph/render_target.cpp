@@ -1,4 +1,5 @@
 #include "erhe_rendergraph/render_target.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"

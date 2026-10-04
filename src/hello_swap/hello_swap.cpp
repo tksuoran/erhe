@@ -1,4 +1,6 @@
 #include "hello_swap.hpp"
+#include "erhe_graphics/surface.hpp"
+#include "erhe_graphics/swapchain.hpp"
 
 #include "hello_swap_log.hpp"
 

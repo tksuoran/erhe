@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_imgui/window_imgui_host.hpp"
+#include "erhe_graphics/surface.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
