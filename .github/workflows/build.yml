@@ -66,6 +66,25 @@ jobs:
             build_dir: build_ninja_linux_vulkan
             config: Release
 
+          # The sanitizer entry: Clang with AddressSanitizer and
+          # UndefinedBehaviorSanitizer (ERHE_USE_ASAN / ERHE_USE_UBSAN,
+          # doc/building.md) on the deviceless test set. It builds in the
+          # Vulkan wrapper's directory on its own runner; `results` keeps its
+          # test-results artifact and files apart from the plain entry's.
+          # The runtime options make a UBSan report fail the test it is in
+          # (halt_on_error) and leave LeakSanitizer off for now: leak
+          # reports are a separate verdict to turn on once the job is green.
+          - name: Linux (Ninja / Vulkan / Clang ASan+UBSan)
+            os: ubuntu-latest
+            api: vulkan
+            shell: bash
+            configure: bash scripts/configure_ninja_linux_vulkan.sh -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DERHE_USE_ASAN=ON -DERHE_USE_UBSAN=ON
+            build_dir: build_ninja_linux_vulkan
+            results: build_ninja_linux_vulkan_sanitizers
+            config: Release
+            asan_options: detect_leaks=0
+            ubsan_options: print_stacktrace=1:halt_on_error=1
+
           - name: macOS (Xcode / Metal)
             os: macos-latest
             api: metal
@@ -160,20 +179,26 @@ jobs:
       # The script tees ctest's output to test-results/<build_dir>.log line by
       # line (ctest's own --output-log is written only at exit), so the
       # uploaded log names the test that was running when a step was cut off.
+      # `results` names the JUnit / log files and the artifact; it defaults
+      # to the build directory and differs only where two entries share one.
+      # The sanitizer runtime options are empty for every other entry.
       - name: Run tests
         id: ctest
         continue-on-error: true
         timeout-minutes: 30
-        run: python3 scripts/ci_run_tests.py "${{ matrix.build_dir }}" "${{ matrix.config }}" "${{ github.workspace }}/test-results"
+        env:
+          ASAN_OPTIONS: ${{ matrix.asan_options }}
+          UBSAN_OPTIONS: ${{ matrix.ubsan_options }}
+        run: python3 scripts/ci_run_tests.py "${{ matrix.build_dir }}" "${{ matrix.config }}" "${{ github.workspace }}/test-results" "${{ matrix.results || matrix.build_dir }}"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-${{ matrix.build_dir }}
+          name: test-results-${{ matrix.results || matrix.build_dir }}
           path: |
-            test-results/${{ matrix.build_dir }}.xml
-            test-results/${{ matrix.build_dir }}.log
+            test-results/${{ matrix.results || matrix.build_dir }}.xml
+            test-results/${{ matrix.results || matrix.build_dir }}.log
           if-no-files-found: ignore
 
   # Grep-level rule (proposal D of doc/erhe/gl_worker_context_enforcement.md):

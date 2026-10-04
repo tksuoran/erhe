@@ -1214,6 +1214,7 @@ target_link_libraries(
         erhe::time
         erhe::ui
         erhe::verify
+        erhe::version
         geogram
         imgui
         imgui_gradient::imgui_gradient

@@ -9,20 +9,17 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
-# TODO For now, to enable sanitizers, uncomment lines here
-
-#add_compile_options(-fsanitize=undefined)
-#add_link_options(-fsanitize=undefined)
-
-#add_compile_options(-fsanitize=address)
-#add_link_options(-fsanitize=address)
-
-# No implicit-conversion because Tracy uses moodycamel
-#add_compile_options(-fsanitize=undefined,float-divide-by-zero,local-bounds -fno-sanitize-recover=all)
-#add_link_options(-fsanitize=undefined,float-divide-by-zero,local-bounds -fno-sanitize-recover=all)
-
-#add_compile_options(-fsanitize=thread)
-#add_link_options(-fsanitize=thread)
+# ERHE_USE_ASAN / ERHE_USE_UBSAN (doc/building.md): AddressSanitizer and
+# UndefinedBehaviorSanitizer for every target, including the CPM
+# dependencies configured in this tree (the flag choice is cmake/Clang.cmake's).
+if (ERHE_USE_ASAN)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=address)
+endif ()
+if (ERHE_USE_UBSAN)
+    add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=undefined)
+endif ()
 
 set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 
@@ -39,4 +36,9 @@ endif ()
 
 function (erhe_target_settings_toolchain target)
     set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym")
+    # ERHE_WARNINGS_AS_ERRORS: per erhe target, as cmake/msvc.cmake's /WX,
+    # so the CPM dependencies keep their own warning policy.
+    if (ERHE_WARNINGS_AS_ERRORS)
+        target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Werror>")
+    endif ()
 endfunction()

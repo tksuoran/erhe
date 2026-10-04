@@ -15,9 +15,11 @@ function (erhe_target_settings_toolchain target)
     # Visual Studio has documented it to be enabled by default
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/JMC>)
 
-    # Set warning level 4 and enable warnings as errors
+    # Set warning level 4 and, with ERHE_WARNINGS_AS_ERRORS, warnings as errors
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4>)
-    target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/WX>)
+    if (ERHE_WARNINGS_AS_ERRORS)
+        target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/WX>)
+    endif ()
 
     # Disable unreachable warning (libfmt)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/wd4702>) # unreachable
@@ -60,6 +62,9 @@ endfunction (erhe_disable_incremental_linking)
 if (ERHE_USE_ASAN)
     erhe_disable_incremental_linking()
     add_compile_options(-fsanitize=address)
+endif()
+if (ERHE_USE_UBSAN)
+    message(STATUS "ERHE_USE_UBSAN: MSVC has no UndefinedBehaviorSanitizer; the option is ignored on this toolchain")
 endif()
 
 #add_definitions(-DUNICODE -D_UNICODE)

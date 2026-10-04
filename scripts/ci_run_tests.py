@@ -7,7 +7,11 @@ streams ctest's stdout to the console and to <results_dir>/<build_dir>.log,
 flushing every line, so the file names the test that was running when the
 run was cut off. Exits with ctest's exit code.
 
-Usage: ci_run_tests.py <build_dir> <config> <results_dir>
+Usage: ci_run_tests.py <build_dir> <config> <results_dir> [<name>]
+
+<name> is the stem of the two output files (default: <build_dir>), for a
+matrix entry that builds in the same directory as another one, such as the
+sanitizer entry.
 """
 
 import pathlib
@@ -16,15 +20,16 @@ import sys
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 4:
+    if len(argv) not in (4, 5):
         print(__doc__, file=sys.stderr)
         return 2
     build_dir = argv[1]
     config = argv[2]
     results_dir = pathlib.Path(argv[3])
+    name = argv[4] if len(argv) == 5 else build_dir
     results_dir.mkdir(parents=True, exist_ok=True)
-    log_path = results_dir / f"{build_dir}.log"
-    junit_path = results_dir / f"{build_dir}.xml"
+    log_path = results_dir / f"{name}.log"
+    junit_path = results_dir / f"{name}.xml"
 
     command = [
         "ctest",

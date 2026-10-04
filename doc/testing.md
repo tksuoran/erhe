@@ -116,7 +116,16 @@ builds while discovery ran post-build.
 CI (`.github/workflows/build.yml`) configures every matrix entry with tests
 on, builds `editor` and `erhe_tests`, and runs
 `ctest --label-exclude "gpu|editor" --output-junit` through
-`scripts/ci_run_tests.py`; the runners have no GPU. Each test is bounded to
+`scripts/ci_run_tests.py`; the runners have no GPU. One Linux entry builds
+with Clang under AddressSanitizer and UndefinedBehaviorSanitizer
+(`ERHE_USE_ASAN` / `ERHE_USE_UBSAN`, `doc/building.md`) and runs the same
+deviceless set with `UBSAN_OPTIONS=halt_on_error=1`, so an undefined
+behavior report fails the test it happens in, and `ASAN_OPTIONS=detect_leaks=0`
+(leak reports are a separate verdict, not yet enabled); it shares the Vulkan
+wrapper's build directory on its own runner and names its results
+`build_ninja_linux_vulkan_sanitizers` (the script's optional fourth
+argument). Every entry compiles erhe's targets with warnings as errors
+(`ERHE_WARNINGS_AS_ERRORS`, default on). Each test is bounded to
 120 s and the ctest step to 30 minutes, so a hung test is reported as a
 Timeout and a runaway step ends while the job is still alive. The script
 tees ctest's output line by line to a `.log` next to the JUnit file (ctest's

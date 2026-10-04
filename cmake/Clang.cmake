@@ -39,24 +39,21 @@ if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 endif ()
 
-# ERHE_USE_ASAN (doc/building.md): AddressSanitizer for every target,
-# including the CPM dependencies configured in this tree.
+# ERHE_USE_ASAN / ERHE_USE_UBSAN (doc/building.md): AddressSanitizer and
+# UndefinedBehaviorSanitizer for every target, including the CPM
+# dependencies configured in this tree, with frame pointers and debug info
+# so the reports carry symbolized stacks in every configuration. UBSan's
+# default set only: implicit-conversion is left out because Tracy's
+# moodycamel queue trips it, and recovery stays on so the CI job decides
+# through UBSAN_OPTIONS=halt_on_error=1 whether a report fails the test.
 if (ERHE_USE_ASAN)
-    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
     add_link_options(-fsanitize=address)
 endif ()
-
-# TODO For now, to enable the other sanitizers, uncomment lines here
-
-#add_compile_options(-fsanitize=undefined)
-#add_link_options(-fsanitize=undefined)
-
-# No implicit-conversion because Tracy uses moodycamel
-#add_compile_options(-fsanitize=undefined,float-divide-by-zero,local-bounds -fno-sanitize-recover=all)
-#add_link_options(-fsanitize=undefined,float-divide-by-zero,local-bounds -fno-sanitize-recover=all)
-
-#add_compile_options(-fsanitize=thread)
-#add_link_options(-fsanitize=thread)
+if (ERHE_USE_UBSAN)
+    add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=undefined)
+endif ()
 
 if (WIN32)
     set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
@@ -118,6 +115,11 @@ function (erhe_target_settings_toolchain target)
     foreach (erhe_warning_flag IN LISTS ERHE_GNU_WARNING_FLAGS)
         target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${erhe_warning_flag}>")
     endforeach ()
+    # ERHE_WARNINGS_AS_ERRORS: per erhe target, as cmake/msvc.cmake's /WX,
+    # so the CPM dependencies keep their own warning policy.
+    if (ERHE_WARNINGS_AS_ERRORS)
+        target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${ERHE_GNU_WARNING_FLAG_PREFIX}-Werror>")
+    endif ()
     if (WIN32)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)

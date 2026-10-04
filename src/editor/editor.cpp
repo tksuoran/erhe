@@ -2,6 +2,7 @@
 
 #include "ai_driver.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_version/version.hpp"
 #include "erhe_graphics/surface.hpp"
 #include "app_context.hpp"
 #include "config/generated/add_cameras_args.hpp"
@@ -4304,6 +4305,10 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         erhe::xr::initialize_logging();
 #endif
         editor::initialize_logging();
+        // The build identity, first thing in the log: the project version
+        // and the source tree's git describe (erhe::version, stamped at
+        // every build) beside the dependency commits CMake captured.
+        log_startup->info("{}; geogram {}; bvh {}", erhe::version::get_description(), ERHE_GEOGRAM_GIT_COMMIT, ERHE_BVH_GIT_COMMIT);
     }
 
     // Descriptor-driven property registrations (texture graph node

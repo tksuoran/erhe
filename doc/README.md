@@ -200,6 +200,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [erhe/usd_compatibility_design.md](erhe/usd_compatibility_design.md) (mostly stable): USD compatibility design record and current state (C/U/M/X labels cited from code)
 - [erhe/usd_node_graphs.md](erhe/usd_node_graphs.md) (mostly stable): Texture and geometry node graphs as UsdShade NodeGraph / Shader prims
 - [erhe/utility.md](erhe/utility.md) (stable): Small standalone utility classes and functions used across the erhe codebase: memory alignment helpers, bitwise test functions, a fixed-size pimpl smart pointer, and an interned debug label type backed by a thread-safe string pool
+- [erhe/version.md](erhe/version.md) (stable): The build identity (`project(VERSION)` plus `git describe`), stamped into one translation unit at every build and logged at editor startup
 - [erhe/verify.md](erhe/verify.md) (stable): Provides two foundational assertion macros used throughout the entire erhe codebase: `ERHE_VERIFY(expression)` for runtime condition checks and `ERHE_FATAL(format, ...)` for unconditional abort with a formatted error message
 - [erhe/vertex_position_quantization.md](erhe/vertex_position_quantization.md) (experimental): Quantized vertex positions across backends
 - [erhe/voxel.md](erhe/voxel.md) (experimental): Sparse voxel signed distance fields (SDF) built on OpenVDB narrow-band level sets

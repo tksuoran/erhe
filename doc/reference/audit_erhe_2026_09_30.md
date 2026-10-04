@@ -44,8 +44,9 @@ next selected items are in `doc/plans/audit_2026_09_30_followups.md`.
 | 6 | Shared `Ring_buffer_pool` and Metal parity | Pool done for all three backends; the Metal parity items (timers, `blit_framebuffer`, resize) are open and need macOS | 64cce60f6 |
 | 7 | Vestigial taskflow annotations | Done | ce897bfe6 |
 | 8 | Plan hygiene | The eight drifted plans rewritten; deleting plans was declined by the user | ac3f76786 |
-| 9 | Frustum culling on draw-list entries | Color passes cull; the shadow side (fit AABBs from the entries, per-light caster culling) is open as item 1 of `doc/plans/draw_list_renderer.md` | e476817cf |
+| 9 | Frustum culling on draw-list entries | Done: color passes cull on the entry AABB; the shadow passes cull against each light frustum and the fit reads the entries' bounds; the mesh-component drag keeps bounds current | e476817cf, 55923790f |
 | 10 | Per-subresource Vulkan layouts, blit region types | Done, plus the review follow-ups and the OpenGL failures the GPU tests found | 4fc17d988, 1d5d45f28, 51dfc09fb, e35933c80, 8628689ad, 5ef90f13c, e80b64ab2, 6837a428f, cafc0773e |
+| 11 | Editor bits out of `Item_flags` / `Item_type` | Done: application ranges with registered label / name tables, `hosted_selection` in `Selection`, the tables in their own headers (`doc/erhe/item.md` "Application bits") | 414c4e285 |
 | 12 | Include diet, interface / backend split | Done | afbe3d5b5, 5342524d6, b9eb1061b |
 | 17 | Sanitizers, `-Werror`, CI GPU tests, version | `ERHE_USE_ASAN` applies with GCC and Clang; the CI job, `-Werror`, CI GPU tests and version embedding are open | 091b5879f |
 | 18 | Shader pipeline persistence | glslang SPIR-V cache key and atomic writes, persisted `VkPipelineCache` done; Metal `MTLBinaryArchive` open, needs macOS | f9ab02789, b67d84982 |

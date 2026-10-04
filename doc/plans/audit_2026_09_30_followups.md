@@ -58,24 +58,25 @@ on culling.
   180292 -> 180207 non-empty preprocessed lines - the table split is not a
   diet, because what `item.hpp` costs its consumers is the property system
   and the standard library behind `Item_base`, not the tables.
+- Item 17, CI hardening (`doc/testing.md` "CI", `doc/building.md`):
+  `ERHE_USE_UBSAN` beside `ERHE_USE_ASAN` in every GNU-style toolchain
+  file, a Linux Clang ASan+UBSan matrix entry running the deviceless set
+  with `halt_on_error`, erhe's warning set and `-Werror` per erhe target on
+  Clang, GCC and AppleClang under `ERHE_WARNINGS_AS_ERRORS` (default on,
+  the MSVC `/WX` follows the same option), and `erhe::version`
+  (`doc/erhe/version.md`) logged as the editor's first startup line beside
+  the dependency commits. The Clang / GCC halves are verified by the first
+  CI run after the push: no Clang toolchain was available on the machine
+  that built them, and GCC previously compiled erhe targets without
+  `-Wall -Wextra`, so that run may surface warnings to fix
+  (`-DERHE_WARNINGS_AS_ERRORS=OFF` is the escape hatch while they are).
 
 ## Next
 
-Selected 2026-10-04, in this order. All three can be built and verified on
-Windows; the macOS-only items under "Open parts of worked items" wait for a
-macOS session.
-
-1. **CI hardening** (the open half of item 17; read the infra slice report
-   section 10 items 5-8, `doc/testing.md`, `.github/workflows/`). A Linux
-   Clang matrix entry building with AddressSanitizer and UBSan
-   (`ERHE_USE_ASAN` exists for GCC / Clang since 091b5879f; add a UBSan
-   option beside it) running the deviceless tests; `-Werror` on Clang / GCC
-   per target, leaf libraries first; version embedding (`erhe_version.hpp`
-   from `project(VERSION)` plus `git describe`, logged at startup next to
-   the dependency commits). Software-Vulkan (lavapipe) GPU tests in CI are
-   a separate step after these. The workflow changes can only be verified by
-   a CI run, which needs the user to push; build the flags locally first
-   (a Clang tree on Windows covers `-Werror` and ASan).
+Nothing is selected: the three items chosen on 2026-10-04 (9 shadow half,
+11, 17) are done. What is open is listed under "Open parts of worked items"
+and "Follow-ups found by review"; the next pick is a new selection from
+`doc/reference/audit_erhe_2026_09_30.md` section 8.
 
 ## Open parts of worked items
 
@@ -84,6 +85,10 @@ macOS session.
   opt-in); needs a macOS session to build and verify.
 - Item 6, Metal half: GPU timers (read 0), `blit_framebuffer` (fatal) and
   swapchain resize on Metal; needs a macOS session.
+- Item 17, GPU tests in CI: `erhe_graphics_gpu_tests` on Linux under
+  lavapipe (`doc/erhe/graphics_test_coverage.md`), with a tolerance profile
+  per driver where the goldens need one; and LeakSanitizer on the sanitizer
+  entry (`ASAN_OPTIONS=detect_leaks=0` today).
 
 Each item is one commit with builds, tests and docs as `AGENTS.md` requires,
 and each commit gets a Fable review at medium effort.

@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::version` (`erhe_version/version.hpp`): `get_project_version()`,
+  `get_git_describe()`, `get_description()`, the build identity stamped
+  into one translation unit at every build (`erhe_version_stamp`).
+- CMake: `ERHE_USE_UBSAN` (UndefinedBehaviorSanitizer on Clang, GCC and
+  AppleClang) beside `ERHE_USE_ASAN`, and `ERHE_WARNINGS_AS_ERRORS` (default
+  on): every toolchain file applies erhe's warning set and `-Werror` /
+  `/WX` per erhe target. CI runs a Clang ASan+UBSan matrix entry.
 - `erhe::scene_renderer`: `Draw_list_scene::gather_shadow_bounds()` with
   `Shadow_bounds_gather_parameters`: the shadow frustum fit's caster /
   receiver bounds and caster vertex extents from the registered objects

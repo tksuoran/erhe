@@ -155,6 +155,8 @@ attempt and the launch must be retried.
 | `ERHE_SPIRV` | Enable SPIR-V shader compilation | `ON`, `OFF` | `OFF` |
 | `ERHE_BUILD_TESTS` | Build the `erhe_<name>_tests` gtest targets | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` | `OFF` |
+| `ERHE_USE_UBSAN` | UndefinedBehaviorSanitizer (Clang, GCC, AppleClang; ignored on MSVC) | `ON`, `OFF` | `OFF` |
+| `ERHE_WARNINGS_AS_ERRORS` | Warnings as errors on every erhe target (`-Werror`, `/WX`); the CPM dependencies keep their own policy | `ON`, `OFF` | `ON` |
 | `ERHE_USE_FPNG` | Build the fpng image writer (fast PNG save) | `ON`, `OFF` | `ON` |
 | `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` | `OFF` |
 
@@ -193,6 +195,23 @@ tabulated in `doc/erhe/physics.md`. Set to `none` to disable physics.
 **ERHE_AUDIO_LIBRARY** -- Currently only used by non-functional experimental code. Best left as `none`.
 
 **ERHE_FONT_RASTERIZATION_LIBRARY** / **ERHE_TEXT_LAYOUT_LIBRARY** -- Disabling either removes native text rendering (ImGui content is not affected).
+
+**ERHE_USE_ASAN** / **ERHE_USE_UBSAN** -- Sanitizers for every target of the
+tree, the CPM dependencies included (`cmake/Clang.cmake`, `GNU.cmake`,
+`AppleClang.cmake`; MSVC supports AddressSanitizer only). Both add frame
+pointers and debug info so the reports carry symbolized stacks in a Release
+tree. UBSan is the default check set with recovery on: a report is printed
+and the program continues unless the `UBSAN_OPTIONS=halt_on_error=1`
+runtime option is set, which is what the CI sanitizer entry does
+(`doc/testing.md` "CI"). The Windows `*_asan.bat` wrappers below set
+`ERHE_USE_ASAN`.
+
+**ERHE_WARNINGS_AS_ERRORS** -- Each toolchain file applies erhe's warning
+set per erhe target (`erhe_target_settings_toolchain`) and, with this option,
+`-Werror` (`/WX` on MSVC) on the same targets; a dependency configured in the
+tree is never affected. Default on, so a warning is a build error on every
+compiler; switch it off to get a tree to build while a warning is being
+fixed.
 
 ## Windows Build Scripts
 
