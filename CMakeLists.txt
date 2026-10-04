@@ -812,6 +812,11 @@ CPMAddPackage(
     VERSION           4.6.6
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY simdjson/simdjson
+    OPTIONS
+        # simdjson defaults to C++17 but adds <bit> to its PCH whenever the
+        # header exists, which MSVC's STL reports as STL4038 below C++20.
+        # erhe is C++20 throughout; build simdjson the same way.
+        "SIMDJSON_CXX_STANDARD 20"
 )
 
 CPMAddPackage(
