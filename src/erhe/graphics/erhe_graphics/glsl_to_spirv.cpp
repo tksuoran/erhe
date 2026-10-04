@@ -5,6 +5,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_file/file.hpp"
+#include "erhe_hash/hash.hpp"
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_shader_stages.hpp"
@@ -102,6 +103,103 @@ namespace erhe::graphics {
     resources.maxFragmentUniformComponents = static_cast<int>(MaxFragmentUniformVectors * 4);
     return resources;
 }
+
+namespace {
+
+// Every glslang setting that changes the SPIR-V produced for the same GLSL
+// source lives here, at file scope, so that compile_settings_hash() below
+// can fold all of them into the Spirv_cache key: a change to any of them
+// changes the key, and no manual cache version tag has to be bumped.
+
+#if defined(ERHE_GRAPHICS_API_METAL) || defined(ERHE_GRAPHICS_API_VULKAN)
+// Vulkan 1.3 client: the instance/device are created with
+// VK_API_VERSION_1_3, and GL_EXT_ray_query requires SPIR-V 1.4+ semantics
+// which glslang only emits for a Vulkan 1.2+ client (the SPIR-V target
+// below is already 1.6).
+constexpr glslang::EShClient              c_env_client         = glslang::EShClient::EShClientVulkan;
+constexpr glslang::EShTargetClientVersion c_env_client_version = glslang::EShTargetClientVersion::EShTargetVulkan_1_3;
+#else
+constexpr glslang::EShClient              c_env_client         = glslang::EShClient::EShClientOpenGL;
+constexpr glslang::EShTargetClientVersion c_env_client_version = glslang::EShTargetClientVersion::EShTargetOpenGL_450;
+#endif
+constexpr int                                 c_env_input_version  = 100;
+constexpr glslang::EShTargetLanguage          c_env_target         = glslang::EShTargetLanguage::EShTargetSpv;
+constexpr glslang::EShTargetLanguageVersion   c_env_target_version = glslang::EShTargetLanguageVersion::EShTargetSpv_1_6;
+constexpr int                                 c_default_version    = 100;
+constexpr bool                                c_forward_compatible = true;
+
+constexpr unsigned int c_parse_messages{
+    EShMsgSpvRules             | // issue messages for SPIR-V generation
+    EShMsgDebugInfo            | // save debug information
+  //EShMsgBuiltinSymbolTable   | // print the builtin symbol table
+    EShMsgEnhanced             | // enhanced message readability
+    EShMsgDisplayErrorColumn     // Display error message column aswell as line
+};
+
+constexpr unsigned int c_link_messages{
+  //EShMsgAST                  | // print the AST intermediate representation
+    EShMsgSpvRules             | // issue messages for SPIR-V generation
+    EShMsgDebugInfo            | // save debug information
+  //EShMsgBuiltinSymbolTable   | // print the builtin symbol table
+    EShMsgEnhanced             | // enhanced message readability
+    EShMsgAbsolutePath         | // Output Absolute path for messages
+    EShMsgDisplayErrorColumn     // Display error message column aswell as line
+};
+
+const glslang::SpvOptions c_spirv_options{
+    .generateDebugInfo                = true,
+    .stripDebugInfo                   = false,
+    .disableOptimizer                 = true,
+    .optimizeSize                     = false,
+    .disassemble                      = false,
+    .validate                         = true,
+    .emitNonSemanticShaderDebugInfo   = true,
+    .emitNonSemanticShaderDebugSource = true,
+    .compileOnly                      = false,
+    .optimizerAllowExpandedIDBound    = false
+};
+
+// Field by field (not the raw struct bytes, whose padding is unspecified).
+auto hash_spv_options(const glslang::SpvOptions& options, uint64_t seed) -> uint64_t
+{
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.generateDebugInfo),                seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.stripDebugInfo),                   seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.disableOptimizer),                 seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.optimizeSize),                     seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.disassemble),                      seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.validate),                         seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.emitNonSemanticShaderDebugInfo),   seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.emitNonSemanticShaderDebugSource), seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.compileOnly),                      seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(options.optimizerAllowExpandedIDBound),    seed);
+    return seed;
+}
+
+// The Spirv_cache key component for the settings above plus the linked
+// glslang version (the same source compiles to different SPIR-V across
+// glslang versions). Computed once per process.
+auto compute_compile_settings_hash() -> uint64_t
+{
+    uint64_t seed = erhe::hash::c_seed;
+    seed = erhe::hash::hash(static_cast<uint64_t>(GLSLANG_VERSION_MAJOR), seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(GLSLANG_VERSION_MINOR), seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(GLSLANG_VERSION_PATCH), seed);
+    seed = erhe::hash::hash(GLSLANG_VERSION_FLAVOR, std::strlen(GLSLANG_VERSION_FLAVOR), seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_env_client),          seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_env_client_version),  seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_env_input_version),   seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_env_target),          seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_env_target_version),  seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_default_version),     seed);
+    seed = erhe::hash::hash(static_cast<uint8_t>(c_forward_compatible),   seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_parse_messages),      seed);
+    seed = erhe::hash::hash(static_cast<uint64_t>(c_link_messages),       seed);
+    seed = hash_spv_options(c_spirv_options, seed);
+    return seed;
+}
+const uint64_t c_compile_settings_hash = compute_compile_settings_hash();
+
+} // anonymous namespace
 
 Glslang_shader_stages::Glslang_shader_stages(Shader_stages_prototype_impl& shader_stages_prototype, Spirv_cache* cache)
     : m_shader_stages_prototype{shader_stages_prototype}
@@ -229,26 +327,9 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     const char* const source_name   = main_name.c_str();
     glslang_shader.setStringsWithLengthsAndNames(&source_string, &source_length, &source_name, 1);
 
-#if defined(ERHE_GRAPHICS_API_METAL) || defined(ERHE_GRAPHICS_API_VULKAN)
-    glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, 100);
-    // Vulkan 1.3 client: the instance/device are created with
-    // VK_API_VERSION_1_3, and GL_EXT_ray_query requires SPIR-V 1.4+ semantics
-    // which glslang only emits for a Vulkan 1.2+ client (the SPIR-V target
-    // below is already 1.6).
-    glslang_shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EshTargetClientVersion::EShTargetVulkan_1_3);
-#else
-    glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientOpenGL, 100);
-    glslang_shader.setEnvClient(glslang::EShClient::EShClientOpenGL, glslang::EshTargetClientVersion::EShTargetOpenGL_450);
-#endif
-    glslang_shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetSpv_1_6);
-
-    unsigned int messages{
-        EShMsgSpvRules             | // issue messages for SPIR-V generation
-        EShMsgDebugInfo            | // save debug information
-      //EShMsgBuiltinSymbolTable   | // print the builtin symbol table
-        EShMsgEnhanced             | // enhanced message readability
-        EShMsgDisplayErrorColumn     // Display error message column aswell as line
-    };
+    glslang_shader.setEnvInput (glslang::EShSource::EShSourceGlsl, language, c_env_client, c_env_input_version);
+    glslang_shader.setEnvClient(c_env_client, c_env_client_version);
+    glslang_shader.setEnvTarget(c_env_target, c_env_target_version);
 
     Glsl_includer includer{
         primary_dir,
@@ -261,9 +342,9 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     const ::TBuiltInResource glslang_built_in_resources = get_built_in_resources(device);
     const bool parse_ok = glslang_shader.parse(
         &glslang_built_in_resources,
-        100,
-        true,
-        static_cast<const EShMessages>(messages),
+        c_default_version,
+        c_forward_compatible,
+        static_cast<const EShMessages>(c_parse_messages),
         includer
     );
     const char* info_log       = glslang_shader.getInfoLog();
@@ -364,16 +445,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
     }
     ERHE_VERIFY(!m_active_stages.empty());
 
-    unsigned int messages{0};
-    //messages = messages | EShMsgAST;                // print the AST intermediate representation
-    messages = messages | EShMsgSpvRules;             // issue messages for SPIR-V generation
-    messages = messages | EShMsgDebugInfo;            // save debug information
-    //messages = messages | EShMsgBuiltinSymbolTable; // print the builtin symbol table
-    messages = messages | EShMsgEnhanced;             // enhanced message readability
-    messages = messages | EShMsgAbsolutePath;         // Output Absolute path for messages
-    messages = messages | EShMsgDisplayErrorColumn;   // Display error message column aswell as line
-
-    const bool link_ok = m_glslang_program->link(static_cast<const EShMessages>(messages));
+    const bool link_ok = m_glslang_program->link(static_cast<const EShMessages>(c_link_messages));
     const char* const info_log = m_glslang_program->getInfoLog();
     if ((info_log != nullptr) && info_log[0] != '\0') {
         log_program->info("glslang program link info log:\n{}\n", info_log);
@@ -385,19 +457,6 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
         return false;
     }
 
-    glslang::SpvOptions spirv_options{
-        .generateDebugInfo                = true,
-        .stripDebugInfo                   = false,
-        .disableOptimizer                 = true,
-        .optimizeSize                     = false,
-        .disassemble                      = false,
-        .validate                         = true,
-        .emitNonSemanticShaderDebugInfo   = true,
-        .emitNonSemanticShaderDebugSource = true,
-        .compileOnly                      = false,
-        .optimizerAllowExpandedIDBound    = false
-    };
-
     const Shader_stages_create_info& create_info = m_shader_stages_prototype.create_info();
 
     for (::EShLanguage stage : m_active_stages) {
@@ -407,7 +466,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
             for (const Shader_stage& shader : create_info.shaders) {
                 if (to_glslang(shader.type) == stage) {
                     const std::string source = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
-                    std::vector<unsigned int> cached = m_cache->get(source, shader.type);
+                    std::vector<unsigned int> cached = m_cache->get(source, shader.type, c_compile_settings_hash);
                     if (!cached.empty()) {
                         m_spirv_shaders[stage] = std::move(cached);
                         from_cache = true;
@@ -434,7 +493,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
                 for (const Shader_stage& shader : create_info.shaders) {
                     if (to_glslang(shader.type) == stage) {
                         const std::string source = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
-                        m_cache->put(source, shader.type, m_spirv_shaders[stage]);
+                        m_cache->put(source, shader.type, c_compile_settings_hash, m_spirv_shaders[stage]);
                         break;
                     }
                 }
@@ -442,7 +501,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
         };
 
         if (!from_cache) {
-            generate(spirv_options);
+            generate(c_spirv_options);
             store_in_cache();
         }
 
@@ -462,7 +521,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
                 create_info.name,
                 glslang_stage_name(stage)
             );
-            glslang::SpvOptions fallback_options = spirv_options;
+            glslang::SpvOptions fallback_options = c_spirv_options;
             fallback_options.emitNonSemanticShaderDebugInfo   = false;
             fallback_options.emitNonSemanticShaderDebugSource = false;
             generate(fallback_options);
@@ -504,7 +563,7 @@ auto Glslang_shader_stages::try_load_all_from_cache(Device& device) -> bool
         const std::string source   = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
         const EShLanguage language = to_glslang(shader.type);
 
-        std::vector<unsigned int> spirv = m_cache->get(source, shader.type);
+        std::vector<unsigned int> spirv = m_cache->get(source, shader.type, c_compile_settings_hash);
         if (spirv.empty()) {
             return false; // Cache miss on any stage means we must compile all
         }

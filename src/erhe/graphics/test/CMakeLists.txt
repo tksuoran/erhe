@@ -1,6 +1,7 @@
 include(GoogleTest)
 
-# Deviceless tests: pure std140/std430 layout math, no graphics Device.
+# Deviceless tests: std140/std430 layout math and the on-disk shader and
+# pipeline caches; no graphics Device.
 # Built in every configuration (CI-friendly, GPU-less).
 set(_deviceless_target "erhe_graphics_tests")
 add_executable(${_deviceless_target}
@@ -8,9 +9,18 @@ add_executable(${_deviceless_target}
     test_shader_resource_size.cpp
 )
 
+# Spirv_cache exists only with glslang; the pipeline cache file is Vulkan's.
+if (ERHE_SPIRV)
+    target_sources(${_deviceless_target} PRIVATE test_spirv_cache.cpp)
+endif ()
+if (ERHE_GRAPHICS_API STREQUAL "vulkan")
+    target_sources(${_deviceless_target} PRIVATE test_pipeline_cache_file.cpp)
+endif ()
+
 target_link_libraries(${_deviceless_target}
     PRIVATE
         erhe::graphics
+        erhe::log
         erhe::verify
         GTest::gtest
 )

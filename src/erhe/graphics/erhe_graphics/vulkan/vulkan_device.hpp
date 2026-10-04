@@ -5,6 +5,7 @@
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/ring_buffer_pool.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/vulkan/vulkan_pipeline_cache_file.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_frame_pacing/frame_time_recorder.hpp"
 #include "erhe_profile/profile.hpp"
@@ -15,6 +16,7 @@
 VK_DEFINE_HANDLE(VmaAllocator)
 
 #include <array>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -391,6 +393,8 @@ public:
     [[nodiscard]] auto get_memory_type                  (uint32_t memory_type_index) const -> const VkMemoryType&;
     [[nodiscard]] auto get_memory_heap                  (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
     [[nodiscard]] auto get_pipeline_cache               () const -> VkPipelineCache;
+    // vkGetPipelineCacheData -> the file of m_pipeline_cache_path (destructor).
+    void               write_pipeline_cache            ();
     [[nodiscard]] auto get_descriptor_set_layout        () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto has_push_descriptor              () const -> bool;
     [[nodiscard]] auto get_texture_set_layout           () const -> VkDescriptorSetLayout;
@@ -641,7 +645,11 @@ private:
     // conservative defaults so call sites can read it unconditionally.
     VkPhysicalDeviceAccelerationStructurePropertiesKHR m_acceleration_structure_properties{};
 
-    // Pipeline infrastructure
+    // Pipeline infrastructure. The pipeline cache is persisted across runs
+    // (vulkan_pipeline_cache_file.hpp): created from the file of this
+    // device's identity, written back in the destructor.
+    Pipeline_cache_identity                       m_pipeline_cache_identity  {};
+    std::filesystem::path                         m_pipeline_cache_path      {};
     VkPipelineCache                               m_pipeline_cache           {VK_NULL_HANDLE};
     VkDescriptorSetLayout                         m_descriptor_set_layout    {VK_NULL_HANDLE};
     VkDescriptorSetLayout                         m_texture_set_layout       {VK_NULL_HANDLE};

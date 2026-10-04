@@ -1,14 +1,22 @@
 #include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 
-#include <glslang/build_info.h>
-
-#include <fmt/format.h>
-
 #include <fstream>
 #include <functional>
 #include <sstream>
 #include <iomanip>
+
+#if defined(_WIN32)
+#   ifndef WIN32_LEAN_AND_MEAN
+#       define WIN32_LEAN_AND_MEAN
+#   endif
+#   ifndef NOMINMAX
+#       define NOMINMAX
+#   endif
+#   include <windows.h>
+#else
+#   include <unistd.h>
+#endif
 
 namespace erhe::graphics {
 
@@ -25,26 +33,17 @@ auto shader_type_string(Shader_type type) -> const char*
     }
 }
 
-// Compilation settings salt. Embeds the linked glslang version
-// (GLSLANG_VERSION_*) so cache entries are auto-invalidated when the
-// glslang dependency is bumped - the same source can compile to
-// different SPIR-V across glslang versions and we never want to
-// load a stale binary built by an earlier compiler.
-//
-// Bump the trailing "vN" tag whenever SpvOptions, the includer behaviour
-// or the target environment changes (since those affect SPIR-V output
-// without changing the glslang version number).
-auto make_settings_salt() -> std::string
+// Process-unique suffix for the temporary file put() writes before the
+// atomic rename, so two processes storing the same entry never share a
+// temporary file.
+auto process_suffix() -> std::string
 {
-    return fmt::format(
-        "vulkan_1_1:spv_1_6:debug:noopt:validate:includer:glslang{}.{}.{}{}:v7",
-        GLSLANG_VERSION_MAJOR,
-        GLSLANG_VERSION_MINOR,
-        GLSLANG_VERSION_PATCH,
-        GLSLANG_VERSION_FLAVOR
-    );
+#if defined(_WIN32)
+    return std::to_string(static_cast<unsigned long>(GetCurrentProcessId()));
+#else
+    return std::to_string(static_cast<long>(getpid()));
+#endif
 }
-static const std::string c_settings_salt = make_settings_salt();
 
 } // anonymous namespace
 
@@ -58,14 +57,18 @@ Spirv_cache::Spirv_cache(const std::filesystem::path& cache_directory)
     }
 }
 
-auto Spirv_cache::compute_hash(const std::string& source, Shader_type stage) const -> std::string
+auto Spirv_cache::compute_hash(const std::string& source, Shader_type stage, const uint64_t compile_settings_hash) const -> std::string
 {
-    // Combine source + stage + settings into a single string and hash it
+    // Combine stage + compile settings + source into a single string and hash it
     std::string key;
-    key.reserve(source.size() + 128);
+    key.reserve(source.size() + 64);
     key.append(shader_type_string(stage));
     key.push_back(':');
-    key.append(c_settings_salt);
+    {
+        std::ostringstream settings;
+        settings << std::hex << std::setfill('0') << std::setw(16) << compile_settings_hash;
+        key.append(settings.str());
+    }
     key.push_back(':');
     key.append(source);
 
@@ -83,9 +86,9 @@ auto Spirv_cache::cache_path(const std::string& hash) const -> std::filesystem::
     return m_cache_directory / (hash + ".spv");
 }
 
-auto Spirv_cache::get(const std::string& source, Shader_type stage) const -> std::vector<unsigned int>
+auto Spirv_cache::get(const std::string& source, Shader_type stage, const uint64_t compile_settings_hash) const -> std::vector<unsigned int>
 {
-    const std::string hash = compute_hash(source, stage);
+    const std::string hash = compute_hash(source, stage, compile_settings_hash);
     const std::filesystem::path path = cache_path(hash);
 
     std::error_code ec;
@@ -119,25 +122,45 @@ auto Spirv_cache::get(const std::string& source, Shader_type stage) const -> std
     return spirv;
 }
 
-void Spirv_cache::put(const std::string& source, Shader_type stage, const std::vector<unsigned int>& spirv)
+void Spirv_cache::put(const std::string& source, Shader_type stage, const uint64_t compile_settings_hash, const std::vector<unsigned int>& spirv)
 {
     if (spirv.empty()) {
         return;
     }
 
-    const std::string hash = compute_hash(source, stage);
-    const std::filesystem::path path = cache_path(hash);
+    const std::string           hash           = compute_hash(source, stage, compile_settings_hash);
+    const std::filesystem::path path           = cache_path(hash);
+    const std::filesystem::path temporary_path = m_cache_directory / (hash + ".spv.tmp." + process_suffix());
 
-    std::ofstream file{path, std::ios::binary};
-    if (!file.is_open()) {
-        log_program->warn("Failed to write SPIR-V cache file: {}", path.string());
-        return;
+    {
+        std::ofstream file{temporary_path, std::ios::binary | std::ios::trunc};
+        if (!file.is_open()) {
+            log_program->warn("Failed to write SPIR-V cache file: {}", temporary_path.string());
+            return;
+        }
+        file.write(
+            reinterpret_cast<const char*>(spirv.data()),
+            static_cast<std::streamsize>(spirv.size() * sizeof(unsigned int))
+        );
+        if (!file.good()) {
+            log_program->warn("Failed to write SPIR-V cache file: {}", temporary_path.string());
+            file.close();
+            std::error_code remove_ec;
+            std::filesystem::remove(temporary_path, remove_ec);
+            return;
+        }
     }
 
-    file.write(
-        reinterpret_cast<const char*>(spirv.data()),
-        static_cast<std::streamsize>(spirv.size() * sizeof(unsigned int))
-    );
+    // rename() replaces an existing file atomically on POSIX and on NTFS,
+    // so a reader never sees a partially written entry.
+    std::error_code ec;
+    std::filesystem::rename(temporary_path, path, ec);
+    if (ec) {
+        log_program->warn("Failed to store SPIR-V cache file {}: {}", path.string(), ec.message());
+        std::error_code remove_ec;
+        std::filesystem::remove(temporary_path, remove_ec);
+        return;
+    }
 
     log_program->info("SPIR-V cache store: {} {}", shader_type_string(stage), hash);
 }

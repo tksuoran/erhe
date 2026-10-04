@@ -93,8 +93,9 @@ and an optional `Vulkan_external_creators` (the OpenXR hook, see
    surface exists).
 6. VMA allocator creation (`vmaImportVulkanFunctionsFromVolk`).
 7. Per-(frame-in-flight, thread-slot) command pools, the frame-end timeline
-   semaphore, the `Device_sync_pool`, the pipeline cache, descriptor set
-   layouts, and the GPU timer query pool.
+   semaphore, the `Device_sync_pool`, the pipeline cache (seeded from its
+   file, "Pipeline cache persistence" below), descriptor set layouts, and
+   the GPU timer query pool.
 
 ### Required features
 
@@ -468,12 +469,39 @@ material / post-processing parameter data.
 ## Shaders
 
 `Shader_stages_prototype_impl` (`vulkan_shader_stages_prototype.cpp`) compiles
-GLSL to SPIR-V with glslang. Compiled binaries are cached on disk under
-`<exe>/spirv_cache/`, keyed by a hash of the final GLSL source (after preamble
-injection and define expansion), so subsequent runs skip glslang. The build-state
-machine (`init -> shader_compilation_started -> program_link_started -> ready`)
-returns early when a stage is already complete, so re-running compile/link is
-idempotent.
+GLSL to SPIR-V with glslang (`glsl_to_spirv.cpp`, shared with the OpenGL and
+Metal backends). Compiled binaries are cached on disk under
+`<cwd>/spirv_cache/` (`Spirv_cache`, `spirv_cache.cpp`), keyed by the stage,
+the final GLSL source (after preamble injection and define expansion) and a
+hash of every glslang setting that changes the output for the same source:
+the `SpvOptions`, the parse and link message masks, the client / target
+environment and the linked glslang version. `glsl_to_spirv.cpp` keeps those
+settings at file scope and computes the hash once per process, so a settings
+change or a glslang bump changes the key by itself; nothing is bumped by
+hand. `Spirv_cache::put` writes a temporary file and renames it over the
+entry, so a crash mid-write never leaves a partial `.spv` in the directory.
+The build-state machine (`init -> shader_compilation_started ->
+program_link_started -> ready`) returns early when a stage is already
+complete, so re-running compile/link is idempotent.
+
+### Pipeline cache persistence
+
+Every `vkCreateGraphicsPipelines` / `vkCreateComputePipelines` call goes
+through the device's one `VkPipelineCache`, and that cache is persisted
+across runs (`vulkan_pipeline_cache_file.hpp`): device init reads
+`<cwd>/pipeline_cache/vk_<vendorID>_<deviceID>_<pipelineCacheUUID>.bin` and
+passes it as the cache's initial data, and `~Device_impl` writes
+`vkGetPipelineCacheData` back to that file (temporary file + rename). The
+file name and the `VkPipelineCacheHeaderVersionOne` check in
+`read_pipeline_cache_file` keep the data of one device + driver build apart
+from every other, so a machine with several Vulkan devices keeps one file
+each and a driver update (new `pipelineCacheUUID`) starts a fresh file. With
+a warm file the first-frame pipeline compilation that dominates start-up on
+tile-based mobile drivers (Adreno on Quest) becomes a cache lookup. The
+read / write functions take no Vulkan handles and are covered by
+`erhe_graphics_tests` (`test_pipeline_cache_file.cpp`); `Spirv_cache` is
+covered there too (`test_spirv_cache.cpp`). The Metal backend has no
+equivalent yet (`MTLBinaryArchive`, `doc/plans/audit_2026_09_30_followups.md`).
 
 `Shader_stages_impl` (`vulkan_shader_stages.cpp`) calls `vkCreateShaderModule`
 for each stage's SPIR-V and exposes `get_vertex_module()` /

@@ -490,9 +490,10 @@ public:
 
     // Init-time prewarm. Constructs a Render_pipeline from the supplied
     // create_info and discards it; on Vulkan the resulting binary is
-    // retained in the driver-level VkPipelineCache (m_pipeline_cache)
-    // because Render_pipeline_impl's constructor calls
-    // vkCreateGraphicsPipelines with that cache. Subsequent constructions
+    // retained in the driver-level VkPipelineCache (m_pipeline_cache,
+    // persisted across runs - vulkan_pipeline_cache_file.hpp) because
+    // Render_pipeline_impl's constructor calls vkCreateGraphicsPipelines
+    // with that cache. Subsequent constructions
     // (or set_render_pipeline_state cache misses) with the same shader
     // modules + pipeline-state tuple skip the IR-optimization step and
     // complete significantly faster -- this is the dominant cost in the

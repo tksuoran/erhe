@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `erhe_graphics/vulkan/vulkan_pipeline_cache_file.hpp`:
+  `Pipeline_cache_identity`, `make_pipeline_cache_path()`,
+  `read_pipeline_cache_file()` and `write_pipeline_cache_file()`, the
+  per-device-identity file behind the Vulkan `Device`'s persisted
+  `VkPipelineCache` (loaded at device creation, written at destruction).
 - `erhe::imgui`: `Imgui_item_recorder::request_scroll_to_item()` /
   `take_scroll_to_item_result()`: in the next recorded frame, Dear ImGui's
   `ScrollToItem()` runs right after the item with the given id is submitted.
@@ -251,6 +256,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `Spirv_cache::get()` and `Spirv_cache::put()` take a
+  `uint64_t compile_settings_hash` that is part of the entry key (the hash
+  of every glslang setting affecting the output, computed by
+  `glsl_to_spirv.cpp`); `put()` writes entries atomically.
 - `erhe::graphics`: the three nine-parameter `Blit_command_encoder` copies
   take region value types: `copy_from_texture(Texture_location source,
   glm::ivec3 size, Texture_location destination)`,

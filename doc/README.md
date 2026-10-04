@@ -377,7 +377,6 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (in progress): Rigging Phase 3 - skeleton editing and posing basics requirements
 - [plans/shadow_robustness.md](plans/shadow_robustness.md) (proposed): Shadow robustness future work (Metal verification, forward pass cost profiling and optimization)
 - [plans/shadows.md](plans/shadows.md) (proposed): Shadow follow-ups
-- [plans/spirv_cache.md](plans/spirv_cache.md) (proposed): SPIR-V cache robustness
 - [plans/texture_graph.md](plans/texture_graph.md) (proposed): Texture graph backlog
 - [plans/texture_memory.md](plans/texture_memory.md) (proposed): Per-scene texture memory cost
 - [plans/timeline_editor.md](plans/timeline_editor.md) (in progress): Animation window remaining work: dope sheet, tangent handles, interpolation editing

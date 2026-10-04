@@ -33,6 +33,7 @@ vscode-cmake-*
 logs/*
 cache/*
 spirv_cache/*
+pipeline_cache/*
 log.txt
 releases
 erhe_cmake_dependencies.dot*
@@ -42,12 +43,16 @@ CMakeUserPresets.json
 # Per-executable runtime artifacts
 src/editor/logs/
 src/editor/spirv_cache/
+src/editor/pipeline_cache/
 src/example/logs/
 src/example/spirv_cache/
+src/example/pipeline_cache/
 src/hextiles/logs/
 src/hextiles/spirv_cache/
+src/hextiles/pipeline_cache/
 src/rendering_test/logs/
 src/rendering_test/spirv_cache/
+src/rendering_test/pipeline_cache/
 
 # Android (Gradle + CMake externalNativeBuild) artifacts
 android-project/.gradle/

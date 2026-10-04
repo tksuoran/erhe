@@ -207,6 +207,8 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_device_debug.cpp
         erhe_graphics/vulkan/vulkan_device_init.cpp
         erhe_graphics/vulkan/vulkan_device.hpp
+        erhe_graphics/vulkan/vulkan_pipeline_cache_file.cpp
+        erhe_graphics/vulkan/vulkan_pipeline_cache_file.hpp
         erhe_graphics/vulkan/vulkan_helpers.cpp
         erhe_graphics/vulkan/vulkan_helpers.hpp
         erhe_graphics/vulkan/vulkan_gpu_timer.cpp
@@ -457,6 +459,7 @@ target_link_libraries(${_target}
         etl::etl
         erhe::defer
         erhe::file
+        erhe::hash
         erhe::log
         erhe::profile
         erhe::time

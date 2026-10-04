@@ -16,6 +16,7 @@
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window.hpp"
 
+#include <cstring>
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -747,6 +748,11 @@ Device_impl::Device_impl(
     };
     vkGetPhysicalDeviceProperties2(m_vulkan_physical_device, &physical_device_properties2);
     VkPhysicalDeviceProperties& properties = physical_device_properties2.properties;
+    m_pipeline_cache_identity.vendor_id = properties.vendorID;
+    m_pipeline_cache_identity.device_id = properties.deviceID;
+    static_assert(sizeof(properties.pipelineCacheUUID) == std::tuple_size<decltype(m_pipeline_cache_identity.uuid)>::value);
+    std::memcpy(m_pipeline_cache_identity.uuid.data(), properties.pipelineCacheUUID, sizeof(properties.pipelineCacheUUID));
+    m_pipeline_cache_path = make_pipeline_cache_path(std::filesystem::path{"pipeline_cache"}, m_pipeline_cache_identity);
     const uint32_t api_version_variant = VK_API_VERSION_VARIANT(properties.apiVersion);
     const uint32_t api_version_major   = VK_API_VERSION_MAJOR  (properties.apiVersion);
     const uint32_t api_version_minor   = VK_API_VERSION_MINOR  (properties.apiVersion);
@@ -2190,18 +2196,23 @@ Device_impl::Device_impl(
         m_info.independent_depth_stencil_resolve_none
     );
 
-    // Create pipeline cache
+    // Create pipeline cache, seeded with the data the previous run of this
+    // device + driver wrote (vulkan_pipeline_cache_file.hpp; the header
+    // check there keeps another device's or driver build's data out).
     {
+        const std::vector<uint8_t> initial_data = read_pipeline_cache_file(m_pipeline_cache_path, m_pipeline_cache_identity);
         const VkPipelineCacheCreateInfo pipeline_cache_create_info{
             .sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
             .pNext           = nullptr,
             .flags           = 0,
-            .initialDataSize = 0,
-            .pInitialData    = nullptr
+            .initialDataSize = initial_data.size(),
+            .pInitialData    = initial_data.empty() ? nullptr : initial_data.data()
         };
         result = vkCreatePipelineCache(m_vulkan_device, &pipeline_cache_create_info, nullptr, &m_pipeline_cache);
         if (result != VK_SUCCESS) {
             log_context->error("vkCreatePipelineCache() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        } else {
+            log_context->info("Pipeline cache {}: {} bytes of initial data", m_pipeline_cache_path.string(), initial_data.size());
         }
     }
 

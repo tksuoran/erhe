@@ -273,6 +273,7 @@ Device_impl::~Device_impl() noexcept
         vkDestroyDescriptorSetLayout(m_vulkan_device, m_descriptor_set_layout, nullptr);
     }
     if (m_pipeline_cache != VK_NULL_HANDLE) {
+        write_pipeline_cache();
         vkDestroyPipelineCache(m_vulkan_device, m_pipeline_cache, nullptr);
     }
     // NOTE: This adds completion handlers for destroying related vulkan objects
@@ -363,6 +364,25 @@ Device_impl::~Device_impl() noexcept
 auto Device_impl::get_pipeline_cache() const -> VkPipelineCache
 {
     return m_pipeline_cache;
+}
+
+void Device_impl::write_pipeline_cache()
+{
+    std::size_t data_size = 0;
+    VkResult result = vkGetPipelineCacheData(m_vulkan_device, m_pipeline_cache, &data_size, nullptr);
+    if ((result != VK_SUCCESS) || (data_size == 0)) {
+        return;
+    }
+    std::vector<uint8_t> data(data_size);
+    result = vkGetPipelineCacheData(m_vulkan_device, m_pipeline_cache, &data_size, data.data());
+    if (result != VK_SUCCESS) {
+        log_context->warn("vkGetPipelineCacheData() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        return;
+    }
+    data.resize(data_size);
+    if (write_pipeline_cache_file(m_pipeline_cache_path, data)) {
+        log_context->info("Pipeline cache {}: wrote {} bytes", m_pipeline_cache_path.string(), data.size());
+    }
 }
 
 auto Device_impl::get_descriptor_set_layout() const -> VkDescriptorSetLayout

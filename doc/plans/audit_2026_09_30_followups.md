@@ -9,10 +9,9 @@ origin/audit-2026-09-30 | grep audit_erhe_2026_09_30` and read with
 `git show origin/audit-2026-09-30:<path>`). Near-term items 1-9
 are done. From the medium-term list (items 10-20) the chosen set is 10, 18 and
 the include-diet half of 12: item 10 closes the only known GPU correctness hole
-and was an open agfx-port finding, item 18 has a ready plan
-(`doc/plans/spirv_cache.md`) and dominates Quest first-frame time, and the
-include diet is the precondition of the `erhe_graphics` interface / backend
-split. Items 11 and 13-16 are multi-week redesigns, 17 is CI work, 19-20 wait
+and was an open agfx-port finding, item 18 dominates Quest first-frame time,
+and the include diet is the precondition of the `erhe_graphics` interface /
+backend split. Items 11 and 13-16 are multi-week redesigns, 17 is CI work, 19-20 wait
 on culling.
 
 ## Done
@@ -22,12 +21,17 @@ on culling.
   narrowing fix 51dfc09fb), and the three OpenGL backend failures the GPU
   tests found while testing it (one-sample multisample target, NVIDIA
   `texelFetch` 3D driver defect, `Device_impl` member destruction order).
+- Item 18, shader pipeline persistence, for glslang and Vulkan: the SPIR-V
+  cache key hashes the compile settings and entries are written atomically,
+  and the `VkPipelineCache` is persisted per device identity
+  (`doc/erhe/vulkan_backend.md` "Shaders" and "Pipeline cache persistence").
 
 ## Next
 
-1. Item 18, shader pipeline persistence: `doc/plans/spirv_cache.md` (settings
-   hash in the salt, atomic rename), then a persisted `VkPipelineCache`
-   (`device.hpp` pipeline cache hooks) and a Metal `MTLBinaryArchive`.
+1. Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
+   (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
+   opt-in); needs a
+   macOS session to build and verify.
 2. Item 12, first half: include diet on `erhe_graphics/device.hpp` and
    `texture.hpp` (`texture.hpp` pulls `erhe_item/item.hpp` and `typed.hpp`, and
    with them the property system; `enums.hpp` is in every graphics header).
