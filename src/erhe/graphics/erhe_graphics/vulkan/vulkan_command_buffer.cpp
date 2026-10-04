@@ -461,8 +461,8 @@ void Command_buffer_impl::upload_to_texture(
         .bufferImageHeight = 0,
         .imageSubresource  = {
             .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel       = static_cast<uint32_t>(level),
-            .baseArrayLayer = 0,
+            .mipLevel       = static_cast<uint32_t>(level + tex_impl.get_view_base_level()),
+            .baseArrayLayer = static_cast<uint32_t>(tex_impl.get_view_base_array_layer()),
             .layerCount     = 1
         },
         .imageOffset = {x, y, 0},
@@ -473,9 +473,10 @@ void Command_buffer_impl::upload_to_texture(
         }
     };
 
-    tex_impl.transition_layout(m_vk_command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    const Image_subresource_range range{.base_level = static_cast<uint32_t>(level), .level_count = 1, .base_layer = 0, .layer_count = 1};
+    tex_impl.transition_layout(m_vk_command_buffer, range, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     vkCmdCopyBufferToImage(m_vk_command_buffer, staging_buffer, destination_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    tex_impl.transition_layout(m_vk_command_buffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    tex_impl.transition_layout(m_vk_command_buffer, range, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     device_impl.add_completion_handler(
         [allocator, staging_buffer, staging_allocation](Device_impl&) {

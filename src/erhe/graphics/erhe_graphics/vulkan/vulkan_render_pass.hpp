@@ -73,6 +73,16 @@ private:
     VkRenderPassBeginInfo     m_begin_info{};
     std::vector<VkClearValue> m_clear_values;
     bool                      m_any_load_op_clear{false};
+
+    // Off-screen passes: the initialLayout of each color attachment and of the
+    // depth attachment (UNDEFINED where the pass drives its own discarding
+    // transition), and the layer count every attachment view spans (more than
+    // one for multiview).
+    std::array<VkImageLayout, 4> m_color_initial_layouts{
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED
+    };
+    VkImageLayout                m_depth_initial_layout  {VK_IMAGE_LAYOUT_UNDEFINED};
+    uint32_t                     m_attachment_layer_count{1};
 };
 
 } // namespace erhe::graphics

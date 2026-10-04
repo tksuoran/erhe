@@ -66,13 +66,6 @@ DeviceInfoDriverVersionNotEmpty (`Device_info` is covered by
 
 Engine issues the port exposed that are not fixed.
 
-- Vulkan `copy_from_buffer` and texture-to-texture `copy_from_texture`
-  (`vulkan_blit_command_encoder.cpp`) transition the destination subresource
-  from `VK_IMAGE_LAYOUT_UNDEFINED`, which permits the driver to discard its
-  contents; region copies over a seeded destination keep the other texels
-  only by driver leniency. Using the tracked layout as `oldLayout` needs
-  per-subresource layout tracking, since the texture tracks one layout for
-  all levels and layers. The copy tests would catch a discarding driver.
 - OpenGL on the AMD Radeon 890M driver 26.8.1.260810: after a comparison
   sampler draw with `never`, later draws of the identical shader source with
   a different compare function read as `never` although the sampler and

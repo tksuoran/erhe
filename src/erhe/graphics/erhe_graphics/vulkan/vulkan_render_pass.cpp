@@ -359,6 +359,18 @@ void record_default_viewport_scissor(const VkCommandBuffer command_buffer, const
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 }
 
+// The subresources one attachment view covers: one level, and one layer per
+// view of a multiview pass.
+auto get_attachment_range(const unsigned int level, const unsigned int layer, const uint32_t layer_count) -> Image_subresource_range
+{
+    return Image_subresource_range{
+        .base_level  = static_cast<uint32_t>(level),
+        .level_count = 1,
+        .base_layer  = static_cast<uint32_t>(layer),
+        .layer_count = layer_count
+    };
+}
+
 } // anonymous namespace
 
 auto Render_pass_impl::get_command_buffer() const -> VkCommandBuffer
@@ -630,6 +642,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             }
             return highest_set_bit + 1u;
         }();
+        m_attachment_layer_count = multiview_layer_count;
 
         for (std::size_t i = 0; i < m_color_attachments.size(); ++i) {
             const Render_pass_attachment_descriptor& att = m_color_attachments[i];
@@ -645,7 +658,9 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             // read-only barrier before begin. This is only valid when loadOp is
             // CLEAR or DONT_CARE -- a LOAD with UNDEFINED initial layout is
             // invalid per Vulkan spec (VUID-VkAttachmentDescription2-format-06699).
-            const bool fresh_color = (att.texture->get_impl().get_current_layout() == VK_IMAGE_LAYOUT_UNDEFINED);
+            const bool fresh_color = att.texture->get_impl().is_layout_undefined(
+                get_attachment_range(att.texture_level, att.texture_layer, multiview_layer_count)
+            );
             const bool wants_load  = (att.load_action == Load_action::Load);
             const VkImageLayout initial_layout = (fresh_color && !wants_load)
                 ? VK_IMAGE_LAYOUT_UNDEFINED
@@ -653,6 +668,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             const VkImageLayout final_layout   = (att.resolve_texture != nullptr)
                 ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                 : to_vk_image_layout(att.layout_after);
+            m_color_initial_layouts[i] = initial_layout;
 
             // Multisampled color attachments must not use LOAD/STORE: loadOp must
             // be CLEAR or DONT_CARE and storeOp must be DONT_CARE so the
@@ -771,7 +787,12 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
                 });
                 VkImageView resolve_view = const_cast<Texture_impl&>(att.resolve_texture->get_impl()).get_vk_image_view(
-                    VK_IMAGE_ASPECT_COLOR_BIT, 0, multiview_layer_count, 0, 1, attachment_image_view_type(multiview_layer_count)
+                    VK_IMAGE_ASPECT_COLOR_BIT,
+                    static_cast<uint32_t>(att.resolve_layer),
+                    multiview_layer_count,
+                    static_cast<uint32_t>(att.resolve_level),
+                    1,
+                    attachment_image_view_type(multiview_layer_count)
                 );
                 image_views.push_back(resolve_view);
                 m_clear_values.push_back(VkClearValue{}); // resolve doesn't use clear
@@ -803,7 +824,9 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
 
             // Use stencil load/store from stencil_attachment if it references the same texture
             const bool has_stencil = (m_stencil_attachment.texture == m_depth_attachment.texture) && m_stencil_attachment.is_defined();
-            const bool fresh_depth = (m_depth_attachment.texture->get_impl().get_current_layout() == VK_IMAGE_LAYOUT_UNDEFINED);
+            const bool fresh_depth = m_depth_attachment.texture->get_impl().is_layout_undefined(
+                get_attachment_range(m_depth_attachment.texture_level, m_depth_attachment.texture_layer, multiview_layer_count)
+            );
             // LOAD with UNDEFINED initial layout is invalid (VUID-06699 applies
             // to depth and stencil as well). Fall back to the declared
             // layout_before when either depth or stencil will be loaded.
@@ -812,6 +835,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             const VkImageLayout depth_initial_layout = (fresh_depth && !depth_wants_load && !stencil_wants_load)
                 ? VK_IMAGE_LAYOUT_UNDEFINED
                 : to_vk_image_layout(m_depth_attachment.layout_before);
+            m_depth_initial_layout = depth_initial_layout;
             // When the depth attachment is being resolved, the MSAA source
             // image is going to be discarded -- its finalLayout doesn't matter
             // to the user. Keep it in DEPTH_STENCIL_ATTACHMENT_OPTIMAL so we
@@ -942,9 +966,10 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             // a single resolve attachment serves both depth and stencil resolves.
             if (depth_resolves || stencil_resolves) {
                 ERHE_VERIFY(depth_msaa); // resolves are only meaningful for MSAA
-                const Texture* resolve_texture = (m_depth_attachment.resolve_texture != nullptr)
-                    ? m_depth_attachment.resolve_texture
-                    : m_stencil_attachment.resolve_texture;
+                const Render_pass_attachment_descriptor& resolve_attachment = (m_depth_attachment.resolve_texture != nullptr)
+                    ? m_depth_attachment
+                    : m_stencil_attachment;
+                const Texture* resolve_texture = resolve_attachment.resolve_texture;
                 ERHE_VERIFY(resolve_texture != nullptr);
                 ERHE_VERIFY(resolve_texture->get_sample_count() <= 1);
 
@@ -984,7 +1009,12 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 stencil_resolve_mode_vk = stencil_resolves ? to_vk_resolve_mode(m_stencil_attachment.resolve_mode) : VK_RESOLVE_MODE_NONE;
 
                 VkImageView resolve_view = const_cast<Texture_impl&>(resolve_texture->get_impl()).get_vk_image_view(
-                    resolve_aspect, 0, multiview_layer_count, 0, 1, attachment_image_view_type(multiview_layer_count)
+                    resolve_aspect,
+                    static_cast<uint32_t>(resolve_attachment.resolve_layer),
+                    multiview_layer_count,
+                    static_cast<uint32_t>(resolve_attachment.resolve_level),
+                    1,
+                    attachment_image_view_type(multiview_layer_count)
                 );
                 image_views.push_back(resolve_view);
                 m_clear_values.push_back(VkClearValue{}); // resolve doesn't use clear
@@ -1255,43 +1285,29 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     static_cast<void>(render_pass_before);
     static_cast<void>(render_pass_after);
 
-    // Deferred pre-transitions: if any attachment texture is in a
-    // layout other than its layout_before (and not still UNDEFINED,
-    // since the render pass machinery handles UNDEFINED itself), emit
-    // the transitions into the caller-supplied cb before the render
-    // pass begins. Used to live in the constructor as an immediate-
-    // commands submit; moved here so all GPU recording goes through
-    // an explicit cb.
+    // Pre-transitions: an attachment whose render pass initialLayout is not
+    // UNDEFINED must be in that layout when the pass begins, in every
+    // subresource its view covers. Subresources already there need no barrier.
     {
         const VkCommandBuffer pre_cb = command_buffer.get_impl().get_vulkan_command_buffer();
         if (pre_cb != VK_NULL_HANDLE) {
-            auto needs_transition = [](const Render_pass_attachment_descriptor& att, const VkImageLayout target) {
-                const VkImageLayout current = att.texture->get_impl().get_current_layout();
-                // Skip transitioning when:
-                //  - texture is still UNDEFINED (the render pass machinery
-                //    handles UNDEFINED initialLayout itself),
-                //  - target is UNDEFINED (descriptor expressed "don't care
-                //    about prior contents" -- transitioning to UNDEFINED
-                //    is invalid per VUID-VkImageMemoryBarrier2-newLayout-01198),
-                //  - we are already in the target layout.
-                return (current != VK_IMAGE_LAYOUT_UNDEFINED) &&
-                       (target  != VK_IMAGE_LAYOUT_UNDEFINED) &&
-                       (current != target);
-            };
-            for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
-                if (!att.is_defined() || (att.texture == nullptr)) {
+            for (std::size_t i = 0; i < m_color_attachments.size(); ++i) {
+                const Render_pass_attachment_descriptor& att = m_color_attachments[i];
+                if (!att.is_defined() || (att.texture == nullptr) || (m_color_initial_layouts[i] == VK_IMAGE_LAYOUT_UNDEFINED)) {
                     continue;
                 }
-                const VkImageLayout target_layout = to_vk_image_layout(att.layout_before);
-                if (needs_transition(att, target_layout)) {
-                    att.texture->get_impl().transition_layout(pre_cb, target_layout);
-                }
+                att.texture->get_impl().transition_layout(
+                    pre_cb,
+                    get_attachment_range(att.texture_level, att.texture_layer, m_attachment_layer_count),
+                    m_color_initial_layouts[i]
+                );
             }
-            if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
-                const VkImageLayout target_layout = to_vk_image_layout(m_depth_attachment.layout_before);
-                if (needs_transition(m_depth_attachment, target_layout)) {
-                    m_depth_attachment.texture->get_impl().transition_layout(pre_cb, target_layout);
-                }
+            if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr) && (m_depth_initial_layout != VK_IMAGE_LAYOUT_UNDEFINED)) {
+                m_depth_attachment.texture->get_impl().transition_layout(
+                    pre_cb,
+                    get_attachment_range(m_depth_attachment.texture_level, m_depth_attachment.texture_layer, m_attachment_layer_count),
+                    m_depth_initial_layout
+                );
             }
         }
     }
@@ -1662,10 +1678,10 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
                 const VkImageLayout final_layout = (att.resolve_texture != nullptr)
                     ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                     : to_vk_image_layout(att.layout_after);
-                const_cast<Texture_impl&>(att.texture->get_impl()).set_layout(final_layout);
+                att.texture->get_impl().set_layout(get_attachment_range(att.texture_level, att.texture_layer, m_attachment_layer_count), final_layout);
                 if (att.resolve_texture != nullptr) {
                     const VkImageLayout resolve_final_layout = to_vk_image_layout(att.layout_after);
-                    const_cast<Texture_impl&>(att.resolve_texture->get_impl()).set_layout(resolve_final_layout);
+                    att.resolve_texture->get_impl().set_layout(get_attachment_range(att.resolve_level, att.resolve_layer, m_attachment_layer_count), resolve_final_layout);
                 }
             }
         }
@@ -1680,11 +1696,17 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
             const VkImageLayout source_layout = has_depth_resolve_request
                 ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
                 : to_vk_image_layout(m_depth_attachment.layout_after);
-            const_cast<Texture_impl&>(m_depth_attachment.texture->get_impl()).set_layout(source_layout);
+            m_depth_attachment.texture->get_impl().set_layout(
+                get_attachment_range(m_depth_attachment.texture_level, m_depth_attachment.texture_layer, m_attachment_layer_count),
+                source_layout
+            );
 
             if (has_depth_resolve_request) {
                 const VkImageLayout resolve_final_layout = to_vk_image_layout(m_depth_attachment.layout_after);
-                const_cast<Texture_impl&>(m_depth_attachment.resolve_texture->get_impl()).set_layout(resolve_final_layout);
+                m_depth_attachment.resolve_texture->get_impl().set_layout(
+                    get_attachment_range(m_depth_attachment.resolve_level, m_depth_attachment.resolve_layer, m_attachment_layer_count),
+                    resolve_final_layout
+                );
             }
         }
     }

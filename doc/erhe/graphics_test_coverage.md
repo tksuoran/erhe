@@ -53,8 +53,9 @@ limitation, not a coverage gap to fill).
 
 - [x] Load_action::Load preserves prior pass across two passes (`test_load_action.cpp`)
 - [x] Load_action Clear / Dont_care / Load over a seeded attachment: corners equal the clear color, a full-coverage draw, or the seed byte for byte (`test_load_action.cpp`, `Pass_action_test`)
-- [x] Render into one subresource (`texture_level` / `texture_layer`): level 1 of a two-level 2D texture, layer 2 of a 2D array, face 3 (-Y) of a cube map, with Clear or with Load plus a draw; every other level / layer / face reads back byte-exact equal to its seed (`test_render_target_subresource.cpp`, `Render_target_subresource_test`)
+- [x] Render into one subresource (`texture_level` / `texture_layer`): level 1 of a two-level 2D texture, layer 2 of a 2D array, face 3 (-Y) of a cube map, with Clear or with Load plus a draw; every other level / layer / face reads back byte-exact equal to its seed; the `*_mixed_layouts` cases leave the target in transfer_src_optimal while the other subresources stay in shader_read_only_optimal, which fails validation unless the backend tracks layouts per subresource (`test_render_target_subresource.cpp`, `Render_target_subresource_test`)
 - [x] Multisample (4x MSAA) color render + average resolve to single-sample target (`test_msaa_resolve.cpp`)
+- [x] MSAA resolve into layer 1 of a two-layer array (`resolve_layer`); seeded layer 0 reads back unchanged (`test_msaa_resolve.cpp`, `Gpu_test.msaa_color_resolve_to_layer`)
 
 ## Compute
 
@@ -177,14 +178,15 @@ embedded, no HTTP server): device, backend and counts, a status filter, an
 output / golden / FLIP error map triptych with the numbers per image golden,
 and a hex view of the differing bytes per buffer golden.
 
-Golden-asserting tests: `msaa_color_resolve` (`msaa_color_resolve.png`),
+Golden-asserting tests: `msaa_color_resolve` and `msaa_color_resolve_to_layer`
+(`msaa_color_resolve.png`),
 `Texgen_render_test.uv_gradient` (`texgen_uv_gradient.png`), and the
 rasterization and depth state ports of the agfx suite, each against the
 golden named in its test: `Triangle_region_test` (3), `Raster_state_test`
 (6), `Depth_compare_test` (11), `Depth_clamp_test` (2), `Topology_test` (3),
 the blending ports: `Blend_factor_test` (13), `Blend_op_test` (5), and the
 render pass action and subresource target ports: `Pass_action_test` (3),
-`Render_target_subresource_test` (6), the copy ports:
+`Render_target_subresource_test` (9), the copy ports:
 `Gpu_test.copy_buffer_to_buffer` (2 buffer goldens), `Copy_test` (3 image,
 3 buffer goldens), `Texture_copy_test` (3), and the sampling ports:
 `Sampler_mode_test` (5), `Sampler_comparison_test` (8), `Texel_fetch_test`

@@ -40,6 +40,48 @@ public:
     VkCommandBuffer cb{VK_NULL_HANDLE};
 };
 
+// One subresource of a texture: its range relative to the texture (for the
+// layout tracking) and its absolute level / layer in the VkImage (for the
+// copy regions; a texture view adds its base level / layer).
+class Image_subresource
+{
+public:
+    Image_subresource_range range;
+    uint32_t                image_level;
+    uint32_t                image_layer;
+    VkImageAspectFlags      aspect_mask;
+};
+
+auto get_subresource(const Texture_impl& texture_impl, const std::uintptr_t level, const std::uintptr_t layer) -> Image_subresource
+{
+    return Image_subresource{
+        .range       = Image_subresource_range{
+            .base_level  = static_cast<uint32_t>(level),
+            .level_count = 1,
+            .base_layer  = static_cast<uint32_t>(layer),
+            .layer_count = 1
+        },
+        .image_level = static_cast<uint32_t>(level) + static_cast<uint32_t>(texture_impl.get_view_base_level()),
+        .image_layer = static_cast<uint32_t>(layer) + static_cast<uint32_t>(texture_impl.get_view_base_array_layer()),
+        .aspect_mask = get_vulkan_image_aspect_flags(texture_impl.get_pixelformat())
+    };
+}
+
+// Returns a copy source to the layout it had before the copy, so a copy does
+// not move the image into a layout its usage flags forbid. A source that was
+// UNDEFINED stays in TRANSFER_SRC_OPTIMAL (no transition to UNDEFINED exists).
+void restore_source_layout(
+    const VkCommandBuffer          command_buffer,
+    const Texture_impl&            texture_impl,
+    const Image_subresource_range& range,
+    const VkImageLayout            layout
+)
+{
+    if (layout != VK_IMAGE_LAYOUT_UNDEFINED) {
+        texture_impl.transition_layout(command_buffer, range, layout);
+    }
+}
+
 } // namespace
 
 Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device, Command_buffer& command_buffer)
@@ -113,125 +155,31 @@ void Blit_command_encoder_impl::copy_from_texture(
         return;
     }
 
-    VkImage src_image = source_texture->get_impl().get_vk_image();
-    VkImage dst_image = destination_texture->get_impl().get_vk_image();
+    const Texture_impl& source_impl      = source_texture->get_impl();
+    const Texture_impl& destination_impl = destination_texture->get_impl();
+    const Image_subresource source_subresource      = get_subresource(source_impl,      source_level,      source_slice);
+    const Image_subresource destination_subresource = get_subresource(destination_impl, destination_level, destination_slice);
 
     Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
-    // The source's current layout is not necessarily SHADER_READ_ONLY:
-    // hardcoding it transitions from a layout the image is not in AND
-    // requires SAMPLED usage the image may lack
-    // (VUID-VkImageMemoryBarrier2-oldLayout-01211). Read the tracked layout
-    // instead, and restore it afterwards so the tracked state stays valid.
-    // Mirrors the texture->buffer copy_from_texture overload.
-    const VkImageLayout src_layout       = source_texture->get_impl().get_current_layout();
-    const bool          from_shader_read = (src_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    // Transition source to transfer src
-    const VkImageMemoryBarrier2 src_barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .srcAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout           = src_layout,
-        .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = src_image,
-        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
-    };
-    // Transition destination to transfer dst
-    const VkImageMemoryBarrier2 dst_barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask       = 0,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = dst_image,
-        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(destination_level), 1, static_cast<uint32_t>(destination_slice), 1}
-    };
-    const VkImageMemoryBarrier2 pre_barriers[] = {src_barrier, dst_barrier};
-    cmd_pipeline_image_barriers2(scope.cb, 2, pre_barriers);
-    ERHE_VULKAN_SYNC_TRACE(
-        "[IMG_BARRIER] op=\"copy pre src\" image=0x{:x} old={} new={} src_stage={} dst_stage={}",
-        reinterpret_cast<std::uintptr_t>(src_image),
-        image_layout_str(src_barrier.oldLayout), image_layout_str(src_barrier.newLayout),
-        pipeline_stage_flags_str(src_barrier.srcStageMask), pipeline_stage_flags_str(src_barrier.dstStageMask)
-    );
-    ERHE_VULKAN_SYNC_TRACE(
-        "[IMG_BARRIER] op=\"copy pre dst\" image=0x{:x} old={} new={} src_stage={} dst_stage={}",
-        reinterpret_cast<std::uintptr_t>(dst_image),
-        image_layout_str(dst_barrier.oldLayout), image_layout_str(dst_barrier.newLayout),
-        pipeline_stage_flags_str(dst_barrier.srcStageMask), pipeline_stage_flags_str(dst_barrier.dstStageMask)
-    );
+    // Both transitions start from the tracked layout of the subresource. A
+    // transition from UNDEFINED would permit the driver to discard the
+    // destination texels outside the copied region.
+    const VkImageLayout source_layout = source_impl.get_layout(source_subresource.range.base_level, source_subresource.range.base_layer);
+    source_impl     .transition_layout(scope.cb, source_subresource.range,      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    destination_impl.transition_layout(scope.cb, destination_subresource.range, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     const VkImageCopy region{
-        .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(source_level), static_cast<uint32_t>(source_slice), 1},
+        .srcSubresource = {source_subresource.aspect_mask, source_subresource.image_level, source_subresource.image_layer, 1},
         .srcOffset      = {source_origin.x, source_origin.y, source_origin.z},
-        .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(destination_level), static_cast<uint32_t>(destination_slice), 1},
+        .dstSubresource = {destination_subresource.aspect_mask, destination_subresource.image_level, destination_subresource.image_layer, 1},
         .dstOffset      = {destination_origin.x, destination_origin.y, destination_origin.z},
         .extent         = {static_cast<uint32_t>(source_size.x), static_cast<uint32_t>(source_size.y), static_cast<uint32_t>(source_size.z)}
     };
-    vkCmdCopyImage(scope.cb, src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyImage(scope.cb, source_impl.get_vk_image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, destination_impl.get_vk_image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    // Transition the source back to the layout it had on entry (so the
-    // tracked layout remains valid and we do not move the image into a
-    // layout its usage flags forbid), and the destination to shader read.
-    const VkImageMemoryBarrier2 src_post{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .dstStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .dstAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout           = src_layout,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = src_image,
-        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
-    };
-    const VkImageMemoryBarrier2 dst_post{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = dst_image,
-        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(destination_level), 1, static_cast<uint32_t>(destination_slice), 1}
-    };
-    const VkImageMemoryBarrier2 post_barriers[] = {src_post, dst_post};
-    cmd_pipeline_image_barriers2(scope.cb, 2, post_barriers);
-    ERHE_VULKAN_SYNC_TRACE(
-        "[IMG_BARRIER] op=\"copy post src\" image=0x{:x} old={} new={} src_stage={} dst_stage={}",
-        reinterpret_cast<std::uintptr_t>(src_image),
-        image_layout_str(src_post.oldLayout), image_layout_str(src_post.newLayout),
-        pipeline_stage_flags_str(src_post.srcStageMask), pipeline_stage_flags_str(src_post.dstStageMask)
-    );
-    ERHE_VULKAN_SYNC_TRACE(
-        "[IMG_BARRIER] op=\"copy post dst\" image=0x{:x} old={} new={} src_stage={} dst_stage={}",
-        reinterpret_cast<std::uintptr_t>(dst_image),
-        image_layout_str(dst_post.oldLayout), image_layout_str(dst_post.newLayout),
-        pipeline_stage_flags_str(dst_post.srcStageMask), pipeline_stage_flags_str(dst_post.dstStageMask)
-    );
-
-    // The source layout is restored to src_layout by src_post, so its tracked
-    // layout is unchanged. The destination was fully overwritten and left in
-    // SHADER_READ_ONLY_OPTIMAL by dst_post, so update its tracked layout to
-    // match (mirrors the buffer->texture copy_from_buffer overload).
-    const_cast<Texture*>(destination_texture)->get_impl().set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    restore_source_layout(scope.cb, source_impl, source_subresource.range, source_layout);
+    destination_impl.transition_layout(scope.cb, destination_subresource.range, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 // Buffer to texture copy
@@ -247,8 +195,9 @@ void Blit_command_encoder_impl::copy_from_buffer(
     glm::ivec3     destination_origin
 )
 {
-    const VkBuffer vk_source_buffer     = source_buffer->get_impl().get_vk_buffer();
-    const VkImage  vk_destination_image = destination_texture->get_impl().get_vk_image();
+    const VkBuffer          vk_source_buffer        = source_buffer->get_impl().get_vk_buffer();
+    const Texture_impl&     destination_impl        = destination_texture->get_impl();
+    const Image_subresource destination_subresource = get_subresource(destination_impl, destination_level, destination_slice);
 
     // bufferRowLength is in texels, not bytes; bufferImageHeight is in rows, not bytes.
     // For block-compressed destinations the source data is required to be tightly
@@ -264,9 +213,9 @@ void Blit_command_encoder_impl::copy_from_buffer(
         .bufferRowLength   = buffer_row_length,
         .bufferImageHeight = buffer_image_height,
         .imageSubresource  = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel       = static_cast<uint32_t>(destination_level),
-            .baseArrayLayer = static_cast<uint32_t>(destination_slice),
+            .aspectMask     = destination_subresource.aspect_mask,
+            .mipLevel       = destination_subresource.image_level,
+            .baseArrayLayer = destination_subresource.image_layer,
             .layerCount     = 1
         },
         .imageOffset = {
@@ -283,75 +232,18 @@ void Blit_command_encoder_impl::copy_from_buffer(
 
     Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
-    // Transition image to transfer destination layout
-    const VkImageMemoryBarrier2 pre_barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-        .srcAccessMask       = 0,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = vk_destination_image,
-        .subresourceRange    = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel   = static_cast<uint32_t>(destination_level),
-            .levelCount     = 1,
-            .baseArrayLayer = static_cast<uint32_t>(destination_slice),
-            .layerCount     = 1
-        }
-    };
-    cmd_pipeline_image_barriers2(scope.cb, 1, &pre_barrier);
-    ERHE_VULKAN_SYNC_TRACE(
-        "[IMG_BARRIER] op=\"upload pre\" image=0x{:x} old={} new={} src_stage={} dst_stage={}",
-        reinterpret_cast<std::uintptr_t>(vk_destination_image),
-        image_layout_str(pre_barrier.oldLayout), image_layout_str(pre_barrier.newLayout),
-        pipeline_stage_flags_str(pre_barrier.srcStageMask), pipeline_stage_flags_str(pre_barrier.dstStageMask)
-    );
-
+    // From the tracked layout, not UNDEFINED: a region copy keeps the texels
+    // outside the region.
+    destination_impl.transition_layout(scope.cb, destination_subresource.range, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     vkCmdCopyBufferToImage(
         scope.cb,
         vk_source_buffer,
-        vk_destination_image,
+        destination_impl.get_vk_image(),
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
         &region
     );
-
-    // Transition image to shader read layout
-    const VkImageMemoryBarrier2 post_barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = vk_destination_image,
-        .subresourceRange    = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel   = static_cast<uint32_t>(destination_level),
-            .levelCount     = 1,
-            .baseArrayLayer = static_cast<uint32_t>(destination_slice),
-            .layerCount     = 1
-        }
-    };
-    cmd_pipeline_image_barriers2(scope.cb, 1, &post_barrier);
-    ERHE_VULKAN_SYNC_TRACE(
-        "[IMG_BARRIER] op=\"upload post\" image=0x{:x} old={} new={} src_stage={} dst_stage={}",
-        reinterpret_cast<std::uintptr_t>(vk_destination_image),
-        image_layout_str(post_barrier.oldLayout), image_layout_str(post_barrier.newLayout),
-        pipeline_stage_flags_str(post_barrier.srcStageMask), pipeline_stage_flags_str(post_barrier.dstStageMask)
-    );
-
-    // Update tracked layout
-    const_cast<Texture*>(destination_texture)->get_impl().set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    destination_impl.transition_layout(scope.cb, destination_subresource.range, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 // Copy from texture to buffer
@@ -371,54 +263,22 @@ void Blit_command_encoder_impl::copy_from_texture(
         return;
     }
 
-    VkImage  src_image  = source_texture->get_impl().get_vk_image();
-    VkBuffer dst_buffer = destination_buffer->get_impl().get_vk_buffer();
+    const Texture_impl&     source_impl        = source_texture->get_impl();
+    const Image_subresource source_subresource = get_subresource(source_impl, source_level, source_slice);
+    const VkBuffer          dst_buffer         = destination_buffer->get_impl().get_vk_buffer();
 
     Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
-    // Aspect must match the source image's format. The previous code
-    // hardcoded COLOR, which is wrong for a depth/stencil source (e.g.
-    // the Id_renderer depth texture copied right after its color image).
-    const erhe::dataformat::Format pixelformat = source_texture->get_pixelformat();
-    const bool has_depth   = erhe::dataformat::get_depth_size_bits  (pixelformat) > 0;
-    const bool has_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
-    VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if (has_depth || has_stencil) {
-        aspect_mask = 0;
-        if (has_depth)   { aspect_mask |= VK_IMAGE_ASPECT_DEPTH_BIT;   }
-        if (has_stencil) { aspect_mask |= VK_IMAGE_ASPECT_STENCIL_BIT; }
-    }
-
-    // The source's current layout is not necessarily SHADER_READ_ONLY:
-    // the Id_renderer attachments are color_attachment|transfer_src (no
-    // sampled usage) and the render pass leaves them in
-    // TRANSFER_SRC_OPTIMAL. Hardcoding SHADER_READ_ONLY here transitions
-    // from a layout the image is not in AND requires SAMPLED usage the
-    // image lacks (VUID-VkImageMemoryBarrier2-oldLayout-01211). Read the
-    // tracked layout instead, and restore it afterwards so the tracked
-    // state stays valid. Mirrors generate_mipmaps().
-    const VkImageLayout current_layout  = source_texture->get_impl().get_current_layout();
-    const bool          from_shader_read = (current_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    // Transition source to transfer src
-    const VkImageMemoryBarrier2 pre_barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .srcAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout           = current_layout,
-        .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = src_image,
-        .subresourceRange    = {aspect_mask, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
-    };
-    cmd_pipeline_image_barriers2(scope.cb, 1, &pre_barrier);
+    // The source's tracked layout is not necessarily SHADER_READ_ONLY: the
+    // Id_renderer attachments are color_attachment|transfer_src (no sampled
+    // usage) and the render pass leaves them in TRANSFER_SRC_OPTIMAL. The
+    // tracked layout is restored afterwards, so the copy does not move the
+    // image into a layout its usage flags forbid.
+    const VkImageLayout source_layout = source_impl.get_layout(source_subresource.range.base_level, source_subresource.range.base_layer);
+    source_impl.transition_layout(scope.cb, source_subresource.range, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     // bufferRowLength is in texels, not bytes; bufferImageHeight is in rows, not bytes
-    const std::size_t bytes_per_pixel     = erhe::dataformat::get_format_size_bytes(pixelformat);
+    const std::size_t bytes_per_pixel     = erhe::dataformat::get_format_size_bytes(source_texture->get_pixelformat());
     const uint32_t    buffer_row_length   = (bytes_per_pixel > 0) ? static_cast<uint32_t>(destination_bytes_per_row / bytes_per_pixel) : 0;
     const uint32_t    buffer_image_height = (destination_bytes_per_row > 0) ? static_cast<uint32_t>(destination_bytes_per_image / destination_bytes_per_row) : 0;
 
@@ -426,30 +286,13 @@ void Blit_command_encoder_impl::copy_from_texture(
         .bufferOffset      = static_cast<VkDeviceSize>(destination_offset),
         .bufferRowLength   = buffer_row_length,
         .bufferImageHeight = buffer_image_height,
-        .imageSubresource  = {aspect_mask, static_cast<uint32_t>(source_level), static_cast<uint32_t>(source_slice), 1},
+        .imageSubresource  = {source_subresource.aspect_mask, source_subresource.image_level, source_subresource.image_layer, 1},
         .imageOffset       = {source_origin.x, source_origin.y, source_origin.z},
         .imageExtent       = {static_cast<uint32_t>(source_size.x), static_cast<uint32_t>(source_size.y), static_cast<uint32_t>(source_size.z)}
     };
-    vkCmdCopyImageToBuffer(scope.cb, src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buffer, 1, &region);
+    vkCmdCopyImageToBuffer(scope.cb, source_impl.get_vk_image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buffer, 1, &region);
 
-    // Transition source back to the layout it had on entry, so the
-    // tracked layout remains valid and we do not move the image into a
-    // layout its usage flags forbid.
-    const VkImageMemoryBarrier2 post_barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .dstStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-        .dstAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout           = current_layout,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = src_image,
-        .subresourceRange    = {aspect_mask, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
-    };
-    cmd_pipeline_image_barriers2(scope.cb, 1, &post_barrier);
+    restore_source_layout(scope.cb, source_impl, source_subresource.range, source_layout);
 }
 
 void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
@@ -458,126 +301,52 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
         return;
     }
 
-    VkImage image       = texture->get_impl().get_vk_image();
-    int     level_count = texture->get_level_count();
-    int     width       = texture->get_width();
-    int     height      = texture->get_height();
-
-    if (level_count <= 1) {
+    const Texture_impl&           texture_impl = texture->get_impl();
+    const Image_subresource_range all          = texture_impl.get_all_subresources();
+    if (all.level_count <= 1) {
         return;
     }
 
-    // For texture views, use the view's base array layer offset
-    const uint32_t base_layer = static_cast<uint32_t>(texture->get_impl().get_view_base_array_layer());
+    const VkImage            image           = texture_impl.get_vk_image();
+    const VkImageAspectFlags aspect_mask     = get_vulkan_image_aspect_flags(texture->get_pixelformat());
+    const uint32_t           view_base_level = static_cast<uint32_t>(texture_impl.get_view_base_level());
+    const uint32_t           view_base_layer = static_cast<uint32_t>(texture_impl.get_view_base_array_layer());
 
     Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
-    // Transition mip level 0 to transfer src
-    const VkImageLayout current_layout = texture->get_impl().get_current_layout();
-    const bool from_shader_read = (current_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    {
-        const VkImageMemoryBarrier2 barrier{
-            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .pNext               = nullptr,
-            .srcStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-            .srcAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-            .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-            .oldLayout           = current_layout,
-            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image               = image,
-            .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, base_layer, 1}
-        };
-        cmd_pipeline_image_barriers2(scope.cb, 1, &barrier);
-    }
+    for (uint32_t layer = 0; layer < all.layer_count; ++layer) {
+        texture_impl.transition_layout(scope.cb, Image_subresource_range{.base_level = 0, .level_count = 1, .base_layer = layer, .layer_count = 1}, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-    int mip_width  = width;
-    int mip_height = height;
+        int mip_width  = texture->get_width();
+        int mip_height = texture->get_height();
+        for (uint32_t level = 1; level < all.level_count; ++level) {
+            const int next_width  = (mip_width  > 1) ? (mip_width  / 2) : 1;
+            const int next_height = (mip_height > 1) ? (mip_height / 2) : 1;
+            const Image_subresource_range level_range{.base_level = level, .level_count = 1, .base_layer = layer, .layer_count = 1};
 
-    for (int i = 1; i < level_count; ++i) {
-        int next_width  = (mip_width  > 1) ? (mip_width  / 2) : 1;
-        int next_height = (mip_height > 1) ? (mip_height / 2) : 1;
-
-        // Transition mip level i to transfer dst
-        {
-            const VkImageMemoryBarrier2 barrier{
-                .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext               = nullptr,
-                .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-                .srcAccessMask       = 0,
-                .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-                .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .image               = image,
-                .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 1, base_layer, 1}
+            texture_impl.transition_layout(scope.cb, level_range, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            const VkImageBlit blit_region{
+                .srcSubresource = {aspect_mask, view_base_level + level - 1, view_base_layer + layer, 1},
+                .srcOffsets     = {{0, 0, 0}, {mip_width, mip_height, 1}},
+                .dstSubresource = {aspect_mask, view_base_level + level,     view_base_layer + layer, 1},
+                .dstOffsets     = {{0, 0, 0}, {next_width, next_height, 1}}
             };
-            cmd_pipeline_image_barriers2(scope.cb, 1, &barrier);
+            vkCmdBlitImage(
+                scope.cb,
+                image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &blit_region,
+                VK_FILTER_LINEAR
+            );
+            // Level i is the blit source of level i + 1
+            texture_impl.transition_layout(scope.cb, level_range, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+            mip_width  = next_width;
+            mip_height = next_height;
         }
-
-        // Blit from mip level i-1 to mip level i
-        const VkImageBlit blit_region{
-            .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i - 1), base_layer, 1},
-            .srcOffsets     = {{0, 0, 0}, {mip_width, mip_height, 1}},
-            .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), base_layer, 1},
-            .dstOffsets     = {{0, 0, 0}, {next_width, next_height, 1}}
-        };
-        vkCmdBlitImage(
-            scope.cb,
-            image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &blit_region,
-            VK_FILTER_LINEAR
-        );
-
-        // Transition mip level i from transfer dst to transfer src (for next iteration)
-        {
-            const VkImageMemoryBarrier2 barrier{
-                .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext               = nullptr,
-                .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-                .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-                .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-                .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .image               = image,
-                .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 1, base_layer, 1}
-            };
-            cmd_pipeline_image_barriers2(scope.cb, 1, &barrier);
-        }
-
-        mip_width  = next_width;
-        mip_height = next_height;
     }
 
-    // Transition all mip levels to shader read optimal
-    {
-        const VkImageMemoryBarrier2 barrier{
-            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .pNext               = nullptr,
-            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
-            .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-            .dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
-            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            .newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image               = image,
-            .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, static_cast<uint32_t>(level_count), base_layer, 1}
-        };
-        cmd_pipeline_image_barriers2(scope.cb, 1, &barrier);
-    }
-
-    // Update tracked layout
-    const_cast<Texture*>(texture)->get_impl().set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    texture_impl.transition_layout(scope.cb, all, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Blit_command_encoder_impl::fill_buffer(

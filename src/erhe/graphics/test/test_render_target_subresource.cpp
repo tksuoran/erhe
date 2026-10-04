@@ -53,9 +53,12 @@
 // a pass that wrote the wrong level or layer shows up there. The target
 // subresource is also asserted against a golden.
 //
-// The texture stays in shader_read_only_optimal around the pass (usage and
-// layout before / after), the layout copy_from_buffer leaves every seeded
-// subresource in, so the tracked layout matches every subresource at readback.
+// The seeds leave every subresource in shader_read_only_optimal. The pass
+// leaves its target either in that same layout or, in the *_mixed_layouts
+// cases, in transfer_src_optimal, so the texture ends with subresources in
+// two different layouts: a backend tracking one layout per texture records
+// barriers with the wrong old layout for the others (a validation error) when
+// they are read back.
 // Seeds are solid colors and the corner regions map onto themselves under a
 // row flip, so the analytic checks do not depend on the texture origin.
 
@@ -104,6 +107,11 @@ enum class Target_kind : unsigned int {
 enum class Pass_kind : unsigned int {
     clear,
     load_and_draw
+};
+
+enum class Target_layout_after : unsigned int {
+    same_as_others,
+    transfer_src
 };
 
 class Subresource final
@@ -187,7 +195,7 @@ public:
 class Render_target_subresource_test : public Gpu_test
 {
 protected:
-    void run_case(const Target_kind kind, const Pass_kind pass, const char* golden_name)
+    void run_case(const Target_kind kind, const Pass_kind pass, const char* golden_name, const Target_layout_after layout_after = Target_layout_after::same_as_others)
     {
         erhe::graphics::Device& graphics_device = device();
         const Target_setup      setup           = make_target_setup(kind);
@@ -259,8 +267,13 @@ protected:
         descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
         descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
         descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::shader_read_only_optimal;
-        descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
-        descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
+        if (layout_after == Target_layout_after::transfer_src) {
+            descriptor.color_attachments[0].usage_after  = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+            descriptor.color_attachments[0].layout_after = erhe::graphics::Image_layout::transfer_src_optimal;
+        } else {
+            descriptor.color_attachments[0].usage_after  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+            descriptor.color_attachments[0].layout_after = erhe::graphics::Image_layout::shader_read_only_optimal;
+        }
         descriptor.render_target_width  = target_size;
         descriptor.render_target_height = target_size;
         descriptor.debug_label = erhe::utility::Debug_label{setup.label};
@@ -397,6 +410,25 @@ TEST_F(Render_target_subresource_test, render_to_slice)
 TEST_F(Render_target_subresource_test, render_to_face)
 {
     run_case(Target_kind::face, Pass_kind::load_and_draw, "render_target_draw_face");
+}
+
+// The target ends in transfer_src_optimal while every other subresource stays
+// in shader_read_only_optimal: the layout is tracked per level.
+TEST_F(Render_target_subresource_test, render_to_mip_mixed_layouts)
+{
+    run_case(Target_kind::mip, Pass_kind::load_and_draw, "render_target_draw_mip", Target_layout_after::transfer_src);
+}
+
+// As above, per layer.
+TEST_F(Render_target_subresource_test, render_to_slice_mixed_layouts)
+{
+    run_case(Target_kind::slice, Pass_kind::load_and_draw, "render_target_draw_slice", Target_layout_after::transfer_src);
+}
+
+// As above, per cube face.
+TEST_F(Render_target_subresource_test, clear_face_mixed_layouts)
+{
+    run_case(Target_kind::face, Pass_kind::clear, "render_target_clear_face", Target_layout_after::transfer_src);
 }
 
 } // namespace erhe::graphics::test

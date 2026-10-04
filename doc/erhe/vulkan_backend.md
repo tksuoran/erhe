@@ -327,8 +327,8 @@ pass.
 
 **Attachments.** `Load_action` maps to `VkAttachmentLoadOp`, `Store_action` to
 `VkAttachmentStoreOp`. The attachment descriptor's `usage_before` / `usage_after`
-masks map to `initialLayout` / `finalLayout` (via `to_vk_image_layout`). When an
-off-screen attachment texture is still `VK_IMAGE_LAYOUT_UNDEFINED` and the load
+masks map to `initialLayout` / `finalLayout` (via `to_vk_image_layout`). When the
+subresources of an off-screen attachment are still `VK_IMAGE_LAYOUT_UNDEFINED` and the load
 action is not `Load`, the pass advertises `UNDEFINED` as the initial layout so it
 drives its own discarding transition instead of a wasteful pre-transition. A
 `Load` with `UNDEFINED` is never emitted (`VUID-VkAttachmentDescription2-format-06699`).
@@ -408,12 +408,34 @@ catching nested-pass wiring bugs early.
 
 ### Image layout tracking
 
-`Texture_impl` tracks its current `VkImageLayout` in `m_current_layout`.
-`transition_layout(cb, new_layout)` inserts a `VkImageMemoryBarrier2` only when
-the layout differs; `set_layout(layout)` updates the tracked layout without a
-barrier (used by `end_render_pass` to record the `finalLayout` the render pass
-machinery applied). Optional layout-transition tracing can be logged to
-`logs/vulkan.txt`.
+Layouts are tracked per subresource. `Image_layout_state`
+(`vulkan_texture.hpp`) holds the current `VkImageLayout` of every (level,
+layer) of one `VkImage`; the texture that creates or wraps the image owns it
+through a `shared_ptr`, and every texture view of the image shares it, so a
+transition recorded through a view is seen through the source and the other
+views. `Texture_impl` addresses it with an `Image_subresource_range` relative
+to itself (a view adds its base level / layer):
+
+- `transition_layout(cb, range, new_layout)` records one
+  `VkImageMemoryBarrier2` per run of levels sharing their old layout, per
+  layer (a single barrier when the whole range shares one layout), skips
+  subresources already in `new_layout`, and derives each barrier's source and
+  destination scopes from the old and new layouts. `transition_layout(cb,
+  new_layout)` covers the whole texture.
+- `set_layout(range, layout)` records a layout applied by other means without
+  a barrier: `end_render_pass` records each attachment's `finalLayout` for
+  exactly the level and layers its framebuffer view covers.
+- Every barrier's `oldLayout` is the tracked layout, never a blanket
+  `UNDEFINED`, so a region copy into a subresource keeps the texels outside
+  the region. The blit encoder's copies move only the copied subresource;
+  a copy source returns to its tracked layout afterwards.
+
+A render pass decides each attachment's `initialLayout` when it is built
+(UNDEFINED when the attachment's subresources are all still UNDEFINED and the
+load action is not `Load`) and, in `start_render_pass`, transitions the
+attachment's subresources to any non-UNDEFINED `initialLayout`. Resolve
+attachment views honor `resolve_level` / `resolve_layer`. Optional
+layout-transition tracing can be logged to `logs/vulkan.txt`.
 
 ## Resources
 

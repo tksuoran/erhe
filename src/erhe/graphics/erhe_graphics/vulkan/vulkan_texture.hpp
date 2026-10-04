@@ -7,11 +7,44 @@
 #include "volk.h"
 #include "vk_mem_alloc.h"
 
+#include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace erhe::graphics {
 
 class Device_impl;
+
+// A range of mip levels and array layers, in the coordinates of one
+// Texture_impl: a texture view adds its own base level / layer offset.
+class Image_subresource_range
+{
+public:
+    uint32_t base_level {0};
+    uint32_t level_count{1};
+    uint32_t base_layer {0};
+    uint32_t layer_count{1};
+};
+
+// The current VkImageLayout of every (level, layer) subresource of one
+// VkImage. Shared by the texture that owns (or wraps) the image and every
+// texture view of it, so a transition recorded through any of them is seen
+// by all.
+class Image_layout_state final
+{
+public:
+    Image_layout_state(uint32_t level_count, uint32_t layer_count);
+
+    [[nodiscard]] auto get_level_count() const -> uint32_t;
+    [[nodiscard]] auto get_layer_count() const -> uint32_t;
+    [[nodiscard]] auto get_layout     (uint32_t level, uint32_t layer) const -> VkImageLayout;
+    void set_layout(uint32_t level, uint32_t layer, VkImageLayout layout);
+
+private:
+    uint32_t                   m_level_count{0};
+    uint32_t                   m_layer_count{0};
+    std::vector<VkImageLayout> m_layouts; // index: layer * m_level_count + level
+};
 
 class Texture_impl final
 {
@@ -44,14 +77,26 @@ public:
     [[nodiscard]] auto get_vma_allocation        () const -> VmaAllocation;
     [[nodiscard]] auto get_vk_image              () const -> VkImage;
     [[nodiscard]] auto get_view_base_array_layer () const -> int;
+    [[nodiscard]] auto get_view_base_level       () const -> int;
     [[nodiscard]] auto get_vk_image_view         (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count) -> VkImageView;
     [[nodiscard]] auto get_vk_image_view         (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count, uint32_t base_level, uint32_t level_count, VkImageViewType view_type) -> VkImageView;
-    [[nodiscard]] auto get_current_layout        () const -> VkImageLayout;
+
+    // Image layout tracking, per subresource. Ranges are relative to this
+    // texture (see Image_subresource_range).
+    [[nodiscard]] auto get_all_subresources() const -> Image_subresource_range;
+    [[nodiscard]] auto get_layout          (uint32_t level, uint32_t layer) const -> VkImageLayout;
+    [[nodiscard]] auto is_layout_undefined (const Image_subresource_range& range) const -> bool;
+
+    // Records a barrier moving every subresource of the range that is not
+    // already in new_layout from its tracked layout to new_layout.
+    void transition_layout(VkCommandBuffer command_buffer, const Image_subresource_range& range, VkImageLayout new_layout) const;
+    void transition_layout(VkCommandBuffer command_buffer, VkImageLayout new_layout) const;
+    // Updates the tracked layout without a barrier, for transitions applied
+    // by other means (render pass finalLayout).
+    void set_layout       (const Image_subresource_range& range, VkImageLayout layout) const;
 
     void clear() const;
     void set_buffer       (Buffer& buffer);
-    void transition_layout(VkCommandBuffer command_buffer, VkImageLayout new_layout) const;
-    void set_layout       (VkImageLayout layout) const; // Update tracked layout without inserting barrier
 
 private:
     friend bool operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept;
@@ -89,7 +134,7 @@ private:
     int                        m_level_count           {0};
     Buffer*                    m_buffer                {nullptr};
     erhe::utility::Debug_label m_debug_label;
-    mutable VkImageLayout      m_current_layout        {VK_IMAGE_LAYOUT_UNDEFINED};
+    std::shared_ptr<Image_layout_state> m_layout_state;
 };
 
 

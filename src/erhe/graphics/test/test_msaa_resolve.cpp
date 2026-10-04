@@ -231,4 +231,160 @@ TEST_F(Gpu_test, msaa_color_resolve)
     expect_image_matches_golden("msaa_color_resolve", width, height, color_format, std::as_bytes(std::span<const uint8_t>{pixels}));
 }
 
+// MSAA color resolve into one layer of an array texture
+// (Render_pass_attachment_descriptor::resolve_layer). Layer 0 is seeded with
+// solid blue and layer 1 is the resolve target: layer 0 must keep its seed
+// byte for byte and layer 1 must hold the resolved triangle, with averaged
+// edge texels as in msaa_color_resolve.
+TEST_F(Gpu_test, msaa_color_resolve_to_layer)
+{
+    constexpr int width  = 32;
+    constexpr int height = 32;
+    constexpr erhe::dataformat::Format color_format = erhe::dataformat::Format::format_8_vec4_unorm;
+
+    erhe::graphics::Device& graphics_device = device();
+
+    const erhe::graphics::Format_properties color_props = graphics_device.get_format_properties(color_format);
+    const std::vector<int>& counts = color_props.texture_2d_sample_counts;
+    if (!color_props.color_renderable ||
+        (std::find(counts.begin(), counts.end(), sample_count) == counts.end())) {
+        GTEST_SKIP() << "4x MSAA is not supported for format_8_vec4_unorm on this device";
+    }
+
+    const std::shared_ptr<erhe::graphics::Texture> msaa_color = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device       = graphics_device,
+            .usage_mask   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment,
+            .type         = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat  = color_format,
+            .sample_count = sample_count,
+            .width        = width,
+            .height       = height,
+            .debug_label  = erhe::utility::Debug_label{"MSAA color (resolve to layer)"}
+        }
+    );
+    ASSERT_EQ(msaa_color->get_sample_count(), sample_count) << "device gave fewer samples than requested";
+
+    // sampled: the seed copy leaves layer 0 in shader_read_only_optimal.
+    const std::shared_ptr<erhe::graphics::Texture> resolve_target = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device            = graphics_device,
+            .usage_mask        =
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_src     |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+            .type              = erhe::graphics::Texture_type::texture_2d_array,
+            .pixelformat       = color_format,
+            .width             = width,
+            .height            = height,
+            .array_layer_count = 2,
+            .debug_label       = erhe::utility::Debug_label{"MSAA resolve target array"}
+        }
+    );
+
+    std::vector<uint8_t> seed(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+    for (std::size_t i = 0; i < seed.size(); i += 4u) {
+        seed[i + 0] = 0u;
+        seed[i + 1] = 0u;
+        seed[i + 2] = 255u;
+        seed[i + 3] = 255u;
+    }
+    seed_subresource_rgba8(*resolve_target, 0, 0, seed);
+
+    const erhe::graphics::Bind_group_layout empty_layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings          = {},
+            .debug_label       = erhe::utility::Debug_label{"MSAA resolve to layer empty layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const erhe::graphics::Fragment_outputs fragment_outputs{
+        { erhe::graphics::Fragment_output{ .name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0 } }
+    };
+    erhe::graphics::Shader_stages_create_info shader_create_info{
+        .name             = "msaa_resolve_to_layer",
+        .fragment_outputs = &fragment_outputs,
+        .no_vertex_input  = true,
+        .shaders = {
+            { erhe::graphics::Shader_type::vertex_shader,   std::string_view{c_vertex_source}   },
+            { erhe::graphics::Shader_type::fragment_shader, std::string_view{c_fragment_source} }
+        },
+        .bind_group_layout = &empty_layout
+    };
+    erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(graphics_device, shader_create_info);
+    ASSERT_TRUE(prototype.is_valid()) << "MSAA resolve to layer shader failed to compile/link";
+    erhe::graphics::Shader_stages shader_stages{graphics_device, std::move(prototype)};
+
+    erhe::graphics::Render_pass_descriptor descriptor{};
+    descriptor.color_attachments[0].texture         = msaa_color.get();
+    descriptor.color_attachments[0].resolve_texture = resolve_target.get();
+    descriptor.color_attachments[0].resolve_layer   = 1;
+    descriptor.color_attachments[0].clear_value     = std::array<double, 4>{ 1.0, 0.0, 0.0, 1.0 }; // red
+    descriptor.color_attachments[0].load_action     = erhe::graphics::Load_action::Clear;
+    descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Multisample_resolve;
+    descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+    descriptor.color_attachments[0].layout_before   = erhe::graphics::Image_layout::undefined;
+    descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_after    = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.render_target_width  = width;
+    descriptor.render_target_height = height;
+    descriptor.debug_label = erhe::utility::Debug_label{"MSAA resolve to layer"};
+
+    erhe::graphics::Render_pipeline_create_info pipeline_create_info;
+    pipeline_create_info.base.input_assembly                    = erhe::graphics::Input_assembly_state::triangle;
+    pipeline_create_info.base.rasterization                     = erhe::graphics::Rasterization_state::cull_mode_none;
+    pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
+    pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
+    pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
+    pipeline_create_info.base.bind_group_layout                 = &empty_layout;
+    pipeline_create_info.base.color_blend                       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+    pipeline_create_info.shader_stages                          = &shader_stages;
+    pipeline_create_info.vertex_input                           = nullptr;
+    pipeline_create_info.set_format_from_render_pass(descriptor);
+    const erhe::graphics::Render_pipeline pipeline{graphics_device, pipeline_create_info};
+    ASSERT_TRUE(pipeline.is_valid()) << "MSAA resolve to layer pipeline is not valid";
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Render_pass            render_pass{graphics_device, descriptor};
+            erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
+            const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+            encoder.set_viewport_rect(0, 0, width, height);
+            encoder.set_scissor_rect (0, 0, width, height);
+            encoder.set_bind_group_layout(&empty_layout);
+            encoder.set_render_pipeline(pipeline);
+            encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+        }
+    );
+
+    const std::vector<uint8_t> layer_0 = read_subresource_rgba8(*resolve_target, 0, 0);
+    ASSERT_EQ(layer_0.size(), seed.size());
+    EXPECT_TRUE(std::equal(layer_0.begin(), layer_0.end(), seed.begin())) << "the resolve wrote layer 0, not resolve_layer 1";
+
+    const std::vector<uint8_t> layer_1 = read_subresource_rgba8(*resolve_target, 1, 0);
+    ASSERT_EQ(layer_1.size(), seed.size());
+    int pure_green   = 0;
+    int pure_red     = 0;
+    int intermediate = 0;
+    for (std::size_t i = 0; i < layer_1.size(); i += 4u) {
+        const int r = layer_1[i + 0];
+        const int g = layer_1[i + 1];
+        if ((g >= 250) && (r <= 5)) {
+            ++pure_green;
+        } else if ((r >= 250) && (g <= 5)) {
+            ++pure_red;
+        } else if ((r >= 20) && (r <= 235) && (g >= 20) && (g <= 235)) {
+            ++intermediate;
+        }
+    }
+    EXPECT_GT(pure_green,   0) << "resolve_layer 1 holds no fully-covered (green) texels";
+    EXPECT_GT(pure_red,     0) << "resolve_layer 1 holds no fully-uncovered (red) texels";
+    EXPECT_GT(intermediate, 0) << "resolve_layer 1 holds no averaged edge texels";
+    expect_image_matches_golden("msaa_color_resolve", width, height, color_format, std::as_bytes(std::span<const uint8_t>{layer_1}));
+}
+
 } // namespace erhe::graphics::test

@@ -15,7 +15,6 @@
 !Image_loader-default=premultiplied→goldens-read-with-Alpha_mode::straight
 !one-golden-set-all-backends::image-space-coords+texture_origin+native_depth_range;GL-bottom-left-origin-exercises-the-normalization
 !AMD-GL-driver::comparison-sampler-reads-never-after-a-never-draw-of-identical-source{state-probed-correct;not-erhe}
-!Vk-blit-dst-transition-from-UNDEFINED::latent-discard-risk{needs-per-subresource-layout-tracking;open}
 !agfx_comparison.md-premise-stale::set_storage_image-works-on-Vk+GL+Metal(image_2d-level-0-only)
 !buffer-goldens-¬device-padding::Shader_resource::get_size_bytes(block)-pads-to-uniform_buffer_offset_alignment{Vk-iGPU-32|Metal-256}->golden-the-members-only{compute_atomics}
 
