@@ -824,8 +824,8 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              meshoptimizer
-    GIT_TAG           v1.2
-    VERSION           1.2
+    GIT_TAG           v1.3
+    VERSION           1.3
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY zeux/meshoptimizer
     OPTIONS
