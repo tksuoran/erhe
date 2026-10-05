@@ -88,9 +88,11 @@ using namespace mcp_server_detail;
 
 namespace {
 
-// A gesture may span at most this many frames. The MCP request timeout is five
-// seconds (Mcp_server::k_request_timeout) and a deferred pass costs one editor
-// frame, so a longer gesture would be dropped mid-way rather than answered.
+// A gesture may span at most this many frames. Each frame is a step of the
+// request, so the request expiry (Mcp_server::k_request_timeout, measured from
+// the last step) does not bound a gesture's length; the caller's HTTP read
+// timeout does, and at a slow software-rendered frame 120 frames already take
+// most of a minute.
 constexpr int         c_max_frame_offset = 120;
 constexpr std::size_t c_max_events       = 256;
 
@@ -106,7 +108,10 @@ constexpr int c_pointer_settle_frames = 3;
 // working the same way in both.
 constexpr int c_click_hold_frames = 2;
 
-[[nodiscard]] auto now_ns() -> int64_t
+// Injected events are stamped on the wall clock (steady_clock), like the
+// window system's events; the event pump maps every event onto the editor
+// clock in one place (Time::map_input_timestamp_ns, doc/editor/time.md).
+[[nodiscard]] auto injection_timestamp_ns() -> int64_t
 {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()
@@ -543,8 +548,10 @@ auto Mcp_server::commit_input_gesture() -> std::string
         steps.clear();
         return make_error_content("The gesture spans more than " + std::to_string(c_max_frame_offset) + " frames");
     }
-    steps.request    = m_current_request;
-    steps.last_frame = last_frame;
+    steps.request             = m_current_request;
+    steps.last_frame          = last_frame;
+    steps.start_button_mask   = m_input_pointer_state.button_mask;
+    steps.start_modifier_mask = m_input_pointer_state.modifier_mask;
     return step_input_gesture();
 }
 
@@ -562,7 +569,7 @@ auto Mcp_server::step_input_gesture() -> std::string
 
     Input_gesture_steps& steps = m_input_gesture_steps;
 
-    const int64_t timestamp_ns = now_ns();
+    const int64_t timestamp_ns = injection_timestamp_ns();
     while ((steps.next_event < steps.events.size()) && (steps.event_frames[steps.next_event] == steps.frame)) {
         erhe::window::Input_event event = steps.events[steps.next_event];
         event.timestamp_ns = timestamp_ns;
@@ -609,6 +616,7 @@ auto Mcp_server::step_input_gesture() -> std::string
 
     if (steps.frame < steps.last_frame) {
         ++steps.frame;
+        note_request_step();
         m_defer_current_request = true;
         return {};
     }
@@ -616,6 +624,7 @@ auto Mcp_server::step_input_gesture() -> std::string
         // R4: one further frame, so the caller's next capture_screenshot shows
         // the result of the last event.
         steps.tail_frame = true;
+        note_request_step();
         m_defer_current_request = true;
         return {};
     }
@@ -643,6 +652,42 @@ auto Mcp_server::step_input_gesture() -> std::string
     m_input_gesture_extra = nlohmann::json::object();
 
     return make_json_content(result).dump();
+}
+
+void Mcp_server::release_input_held_since(const uint32_t start_button_mask, const uint32_t start_modifier_mask)
+{
+    erhe::window::Context_window* const context_window = m_context.context_window;
+    if (context_window == nullptr) {
+        return;
+    }
+    const int64_t timestamp_ns = injection_timestamp_ns();
+    for (erhe::window::Mouse_button button = 0; button < erhe::window::Mouse_button_count; ++button) {
+        const uint32_t bit = 1u << button;
+        if (((m_input_pointer_state.button_mask & bit) == 0) || ((start_button_mask & bit) != 0)) {
+            continue;
+        }
+        erhe::window::Input_event event = make_event(erhe::window::Input_event_type::mouse_button_event);
+        event.timestamp_ns                       = timestamp_ns;
+        event.u.mouse_button_event.button        = button;
+        event.u.mouse_button_event.pressed       = false;
+        event.u.mouse_button_event.modifier_mask = m_input_pointer_state.modifier_mask;
+        context_window->inject_input_event(event);
+        m_input_pointer_state.button_mask &= ~bit;
+        log_mcp->warn("MCP server: released mouse button '{}' left held by an expired gesture", erhe::window::c_str(button));
+    }
+    for (const uint32_t bit : c_modifier_bits) {
+        if (((m_input_pointer_state.modifier_mask & bit) == 0) || ((start_modifier_mask & bit) != 0)) {
+            continue;
+        }
+        m_input_pointer_state.modifier_mask &= ~bit;
+        erhe::window::Input_event event = make_event(erhe::window::Input_event_type::key_event);
+        event.timestamp_ns              = timestamp_ns;
+        event.u.key_event.keycode       = modifier_bit_key(bit);
+        event.u.key_event.pressed       = false;
+        event.u.key_event.modifier_mask = m_input_pointer_state.modifier_mask;
+        context_window->inject_input_event(event);
+        log_mcp->warn("MCP server: released modifier key '{}' left held by an expired gesture", erhe::window::c_str(modifier_bit_key(bit)));
+    }
 }
 
 // inject_input_events - doc/agents/mcp_ui_driving.md.

@@ -33,6 +33,7 @@ res/, logs/ are cwd-relative) and poll `logs/log.txt` for the listening line
 Get-Process editor -ErrorAction SilentlyContinue | Stop-Process -Force   # no stale server on 3743
 Start-Sleep -Milliseconds 800
 if (Test-Path logs\log.txt) { Clear-Content logs\log.txt }
+$env:ERHE_FIXED_DT_MS = "16.667"   # fixed-dt editor clock: gestures and double clicks behave the same at any frame rate (doc/editor/time.md)
 $p = Start-Process -FilePath "build_vs2026_vulkan_headless\bin\Debug\editor.exe" -WorkingDirectory (Get-Location) -PassThru -WindowStyle Hidden
 for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 1000

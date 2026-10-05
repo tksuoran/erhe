@@ -457,7 +457,7 @@ void Viewport_window::imgui()
         const float button_radius = style.toolButtonRadius * style.scale;
         ImVec2 position = window_position + ImVec2{window_size.x - rotate_radius, after_toolbar_cursor_pos.y + rotate_radius};
         bool modified = false;
-        const int64_t time_ns = m_app_context.time->get_host_system_time_ns();
+        const int64_t time_ns = m_app_context.time->get_editor_time_ns();
 
         // Draw + hover only. Input (orbit/zoom/pan/snap) is driven through erhe::commands
         // by Navigation_gizmo_tool, which writes the camera directly. The only camera

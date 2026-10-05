@@ -138,10 +138,19 @@ auto spawn_editor(
 ) -> bool
 {
     const std::string port_text = std::to_string(port);
+    // The tests run against the fixed-dt editor clock (doc/editor/time.md):
+    // every frame advances editor time by 16.667 ms however long it takes,
+    // so double clicks and multi-frame gestures mean the same on a fast GPU
+    // and on a software rasterizer. An ERHE_FIXED_DT_MS already in the
+    // environment wins (set it empty to test against the wall clock).
+    const char* const fixed_dt_ms = (std::getenv("ERHE_FIXED_DT_MS") != nullptr) ? nullptr : "16.667";
 #if defined(_WIN32)
     // The child receives a copy of this process's environment block.
     SetEnvironmentVariableA("ERHE_MCP_PORT",       port_text.c_str());
     SetEnvironmentVariableA("ERHE_AI_DRIVER",      "1");
+    if (fixed_dt_ms != nullptr) {
+        SetEnvironmentVariableA("ERHE_FIXED_DT_MS", fixed_dt_ms);
+    }
     SetEnvironmentVariableA("ERHE_MCP_TOKEN_FILE", token_file.empty() ? nullptr : token_file.c_str());
 
     std::string command_line = "\"" + editor_path + "\"";
@@ -194,6 +203,9 @@ auto spawn_editor(
         }
         setenv("ERHE_MCP_PORT",  port_text.c_str(), 1);
         setenv("ERHE_AI_DRIVER", "1", 1);
+        if (fixed_dt_ms != nullptr) {
+            setenv("ERHE_FIXED_DT_MS", fixed_dt_ms, 1);
+        }
         if (token_file.empty()) {
             unsetenv("ERHE_MCP_TOKEN_FILE");
         } else {

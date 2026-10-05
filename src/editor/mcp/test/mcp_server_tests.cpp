@@ -146,12 +146,19 @@ public:
         return rpc("tools/list", json{});
     }
 
+    void set_read_timeout_seconds(const int seconds)
+    {
+        m_client.set_read_timeout(seconds, 0);
+    }
+
 private:
     httplib::Client m_client;
 };
 
 // Helpers defined after the test fixture (see below).
 void advance_frames(Mcp_client& client, int frames);
+// Lets frames run until the editor clock has advanced by at least seconds.
+void wait_editor_time(Mcp_client& client, double seconds);
 [[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>;
 [[nodiscard]] auto wait_until_idle(Mcp_client& client, int timeout_ms) -> bool;
 
@@ -1978,11 +1985,37 @@ constexpr const char* c_undo_ref_gltf = "res/editor/assets/RiggedFigure/RiggedFi
 
 // The removal announcement is published once per frame, just before the
 // message bus pump, so every mutation needs a frame before it is observable.
+// advance_frames answers after that many editor frames (doc/editor/time.md).
+// One call waits as long as its frames take, so the frames are asked for a
+// few at a time: a software-rendered frame takes several hundred ms and every
+// call has to answer within the client's 10 s read timeout.
 void advance_frames(Mcp_client& client, int frames)
 {
-    for (int i = 0; i < frames; ++i) {
-        client.call_tool("advance_time", json{{"seconds", 0.016}});
+    constexpr int c_frames_per_call = 5;
+    while (frames > 0) {
+        const int chunk = std::min(frames, c_frames_per_call);
+        const Mcp_client::Tool_result result = client.call_tool("advance_frames", json{{"frames", chunk}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        if (result.is_error) {
+            return;
+        }
+        frames -= chunk;
     }
+}
+
+void wait_editor_time(Mcp_client& client, const double seconds)
+{
+    const Mcp_client::Tool_result start = client.call_tool("get_time", json::object());
+    ASSERT_FALSE(start.is_error) << start.text;
+    const double end_s = start.payload.value("editor_time_s", 0.0) + seconds;
+    for (int i = 0; i < 1000; ++i) {
+        const Mcp_client::Tool_result now = client.call_tool("advance_frames", json{{"frames", 4}});
+        ASSERT_FALSE(now.is_error) << now.text;
+        if (now.payload.value("editor_time_s", 0.0) >= end_s) {
+            return;
+        }
+    }
+    FAIL() << "the editor clock did not advance by " << seconds << " s";
 }
 
 // True once get_async_status reports nothing in flight on two consecutive
@@ -5493,12 +5526,13 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     advance_frames(client, 3);
 
     // Dear ImGui chains clicks at one spot that come within
-    // io.MouseDoubleClickTime (0.30 s, wall clock) of each other into one
-    // click count, and the node toggles on a count of exactly two. Each
-    // gesture below starts a fresh chain: the clicks of the previous gesture
-    // (or of a previous run against the same editor) are waited out first.
-    const auto wait_out_double_click_time = []() {
-        std::this_thread::sleep_for(std::chrono::milliseconds{400});
+    // io.MouseDoubleClickTime (0.30 s of editor time, doc/editor/time.md) of
+    // each other into one click count, and the node toggles on a count of
+    // exactly two. Each gesture below starts a fresh chain: the clicks of the
+    // previous gesture (or of a previous run against the same editor) are
+    // waited out first.
+    const auto wait_out_double_click_time = [&client]() {
+        wait_editor_time(client, 0.4);
     };
 
     const auto is_opened = [&]() -> bool {
@@ -5548,6 +5582,230 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
         {"label",  "Executed"},
         {"double", true}
     });
+    advance_frames(client, 3);
+    client.call_tool("set_window_visibility", json{{"title", "Operation Stack"}, {"visible", false}});
+    advance_frames(client, 2);
+}
+
+// Slows every editor frame down with the frame pacing window's simulated
+// workload (a busy wait of up to 60 ms per frame) for one test, and turns it
+// off again however the test ends.
+class Slow_frames_guard
+{
+public:
+    Slow_frames_guard(Mcp_client& client, const float workload_ms)
+        : m_client{client}
+    {
+        const Mcp_client::Tool_result result = m_client.call_tool("set_frame_pacing_workload", json{{"min_ms", workload_ms}});
+        m_ok = !result.is_error;
+    }
+    ~Slow_frames_guard()
+    {
+        m_client.call_tool("set_frame_pacing_workload", json{{"min_ms", 0.0f}});
+    }
+    Slow_frames_guard(const Slow_frames_guard&) = delete;
+    auto operator=(const Slow_frames_guard&) -> Slow_frames_guard& = delete;
+
+    [[nodiscard]] auto is_ok() const -> bool { return m_ok; }
+
+private:
+    Mcp_client& m_client;
+    bool        m_ok{false};
+};
+
+[[nodiscard]] auto editor_clock_is_fixed_dt(Mcp_client& client) -> bool
+{
+    const Mcp_client::Tool_result time = client.call_tool("get_time", json::object());
+    return !time.is_error && (time.payload.value("clock", std::string{}) == "fixed_dt");
+}
+
+// advance_frames answers after exactly the frames asked for; under the
+// fixed-dt clock each of them advances the editor clock by exactly dt.
+TEST_F(Mcp_test, advance_frames_answers_after_the_frames_and_fixed_dt_advances_the_clock_by_dt)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const Mcp_client::Tool_result before = client.call_tool("get_time", json::object());
+    ASSERT_FALSE(before.is_error) << before.text;
+    const uint64_t frame_before = before.payload.value("frame_number", uint64_t{0});
+
+    // One call for all its frames: allow for slow software-rendered frames.
+    client.set_read_timeout_seconds(60);
+    const Mcp_client::Tool_result first = client.call_tool("advance_frames", json{{"frames", 10}});
+    ASSERT_FALSE(first.is_error) << first.text;
+    const uint64_t frame_first = first.payload.value("frame_number", uint64_t{0});
+    EXPECT_GE(frame_first, frame_before + 10u) << "advance_frames answered before 10 frames ran";
+
+    const Mcp_client::Tool_result second = client.call_tool("advance_frames", json{{"frames", 20}});
+    ASSERT_FALSE(second.is_error) << second.text;
+    const uint64_t frame_second = second.payload.value("frame_number", uint64_t{0});
+    // Between the first answer and the second the request is enqueued on the
+    // HTTP thread and first seen one or two frames later.
+    EXPECT_GE(frame_second, frame_first + 20u);
+    EXPECT_LE(frame_second, frame_first + 23u) << "advance_frames ran far past the frames asked for";
+
+    const Mcp_client::Tool_result zero = client.call_tool("advance_frames", json{{"frames", 0}});
+    ASSERT_FALSE(zero.is_error) << zero.text;
+    EXPECT_TRUE(client.call_tool("advance_frames", json{{"frames", -1}}).is_error) << "a negative frame count was accepted";
+    client.set_read_timeout_seconds(10);
+
+    if (first.payload.value("clock", std::string{}) != "fixed_dt") {
+        GTEST_SKIP() << "the editor clock is not fixed_dt (ERHE_FIXED_DT_MS); the per-frame advance is not checked";
+    }
+    const double fixed_dt_s    = first.payload.value("fixed_dt_ms", 0.0) * 1.0e-3;
+    const double editor_delta  = second.payload.value("editor_time_s", 0.0) - first.payload.value("editor_time_s", 0.0);
+    const double frame_delta   = static_cast<double>(frame_second - frame_first);
+    EXPECT_NEAR(editor_delta, frame_delta * fixed_dt_s, 1.0e-6) << "the editor clock did not advance by exactly dt per frame";
+    EXPECT_NEAR(second.payload.value("editor_frame_dt_ms", 0.0) * 1.0e-3, fixed_dt_s, 1.0e-9);
+}
+
+// The editor clock never goes back, whichever way its source is switched
+// (doc/editor/time.md): fixed_dt -> wall_clock continues from the fixed_dt
+// value, wall_clock -> fixed_dt continues from the wall value.
+TEST_F(Mcp_test, editor_clock_is_monotonic_across_clock_source_switches)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const Mcp_client::Tool_result initial = client.call_tool("get_time", json::object());
+    ASSERT_FALSE(initial.is_error) << initial.text;
+    const std::string initial_clock  = initial.payload.value("clock", std::string{"wall_clock"});
+    const double      initial_dt_ms  = initial.payload.value("fixed_dt_ms", 16.667);
+
+    // Restores the clock the editor ran with, however the test ends.
+    class Clock_restore
+    {
+    public:
+        Clock_restore(Mcp_client& client, const std::string& clock, const double fixed_dt_ms)
+            : m_client{client}, m_clock{clock}, m_fixed_dt_ms{fixed_dt_ms} {}
+        ~Clock_restore()
+        {
+            m_client.call_tool("advance_time", json{{"clock", m_clock}, {"fixed_dt_ms", m_fixed_dt_ms}});
+            m_client.call_tool("advance_frames", json{{"frames", 2}});
+        }
+        Clock_restore(const Clock_restore&) = delete;
+        auto operator=(const Clock_restore&) -> Clock_restore& = delete;
+    private:
+        Mcp_client& m_client;
+        std::string m_clock;
+        double      m_fixed_dt_ms;
+    };
+    Clock_restore restore{client, initial_clock, initial_dt_ms};
+
+    double previous_s = initial.payload.value("editor_time_s", 0.0);
+    const auto step = [&](const std::string& clock, const char* label) {
+        const Mcp_client::Tool_result switched = client.call_tool("advance_time", json{{"clock", clock}});
+        ASSERT_FALSE(switched.is_error) << switched.text;
+        EXPECT_EQ(switched.payload.value("pending_clock", std::string{}), clock) << label;
+        for (int i = 0; i < 3; ++i) {
+            const Mcp_client::Tool_result frame = client.call_tool("advance_frames", json{{"frames", 1}});
+            ASSERT_FALSE(frame.is_error) << frame.text;
+            const double now_s = frame.payload.value("editor_time_s", 0.0);
+            EXPECT_GT(now_s, previous_s) << label << ": the editor clock did not advance";
+            // A switch continues the clock: no jump by the distance between
+            // the fixed_dt value and the wall clock.
+            EXPECT_LT(now_s - previous_s, 30.0) << label << ": the editor clock jumped";
+            previous_s = now_s;
+        }
+        const Mcp_client::Tool_result after = client.call_tool("get_time", json::object());
+        EXPECT_EQ(after.payload.value("clock", std::string{}), clock) << label;
+    };
+    step("fixed_dt",   "to fixed_dt");
+    step("wall_clock", "fixed_dt -> wall_clock");
+    step("fixed_dt",   "wall_clock -> fixed_dt");
+    step("wall_clock", "fixed_dt -> wall_clock again");
+}
+
+// T1 of doc/plans/deterministic_editor_clock.md: a gesture that steps every
+// frame is answered even when it takes longer than the request expiry
+// (5 s of wall time), because expiry is measured from the last step.
+TEST_F(Mcp_test, gesture_longer_than_the_request_expiry_completes_while_it_steps)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to move the pointer in";
+
+    Slow_frames_guard slow{client, 60.0f};
+    ASSERT_TRUE(slow.is_ok()) << "the simulated frame workload is not available";
+
+    // 101 frames of at least 60 ms each: over 6 s of wall time.
+    constexpr int c_last_frame = 100;
+    json events = json::array();
+    for (int frame = 0; frame <= c_last_frame; frame += 10) {
+        events.push_back(json{
+            {"type",  "mouse_move"},
+            {"frame", frame},
+            {"x",     viewport.center_x() + static_cast<float>(frame % 20)},
+            {"y",     viewport.center_y()}
+        });
+    }
+    client.set_read_timeout_seconds(120);
+    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    const Mcp_client::Tool_result gesture = client.call_tool("inject_input_events", json{{"events", events}});
+    const double elapsed_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    client.set_read_timeout_seconds(10);
+
+    ASSERT_FALSE(gesture.is_error) << gesture.text;
+    EXPECT_EQ(gesture.payload.value("frames", 0), c_last_frame + 1);
+    EXPECT_GT(elapsed_s, 5.0) << "the gesture took " << elapsed_s << " s, not longer than the request expiry; the test proves nothing";
+}
+
+// T2 of doc/plans/deterministic_editor_clock.md: with the fixed-dt clock a
+// double click is recognized however long each frame takes. At 60+ ms per
+// frame the press/release pairs of one imgui_click double gesture are more
+// than ImGui's 0.30 s double-click time apart on the wall clock.
+TEST_F(Mcp_test, imgui_click_double_is_a_double_click_at_slow_frames_with_the_fixed_dt_clock)
+{
+    Mcp_client& client = Mcp_env::get().client();
+    if (!editor_clock_is_fixed_dt(client)) {
+        GTEST_SKIP() << "the editor clock is not fixed_dt (ERHE_FIXED_DT_MS)";
+    }
+
+    Mcp_client::Tool_result shown = client.call_tool("set_window_visibility", json{
+        {"title",   "Operation Stack"},
+        {"visible", true}
+    });
+    ASSERT_FALSE(shown.is_error) << shown.text;
+    advance_frames(client, 3);
+
+    const auto is_opened = [&]() -> bool {
+        Mcp_client::Tool_result rect = client.call_tool("get_imgui_item_rect", json{
+            {"window", "Operation Stack"},
+            {"label",  "Executed"}
+        });
+        EXPECT_FALSE(rect.is_error) << rect.text;
+        return !rect.is_error && rect.payload["status"].value("opened", false);
+    };
+    const json double_click_args = json{
+        {"window", "Operation Stack"},
+        {"label",  "Executed"},
+        {"double", true}
+    };
+    if (is_opened()) {
+        wait_editor_time(client, 0.4);
+        client.call_tool("imgui_click", double_click_args);
+        advance_frames(client, 3);
+    }
+    ASSERT_FALSE(is_opened()) << "the tree node could not be closed before the test";
+
+    {
+        Slow_frames_guard slow{client, 60.0f};
+        ASSERT_TRUE(slow.is_ok()) << "the simulated frame workload is not available";
+        wait_editor_time(client, 0.4);
+        client.set_read_timeout_seconds(60);
+        const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+        const Mcp_client::Tool_result double_click = client.call_tool("imgui_click", double_click_args);
+        const double elapsed_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        client.set_read_timeout_seconds(10);
+        ASSERT_FALSE(double_click.is_error) << double_click.text;
+        EXPECT_GT(elapsed_s, 0.3) << "the gesture took " << elapsed_s << " s of wall time; frames were not slow";
+        advance_frames(client, 3);
+    }
+    EXPECT_TRUE(is_opened()) << "the double click was not recognized at slow frames";
+
+    // Leave the node closed, as the test found it.
+    wait_editor_time(client, 0.4);
+    client.call_tool("imgui_click", double_click_args);
     advance_frames(client, 3);
     client.call_tool("set_window_visibility", json{{"title", "Operation Stack"}, {"visible", false}});
     advance_frames(client, 2);

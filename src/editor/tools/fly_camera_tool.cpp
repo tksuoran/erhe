@@ -10,6 +10,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "time.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_commands/input_arguments.hpp"
@@ -36,6 +37,7 @@
 
 #include <imgui/imgui.h>
 
+#include <chrono>
 #include <cmath>
 #include <numeric>
 #include <string>
@@ -514,7 +516,8 @@ void Fly_camera_tool::synthesize_input()
     std::mt19937                          random_engine{random_device()};
     std::uniform_real_distribution<float> distribution(0.1f, 20.0f);
 
-    int64_t timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    // The schedule runs on the editor clock (doc/editor/time.md).
+    int64_t timestamp_ns = m_context.time->get_editor_time_ns();
 
     m_before_position    = m_camera_controller->get_position();
     m_before_orientation = m_camera_controller->get_orientation();
@@ -631,13 +634,17 @@ void Fly_camera_tool::synthesize_input()
 
     m_context.context_window->set_input_event_synthesizer_callback(
         [this](erhe::window::Context_window& context_window) {
-            const int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            // The schedule runs on the editor clock; the injected event is
+            // stamped on the wall clock like every input producer's, and the
+            // event pump maps it onto the editor clock.
+            const int64_t now = m_context.time->get_editor_time_ns();
+            const int64_t wall_now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
             while (!m_synthetic_input_events.empty()) {
                 erhe::window::Input_event event = m_synthetic_input_events.front();
                 if (event.timestamp_ns > now) {
                     return;
                 }
-                event.timestamp_ns = now;
+                event.timestamp_ns = wall_now_ns;
                 context_window.inject_input_event(event);
                 m_synthetic_input_events.pop_front();
             }
@@ -1699,7 +1706,9 @@ void Fly_camera_tool::window_imgui()
             m_py_graph       .clear();
             m_pz_graph       .clear();
             m_heading_graph  .clear();
-            m_recording_start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            // Samples are stamped with input event timestamps, which are on
+            // the editor clock.
+            m_recording_start_time_ns = m_context.time->get_editor_time_ns();
             m_sample_count = 0;
             m_recording = true;
         }

@@ -170,7 +170,7 @@ void Navigation_gizmo_tool::on_drag_end()
                 erhe::scene::Trs_transform transform   = node->world_from_node_transform();
                 glm::quat                  rotation    = transform.get_rotation();
                 glm::vec3                  translation = transform.get_translation();
-                const int64_t              time_ns     = m_context.time->get_host_system_time_ns();
+                const int64_t              time_ns     = m_context.time->get_editor_time_ns();
                 const erhe::math::Aabb&    framed_aabb = m_context.fly_camera_tool->get_framed_aabb();
                 const float focus_distance = framed_aabb.is_valid_3d()
                     ? glm::distance(framed_aabb.center(), translation)

@@ -41,6 +41,20 @@ VkStructureType") at device creation and `Gpu_test.device_up_clean` fails.
 Use a validation layer from a Vulkan SDK at least as new as the pinned
 headers (`VK_ADD_LAYER_PATH=<sdk>/share/vulkan/explicit_layer.d`).
 
+The headless editor on a software driver (lavapipe) renders a frame in a few
+hundred milliseconds; run it with the fixed-dt editor clock so its behavior
+does not depend on that (`doc/editor/time.md`):
+
+```bash
+ERHE_AI_DRIVER=1 ERHE_FIXED_DT_MS=16.667 \
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json \
+VK_LOADER_LAYERS_DISABLE='~implicit~' \
+build_ninja_linux_vulkan_headless/bin/editor
+```
+
+The `mcp_server_tests` fixtures set `ERHE_FIXED_DT_MS` themselves; pass the
+driver variables to `ctest`.
+
 Kill a stray editor with `pkill -x editor`; `pkill -f` patterns match the
 shell running the command as well.
 

@@ -577,7 +577,7 @@ auto Hud::on_toggle_button_edge(const bool pressed) -> bool
         return true;
     }
     if (pressed) {
-        m_toggle_press_time_ns = m_context.time->get_host_system_time_ns();
+        m_toggle_press_time_ns = m_context.time->get_editor_time_ns();
         m_long_press_fired     = false;
         return true;
     }
@@ -601,7 +601,7 @@ void Hud::on_toggle_button_update()
         return;
     }
     constexpr int64_t long_press_ns = 500'000'000; // 0.5 s
-    if ((m_context.time->get_host_system_time_ns() - m_toggle_press_time_ns) >= long_press_ns) {
+    if ((m_context.time->get_editor_time_ns() - m_toggle_press_time_ns) >= long_press_ns) {
         m_long_press_fired = true;
         summon();
     }

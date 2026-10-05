@@ -264,6 +264,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/settings_codegen_scene_reference.md](editor/settings_codegen_scene_reference.md) (stable): Reference map for three subsystems that are easy to lose track of: the editor settings model, the `erhe_codegen` struct generator, and scene save / load
 - [editor/style_library.md](editor/style_library.md) (mostly stable): Style items: live property inheritance, assignment, persistence
 - [editor/texture_graph.md](editor/texture_graph.md) (mostly stable): Procedural texture graph status against Material Maker
+- [editor/time.md](editor/time.md) (mostly stable): Editor clocks: wall, editor (wall_clock or fixed_dt source) and simulation time, input timestamp mapping, MCP get_time / advance_frames
 - [editor/tools.md](editor/tools.md) (stable): Defines the Tool abstraction and the Tools container, plus several concrete tools for interacting with the 3D scene
 - [editor/transform.md](editor/transform.md) (stable): Transform gizmo system for interactive translate, rotate, and scale operations
 - [editor/weight_paint.md](editor/weight_paint.md) (experimental): Blender-style weight painting

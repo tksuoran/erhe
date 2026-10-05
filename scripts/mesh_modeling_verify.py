@@ -2,7 +2,8 @@
 """Verify the mesh modeling selection commands (doc/plans/mesh_modeling.md
 section 4.2, doc/editor/mesh_component_selection.md) over MCP.
 
-Launches a headless editor (ERHE_AI_DRIVER=1), creates a box and checks the
+Launches a headless editor (ERHE_AI_DRIVER=1; ERHE_FIXED_DT_MS=16.667 unless
+the environment sets it), creates a box and checks the
 flush rules, the mode conversions (flush and expand), invert, select all,
 select none, select linked and the vertex / edge mode region (box and brush)
 select against the box's known counts (8 vertices, 12 edges, 6 facets). Loop
@@ -110,6 +111,9 @@ def launch_editor(editor_exe):
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     open(LOG_PATH, "w").close()
     env = dict(os.environ, ERHE_AI_DRIVER="1")
+    # The fixed-dt editor clock (doc/editor/time.md): the clicks, double
+    # clicks and gestures below mean the same at any frame rate.
+    env.setdefault("ERHE_FIXED_DT_MS", "16.667")
     flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
     # The cpptrace crash stack goes to stderr; keep it for the post-mortem.
     stderr_file = open(STDERR_PATH, "w", encoding="utf-8")
@@ -143,8 +147,7 @@ class Editor:
         return self.c.call(tool, args or {})
 
     def advance(self, frames=2):
-        for _ in range(frames):
-            self.call("advance_time", {"seconds": 0.016})
+        self.call("advance_frames", {"frames": frames})
 
     def key(self, key, modifiers):
         self.call("key_press", {"key": key, "modifiers": modifiers})

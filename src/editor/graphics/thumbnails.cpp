@@ -220,7 +220,7 @@ auto Thumbnails::draw(
             );
             if (ImGui::IsItemHovered()) {
                 thumbnail.callback = callback;
-                thumbnail.time += m_context.time->get_host_system_last_frame_duration_ns();
+                thumbnail.time += m_context.time->get_editor_frame_duration_ns();
                 ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4{0.0f, 0.0f, 0.0f, 0.8f});
                 ImGui::BeginTooltip();
                 m_context.imgui_renderer->image(

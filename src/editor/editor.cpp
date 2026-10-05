@@ -622,9 +622,10 @@ public:
         m_time->prepare_update(m_frame_activity != Frame_activity::hidden, display_advance_ns);
         m_time->update_transform_animations(*m_app_message_bus.get());
         // Scene animations advance on the same clock as the simulation:
-        // predicted display delta when pacing is active (P2.4), wall clock
-        // otherwise.
-        const int64_t animation_advance_ns = (display_advance_ns >= 0) ? display_advance_ns : m_time->get_host_system_last_frame_duration_ns();
+        // predicted display delta when pacing is active (P2.4), the editor
+        // clock otherwise (the fixed dt in fixed_dt mode, doc/editor/time.md).
+        const bool    use_display_advance  = (display_advance_ns >= 0) && (m_time->get_current_editor_clock_source() == Editor_clock_source::wall_clock);
+        const int64_t animation_advance_ns = use_display_advance ? display_advance_ns : m_time->get_editor_frame_duration_ns();
         m_animation_player->update(static_cast<float>(animation_advance_ns) * 1.0e-9f);
         m_fly_camera_tool->on_frame_begin();
 
@@ -663,13 +664,9 @@ public:
         erhe::log::set_breadcrumb("tick: fixed_step (physics)");
         m_app_scenes->before_physics_simulation_steps();
 
-        float host_system_dt_s = 0.0f;
-        int64_t host_system_time_ns = 0;
         m_time->for_each_fixed_step(
-            [this, &input_events, &host_system_dt_s, &host_system_time_ns](const Time_context& time_context) {
+            [this](const Time_context& time_context) {
                 ERHE_PROFILE_SCOPE("fixed step update");
-                host_system_dt_s += time_context.host_system_dt_s;
-                host_system_time_ns = time_context.host_system_time_ns;
                 m_headset_view   ->update_fixed_step();
                 m_fly_camera_tool->update_fixed_step(time_context);
                 m_app_scenes     ->update_physics_simulation_fixed_step(time_context);
@@ -677,8 +674,13 @@ public:
         );
         m_app_scenes   ->after_physics_simulation_steps();
         erhe::log::set_breadcrumb("tick: imgui process_events + commands");
-        m_imgui_windows->process_events(host_system_dt_s, host_system_time_ns);
-        m_commands     ->tick(host_system_time_ns, input_events);
+        // ImGui (io.DeltaTime: double clicks, key repeat, animations) and the
+        // command bindings run on the editor clock, the same domain the input
+        // event timestamps were mapped into in run().
+        const int64_t editor_time_ns      = m_time->get_editor_time_ns();
+        const float   editor_frame_dt_s   = static_cast<float>(static_cast<double>(m_time->get_editor_frame_duration_ns()) * 1.0e-9);
+        m_imgui_windows->process_events(editor_frame_dt_s, editor_time_ns);
+        m_commands     ->tick(editor_time_ns, input_events);
 
         // Process any requests queued by the MCP server
         if (m_mcp_server) {
@@ -3923,6 +3925,10 @@ public:
                 ERHE_PROFILE_SCOPE("dispatch events");
                 auto& input_events = m_window->get_input_events();
                 for (erhe::window::Input_event& input_event : input_events) {
+                    // The one place input timestamps (window system, MCP
+                    // injection, the fly camera synthesizer) enter the editor
+                    // clock's domain (doc/editor/time.md).
+                    input_event.timestamp_ns = m_time->map_input_timestamp_ns(input_event.timestamp_ns);
                     dispatch_input_event(input_event);
                 }
                 if (m_window_resize_event.has_value()) {

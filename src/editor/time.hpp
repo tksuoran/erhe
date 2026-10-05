@@ -26,15 +26,24 @@ enum class Time_mode : int {
     manual     = 2
 };
 
+// Source of the editor clock (doc/editor/time.md). wall_clock: the editor
+// clock is the wall clock (steady_clock), sampled once per frame. fixed_dt:
+// every frame advances the editor clock by a fixed dt, independent of how
+// long the frame took, so headless, cloud and CI runs behave the same at any
+// frame rate. Orthogonal to Time_mode, which gates the simulation.
+enum class Editor_clock_source : int {
+    wall_clock = 0,
+    fixed_dt   = 1
+};
+
+[[nodiscard]] auto c_str(Editor_clock_source source) -> const char*;
+
 class Time_context
 {
 public:
     float    simulation_dt_s    {0.0};
     int64_t  simulation_dt_ns   {0};
     int64_t  simulation_time_ns {0};
-    float    host_system_dt_s   {0.0};
-    int64_t  host_system_dt_ns  {0};
-    int64_t  host_system_time_ns{0};
     uint64_t frame_number       {0};
     uint64_t subframe           {0};
 };
@@ -52,11 +61,46 @@ public:
 class Time
 {
 public:
-    [[nodiscard]] auto get_simulation_time_ns                () const -> int64_t;
-    [[nodiscard]] auto get_host_system_time_ns               () const -> int64_t;
-    [[nodiscard]] auto get_host_system_last_frame_duration_ns() const -> int64_t;
-    [[nodiscard]] auto get_frame_number                      () const -> uint64_t;
-    [[nodiscard]] auto get_frame_time_average_ms             () const -> float;
+    // ERHE_FIXED_DT_MS=<milliseconds> in the environment selects the
+    // fixed_dt editor clock from the first frame (the headless test fixtures
+    // and run-books set 16.667).
+    Time();
+
+    [[nodiscard]] auto get_simulation_time_ns   () const -> int64_t;
+    [[nodiscard]] auto get_frame_number         () const -> uint64_t;
+    // Wall-clock frame time average (frame pacing / UI statistics); not
+    // affected by the editor clock source.
+    [[nodiscard]] auto get_frame_time_average_ms() const -> float;
+
+    // The editor clock: UI, input and animation time. Sampled once per frame
+    // by prepare_update(); in wall_clock mode it is the wall clock
+    // (steady_clock nanoseconds, plus an offset after a switch from
+    // fixed_dt) at the start of the frame, in fixed_dt mode
+    // it advances by exactly the fixed dt per frame. Everything that reasons
+    // about elapsed user-facing time (ImGui io.DeltaTime and double clicks,
+    // input event timestamps, transform and scene animations, double-click /
+    // long-press detection in tools) reads this clock; frame pacing, sleeps,
+    // transport timeouts, load budgets and profiling stay on the wall clock.
+    [[nodiscard]] auto get_editor_time_ns          () const -> int64_t;
+    // Editor clock advance of the current frame (0 on the first frame).
+    [[nodiscard]] auto get_editor_frame_duration_ns() const -> int64_t;
+    // Maps an input event timestamp, stamped by its producer on the wall
+    // clock (steady_clock nanoseconds), onto the editor clock: the wall
+    // clock plus the wall_clock-mode offset (0 unless the run switched
+    // from fixed_dt), or the current editor frame time in fixed_dt mode
+    // (the events dispatched in one frame all happened during the
+    // previous one).
+    [[nodiscard]] auto map_input_timestamp_ns(int64_t wall_timestamp_ns) const -> int64_t;
+
+    // Takes effect at the next prepare_update(). The editor clock stays
+    // monotonic across switches: switching to fixed_dt continues from the
+    // current value, switching to wall_clock offsets the wall clock so the
+    // switching frame advances by its wall duration.
+    void set_editor_clock_source(Editor_clock_source source, int64_t fixed_dt_ns);
+    // The source of the current frame, and the one the next frame uses.
+    [[nodiscard]] auto get_current_editor_clock_source() const -> Editor_clock_source;
+    [[nodiscard]] auto get_pending_editor_clock_source() const -> Editor_clock_source;
+    [[nodiscard]] auto get_fixed_dt_ns                () const -> int64_t;
 
     // advance_simulation == false pauses the fixed-step simulation (physics,
     // fly-camera and headset fixed updates) without losing wall-clock time:
@@ -68,7 +112,9 @@ public:
     // frame pacing step P2.4: the caller passes the delta between successive
     // predicted display times, so simulated state is sampled at the time each
     // frame is shown rather than the time it is produced). Negative keeps the
-    // wall-clock path. The 25 ms dilation cap applies to both sources.
+    // wall-clock path. The 25 ms dilation cap applies to both sources. In
+    // fixed_dt mode the simulation advances by the fixed dt instead (no cap,
+    // simulation_advance_ns ignored).
     void prepare_update     (bool advance_simulation = true, int64_t simulation_advance_ns = -1);
     void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
@@ -94,9 +140,13 @@ public:
     );
 
 private:
-    int64_t  m_host_system_last_frame_start_time {0};
-    int64_t  m_host_system_time_ns               {0};
-    int64_t  m_host_system_last_frame_duration_ns{0};
+    int64_t  m_wall_last_frame_start_time_ns     {0};
+    int64_t  m_editor_time_ns                    {0};
+    int64_t  m_editor_frame_duration_ns          {0};
+    int64_t  m_wall_to_editor_offset_ns          {0}; // wall_clock mode: editor = wall + offset
+    Editor_clock_source m_editor_clock_source    {Editor_clock_source::wall_clock};
+    Editor_clock_source m_next_editor_clock_source{Editor_clock_source::wall_clock};
+    int64_t  m_fixed_dt_ns                       {16'666'667};
     int64_t  m_simulation_time_accumulator       {0};
     int64_t  m_simulation_dt_ns                  {0};
     int64_t  m_simulation_time_ns                {0};

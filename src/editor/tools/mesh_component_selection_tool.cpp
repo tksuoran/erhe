@@ -21,6 +21,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "time.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
@@ -2644,13 +2645,15 @@ void Mesh_component_selection_tool::knife_press()
     if (!cursor.has_value()) {
         return;
     }
-    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    // Editor clock (doc/editor/time.md): a double click is two presses
+    // within c_knife_double_click_time of editor time, at any frame rate.
+    const int64_t now_ns = m_context.time->get_editor_time_ns();
     const bool double_click =
         m_knife.has_last_press &&
-        ((now - m_knife.last_press_time) <= c_knife_double_click_time) &&
+        ((now_ns - m_knife.last_press_time_ns) <= std::chrono::nanoseconds{c_knife_double_click_time}.count()) &&
         (glm::distance(cursor.value(), m_knife.last_press_position) <= c_knife_double_click_distance);
     m_knife.has_last_press      = true;
-    m_knife.last_press_time     = now;
+    m_knife.last_press_time_ns  = now_ns;
     m_knife.last_press_position = cursor.value();
 
     // Double click: close the current polyline (the first press added the

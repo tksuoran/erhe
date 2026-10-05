@@ -15,6 +15,12 @@ UI driving: `doc/agents/mcp_ui_driving.md`; MCP tool design rules:
 - Run the editor with the repo root as working directory (`config/`, `res/`,
   `logs/` are cwd-relative).
 - Set `ERHE_AI_DRIVER=1` in the editor's environment (below).
+- For a headless run also set `ERHE_FIXED_DT_MS=16.667`: the editor clock then
+  advances 16.667 ms per frame whatever the frame takes
+  (`doc/editor/time.md`), so double clicks, multi-frame gestures, animations
+  and physics mean the same on a fast GPU and on a software rasterizer. Let
+  frames pass with the `advance_frames` MCP tool; `get_time` reports the
+  clocks.
 - Kill any editor left over from a previous run before launching (a stale
   editor keeps the MCP port and silently answers every call from an old
   binary) - but only editors you started: the user may be running their own

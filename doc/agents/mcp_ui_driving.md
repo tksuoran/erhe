@@ -131,9 +131,21 @@ these rather than clicking at a guessed offset. See
   (`c_pointer_settle_frames`); a raw event list must leave the same room.
 - **One gesture at a time.** A second gesture call while one is stepping is an
   error. `get_input_state` reports the gesture that runs.
-- **A gesture spans at most 120 frames** (`c_max_frame_offset`), because one
-  deferred pass costs an editor frame and the MCP request timeout is five
-  seconds. Split a longer drag into a held `mouse_drag` plus `mouse_release`.
+- **A gesture spans at most 120 frames** (`c_max_frame_offset`). Every frame
+  is a step of the request, and request expiry is measured from the last step
+  (`doc/editor/time.md` "MCP"), so a stepping gesture does not expire; the
+  bound is the caller's HTTP read timeout at slow frames. Split a longer drag
+  into a held `mouse_drag` plus `mouse_release`. A gesture that does expire
+  (the main thread stalled) releases the buttons and modifier keys it pressed
+  and left held; a button held before it started stays held.
+- **Gesture timing is editor time.** Double clicks and key repeat run on
+  ImGui's `io.DeltaTime`, which the editor clock feeds
+  (`doc/editor/time.md`). Under the fixed-dt clock (`ERHE_FIXED_DT_MS=16.667`,
+  the headless default of the run-books and test fixtures) a double click
+  gesture is recognized at any frame rate; under the wall clock it needs its
+  press / release frames to fit in 0.30 s of real time. Wait editor time, not
+  wall time, between gestures that must not chain (`advance_frames`, reading
+  `editor_time_s` from `get_time`).
 - **Menus take two clicks.** A menu item exists only while its menu is open:
   `imgui_click` the menu bar item, then `imgui_click` the item in the popup.
 - **`hovered` and `active` are read now, not then.** `get_imgui_items` reports

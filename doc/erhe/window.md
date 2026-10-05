@@ -8,7 +8,9 @@ Platform windowing abstraction over SDL and GLFW. Provides window creation, Open
 ## Key Types
 - `Context_window` -- Main window class (implemented separately for SDL and GLFW). Creates a window with an OpenGL/Vulkan context, collects input events into a double-buffered queue, supports cursor capture (relative hold mode), joystick/controller handling, and text input.
 - `Window_configuration` -- Configuration struct for window creation: color depth, depth/stencil, MSAA, swap interval, fullscreen, size, title, GL version, context sharing.
-- `Input_event` -- Tagged union of all input event types with a timestamp.
+- `Input_event` -- Tagged union of all input event types with a timestamp
+  (`timestamp_ns`, `steady_clock` nanoseconds in every backend; the SDL
+  backend maps `SDL_GetTicksNS()` onto it with an offset sampled at SDL init).
 - `Input_event_handler` -- Abstract base class with virtual `on_*_event()` methods for each event type. `dispatch_input_event()` routes events to the correct handler.
 - `Key_event`, `Mouse_move_event`, `Mouse_button_event`, `Mouse_wheel_event`, `Controller_axis_event`, etc. -- Individual event data classes.
 - `Xr_boolean_event`, `Xr_float_event`, `Xr_vector2f_event` -- XR controller action events integrated into the input system.

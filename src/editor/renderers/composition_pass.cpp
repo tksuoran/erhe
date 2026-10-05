@@ -62,7 +62,7 @@ auto make_selection_outline_settings(const App_context& context) -> erhe::scene_
     // Selection outline appearance is editor-global (Selection_outline_style),
     // shared by all scene views; edited in the Settings window.
     const Selection_outline_style& outline = context.editor_settings->selection_outline;
-    const int64_t t0_ns  = context.time->get_host_system_time_ns();
+    const int64_t t0_ns  = context.time->get_editor_time_ns();
     const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
     const float   period = 1.0f / outline.selection_highlight_frequency;
     const float   t1     = static_cast<float>(::fmod(t0, period));

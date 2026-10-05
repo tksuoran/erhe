@@ -5,7 +5,7 @@
 
 // #include <miniaudio.h>
 
-#include <chrono>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -71,9 +71,7 @@ private:
     //// ma_device          m_audio_device;
     std::vector<float>   m_wavetable; // for visualization
 
-    std::optional<
-        std::chrono::steady_clock::time_point
-    >                    m_right_hold_start_time;
+    std::optional<int64_t> m_right_hold_start_time_ns; // editor clock
     bool                 m_right_click{false};
 
 };

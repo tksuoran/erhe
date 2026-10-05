@@ -57,6 +57,12 @@ dedicated editor started with a configure-time test token
 - The stop test runs `mcp_server_tests --request-editor-exit`, which waits for
   a still-starting editor, calls that editor's `request_exit` MCP tool and
   waits for it to go away.
+- The editors run with the fixed-dt editor clock (`ERHE_FIXED_DT_MS=16.667`,
+  set by `src/editor/mcp/test/editor_launcher.cpp` unless the environment
+  already sets it; set it empty to test against the wall clock), so a case
+  means the same at any frame rate (`doc/editor/time.md`). Cases let frames
+  pass with the `advance_frames` MCP tool and wait out editor time, not wall
+  time, between gestures.
 - Every case begins with the `reset_editor_state` MCP tool (selection, mesh
   component selection, clipboard, undo/redo stacks, queued operations,
   shader-debug stack and thumbnail slots cleared, window visibility back to the
@@ -65,6 +71,15 @@ dedicated editor started with a configure-time test token
   import + a material); the last case's scene is reset away at exit.
 - Run `ctest -C Debug -R "Mcp_"` from the build directory; the windowed editor
   needs a live display (`doc/agents/editor_runs.md`).
+- On Linux in a cloud container (4 cores, no GPU, no display) the headless
+  Vulkan tree runs the suite on lavapipe (`doc/agents/linux.md` for the driver
+  variables): `ctest -R "Mcp_"` passes 101 of 101 (97 cases plus the four
+  fixture steps) in about 35 minutes, at a few hundred milliseconds per
+  editor frame; `scripts/mesh_modeling_verify.py` (465 checks),
+  `scripts/geometry_nodes_smoke_test.py` (136) and
+  `scripts/scene_roundtrip_verify.py` (162, the USD leg skipped without
+  `ERHE_USD_LIBRARY`) pass against the same headless editor with
+  `ERHE_FIXED_DT_MS=16.667`.
 - Visual Studio's Test Explorer runs the gtest binary directly (no ctest, no
   fixtures): there the binary launches the editors from their compiled-in path
   when nothing answers on the port and stops them at exit
@@ -211,4 +226,4 @@ verification"; the commands:
 ## Future work
 
 - [plans/graphics_tests.md](plans/graphics_tests.md)
-- [plans/deterministic_editor_clock.md](plans/deterministic_editor_clock.md): fixed-dt editor clock so headless results do not depend on frame speed
+- [plans/deterministic_editor_clock.md](plans/deterministic_editor_clock.md): remaining scripts onto `advance_frames` and the fixed-dt clock

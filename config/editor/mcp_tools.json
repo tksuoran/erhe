@@ -2160,9 +2160,21 @@
     "name": "toggle_physics"
   },
   {
-    "description": "Control the editor simulation clock. 'seconds' queues that much simulation time to run deterministically at 'max_step_ms' (default 250) of simulation per rendered frame, bypassing the 25 ms wall-clock dilation cap and the hidden-window pause - the call returns immediately, poll with an empty call until pending_seconds is 0. 'mode' switches the clock source: wall_clock (normal), paused / manual (simulation frozen except queued advances). Physics settling recipe: build with physics disabled, toggle_physics enabled + wake, mode=manual, advance_time seconds=N, poll, then freeze.",
+    "description": "Control the editor simulation clock and the editor clock. 'seconds' queues that much simulation time to run deterministically at 'max_step_ms' (default 250) of simulation per rendered frame, bypassing the 25 ms wall-clock dilation cap and the hidden-window pause - the call returns immediately, poll with an empty call until pending_seconds is 0. 'mode' switches the simulation clock: wall_clock (normal), paused / manual (simulation frozen except queued advances). 'clock' switches the editor clock (UI, input, animation time; doc/editor/time.md): wall_clock, or fixed_dt where every frame advances editor and simulation time by exactly 'fixed_dt_ms' whatever the frame took (ERHE_FIXED_DT_MS sets it at startup). Reports the same fields as get_time. Physics settling recipe: build with physics disabled, toggle_physics enabled + wake, mode=manual, advance_time seconds=N, poll, then freeze. To wait for frames use advance_frames.",
     "inputSchema": {
       "properties": {
+        "clock": {
+          "description": "Editor clock source; omit to leave unchanged. Takes effect from the next frame",
+          "enum": [
+            "wall_clock",
+            "fixed_dt"
+          ],
+          "type": "string"
+        },
+        "fixed_dt_ms": {
+          "description": "Editor clock advance per frame in fixed_dt mode, milliseconds in (0, 1000] (sticky; default 16.667)",
+          "type": "number"
+        },
         "max_step_ms": {
           "description": "Max simulation milliseconds consumed per rendered frame while draining the queue (default 250, sticky)",
           "type": "number"
@@ -2184,6 +2196,27 @@
       "type": "object"
     },
     "name": "advance_time"
+  },
+  {
+    "description": "Report the editor's clocks: frame_number, clock (editor clock source: wall_clock or fixed_dt), fixed_dt_ms, editor_time_s (editor clock at the start of the current frame: the time ImGui, input events and animations run on), editor_frame_dt_ms (its advance this frame), mode (simulation clock: wall_clock, paused, manual), simulation_time_s, pending_seconds (queued advance_time) and wall_frame_time_avg_ms (wall-clock frame time average). doc/editor/time.md.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_time"
+  },
+  {
+    "description": "Answer after the editor has run 'frames' more frames (default 1; 0 answers at once). The way to let N frames pass: the call is one deferred request that steps once per frame, so it neither expires while frames keep coming nor queues simulation time (unlike advance_time seconds=0.016). Reports the same fields as get_time, read in the frame it answers in. Cannot run inside a batch.",
+    "inputSchema": {
+      "properties": {
+        "frames": {
+          "description": "Frames to wait for, integer in [0, 3600] (default 1)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "advance_frames"
   },
   {
     "description": "Set the spdlog level of one or more log categories for this run, so a script can turn a diagnostic on without raising it in config/editor/logging.json for every run. Levels are the spdlog names: trace, debug, info, warn, err, critical, off. Reports the categories applied and the ones the process has no logger for.",

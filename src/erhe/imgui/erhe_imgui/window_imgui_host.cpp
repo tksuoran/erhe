@@ -164,6 +164,9 @@ void Window_imgui_host::begin_imgui_frame()
 
     ImGuiIO& io = m_imgui_context->IO;
     io.DisplaySize = ImVec2{static_cast<float>(width), static_cast<float>(height)};
+    // The caller's clock advance since the previous ImGui frame (the editor
+    // passes its editor clock, doc/editor/time.md); Dear ImGui needs a
+    // positive DeltaTime, and only the very first frame has none.
     io.DeltaTime   = m_this_frame_dt_s > 0.0f ? m_this_frame_dt_s : static_cast<float>(1.0 / 60.0);
 
     // ImGui_ImplGlfw_UpdateMouseCursor

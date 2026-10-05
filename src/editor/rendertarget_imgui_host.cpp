@@ -466,6 +466,9 @@ void Rendertarget_imgui_host::begin_imgui_frame()
     }
 #endif
 
+    // The caller's clock advance since the previous ImGui frame (the editor
+    // passes its editor clock, doc/editor/time.md); Dear ImGui needs a
+    // positive DeltaTime, and only the very first frame has none.
     io.DeltaTime = m_this_frame_dt_s > 0.0f ? m_this_frame_dt_s : static_cast<float>(1.0 / 60.0);
 
     load_pending_imgui_ini();

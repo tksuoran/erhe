@@ -394,6 +394,7 @@ auto Mcp_server::handle_tools_call(
     queued->tool_name = tool_name;
     queued->arguments = arguments;
     std::future<std::string> result_future = queued->result_promise.get_future();
+    const std::shared_ptr<Request_liveness> liveness = queued->liveness;
 
     {
         std::lock_guard<std::mutex> lock{m_queue_mutex};
@@ -408,9 +409,21 @@ auto Mcp_server::handle_tools_call(
         m_request_queue.push_back(std::move(queued));
     }
 
-    const auto status = result_future.wait_for(k_request_timeout);
-    if (status == std::future_status::timeout) {
-        return make_jsonrpc_error(id, -32000, "Request timed out: " + tool_name);
+    // Wait while the request keeps stepping: a multi-frame request that
+    // advances every frame is answered however long it runs; one that goes
+    // k_request_timeout without a step (the main thread stopped draining
+    // the queue) times out, and the main thread drops it on its next pass.
+    for (;;) {
+        const std::chrono::steady_clock::duration remaining = liveness->get_remaining(std::chrono::steady_clock::now());
+        if (result_future.wait_for(remaining) == std::future_status::ready) {
+            break;
+        }
+        if (liveness->expire_if_stalled(std::chrono::steady_clock::now())) {
+            if (result_future.wait_for(std::chrono::seconds{0}) == std::future_status::ready) {
+                break; // answered between the wait and the expiry check
+            }
+            return make_jsonrpc_error(id, -32000, "Request timed out: " + tool_name);
+        }
     }
 
     std::string result_json;
@@ -438,6 +451,56 @@ auto Mcp_server::handle_error(const json& id, int code, const std::string& messa
     return make_jsonrpc_error(id, code, message);
 }
 
+auto Mcp_server::Request_liveness::try_begin_pass(const std::chrono::steady_clock::time_point now) -> bool
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    if (!m_expired && ((now - m_last_step) >= k_request_timeout)) {
+        m_expired = true;
+    }
+    m_in_pass = !m_expired;
+    return m_in_pass;
+}
+
+void Mcp_server::Request_liveness::end_pass()
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    m_in_pass = false;
+}
+
+void Mcp_server::Request_liveness::note_step(const std::chrono::steady_clock::time_point now)
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    if (!m_expired) {
+        m_last_step = now;
+    }
+}
+
+auto Mcp_server::Request_liveness::expire_if_stalled(const std::chrono::steady_clock::time_point now) -> bool
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    if (!m_in_pass && ((now - m_last_step) >= k_request_timeout)) {
+        m_expired = true;
+    }
+    return m_expired;
+}
+
+auto Mcp_server::Request_liveness::get_remaining(const std::chrono::steady_clock::time_point now) -> std::chrono::steady_clock::duration
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    if (m_in_pass) {
+        return std::chrono::milliseconds{100}; // re-checked once the pass has ended
+    }
+    const std::chrono::steady_clock::duration remaining = (m_last_step + k_request_timeout) - now;
+    return (remaining > std::chrono::steady_clock::duration::zero()) ? remaining : std::chrono::steady_clock::duration::zero();
+}
+
+void Mcp_server::note_request_step()
+{
+    if (m_current_request != nullptr) {
+        m_current_request->liveness->note_step(std::chrono::steady_clock::now());
+    }
+}
+
 auto Mcp_server::process_queued_requests() -> int
 {
     std::vector<std::unique_ptr<Queued_request>> requests;
@@ -463,15 +526,15 @@ auto Mcp_server::process_queued_requests() -> int
     // its recorded copy has retired.
     release_abandoned_scene_image_capture();
 
-    const auto now = std::chrono::steady_clock::now();
     int count = 0;
     for (auto& req : requests) {
-        // Drop entries whose HTTP client has already given up (wait_for
-        // returned timeout in handle_tools_call). Without this guard
-        // a slow editor frame would still mutate editor state for a
-        // request the operator already considers failed. We still
-        // settle the promise so the future destructor does not abort.
-        if ((now - req->enqueued_at) >= k_request_timeout) {
+        // Drop entries that went k_request_timeout without a step: their
+        // HTTP thread gives up (or already gave up) on the same liveness
+        // record. Without this guard a stalled editor would still mutate
+        // editor state for a request the operator already considers
+        // failed. We still settle the promise so the future destructor
+        // does not abort.
+        if (!req->liveness->try_begin_pass(std::chrono::steady_clock::now())) {
             req->result_promise.set_value(
                 make_jsonrpc_error(nullptr, -32000, "Request expired before processing: " + req->tool_name)
             );
@@ -486,15 +549,19 @@ auto Mcp_server::process_queued_requests() -> int
                 log_mcp->warn("MCP server: physics_drag expired mid-drag; the drag is held - release it with action 'release'");
             }
             if (m_input_gesture_steps.request == req.get()) {
-                // The remaining events are dropped; what was already injected
-                // has been dispatched, so a held button stays held until the
-                // caller injects its release.
+                // The remaining events are dropped. What was already injected
+                // has been dispatched; a button or modifier key it left held
+                // is released, so the expired gesture leaves no input down.
                 log_mcp->warn(
-                    "MCP server: inject_input_events expired after {} of {} events; the rest are dropped",
+                    "MCP server: input gesture '{}' expired after {} of {} events; the rest are dropped",
+                    req->tool_name,
                     m_input_gesture_steps.injected,
                     m_input_gesture_steps.events.size()
                 );
+                const uint32_t start_button_mask   = m_input_gesture_steps.start_button_mask;
+                const uint32_t start_modifier_mask = m_input_gesture_steps.start_modifier_mask;
                 m_input_gesture_steps.clear();
+                release_input_held_since(start_button_mask, start_modifier_mask);
             }
             if ((m_reference_query_request == req.get()) && (m_context.ddgi_renderer != nullptr)) {
                 // Stop tracing chunks nobody will read.
@@ -555,17 +622,22 @@ auto Mcp_server::process_queued_requests() -> int
             log_mcp->error("MCP server: handler for '{}' threw a non-standard exception", req->tool_name);
             result = make_error_content(std::string{"Handler '"} + req->tool_name + "' threw a non-standard exception");
         }
+        m_current_request = nullptr;
 
         if (m_defer_current_request) {
             // The handler needs a rendered frame before it can answer (see
             // the m_deferred_requests member comment): park the request,
             // promise unsettled, and re-run it on the next frame's pass.
             m_defer_current_request = false;
+            req->liveness->end_pass();
             m_deferred_requests.push_back(std::move(req));
             continue;
         }
 
+        // Settled before the pass ends, so the waiting HTTP thread finds the
+        // result rather than expiring the request in between.
         req->result_promise.set_value(std::move(result));
+        req->liveness->end_pass();
         ++count;
         log_mcp->info("MCP server: processed '{}'", req->tool_name);
     }
@@ -666,6 +738,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "edit_camera",                    &Mcp_server::action_edit_camera                   },
         { "toggle_physics",                 &Mcp_server::action_toggle_physics                },
         { "advance_time",                   &Mcp_server::action_advance_time                  },
+        { "advance_frames",                 &Mcp_server::action_advance_frames                },
+        { "get_time",                       &Mcp_server::query_time                           },
         { "set_log_levels",                 &Mcp_server::action_set_log_levels                },
         { "apply_physics_force",            &Mcp_server::action_apply_physics_force           },
         { "create_child_prim",              &Mcp_server::action_create_child_prim             },

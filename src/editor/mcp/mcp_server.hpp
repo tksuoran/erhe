@@ -291,6 +291,9 @@ private:
     auto action_edit_camera     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
     auto action_advance_time    (const nlohmann::json& args) -> std::string;
+    auto action_advance_frames  (const nlohmann::json& args) -> std::string;
+    auto query_time             (const nlohmann::json& args) -> std::string;
+    [[nodiscard]] auto time_json() const -> nlohmann::json;
     auto action_set_log_levels  (const nlohmann::json& args) -> std::string;
     auto action_create_child_prim(const nlohmann::json& args) -> std::string;
     auto action_reparent_item   (const nlohmann::json& args) -> std::string;
@@ -594,12 +597,47 @@ private:
     // JSON-RPC -32000 "server busy" instead of enqueuing.
     static constexpr std::size_t     k_max_queue_depth = 64;
 
-    // How long a queued request may sit before process_queued_requests
-    // drops it without mutating editor state. Must match the wait_for
-    // in handle_tools_call so an abandoned promise can never reach
-    // set_value (which would also leave the queue holding a
-    // result_promise that nobody is listening on).
+    // How long a request may go without a step before it expires: from
+    // enqueue until its first pass, and between the steps of a multi-frame
+    // request (a gesture, a scripted drag, advance_frames), which records
+    // each step with note_request_step(). A request that advances every
+    // frame never expires however long it runs; one that only polls (a
+    // capture waiting for a frame that never renders) expires 5 s after its
+    // last step. The limit also detects a main thread that stopped draining
+    // the queue. handle_tools_call and process_queued_requests decide
+    // expiry on the same Request_liveness under its mutex, and a pass in
+    // progress cannot expire, so the HTTP thread never gives up on a request
+    // the main thread is running or has decided to run.
     static constexpr std::chrono::seconds k_request_timeout{5};
+
+    // The wall-clock time of a request's last step and whether the main
+    // thread is running a pass of it, shared between the HTTP thread waiting
+    // for the result and the main thread stepping it. Once either side has
+    // decided the request expired it stays expired.
+    class Request_liveness
+    {
+    public:
+        // Main thread, before dispatching a pass: false (and expired) when
+        // the request went k_request_timeout without a step or expired
+        // before; otherwise the pass begins and the request cannot expire
+        // until end_pass().
+        [[nodiscard]] auto try_begin_pass(std::chrono::steady_clock::time_point now) -> bool;
+        void end_pass();
+        // Main thread, during a pass: records a step.
+        void note_step(std::chrono::steady_clock::time_point now);
+        // HTTP thread: true when the request has gone k_request_timeout
+        // without a step outside a pass (marking it expired) or expired
+        // before.
+        [[nodiscard]] auto expire_if_stalled(std::chrono::steady_clock::time_point now) -> bool;
+        // HTTP thread: how long the request may still go without a step.
+        [[nodiscard]] auto get_remaining(std::chrono::steady_clock::time_point now) -> std::chrono::steady_clock::duration;
+
+    private:
+        std::mutex                            m_mutex;
+        std::chrono::steady_clock::time_point m_last_step{std::chrono::steady_clock::now()};
+        bool                                  m_in_pass  {false};
+        bool                                  m_expired  {false};
+    };
 
     // Tool info cache
     std::mutex                  m_tools_mutex;
@@ -612,6 +650,10 @@ private:
         nlohmann::json                                arguments;
         std::promise<std::string>                     result_promise;
         std::chrono::steady_clock::time_point         enqueued_at{std::chrono::steady_clock::now()};
+        std::shared_ptr<Request_liveness>             liveness{std::make_shared<Request_liveness>()};
+        // advance_frames: the editor frame number the request answers at
+        // (set on its first pass).
+        std::optional<uint64_t>                       answer_at_frame;
     };
     std::mutex                                       m_queue_mutex;
     std::vector<std::unique_ptr<Queued_request>>     m_request_queue;
@@ -636,7 +678,18 @@ private:
     std::vector<std::unique_ptr<Queued_request>>     m_deferred_requests;
     // The request being dispatched (main thread only): lets a deferring
     // handler tell its own re-run from a new call of the same tool.
-    const Queued_request*                            m_current_request{nullptr};
+    Queued_request*                                  m_current_request{nullptr};
+
+    // A multi-frame handler calls this on each pass that advanced its
+    // request (k_request_timeout).
+    void note_request_step();
+
+    // An input gesture expired before its last event: releases the mouse
+    // buttons and modifier keys its injected events pressed and left held
+    // (those held now and not at the gesture's start), so an expired gesture
+    // never leaves the editor with a button down it put there, and a button
+    // a previous held drag left down stays down.
+    void release_input_held_since(uint32_t start_button_mask, uint32_t start_modifier_mask);
 
     // drag_selection: one scripted Transform tool drag stepping one frame per
     // pass of its deferred request (main thread only).
@@ -691,6 +744,10 @@ private:
         int                                    frame      {0}; // frame offset of this pass
         int                                    last_frame {0}; // frame offset of the last event
         int                                    injected   {0};
+        // Input_pointer_state button / modifier masks when the gesture
+        // started stepping (an expired gesture releases what it pressed).
+        uint32_t                               start_button_mask  {0};
+        uint32_t                               start_modifier_mask{0};
         // The last event has been injected and the extra frame R4 promises is
         // being waited out.
         bool                                   tail_frame {false};
@@ -704,6 +761,8 @@ private:
             frame      = 0;
             last_frame = 0;
             injected   = 0;
+            start_button_mask   = 0;
+            start_modifier_mask = 0;
             tail_frame = false;
         }
     };

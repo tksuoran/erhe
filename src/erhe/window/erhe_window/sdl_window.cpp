@@ -36,6 +36,7 @@
 # include "volk.h"
 #endif
 
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -301,6 +302,14 @@ auto sdl_pixel_format_to_erhe(const SDL_PixelFormat sdl_pixel_format)
 
 int Context_window::s_window_count{0};
 
+namespace {
+
+// steady_clock ns - SDL_GetTicksNS() ns, sampled once when SDL is initialized
+// (the primary window's open()).
+int64_t s_sdl_ticks_to_steady_offset_ns{0};
+
+} // anonymous namespace
+
 Context_window::Context_window(const Window_configuration& configuration)
 {
     ERHE_PROFILE_FUNCTION();
@@ -556,6 +565,13 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
             fputs("Failed to initialize SDL\n", stderr);
             return false;
         }
+
+        // SDL stamps events with SDL_GetTicksNS(); erhe::window events carry
+        // steady_clock nanoseconds (as the GLFW backend's do). Both clocks are
+        // monotonic, so one offset sampled here maps one onto the other.
+        s_sdl_ticks_to_steady_offset_ns =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() -
+            static_cast<int64_t>(SDL_GetTicksNS());
 
         {
             int num_displays = 0;
@@ -1060,7 +1076,7 @@ void Context_window::handle_sdl_event(void* sdl_event)
 {
     SDL_Event& poll_event = *static_cast<SDL_Event*>(sdl_event);
     {
-        const int64_t timestamp = static_cast<int64_t>(poll_event.common.timestamp);
+        const int64_t timestamp = static_cast<int64_t>(poll_event.common.timestamp) + s_sdl_ticks_to_steady_offset_ns;
         switch (poll_event.type) {
             case SDL_EVENT_MOUSE_MOTION: {
                 //// log_window_event->info("SDL_EVENT_MOUSE_MOTION x = {}, y = {}", poll_event.motion.x, poll_event.motion.y);

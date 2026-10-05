@@ -1049,7 +1049,7 @@ private:
         // Pointer presses: double click (close) and drag-hold (add points).
         bool                                                  drag_held          {false};
         bool                                                  has_last_press     {false};
-        std::chrono::steady_clock::time_point                 last_press_time    {};
+        int64_t                                               last_press_time_ns {0}; // editor clock
         glm::vec2                                             last_press_position{0.0f, 0.0f};
         glm::vec2                                             last_added_position{0.0f, 0.0f};
     };

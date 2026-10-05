@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 
 #include "graphics/gradients.hpp"
+#include "time.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/headset_view.hpp"
 
@@ -288,11 +289,13 @@ void Theremin::render(const Render_context& context)
     if (m_right_finger_distance.has_value()) {
         m_right_finger_distance = m_right_finger_distance.value() * 100.0f;
         if (m_right_finger_distance < 1.3f) {
-            if (!m_right_hold_start_time.has_value()) {
-                m_right_hold_start_time = std::chrono::steady_clock::now();
+            // Hold time on the editor clock (doc/editor/time.md).
+            const int64_t now_ns = m_context.time->get_editor_time_ns();
+            if (!m_right_hold_start_time_ns.has_value()) {
+                m_right_hold_start_time_ns = now_ns;
             } else if (!m_right_click) {
-                const auto duration = std::chrono::steady_clock::now() - m_right_hold_start_time.value();
-                if (duration > std::chrono::milliseconds(50)) {
+                const int64_t duration_ns = now_ns - m_right_hold_start_time_ns.value();
+                if (duration_ns > int64_t{50'000'000}) { // 50 ms
                     m_right_click = true;
 
                     m_snap_to_note = !m_snap_to_note;
@@ -300,11 +303,11 @@ void Theremin::render(const Render_context& context)
             }
         } else if (m_right_click) {
             m_right_click = false;
-            m_right_hold_start_time.reset();
+            m_right_hold_start_time_ns.reset();
         }
     } else {
         m_right_click = false;
-        m_right_hold_start_time.reset();
+        m_right_hold_start_time_ns.reset();
     }
 
     if (right_hand.is_active()) {

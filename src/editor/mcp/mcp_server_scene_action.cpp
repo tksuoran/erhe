@@ -1745,6 +1745,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
     apply_step(steps, static_cast<float>(steps.frame) / static_cast<float>(steps.frame_count));
 
     if (steps.frame < steps.frame_count) {
+        note_request_step();
         m_defer_current_request = true;
         return {};
     }
@@ -1900,6 +1901,7 @@ auto Mcp_server::action_physics_drag(const json& args) -> std::string
     physics_tool->step_scripted_drag(glm::mix(steps.start_goal, steps.end_goal, fraction));
 
     if ((steps.frame < steps.frame_count) && physics_tool->is_scripted_drag_active()) {
+        note_request_step();
         m_defer_current_request = true;
         return {};
     }
@@ -3527,6 +3529,29 @@ auto Mcp_server::action_toggle_physics(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::time_json() const -> json
+{
+    const Time& time = *m_context.time;
+    const char* mode_name = "wall_clock";
+    switch (time.get_time_mode()) {
+        case Time_mode::paused: mode_name = "paused"; break;
+        case Time_mode::manual: mode_name = "manual"; break;
+        default: break;
+    }
+    return json{
+        {"frame_number",          time.get_frame_number()},
+        {"clock",                 c_str(time.get_current_editor_clock_source())},
+        {"pending_clock",         c_str(time.get_pending_editor_clock_source())},
+        {"fixed_dt_ms",           static_cast<double>(time.get_fixed_dt_ns()) * 1e-6},
+        {"editor_time_s",         static_cast<double>(time.get_editor_time_ns()) * 1e-9},
+        {"editor_frame_dt_ms",    static_cast<double>(time.get_editor_frame_duration_ns()) * 1e-6},
+        {"mode",                  mode_name},
+        {"simulation_time_s",     static_cast<double>(time.get_simulation_time_ns()) * 1e-9},
+        {"pending_seconds",       static_cast<double>(time.get_pending_simulation_advance_ns()) * 1e-9},
+        {"wall_frame_time_avg_ms", time.get_frame_time_average_ms()}
+    };
+}
+
 auto Mcp_server::action_advance_time(const json& args) -> std::string
 {
     Time* time = m_context.time;
@@ -3557,6 +3582,33 @@ auto Mcp_server::action_advance_time(const json& args) -> std::string
         }
     }
 
+    // The editor clock source (doc/editor/time.md); takes effect from the
+    // next frame.
+    const json::const_iterator clock_it = args.find("clock");
+    const json::const_iterator dt_it    = args.find("fixed_dt_ms");
+    if ((clock_it != args.end()) || (dt_it != args.end())) {
+        Editor_clock_source source = time->get_pending_editor_clock_source();
+        if (clock_it != args.end()) {
+            const std::string clock_name = clock_it->is_string() ? clock_it->get<std::string>() : std::string{};
+            if (clock_name == "wall_clock") {
+                source = Editor_clock_source::wall_clock;
+            } else if (clock_name == "fixed_dt") {
+                source = Editor_clock_source::fixed_dt;
+            } else {
+                return make_error_content("clock must be wall_clock or fixed_dt");
+            }
+        }
+        int64_t fixed_dt_ns = 0;
+        if (dt_it != args.end()) {
+            const double fixed_dt_ms = dt_it->is_number() ? dt_it->get<double>() : -1.0;
+            if (!std::isfinite(fixed_dt_ms) || (fixed_dt_ms <= 0.0) || (fixed_dt_ms > 1000.0)) {
+                return make_error_content("fixed_dt_ms must be a number in (0, 1000]");
+            }
+            fixed_dt_ns = static_cast<int64_t>(std::llround(fixed_dt_ms * 1e6));
+        }
+        time->set_editor_clock_source(source, fixed_dt_ns);
+    }
+
     const double seconds     = args.value("seconds", 0.0);
     const double max_step_ms = args.value("max_step_ms", 0.0);
     if ((seconds < 0.0) || (max_step_ms < 0.0)) {
@@ -3570,18 +3622,44 @@ auto Mcp_server::action_advance_time(const json& args) -> std::string
         time->request_simulation_advance(advance_ns, max_step_ns);
     }
 
-    const char* mode_name = "wall_clock";
-    switch (time->get_time_mode()) {
-        case Time_mode::paused: mode_name = "paused"; break;
-        case Time_mode::manual: mode_name = "manual"; break;
-        default: break;
+    return make_json_content(time_json()).dump();
+}
+
+auto Mcp_server::query_time(const json&) -> std::string
+{
+    if (m_context.time == nullptr) {
+        return make_error_content("Time not available");
     }
-    return make_json_content({
-        {"mode",              mode_name},
-        {"pending_seconds",   static_cast<double>(time->get_pending_simulation_advance_ns()) * 1e-9},
-        {"simulation_time_s", static_cast<double>(time->get_simulation_time_ns()) * 1e-9},
-        {"frame_number",      time->get_frame_number()}
-    }).dump();
+    return make_json_content(time_json()).dump();
+}
+
+// Answers once the editor has run 'frames' more frames: the deferred request
+// passes once per frame, and each pass is a step (k_request_timeout), so a
+// long wait never expires while frames keep coming.
+auto Mcp_server::action_advance_frames(const json& args) -> std::string
+{
+    constexpr int64_t c_max_frames = 3600;
+    if (m_context.time == nullptr) {
+        return make_error_content("Time not available");
+    }
+    Queued_request* const request = m_current_request;
+    if (request == nullptr) {
+        return make_error_content("advance_frames: no request to defer");
+    }
+    const uint64_t frame_number = m_context.time->get_frame_number();
+    if (!request->answer_at_frame.has_value()) {
+        const json& frames_value = args.contains("frames") ? args.at("frames") : json{1};
+        if (!frames_value.is_number_integer() || (frames_value.get<int64_t>() < 0) || (frames_value.get<int64_t>() > c_max_frames)) {
+            return make_error_content("frames must be an integer in [0, " + std::to_string(c_max_frames) + "]");
+        }
+        request->answer_at_frame = frame_number + static_cast<uint64_t>(frames_value.get<int64_t>());
+    }
+    if (frame_number < request->answer_at_frame.value()) {
+        note_request_step();
+        m_defer_current_request = true;
+        return {};
+    }
+    return make_json_content(time_json()).dump();
 }
 
 // The level of one or more spdlog categories, for the run the caller is

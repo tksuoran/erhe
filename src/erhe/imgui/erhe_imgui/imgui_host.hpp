@@ -55,6 +55,9 @@ public:
     ~Imgui_host() noexcept override;
 
     virtual void begin_imgui_frame  () = 0;
+    // dt_s: time since the previous call, io.DeltaTime of the next ImGui
+    // frame (double-click and key-repeat timing run on it); time_ns: the
+    // caller's current time, in the domain of the input event timestamps.
     virtual void process_events     (float dt_s, int64_t time_ns) = 0;
     virtual void end_imgui_frame    () = 0;
     virtual void set_text_input_area(int x, int y, int w, int h) = 0;
