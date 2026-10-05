@@ -211,3 +211,4 @@ verification"; the commands:
 ## Future work
 
 - [plans/graphics_tests.md](plans/graphics_tests.md)
+- [plans/deterministic_editor_clock.md](plans/deterministic_editor_clock.md): fixed-dt editor clock so headless results do not depend on frame speed
