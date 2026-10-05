@@ -979,6 +979,15 @@ auto Fly_camera_tool::get_writable_camera_controls() -> Camera_controls_config*
     return &m_context.editor_settings->camera_controls;
 }
 
+void Fly_camera_tool::on_scene_camera_controls_changed(const Scene_root& scene_root)
+{
+    const Scene_view* const scene_view = get_hover_scene_view();
+    if ((scene_view == nullptr) || (scene_view->get_scene_root().get() != &scene_root)) {
+        return; // adopted when that scene is hovered (on_hover_viewport_change)
+    }
+    apply_camera_controls_from_scene();
+}
+
 void Fly_camera_tool::on_hover_viewport_change()
 {
     // Adopt the newly-hovered scene's effective camera controls (#239).

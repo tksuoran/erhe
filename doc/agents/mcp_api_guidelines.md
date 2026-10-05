@@ -91,9 +91,14 @@ A tool that changes the document (scene content, item properties, materials,
 scene settings such as the lightmap tile overrides) builds the same
 `Operation` the UI uses for that edit and hands it to the `Operation_stack`
 (`execute_now()` when the reply reports the new state, `queue()` otherwise),
-several fields of one call grouped into one `Compound_operation`. The call
-then leaves exactly one undo entry, undo steps back over it, and the UI and
-MCP edits of the same field behave alike. Writing a field directly is not
+several fields of one call grouped into one `Compound_operation` (with
+`Compound_child_error::roll_back`, so a child that refuses its edit leaves
+nothing of the call applied, `doc/editor/operations.md`). The call then
+leaves exactly one undo entry, undo steps back over it, and the UI and MCP
+edits of the same field behave alike. A write the property store refuses
+(sealed item, validation) makes the call an error result naming the
+property, with no undo entry and the redo history kept
+(`Mcp_test.refused_physics_edit_is_an_error_and_keeps_the_history`). Writing a field directly is not
 undoable and is a defect. `Mcp_test.document_edits_record_one_undo_entry_each`
 (`src/editor/mcp/test/mcp_server_tests.cpp`) asserts this for the document
 edit tools; a new one adds its case there. Editor state that is not the

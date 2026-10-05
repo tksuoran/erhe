@@ -126,9 +126,10 @@ public:
     void undo    (App_context& context)  override;
 
     // Public API
-    // The physics state of `node` as the operation found it: the collision
-    // shape its scene's system holds and the key value, so a version can be
-    // restored whole.
+    // The physics state of `node` as the operation found it: the authored
+    // collision shape (Node_physics_system::get_authored_collision_shape,
+    // without the center-of-mass wrapper) and the key value, so a version
+    // can be restored whole.
     [[nodiscard]] static auto capture_physics(const erhe::scene::Node& node) -> Entry::Version;
     // Writes a captured version's physics state back onto `node`: the shape
     // first, then the key value, so a body is never made from a stale shape.

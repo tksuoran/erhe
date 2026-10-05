@@ -33,6 +33,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
 #include "operations/property_set_operation.hpp"
+#include "operations/scene_settings_set_operation.hpp"
 #include "physics/physics_tool.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "time.hpp"
@@ -315,7 +316,11 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    bool changed = false;
+    // Everything is checked before anything is written; the edits become
+    // one undo entry (doc/agents/mcp_api_guidelines.md "Document edits are
+    // operations").
+    std::vector<std::shared_ptr<Operation>> operations;
+    bool settings_unchanged = false;
     if (args.contains("ambient_light")) {
         const json& value = args["ambient_light"];
         if (!value.is_array() || (value.size() < 3)) {
@@ -328,7 +333,7 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         // fourth number is accepted for the file form and ignored.
         const erhe::property::Dependency_property& ambient_property = *erhe::scene::Scene::ambient_light_property.get_ptr();
         erhe::scene::Scene& scene = sr->get_scene();
-        m_context.operation_stack->queue(
+        operations.push_back(
             std::make_shared<Property_set_operation>(
                 sr->get_scene_item(),
                 ambient_property,
@@ -340,7 +345,6 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
                 }
             )
         );
-        changed = true;
     }
     if (args.contains("settings")) {
         const json& value = args["settings"];
@@ -369,12 +373,31 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         // merge: true the given fields are deep-merged (RFC 7386) over the
         // CURRENT settings instead: omitted fields keep their values and a
         // null deletes an override - no client-side accumulator needed.
+        const Scene_settings& current_settings = sr->get_scene_settings();
+        const json current = json::parse(serialize(current_settings, 0), nullptr, false);
         json settings_value = value;
         if (args.value("merge", false)) {
-            json current = json::parse(serialize(sr->get_scene_settings(), 0), nullptr, false);
             if (current.is_object()) {
-                current.merge_patch(value);
-                settings_value = std::move(current);
+                json merged = current;
+                merged.merge_patch(value);
+                settings_value = std::move(merged);
+            }
+        }
+        // scene_id (side-data identity) and variant_selections (written by
+        // select_variant together with the scene content) are managed by the
+        // scene: they are kept, and a different value is refused.
+        for (const char* const managed : {"scene_id", "variant_selections"}) {
+            if (!settings_value.contains(managed)) {
+                continue;
+            }
+            const json current_value = (current.is_object() && current.contains(managed)) ? current.at(managed) : json{};
+            if (settings_value.at(managed) != current_value) {
+                json r = make_text_content(
+                    std::string{"settings."} + managed + " is managed by the scene and cannot be set" +
+                    ((std::string_view{managed} == "variant_selections") ? " (use select_variant)" : "")
+                );
+                r["isError"] = true;
+                return r.dump();
             }
         }
         Scene_settings new_settings{};
@@ -392,13 +415,48 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
-        sr->get_scene_settings() = new_settings;
-        changed = true;
+        new_settings.scene_id           = current_settings.scene_id;
+        new_settings.variant_selections = current_settings.variant_selections;
+        // Settings equal to the current ones are no edit and leave no undo
+        // entry (the codegen struct has no comparison; its serialization
+        // compares field by field).
+        if (serialize(new_settings, 0) == serialize(current_settings, 0)) {
+            settings_unchanged = true;
+        } else {
+            operations.push_back(
+                std::make_shared<Scene_settings_set_operation>(
+                    Scene_settings_set_operation::Parameters{
+                        .scene_root = sr->shared_from_this(),
+                        .before     = current_settings,
+                        .after      = std::move(new_settings)
+                    }
+                )
+            );
+        }
     }
-    return make_json_content({
+    const bool changed = !operations.empty();
+    if (changed) {
+        const std::shared_ptr<Operation> operation = (operations.size() == 1)
+            ? operations.front()
+            : std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{
+                    .operations  = std::move(operations),
+                    .child_error = Compound_child_error::roll_back
+                }
+            );
+        m_context.operation_stack->execute_now(operation);
+        if (operation->has_error()) {
+            return make_error_content(operation->get_error());
+        }
+    }
+    json reply = {
         {"updated",    changed},
         {"scene_name", sr->get_name()}
-    }).dump();
+    };
+    if (settings_unchanged) {
+        reply["settings"] = "unchanged";
+    }
+    return make_json_content(reply).dump();
 }
 
 auto Mcp_server::action_select_variant(const json& args) -> std::string

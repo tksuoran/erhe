@@ -7,9 +7,12 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/collision_shape_set_operation.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/property_edit_operation.hpp"
 #include "scene/ik_properties.hpp"
 #include "scene/joint.hpp"
 #include "scene/joint_system.hpp"
@@ -49,6 +52,60 @@
 namespace editor {
 
 using namespace mcp_server_detail;
+
+namespace {
+
+// Runs the property writes of one edit tool call as one
+// Property_edit_operation (one undo entry, doc/agents/mcp_api_guidelines.md
+// "Document edits are operations"). Returns the operation's error, empty on
+// success; a refused write names the property and nothing stays written.
+[[nodiscard]] auto execute_property_edit(App_context& context, std::string description, Property_edit_operation::Edit_function edit) -> std::string
+{
+    const std::shared_ptr<Property_edit_operation> operation = std::make_shared<Property_edit_operation>(std::move(description), std::move(edit));
+    context.operation_stack->execute_now(operation);
+    return operation->get_error();
+}
+
+// One joint axis property write a parse made on a scratch item.
+class Joint_axis_write
+{
+public:
+    const erhe::property::Dependency_property* property{nullptr};
+    erhe::property::Local_state                state;
+};
+
+// The writes parse_joint_limits / parse_joint_drives made on `source`, a
+// scratch item with no other local values, to be replayed on the real item
+// inside an edit function.
+[[nodiscard]] auto get_joint_axis_writes(const erhe::physics::Physics_joint_settings& source) -> std::vector<Joint_axis_write>
+{
+    using Settings = erhe::physics::Physics_joint_settings;
+    std::vector<Joint_axis_write> writes;
+    for (std::size_t axis = 0; axis < erhe::physics::c_joint_axis_count; ++axis) {
+        const std::array<const erhe::property::Dependency_property*, 11> properties{
+            Settings::limit_property                [axis].get_ptr(),
+            Settings::limit_min_property            [axis].get_ptr(),
+            Settings::limit_max_property            [axis].get_ptr(),
+            Settings::limit_stiffness_property      [axis].get_ptr(),
+            Settings::limit_damping_property        [axis].get_ptr(),
+            Settings::drive_property                [axis].get_ptr(),
+            Settings::drive_max_force_property      [axis].get_ptr(),
+            Settings::drive_position_target_property[axis].get_ptr(),
+            Settings::drive_velocity_target_property[axis].get_ptr(),
+            Settings::drive_stiffness_property      [axis].get_ptr(),
+            Settings::drive_damping_property        [axis].get_ptr()
+        };
+        for (const erhe::property::Dependency_property* const property : properties) {
+            std::optional<erhe::property::Local_state> state = source.read_local_state(*property);
+            if (state.has_value()) {
+                writes.push_back(Joint_axis_write{.property = property, .state = std::move(state.value())});
+            }
+        }
+    }
+    return writes;
+}
+
+} // anonymous namespace
 
 auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
 {
@@ -367,52 +424,88 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
         }
     }
 
+    // The values are read out of the arguments now; the edit function runs
+    // inside execute_now below.
+    class Body_edit
+    {
+    public:
+        std::optional<erhe::physics::Motion_mode>                       motion_mode;
+        std::optional<bool>                                             is_trigger;
+        std::optional<glm::vec3>                                        center_of_mass;
+        std::optional<float>                                            gravity_factor;
+        std::optional<glm::vec3>                                        linear_velocity;
+        std::optional<glm::vec3>                                        angular_velocity;
+        std::optional<std::shared_ptr<erhe::physics::Physics_material>> material;
+        std::optional<std::shared_ptr<erhe::physics::Collision_filter>> filter;
+        std::optional<float>                                            mass;
+    };
+    Body_edit edit{};
     json applied = json::array();
-    if (args.contains("motion_mode")) {
-        node->set_value(Node_physics::motion_mode_property, motion_mode);
-        applied.push_back("motion_mode");
-    }
-    // Body-recreating edits first so live scalar edits below land on the
-    // final rigid body.
-    if (new_shape) {
-        sr->get_node_physics_system().set_collision_shape(*node.get(), new_shape);
-        applied.push_back("shape");
-    }
-    if (args.contains("is_trigger")) {
-        node->set_value(Node_physics::is_trigger_property, args["is_trigger"].get<bool>());
-        applied.push_back("is_trigger");
-    }
-    if (args.contains("center_of_mass")) {
-        node->set_value(Node_physics::center_of_mass_offset_property, get_vec3(args, "center_of_mass", glm::vec3{0.0f}));
-        applied.push_back("center_of_mass");
-    }
-    if (args.contains("gravity_factor")) {
-        node->set_value(Node_physics::gravity_factor_property, args["gravity_factor"].get<float>());
-        applied.push_back("gravity_factor");
-    }
-    if (args.contains("linear_velocity")) {
-        node->set_value(Node_physics::initial_linear_velocity_property, get_vec3(args, "linear_velocity", glm::vec3{0.0f}));
-        applied.push_back("linear_velocity");
-    }
-    if (args.contains("angular_velocity")) {
-        node->set_value(Node_physics::initial_angular_velocity_property, get_vec3(args, "angular_velocity", glm::vec3{0.0f}));
-        applied.push_back("angular_velocity");
-    }
-    if (args.contains("material_name")) {
-        node->set_value(Node_physics::physics_material_property, erhe::property::Object_reference{material});
-        applied.push_back("material_name");
-    }
-    if (args.contains("filter_name")) {
-        node->set_value(Node_physics::collision_filter_property, erhe::property::Object_reference{filter});
-        applied.push_back("filter_name");
-    }
-
+    if (args.contains("motion_mode"))      { edit.motion_mode      = motion_mode;                                                 applied.push_back("motion_mode"); }
+    if (new_shape)                         {                                                                                      applied.push_back("shape"); }
+    if (args.contains("is_trigger"))       { edit.is_trigger       = args["is_trigger"].get<bool>();                              applied.push_back("is_trigger"); }
+    if (args.contains("center_of_mass"))   { edit.center_of_mass   = get_vec3(args, "center_of_mass", glm::vec3{0.0f});           applied.push_back("center_of_mass"); }
+    if (args.contains("gravity_factor"))   { edit.gravity_factor   = args["gravity_factor"].get<float>();                         applied.push_back("gravity_factor"); }
+    if (args.contains("linear_velocity"))  { edit.linear_velocity  = get_vec3(args, "linear_velocity", glm::vec3{0.0f});          applied.push_back("linear_velocity"); }
+    if (args.contains("angular_velocity")) { edit.angular_velocity = get_vec3(args, "angular_velocity", glm::vec3{0.0f});         applied.push_back("angular_velocity"); }
+    if (args.contains("material_name"))    { edit.material         = material;                                                    applied.push_back("material_name"); }
+    if (args.contains("filter_name"))      { edit.filter           = filter;                                                      applied.push_back("filter_name"); }
     // The mass is a Node_physics value: the create info keeps the authored
     // value and the live body (if any) gets it now. Damping, wind receptivity
     // and density belong to the physics material (edit_physics_material).
-    if (args.contains("mass")) {
-        node->set_value(Node_physics::mass_property, args["mass"].get<float>());
-        applied.push_back("mass");
+    if (args.contains("mass"))             { edit.mass             = args["mass"].get<float>();                                   applied.push_back("mass"); }
+
+    const bool has_property_edit =
+        edit.motion_mode.has_value() || edit.is_trigger.has_value() || edit.center_of_mass.has_value() ||
+        edit.gravity_factor.has_value() || edit.linear_velocity.has_value() || edit.angular_velocity.has_value() ||
+        edit.material.has_value() || edit.filter.has_value() || edit.mass.has_value();
+
+    std::vector<std::shared_ptr<Operation>> operations;
+    if (has_property_edit) {
+        operations.push_back(
+            std::make_shared<Property_edit_operation>(
+                "edit_physics_body '" + node->get_name() + "'",
+                [node, edit]() {
+                    erhe::scene::Node& target = *node.get();
+                    if (edit.motion_mode.has_value())      { target.set_value(Node_physics::motion_mode_property,              edit.motion_mode.value()); }
+                    if (edit.is_trigger.has_value())       { target.set_value(Node_physics::is_trigger_property,               edit.is_trigger.value()); }
+                    if (edit.center_of_mass.has_value())   { target.set_value(Node_physics::center_of_mass_offset_property,    edit.center_of_mass.value()); }
+                    if (edit.gravity_factor.has_value())   { target.set_value(Node_physics::gravity_factor_property,           edit.gravity_factor.value()); }
+                    if (edit.linear_velocity.has_value())  { target.set_value(Node_physics::initial_linear_velocity_property,  edit.linear_velocity.value()); }
+                    if (edit.angular_velocity.has_value()) { target.set_value(Node_physics::initial_angular_velocity_property, edit.angular_velocity.value()); }
+                    if (edit.material.has_value())         { target.set_value(Node_physics::physics_material_property,         erhe::property::Object_reference{edit.material.value()}); }
+                    if (edit.filter.has_value())           { target.set_value(Node_physics::collision_filter_property,         erhe::property::Object_reference{edit.filter.value()}); }
+                    if (edit.mass.has_value())             { target.set_value(Node_physics::mass_property,                     edit.mass.value()); }
+                }
+            )
+        );
+    }
+    if (new_shape) {
+        // A triangle mesh shape is static / kinematic only: the motion mode
+        // leaves dynamic before the mesh shape arrives, and on undo the mesh
+        // shape leaves before the motion mode returns to dynamic (Compound
+        // undo runs in reverse). Any other shape goes first, so a static
+        // mesh body never turns dynamic while it still has the mesh shape.
+        const std::shared_ptr<Operation> shape_operation = std::make_shared<Collision_shape_set_operation>(node, new_shape);
+        if (args["shape"].get<std::string>() == "mesh") {
+            operations.push_back(shape_operation);
+        } else {
+            operations.insert(operations.begin(), shape_operation);
+        }
+    }
+    if (!operations.empty()) {
+        const std::shared_ptr<Operation> operation = (operations.size() == 1)
+            ? operations.front()
+            : std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{
+                    .operations  = std::move(operations),
+                    .child_error = Compound_child_error::roll_back
+                }
+            );
+        m_context.operation_stack->execute_now(operation);
+        if (operation->has_error()) {
+            return make_error_content(operation->get_error());
+        }
     }
 
     const std::shared_ptr<erhe::physics::ICollision_shape> shape = get_node_collision_shape(*node.get());
@@ -502,9 +595,14 @@ auto Mcp_server::action_edit_joint(const json& args) -> std::string
     }
     const std::shared_ptr<Joint> node_joint = joints[joint_index];
 
+    // Resolve everything first; the property writes then run as one
+    // operation. Each write rebuilds the constraint through
+    // Joint::on_property_changed -> Joint_system::on_values_changed, so undo
+    // and redo rebuild it as well.
     json applied = json::array();
+    std::optional<std::shared_ptr<erhe::scene::Node>> body_1{};
     if (args.value("connect_to_world", false)) {
-        node_joint->set_body_1({});
+        body_1 = std::shared_ptr<erhe::scene::Node>{};
         applied.push_back("connect_to_world");
     } else if (args.contains("connected_node_id") || args.contains("connected_node_name")) {
         const std::shared_ptr<erhe::scene::Node> connected = find_node_in_scene(*sr, args, "connected_node_id", "connected_node_name");
@@ -514,13 +612,14 @@ auto Mcp_server::action_edit_joint(const json& args) -> std::string
         if (connected == node) {
             return make_error_content("Connected node must differ from the joint node");
         }
-        node_joint->set_body_1(connected);
+        body_1 = connected;
         applied.push_back("connected_node");
     }
+    std::optional<std::shared_ptr<erhe::physics::Physics_joint_settings>> joint_settings{};
     if (args.contains("settings_name")) {
         const std::string settings_name = args["settings_name"].get<std::string>();
         if (settings_name.empty()) {
-            node_joint->set_settings({});
+            joint_settings = std::shared_ptr<erhe::physics::Physics_joint_settings>{};
         } else {
             const std::shared_ptr<Content_library> library = sr->get_content_library();
             const std::shared_ptr<erhe::physics::Physics_joint_settings> settings =
@@ -528,14 +627,32 @@ auto Mcp_server::action_edit_joint(const json& args) -> std::string
             if (!settings) {
                 return make_error_content("Joint settings not found: " + settings_name);
             }
-            node_joint->set_settings(settings);
+            joint_settings = settings;
         }
         applied.push_back("settings");
     }
+    std::optional<bool> enable_collision{};
     if (args.contains("enable_collision")) {
-        node_joint->set_enable_collision(args["enable_collision"].get<bool>());
+        enable_collision = args["enable_collision"].get<bool>();
         applied.push_back("enable_collision");
     }
+    if (body_1.has_value() || joint_settings.has_value() || enable_collision.has_value()) {
+        const std::string error = execute_property_edit(
+            m_context,
+            "edit_joint '" + node_joint->get_name() + "'",
+            [node_joint, body_1, joint_settings, enable_collision]() {
+                if (body_1.has_value())           { node_joint->set_body_1(body_1.value()); }
+                if (joint_settings.has_value())   { node_joint->set_settings(joint_settings.value()); }
+                if (enable_collision.has_value()) { node_joint->set_enable_collision(enable_collision.value()); }
+            }
+        );
+        if (!error.empty()) {
+            return make_error_content(error);
+        }
+    }
+    // An explicit rebuild re-captures the joint frames from the current node
+    // poses: runtime state of the simulation, not a document edit, so it is
+    // outside undo.
     if (args.value("rebuild", false)) {
         node_joint->rebuild();
         applied.push_back("rebuild");
@@ -617,6 +734,23 @@ auto Mcp_server::action_edit_physics_material(const json& args) -> std::string
         return make_error_content("Physics material not found: " + name);
     }
 
+    // The arguments are read and checked first; the writes then run as one
+    // operation.
+    class Material_edit
+    {
+    public:
+        std::optional<std::string>                 name;
+        std::optional<float>                       static_friction;
+        std::optional<float>                       dynamic_friction;
+        std::optional<float>                       restitution;
+        std::optional<erhe::physics::Combine_mode> friction_combine;
+        std::optional<erhe::physics::Combine_mode> restitution_combine;
+        std::optional<float>                       linear_damping;
+        std::optional<float>                       angular_damping;
+        std::optional<float>                       wind_receptivity;
+        std::optional<float>                       density;
+    };
+    Material_edit edit{};
     json applied = json::array();
     if (args.contains("new_name")) {
         // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2).
@@ -625,24 +759,43 @@ auto Mcp_server::action_edit_physics_material(const json& args) -> std::string
             log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
             return make_error_content("'" + new_name + "' is already the name of a sibling of '" + item->get_name() + "'");
         }
-        item->set_name(new_name);
+        edit.name = new_name;
         applied.push_back("new_name");
     }
-    if (args.contains("static_friction"))  { item->set_static_friction (args["static_friction"].get<float>());  applied.push_back("static_friction"); }
-    if (args.contains("dynamic_friction")) { item->set_dynamic_friction(args["dynamic_friction"].get<float>()); applied.push_back("dynamic_friction"); }
-    if (args.contains("restitution"))      { item->set_restitution     (args["restitution"].get<float>());      applied.push_back("restitution"); }
-    if (args.contains("friction_combine")) {
-        item->set_friction_combine(parse_combine_mode(args["friction_combine"].get<std::string>(), item->get_friction_combine()));
-        applied.push_back("friction_combine");
+    if (args.contains("static_friction"))     { edit.static_friction     = args["static_friction"].get<float>();                                                            applied.push_back("static_friction"); }
+    if (args.contains("dynamic_friction"))    { edit.dynamic_friction    = args["dynamic_friction"].get<float>();                                                           applied.push_back("dynamic_friction"); }
+    if (args.contains("restitution"))         { edit.restitution         = args["restitution"].get<float>();                                                                applied.push_back("restitution"); }
+    if (args.contains("friction_combine"))    { edit.friction_combine    = parse_combine_mode(args["friction_combine"].get<std::string>(), item->get_friction_combine());       applied.push_back("friction_combine"); }
+    if (args.contains("restitution_combine")) { edit.restitution_combine = parse_combine_mode(args["restitution_combine"].get<std::string>(), item->get_restitution_combine()); applied.push_back("restitution_combine"); }
+    if (args.contains("linear_damping"))      { edit.linear_damping      = args["linear_damping"].get<float>();                                                             applied.push_back("linear_damping"); }
+    if (args.contains("angular_damping"))     { edit.angular_damping     = args["angular_damping"].get<float>();                                                            applied.push_back("angular_damping"); }
+    if (args.contains("wind_receptivity"))    { edit.wind_receptivity    = args["wind_receptivity"].get<float>();                                                           applied.push_back("wind_receptivity"); }
+    if (args.contains("density"))             { edit.density             = args["density"].get<float>();                                                                    applied.push_back("density"); }
+
+    if (!applied.empty()) {
+        // Every field is a property: the bodies using this material follow
+        // through their own observer (Node_physics_system), on undo too.
+        const std::string error = execute_property_edit(
+            m_context,
+            "edit_physics_material '" + item->get_name() + "'",
+            [item, edit]() {
+                erhe::physics::Physics_material& target = *item.get();
+                if (edit.name.has_value())                { target.set_value(erhe::Item_base::name_property, edit.name.value()); }
+                if (edit.static_friction.has_value())     { target.set_static_friction    (edit.static_friction.value()); }
+                if (edit.dynamic_friction.has_value())    { target.set_dynamic_friction   (edit.dynamic_friction.value()); }
+                if (edit.restitution.has_value())         { target.set_restitution        (edit.restitution.value()); }
+                if (edit.friction_combine.has_value())    { target.set_friction_combine   (edit.friction_combine.value()); }
+                if (edit.restitution_combine.has_value()) { target.set_restitution_combine(edit.restitution_combine.value()); }
+                if (edit.linear_damping.has_value())      { target.set_linear_damping     (edit.linear_damping.value()); }
+                if (edit.angular_damping.has_value())     { target.set_angular_damping    (edit.angular_damping.value()); }
+                if (edit.wind_receptivity.has_value())    { target.set_wind_receptivity   (edit.wind_receptivity.value()); }
+                if (edit.density.has_value())             { target.set_density            (edit.density.value()); }
+            }
+        );
+        if (!error.empty()) {
+            return make_error_content(error);
+        }
     }
-    if (args.contains("restitution_combine")) {
-        item->set_restitution_combine(parse_combine_mode(args["restitution_combine"].get<std::string>(), item->get_restitution_combine()));
-        applied.push_back("restitution_combine");
-    }
-    if (args.contains("linear_damping"))   { item->set_linear_damping  (args["linear_damping"].get<float>());   applied.push_back("linear_damping"); }
-    if (args.contains("angular_damping"))  { item->set_angular_damping (args["angular_damping"].get<float>());  applied.push_back("angular_damping"); }
-    if (args.contains("wind_receptivity")) { item->set_wind_receptivity(args["wind_receptivity"].get<float>()); applied.push_back("wind_receptivity"); }
-    if (args.contains("density"))          { item->set_density         (args["density"].get<float>());          applied.push_back("density"); }
 
     return make_json_content({
         {"name",                item->get_name()},
@@ -717,6 +870,17 @@ auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
         return make_error_content("Collision filter not found: " + name);
     }
 
+    // The arguments are read and checked first; the writes then run as one
+    // operation.
+    class Filter_edit
+    {
+    public:
+        std::optional<std::string>              name;
+        std::optional<std::vector<std::string>> collision_systems;
+        std::optional<std::vector<std::string>> collide_with_systems;
+        std::optional<std::vector<std::string>> not_collide_with_systems;
+    };
+    Filter_edit edit{};
     json applied = json::array();
     if (args.contains("new_name")) {
         // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2).
@@ -725,23 +889,39 @@ auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
             log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
             return make_error_content("'" + new_name + "' is already the name of a sibling of '" + item->get_name() + "'");
         }
-        item->set_name(new_name);
+        edit.name = new_name;
         applied.push_back("new_name");
     }
-    // Every list is a property, so the write reaches the bodies that use
-    // this filter through the body's own observer (section 4.21); this
-    // tool re-applies nothing of its own.
     if (args.contains("collision_systems")) {
-        item->set_collision_systems(args["collision_systems"].get<std::vector<std::string>>());
+        edit.collision_systems = args["collision_systems"].get<std::vector<std::string>>();
         applied.push_back("collision_systems");
     }
     if (args.contains("collide_with_systems")) {
-        item->set_collide_with_systems(args["collide_with_systems"].get<std::vector<std::string>>());
+        edit.collide_with_systems = args["collide_with_systems"].get<std::vector<std::string>>();
         applied.push_back("collide_with_systems");
     }
     if (args.contains("not_collide_with_systems")) {
-        item->set_not_collide_with_systems(args["not_collide_with_systems"].get<std::vector<std::string>>());
+        edit.not_collide_with_systems = args["not_collide_with_systems"].get<std::vector<std::string>>();
         applied.push_back("not_collide_with_systems");
+    }
+    if (!applied.empty()) {
+        // Every list is a property, so the write reaches the bodies that use
+        // this filter through the body's own observer (section 4.21), on
+        // undo too; this tool re-applies nothing of its own.
+        const std::string error = execute_property_edit(
+            m_context,
+            "edit_collision_filter '" + item->get_name() + "'",
+            [item, edit]() {
+                erhe::physics::Collision_filter& target = *item.get();
+                if (edit.name.has_value())                     { target.set_value(erhe::Item_base::name_property, edit.name.value()); }
+                if (edit.collision_systems.has_value())        { target.set_collision_systems       (edit.collision_systems.value()); }
+                if (edit.collide_with_systems.has_value())     { target.set_collide_with_systems    (edit.collide_with_systems.value()); }
+                if (edit.not_collide_with_systems.has_value()) { target.set_not_collide_with_systems(edit.not_collide_with_systems.value()); }
+            }
+        );
+        if (!error.empty()) {
+            return make_error_content(error);
+        }
     }
 
     return make_json_content({
@@ -818,34 +998,56 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
         return make_error_content("Joint settings not found: " + name);
     }
 
+    std::optional<std::string> new_name{};
     json applied = json::array();
     if (args.contains("new_name")) {
         // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2).
-        const std::string new_name = args["new_name"].get<std::string>();
-        if (!item->is_name_available(new_name)) {
-            log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
-            return make_error_content("'" + new_name + "' is already the name of a sibling of '" + item->get_name() + "'");
+        new_name = args["new_name"].get<std::string>();
+        if (!item->is_name_available(new_name.value())) {
+            log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name.value());
+            return make_error_content("'" + new_name.value() + "' is already the name of a sibling of '" + item->get_name() + "'");
         }
-        item->set_name(new_name);
         applied.push_back("new_name");
     }
+    // The limits and drives are parsed onto a scratch item first, so an
+    // argument error leaves the settings untouched; the edit function then
+    // writes the axis properties the parse wrote.
+    const std::shared_ptr<erhe::physics::Physics_joint_settings> parsed = std::make_shared<erhe::physics::Physics_joint_settings>(item->get_name());
     if (args.contains("limits")) {
-        const std::optional<std::string> error = parse_joint_limits(args["limits"], *item.get());
+        const std::optional<std::string> error = parse_joint_limits(args["limits"], *parsed.get());
         if (error.has_value()) {
             return make_error_content(error.value());
         }
         applied.push_back("limits");
     }
     if (args.contains("drives")) {
-        const std::optional<std::string> error = parse_joint_drives(args["drives"], *item.get());
+        const std::optional<std::string> error = parse_joint_drives(args["drives"], *parsed.get());
         if (error.has_value()) {
             return make_error_content(error.value());
         }
         applied.push_back("drives");
     }
-    // Every write above goes through the property store, so the joints using
-    // these settings rebuild their constraints on their own
-    // (doc/erhe/property_system.md section 4.22).
+    std::vector<Joint_axis_write> axis_writes = get_joint_axis_writes(*parsed.get());
+    if (new_name.has_value() || !axis_writes.empty()) {
+        // Every field is a property, so the joints using these settings
+        // rebuild their constraints on their own
+        // (doc/erhe/property_system.md section 4.22), on undo too.
+        const std::string error = execute_property_edit(
+            m_context,
+            "edit_physics_joint_settings '" + item->get_name() + "'",
+            [item, new_name, axis_writes = std::move(axis_writes)]() {
+                if (new_name.has_value()) {
+                    item->set_value(erhe::Item_base::name_property, new_name.value());
+                }
+                for (const Joint_axis_write& write : axis_writes) {
+                    item->apply_local_state(*write.property, write.state);
+                }
+            }
+        );
+        if (!error.empty()) {
+            return make_error_content(error);
+        }
+    }
 
     json result = joint_settings_to_json(*item);
     result["applied"] = applied;

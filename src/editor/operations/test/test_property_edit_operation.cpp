@@ -7,6 +7,7 @@
 #include "editor_glue.hpp"
 
 #include "app_context.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/property_edit_operation.hpp"
 
 #include "erhe_primitive/buffer_mesh.hpp"
@@ -361,4 +362,53 @@ TEST_F(Property_edit_operation_test, edit_function_capture_as_only_owner)
     refused->execute(context);
     EXPECT_TRUE(refused->has_error());
     EXPECT_TRUE(refused_weak.expired()) << "released after the rollback";
+}
+
+// Compound_operation with Compound_child_error::roll_back (doc/editor/operations.md
+// "Compound_operation"): a child in error after its first execute undoes the
+// children before it and puts the compound in error; keep_siblings leaves
+// them applied.
+TEST_F(Property_edit_operation_test, compound_roll_back_undoes_the_children_before_a_refused_one)
+{
+    const std::shared_ptr<Light> a = std::make_shared<Light>("a");
+    const std::shared_ptr<Light> b = std::make_shared<Light>("b");
+    a->set_value(Light::intensity_property, 2.0f);
+    b->seal();
+
+    editor::Compound_operation compound{
+        editor::Compound_operation::Parameters{
+            .operations = {
+                std::make_shared<Property_edit_operation>("accepted", [a]() { a->set_value(Light::intensity_property, 5.0f); }),
+                std::make_shared<Property_edit_operation>("refused",  [b]() { b->set_value(Light::intensity_property, 6.0f); })
+            },
+            .child_error = editor::Compound_child_error::roll_back
+        }
+    };
+    compound.execute(context);
+    ASSERT_TRUE(compound.has_error());
+    EXPECT_NE(compound.get_error().find("'b'"), std::string::npos) << compound.get_error();
+    EXPECT_EQ(local_float(a->read_local_state(Light::intensity_property.get())), 2.0f);
+    EXPECT_FALSE(b->read_local_state(Light::intensity_property.get()).has_value());
+}
+
+TEST_F(Property_edit_operation_test, compound_keep_siblings_leaves_the_accepted_children_applied)
+{
+    const std::shared_ptr<Light> a = std::make_shared<Light>("a");
+    const std::shared_ptr<Light> b = std::make_shared<Light>("b");
+    a->set_value(Light::intensity_property, 2.0f);
+    b->seal();
+
+    editor::Compound_operation compound{
+        editor::Compound_operation::Parameters{
+            .operations = {
+                std::make_shared<Property_edit_operation>("accepted", [a]() { a->set_value(Light::intensity_property, 5.0f); }),
+                std::make_shared<Property_edit_operation>("refused",  [b]() { b->set_value(Light::intensity_property, 6.0f); })
+            }
+        }
+    };
+    compound.execute(context);
+    EXPECT_FALSE(compound.has_error());
+    EXPECT_EQ(local_float(a->read_local_state(Light::intensity_property.get())), 5.0f);
+    compound.undo(context);
+    EXPECT_EQ(local_float(a->read_local_state(Light::intensity_property.get())), 2.0f);
 }

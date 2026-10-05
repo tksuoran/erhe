@@ -31,8 +31,23 @@ void Compound_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute Begin {}", describe());
 
-    for (auto& operation : m_parameters.operations) {
-        operation->execute(context);
+    const bool first_execute = !m_executed;
+    m_executed = true;
+    for (std::size_t i = 0, end = m_parameters.operations.size(); i < end; ++i) {
+        Operation& operation = *m_parameters.operations[i].get();
+        operation.execute(context);
+        if (!first_execute || (m_parameters.child_error != Compound_child_error::roll_back) || !operation.has_error()) {
+            continue;
+        }
+        // A child in error after its first execute changed nothing
+        // (Operation_stack's all-or-nothing rule); undoing the children
+        // before it leaves the whole compound unapplied.
+        for (std::size_t j = i; j > 0; --j) {
+            m_parameters.operations[j - 1]->undo(context);
+        }
+        set_error(operation.get_error());
+        log_operations->trace("Op Execute Rolled Back {}: {}", describe(), get_error());
+        return;
     }
 
     log_operations->trace("Op Execute End {}", describe());

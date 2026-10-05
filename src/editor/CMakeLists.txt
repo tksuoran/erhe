@@ -371,6 +371,8 @@ erhe_target_sources_grouped(
     operations/animation_edit_operation.hpp
     operations/async_raytrace_kickoff_operation.cpp
     operations/async_raytrace_kickoff_operation.hpp
+    operations/collision_shape_set_operation.cpp
+    operations/collision_shape_set_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/kind_scope_operation.cpp
@@ -407,6 +409,8 @@ erhe_target_sources_grouped(
     operations/scene_builder_floor_resources_operation.hpp
     operations/scene_builder_viewport_resources_operation.cpp
     operations/scene_builder_viewport_resources_operation.hpp
+    operations/scene_settings_set_operation.cpp
+    operations/scene_settings_set_operation.hpp
     operations/merge_operation.cpp
     operations/merge_operation.hpp
     operations/merge_static_subtree_operation.cpp

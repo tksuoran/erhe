@@ -747,6 +747,12 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         };
         const std::shared_ptr<erhe::physics::ICollision_shape> shape = get_node_collision_shape(*found_node.get());
         physics_json["collision_shape"] = shape ? shape->describe() : "";
+        if (shape) {
+            // The center of mass the body is made with, in node space: the
+            // shape's own, moved by the center-of-mass offset wrapper.
+            const glm::vec3 center_of_mass = shape->get_center_of_mass();
+            physics_json["center_of_mass"] = json::array({center_of_mass.x, center_of_mass.y, center_of_mass.z});
+        }
         const erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*found_node.get());
         if (rigid_body != nullptr) {
             physics_json["mass"]      = rigid_body->get_mass();

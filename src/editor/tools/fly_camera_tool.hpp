@@ -34,6 +34,7 @@ class App_message_bus;
 class Fly_camera_tool;
 class Tools;
 class Scene_views;
+class Scene_root;
 
 class Jitter
 {
@@ -199,6 +200,11 @@ public:
 
     void set_framed_aabb(erhe::math::Aabb& aabb);
     [[nodiscard]] auto get_framed_aabb() const -> const erhe::math::Aabb&;
+
+    // The camera_controls field of `scene_root`'s Scene_settings changed
+    // (Scene_settings_set_operation execute / undo): the controls are
+    // re-adopted when that scene is the hovered one.
+    void on_scene_camera_controls_changed(const Scene_root& scene_root);
 
     // API for commands
     void on_hover_viewport_change();

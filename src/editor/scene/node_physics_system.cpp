@@ -63,6 +63,21 @@ auto Node_physics_system::get_collision_shape(const erhe::scene::Node& node) con
     return (entry != nullptr) ? entry->collision_shape : std::shared_ptr<ICollision_shape>{};
 }
 
+auto Node_physics_system::get_authored_collision_shape(const erhe::scene::Node& node) const -> std::shared_ptr<ICollision_shape>
+{
+    const std::shared_ptr<ICollision_shape> shape = get_collision_shape(node);
+    if (!shape) {
+        return shape;
+    }
+    // set_collision_shape and the center_of_mass_offset change wrap the
+    // shape once with the node's offset; that wrapper is not authored.
+    const std::optional<glm::vec3> offset = shape->get_offset();
+    if (offset.has_value() && (offset.value() == node.get_value(Node_physics::center_of_mass_offset_property))) {
+        return shape->get_inner_shape();
+    }
+    return shape;
+}
+
 auto Node_physics_system::get_or_create(erhe::scene::Node& node) -> Node_physics_entry&
 {
     const std::unordered_map<const erhe::scene::Node*, Node_physics_entry>::iterator i = m_entries.find(&node);
@@ -538,6 +553,12 @@ auto get_node_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<
 {
     Node_physics_system* const system = find_node_physics_system(node);
     return (system != nullptr) ? system->get_collision_shape(node) : std::shared_ptr<ICollision_shape>{};
+}
+
+auto get_node_authored_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<ICollision_shape>
+{
+    Node_physics_system* const system = find_node_physics_system(node);
+    return (system != nullptr) ? system->get_authored_collision_shape(node) : std::shared_ptr<ICollision_shape>{};
 }
 
 auto get_node_rigid_body(const erhe::scene::Node& node) -> IRigid_body*

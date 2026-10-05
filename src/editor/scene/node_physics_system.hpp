@@ -89,6 +89,11 @@ public:
     // The live rigid body of `node`, or nullptr.
     [[nodiscard]] auto get_rigid_body    (const erhe::scene::Node& node) const -> erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_collision_shape(const erhe::scene::Node& node) const -> std::shared_ptr<erhe::physics::ICollision_shape>;
+    // The held shape without the center-of-mass wrapper this system adds for
+    // a nonzero Node_physics.center_of_mass_offset: the shape
+    // set_collision_shape takes, so passing it back restores the same body
+    // shape (an undo's before state). Null when the node has none.
+    [[nodiscard]] auto get_authored_collision_shape(const erhe::scene::Node& node) const -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
     // Gives the node the collision shape its body is made from. Recreates a
     // live body. The shape is remembered whether or not the node carries the
@@ -163,6 +168,10 @@ private:
 // The collision shape built for `node`, through its scene's system; null when
 // the node is in no scene or has none.
 [[nodiscard]] auto get_node_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<erhe::physics::ICollision_shape>;
+
+// The authored collision shape of `node` (get_authored_collision_shape),
+// through its scene's system; null when the node is in no scene or has none.
+[[nodiscard]] auto get_node_authored_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
 // The live rigid body of `node`, through its scene's system; null when there
 // is none.

@@ -310,11 +310,11 @@ generate.
 | `edit_light` | type, color, intensity, range, cast_shadow, spot angles | `position` already exists as `set_node_transform`; tool deleted |
 | `edit_camera` | exposure, shadow_range, fov_y, z_near / z_far | z_near / z_far name the projection-specific property; tool deleted |
 | `edit_material` | the scalar / color fields, slot texture references and the per-slot sampler properties | tool deleted (`Material::set_data` writes only properties) |
-| `edit_physics_body` | motion_mode, is_trigger, center_of_mass_offset, gravity_factor, velocities, physics_material, collision_filter, mass | `set_collision_shape` (shape arguments, through the new `Collision_shape_set_operation` of A3); `wake` becomes `wake_physics_body` (runtime state, not a document edit) |
-| `edit_physics_material`, `edit_collision_filter` | every field (setters are `set_value`) | tools deleted |
-| `edit_physics_joint_settings` | every field that is a property (A3 confirms the limits / drives arrays) | tool deleted if A3 finds no non-property field |
-| `edit_joint` | body_1, settings, enable_collision (setters are `set_value`) | tool deleted once A3 confirms the constraint rebuild (`node_joint->rebuild()`, `mcp_server_physics.cpp:540`) is reached from the property callback / `INode_system::on_values_changed`; if not, that is fixed in the joint system, so undo also rebuilds |
-| `set_scene_settings` | `ambient_light` | `settings` / `merge` stays, through `Scene_settings_set_operation` (codegen struct before / after) |
+| `edit_physics_body` | motion_mode, is_trigger, center_of_mass_offset, gravity_factor, initial linear / angular velocity, physics_material, collision_filter, mass (all `Node_physics` properties, A3) | `set_collision_shape` (shape arguments, through `Collision_shape_set_operation`, A3); `wake` is listed in the descriptor but the edit handler never read it (only `create_physics_body` does); runtime state, so `wake_physics_body` if kept |
+| `edit_physics_material`, `edit_collision_filter` | every field (setters are `set_value`; `new_name` is the `name` property, A3) | tools deleted |
+| `edit_physics_joint_settings` | every field: `new_name` is the `name` property, the `limits` / `drives` entries write the 66 axis properties (`Physics_joint_settings::limit_*_property` / `drive_*_property`, eleven per axis); no non-property field (A3) | tool deleted |
+| `edit_joint` | body_1, settings, enable_collision (setters are `set_value`) | A3 confirmed the rebuild path: a write of body_0 / body_1 / joint_settings / enable_collision reaches `Joint::on_property_changed` -> `Joint_system::on_values_changed`, which destroys and recreates the constraint, so the edit, its undo and its redo rebuild (tested through the live constraint's limits); an edit of the settings item rebuilds every joint using it through `Joint_system::observe_settings`. The tool never called `rebuild()` after its writes; its `rebuild` argument is an explicit re-capture of the joint frames from the current poses (runtime state, outside undo) and needs a runtime tool of its own (`rebuild_joint`) before the tool is deleted |
+| `set_scene_settings` | `ambient_light` | `settings` / `merge` stays, through `Scene_settings_set_operation` (codegen struct before / after, A3; `scene_id` and `variant_selections` are kept and a different value is refused) |
 | `new_name` arguments of the physics tools | `name` property | - |
 
 Every caller is migrated in the same commit: `scripts/*.py`,
@@ -323,6 +323,12 @@ skills under `.claude/`, and `doc/`. Measured blast radius (2026-10-05):
 under 40 script lines, about 25 test lines, about 96 doc lines.
 `mcp_tools.json` is recounted before C3 (the scout counted 298 entries,
 the reviewer 329 `"name"` keys, which include nested schema names).
+
+Follow-up found in A3: the Properties window scene override rows
+(`properties.cpp`, `override_struct`) and `Fly_camera_tool::get_writable_camera_controls`
+write `Scene_settings` directly - not undoable, and an undo of an earlier
+`set_scene_settings` reverts them; they are to go through
+`Scene_settings_set_operation`.
 
 ## 5. Steps
 

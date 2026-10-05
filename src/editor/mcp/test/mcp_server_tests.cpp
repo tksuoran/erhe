@@ -1184,6 +1184,241 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
             EXPECT_NEAR(camera.at("fov_y").get<double>(),    cameras.payload.at("cameras")[0].at("fov_y").get<double>(),    1e-6);
         }
     }
+
+    // The physics edit tools and set_scene_settings (plan
+    // doc/plans/property_undo_and_reflective_mcp.md step A3).
+    ASSERT_FALSE(client.call_tool("create_shape", json{{"scene_name", scene}, {"shape", "box"}, {"name", "undo body a"}, {"motion_mode", "dynamic"}, {"position", {0.0, 20.0, 0.0}}}).is_error);
+    ASSERT_FALSE(client.call_tool("create_shape", json{{"scene_name", scene}, {"shape", "box"}, {"name", "undo body b"}, {"motion_mode", "dynamic"}, {"position", {3.0, 20.0, 0.0}}}).is_error);
+    ASSERT_FALSE(client.call_tool("create_physics_material",       json{{"scene_name", scene}, {"name", "undo material"}}).is_error);
+    ASSERT_FALSE(client.call_tool("create_collision_filter",       json{{"scene_name", scene}, {"name", "undo filter"}}).is_error);
+    ASSERT_FALSE(client.call_tool("create_physics_joint_settings", json{{"scene_name", scene}, {"name", "undo settings"}}).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    ASSERT_FALSE(client.call_tool("create_joint", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"connected_node_name", "undo body b"}}).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+
+    check_one_entry("edit_physics_body", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"gravity_factor", 0.5}, {"material_name", "undo material"}, {"filter_name", "undo filter"}});
+    check_one_entry("edit_physics_body", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"shape", "sphere"}, {"radius", 0.4}});
+    // Shape and property fields together: still one entry.
+    check_one_entry("edit_physics_body", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"shape", "box"}, {"half_extents", {0.3, 0.3, 0.3}}, {"mass", 3.0}});
+    check_one_entry("edit_joint", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"enable_collision", true}, {"settings_name", "undo settings"}});
+    check_one_entry("edit_physics_material", json{{"scene_name", scene}, {"name", "undo material"}, {"restitution", 0.75}, {"linear_damping", 0.3}});
+    check_one_entry("edit_collision_filter", json{{"scene_name", scene}, {"name", "undo filter"}, {"collision_systems", {"undo system"}}});
+    check_one_entry(
+        "edit_physics_joint_settings",
+        json{{"scene_name", scene}, {"name", "undo settings"}, {"limits", json::array({json{{"linear_axes", {true, false, false}}, {"min", -0.1}, {"max", 0.1}}})}}
+    );
+    // ambient_light and settings together: one entry.
+    check_one_entry(
+        "set_scene_settings",
+        json{{"scene_name", scene}, {"ambient_light", {0.2, 0.3, 0.4}}, {"settings", json{{"clear_color", {0.1, 0.2, 0.3, 1.0}}}}, {"merge", true}}
+    );
+    check_one_entry("set_scene_settings", json{{"scene_name", scene}, {"settings", json{{"post_processing", false}}}});
+}
+
+// The A3 edits through their operations (doc/plans/property_undo_and_reflective_mcp.md
+// step A3): undo restores the values, and the runtime state built from them
+// (live body damping, collision shape center of mass, joint constraint)
+// follows the restore. Physics needs a physics world in the test scene.
+TEST_F(Mcp_test, physics_and_scene_settings_edits_undo_to_the_prior_state)
+{
+    Mcp_env&           env    = Mcp_env::get();
+    Mcp_client&        client = env.client();
+    const std::string& scene  = env.scene_name();
+
+    auto call = [&client](const std::string& tool, const json& arguments) -> Mcp_client::Tool_result {
+        Mcp_client::Tool_result result = client.call_tool(tool, arguments);
+        EXPECT_FALSE(result.is_error) << tool << ": " << result.text;
+        return result;
+    };
+    auto undo = [&client]() {
+        EXPECT_FALSE(client.call_tool("undo", json::object()).is_error);
+        EXPECT_TRUE(wait_until_idle(client, 30000));
+    };
+    auto physics_of = [&client, &scene](const std::string& node_name) -> json {
+        const Mcp_client::Tool_result details = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", node_name}});
+        EXPECT_FALSE(details.is_error) << details.text;
+        return details.payload.value("physics", json{});
+    };
+    auto joint_of = [&client, &scene]() -> json {
+        const Mcp_client::Tool_result details = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "body a"}});
+        EXPECT_FALSE(details.is_error) << details.text;
+        const json joints = details.payload.value("joints", json::array());
+        return joints.empty() ? json{} : joints[0];
+    };
+    auto joint_x_limit = [&client, &scene]() -> json {
+        const Mcp_client::Tool_result state = client.call_tool("get_joint_constraint_state", json{{"scene_name", scene}});
+        EXPECT_FALSE(state.is_error) << state.text;
+        const json joints = state.payload.value("physics_joints", json::array());
+        if (joints.empty()) {
+            ADD_FAILURE() << "no physics joint: " << state.text;
+            return json{};
+        }
+        EXPECT_TRUE(joints[0].value("live", false)) << "the joint has no live constraint: " << joints[0].dump();
+        return joints[0].at("contract").at("limits").at("translation")[0];
+    };
+
+    const Mcp_client::Tool_result scene_settings = call("get_scene_settings", json{{"scene_name", scene}});
+    if (!scene_settings.payload.value("enable_physics", false)) {
+        GTEST_SKIP() << "the test scene has no physics world";
+    }
+
+    call("create_shape", json{{"scene_name", scene}, {"shape", "box"}, {"name", "body a"}, {"motion_mode", "dynamic"}, {"position", {0.0, 20.0, 0.0}}});
+    call("create_shape", json{{"scene_name", scene}, {"shape", "box"}, {"name", "body b"}, {"motion_mode", "dynamic"}, {"position", {3.0, 20.0, 0.0}}});
+    call("create_physics_material", json{{"scene_name", scene}, {"name", "material m"}, {"linear_damping", 0.1}});
+    call("create_collision_filter", json{{"scene_name", scene}, {"name", "filter f"}});
+    call(
+        "create_physics_joint_settings",
+        json{{"scene_name", scene}, {"name", "settings s"}, {"limits", json::array({json{{"linear_axes", {true, false, false}}, {"min", -0.1}, {"max", 0.1}}})}}
+    );
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    call("create_joint", json{{"scene_name", scene}, {"node_name", "body a"}, {"connected_node_name", "body b"}});
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    call("edit_physics_body", json{{"scene_name", scene}, {"node_name", "body a"}, {"material_name", "material m"}, {"center_of_mass", {0.0, 0.25, 0.0}}});
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    ASSERT_TRUE(physics_of("body a").contains("linear_damping")) << "body a has no live body";
+    EXPECT_NEAR(physics_of("body a").at("linear_damping").get<double>(), 0.1, 1e-5);
+    EXPECT_NEAR(physics_of("body a").at("center_of_mass")[1].get<double>(), 0.25, 1e-5);
+
+    // Physics material: the live body follows the edit and its undo.
+    call("edit_physics_material", json{{"scene_name", scene}, {"name", "material m"}, {"linear_damping", 0.9}});
+    EXPECT_NEAR(physics_of("body a").at("linear_damping").get<double>(), 0.9, 1e-5);
+    undo();
+    EXPECT_NEAR(physics_of("body a").at("linear_damping").get<double>(), 0.1, 1e-5);
+
+    // Body properties and shape: undo restores the values and the authored
+    // shape, re-wrapped once with the center-of-mass offset.
+    call("edit_physics_body", json{{"scene_name", scene}, {"node_name", "body a"}, {"gravity_factor", 0.25}, {"is_trigger", true}, {"shape", "sphere"}, {"radius", 0.5}});
+    EXPECT_NEAR(physics_of("body a").at("gravity_factor").get<double>(), 0.25, 1e-6);
+    EXPECT_TRUE(physics_of("body a").at("is_trigger").get<bool>());
+    EXPECT_NEAR(physics_of("body a").at("center_of_mass")[1].get<double>(), 0.25, 1e-5);
+    undo();
+    EXPECT_NEAR(physics_of("body a").at("gravity_factor").get<double>(), 1.0, 1e-6);
+    EXPECT_FALSE(physics_of("body a").at("is_trigger").get<bool>());
+    EXPECT_NEAR(physics_of("body a").at("center_of_mass")[1].get<double>(), 0.25, 1e-5) << "the offset is applied once after undo";
+    EXPECT_EQ(physics_of("body a").at("physics_material").get<std::string>(), "material m");
+
+    // Joint: the constraint is rebuilt from the property change on the edit
+    // and on its undo (the live constraint's limits are the settings').
+    EXPECT_FALSE(joint_x_limit().value("limited", true));
+    call("edit_joint", json{{"scene_name", scene}, {"node_name", "body a"}, {"settings_name", "settings s"}, {"enable_collision", true}});
+    EXPECT_EQ(joint_of().value("joint_settings", ""), "settings s");
+    EXPECT_TRUE(joint_of().value("enable_collision", false));
+    EXPECT_TRUE(joint_x_limit().value("limited", false));
+    undo();
+    EXPECT_EQ(joint_of().value("joint_settings", "?"), "");
+    EXPECT_FALSE(joint_of().value("enable_collision", true));
+    EXPECT_EQ(joint_of().value("constraint", ""), "created");
+    EXPECT_FALSE(joint_x_limit().value("limited", true));
+
+    // Joint settings: a limit edit and its undo reach the joints using them.
+    ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    EXPECT_NEAR(joint_x_limit().value("max", 0.0), 0.1, 1e-6);
+    call("edit_physics_joint_settings", json{{"scene_name", scene}, {"name", "settings s"}, {"limits", json::array({json{{"linear_axes", {true, false, false}}, {"min", -0.2}, {"max", 0.2}}})}});
+    EXPECT_NEAR(joint_x_limit().value("max", 0.0), 0.2, 1e-6);
+    undo();
+    EXPECT_NEAR(joint_x_limit().value("max", 0.0), 0.1, 1e-6);
+
+    // Collision filter: undo restores the lists.
+    auto filter_systems = [&client, &scene]() -> json {
+        const Mcp_client::Tool_result items = client.call_tool("get_physics_items", json{{"scene_name", scene}});
+        EXPECT_FALSE(items.is_error) << items.text;
+        for (const json& filter : items.payload.value("collision_filters", json::array())) {
+            if (filter.value("name", "") == "filter f") {
+                return filter.at("collision_systems");
+            }
+        }
+        ADD_FAILURE() << "filter f not found: " << items.text;
+        return json{};
+    };
+    call("edit_collision_filter", json{{"scene_name", scene}, {"name", "filter f"}, {"collision_systems", {"system x"}}});
+    EXPECT_EQ(filter_systems(), json::array({"system x"}));
+    undo();
+    EXPECT_EQ(filter_systems(), json::array());
+
+    // Scene settings: ambient light and the settings struct undo together;
+    // replace semantics keep the scene id; variant_selections are refused.
+    const json before = call("get_scene_settings", json{{"scene_name", scene}}).payload;
+    call("set_scene_settings", json{{"scene_name", scene}, {"ambient_light", {0.2, 0.3, 0.4}}, {"settings", json{{"clear_color", {0.1, 0.2, 0.3, 1.0}}}}});
+    const json during = call("get_scene_settings", json{{"scene_name", scene}}).payload;
+    EXPECT_NEAR(during.at("ambient_light")[1].get<double>(), 0.3, 1e-6);
+    ASSERT_TRUE(during.at("settings").is_object()) << during.dump();
+    EXPECT_NEAR(during.at("settings").at("clear_color")[2].get<double>(), 0.3, 1e-6);
+    const json before_settings = before.at("settings");
+    const std::string before_scene_id = before_settings.is_object() ? before_settings.value("scene_id", "") : std::string{};
+    EXPECT_EQ(during.at("settings").value("scene_id", ""), before_scene_id) << "replace keeps the scene id";
+    undo();
+    const json after = call("get_scene_settings", json{{"scene_name", scene}}).payload;
+    EXPECT_EQ(after.at("ambient_light"), before.at("ambient_light"));
+    EXPECT_EQ(after.at("settings"), before.at("settings"));
+    // Undo and redo keep the live scene id (it is assigned lazily and is no
+    // part of what the edit restores), and settings equal to the current
+    // ones leave no undo entry.
+    const std::size_t undo_depth0 = call("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    const json settings_now = call("get_scene_settings", json{{"scene_name", scene}}).payload.at("settings");
+    const Mcp_client::Tool_result same = call("set_scene_settings", json{{"scene_name", scene}, {"settings", settings_now.is_object() ? settings_now : json::object()}});
+    EXPECT_FALSE(same.payload.value("updated", true)) << same.text;
+    EXPECT_EQ(same.payload.value("settings", ""), "unchanged") << same.text;
+    EXPECT_EQ(call("get_undo_redo_stack", json::object()).payload.at("undo").size(), undo_depth0) << "an unchanged set records nothing";
+    call("set_scene_settings", json{{"scene_name", scene}, {"settings", json{{"post_processing", false}}}, {"merge", true}});
+    undo();
+    ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    const json redone = call("get_scene_settings", json{{"scene_name", scene}}).payload.at("settings");
+    EXPECT_EQ(redone.is_object() ? redone.value("scene_id", "") : std::string{}, before_scene_id) << "undo / redo keep the scene id";
+    const Mcp_client::Tool_result variant_write = client.call_tool(
+        "set_scene_settings",
+        json{{"scene_name", scene}, {"settings", json{{"variant_selections", json::array({json{{"set_name", "x"}, {"variant_name", "y"}}})}}}}
+    );
+    EXPECT_TRUE(variant_write.is_error) << variant_write.text;
+}
+
+// A property edit refused at write time (here: a sealed physics material)
+// comes back as an error naming the property, leaves no undo entry and
+// keeps the redo history: the real Operation_stack and apply_item_property
+// path behind the MCP edit tools.
+TEST_F(Mcp_test, refused_physics_edit_is_an_error_and_keeps_the_history)
+{
+    Mcp_env&           env    = Mcp_env::get();
+    Mcp_client&        client = env.client();
+    const std::string& scene  = env.scene_name();
+
+    auto stacks = [&client]() -> json {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload;
+    };
+
+    ASSERT_FALSE(client.call_tool("create_physics_material", json{{"scene_name", scene}, {"name", "sealed material"}}).is_error);
+    ASSERT_FALSE(client.call_tool("create_physics_material", json{{"scene_name", scene}, {"name", "open material"}}).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    std::size_t sealed_id = 0;
+    for (const json& material : client.call_tool("get_physics_items", json{{"scene_name", scene}}).payload.value("physics_materials", json::array())) {
+        if (material.value("name", "") == "sealed material") {
+            sealed_id = material.value("id", std::size_t{0});
+        }
+    }
+    ASSERT_NE(sealed_id, std::size_t{0});
+    ASSERT_FALSE(client.call_tool("set_item_property", json{{"item_id", sealed_id}, {"property", "lock_edit"}, {"value", true}}).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+
+    // A redo entry to keep.
+    ASSERT_FALSE(client.call_tool("edit_physics_material", json{{"scene_name", scene}, {"name", "open material"}, {"restitution", 0.5}}).is_error);
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    const json stacks0 = stacks();
+    ASSERT_FALSE(stacks0.at("redo").empty());
+
+    const Mcp_client::Tool_result refused = client.call_tool("edit_physics_material", json{{"scene_name", scene}, {"name", "sealed material"}, {"restitution", 0.25}, {"density", 3.0}});
+    EXPECT_TRUE(refused.is_error) << refused.text;
+    EXPECT_NE(refused.text.find("restitution"), std::string::npos) << refused.text;
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    const json stacks1 = stacks();
+    EXPECT_EQ(stacks1.at("undo").size(), stacks0.at("undo").size()) << "a refused edit leaves no undo entry";
+    EXPECT_EQ(stacks1.at("redo").size(), stacks0.at("redo").size()) << "a refused edit keeps the redo history";
+    for (const json& material : client.call_tool("get_physics_items", json{{"scene_name", scene}}).payload.value("physics_materials", json::array())) {
+        if (material.value("name", "") == "sealed material") {
+            EXPECT_NE(material.value("density", 0.0), 3.0) << "nothing of the refused edit stays written";
+        }
+    }
 }
 
 TEST_F(Mcp_test, batch_rejects_nested_and_malformed)

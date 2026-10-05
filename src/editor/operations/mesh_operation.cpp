@@ -439,7 +439,10 @@ auto Mesh_operation::capture_physics(const erhe::scene::Node& node) -> Mesh_oper
         return version;
     }
     version.motion_mode     = data.value().motion_mode;
-    version.collision_shape = get_node_collision_shape(node);
+    // The authored shape, not the held one: restore_physics hands it to
+    // set_collision_shape, which wraps it with the node's center-of-mass
+    // offset again.
+    version.collision_shape = get_node_authored_collision_shape(node);
     return version;
 }
 
