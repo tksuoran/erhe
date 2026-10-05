@@ -17,6 +17,7 @@
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/scoped_container_access.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -158,6 +159,31 @@ Render_pass::Render_pass(Device& device, const Render_pass_descriptor& descripto
                 c_str(descriptor.stencil_attachment.resolve_mode)
             )
         );
+    }
+
+    // Exactly one of depth and stencil resolving into a target whose format
+    // has both aspects leaves the other aspect's mode NONE, which a device
+    // allows only with independent_depth_stencil_resolve_none (Vulkan
+    // VUID-VkSubpassDescriptionDepthStencilResolve-pDepthStencilResolveAttachment-03185;
+    // Mesa lavapipe is one device without it).
+    if (depth_resolves != stencil_resolves) {
+        const Render_pass_attachment_descriptor& resolving = depth_resolves ? descriptor.depth_attachment : descriptor.stencil_attachment;
+        const erhe::dataformat::Format resolve_format = resolving.resolve_texture->get_pixelformat();
+        const bool has_both_aspects =
+            (erhe::dataformat::get_depth_size_bits(resolve_format) > 0) &&
+            (erhe::dataformat::get_stencil_size_bits(resolve_format) > 0);
+        if (has_both_aspects && !info.independent_depth_stencil_resolve && !info.independent_depth_stencil_resolve_none) {
+            device.device_message(Message_severity::error,
+                fmt::format(
+                    "Render_pass '{}': only {} resolves into {} '{}', which has depth and stencil, "
+                    "but the device does not support resolving one aspect alone (independent_depth_stencil_resolve_none)",
+                    descriptor.debug_label.string_view(),
+                    depth_resolves ? "depth" : "stencil",
+                    erhe::dataformat::c_str(resolve_format),
+                    resolving.resolve_texture->get_debug_label().string_view()
+                )
+            );
+        }
     }
 }
 Render_pass::~Render_pass() noexcept

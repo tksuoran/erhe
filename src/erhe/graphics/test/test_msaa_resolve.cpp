@@ -602,6 +602,12 @@ TEST_F(Gpu_test, msaa_stencil_only_resolve_tracks_target_layout)
     if ((graphics_device.get_info().supported_stencil_resolve_modes & erhe::graphics::Resolve_mode_flag_bit_mask::sample_zero) == 0) {
         GTEST_SKIP() << "sample_zero stencil resolve is not supported on this device";
     }
+    // The format has depth too, and only stencil resolves: the device must
+    // allow resolving one aspect alone (Render_pass validates the same rule).
+    const erhe::graphics::Device_info& info = graphics_device.get_info();
+    if (!info.independent_depth_stencil_resolve && !info.independent_depth_stencil_resolve_none) {
+        GTEST_SKIP() << "resolving stencil alone from a depth-stencil format is not supported on this device";
+    }
 
     const std::shared_ptr<erhe::graphics::Texture> msaa_target = std::make_shared<erhe::graphics::Texture>(
         graphics_device,
