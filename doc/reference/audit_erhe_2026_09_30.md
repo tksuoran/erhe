@@ -48,7 +48,7 @@ next selected items are in `doc/plans/audit_2026_09_30_followups.md`.
 | 10 | Per-subresource Vulkan layouts, blit region types | Done, plus the review follow-ups and the OpenGL failures the GPU tests found | 4fc17d988, 1d5d45f28, 51dfc09fb, e35933c80, 8628689ad, 5ef90f13c, e80b64ab2, 6837a428f, cafc0773e |
 | 11 | Editor bits out of `Item_flags` / `Item_type` | Done: application ranges with registered label / name tables, `hosted_selection` in `Selection`, the tables in their own headers (`doc/erhe/item.md` "Application bits") | 414c4e285 |
 | 12 | Include diet, interface / backend split | Done | afbe3d5b5, 5342524d6, b9eb1061b |
-| 17 | Sanitizers, `-Werror`, CI GPU tests, version | Done except the CI GPU tests (lavapipe) and LeakSanitizer: `ERHE_USE_ASAN` / `ERHE_USE_UBSAN`, a Clang ASan+UBSan CI entry, `-Werror` per erhe target on every toolchain, `erhe::version` logged at startup | 091b5879f, fbbc7bd83 |
+| 17 | Sanitizers, `-Werror`, CI GPU tests, version | Done except LeakSanitizer; the CI GPU test job (lavapipe, SDK validation layer) awaits its first runner run: `ERHE_USE_ASAN` / `ERHE_USE_UBSAN`, a Clang ASan+UBSan CI entry, `-Werror` per erhe target on every toolchain, `erhe::version` logged at startup | 091b5879f, fbbc7bd83 |
 | 18 | Shader pipeline persistence | glslang SPIR-V cache key and atomic writes, persisted `VkPipelineCache` done; Metal `MTLBinaryArchive` open, needs macOS | f9ab02789, b67d84982 |
 
 Options 11, 13-16, 19-27 have not been started. Of the 2026-06-21

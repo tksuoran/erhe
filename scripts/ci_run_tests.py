@@ -7,11 +7,16 @@ streams ctest's stdout to the console and to <results_dir>/<build_dir>.log,
 flushing every line, so the file names the test that was running when the
 run was cut off. Exits with ctest's exit code.
 
-Usage: ci_run_tests.py <build_dir> <config> <results_dir> [<name>]
+Usage: ci_run_tests.py [--label <regex>] <build_dir> <config> <results_dir> [<name>]
 
 <name> is the stem of the two output files (default: <build_dir>), for a
 matrix entry that builds in the same directory as another one, such as the
 sanitizer entry.
+
+Without --label the run leaves out the tests labeled "gpu" (they bring up a
+graphics Device) and "editor" (they drive a running editor): the default for
+a runner without a GPU. --label runs only the tests whose label matches the
+regex instead, which is how the GPU test job runs "gpu" on a software Vulkan.
 """
 
 import pathlib
@@ -20,6 +25,10 @@ import sys
 
 
 def main(argv: list[str]) -> int:
+    label = None
+    if (len(argv) >= 3) and (argv[1] == "--label"):
+        label = argv[2]
+        argv = [argv[0]] + argv[3:]
     if len(argv) not in (4, 5):
         print(__doc__, file=sys.stderr)
         return 2
@@ -35,7 +44,7 @@ def main(argv: list[str]) -> int:
         "ctest",
         "--test-dir", build_dir,
         "--build-config", config,
-        "--label-exclude", "gpu|editor",
+        *(["--label-regex", label] if label is not None else ["--label-exclude", "gpu|editor"]),
         "--output-on-failure",
         "--timeout", "120",
         "--output-junit", str(junit_path),

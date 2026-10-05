@@ -136,8 +136,23 @@ files are uploaded as `test-results-*` artifacts and
 `.github/workflows/tests.yml` (triggered when a build run completes)
 summarizes them with `scripts/ci_test_summary.py` and gives the tests badge in
 README.md. A build run that did not succeed fails the tests workflow too.
-Running the `gpu` tests in CI under a software Vulkan is described in
-`doc/erhe/graphics_test_coverage.md`.
+
+The `gpu` tests run in a job of their own, "Linux (Vulkan headless /
+lavapipe GPU tests)": the headless Vulkan tree
+(`scripts/configure_ninja_linux_vulkan_headless.sh`, `ERHE_WINDOW_LIBRARY=none`,
+so no display) builds only `erhe_graphics_gpu_tests`, `erhe_renderer_gpu_tests`
+and `erhe_scene_renderer_gpu_tests`, and runs them on Mesa lavapipe
+(`mesa-vulkan-drivers`, `VK_DRIVER_FILES` pointing at its ICD) with
+`scripts/ci_run_tests.py --label gpu`. The Vulkan loader and
+`VK_LAYER_KHRONOS_validation` come from the latest LunarG Vulkan SDK
+(downloaded by the version `vulkan.lunarg.com/sdk/latest/linux.txt` names and
+cached per version), with the SDK's library and layer manifest directories on
+`LD_LIBRARY_PATH` and `VK_LAYER_PATH`; a check step fails the job unless
+`vulkaninfo` lists both lavapipe and the layer, because the GPU test fixture
+enables validation only when the layer loads. Every validation error fails
+the test it occurs in. Its JUnit file, `build_ninja_linux_vulkan_headless_gpu`,
+joins the others in the tests workflow. Tests that need a capability lavapipe
+lacks skip, as on any device (`doc/erhe/graphics_test_coverage.md`).
 
 ## Running
 

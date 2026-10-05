@@ -201,6 +201,119 @@ jobs:
             test-results/${{ matrix.results || matrix.build_dir }}.log
           if-no-files-found: ignore
 
+  # GPU tests on a software Vulkan (doc/testing.md "CI"): the tests labeled
+  # "gpu" (erhe_graphics_gpu_tests, erhe_renderer_gpu_tests,
+  # erhe_scene_renderer_gpu_tests) on Mesa lavapipe, from the headless Vulkan
+  # tree (ERHE_WINDOW_LIBRARY=none, so no display is needed), under the
+  # validation layer of the latest LunarG Vulkan SDK. The GPU test fixture
+  # turns every validation error into a test failure. Only the three test
+  # targets are built, not the editor. Like the matrix jobs, the ctest step
+  # does not fail the job; the uploaded JUnit file joins the others in the
+  # tests workflow.
+  gpu-tests:
+    name: Linux (Vulkan headless / lavapipe GPU tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm_cache
+      BUILD_DIR: build_ninja_linux_vulkan_headless
+      RESULTS: build_ninja_linux_vulkan_headless_gpu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache CPM dependencies
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.cpm_cache
+          key: cpm-ubuntu-latest-vulkan-headless-${{ hashFiles('cmake/**', '**/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-ubuntu-latest-vulkan-headless-
+            cpm-ubuntu-latest-vulkan-
+
+      # mesa-vulkan-drivers provides lavapipe (lvp_icd.json). The Vulkan
+      # loader and the validation layer come from the SDK below.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libwayland-dev libxkbcommon-dev xorg-dev libtbb-dev mesa-vulkan-drivers vulkan-tools
+
+      # The newest SDK release, by the version LunarG publishes as "latest";
+      # cached per version, so a new SDK release is picked up on the next run.
+      - name: Resolve latest Vulkan SDK version
+        id: vulkan_sdk
+        run: |
+          version="$(curl -sSfL https://vulkan.lunarg.com/sdk/latest/linux.txt | tr -d '[:space:]')"
+          test -n "$version"
+          echo "Vulkan SDK $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Vulkan SDK
+        id: vulkan_sdk_cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/vulkan-sdk
+          key: vulkan-sdk-linux-${{ steps.vulkan_sdk.outputs.version }}
+
+      - name: Download Vulkan SDK
+        if: steps.vulkan_sdk_cache.outputs.cache-hit != 'true'
+        env:
+          VERSION: ${{ steps.vulkan_sdk.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/vulkan-sdk"
+          curl -sSfL -o "$RUNNER_TEMP/vulkan-sdk.tar.xz" \
+            "https://sdk.lunarg.com/sdk/download/$VERSION/linux/vulkansdk-linux-x86_64-$VERSION.tar.xz"
+          tar -xJf "$RUNNER_TEMP/vulkan-sdk.tar.xz" -C "$RUNNER_TEMP/vulkan-sdk"
+          rm "$RUNNER_TEMP/vulkan-sdk.tar.xz"
+
+      # What the SDK's setup-env.sh does, for the parts the tests need: the
+      # SDK's loader and layer libraries on the library path (the layer
+      # manifest names its library without a path) and the layer manifest
+      # directory on the layer path. VK_DRIVER_FILES limits the loader to
+      # lavapipe. The step fails unless vulkaninfo shows both, so a missing
+      # layer cannot silently turn validation off.
+      - name: Set up Vulkan SDK and lavapipe
+        run: |
+          manifest="$(find "$RUNNER_TEMP/vulkan-sdk" -name VkLayer_khronos_validation.json -path '*explicit_layer.d*' | head -n 1)"
+          library="$(find "$RUNNER_TEMP/vulkan-sdk" -name libVkLayer_khronos_validation.so | head -n 1)"
+          test -n "$manifest" && test -n "$library"
+          {
+            echo "VK_LAYER_PATH=$(dirname "$manifest")"
+            echo "LD_LIBRARY_PATH=$(dirname "$library")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            echo "VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json"
+            echo "PATH=$(dirname "$(dirname "$library")")/bin:$PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Check Vulkan device and validation layer
+        run: |
+          vulkaninfo --summary | tee vulkaninfo.txt
+          grep -q 'llvmpipe' vulkaninfo.txt
+          grep -q 'VK_LAYER_KHRONOS_validation' vulkaninfo.txt
+
+      - name: Configure
+        run: bash scripts/configure_ninja_linux_vulkan_headless.sh -DERHE_BUILD_TESTS=ON
+
+      - name: Build GPU tests
+        run: cmake --build "$BUILD_DIR" --target erhe_graphics_gpu_tests erhe_renderer_gpu_tests erhe_scene_renderer_gpu_tests --parallel
+
+      # The bounds of the matrix jobs' test step apply: the slowest GPU test
+      # takes about 15 s on lavapipe and the whole label a few minutes.
+      - name: Run GPU tests
+        id: ctest
+        continue-on-error: true
+        timeout-minutes: 30
+        run: python3 scripts/ci_run_tests.py --label gpu "$BUILD_DIR" Release "${{ github.workspace }}/test-results" "$RESULTS"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ env.RESULTS }}
+          path: |
+            test-results/${{ env.RESULTS }}.xml
+            test-results/${{ env.RESULTS }}.log
+          if-no-files-found: ignore
+
   # Grep-level rule (proposal D of doc/erhe/gl_worker_context_enforcement.md):
   # task scheduling in src/editor and src/erhe must go through the erhe::task
   # spawn wrappers, which assert that the calling thread holds no worker GL
