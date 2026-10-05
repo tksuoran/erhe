@@ -1551,8 +1551,7 @@ void Swapchain_impl::update_present_timing_calibration()
     if (m_timing_calibration_valid && ((frame_index - m_timing_calibration_frame) < 120)) {
         return;
     }
-    const PFN_vkGetCalibratedTimestampsKHR get_calibrated_timestamps =
-        (vkGetCalibratedTimestampsKHR != nullptr) ? vkGetCalibratedTimestampsKHR : vkGetCalibratedTimestampsEXT;
+    const PFN_vkGetCalibratedTimestampsKHR get_calibrated_timestamps = m_device_impl.get_calibrated_timestamps_function();
     if (get_calibrated_timestamps == nullptr) {
         return;
     }

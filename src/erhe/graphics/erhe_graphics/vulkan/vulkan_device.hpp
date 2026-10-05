@@ -334,6 +334,15 @@ public:
     // True for a host domain this device advertises and this platform can
     // read, i.e. one host_domain_value_to_seconds() can convert.
     [[nodiscard]] auto is_host_time_domain(VkTimeDomainKHR domain) const -> bool;
+    // The calibrated timestamps entry points of the extension the device
+    // enabled (VK_KHR_calibrated_timestamps, else VK_EXT_calibrated_timestamps),
+    // nullptr when neither is. Chosen by the enabled extension, never by which
+    // pointer is non-null: with volk loading device functions through the
+    // instance, the loader returns a trampoline for every name it knows, so the
+    // KHR pointer is non-null on a device that enabled only the EXT extension
+    // (Mesa lavapipe) and calling it reaches a null driver entry.
+    [[nodiscard]] auto get_calibrated_timestamps_function        () const -> PFN_vkGetCalibratedTimestampsKHR;
+    [[nodiscard]] auto get_calibrateable_time_domains_function   () const -> PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR;
     // Converts a value in the given host time domain (QPC ticks for
     // QUERY_PERFORMANCE_COUNTER, nanoseconds for the monotonic domains) to
     // reference-clock seconds; 0.0 for a domain that is not a usable host

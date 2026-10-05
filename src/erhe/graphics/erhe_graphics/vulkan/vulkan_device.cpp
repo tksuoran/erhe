@@ -2708,10 +2708,7 @@ void Device_impl::select_calibrated_host_time_domain()
     if (!m_device_extensions.m_VK_KHR_calibrated_timestamps && !m_device_extensions.m_VK_EXT_calibrated_timestamps) {
         return;
     }
-    const PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR get_time_domains =
-        (vkGetPhysicalDeviceCalibrateableTimeDomainsKHR != nullptr)
-            ? vkGetPhysicalDeviceCalibrateableTimeDomainsKHR
-            : vkGetPhysicalDeviceCalibrateableTimeDomainsEXT;
+    const PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR get_time_domains = get_calibrateable_time_domains_function();
     if (get_time_domains == nullptr) {
         log_context->warn("vkGetPhysicalDeviceCalibrateableTimeDomains() is not available; calibrated timestamps disabled");
         return;
@@ -2802,6 +2799,28 @@ auto Device_impl::get_calibrated_host_time_domain() const -> VkTimeDomainKHR
     return m_calibrated_host_time_domain;
 }
 
+auto Device_impl::get_calibrated_timestamps_function() const -> PFN_vkGetCalibratedTimestampsKHR
+{
+    if (m_device_extensions.m_VK_KHR_calibrated_timestamps) {
+        return vkGetCalibratedTimestampsKHR;
+    }
+    if (m_device_extensions.m_VK_EXT_calibrated_timestamps) {
+        return vkGetCalibratedTimestampsEXT;
+    }
+    return nullptr;
+}
+
+auto Device_impl::get_calibrateable_time_domains_function() const -> PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR
+{
+    if (m_device_extensions.m_VK_KHR_calibrated_timestamps) {
+        return vkGetPhysicalDeviceCalibrateableTimeDomainsKHR;
+    }
+    if (m_device_extensions.m_VK_EXT_calibrated_timestamps) {
+        return vkGetPhysicalDeviceCalibrateableTimeDomainsEXT;
+    }
+    return nullptr;
+}
+
 auto Device_impl::is_host_time_domain(const VkTimeDomainKHR domain) const -> bool
 {
     for (const Host_time_domain& entry : m_host_time_domains) {
@@ -2841,8 +2860,7 @@ void Device_impl::update_gpu_calibration()
     if (m_gpu_calibration_valid && ((m_frame_index - m_gpu_calibration_frame) < 120)) {
         return;
     }
-    const PFN_vkGetCalibratedTimestampsKHR get_calibrated_timestamps =
-        (vkGetCalibratedTimestampsKHR != nullptr) ? vkGetCalibratedTimestampsKHR : vkGetCalibratedTimestampsEXT;
+    const PFN_vkGetCalibratedTimestampsKHR get_calibrated_timestamps = get_calibrated_timestamps_function();
     if (get_calibrated_timestamps == nullptr) {
         return;
     }
