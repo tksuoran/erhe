@@ -17,30 +17,18 @@ namespace editor {
 
 namespace {
 
-// The item an object value names, or null (not an object value, null
-// reference, an expression, no local state).
-auto referenced_item(const std::optional<erhe::property::Local_state>& state) -> std::shared_ptr<erhe::Item_base>
-{
-    if (!state.has_value()) {
-        return {};
-    }
-    const erhe::property::Property_value* value = std::get_if<erhe::property::Property_value>(&state.value());
-    if (value == nullptr) {
-        return {};
-    }
-    return std::dynamic_pointer_cast<erhe::Item_base>(erhe::property::get_referenced_object(*value));
-}
-
 auto referenced_item(const std::optional<erhe::property::Property_value>& value) -> std::shared_ptr<erhe::Item_base>
 {
-    return referenced_item(to_local_state(value));
+    return get_referenced_item(to_local_state(value));
 }
+
+} // anonymous namespace
 
 // D28 host check: same scene, or a manager-owned asset (material, brush,
 // animation) the asset manager accepts across scenes; a scene-hosted item
 // (a texture, a graph texture, a node) never crosses scenes. An item whose
 // scene cannot be determined (previews, unhosted test items) passes.
-auto is_reference_allowed(App_context& context, const erhe::Item_base& target, const erhe::Item_base& referenced) -> bool
+auto is_item_reference_allowed(App_context& context, const erhe::Item_base& target, const erhe::Item_base& referenced) -> bool
 {
     Scene_root* const target_scene     = find_scene_root_for_item(context, target);
     Scene_root* const referenced_scene = find_scene_root_for_item(context, referenced);
@@ -67,8 +55,6 @@ auto is_reference_allowed(App_context& context, const erhe::Item_base& target, c
     return false;
 }
 
-// Asset-manager plan R5.4: an operation holding a managed asset declares
-// the usership. One entry per distinct asset.
 void adopt_reference_usership(App_context& context, std::vector<Asset_reference>& userships, const std::shared_ptr<erhe::Item_base>& item)
 {
     if (!item || (context.asset_manager == nullptr) || (asset_type_from_item(*item) == Asset_type::none)) {
@@ -82,43 +68,6 @@ void adopt_reference_usership(App_context& context, std::vector<Asset_reference>
     Asset_reference& usership = userships.emplace_back();
     usership.set_user_label("undo stack: property set");
     usership.adopt(*context.asset_manager, item);
-}
-
-} // anonymous namespace
-
-auto apply_item_property(
-    App_context&                                       context,
-    erhe::Item_base&                                   item,
-    const erhe::property::Dependency_property&         property,
-    const std::optional<erhe::property::Local_state>&  state
-) -> bool
-{
-    return apply_item_property(context, item, item, property, state);
-}
-
-auto apply_item_property(
-    App_context&                                       context,
-    erhe::Item_base&                                   item,
-    erhe::property::Dependency_object&                 target,
-    const erhe::property::Dependency_property&         property,
-    const std::optional<erhe::property::Local_state>&  state
-) -> bool
-{
-    if ((&target != &item) && item.is_sealed()) {
-        // D24: a sub-object of a sealed item is as sealed as the item.
-        log_operations->warn("property '{}' on a sub-object of sealed '{}' not applied", property.get_name(), item.get_name());
-        return false;
-    }
-    if (const std::shared_ptr<erhe::Item_base> referenced = referenced_item(state); referenced && !is_reference_allowed(context, item, *referenced)) {
-        return false;
-    }
-    if (!target.apply_local_state(property, state)) {
-        // Sealed item (D24) or a rejected value: the store logged why.
-        log_operations->warn("property '{}' on '{}' not applied", property.get_name(), item.get_name());
-        return false;
-    }
-    context.on_item_property_changed(item, property);
-    return true;
 }
 
 auto make_computed_write_operation(
@@ -232,8 +181,8 @@ void Property_set_operation::adopt_userships(App_context& context)
         return;
     }
     m_userships_adopted = true;
-    adopt_reference_usership(context, m_userships, referenced_item(m_before));
-    adopt_reference_usership(context, m_userships, referenced_item(m_after));
+    adopt_reference_usership(context, m_userships, get_referenced_item(m_before));
+    adopt_reference_usership(context, m_userships, get_referenced_item(m_after));
 }
 
 void Property_set_operation::undo(App_context& context)
@@ -250,15 +199,7 @@ auto Property_set_operation::apply(App_context& context, const std::optional<erh
     if (!m_item) {
         return false;
     }
-    if (!m_sub_object.has_value()) {
-        return apply_item_property(context, *m_item, m_property, state);
-    }
-    erhe::property::Dependency_object* target = m_item->get_property_sub_object(m_sub_object.value());
-    if (target == nullptr) {
-        log_operations->warn("property '{}' on '{}': sub-object {} no longer exists, not applied", m_property.get_name(), m_item->get_name(), m_sub_object.value());
-        return false;
-    }
-    return apply_item_property(context, *m_item, *target, m_property, state);
+    return apply_item_property(context, *m_item, m_sub_object, m_property, state);
 }
 
 void Property_set_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
@@ -270,7 +211,7 @@ void Property_set_operation::collect_item_references(std::unordered_set<const er
         follow_up->collect_item_references(out_items);
     }
     for (const std::optional<erhe::property::Local_state>* state : {&m_before, &m_after}) {
-        if (const std::shared_ptr<erhe::Item_base> referenced = referenced_item(*state); referenced) {
+        if (const std::shared_ptr<erhe::Item_base> referenced = get_referenced_item(*state); referenced) {
             out_items.insert(referenced.get());
         }
     }

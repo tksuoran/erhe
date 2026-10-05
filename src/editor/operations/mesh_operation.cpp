@@ -55,6 +55,13 @@ void Mesh_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute Wait {}", describe());
 
+    // All or nothing: an error recorded while the entries were built (a
+    // mesh whose result failed validation) leaves the operation inert, as
+    // undo does, so Operation_stack does not record a partial change.
+    if (has_error()) {
+        log_operations->warn("Op Execute {} skipped: {}", describe(), get_error());
+        return;
+    }
     if (m_entries.empty()) {
         set_error("No mesh entries - selection may not contain meshes with geometry");
         log_operations->warn("Op Execute {} failed: {}", describe(), get_error());

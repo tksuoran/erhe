@@ -18,10 +18,6 @@
 
 namespace editor {
 
-Operation::~Operation() noexcept
-{
-}
-
 #pragma region Commands
 Undo_command::Undo_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "undo"}
@@ -100,6 +96,19 @@ void Operation_stack::verify_main_thread() const
     ERHE_VERIFY(std::this_thread::get_id() == m_context.main_thread_id);
 }
 
+auto Operation_stack::is_recordable(const Operation& operation) const -> bool
+{
+    if (!operation.has_error()) {
+        return true;
+    }
+    // An operation reports an error from its first execute when it could
+    // not do its work, before it changes anything (Property_edit_operation
+    // restores what its edit wrote first): there is nothing to undo, and
+    // the redo history stays valid.
+    log_operations->warn("Op {} not recorded: {}", operation.describe(), operation.get_error());
+    return false;
+}
+
 void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
 {
     verify_main_thread();
@@ -113,7 +122,9 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
         m_executing = true;
         operation->execute(m_context);
         m_executing = false;
-        m_group_collected.push_back(operation);
+        if (is_recordable(*operation)) {
+            m_group_collected.push_back(operation);
+        }
         return;
     }
 
@@ -143,6 +154,9 @@ void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
     m_executing = true;
     operation->execute(m_context);
     m_executing = false;
+    if (!is_recordable(*operation)) {
+        return;
+    }
     if (m_grouping) {
         m_group_collected.push_back(operation);
         return;
@@ -212,15 +226,21 @@ void Operation_stack::update()
 
     // Index loop with a per-iteration copy: an executing operation may
     // queue() follow-up operations, growing (and reallocating) m_queued.
+    bool recorded = false;
     for (std::size_t i = 0; i < m_queued.size(); ++i) {
         std::shared_ptr<Operation> operation = m_queued[i];
         m_executing = true;
         operation->execute(m_context);
         m_executing = false;
-        m_executed.push_back(std::move(operation));
+        if (is_recordable(*operation)) {
+            m_executed.push_back(std::move(operation));
+            recorded = true;
+        }
     }
     m_queued.clear();
-    m_undone.clear();
+    if (recorded) {
+        m_undone.clear();
+    }
 }
 
 auto Operation_stack::get_undo_block_reason() const -> const char*

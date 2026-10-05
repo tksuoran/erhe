@@ -201,6 +201,11 @@ void Separate_selection_operation::execute(App_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
+    // All or nothing, as undo: an operation in error changes nothing.
+    if (has_error()) {
+        log_operations->warn("Op Execute {} skipped: {}", describe(), get_error());
+        return;
+    }
     if (m_entries.empty()) {
         return;
     }

@@ -173,9 +173,11 @@ public:
 One operation class that replaces hand-written property before / after:
 
 - Constructed with a description and an edit function
-  (`std::function<void(Property_edit_context&)>`) that performs property
-  writes on items (setters such as `Light::set_intensity` are fine; they
-  write properties).
+  (`std::function<void()>`) that performs property writes on items
+  (setters such as `Light::set_intensity` are fine; they write
+  properties). The function captures what it edits; no context object is
+  passed, because the cross-scene reference check below runs on the
+  records, which covers object values written through setters as well.
 - First `execute`: opens a `Property_write_recording`, runs the edit
   function once, takes the records and resolves each record's object to an
   owning item handle (`shared_ptr<Item_base>` plus the sub-object index of
@@ -184,13 +186,14 @@ One operation class that replaces hand-written property before / after:
   or an object no item owns) is a fatal error: the edit function wrote
   something that is not document state of a live item, which belongs in a
   bespoke operation. The edit function is released after the first execute.
-- Refusals: a write refused during the edit (gates, bridge validate, and
-  the cross-scene reference check of `apply_item_property`,
-  `property_set_operation.cpp:112`, which the edit context applies to every
-  object-reference write it offers) puts the operation in error
-  (`Operation::set_error`, `operation.hpp:64`) naming the property; the
-  writes that did happen are restored from their before states and no undo
-  entry is left. An edit that recorded nothing is also an error.
+- Refusals: a write refused during the edit (gates, bridge validate), or
+  a recorded object value that the cross-scene reference check of
+  `apply_item_property` (`is_item_reference_allowed`) refuses, puts the
+  operation in error (`Operation::set_error`, `operation.hpp:64`) naming
+  the property; the writes that did happen are restored from their before
+  states and no undo entry is left (`Operation_stack` does not record an
+  operation that is in error after its first execute). An edit that
+  recorded nothing is also an error.
 - Redo applies the `after` states in record order; undo applies the
   `before` states also in record order, each followed by
   `on_item_property_changed`. Forward order is required for cascades: an
@@ -332,7 +335,7 @@ effort before commit. Targets that must build: `editor`, `src/example`,
 | Step | Content | Depends on | Size |
 |---|---|---|---|
 | A1 | `Property_write_recording` in `erhe::property` with its tests (3.1) | - | S |
-| A2 | `Property_edit_operation` (3.2); shared apply code with `Property_set_operation`; MCP test for record / undo / redo and a cascade | A1 | M |
+| A2 | `Property_edit_operation` (3.2); shared apply code with `Property_set_operation`; `editor_operation_tests` for record / undo / redo and a cascade | A1 | M |
 | A3 | Close the MCP undo holes: the property fields of the five physics tools through `Property_edit_operation`; new `Collision_shape_set_operation` (also used by `Mesh_operation::restore_physics` if that removes its direct write); `Scene_settings_set_operation`, whose execute / undo notify each consumer of the changed `Scene_settings` fields directly (named in the commit, no per-frame comparison; `Lightmap_tile_overrides_operation` is the precedent); confirm the joint rebuild path (4.3); cases added to `Mcp_test.document_edits_record_one_undo_entry_each`. May split into two commits (physics, scene settings) | A2 | L |
 | A4 | Move the operations of 3.3 onto `Property_edit_operation`; test that an expression survives undo of a multi-property edit; full property dump undo / redo round trip per migrated operation; operation class count before / after in the commit message | A2 | M |
 | B1 | Notification decision (section 6): written, then shown to the user before any code | A4 | S |
@@ -368,9 +371,9 @@ No mechanism is removed in this plan without the user's approval of B1.
   behavior for transform / name.
 - Edit functions that also mutate non-property state (including
   `set_flag_bits` and `set_parent_from_node`) would lose that state on
-  undo. A2 documents the rule in `doc/editor/operations.md`; whether a
-  debug check is possible (the item mutation serial, `item.hpp:461-468`)
-  is decided in A2.
+  undo. The rule is in `doc/editor/operations.md`
+  "Property_edit_operation", with why the item mutation serial cannot
+  serve as a debug check for it.
 - Removing per-type tools changes the MCP API used by creation scripts;
   all in-repo callers are migrated in C3, and the guideline document says
   which tool to use instead.

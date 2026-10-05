@@ -182,6 +182,10 @@ private:
     void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
     void verify_main_thread() const;
+    // False (logged) for an operation in error after its first execute:
+    // queue, execute_now and update do not record it, and it does not
+    // clear the redo history.
+    [[nodiscard]] auto is_recordable(const Operation& operation) const -> bool;
 
     App_context&  m_context;
     Undo_command  m_undo_command;

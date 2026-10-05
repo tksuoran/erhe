@@ -2,6 +2,10 @@
 
 namespace editor {
 
+Operation::~Operation() noexcept
+{
+}
+
 void Operation::on_lossless_undo(App_context&)
 {
     // Default: an operation that cannot rebuild itself keeps what it holds.

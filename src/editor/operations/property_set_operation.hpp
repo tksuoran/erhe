@@ -1,6 +1,7 @@
 #pragma once
 
 #include "assets/asset_reference.hpp"
+#include "operations/item_property_apply.hpp"
 #include "operations/operation.hpp"
 
 #include "erhe_property/expression.hpp"
@@ -117,30 +118,11 @@ private:
     bool                         m_userships_adopted{false};
 };
 
-// Applies `state` (a value, an expression, or nullopt = clear) as the
-// item's local layer and runs the editor consequence hook. Shared by the
-// operations above and by direct (non-undoable) callers such as the startup
-// script. An object value (D28) is applied only when the referenced item
-// belongs to the target's scene or is a cross-scene referenceable asset;
-// otherwise a warning names both items and nothing changes. Returns whether
-// the state was applied.
-auto apply_item_property(
-    App_context&                                       context,
-    erhe::Item_base&                                   item,
-    const erhe::property::Dependency_property&         property,
-    const std::optional<erhe::property::Local_state>&  state
-) -> bool;
-
-// The same for a property of one of the item's sub-objects (D29):
-// `target` is item.get_property_sub_object(index); a sealed item refuses
-// the write, and the consequence hook runs with the item.
-auto apply_item_property(
-    App_context&                                       context,
-    erhe::Item_base&                                   item,
-    erhe::property::Dependency_object&                 target,
-    const erhe::property::Dependency_property&         property,
-    const std::optional<erhe::property::Local_state>&  state
-) -> bool;
+// Asset-manager plan R5.4: an operation that holds `item` (a managed asset
+// named by an object value it can restore) declares the usership; one
+// entry per distinct asset. No-op for a null item, a non-asset item or
+// without an asset manager.
+void adopt_reference_usership(App_context& context, std::vector<Asset_reference>& userships, const std::shared_ptr<erhe::Item_base>& item);
 
 // D26: an undoable write of a writable computed property. The value goes
 // through the property's setter now, and the returned operation records

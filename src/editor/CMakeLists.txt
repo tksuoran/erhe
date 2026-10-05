@@ -390,6 +390,10 @@ erhe_target_sources_grouped(
     operations/item_reposition_in_parent_operation.cpp
     operations/item_reposition_in_parent_operation.hpp
     operations/material_change_operation.cpp
+    operations/item_property_apply.cpp
+    operations/item_property_apply.hpp
+    operations/property_edit_operation.cpp
+    operations/property_edit_operation.hpp
     operations/property_set_operation.cpp
     operations/property_set_operation.hpp
     operations/style_set_operation.cpp
@@ -1353,6 +1357,7 @@ if (${ERHE_BUILD_TESTS})
     add_subdirectory(assets/test)
     add_subdirectory(brushes/test)
     add_subdirectory(mcp/test)
+    add_subdirectory(operations/test)
     add_subdirectory(renderers/test)
     add_subdirectory(rig/test)
     add_subdirectory(transform/test)

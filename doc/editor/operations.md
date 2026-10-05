@@ -10,7 +10,7 @@ Implements the undo/redo operation system and all concrete editor operations.
 
 - **`Operation`** -- Abstract base class with `execute(App_context&)` and `undo(App_context&)`. Has a unique serial ID, a description string, and an error state (`set_error`/`get_error`/`has_error`). Operations that fail set the error instead of asserting.
 
-- **`Operation_stack`** -- Manages three vectors: `m_queued`, `m_executed`, `m_undone`. Operations are queued via `queue()`, then executed during `update()` (called once per frame). Undo moves from `m_executed` to `m_undone`; redo moves back. Also an `Imgui_window` that displays the operation history. Binds Ctrl+Z/Ctrl+Y for undo/redo.
+- **`Operation_stack`** -- Manages three vectors: `m_queued`, `m_executed`, `m_undone`. Operations are queued via `queue()`, then executed during `update()` (called once per frame). Undo moves from `m_executed` to `m_undone`; redo moves back. Also an `Imgui_window` that displays the operation history. Binds Ctrl+Z/Ctrl+Y for undo/redo. An operation that is in error after its first execute (`queue()` / `update()`, `execute_now()`, or an undo group) is not recorded: it is logged, it does not join the undo history or the group, and it leaves the redo history in place. Execute is all or nothing: an operation reports such an error only when it changed nothing - it checks before it mutates, and `Mesh_operation` and `Separate_selection_operation` return at the top of `execute()` when an error was recorded while their entries were built (one mesh failing validation leaves every mesh unchanged). A caller that needs the reason reads `get_error()` after `execute_now()`. `Compound_operation` does not propagate a child's first-execute error: a failed `Property_edit_operation` child has restored its writes and stays inert inside the compound while its siblings stay applied.
 
 - **`Mesh_operation`** -- Base for operations that modify mesh geometry. Contains a list of `Entry` objects, each storing before/after mesh primitives and node physics. `make_entries()` helper applies a geometry transformation function to all selected meshes. After each geometry transform, the output is sanitized (`Geometry::sanitize()` - fixes degenerate facets and NaN/Inf vertices) and validated (`Geometry::validate()`). When sanitization fixes problems, the pre-operation input geometry is saved to `debug_geometry/` as a `.geogram` file for investigation. A result with no facets (every face deleted, a merge by distance that collapses the mesh) is a legal result: it yields an empty `Primitive` that renders and raytraces nothing (`doc/erhe/primitive.md` "Empty primitives"), the mesh keeps it (no rigid body, since it has no convex hull), and undo restores the previous primitive like for any other operation.
 
@@ -109,6 +109,7 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Node_transform_operation` -- undo/redo node transforms
   - `Material_change_operation` -- undo/redo a whole `Material_data` snapshot (MCP `edit_material`); the Properties window records `Property_set_operation`s instead
   - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows, MCP `set_item_property`, and MCP `edit_light` / `edit_camera` (one per field, grouped into a `Compound_operation` with a `Node_transform_operation` for `edit_light`'s position)
+  - `Property_edit_operation` -- the property writes of an edit function, recorded on the first execute (see "Property_edit_operation" below)
   - `Lightmap_tile_overrides_operation` -- a scene's lightmap quadtree leaf overrides before / after (the Lightmap window's and MCP's subdivide / merge); execute and undo let the Lightmap window re-prepare a live partition
   - `Merge_operation` -- merge multiple meshes
   - `Separate_selection_operation` (`operations/separate_operation.hpp`) --
@@ -134,6 +135,89 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Paint_weights_operation` -- rewrites `vertex_joint_indices_0` / `vertex_joint_weights_0` of a vertex set (one `Weight_paint_tool` stroke); no physics or normal work (positions unchanged), but the primitive rebuild refreshes the solid-wireframe / edge-line streams that carry their own copy of the joint data.
 
 - **`Operations`** window -- ImGui window providing buttons for all geometry operations. Its "Components" section holds the delete and dissolve buttons, each enabled in the component mode whose set it reads (Delete Vertices and Dissolve Vertices in vertex mode; Delete Edges, Delete Only Edges and Faces and Dissolve Edges in edge mode; Delete Faces, Delete Only Faces and Dissolve Faces in face mode; Limited Dissolve with a component or a mesh selection), and the dissolve options as widgets; the options are `Operations` members read by the buttons and the `Geometry.Dissolve.*` commands. The commands are `Geometry.Delete.Vertices` / `.Edges` / `.Faces` / `.OnlyEdgesAndFaces` / `.OnlyFaces`, `Geometry.Dissolve.Faces` / `.Edges` / `.Vertices` / `.Limited`, and the mode-dispatching `Geometry.Delete.Selected` (Delete) and `Geometry.Dissolve.Selected` (Ctrl+X) of `doc/editor/mesh_component_selection.md`. The same section holds the merge buttons - Merge at Center, at Cursor, at First, at Last, Collapse (enabled with a selection in vertex, edge or face mode) and Merge by Distance (with a component or a mesh selection) - with the UVs checkbox and the by-distance threshold, centroid and include-unselected widgets as `Operations` members; the commands are `Geometry.Merge.AtCenter` (M) / `.AtCursor` / `.AtFirst` / `.AtLast` / `.Collapse` / `.ByDistance`. `Geometry.Merge.AtCursor` logs and does nothing when no content point is hovered. The Subdivide Edges button (enabled with a selection in vertex, edge or face mode) comes with the cuts, smoothness and only-quads widgets as `Operations` members; its command is `Geometry.Subdivide.Edges` (no key: Blender reaches it from a menu). The Split and Separate buttons (enabled with a selection in vertex, edge or face mode) and the Rip button (vertex or edge mode) run `Geometry.Split.Selected` (Y), `Geometry.Separate.Selection` (P) and `Geometry.Rip.Selected` (V; toward the component tool's last hovered content point); each declines without a live selection in a mode it reads. The Fill button (vertex, edge or face mode) and the Connect button (vertex or edge mode) run `Geometry.Fill.Selected` (F) and `Geometry.Connect.Selected` (J). The Bridge Edge Loops button (vertex, edge or face mode) comes with the connect loops combo (open loop, closed loop, loop pairs), the merge checkbox, merge factor, twist and cuts widgets (`Operations::m_bridge_loops_options`); its command is `Geometry.Bridge.Loops` (no key: Blender reaches it from a menu). The Flip Normals button (vertex, edge or face mode) runs `Geometry.Normals.Flip`; Recalculate Outside and Recalculate Inside (a component selection, or a mesh selection in object mode) run `Geometry.Normals.RecalculateOutside` (Shift+N) and `Geometry.Normals.RecalculateInside`. The Smooth Vertices button (vertex, edge or face mode) comes with the smoothing factor and repeat widgets (`Operations::m_smooth_vertices_options`); its command `Geometry.Smooth.Vertices` computes the positions with `smooth_vertices()` on the main thread and queues one `Move_mesh_vertices_operation` "Smooth Vertices" per affected primitive (a `Compound_operation` for several), which edits the Geometry in place, so the component selection survives; it is not a `Mesh_operation`. Every command and button of the section that acts on the component selection goes through one guard (`has_component_mode_selection()` in `operations_window.cpp`): it declines without a live selection in a mode the command reads and while a modal component edit (slide, loop cut, inset, bevel, knife) runs. The Inset button (enabled with a face mode selection) comes with the thickness and depth drags and the boundary, even offset, relative offset, edge rail, outset, individual and interpolate checkboxes (`Operations::m_inset_options`); it runs the numeric inset `Mesh_component_selection_tool::inset()` (one `Fork_geometry_operation` "Inset", `doc/editor/mesh_modeling.md`), not a `Mesh_operation`. The Bevel button (enabled with an edge or vertex mode selection) comes with the amount drag, the offset type combo (offset, width) and the loop slide checkbox (`Operations::m_bevel_options`); it runs the numeric bevel `Mesh_component_selection_tool::bevel()` (one `Fork_geometry_operation` "Bevel", `doc/editor/mesh_modeling.md`), not a `Mesh_operation`.
+
+## Property_edit_operation
+
+`Property_edit_operation` (`operations/property_edit_operation.hpp`) is an
+undoable property edit described by a function instead of hand-written
+before / after states. It is constructed with a description and an edit
+function (`std::function<void()>`) that performs property writes on items:
+`set_value`, `clear_value`, `set_expression`, or setters that write
+properties (`Light::set_intensity`, `Material::set_data`).
+
+- First execute: the operation opens an
+  `erhe::property::Property_write_recording` (`doc/erhe/property.md`
+  "Write recording"), runs the edit function once, takes the records and
+  releases the function. Each record's object resolves to the item that
+  owns it: the item itself, or for a `Mesh_primitive` its mesh
+  (`get_owner()`) with the primitive's index (`get_index()`) as the D29
+  sub-object index, the form `Property_set_operation` uses. A record whose
+  object no live item owns (a `Property_style`, a primitive outside a mesh)
+  is a fatal error: that write is not document state the operation can
+  restore and belongs in a bespoke operation. The writes have happened, so
+  the first execute does not re-apply them; it runs
+  `App_context::on_item_property_changed` once per record.
+- Redo applies the after states and undo the before states, each through
+  `apply_item_property` (`operations/item_property_apply.hpp`, shared with
+  `Property_set_operation`, so both reach the same consequences), each followed by `on_item_property_changed`. No
+  recording may be open while they apply (verified), so a restore is never
+  taken for an edit.
+- Undo runs in record order, like redo, not in reverse. A changed callback
+  that writes another property during the edit is recorded after the write
+  that caused it: an edit of A whose callback writes B records [A, B].
+  Undo restores A first (the callback writes B from A's old value) and then
+  B's own before state, which puts back a B the user authored
+  independently; reverse order would leave the callback's value.
+- Refusals: a write a gate refused during the edit (read-only, sealed,
+  validate, bridge validate such as a sibling-unique name), a write on a
+  sub-object of a sealed item (D24: a mesh primitive carries no seal of its
+  own, so the store accepts it, but `apply_item_property` refuses it), an
+  object value
+  the D28 host check of `apply_item_property` refuses (`is_item_reference_allowed`,
+  applied after the edit to the after state of every recorded property, so
+  it covers object values written through setters too), or an edit that
+  wrote nothing puts the operation in error naming the property and item.
+  The writes that did happen are restored from their before states (in
+  record order, without the consequence hook, since the edit never
+  reported them), the operation keeps no records, and `Operation_stack`
+  does not record it.
+- The edit function is released at the end of the first execute, after the
+  records hold their items and after any restore: its captures may be the
+  only owners of what it edited.
+- Every object value in a before or after state that names a managed asset
+  is adopted as an `Asset_reference` usership, as `Property_set_operation`
+  does, and `collect_item_references` reports every recorded item and every
+  referenced item.
+- `get_records()` lists the records (item, sub-object, property, before,
+  after) for callers that report what an edit changed.
+
+Edit functions write only through `set_value` and property setters. A
+member write that bypasses the property layer is invisible to the
+recording and is lost on undo: `Item_base::set_flag_bits` (the flag
+properties are bridges whose setter calls it; write the flag property with
+`set_value` instead), `Node::set_parent_from_node` (a transform; that is
+`Node_transform_operation`), `Node_physics_system::set_collision_shape`, or
+any setter that assigns a plain member. Structural changes (insert, remove,
+reparent, geometry replacement) stay bespoke operations.
+
+There is no run-time check for such member writes. The item mutation
+serial (`erhe::get_item_mutation_serial()`, `item.hpp`) cannot provide one:
+it moves on recorded property writes too (a name, a flag bridge such as
+the locks or visibility) and on hierarchy edits, and it does not move on
+transform, physics or other plain member writes, so a serial comparison
+around the edit would both flag correct edits and miss the writes it is
+meant to catch.
+
+`editor_operation_tests` (`src/editor/operations/test/`) covers the record
+/ undo / redo round trip on two items with an expression surviving undo, a
+mesh primitive property, a cascade, a refused write, a refused reference,
+a primitive write on a sealed mesh, an edit that writes nothing, and an
+edit function that is the only owner of its items. The test compiles
+`property_edit_operation.cpp` and `item_property_apply.cpp`; the editor
+functions they call that need the whole editor
+(`App_context::on_item_property_changed`, the scene lookup of
+`is_item_reference_allowed`, the asset usership) have minimal test
+definitions in `editor_glue.cpp`.
 
 ## Primitive swaps keep the node in place
 
