@@ -66,7 +66,10 @@ on culling.
   the MSVC `/WX`, and `erhe::version` (`doc/erhe/version.md`) logged as the
   editor's first startup line beside the dependency commits. `-Werror` on
   Clang, GCC and AppleClang was tried and removed again because it failed
-  the CI builds; it is open until those builds are warning-free.
+  the CI builds; it is open until those builds are warning-free. The
+  sanitizer entry builds since 63ba00fd4 (Clang links the shared sanitizer
+  runtime on Linux) and its deviceless set passes locally with no report
+  (1368 of 1368 with clang 18 and the CI options).
 
 ## Next
 
