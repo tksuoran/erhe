@@ -18,13 +18,13 @@ namespace {
 class Computed_object : public Test_object
 {
 public:
-    Computed_object() : Test_object{type_d()} {}
+    Computed_object() : Test_object{type_f()} {}
     glm::vec3 size{1.0f, 2.0f, 3.0f};
     int       compute_calls{0};
 };
 
 const Property<glm::vec3> computed_extent = Property<glm::vec3>::register_computed(
-    "computed_extent", type_d(),
+    "computed_extent", type_f(),
     [](const Dependency_object& o) -> Property_value {
         Computed_object& c = const_cast<Computed_object&>(static_cast<const Computed_object&>(o));
         ++c.compute_calls;
@@ -37,16 +37,16 @@ const Property<glm::vec3> computed_extent = Property<glm::vec3>::register_comput
 );
 
 const Property<int> computed_count = Property<int>::register_computed(
-    "computed_count", type_d(),
+    "computed_count", type_f(),
     [](const Dependency_object& o) -> Property_value { return static_cast<int>(static_cast<const Computed_object&>(o).size.x); }
 );
 
-const Property<float> computed_target = Property<float>::register_property("computed_target", type_d());
+const Property<float> computed_target = Property<float>::register_property("computed_target", type_f());
 
 // A writable computed property: twice computed_target, and its setter
 // writes computed_target.
 const Property<float> computed_double = Property<float>::register_computed(
-    "computed_double", type_d(),
+    "computed_double", type_f(),
     [](const Dependency_object& o) -> Property_value { return o.get_value(computed_target) * 2.0f; },
     [](Dependency_object& o, const Property_value& value) { o.set_value(computed_target, std::get<float>(value) * 0.5f); },
     computed_target.get()
