@@ -45,6 +45,8 @@ A commit that changes the public API of an `erhe::*` library adds its line to `C
 
 Configure and build through the `scripts/` wrappers on every platform; they encode the project's configure flow (CPM caching, MSVC environment init, the options they pass). The per-platform build trees and the day-to-day loop are in the platform's topic document; `doc/building.md` lists every wrapper and CMake option. Building and launching the editor to verify a change is self-serve.
 
+**In cloud sessions and CI, always build and run the headless editor** (`scripts/configure_ninja_linux_vulkan_headless.sh`, `build_ninja_linux_vulkan_headless`; `doc/agents/linux.md`) for runtime verification, MCP-driven scripts and `mcp_server_tests`. Never run the windowed editor under a virtual display (Xvfb or similar) there: its layout, frame timing and input differ from the headless configuration the verification scripts are written for, so its results are not comparable.
+
 A change to shared infrastructure (e.g. `erhe::scene_renderer`) keeps these targets building and consistent: the `editor` executable, `src/example`, `src/hello_swap`, `src/hextiles` and the `erhe::*` libraries.
 
 ## No Band-Aid Fixes
