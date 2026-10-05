@@ -73,10 +73,10 @@ on culling.
 
 ## Next
 
-Nothing is selected: the three items chosen on 2026-10-04 (9 shadow half,
-11, 17) are done. What is open is listed under "Open parts of worked items"
-and "Follow-ups found by review"; the next pick is a new selection from
-`doc/reference/audit_erhe_2026_09_30.md` section 8.
+Items 13 and 14, selected 2026-10-05, worked together: the plan, its steps
+and order are in `doc/plans/property_undo_and_reflective_mcp.md`. What else
+is open is listed under "Open parts of worked items" and "Follow-ups found
+by review".
 
 ## Open parts of worked items
 

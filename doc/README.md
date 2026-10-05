@@ -372,6 +372,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
+- [plans/property_undo_and_reflective_mcp.md](plans/property_undo_and_reflective_mcp.md) (proposed): Data-model undo by property write recording and reflective MCP item edits (audit items 13, 14)
 - [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (in progress): FABRIK inverse kinematics requirements

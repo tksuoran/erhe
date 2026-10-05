@@ -224,3 +224,7 @@ Geometry operations run asynchronously via `async_for_nodes_with_mesh()` (in `it
 - erhe::scene, erhe::geometry, erhe::primitive, erhe::physics
 - erhe::commands (for undo/redo key bindings)
 - editor: App_context, Mesh_memory
+
+## Future work
+
+- [plans/property_undo_and_reflective_mcp.md](../plans/property_undo_and_reflective_mcp.md): property edits recorded instead of hand-coded before / after, and the MCP item-edit tools replaced by one reflective verb.

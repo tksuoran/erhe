@@ -51,7 +51,8 @@ next selected items are in `doc/plans/audit_2026_09_30_followups.md`.
 | 17 | Sanitizers, `-Werror`, CI GPU tests, version | Done except LeakSanitizer; the CI GPU test job (lavapipe, SDK validation layer) awaits its first runner run: `ERHE_USE_ASAN` / `ERHE_USE_UBSAN`, a Clang ASan+UBSan CI entry, `-Werror` per erhe target on every toolchain, `erhe::version` logged at startup | 091b5879f, fbbc7bd83 |
 | 18 | Shader pipeline persistence | glslang SPIR-V cache key and atomic writes, persisted `VkPipelineCache` done; Metal `MTLBinaryArchive` open, needs macOS | f9ab02789, b67d84982 |
 
-Options 11, 13-16, 19-27 have not been started. Of the 2026-06-21
+Options 13 and 14 are planned in `doc/plans/property_undo_and_reflective_mcp.md`;
+options 15, 16, 19-27 have not been started. Of the 2026-06-21
 recommendations in section 7, number 2 (pin concurrentqueue) and number 4
 (centralize GoogleTest) are done by 238830d45.
 
