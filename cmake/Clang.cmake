@@ -55,6 +55,38 @@ if (ERHE_USE_UBSAN)
     add_link_options(-fsanitize=undefined)
 endif ()
 
+# Clang on Linux links its sanitizer runtime statically and into executables
+# only, so a sanitized shared library leaves every __asan_* / __ubsan_*
+# reference unresolved. Dependencies that build shared libraries and link
+# them with -Wl,--no-undefined (geogram's libgeogram.so) then fail to link.
+# GCC links its shared libasan / libubsan into shared libraries as well,
+# which is why only the Clang sanitizer tree hit this. -shared-libsan selects
+# the shared runtime for every link, executables and shared libraries alike,
+# which also keeps one runtime instance per process. The runtime lives in
+# Clang's resource directory, outside the loader's default path, so it is
+# added to every binary's run path; -frtlib-add-rpath does not do this on
+# distributions (Ubuntu) whose runtime directory is not the per-target one.
+if ((ERHE_USE_ASAN OR ERHE_USE_UBSAN) AND (NOT WIN32) AND (NOT APPLE) AND (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
+    if (ERHE_USE_ASAN)
+        set(erhe_sanitizer_runtime_name "libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so")
+    else ()
+        set(erhe_sanitizer_runtime_name "libclang_rt.ubsan_standalone-${CMAKE_SYSTEM_PROCESSOR}.so")
+    endif ()
+    execute_process(
+        COMMAND         "${CMAKE_CXX_COMPILER}" "-print-file-name=${erhe_sanitizer_runtime_name}"
+        OUTPUT_VARIABLE erhe_sanitizer_runtime_path
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if (NOT IS_ABSOLUTE "${erhe_sanitizer_runtime_path}" OR NOT EXISTS "${erhe_sanitizer_runtime_path}")
+        message(FATAL_ERROR
+            "ERHE_USE_ASAN / ERHE_USE_UBSAN: ${CMAKE_CXX_COMPILER} has no shared sanitizer runtime "
+            "${erhe_sanitizer_runtime_name} (got '${erhe_sanitizer_runtime_path}'). "
+            "On Debian / Ubuntu install libclang-rt-<version>-dev.")
+    endif ()
+    get_filename_component(erhe_sanitizer_runtime_dir "${erhe_sanitizer_runtime_path}" DIRECTORY)
+    add_link_options(-shared-libsan "-Wl,-rpath,${erhe_sanitizer_runtime_dir}")
+endif ()
+
 if (WIN32)
     set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 endif ()

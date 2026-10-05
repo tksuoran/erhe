@@ -203,8 +203,12 @@ pointers and debug info so the reports carry symbolized stacks in a Release
 tree. UBSan is the default check set with recovery on: a report is printed
 and the program continues unless the `UBSAN_OPTIONS=halt_on_error=1`
 runtime option is set, which is what the CI sanitizer entry does
-(`doc/testing.md` "CI"). The Windows `*_asan.bat` wrappers below set
-`ERHE_USE_ASAN`.
+(`doc/testing.md` "CI"). With Clang on Linux every binary links the shared
+sanitizer runtime (`-shared-libsan`, run path to Clang's runtime directory),
+because the static runtime Clang uses by default leaves sanitized shared
+libraries such as geogram's unlinkable; configure stops with an error when
+that runtime is missing (on Debian / Ubuntu it is `libclang-rt-<version>-dev`).
+The Windows `*_asan.bat` wrappers below set `ERHE_USE_ASAN`.
 
 **ERHE_WARNINGS_AS_ERRORS** -- Each toolchain file applies erhe's warning
 set per erhe target (`erhe_target_settings_toolchain`). With MSVC this option
