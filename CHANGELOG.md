@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::property`: `Property_write_recording` (`property_write_recording.hpp`),
+  an RAII per-thread scope collecting the local-layer writes made while it is
+  open as `Property_write_record`s (object, property, `before` / `after`
+  `Local_state`) via `take_records()`, and the refused writes via
+  `get_refusals()` / `get_refusal_count()` (`Property_write_refusal`); see
+  `doc/erhe/property.md` "Write recording".
 - `erhe::graphics`: `Graphics_config::vulkan.vulkan_gpu_assisted_validation`
   (config version 2), GPU-assisted validation in place of synchronization
   validation; debug-level resource and address traces (`erhe.graphics.texture`,

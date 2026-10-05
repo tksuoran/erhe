@@ -1,5 +1,6 @@
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_property/property_log.hpp"
+#include "erhe_property/property_write_recording.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -156,6 +157,10 @@ Dependency_object& Dependency_object::operator=(const Dependency_object& other)
 
 Dependency_object::~Dependency_object() noexcept
 {
+    // A recording open on this thread must not keep pointers to this object.
+    if (Property_write_recording* const recording = Property_write_recording::get_active(); recording != nullptr) {
+        recording->forget_object(*this);
+    }
     if (m_style) {
         m_style->remove_style_user(*this);
         m_style.reset();
@@ -753,6 +758,26 @@ auto Dependency_object::reject_if_sealed(const Dependency_property& property) co
     return false;
 }
 
+void Dependency_object::record_write(const Dependency_property& property)
+{
+    Property_write_recording* const recording = Property_write_recording::get_active();
+    if (recording == nullptr) {
+        return;
+    }
+    if (!recording->is_recorded(*this, property)) {
+        recording->add_record(*this, property, read_local_state(property));
+    }
+}
+
+void Dependency_object::record_refused_write(const Dependency_property& property)
+{
+    Property_write_recording* const recording = Property_write_recording::get_active();
+    if (recording == nullptr) {
+        return;
+    }
+    recording->add_refusal(*this, property);
+}
+
 auto Dependency_object::set_value(const Dependency_property& property, const Property_value& value) -> bool
 {
     return set_value_internal(property, value, false, false);
@@ -767,12 +792,27 @@ auto Dependency_object::set_value_internal(const Dependency_property& property, 
 {
     if (property.is_read_only() && !allow_read_only) {
         log->error("property '{}' is read-only", property.get_name());
+        record_refused_write(property);
         return false;
     }
+    // The write recording skips two writes: set_current_value over an
+    // installed expression, which leaves the local layer - the expression
+    // text - as it is, and a Property_key write of a read-only property,
+    // owner-maintained state that apply_local_state cannot restore and the
+    // owner re-derives when the authored writes are restored.
+    const Effective_value_entry* const entry_at_start = find_entry(property.get_index());
+    const bool keeps_installed_expression = keep_expression && (entry_at_start != nullptr) && (entry_at_start->expression != nullptr);
+    const bool recorded = !keeps_installed_expression && !property.is_read_only();
     if (reject_if_sealed(property)) {
+        if (recorded) {
+            record_refused_write(property);
+        }
         return false;
     }
     if (!property.validate(value)) {
+        if (recorded) {
+            record_refused_write(property);
+        }
         return false; // Dependency_property::validate logs the reason itself
     }
 
@@ -781,6 +821,9 @@ auto Dependency_object::set_value_internal(const Dependency_property& property, 
         std::string validation_error;
         if (!metadata.bridge.validate(*this, value, validation_error)) {
             log->warn("property '{}' rejected the value: {}", property.get_name(), validation_error);
+            if (recorded) {
+                record_refused_write(property);
+            }
             return false;
         }
     }
@@ -788,13 +831,21 @@ auto Dependency_object::set_value_internal(const Dependency_property& property, 
         // D26: a writable computed property hands the value to its setter,
         // which writes the stored property the value derives from; that
         // write notifies for the stored property, this one has no entry,
-        // no previous value and no notification of its own.
+        // no previous value and no notification of its own. The write
+        // recording records the stored property's write, not this one.
         if (!metadata.is_computed_writable()) {
             log->error("property '{}' is computed and has no setter", property.get_name());
+            if (recorded) {
+                record_refused_write(property);
+            }
             return false;
         }
         metadata.compute_set(*this, value);
         return true;
+    }
+
+    if (recorded) {
+        record_write(property);
     }
 
     Value_source   old_source{};
@@ -855,24 +906,40 @@ auto Dependency_object::clear_value_internal(const Dependency_property& property
 {
     if (property.is_read_only() && !allow_read_only) {
         log->error("property '{}' is read-only", property.get_name());
+        record_refused_write(property);
         return false;
     }
+    // A Property_key clear of a read-only property is not recorded (see
+    // set_value_internal).
+    const bool recorded = !property.is_read_only();
     if (reject_if_sealed(property)) {
+        if (recorded) {
+            record_refused_write(property);
+        }
         return false;
     }
     const Property_metadata& metadata = get_metadata(property);
     if (metadata.is_computed()) {
         log->error("property '{}' is computed: it has no local value to clear", property.get_name());
+        if (recorded) {
+            record_refused_write(property);
+        }
         return false;
     }
     if (metadata.bridge.is_bound()) {
         // A bridged property has no "unset" state: clearing writes the
-        // default (and drops an expression, through set_value_internal).
+        // default (and drops an expression, through set_value_internal,
+        // which records the write).
         return set_value_internal(property, metadata.default_value.value(), allow_read_only, false);
     }
     Effective_value_entry* entry = find_entry(property.get_index());
     if (entry == nullptr) {
         return true;
+    }
+    // An entry without a local layer (an animated-only entry) has nothing
+    // for the clear to change in it, and nothing to record.
+    if (recorded && (entry->has_local() || (entry->expression != nullptr))) {
+        record_write(property);
     }
 
     Value_source   old_source{};
@@ -1084,21 +1151,34 @@ auto Dependency_object::set_expression(const Dependency_property& property, cons
 {
     if (property.is_read_only()) {
         log->error("property '{}' is read-only", property.get_name());
+        record_refused_write(property);
         return false;
     }
     if (reject_if_sealed(property)) {
+        record_refused_write(property);
         return false;
     }
     if (get_metadata(property).is_computed()) {
         log->error("property '{}' is computed: an expression cannot drive it", property.get_name());
+        record_refused_write(property);
         return false;
     }
     std::string error;
     if (!validate_expression_text(property, text, error)) {
         log->error("expression '{}' for property '{}' rejected: {}", text, property.get_name(), error);
+        record_refused_write(property);
         return false;
     }
     std::unique_ptr<Expression> expression = Expression::compile(text, property.get_type(), error);
+
+    // The write recording's before state is read ahead of the install and
+    // committed once the cycle check below accepts the expression.
+    Property_write_recording* const recording = Property_write_recording::get_active();
+    std::optional<Local_state> recording_before{};
+    const bool record = (recording != nullptr) && !recording->is_recorded(*this, property);
+    if (record) {
+        recording_before = read_local_state(property);
+    }
 
     Value_source   old_source{};
     Property_value old_value = get_effective_value(property, old_source);
@@ -1130,8 +1210,12 @@ auto Dependency_object::set_expression(const Dependency_property& property, cons
             } else {
                 remove_entry_if_empty(property.get_index());
             }
+            record_refused_write(property);
             return false;
         }
+    }
+    if (record) {
+        recording->add_record(*this, property, std::move(recording_before));
     }
 
     // The first evaluation, notified against the state before the install

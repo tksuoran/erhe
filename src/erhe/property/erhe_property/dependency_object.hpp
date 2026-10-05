@@ -16,6 +16,7 @@
 namespace erhe::property {
 
 class Dependency_object;
+class Property_write_recording;
 
 // Subscription to one property on one object. Move-only; unsubscribes on
 // destruction or release(). Outlives the object safely: the object's
@@ -363,6 +364,8 @@ protected:
     void refresh_computed_default(const Dependency_property& property, const Property_value& old_value, Value_source old_source);
 
 private:
+    friend class Property_write_recording; // reads m_batch_depth of recorded objects
+
     // The DEFAULT layer of a property on this object (D31): the effective
     // value of metadata.default_from, else compute_default, else the
     // registration-time default_value.
@@ -450,6 +453,13 @@ private:
     void for_each_supplied_property(const std::function<void(const Dependency_property&)>& callback) const;
 
     [[nodiscard]] auto reject_if_sealed   (const Dependency_property& property) const -> bool;
+
+    // Write recording (property_write_recording.hpp): a local-layer write
+    // that passed its gates calls record_write before it notifies; a gate
+    // that refuses one calls record_refused_write. One thread_local pointer
+    // test each when no recording is open.
+    void record_write        (const Dependency_property& property);
+    void record_refused_write(const Dependency_property& property);
 
     // The effective value the object would have without its style layer
     // (reference, inherited or default, coerced): a style user's value

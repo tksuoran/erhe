@@ -21,6 +21,7 @@ add_executable(${_target}
     test_default_elision.cpp
     test_expressions.cpp
     test_object_reference.cpp
+    test_write_recording.cpp
 )
 
 target_link_libraries(${_target}

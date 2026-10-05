@@ -128,10 +128,17 @@ public:
   through `set_value` are recorded (the bridge `set` runs inside that path).
   For a writable computed property the computed branch records nothing; its
   `compute_set` writes the stored target through `set_value`, which records
-  the target once. `set_current_value` is not hooked: `read_local_state`
-  returns the expression text before and after, so there is nothing to
-  restore. Propagation, animated, style and reference layers are not
-  recorded.
+  the target once. `set_current_value` over an installed expression is not
+  recorded: `read_local_state` returns the expression text before and
+  after, so there is nothing to restore; without an expression it writes
+  the local layer and is recorded. A `Property_key` write or clear of a
+  read-only property is not recorded (and its refusals are not counted):
+  `apply_local_state` cannot restore it, and it is owner-maintained state
+  that the owner re-derives when the authored writes are restored.
+  Propagation, animated, style and reference layers are not recorded.
+- An object destroyed while the recording is open drops its records and
+  refusals (its destructor tells the active recording), so no record
+  points at a destroyed object.
 - Member writes that bypass `set_value` (`set_flag_bits`,
   `set_parent_from_node`, any setter writing a plain member) are invisible to
   the recording. The rule for edit functions is therefore: write through

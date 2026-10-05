@@ -23,6 +23,8 @@ erhe_target_sources_grouped(
     erhe_property/property_style.hpp
     erhe_property/property_string.hpp
     erhe_property/property_value.hpp
+    erhe_property/property_write_recording.cpp
+    erhe_property/property_write_recording.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

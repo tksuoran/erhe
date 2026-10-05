@@ -273,6 +273,51 @@ accepted while sealed, for the property that owns the seal;
 place of `is_sealed()`. `erhe::Item_base` ties the seal to
 `Item_flags::lock_edit` and flags `lock_edit_property` that way.
 
+## Write recording
+
+`Property_write_recording` (`erhe_property/property_write_recording.hpp`)
+is an RAII scope that collects the local-layer writes made on the current
+thread while it is alive; it is how an undoable edit learns what an
+arbitrary edit function wrote. One recording is open per thread at a time
+(a `static thread_local` pointer, `get_active()`); opening a second one is
+a fatal usage error. With no recording open, a local write costs one test
+of that pointer.
+
+- The hook sits in the local-layer write paths after their gates:
+  `set_value`, `set_current_value`, `clear_value`,
+  `set_expression`, and `apply_local_state`, which reaches them. A bridged
+  property written through `set_value` is recorded. A writable computed
+  property records nothing itself; its `compute_set` writes the stored
+  target through `set_value`, which is recorded. `set_current_value` over
+  an installed expression leaves the local layer (the expression text)
+  unchanged and is not recorded; without an expression it writes the local
+  layer and is recorded. A `Property_key` write or clear of a read-only
+  property is not recorded and not counted as a refusal: it is
+  owner-maintained state that `apply_local_state` cannot restore and that
+  the owner re-derives when the authored writes are restored. The
+  animated, style, reference and inherited layers are not recorded, nor is
+  a clear of a property without a local layer.
+- One `Property_write_record` per (object, property): `before` is
+  `read_local_state` ahead of the first accepted write, `after` is
+  `read_local_state` when `take_records()` runs. Records are in first-write
+  order, and a write made by a changed callback during another write comes
+  after the write that caused it. `take_records()` moves the records out
+  and leaves the recording open and empty.
+- A `Change_batch` opened and closed inside the recording delivers its
+  queued notifications inside it, so their callbacks' writes are recorded.
+  A recorded object whose batch is still open when `take_records()` runs
+  is a fatal usage error.
+- A write refused by a gate (read-only, sealed, the property's validate
+  including the type check, the bridge validate, a computed property
+  without a setter, an expression that does not compile or would cycle) is
+  not recorded; it is listed in `get_refusals()` (object and property, in
+  order) and counted by `get_refusal_count()`.
+- An object destroyed while a recording is open removes its records and
+  refusals from it (`~Dependency_object` tells the active recording), so
+  no record points at a destroyed object.
+- Writes that bypass the property layer (a setter assigning a plain member
+  without `set_value`) are invisible to the recording.
+
 ## Secondary owner type
 
 `Dependency_object::get_secondary_property_owner_type()` (nullopt by
@@ -349,5 +394,5 @@ item state guarded by the item's host mutex, like the rest of the item.
 `test/` (gtest): registry and overrides, every value type, validate, coerce,
 change notifications and batching, inheritance through a `Test_object` tree,
 observers, enumerations, string conversion, property sets, bridged storage,
-computed properties, the style and reference layers, object references and
-`register_member`.
+computed properties, the style and reference layers, object references,
+`register_member` and the write recording.
