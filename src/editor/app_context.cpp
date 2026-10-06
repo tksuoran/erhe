@@ -4,12 +4,14 @@
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
 #include "operations/operation_stack.hpp"
+#include "scene/node_transform_commit.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
@@ -56,6 +58,19 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
     const bool lighting_item = erhe::is<erhe::primitive::Material>(&item) || erhe::is<erhe::scene::Light>(&item);
     if ((app_message_bus != nullptr) && lighting_item) {
         app_message_bus->scene_lighting_changed.queue_message(Scene_lighting_changed_message{});
+    }
+
+    // A committed write of a node's transform property (translation,
+    // rotation, scale: Property_flags::affects_transform) is a committed node
+    // transform like a Node_transform_operation's: the same announcement
+    // reaches the transform tool, the bone visualization and the indirect
+    // diffuse producers. Runs once per applied record, so an edit of three
+    // channels announces three times; every subscriber is idempotent.
+    if ((app_message_bus != nullptr) && ((flags & Property_flags::affects_transform) != 0)) {
+        erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(&item);
+        if (node != nullptr) {
+            announce_committed_node_transform(*app_message_bus, *node);
+        }
     }
 }
 

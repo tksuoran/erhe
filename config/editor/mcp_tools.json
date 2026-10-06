@@ -3668,7 +3668,7 @@
     "name": "set_ray_trace"
   },
   {
-    "description": "Tune dynamic diffuse global illumination (doc/editor/ddgi.md): a scene-wide probe volume is auto-fitted to the content bounding box, traced with ray queries and blended into octahedral irradiance / distance atlases that replace the flat ambient term for non-lightmapped draws while DDGI is the selected indirect diffuse source (set_indirect_diffuse). Returns the fitted grid (probe counts, spacing, origin), the derived ray/texel counts, the probe texture memory and 'enabled' (DDGI is the selected source). Requires a device with ray query support.",
+    "description": "Tune dynamic diffuse global illumination (doc/editor/ddgi.md): a scene-wide probe volume is auto-fitted to the content bounding box, traced with ray queries and blended into octahedral irradiance / distance atlases that replace the flat ambient term for non-lightmapped draws while DDGI is the selected indirect diffuse source (set_indirect_diffuse). Returns the fitted grid (probe counts, spacing, origin), the derived ray/texel counts, the probe texture memory, 'enabled' (DDGI is the selected source) and the configured 'max_probes' and 'config_rays_per_probe' (the setting; 'rays_per_probe' is the renderer's rounded count). Requires a device with ray query support.",
     "inputSchema": {
       "properties": {
         "enabled": {

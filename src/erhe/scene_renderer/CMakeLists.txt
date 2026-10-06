@@ -80,7 +80,6 @@ target_link_libraries(
     PRIVATE
         erhe::file
         erhe::log
-        erhe::message_bus
         erhe::profile
 )
 

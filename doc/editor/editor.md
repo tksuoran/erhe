@@ -57,7 +57,7 @@ The editor is the main application built on the erhe C++ graphics engine. It pro
 - `Hover_scene_view_message` -- pointer entered/left a scene view
 - `Hover_mesh_message` -- pointer hovers over a mesh
 - `Graphics_settings_message` -- graphics preset changed
-- `Node_touched_message` -- a node's transform was modified
+- `Node_touched_message` -- a node's transform was modified (live, or committed through `announce_committed_node_transform()`, [operations.md](operations.md) "Committed node transforms")
 - `Load_scene_file_message` -- scene lifecycle
 - `Tool_select_message` -- active tool changed
 - `Render_scene_view_message` -- scene view rendering requested

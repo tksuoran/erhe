@@ -480,12 +480,7 @@ void Viewport_window::imgui()
                 m_app_context.fly_camera_tool->hint_next_camera_write("Navigation gizmo snap animation (ImViewGuizmo::draw_rotate)");
             }
             node->set_world_from_node(transform);
-            m_app_context.app_message_bus->node_touched.send_message(
-                Node_touched_message{
-                    .source = Node_touch_source::navigation_gizmo,
-                    .node   = node
-                }
-            );
+            m_app_context.app_message_bus->node_touched.send_message(Node_touched_message{.node = node});
         }
 
         m_request_cursor_relative_hold = gizmo.IsUsing();

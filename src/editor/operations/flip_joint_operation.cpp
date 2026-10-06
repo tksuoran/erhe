@@ -4,6 +4,7 @@
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
 #include "scene/joint.hpp"
+#include "scene/node_transform_commit.hpp"
 
 #include "erhe_scene/node.hpp"
 
@@ -33,12 +34,8 @@ void Flip_joint_operation::execute(App_context& context)
         m_parameters.joint->rebuild();
     }
 
-    context.app_message_bus->node_touched.send_message(
-        Node_touched_message{
-            .source = Node_touch_source::operation_stack,
-            .node   = m_parameters.moved_node.get()
-        }
-    );
+    announce_committed_node_transform(*context.app_message_bus, *m_parameters.moved_node);
+    announce_committed_node_transform(*context.app_message_bus, *m_parameters.frame_node);
 }
 
 void Flip_joint_operation::undo(App_context& context)
@@ -54,12 +51,8 @@ void Flip_joint_operation::undo(App_context& context)
         m_parameters.joint->rebuild();
     }
 
-    context.app_message_bus->node_touched.send_message(
-        Node_touched_message{
-            .source = Node_touch_source::operation_stack,
-            .node   = m_parameters.moved_node.get()
-        }
-    );
+    announce_committed_node_transform(*context.app_message_bus, *m_parameters.moved_node);
+    announce_committed_node_transform(*context.app_message_bus, *m_parameters.frame_node);
 }
 
 }

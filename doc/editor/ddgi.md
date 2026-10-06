@@ -156,20 +156,21 @@ radiance cascades raw texels) resets the history instead:
   change of the light transport, announced on `App_message_bus` (no
   polling): `Mesh_geometry_changed_message`, `Items_removed_message` and
   `Scene_lighting_changed_message`. The last is queued only at commit sites:
-  `Node_transform_operation` execute / undo / redo and the end of its
-  transform animation, for a node whose subtree holds a content-layer mesh
-  or a light (`announce_committed_node_transform()`,
-  `node_affects_indirect_lighting()`; a camera or tool node does not
-  reset); `Scene_root` when a content-layer mesh or a light is registered
-  or unregistered; `App_context::on_item_property_changed()` after a
-  property operation edited a light or a material.
-- **Live edits keep blending.** A gizmo or transform tool drag, a slider
-  being dragged and each frame of a transform animation send
+  a committed node transform of a node whose subtree holds a content-layer
+  mesh or a light (`announce_committed_node_transform()`,
+  `node_affects_indirect_lighting()` in `scene/node_transform_commit.hpp`;
+  a camera or tool node does not reset; the commit sites are listed in
+  [operations.md](operations.md) "Committed node transforms");
+  `Scene_root` when a content-layer mesh or a light is registered or
+  unregistered; `App_context::on_item_property_changed()` after a property
+  operation edited a light or a material.
+- **Live edits keep blending.** Each frame of a transform animation, a
+  navigation gizmo drag or snap and a slider being dragged send
   `Node_touched_message` or a property change callback, which the
   producers do not reset on - the commit is a different message type, so a
-  live touch cannot reset the history. A drag therefore converges through
-  the normal hysteresis while it moves, and the release (the queued
-  `Node_transform_operation`) resets once. Measured: ten live
+  live touch cannot reset the history. A transform tool or IK drag sends
+  nothing while it moves; it converges through the normal hysteresis, and
+  the release (the one queued `Node_transform_operation`) resets once. Measured: ten live
   `transform_selection` steps (`end_edit` false) on the `cornell` light
   leave `history_reset_count` unchanged for both producers; the commit
   adds exactly one.

@@ -3,8 +3,8 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
-#include "renderers/indirect_diffuse.hpp"
 #include "scene/node_physics_system.hpp"
+#include "scene/node_transform_commit.hpp"
 #include "time.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -37,7 +37,8 @@ void Node_transform_operation::execute(App_context& context)
             // body is moving; record without writing or snapping.
             m_xform_op_stack_after          = m_parameters.xform_op_stack_after;
             m_xform_op_stack_after_recorded = true;
-            // The drag ends here: its pose is committed.
+            // The drag ends here: its pose is committed. No teleport: the
+            // body keeps the velocity the simulation gave it.
             announce_committed_node_transform(*context.app_message_bus, *m_parameters.node);
             return;
         } else {
@@ -45,12 +46,6 @@ void Node_transform_operation::execute(App_context& context)
             m_xform_op_stack_after          = m_parameters.node->copy_xform_op_stack();
             m_xform_op_stack_after_recorded = true;
         }
-        context.app_message_bus->node_touched.send_message(
-            Node_touched_message{
-                .source = Node_touch_source::operation_stack,
-                .node   = m_parameters.node.get()
-            }
-        );
         announce_committed_node_transform(*context.app_message_bus, *m_parameters.node);
         // Snap the node's rigid body to the new pose at rest so the simulation does
         // not react to this discrete (non-interactive) move with a kinematic velocity
@@ -73,12 +68,6 @@ void Node_transform_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
     m_parameters.node->restore_local_transform(m_parameters.parent_from_node_before, m_parameters.xform_op_stack_before);
-    context.app_message_bus->node_touched.send_message(
-        Node_touched_message{
-            .source = Node_touch_source::operation_stack,
-            .node   = m_parameters.node.get()
-        }
-    );
     announce_committed_node_transform(*context.app_message_bus, *m_parameters.node);
     // Snap the node's rigid body to the restored pose at rest (see execute()).
     Node_physics_system* const system = find_node_physics_system(*m_parameters.node.get());

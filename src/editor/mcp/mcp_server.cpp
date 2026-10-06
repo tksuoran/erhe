@@ -1239,6 +1239,8 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
         result["intensity"]         = config.intensity;
         result["debug_draw_probes"] = config.debug_draw_probes;
         result["bounces"]           = std::string{to_string(config.bounces)};
+        result["max_probes"]        = config.max_probes;
+        result["config_rays_per_probe"] = config.rays_per_probe;
     }
     return make_json_content(result).dump();
 }

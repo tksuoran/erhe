@@ -2,7 +2,7 @@
 
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
-#include "renderers/indirect_diffuse.hpp"
+#include "scene/node_transform_commit.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
@@ -280,12 +280,6 @@ void Time::finish_all_transform_animations(App_message_bus& app_message_bus)
 {
     for (Transform_animation_entry& entry : m_transform_animations) {
         entry.node->set_parent_from_node(entry.parent_from_node_after);
-        app_message_bus.node_touched.send_message(
-            Node_touched_message{
-                .source = Node_touch_source::operation_stack,
-                .node   = entry.node.get()
-            }
-        );
         announce_committed_node_transform(app_message_bus, *entry.node);
     }
 }
@@ -301,12 +295,6 @@ void Time::update_transform_animations(App_message_bus& app_message_bus)
                 const int64_t time_position = m_editor_time_ns - entry.start_time_ns;
                 if (time_position >= entry.time_duration_ns) {
                     entry.node->set_parent_from_node(entry.parent_from_node_after);
-                    app_message_bus.node_touched.send_message(
-                        Node_touched_message{
-                            .source = Node_touch_source::operation_stack,
-                            .node   = entry.node.get()
-                        }
-                    );
                     // The animated operation's pose is reached: committed.
                     announce_committed_node_transform(app_message_bus, *entry.node);
                     return true;
@@ -331,12 +319,8 @@ void Time::update_transform_animations(App_message_bus& app_message_bus)
             t_
         );
         entry.node->set_parent_from_node(transform);
-        app_message_bus.node_touched.send_message(
-            Node_touched_message{
-                .source = Node_touch_source::operation_stack,
-                .node   = entry.node.get()
-            }
-        );
+        // A frame of the animation is a live move, not a commit.
+        app_message_bus.node_touched.send_message(Node_touched_message{.node = entry.node.get()});
     }
 }
 

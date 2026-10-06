@@ -606,6 +606,8 @@ erhe_target_sources_grouped(
     scene/node_physics.hpp
     scene/node_physics_system.cpp
     scene/node_physics_system.hpp
+    scene/node_transform_commit.cpp
+    scene/node_transform_commit.hpp
     scene/node_raytrace.cpp
     scene/node_raytrace.hpp
     scene/node_raytrace_mask.hpp

@@ -1,16 +1,10 @@
 #include "renderers/indirect_diffuse.hpp"
 
 #include "app_context.hpp"
-#include "app_message_bus.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "renderers/ddgi_renderer.hpp"
 #include "renderers/radiance_cascades_renderer.hpp"
-#include "scene/scene_root.hpp"
-
-#include "erhe_scene/light.hpp"
-#include "erhe_scene/mesh.hpp"
-#include "erhe_scene/node.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -111,37 +105,6 @@ void Temporal_history::end_update(const int64_t item_count_traced, const float h
 auto Temporal_history::get_reset_count() const -> uint64_t
 {
     return m_reset_count;
-}
-
-auto node_affects_indirect_lighting(const erhe::scene::Node& node) -> bool
-{
-    bool affects = false;
-    node.for_each_const<erhe::scene::Mesh>(
-        [&affects](const erhe::scene::Mesh& mesh) -> bool {
-            if (mesh.layer_id == Mesh_layer_id::content) {
-                affects = true;
-                return false; // stop
-            }
-            return true;
-        }
-    );
-    if (affects) {
-        return true;
-    }
-    node.for_each_const<erhe::scene::Light>(
-        [&affects](const erhe::scene::Light&) -> bool {
-            affects = true;
-            return false;
-        }
-    );
-    return affects;
-}
-
-void announce_committed_node_transform(App_message_bus& app_message_bus, const erhe::scene::Node& node)
-{
-    if (node_affects_indirect_lighting(node)) {
-        app_message_bus.scene_lighting_changed.queue_message(Scene_lighting_changed_message{});
-    }
 }
 
 } // namespace editor

@@ -7293,3 +7293,152 @@ TEST_F(Mcp_test, set_item_properties_takes_every_schema_default)
     }
     GTEST_LOG_(INFO) << "owner types written to their defaults: " << covered_list;
 }
+
+// Restores the indirect diffuse source and the DDGI budget a test changed,
+// however the test leaves (an ASSERT returns early): later tests share the
+// editor.
+class Indirect_diffuse_settings_guard
+{
+public:
+    explicit Indirect_diffuse_settings_guard(Mcp_client& client)
+        : m_client{client}
+    {
+        const Mcp_client::Tool_result stats = m_client.call_tool("get_indirect_diffuse_stats", json::object());
+        m_source = stats.payload.value("source", std::string{"ambient"});
+        const Mcp_client::Tool_result ddgi = m_client.call_tool("set_ddgi", json::object());
+        m_max_probes     = ddgi.payload.value("max_probes",            4096);
+        m_rays_per_probe = ddgi.payload.value("config_rays_per_probe", 128);
+    }
+    Indirect_diffuse_settings_guard(const Indirect_diffuse_settings_guard&) = delete;
+    Indirect_diffuse_settings_guard& operator=(const Indirect_diffuse_settings_guard&) = delete;
+    ~Indirect_diffuse_settings_guard()
+    {
+        EXPECT_FALSE(m_client.call_tool("set_ddgi", json{{"max_probes", m_max_probes}, {"rays_per_probe", m_rays_per_probe}}).is_error);
+        EXPECT_FALSE(m_client.call_tool("set_indirect_diffuse", json{{"source", m_source}}).is_error);
+    }
+
+private:
+    Mcp_client& m_client;
+    std::string m_source;
+    int         m_max_probes    {4096};
+    int         m_rays_per_probe{128};
+};
+
+// A transform write through set_item_properties is a committed node
+// transform like set_node_transform's (doc/editor/operations.md "Committed
+// node transforms"): the Transform tool anchor follows it, its undo and its
+// redo, and the indirect diffuse producer resets its temporal history for
+// each of them (App_context::on_item_property_changed ->
+// announce_committed_node_transform).
+TEST_F(Mcp_test, set_item_properties_transform_write_is_a_committed_node_transform)
+{
+    // In the environment's scene: the indirect diffuse field is produced
+    // only while a single scene is open.
+    Mcp_client&       client = Mcp_env::get().client();
+    const std::string scene  = Mcp_env::get().scene_name();
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  scene},
+        {"shape",       "box"},
+        {"name",        "committed transform box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    // A content mesh node, not a light: a light is an item whose every
+    // property edit announces a lighting change anyway.
+    const std::size_t node_id = client.call_tool(
+        "get_node_details", json{{"scene_name", scene}, {"node_name", "committed transform box"}}
+    ).payload.value("id", std::size_t{0});
+    ASSERT_NE(node_id, 0u);
+
+    ASSERT_FALSE(client.call_tool("set_node_transform", json{
+        {"scene_name", scene}, {"node_id", node_id}, {"space", "local"}, {"translation", {0.0, 0.5, 0.0}}
+    }).is_error);
+    Mcp_client::Tool_result selected = client.call_tool("select_items", json{{"scene_name", scene}, {"ids", {node_id}}});
+    ASSERT_FALSE(selected.is_error) << selected.text;
+    advance_frames(client, 2);
+
+    auto anchor = [&client]() -> std::array<float, 3> {
+        Mcp_client::Tool_result state = client.call_tool("get_transform_state", json::object());
+        EXPECT_FALSE(state.is_error) << state.text;
+        const json t = state.payload.at("anchor_frame").at("translation");
+        return std::array<float, 3>{t[0].get<float>(), t[1].get<float>(), t[2].get<float>()};
+    };
+    auto expect_anchor = [&anchor](const std::array<float, 3>& expected, const char* const when) {
+        const std::array<float, 3> a = anchor();
+        EXPECT_NEAR(a[0], expected[0], 1.0e-4f) << when;
+        EXPECT_NEAR(a[1], expected[1], 1.0e-4f) << when;
+        EXPECT_NEAR(a[2], expected[2], 1.0e-4f) << when;
+    };
+    expect_anchor(std::array<float, 3>{0.0f, 0.5f, 0.0f}, "set_node_transform");
+    const std::array<float, 3> before{0.25f, 0.5f, 0.0f};
+    const std::array<float, 3> after {0.5f, 0.75f, -0.25f};
+
+    // Indirect diffuse history resets, where the device supports DDGI. A
+    // few probes and rays keep each frame inside an MCP request's time on a
+    // software rasterizer; the guard restores the source and the budget.
+    const Indirect_diffuse_settings_guard settings_guard{client};
+    ASSERT_FALSE(client.call_tool("set_ddgi", json{{"max_probes", 8}, {"rays_per_probe", 32}, {"enabled", true}}).is_error);
+    auto ddgi_stats = [&client]() -> json {
+        Mcp_client::Tool_result stats = client.call_tool("get_indirect_diffuse_stats", json::object());
+        EXPECT_FALSE(stats.is_error) << stats.text;
+        return stats.payload.contains("ddgi") ? stats.payload.at("ddgi") : json::object();
+    };
+    auto reset_count = [&ddgi_stats]() -> std::optional<uint64_t> {
+        const json ddgi = ddgi_stats();
+        if (!ddgi.value("active", false)) {
+            return std::nullopt;
+        }
+        return ddgi.value("history_reset_count", uint64_t{0});
+    };
+    const bool ddgi_active = ddgi_stats().value("supported", false);
+    if (ddgi_active) {
+        for (int i = 0; (i < 10) && !reset_count().has_value(); ++i) {
+            advance_frames(client, 2);
+        }
+        ASSERT_TRUE(reset_count().has_value()) << "DDGI is supported but not active: " << ddgi_stats().dump();
+    } else {
+        GTEST_LOG_(INFO) << "DDGI not supported here: the history reset half is not checked";
+    }
+    // Each step is followed by a quiet stretch first, so a reset counted
+    // after the step was caused by it.
+    auto expect_reset = [&](const char* const when, const std::function<void()>& step) {
+        advance_frames(client, 3);
+        const std::optional<uint64_t> quiet = reset_count();
+        advance_frames(client, 3);
+        const std::optional<uint64_t> start = reset_count();
+        if (ddgi_active) {
+            ASSERT_TRUE(quiet.has_value() && start.has_value());
+            EXPECT_EQ(start.value(), quiet.value()) << "history reset without a change before: " << when;
+        }
+        step();
+        advance_frames(client, 3);
+        const std::optional<uint64_t> end = reset_count();
+        if (ddgi_active) {
+            ASSERT_TRUE(end.has_value());
+            EXPECT_GT(end.value(), start.value()) << "no history reset after " << when;
+        }
+    };
+
+    expect_reset("set_node_transform", [&]() {
+        ASSERT_FALSE(client.call_tool("set_node_transform", json{
+            {"scene_name", scene}, {"node_id", node_id}, {"space", "local"}, {"translation", {before[0], before[1], before[2]}}
+        }).is_error);
+    });
+    expect_anchor(before, "set_node_transform");
+    expect_reset("set_item_properties", [&]() {
+        Mcp_client::Tool_result set = client.call_tool("set_item_properties", json{
+            {"item_id", node_id}, {"properties", {{"translation", {after[0], after[1], after[2]}}}}
+        });
+        ASSERT_FALSE(set.is_error) << set.text;
+    });
+    expect_anchor(after, "set_item_properties");
+    expect_reset("undo", [&]() { ASSERT_FALSE(client.call_tool("undo", json::object()).is_error); });
+    expect_anchor(before, "undo");
+    expect_reset("redo", [&]() { ASSERT_FALSE(client.call_tool("redo", json::object()).is_error); });
+    expect_anchor(after, "redo");
+
+    client.call_tool("select_items", json{{"scene_name", scene}, {"ids", json::array()}});
+    client.call_tool("delete_nodes", json{{"scene_name", scene}, {"names", {"committed transform box"}}});
+    advance_frames(client, 3);
+}

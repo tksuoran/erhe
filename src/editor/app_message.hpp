@@ -85,15 +85,18 @@ struct Graphics_settings_message
     Graphics_preset_entry* graphics_preset{nullptr};
 };
 
-enum class Node_touch_source : int {
-    operation_stack,
-    navigation_gizmo
-};
-
+// A node's local transform was written. Sent synchronously for live moves
+// (a transform animation frame, a navigation gizmo drag or axis snap, the
+// viewport window's snap animation; a transform tool or IK drag sends
+// nothing until it commits one Node_transform_operation at drag end) and, together with Scene_lighting_changed_message, by
+// announce_committed_node_transform() (scene/node_transform_commit.hpp) at
+// every commit of a node transform, including a property operation writing
+// a transform property. Subscribers refresh state derived from the node's
+// transform (Transform_tool anchor, Bone_visualization shapes, radiance
+// cascades visibility).
 struct Node_touched_message
 {
-    Node_touch_source  source{Node_touch_source::operation_stack};
-    erhe::scene::Node* node  {nullptr};
+    erhe::scene::Node* node{nullptr};
 };
 
 // Announced whenever an editor operation replaces a mesh's primitives via
@@ -108,14 +111,17 @@ struct Mesh_geometry_changed_message
 
 // A COMMITTED change of a scene's light transport: a content-layer mesh or
 // a light entered or left the scene (Scene_root::register_mesh() and
-// friends), a Node_transform_operation moved content or a light (execute,
-// undo, redo; also the end of its transform animation), or a property
+// friends), a committed node transform moved content or a light
+// (announce_committed_node_transform(): Node_transform_operation execute /
+// undo / redo and the end of its transform animation, Flip_joint_operation,
+// a property operation writing a node's transform property), or a property
 // operation edited a light or a material (App_context::
 // on_item_property_changed()). Only these commit sites send it; a live,
-// uncommitted change - a gizmo or transform tool drag, a slider being
-// dragged, a frame of a transform animation - arrives as
-// Node_touched_message or a property change callback and never as this
-// message, so the indirect diffuse producers (Ddgi_renderer,
+// uncommitted change - a frame of a transform animation, camera
+// navigation, a slider being dragged - arrives as Node_touched_message or
+// a property change callback and never as this message (a transform tool
+// or IK drag announces nothing until its Node_transform_operation commits
+// at drag end), so the indirect diffuse producers (Ddgi_renderer,
 // Radiance_cascades_renderer), which reset their temporal history on this
 // message only, keep blending through a drag and reset once at its commit
 // (doc/editor/ddgi.md "History reset"). Queued, because the Scene_host

@@ -143,12 +143,7 @@ auto Navigation_gizmo_tool::on_drag(glm::vec2 relative) -> bool
             m_context.fly_camera_tool->hint_next_camera_write("Navigation gizmo drag (ImViewGuizmo::Context::drag)");
         }
         node->set_world_from_node(transform);
-        m_context.app_message_bus->node_touched.send_message(
-            Node_touched_message{
-                .source = Node_touch_source::navigation_gizmo,
-                .node   = node
-            }
-        );
+        m_context.app_message_bus->node_touched.send_message(Node_touched_message{.node = node});
     }
     return true;
 }
@@ -182,12 +177,7 @@ void Navigation_gizmo_tool::on_drag_end()
                         m_context.fly_camera_tool->hint_next_camera_write("Navigation gizmo axis snap (ImViewGuizmo::Context::snap)");
                     }
                     node->set_world_from_node(transform);
-                    m_context.app_message_bus->node_touched.send_message(
-                        Node_touched_message{
-                            .source = Node_touch_source::navigation_gizmo,
-                            .node   = node
-                        }
-                    );
+                    m_context.app_message_bus->node_touched.send_message(Node_touched_message{.node = node});
                 }
             }
         }

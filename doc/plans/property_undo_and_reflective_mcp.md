@@ -441,26 +441,55 @@ effort before commit. Targets that must build: `editor`, `src/example`,
 
 A3 and C1 can swap order; C3 must come after both.
 
-Done: A1, A2, A3, A4, C1, C2, C3. Next: B1.
+Done: A1, A2, A3, A4, B1, C1, C2, C3.
 
 ## 6. Notification design (B1)
 
-The audit asks for one notification design instead of four (property
-observers and metadata callbacks, `INode_system`, `Scene_host` callbacks,
-`Transform_observer`, plus the editor message buses). The facts so far:
-`INode_system::on_values_changed` is itself driven by the property
-`property_changed` metadata callback, so it is a property observer with a
-system dispatcher; `Scene_host` carries coarse mesh / light structure
-events that are not property changes and may come from worker threads;
-`Transform_observer` carries world-transform dirtiness, which is derived
-state, not a property write.
+Decided 2026-10-06 (user approval of R1-R4). The six mechanisms stay; each
+owns one kind of event, and none has all its uses covered by another:
 
-After A4 every document property edit runs through one of two operation
-classes and reaches `on_item_property_changed`. B1 writes down which
-mechanism owns which kind of event (document edit consequences,
-derived-state invalidation, structure events, UI notification), lists each
-mechanism whose uses all fall under another one, and proposes the removals.
-No mechanism is removed in this plan without the user's approval of B1.
+| Mechanism | Owns | Thread |
+|---|---|---|
+| Property changed callbacks and `App_context::on_item_property_changed` | consequences of a document property write (the single hook every property-writing operation calls) | main |
+| `INode_system::on_values_changed` | dispatch of node property changes to the per-scene node systems (layout, rig, draw mode, physics, geometry graph); driven by the property callback, so it is a property observer with a system dispatcher | main |
+| `Scene_host` callbacks | mesh / light structure events (add, remove, primitive change), which are not property writes and may arrive from worker threads | any |
+| `Transform_observer` | world-transform dirtiness, derived state of the hierarchy | main |
+| `Item_host` register / unregister hooks | prim registration (feeds the content library) | main |
+| `App_message_bus` messages | editor-wide UI and tool notification | main, queued |
+
+Changes:
+
+- R1: `Node_touched_message::source` (`Node_touch_source`) was written at
+  ten sites and read by none; it is removed.
+- R2: `erhe_scene_renderer` linked `erhe::message_bus` without including
+  it; the link is removed. (`erhe_item` does not link it.)
+- R3: a committed node transform is announced by one function,
+  `announce_committed_node_transform()` in
+  `src/editor/scene/node_transform_commit.hpp` (with
+  `node_affects_indirect_lighting()`, both moved out of
+  `renderers/indirect_diffuse`), which sends `Node_touched_message` and
+  queues `Scene_lighting_changed_message` when the node holds content or a
+  light. `Node_transform_operation` (execute, including the record-only
+  first execute of a physics-driven drag, which before sent the lighting
+  announcement only; undo; redo), the transform animation finish paths in
+  `time.cpp` and `Flip_joint_operation` (execute and undo, for both the
+  moved node and its frame node; before it sent `Node_touched_message` for
+  the moved node only) call it. Live moves keep sending
+  `Node_touched_message` alone: a transform animation frame, the
+  navigation gizmo drag and axis snap, and the viewport window's snap
+  animation (camera navigation, not a document edit).
+- R4: a property operation that writes a node's transform (a property
+  flagged `Property_flags::affects_transform`: translation, rotation,
+  scale; the authored xform-op stack follows those writes and has no
+  property of its own), through `Property_set_operation`,
+  `Property_edit_operation` (including its recording first execute, so MCP
+  `set_item_properties`) or `Style_set_operation`, reaches the same
+  announcement from `on_item_property_changed`, once per applied record, so
+  the DDGI and radiance cascades history reset, the radiance cascades
+  visibility refresh, the transform tool and the bone visualization see it
+  as they see a `Node_transform_operation`. A compound holding both kinds
+  for one node announces more than once; every subscriber is idempotent
+  (a set flag, a recomputed anchor or shape).
 
 ## 7. Risks and open questions
 

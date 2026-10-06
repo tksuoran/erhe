@@ -110,6 +110,24 @@ out of the scene. So a cached reference must handle BOTH.
   reports every such cached reference. See
   `doc/editor/import_undo_reference_clearing.md`.
 
+## Node transform writes
+
+- Code that commits a node transform (an operation's execute / undo / redo,
+  the end of an animated operation) calls
+  `announce_committed_node_transform()` (`scene/node_transform_commit.hpp`)
+  instead of sending `Node_touched_message` and
+  `Scene_lighting_changed_message` itself; a transform written through a
+  property operation reaches it from `App_context::on_item_property_changed()`.
+- A live, uncommitted move (a transform animation frame, a navigation
+  gizmo drag or axis snap, the viewport window's snap animation) sends
+  `Node_touched_message` alone, never the lighting announcement: the
+  indirect diffuse producers reset their temporal history on it, and a
+  reset per frame would keep them from converging. A transform tool or IK
+  drag sends nothing while it moves and commits one
+  `Node_transform_operation` at drag end.
+- The commit sites are listed in [operations.md](operations.md)
+  "Committed node transforms".
+
 ## Config JSON formatting
 
 Applies to JSON files consumed by `erhe_codegen`-generated loaders (the

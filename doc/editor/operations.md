@@ -313,6 +313,41 @@ covers the same round trip of the full property dump (`get_item_properties`)
 for a material edit through `set_item_properties` (an overwritten
 expression restored, an untouched one kept) and for a variant switch of `nested_variants.usda` (every prim).
 
+## Committed node transforms
+
+A committed node transform is announced by one function,
+`announce_committed_node_transform()` (`scene/node_transform_commit.hpp`):
+it sends `Node_touched_message` and, when the node's subtree holds a
+content-layer mesh or a light (`node_affects_indirect_lighting()`), queues
+`Scene_lighting_changed_message`. The commit sites call it:
+
+- `Node_transform_operation` execute (including the record-only first
+  execute of a physics-driven drag, which skips only the body teleport),
+  undo and redo, and `Time` when one of its transform animations reaches
+  its end pose;
+- `Flip_joint_operation` execute and undo, for the moved node and its
+  joint frame node;
+- `App_context::on_item_property_changed()` for a property flagged
+  `Property_flags::affects_transform` (translation, rotation, scale) on a
+  node, so a `Property_set_operation`, `Property_edit_operation` (its
+  recording first execute too, so MCP `set_item_properties`) or
+  `Style_set_operation` that writes a transform, and its undo and redo,
+  reach the transform tool, the bone visualization and the indirect diffuse
+  producers as a `Node_transform_operation` does. It runs once per applied
+  record; the subscribers are idempotent, so a compound that touches a
+  node more than once announces more than once to the same effect.
+
+A live move sends `Node_touched_message` alone: a transform animation
+frame, the navigation gizmo drag and axis snap and the viewport window's
+snap animation. A transform tool or IK drag sends nothing while it moves
+and commits one `Node_transform_operation` at drag end. The indirect diffuse producers reset
+their history on `Scene_lighting_changed_message` only, so a live move
+never resets it ([ddgi.md](ddgi.md) "History reset").
+`Mcp_test.set_item_properties_transform_write_is_a_committed_node_transform`
+checks that a `set_item_properties` transform write, its undo and its redo
+move the transform tool anchor and reset the DDGI history as
+`set_node_transform` does.
+
 ## Primitive swaps keep the node in place
 
 An operation that replaces a mesh's primitives leaves the mesh node where it

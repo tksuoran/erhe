@@ -13,15 +13,10 @@ enum class Indirect_diffuse_source : unsigned int;
 namespace erhe::graphics {
     class Texture;
 }
-namespace erhe::scene {
-    class Xformable;
-    using Node = Xformable;
-}
 
 namespace editor {
 
 class App_context;
-class App_message_bus;
 
 // The indirect diffuse probe field a producer publishes: the DDGI atlas
 // format (doc/editor/ddgi.md "Data layout") both producers write, and the
@@ -113,15 +108,5 @@ private:
     bool     m_reset_requested{false};
     uint64_t m_reset_count    {0};
 };
-
-// Whether a transform change of the node moves anything the indirect
-// diffuse producers trace or shade with: a content-layer mesh or a light in
-// the node's subtree. A camera or tool node does not.
-[[nodiscard]] auto node_affects_indirect_lighting(const erhe::scene::Node& node) -> bool;
-
-// The commit site of a node transform (Node_transform_operation execute /
-// undo / redo, the end of its transform animation) announces it: queues
-// Scene_lighting_changed_message when the node affects indirect lighting.
-void announce_committed_node_transform(App_message_bus& app_message_bus, const erhe::scene::Node& node);
 
 } // namespace editor
