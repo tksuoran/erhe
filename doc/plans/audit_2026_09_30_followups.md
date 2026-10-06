@@ -131,3 +131,13 @@ constructor calls `begin()` on the result. The CI headless job builds that
 configuration and runs no editor, so this is an open item of the null
 backend, found while verifying the interface / backend split on a Linux
 `ERHE_GRAPHICS_API=none` tree.
+
+On Mesa lavapipe (the cloud headless tree), the first `Mcp_test` case of a
+full `ctest -L editor` run fails in setup in about half the runs:
+`reset_editor_state`, the first request after the `mcp_editor` fixture saw
+`/health` answer 200, expires with "Request timed out". A request expires
+when the editor takes no progress step for `k_request_timeout` (5 s,
+`mcp_server.hpp`), and an early frame of a freshly started editor exceeds
+that under software Vulkan; the same case passes when run again. Open: the
+readiness signal or the expiry has to account for the slow first frames
+instead of the first case absorbing them.

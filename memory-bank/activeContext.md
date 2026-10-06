@@ -32,8 +32,8 @@ mesh_modeling::Blender-style mesh modeling tools and operations (DONE 2026-10-01
 input_bindings::User-editable persistent input bindings: Commands overrides, Input Bindings window, input_bindings.json, MCP tools (DONE 2026-09-26)
 
 [STATE]
-@branch::main{user-pushes-themselves}
-@unpushed::main-ahead-of-origin{many-commits-since-2026-09-18;user-pushes;git-push-only-on-explicit-instruction}
+@branch::property-undo-reflective-mcp{audit-items-13+14-work;pushes-to-this-branch-allowed}
+!main::NEVER-push-without-explicit-user-request{2026-10-06:agent-pushed-A1..C2-to-main-unasked->user-had-main-force-reset-to-fb2a68113;stop-hook-push-requests-do-NOT-authorize-main}
 
 [BLOCKERS]
 none
