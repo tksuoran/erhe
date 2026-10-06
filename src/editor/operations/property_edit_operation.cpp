@@ -7,6 +7,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_property/property_set.hpp"
 #include "erhe_property/property_write_recording.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_verify/verify.hpp"
@@ -187,6 +188,9 @@ void Property_edit_operation::apply(App_context& context, const State state)
     // Record order for both directions: an edit that wrote A, whose changed
     // callback wrote B, recorded [A, B]; restoring A first lets the callback
     // write B, and restoring B afterwards puts back B's own recorded state.
+    // No change batch around the restores: a batch defers the changed
+    // callbacks to its end, after the later records were restored, so a
+    // callback of A would overwrite the restored B of a cascade [A, B].
     for (const Record& record : m_records) {
         apply_item_property(context, *record.item, record.sub_object, *record.property, (state == State::before) ? record.before : record.after);
     }
@@ -223,6 +227,43 @@ void Property_edit_operation::collect_item_references(std::unordered_set<const e
 auto Property_edit_operation::get_records() const -> std::span<const Record>
 {
     return m_records;
+}
+
+auto make_property_set_edit_operation(
+    App_context&                            context,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const erhe::property::Property_set&     values
+) -> std::shared_ptr<Property_edit_operation>
+{
+    if (!item || values.empty()) {
+        return {};
+    }
+    std::string description = fmt::format("Set {} properties on {} '{}'", values.size(), item->get_type_name(), item->get_name());
+    return std::make_shared<Property_edit_operation>(
+        std::move(description),
+        [&context, item, values]() {
+            const erhe::property::Dependency_object::Change_batch batch{*item};
+            for (const erhe::property::Property_set::Entry& entry : values.entries()) {
+                // Checked against the live state, after the entries before
+                // it were written.
+                std::string refusal;
+                if (item->is_write_sealed(*entry.property)) {
+                    refusal = "the item is sealed";
+                } else if (!item->validate_value(*entry.property, entry.value, refusal)) {
+                    // validate_value filled in the reason
+                } else if (
+                    const std::shared_ptr<erhe::Item_base> referenced = get_referenced_item(erhe::property::Local_state{entry.value});
+                    referenced && !is_item_reference_allowed(context, *item, *referenced)
+                ) {
+                    refusal = fmt::format("it cannot reference {} '{}'", referenced->get_type_name(), referenced->get_name());
+                } else {
+                    item->set_value(*entry.property, entry.value);
+                    continue;
+                }
+                log_operations->warn("'{}' not written on '{}': {}", entry.property->get_name(), item->get_name(), refusal);
+            }
+        }
+    );
 }
 
 }

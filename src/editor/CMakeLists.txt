@@ -379,6 +379,8 @@ erhe_target_sources_grouped(
     operations/kind_scope_operation.hpp
     operations/library_attach_operation.cpp
     operations/library_attach_operation.hpp
+    operations/material_edit_operation.cpp
+    operations/material_edit_operation.hpp
     operations/geometry_operations.cpp
     operations/geometry_operations.hpp
     operations/operation.cpp
@@ -391,7 +393,6 @@ erhe_target_sources_grouped(
     operations/item_parent_change_operation.hpp
     operations/item_reposition_in_parent_operation.cpp
     operations/item_reposition_in_parent_operation.hpp
-    operations/material_change_operation.cpp
     operations/item_property_apply.cpp
     operations/item_property_apply.hpp
     operations/property_edit_operation.cpp
@@ -402,7 +403,6 @@ erhe_target_sources_grouped(
     operations/style_set_operation.hpp
     operations/variant_select_operation.cpp
     operations/variant_select_operation.hpp
-    operations/material_change_operation.hpp
     operations/mesh_material_assign_operation.cpp
     operations/mesh_material_assign_operation.hpp
     operations/scene_builder_floor_resources_operation.cpp
@@ -431,8 +431,6 @@ erhe_target_sources_grouped(
     operations/flip_joint_operation.hpp
     operations/fork_geometry_operation.cpp
     operations/fork_geometry_operation.hpp
-    operations/item_set_flag_bits_operation.cpp
-    operations/item_set_flag_bits_operation.hpp
     operations/lightmap_tile_overrides_operation.cpp
     operations/lightmap_tile_overrides_operation.hpp
     operations/node_transform_operation.cpp

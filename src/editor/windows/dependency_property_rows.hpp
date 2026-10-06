@@ -26,8 +26,9 @@ class Property_editor;
 // more items (doc/erhe/property_system.md D12): one widget per
 // Property_type shaped by the property's Property_ui metadata, a value
 // source indicator, "Reset to default", Copy / Paste Properties, mixed-value
-// display for multi-selection, undo through Property_set_operation /
-// Property_set_apply_operation (one operation per completed drag), and the
+// display for multi-selection, undo through Property_set_operation (one
+// operation per completed drag) and, for Paste Properties, one
+// Property_edit_operation per item (make_property_set_edit_operation), and the
 // formula text in place of the widget for a property driven by an
 // expression (D22), with "Edit as expression" / "Remove expression" in the
 // context menu. Each item section ends with an "Add Property" row whose

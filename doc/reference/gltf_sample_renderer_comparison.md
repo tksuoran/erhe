@@ -140,8 +140,10 @@ both renderer paths: `Render_bucket` for the classic per-pass bucketing and
 negative-determinant split.
 
 Draw lists capture their partitioning at register time, so an in-place edit of
-a material already in use needs them rebuilt; that hook went into
-`Material_change_operation` (execute and undo), which also covers
+a material already in use needs them rebuilt; that hook is
+`App_context::on_item_property_changed` (after every property operation's
+execute and undo, for a property flagged `affects_draw_list_partition` or
+`affects_shader_variant`), which also covers
 `blending_mode` and `bxdf_model`, where the same staleness was already
 possible.
 

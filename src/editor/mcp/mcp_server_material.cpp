@@ -9,9 +9,8 @@
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
-#include "operations/compound_operation.hpp"
-#include "operations/material_change_operation.hpp"
-#include "operations/property_set_operation.hpp"
+#include "operations/material_edit_operation.hpp"
+#include "operations/property_edit_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -740,9 +739,12 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
         return r.dump();
     }
 
-    const bool values_changed   = !(after_values == before_values);
-    const bool samplers_changed = !(after == before);
-    if (!values_changed && !samplers_changed) {
+    // The changed property fields and texture slot fields as one
+    // Property_edit_operation (one undo entry; fields that did not change
+    // are not written, so their local layers - an expression - stay). Null
+    // when the call changes nothing.
+    const std::shared_ptr<Property_edit_operation> operation = make_material_edit_operation(material, before_values, after_values, before, after);
+    if (!operation) {
         return make_json_content({
             {"name",     material->get_name()},
             {"id",       material->get_id()},
@@ -750,29 +752,11 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
             {"changed",  false}
         }).dump();
     }
-
-    // Property fields as one Property_set_apply_operation (only the entries
-    // that changed), texture slots as a Material_change_operation; both in
-    // one undo step when both changed.
-    Compound_operation::Parameters parameters;
-    if (values_changed) {
-        parameters.operations.push_back(
-            std::make_shared<Property_set_apply_operation>(
-                std::vector<std::shared_ptr<erhe::Item_base>>{material},
-                erhe::property::Property_set::diff(
-                    erhe::primitive::Material::to_property_set(before_values),
-                    erhe::primitive::Material::to_property_set(after_values)
-                )
-            )
-        );
-    }
-    if (samplers_changed) {
-        parameters.operations.push_back(std::make_shared<Material_change_operation>(material, before, after));
-    }
-    if (parameters.operations.size() == 1) {
-        m_context.operation_stack->queue(parameters.operations.front());
-    } else {
-        m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+    m_context.operation_stack->execute_now(operation);
+    if (operation->has_error()) {
+        json r = make_text_content("edit_material failed: " + operation->get_error());
+        r["isError"] = true;
+        return r.dump();
     }
 
     return make_json_content({

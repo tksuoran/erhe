@@ -14,7 +14,6 @@
 #include "items.hpp"
 #include <algorithm>
 #include "operations/compound_operation.hpp"
-#include "operations/material_change_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"

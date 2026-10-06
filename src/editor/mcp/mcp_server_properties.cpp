@@ -30,6 +30,7 @@
 #include "erhe_property/enum_info.hpp"
 #include "erhe_property/expression.hpp"
 #include "erhe_property/property_metadata.hpp"
+#include "erhe_property/property_set.hpp"
 #include "erhe_property/property_string.hpp"
 #include "erhe_property/property_style.hpp"
 

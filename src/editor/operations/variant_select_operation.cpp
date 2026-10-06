@@ -3,7 +3,7 @@
 #include "operations/compound_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/node_transform_operation.hpp"
-#include "operations/property_set_operation.hpp"
+#include "operations/property_edit_operation.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
 
@@ -67,6 +67,26 @@ namespace {
     return true;
 }
 
+// One local-layer write a switch makes: a value, or nullopt to clear the
+// local value. Collected while the compound is built and made by one
+// Property_edit_operation, in collection order.
+class Variant_property_write
+{
+public:
+    std::shared_ptr<erhe::Item_base>              item;
+    const erhe::property::Dependency_property*    property{nullptr};
+    std::optional<erhe::property::Property_value> value;
+};
+
+// What one switch does: the property writes, and the other operations
+// (transforms, material assignments).
+class Variant_switch_parts
+{
+public:
+    std::vector<Variant_property_write>     property_writes;
+    std::vector<std::shared_ptr<Operation>> operations;
+};
+
 // The property writes one switch performs. The set's base values name every
 // path and property name any of its variants authors, so this visits exactly
 // the opinions a switch can leave standing: the chosen variant's value where
@@ -75,9 +95,9 @@ namespace {
 // set whose enclosing block is being left: every opinion of it goes back to
 // its base value.
 void append_variant_property_operations(
-    const Variant_set&                       set,
-    const Variant*                           variant,
-    std::vector<std::shared_ptr<Operation>>& operations
+    const Variant_set&    set,
+    const Variant*        variant,
+    Variant_switch_parts& parts
 )
 {
     for (const erhe::scene::Instance_override& base : set.base_values) {
@@ -108,9 +128,7 @@ void append_variant_property_operations(
             if (before == after) {
                 continue;
             }
-            operations.push_back(
-                std::make_shared<Property_set_operation>(item, *property, before, after)
-            );
+            parts.property_writes.push_back(Variant_property_write{.item = item, .property = property, .value = std::move(after)});
         }
         if (!base.transform_overridden) {
             continue;
@@ -131,7 +149,7 @@ void append_variant_property_operations(
         parameters.parent_from_node_before = xformable->parent_from_node_transform();
         parameters.parent_from_node_after  = erhe::scene::Trs_transform{wanted};
         parameters.xform_op_stack_before   = xformable->copy_xform_op_stack();
-        operations.push_back(std::make_shared<Node_transform_operation>(parameters));
+        parts.operations.push_back(std::make_shared<Node_transform_operation>(parameters));
     }
 }
 
@@ -142,9 +160,9 @@ void append_variant_property_operations(
 // every other variant's are inactive, which prunes each one and its subtree
 // from the render, the pick and the simulation (X2).
 void append_variant_prim_operations(
-    const Variant_set&                       set,
-    const Variant*                           variant,
-    std::vector<std::shared_ptr<Operation>>& operations
+    const Variant_set&    set,
+    const Variant*        variant,
+    Variant_switch_parts& parts
 )
 {
     for (const Variant& candidate : set.variants) {
@@ -170,18 +188,16 @@ void append_variant_prim_operations(
             if (before == after) {
                 continue;
             }
-            operations.push_back(
-                std::make_shared<Property_set_operation>(item, *property, before, after)
-            );
+            parts.property_writes.push_back(Variant_property_write{.item = item, .property = property, .value = std::move(after)});
         }
     }
 }
 
 // The material assignments one variant's bindings are.
 void append_variant_binding_operations(
-    const Variant_set&                       set,
-    const Variant&                           variant,
-    std::vector<std::shared_ptr<Operation>>& operations
+    const Variant_set&    set,
+    const Variant&        variant,
+    Variant_switch_parts& parts
 )
 {
     for (const Variant_binding& binding : variant.bindings) {
@@ -194,7 +210,7 @@ void append_variant_binding_operations(
             const std::shared_ptr<Mesh_material_assign_operation> assign =
                 make_mesh_material_assign_operation(target.mesh, primitive_index, material);
             if (assign) {
-                operations.push_back(assign);
+                parts.operations.push_back(assign);
             }
         }
     }
@@ -204,7 +220,7 @@ void append_variant_set_off(
     Variant_table&                           variant_table,
     Variant_set&                             set,
     std::vector<const Variant_set*>&         visited,
-    std::vector<std::shared_ptr<Operation>>& operations
+    Variant_switch_parts&                    parts
 );
 
 // Whether the block a nested set is declared inside is the one being selected
@@ -222,7 +238,7 @@ void append_nested_variant_sets(
     const std::string&                       variant_name,
     Nested_variant_action                    action,
     std::vector<const Variant_set*>&         visited,
-    std::vector<std::shared_ptr<Operation>>& operations
+    Variant_switch_parts&                    parts
 );
 
 // One set coming on: it applies the selection it holds. Its base values are
@@ -234,7 +250,7 @@ void append_variant_set_on(
     Variant_table&                           variant_table,
     Variant_set&                             set,
     std::vector<const Variant_set*>&         visited,
-    std::vector<std::shared_ptr<Operation>>& operations
+    Variant_switch_parts&                    parts
 )
 {
     if (std::find(visited.begin(), visited.end(), &set) != visited.end()) {
@@ -243,12 +259,12 @@ void append_variant_set_on(
     visited.push_back(&set);
     capture_variant_base_values(set);
     const Variant* const variant = set.find_variant(set.selected);
-    append_variant_property_operations(set, variant, operations);
-    append_variant_prim_operations    (set, variant, operations);
+    append_variant_property_operations(set, variant, parts);
+    append_variant_prim_operations    (set, variant, parts);
     if (variant != nullptr) {
-        append_variant_binding_operations(set, *variant, operations);
+        append_variant_binding_operations(set, *variant, parts);
     }
-    append_nested_variant_sets(variant_table, set, set.selected, Nested_variant_action::bring_on, visited, operations);
+    append_nested_variant_sets(variant_table, set, set.selected, Nested_variant_action::bring_on, visited, parts);
 }
 
 // One set going off: every opinion of it back to its base value and every
@@ -258,7 +274,7 @@ void append_variant_set_off(
     Variant_table&                           variant_table,
     Variant_set&                             set,
     std::vector<const Variant_set*>&         visited,
-    std::vector<std::shared_ptr<Operation>>& operations
+    Variant_switch_parts&                    parts
 )
 {
     if (std::find(visited.begin(), visited.end(), &set) != visited.end()) {
@@ -266,10 +282,10 @@ void append_variant_set_off(
     }
     visited.push_back(&set);
     for (const Variant& variant : set.variants) {
-        append_nested_variant_sets(variant_table, set, variant.name, Nested_variant_action::take_off, visited, operations);
+        append_nested_variant_sets(variant_table, set, variant.name, Nested_variant_action::take_off, visited, parts);
     }
-    append_variant_property_operations(set, nullptr, operations);
-    append_variant_prim_operations    (set, nullptr, operations);
+    append_variant_property_operations(set, nullptr, parts);
+    append_variant_prim_operations    (set, nullptr, parts);
 }
 
 void append_nested_variant_sets(
@@ -278,15 +294,15 @@ void append_nested_variant_sets(
     const std::string&                       variant_name,
     const Nested_variant_action              action,
     std::vector<const Variant_set*>&         visited,
-    std::vector<std::shared_ptr<Operation>>& operations
+    Variant_switch_parts&                    parts
 )
 {
     const std::vector<Variant_set*> nested = variant_table.find_nested_sets(set, variant_name);
     for (Variant_set* const nested_set : nested) {
         if (action == Nested_variant_action::bring_on) {
-            append_variant_set_on(variant_table, *nested_set, visited, operations);
+            append_variant_set_on(variant_table, *nested_set, visited, parts);
         } else {
-            append_variant_set_off(variant_table, *nested_set, visited, operations);
+            append_variant_set_off(variant_table, *nested_set, visited, parts);
         }
     }
 }
@@ -378,7 +394,7 @@ auto make_select_variant_operation(
     }
     const std::string before_variant_name = set->selected;
 
-    std::vector<std::shared_ptr<Operation>> operations;
+    Variant_switch_parts parts;
     Variant_select_operation::Parameters parameters{};
     parameters.scene_root          = scene_root;
     parameters.key                 = key;
@@ -397,6 +413,7 @@ auto make_select_variant_operation(
         }
     ) ? Variant_select_operation::Entry_state::present
       : Variant_select_operation::Entry_state::absent;
+    std::vector<std::shared_ptr<Operation>> operations;
     operations.push_back(std::make_shared<Variant_select_operation>(std::move(parameters)));
 
     // A set whose enclosing block is not the selected one contributes nothing
@@ -410,19 +427,48 @@ auto make_select_variant_operation(
         // then this set's own opinions, then what the chosen block declares.
         if (before_variant_name != variant_name) {
             append_nested_variant_sets(
-                variant_table, *set, before_variant_name, Nested_variant_action::take_off, visited, operations
+                variant_table, *set, before_variant_name, Nested_variant_action::take_off, visited, parts
             );
         }
-        append_variant_property_operations(*set, variant, operations);
-        append_variant_prim_operations    (*set, variant, operations);
-        append_variant_binding_operations (*set, *variant, operations);
+        append_variant_property_operations(*set, variant, parts);
+        append_variant_prim_operations    (*set, variant, parts);
+        append_variant_binding_operations (*set, *variant, parts);
         append_nested_variant_sets(
-            variant_table, *set, variant_name, Nested_variant_action::bring_on, visited, operations
+            variant_table, *set, variant_name, Nested_variant_action::bring_on, visited, parts
         );
     }
 
+    // Every opinion and `active` write of the switch, in the order collected
+    // (what comes off first, then what comes on), as one
+    // Property_edit_operation: undo restores each written property's exact
+    // prior local layer, an expression included.
+    if (!parts.property_writes.empty()) {
+        operations.push_back(
+            std::make_shared<Property_edit_operation>(
+                fmt::format("Variant {} of {} on {}: property opinions", variant_name, key.set_name, key.prim_path),
+                [writes = std::move(parts.property_writes)]() {
+                    for (const Variant_property_write& write : writes) {
+                        if (write.value.has_value()) {
+                            write.item->set_value(*write.property, write.value.value());
+                        } else {
+                            write.item->clear_value(*write.property);
+                        }
+                    }
+                }
+            )
+        );
+    }
+    for (std::shared_ptr<Operation>& operation : parts.operations) {
+        operations.push_back(std::move(operation));
+    }
+
+    // All or nothing: a refused opinion write rolls the selection entry back
+    // too, so a switch never records a variant whose opinions did not apply.
     std::shared_ptr<Compound_operation> compound = std::make_shared<Compound_operation>(
-        Compound_operation::Parameters{.operations = std::move(operations)}
+        Compound_operation::Parameters{
+            .operations  = std::move(operations),
+            .child_error = Compound_child_error::roll_back
+        }
     );
     compound->set_description(
         fmt::format(

@@ -198,7 +198,7 @@ public:
     // The one place that maps a property's consequence flags
     // (erhe::property::Property_flags, doc/erhe/property_system.md D11) to
     // editor actions. Called after every property write made through
-    // Property_set_operation / Property_set_apply_operation.
+    // Property_set_operation / Property_edit_operation / Style_set_operation.
     void on_item_property_changed(erhe::Item_base& item, const erhe::property::Dependency_property& property);
 
     // Set at the top of Editor construction, before parts construction.

@@ -5,7 +5,6 @@
 #include "operations/operation.hpp"
 
 #include "erhe_property/expression.hpp"
-#include "erhe_property/property_set.hpp"
 #include "erhe_property/property_value.hpp"
 
 #include <memory>
@@ -85,37 +84,6 @@ private:
     bool                                        m_userships_adopted{false};
     std::vector<std::shared_ptr<Operation>>     m_follow_ups;
     bool                                        m_follow_ups_recorded{false};
-};
-
-// Applies a Property_set to several items (paste, multi-selection edit) as
-// one undo step: every entry becomes a local value on every item, and undo
-// restores each item's previous local value (or clears it).
-class Property_set_apply_operation : public Operation
-{
-public:
-    Property_set_apply_operation(
-        const std::vector<std::shared_ptr<erhe::Item_base>>& items,
-        erhe::property::Property_set                         values
-    );
-    ~Property_set_apply_operation() noexcept override;
-
-    // Implements Operation
-    void execute(App_context& context) override;
-    void undo   (App_context& context) override;
-    void collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const override;
-
-private:
-    struct Target
-    {
-        std::shared_ptr<erhe::Item_base>                           item;
-        std::vector<std::optional<erhe::property::Property_value>> before; // one per m_values entry
-    };
-    void adopt_userships(App_context& context);
-
-    std::vector<Target>          m_targets;
-    erhe::property::Property_set m_values;
-    std::vector<Asset_reference> m_userships; // as Property_set_operation
-    bool                         m_userships_adopted{false};
 };
 
 // Asset-manager plan R5.4: an operation that holds `item` (a managed asset

@@ -416,9 +416,9 @@ public:
     // container).
     auto request_unload(const Asset_key& key, bool discard = false) -> Unload_result;
 
-    // R5.8 dirty tracking: asset-edit paths (Material_change_operation,
-    // Animation_edit_operation, Animation_structure_operation - every
-    // material / animation edit funnels through them) mark the edited
+    // R5.8 dirty tracking: asset-edit paths (App_context::on_item_property_changed
+    // after every property operation's write - a material edit is one -,
+    // Animation_edit_operation, Animation_structure_operation) mark the edited
     // asset's DEFINING container dirty. No-op for builtins and unmanaged
     // items.
     void mark_item_dirty(const erhe::Item_base& item);

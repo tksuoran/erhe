@@ -1,6 +1,6 @@
 # Data-model undo and reflective MCP item edits
 
-Status: proposed
+Status: in progress
 
 Audit items 13 and 14 of `doc/reference/audit_erhe_2026_09_30.md` section 8,
 worked together because both stand on the dependency-property registry
@@ -223,17 +223,36 @@ consequences.
 Moves onto `Property_edit_operation` (each verified by an undo / redo
 round-trip of the item's full property dump):
 
-- `Property_set_apply_operation` (fixes the expression-loss defect).
-- `Material_change_operation` (`Material::set_data` writes only
-  properties).
+- `Property_set_apply_operation` (fixes the expression-loss defect):
+  replaced by `make_property_set_edit_operation` (one item, one bag). Paste
+  Properties builds one per item in a `keep_siblings` compound; the edit
+  checks each entry against the live state just before writing it (seal,
+  `validate_value`, D28 host check) and skips a refused one with a
+  warning, since a refused write would otherwise fail the whole item (the
+  copied name on a sibling). Class deleted (A4).
+- `Material_change_operation`: replaced by `make_material_edit_operation`,
+  which writes only the changed value fields and the changed slot fields,
+  each through its own property as a local value (only a null texture
+  clears), not a whole `Material::set_data` snapshot, so an expression on
+  an unchanged slot field stays. MCP
+  `edit_material` now runs it with `execute_now` (it was queued). Class
+  deleted (A4).
 - In `make_select_variant_operation`, the per-opinion
   `Property_set_operation`s collapse into one `Property_edit_operation`;
   `Variant_select_operation` itself stays (it writes the variant table and
-  `Scene_settings`).
+  `Scene_settings`). The compound uses `Compound_child_error::roll_back`,
+  so a refused opinion write leaves nothing of the switch applied. All
+  property writes now run before the transforms and material assignments
+  (they touch disjoint state), and a switch applies file opinions only,
+  with no bone-connect follow-ups, as an import does (A4).
+- Undo / redo of a `Property_edit_operation` opens no `Change_batch`: a
+  batch defers changed callbacks past the later restores and breaks the
+  record-order cascade restore of 3.2 (tried in A4; the A2 cascade test
+  fails), so consumers are notified per restored property.
 - `Item_set_flag_bits_operation`: its one caller (`scene_root.cpp:1139`,
   `no_transform_update`) is rewritten to write
   `no_transform_update_property` through `set_value` inside a
-  `Property_edit_operation`, and the class is deleted. `set_flag_bits`
+  `Property_edit_operation`, and the class is deleted (A4). `set_flag_bits`
   itself stays a member write and is never called from an edit function.
 - The MCP edits of step A3.
 
@@ -350,6 +369,8 @@ effort before commit. Targets that must build: `editor`, `src/example`,
 | C3 | Per-type edit tools reduced (4.3) with all callers migrated; `mcp_tools.json` entries removed or replaced; line delta of `src/editor/mcp` in the commit message | C1, C2, A3 | M |
 
 A3 and C1 can swap order; C3 must come after both.
+
+Done: A1, A2, A3, A4. Next: B1.
 
 ## 6. Notification design (B1)
 

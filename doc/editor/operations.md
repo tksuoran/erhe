@@ -107,9 +107,8 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `reparent_item`)
   - `Item_reposition_in_parent_operation` -- reorder siblings
   - `Node_transform_operation` -- undo/redo node transforms
-  - `Material_change_operation` -- undo/redo a whole `Material_data` snapshot (MCP `edit_material`); the Properties window records `Property_set_operation`s instead
   - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows, MCP `set_item_property`, and MCP `edit_light` / `edit_camera` (one per field, grouped into a `Compound_operation` with a `Node_transform_operation` for `edit_light`'s position)
-  - `Property_edit_operation` -- the property writes of an edit function, recorded on the first execute (see "Property_edit_operation" below)
+  - `Property_edit_operation` -- the property writes of an edit function, recorded on the first execute (see "Property_edit_operation" below); the Properties window's Paste Properties, MCP `edit_material`, the property opinions of a variant switch, the Hierarchy window's no-transform-update flag and the MCP physics edits
   - `Lightmap_tile_overrides_operation` -- a scene's lightmap quadtree leaf overrides before / after (the Lightmap window's and MCP's subdivide / merge); execute and undo let the Lightmap window re-prepare a live partition
   - `Collision_shape_set_operation` -- the collision shape a node's rigid body is made from, before / after (MCP `edit_physics_body` shape arguments): `Node_physics_system::set_collision_shape`, which recreates a live body. The before state is the node's authored shape (`Node_physics_system::get_authored_collision_shape`: the held shape without the center-of-mass wrapper the system adds for a nonzero `center_of_mass_offset`), so undo restores the same body shape and the offset is applied once. `Mesh_operation::capture_physics` takes the same authored shape for its versions.
   - `Scene_settings_set_operation` -- a scene's per-scene setting overrides (the codegen `Scene_settings`) before / after (MCP `set_scene_settings`). Execute and undo assign the struct and notify directly each consumer that keeps derived state from a field that changed, decided once at construction from the serialized fields: `camera_controls` -> `Fly_camera_tool::on_scene_camera_controls_changed()` (re-adopts the controls when the scene is hovered), `lightmap_tile_overrides` -> `Lightmap_window::on_tile_overrides_changed()`. `sky`, `grid`, `physics` and `shadow_frustum_fit` are read through `scene_settings_resolve.hpp` where they are used (sky and grid rendering, the lightmap bake's sky, the physics step and drags, the shadow fit), so nothing caches them; `clear_color` and `post_processing` have no reader. `scene_id` and `variant_selections` are managed by the scene (side-data identity; `Variant_select_operation`), and before and after must agree on them (verified).
@@ -169,7 +168,11 @@ properties (`Light::set_intensity`, `Material::set_data`).
   that caused it: an edit of A whose callback writes B records [A, B].
   Undo restores A first (the callback writes B from A's old value) and then
   B's own before state, which puts back a B the user authored
-  independently; reverse order would leave the callback's value.
+  independently; reverse order would leave the callback's value. For the
+  same reason no `Change_batch` is open around the restores: a batch defers
+  the changed callbacks to its end, after B was restored, so A's callback
+  would overwrite it. Consumers are therefore notified per restored
+  property, not once per object.
 - Refusals: a write a gate refused during the edit (read-only, sealed,
   validate, bridge validate such as a sibling-unique name), a write on a
   sub-object of a sealed item (D24: a mesh primitive carries no seal of its
@@ -212,16 +215,64 @@ transform, physics or other plain member writes, so a serial comparison
 around the edit would both flag correct edits and miss the writes it is
 meant to catch.
 
+Edits built on it (doc/plans/property_undo_and_reflective_mcp.md
+section 3.3):
+
+- `make_property_set_edit_operation` (`property_edit_operation.hpp`): a
+  `Property_set` written as local values on one item. Each entry is checked
+  against the item's live state just before it is written (seal,
+  `validate_value` with the bridge validate, the D28 host check of an
+  object value); a refused entry is skipped with a warning and the rest are
+  written - pasting onto two siblings, the second skips the copied name the
+  first now holds. Paste Properties builds one per item (entries of
+  properties the item's type has and that are writable) in a
+  `Compound_operation` with the default `keep_siblings`.
+- `make_material_edit_operation` (`operations/material_edit_operation.hpp`):
+  MCP `edit_material`, run with `execute_now` (the reply reports a refusal).
+  It writes the `Material_values` fields that changed and, per texture
+  slot, only the slot fields that changed, each through its own property as
+  a local value: a changed field is an explicit request, so it becomes local
+  even when it equals the default; only a slot texture set to null clears
+  the slot's local value. An unchanged field is not written, so an
+  expression on it stays through the edit as well as through its undo.
+- `make_select_variant_operation` (`operations/variant_select_operation.hpp`):
+  every opinion and `active` write of the switch, in collection order (the
+  sets the left block declares, deepest first, then the switched set, then
+  the sets the chosen block declares), is one `Property_edit_operation` in
+  the switch's compound. The compound runs the `Variant_select_operation`
+  (variant table and `Scene_settings`), then that property edit, then the
+  `Node_transform_operation`s and the `Mesh_material_assign_operation`s in
+  the same set order: all property writes come before every transform and
+  material assignment, which read and write state the property writes do
+  not touch. A switch applies the file's opinions only, as an import does:
+  it adds none of the follow-ups an interactive edit implies (the
+  connected child bones a `Rig.tail` / `Rig.connected` edit through
+  `Property_set_operation` moves).
+  The compound uses `Compound_child_error::roll_back`: a refused opinion
+  write takes the selection entry back, so a switch never records a
+  variant whose opinions did not apply; a switch applied at once
+  (`Variant_switch_mode::immediate`) returns the error.
+- The Hierarchy window's "Set / Clear No Transform Update (Recursive)"
+  writes `Item_base::no_transform_update_property` with `set_value` on each
+  node whose flag differs.
+
 `editor_operation_tests` (`src/editor/operations/test/`) covers the record
 / undo / redo round trip on two items with an expression surviving undo, a
 mesh primitive property, a cascade, a refused write, a refused reference,
 a primitive write on a sealed mesh, an edit that writes nothing, and an
-edit function that is the only owner of its items. The test compiles
-`property_edit_operation.cpp` and `item_property_apply.cpp`; the editor
+edit function that is the only owner of its items, and for the property
+bag, the material edit and the no-transform-update flag an undo / redo round
+trip of the item's full property dump with an overwritten expression
+restored (`test_migrated_property_edits.cpp`). The test compiles
+`property_edit_operation.cpp`, `material_edit_operation.cpp` and
+`item_property_apply.cpp`; the editor
 functions they call that need the whole editor
 (`App_context::on_item_property_changed`, the scene lookup of
 `is_item_reference_allowed`, the asset usership) have minimal test
-definitions in `editor_glue.cpp`.
+definitions in `editor_glue.cpp`. In the running editor, `mcp_server_tests`
+covers the same round trip of the full property dump (`get_item_properties`)
+for `edit_material` (an overwritten expression restored, an untouched one
+kept) and for a variant switch of `nested_variants.usda` (every prim).
 
 ## Primitive swaps keep the node in place
 

@@ -1718,7 +1718,7 @@ private:
 };
 
 // (b) NaN float must be rejected before the (after == before) short-circuit
-// and must not push a Material_change_operation onto the undo stack.
+// and must not record a material edit on the undo stack.
 TEST_F(Mcp_test, edit_material_rejects_nan_opacity)
 {
     Material_scalar_state_guard guard;
@@ -1737,7 +1737,7 @@ TEST_F(Mcp_test, edit_material_rejects_nan_opacity)
     //  - HTTP 200 with a tools/call response carrying isError=true
     //    ("opacity must be finite (got NaN or Inf)").
     // Either is acceptable; the critical post-condition is that the
-    // material was NOT mutated and no Material_change_operation was
+    // material was NOT mutated and no material edit was
     // queued. Material_scalar_state_guard restores baseline in case of leak.
     ASSERT_TRUE(res) << "HTTP request failed";
     ASSERT_EQ(res->status, 200);
@@ -6588,4 +6588,146 @@ TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne_with_constant_depth_bias)
             << measurement.label << ": " << measurement.count.failing_pixels << " of " << measurement.count.gated_pixels
             << " unobstructed floor pixels read shadow visibility < 0.999";
     }
+}
+
+// doc/plans/property_undo_and_reflective_mcp.md A4: edit_material is one
+// Property_edit_operation. A multi-property edit that overwrites an
+// expression (ior) and edits texture slot fields leaves an untouched
+// expression (transmission) alone; one undo returns the material's full
+// property dump exactly to its prior state, the expression included, and
+// redo to the edited one.
+TEST_F(Mcp_test, edit_material_undo_redo_round_trips_the_property_dump_and_keeps_expressions)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+    const json  details = material_details();
+    ASSERT_TRUE(details.contains("id")) << details.dump();
+    const int material_id = details.at("id").get<int>();
+
+    auto dump = [&client, material_id]() -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_item_properties", json{{"item_id", material_id}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        return result.is_error ? json{} : result.payload.at("properties");
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+
+    for (const auto& [name, text] : {std::pair{"ior", "{metallic} + 1.0"}, std::pair{"transmission", "{metallic} * 0.25"}}) {
+        Mcp_client::Tool_result set = client.call_tool("set_item_property", json{{"item_id", material_id}, {"property", name}, {"expression", text}});
+        ASSERT_FALSE(set.is_error) << set.text;
+    }
+    advance_frames(client, 2);
+    ASSERT_EQ(item_property(client, material_id, "ior").value("expression", json()), json("{metallic} + 1.0"));
+
+    const json        dump_before = dump();
+    const std::size_t depth       = undo_depth();
+    Mcp_client::Tool_result edited = client.call_tool("edit_material", json{
+        {"scene_name",       env.scene_name()},
+        {"material_name",    env.material_name()},
+        {"ior",              1.9},
+        {"metallic",         0.7},
+        {"texture_samplers", {{"base_color", {{"rotation", 0.5}, {"wrap", "clamp_to_edge"}}}}}
+    });
+    ASSERT_FALSE(edited.is_error) << edited.text;
+    EXPECT_TRUE(edited.payload.value("changed", false));
+    EXPECT_EQ(undo_depth(), depth + 1) << "one undo entry";
+    const json dump_after = dump();
+    EXPECT_NE(dump_after, dump_before);
+    EXPECT_TRUE(item_property(client, material_id, "ior").at("expression").is_null()) << "the edit replaced the expression";
+    EXPECT_EQ(item_property(client, material_id, "transmission").value("expression", json()), json("{metallic} * 0.25"))
+        << "a field the call did not change is not written";
+
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    EXPECT_EQ(dump(), dump_before) << "undo returns the full property dump to its prior state";
+    EXPECT_EQ(item_property(client, material_id, "ior").value("expression", json()), json("{metallic} + 1.0")) << "the expression survives undo";
+
+    ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+    EXPECT_EQ(dump(), dump_after) << "redo returns the full property dump to the edited state";
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    EXPECT_EQ(dump(), dump_before);
+}
+
+// doc/plans/property_undo_and_reflective_mcp.md A4: the property writes of
+// a variant switch (here the `active` writes of the prims the nested sets'
+// variants add, and the nested sets going off and on) are one
+// Property_edit_operation inside the switch's compound. One undo returns
+// every prim's full property dump exactly to its prior state, redo to the
+// switched one.
+TEST_F(Mcp_test, select_variant_undo_redo_round_trips_every_prims_property_dump)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    // Variant opinions and variant prims come from USD composition only; an
+    // editor built with ERHE_USD_LIBRARY=none answers describe_usd_file
+    // with "USD support not built" (scripts/scene_roundtrip_verify.py
+    // usd_support_available).
+    constexpr const char* c_nested_variants_usda = "src/erhe/usd/test/data/nested_variants.usda";
+    const Mcp_client::Tool_result probe = client.call_tool("describe_usd_file", json{{"path", c_nested_variants_usda}});
+    if ((probe.text.find("USD support not built") != std::string::npos) || (probe.payload.dump().find("USD support not built") != std::string::npos)) {
+        GTEST_SKIP() << "editor built with ERHE_USD_LIBRARY=none";
+    }
+
+    Mcp_client::Tool_result loaded = client.call_tool("load_scene", json{{"path", c_nested_variants_usda}});
+    ASSERT_FALSE(loaded.is_error) << loaded.text;
+    std::string scene;
+    for (int attempt = 0; (attempt < 100) && scene.empty(); ++attempt) {
+        advance_frames(client, 2);
+        for (const std::string& name : scene_names(client)) {
+            if (name.find("nested_variants") != std::string::npos) {
+                scene = name;
+            }
+        }
+    }
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+    ASSERT_FALSE(scene.empty()) << "nested_variants.usda was not opened as a scene";
+
+    auto dump_scene = [&client, &scene]() -> json {
+        json dump = json::object();
+        Mcp_client::Tool_result nodes = client.call_tool("get_scene_nodes", json{{"scene_name", scene}});
+        EXPECT_FALSE(nodes.is_error) << nodes.text;
+        if (nodes.is_error) {
+            return dump;
+        }
+        for (const json& node : nodes.payload.at("nodes")) {
+            const int id = node.at("id").get<int>();
+            Mcp_client::Tool_result properties = client.call_tool("get_item_properties", json{{"item_id", id}});
+            EXPECT_FALSE(properties.is_error) << properties.text;
+            dump[std::to_string(id)] = properties.is_error ? json{} : properties.payload.at("properties");
+        }
+        return dump;
+    };
+
+    Mcp_client::Tool_result sets = client.call_tool("get_scene_variants", json{{"scene_name", scene}});
+    ASSERT_FALSE(sets.is_error) << sets.text;
+    std::string prim_path;
+    std::string selected;
+    for (const json& set : sets.payload.at("variant_sets")) {
+        if ((set.value("set_name", "") == "modelVariant") && set.value("enclosing_set_name", "").empty()) {
+            prim_path = set.value("prim_path", "");
+            selected  = set.value("selected", "");
+        }
+    }
+    ASSERT_EQ(selected, "Utah") << sets.payload.dump();
+    const json dump_before = dump_scene();
+
+    Mcp_client::Tool_result switched = client.call_tool("select_variant", json{
+        {"scene_name", scene}, {"prim_path", prim_path}, {"set_name", "modelVariant"}, {"variant_name", "Fancy"}
+    });
+    ASSERT_FALSE(switched.is_error) << switched.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000));
+    advance_frames(client, 2);
+    const json dump_after = dump_scene();
+    EXPECT_NE(dump_after, dump_before) << "the switch writes prim properties";
+
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    advance_frames(client, 2);
+    EXPECT_EQ(dump_scene(), dump_before) << "undo returns every prim's property dump to its prior state";
+
+    ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+    advance_frames(client, 2);
+    EXPECT_EQ(dump_scene(), dump_after) << "redo returns every prim's property dump to the switched state";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
 }

@@ -13,7 +13,10 @@
 #include <vector>
 
 namespace erhe           { class Item_base; }
-namespace erhe::property { class Dependency_property; }
+namespace erhe::property {
+    class Dependency_property;
+    class Property_set;
+}
 
 namespace editor {
 
@@ -81,5 +84,20 @@ private:
     // the same).
     std::vector<Asset_reference> m_userships;
 };
+
+// A bag of property values (D17) written as local values on one item, as
+// one Property_edit_operation: the Properties window's Paste Properties.
+// Each entry is checked against the item's live state just before it is
+// written - the property's validation and the bridge validate
+// (validate_value), the item's seal, and for an object value the D28 host
+// check - and an entry the item refuses is skipped with a warning, so one
+// refused entry (a copied name a sibling holds by then) does not fail the
+// rest. Undo restores each written property's exact prior local layer
+// (value, expression or none). Null when `values` is empty.
+[[nodiscard]] auto make_property_set_edit_operation(
+    App_context&                            context,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const erhe::property::Property_set&     values
+) -> std::shared_ptr<Property_edit_operation>;
 
 }

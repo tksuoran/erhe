@@ -483,7 +483,8 @@ defeats that unless it is fixed as part of phase 4. It is specific to the **draw
 the forward set has no cached records and nothing rebuilds it mid-frame.
 
 **`rebuild_all()` is reachable from inside the rendergraph.** Besides
-`material_change_operation.cpp:47` (main thread, before the flush - fine),
+`App_context::on_item_property_changed` (`app_context.cpp`, main thread,
+after a property operation's write, before the flush - fine),
 `Draw_list_scene::set_exclude_unlit_from_shadows` (`draw_list_scene.cpp:878`)
 calls `rebuild_all()` at `:889` when the setting changed, and its caller is
 `shadow_render_node.cpp:587` - three lines before
@@ -1075,12 +1076,13 @@ Hashing the resolved texture pointer is what makes a re-baked editor
 bake - dirty every set the material is a member of, without the texture graph
 knowing material state exists.
 
-**What persistence removes.** Today's correctness rests on the per-frame
-rewrite, and `material_change_operation.cpp:18-24` says so: only the
-draw-list-identity fields (blending class, double-sided) need an explicit
-re-registration, because "Everything else in `Material_data` reaches the shader
-through `Material_buffer`, which is re-uploaded each frame anyway" (verbatim).
-The rule above is what replaces that guarantee, which is why R5 demands a
+**What persistence removes.** Without persistent records, correctness rests
+on the per-frame rewrite: only the draw-list-identity fields (blending class,
+double-sided) need an explicit re-registration
+(`App_context::on_item_property_changed` rebuilds the draw lists for a
+property flagged `affects_draw_list_partition` or `affects_shader_variant`),
+and everything else in `Material_data` reaches the shader through
+`Material_buffer`, which is re-uploaded each frame. The rule above is what replaces that guarantee, which is why R5 demands a
 mechanism no writer can slip past.
 
 **Why a hash and not a version counter on `Material`.** A `data_serial` bumped

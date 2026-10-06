@@ -58,10 +58,14 @@ private:
 };
 
 // The undoable compound one variant switch is: the selection entry above, one
-// property write per opinion any variant of the set authors, one `active`
-// write per prim any variant of the set adds - the chosen variant's prims
-// active, every other variant's inactive - and one material assignment per
-// binding of the chosen variant, so a single undo puts all of them back. A
+// Property_edit_operation making one property write per opinion any variant
+// of the set authors and one `active` write per prim any variant of the set
+// adds - the chosen variant's prims active, every other variant's inactive -
+// then one transform operation per authored transform and one material
+// assignment per binding of the chosen variant, so a single undo puts all of
+// them back (each written property to its exact prior local layer). The
+// compound rolls back on a child's error (Compound_child_error::roll_back):
+// a refused opinion write leaves nothing of the switch applied. A
 // property the chosen variant does not author goes back to the
 // set's base value - what the file authored outside the variant blocks - so
 // switching never leaves the previous variant's opinion standing. Null when

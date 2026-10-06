@@ -11,6 +11,7 @@
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/property_edit_operation.hpp"
 #include "operations/property_set_operation.hpp"
 #include "operations/style_set_operation.hpp"
 #include "scene/item_lookup.hpp"
@@ -1655,6 +1656,8 @@ void Dependency_property_rows::paste_properties()
             continue; // D24
         }
         // Only the properties this item's type has (by identity, not name).
+        // The values the item refuses are skipped when the paste writes
+        // them (make_property_set_edit_operation checks the live state).
         erhe::property::Property_set filtered;
         for (const erhe::property::Property_set::Entry& entry : source.entries()) {
             if (entry.property->is_read_only()) {
@@ -1664,15 +1667,16 @@ void Dependency_property_rows::paste_properties()
                 filtered.set(*entry.property, entry.value);
             }
         }
-        if (!filtered.empty()) {
-            parameters.operations.push_back(
-                std::make_shared<Property_set_apply_operation>(std::vector<std::shared_ptr<erhe::Item_base>>{item}, std::move(filtered))
-            );
+        const std::shared_ptr<Property_edit_operation> operation = make_property_set_edit_operation(m_context, item, filtered);
+        if (operation) {
+            parameters.operations.push_back(operation);
         }
     }
     if (parameters.operations.empty()) {
         return;
     }
+    // Several items: one undo step; each item's paste is independent of the
+    // others (Compound_child_error::keep_siblings, the default).
     if (parameters.operations.size() == 1) {
         m_context.operation_stack->queue(parameters.operations.front());
     } else {

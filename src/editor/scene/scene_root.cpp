@@ -25,9 +25,9 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/item_set_flag_bits_operation.hpp"
 #include "operations/property_set_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/property_edit_operation.hpp"
 #include "operations/variant_select_operation.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "rig/bone_commands.hpp"
@@ -1136,13 +1136,20 @@ auto Scene_root::make_browser_window(
                             if (nodes.empty()) {
                                 return;
                             }
-                            auto op = std::make_shared<Item_set_flag_bits_operation>(
-                                std::move(nodes),
-                                erhe::Item_flags::no_transform_update,
-                                enable,
-                                enable ? "Set No Transform Update" : "Clear No Transform Update"
+                            // The flag through its bridge property, so the
+                            // write is recorded (set_flag_bits is a member
+                            // write the recording does not see).
+                            const std::size_t node_count = nodes.size();
+                            context.operation_stack->queue(
+                                std::make_shared<Property_edit_operation>(
+                                    fmt::format("{} ({} nodes)", enable ? "Set No Transform Update" : "Clear No Transform Update", node_count),
+                                    [nodes = std::move(nodes), enable]() {
+                                        for (const std::shared_ptr<erhe::Item_base>& item : nodes) {
+                                            item->set_value(erhe::Item_base::no_transform_update_property, enable);
+                                        }
+                                    }
+                                )
                             );
-                            context.operation_stack->queue(op);
                         }
                     );
                 };
@@ -2415,6 +2422,9 @@ auto Scene_root::select_variant(
         context.operation_stack->queue(operation);
     } else {
         operation->execute(context);
+        if (operation->has_error()) {
+            return operation->get_error();
+        }
     }
     return std::string{};
 }

@@ -336,11 +336,11 @@ table, see D2a), and references to other objects (D28).
   `item->get_property_sub_object(index)`, the item stays the one the
   operation names and seals against, and a sub-object that no longer
   exists at apply time is a logged no-op.
-  `Material_change_operation` applies a whole `Material_data` snapshot
-  through `Material::set_data` (the MCP `edit_material` tool). A
-  `Property_set_apply_operation`
-  applies a `Property_set` (D17) to a list of items and records one before
-  bag per item, for paste and multi-selection edits.
+  A multi-property edit - Paste Properties, the MCP `edit_material` tool
+  (property fields and texture slot fields) - is a
+  `Property_edit_operation` (`doc/editor/operations.md`
+  "Property_edit_operation"), which records the exact local layer of every
+  property it writes.
 - D12 Editor UI. `Property_editor` has a generic
   `dependency_properties(item)` section that lists the registered properties
   of the item's type in registration order and draws one widget per
@@ -390,8 +390,9 @@ table, see D2a), and references to other objects (D28).
   The
   section's context menu offers Copy Properties (reads a `Property_set` of
   the item's local values into an editor clipboard) and Paste Properties
-  (applies it to the selection through `Property_set_apply_operation`,
-  skipping properties the target type does not have).
+  (applies it to the selection through one `Property_edit_operation` per
+  item, skipping properties the target type does not have and values the
+  target refuses).
 
   Attached properties (R7) follow the section's listing rule: an attached
   property is listed on an object of its holder type
@@ -756,8 +757,9 @@ table, see D2a), and references to other objects (D28).
     skips the derived bits. "Enable / Disable Lightmap (Recursive)" in the
     item context menu is one `Compound_operation` that sets the local
     value on the selected items and clears it on their descendants, so the
-    subtree follows the ancestor afterward; `Item_set_flag_bits_operation`
-    keeps serving `no_transform_update`. MCP `set_item_flags` rejects the
+    subtree follows the ancestor afterward; "Set / Clear No Transform
+    Update (Recursive)" writes `no_transform_update` through its property
+    in one `Property_edit_operation`. MCP `set_item_flags` rejects the
     three names with a message pointing at `set_item_property`;
     `get_item_properties` lists them.
   - Serialization (the first user of the D14 extras work). The
@@ -819,9 +821,9 @@ table, see D2a), and references to other objects (D28).
   - Editor. The generic rows draw disabled for a sealed first item, queue
     nothing, and disable Reset to default, Edit as expression, Remove
     expression and Paste Properties (Copy stays); the row tooltip says
-    `Sealed (lock_edit)`. `Property_set_operation` and
-    `Property_set_apply_operation` log a warning when the write was
-    rejected. MCP `set_item_property` and `scene.set_property` refuse a
+    `Sealed (lock_edit)`. `Property_set_operation` logs a warning when the
+    write was rejected; `Property_edit_operation` is put in error and
+    restores what it wrote. MCP `set_item_property` and `scene.set_property` refuse a
     sealed item with a message naming `lock_edit` / `unlock_items`, and
     `get_item_properties` reports `sealed` on the item. The typed blocks'
     `edit_disabled` and the delete / transform / selection checks stay:
@@ -1090,7 +1092,7 @@ table, see D2a), and references to other objects (D28).
     without a defining record as referenceable, which is meant for
     assets). A failing check logs a warning naming both items and
     applies nothing. `Property_set_operation` and
-    `Property_set_apply_operation` adopt an `Asset_reference` usership
+    `Property_edit_operation` adopt an `Asset_reference` usership
     for every managed asset in their before and after states at first
     execute (asset-manager plan R5.4) and report those items from
     `collect_item_references`.
@@ -1412,8 +1414,8 @@ Writers of a live material use `set_base_color_texture()` and the other
 setters, `set_slot_texture(slot, texture)` and `set_slot_sampler(slot,
 state)` for a slot held by pointer (the glTF importer, the graph-texture
 binders, `Rendertarget_mesh`), `set_value` on a slot property, or
-`set_data(Material_data)` (what `Material_change_operation` applies:
-every slot field through its property in one change batch). A
+`set_data(Material_data)` (every slot field through its property in one
+change batch). A
 `Material_data` cannot say "inherit", so a slot field at its default - an
 unbound texture, an identity transform, a default sampler field - clears
 the local value and any other value becomes local; the constructor seeds

@@ -60,7 +60,7 @@ public:
 
     // Copy / Paste Properties (doc/erhe/property_system.md D12): a bag of
     // (property, value) read from one item's local values, applied to the
-    // selection by Property_set_apply_operation. Independent of the item
+    // selection by make_property_set_edit_operation. Independent of the item
     // contents above.
     void set_property_contents(const erhe::property::Property_set& properties, std::string_view source_name);
     [[nodiscard]] auto get_property_contents     () const -> const erhe::property::Property_set&;

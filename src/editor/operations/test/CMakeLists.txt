@@ -10,14 +10,17 @@ add_executable(${_target}
     # they call that need the whole editor (App_context::on_item_property_changed,
     # the scene lookup of is_item_reference_allowed, the asset usership of
     # adopt_reference_usership, Asset_reference) get minimal test
-    # definitions in editor_glue.cpp.
+    # definitions in editor_glue.cpp. material_edit_operation.cpp is the
+    # material edit factory of MCP edit_material.
     ${CMAKE_CURRENT_SOURCE_DIR}/../compound_operation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../item_property_apply.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../material_edit_operation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../property_edit_operation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../operation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../editor_log.cpp
     editor_glue.cpp
     editor_glue.hpp
+    test_migrated_property_edits.cpp
     test_property_edit_operation.cpp
 )
 

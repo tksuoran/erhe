@@ -15,15 +15,6 @@
 
 namespace editor {
 
-namespace {
-
-auto referenced_item(const std::optional<erhe::property::Property_value>& value) -> std::shared_ptr<erhe::Item_base>
-{
-    return get_referenced_item(to_local_state(value));
-}
-
-} // anonymous namespace
-
 // D28 host check: same scene, or a manager-owned asset (material, brush,
 // animation) the asset manager accepts across scenes; a scene-hosted item
 // (a texture, a graph texture, a node) never crosses scenes. An item whose
@@ -212,88 +203,6 @@ void Property_set_operation::collect_item_references(std::unordered_set<const er
     }
     for (const std::optional<erhe::property::Local_state>* state : {&m_before, &m_after}) {
         if (const std::shared_ptr<erhe::Item_base> referenced = get_referenced_item(*state); referenced) {
-            out_items.insert(referenced.get());
-        }
-    }
-}
-
-//
-
-Property_set_apply_operation::Property_set_apply_operation(
-    const std::vector<std::shared_ptr<erhe::Item_base>>& items,
-    erhe::property::Property_set                         values
-)
-    : m_values{std::move(values)}
-{
-    m_targets.reserve(items.size());
-    for (const std::shared_ptr<erhe::Item_base>& item : items) {
-        if (!item) {
-            continue;
-        }
-        Target target{.item = item, .before = {}};
-        target.before.reserve(m_values.size());
-        for (const erhe::property::Property_set::Entry& entry : m_values.entries()) {
-            target.before.push_back(item->read_local_value(*entry.property));
-        }
-        m_targets.push_back(std::move(target));
-    }
-    set_description(fmt::format("Set {} properties on {} items", m_values.size(), m_targets.size()));
-}
-
-Property_set_apply_operation::~Property_set_apply_operation() noexcept = default;
-
-void Property_set_apply_operation::adopt_userships(App_context& context)
-{
-    if (m_userships_adopted || (context.asset_manager == nullptr)) {
-        return;
-    }
-    m_userships_adopted = true;
-    for (const erhe::property::Property_set::Entry& entry : m_values.entries()) {
-        adopt_reference_usership(context, m_userships, referenced_item(std::optional<erhe::property::Property_value>{entry.value}));
-    }
-    for (const Target& target : m_targets) {
-        for (const std::optional<erhe::property::Property_value>& before : target.before) {
-            adopt_reference_usership(context, m_userships, referenced_item(before));
-        }
-    }
-}
-
-void Property_set_apply_operation::execute(App_context& context)
-{
-    log_operations->trace("Op Execute {}", describe());
-    adopt_userships(context);
-    for (const Target& target : m_targets) {
-        const erhe::property::Dependency_object::Change_batch batch{*target.item};
-        for (const erhe::property::Property_set::Entry& entry : m_values.entries()) {
-            apply_item_property(context, *target.item, *entry.property, erhe::property::Local_state{entry.value});
-        }
-    }
-}
-
-void Property_set_apply_operation::undo(App_context& context)
-{
-    log_operations->trace("Op Undo {}", describe());
-    for (const Target& target : m_targets) {
-        const erhe::property::Dependency_object::Change_batch batch{*target.item};
-        const std::vector<erhe::property::Property_set::Entry>& entries = m_values.entries();
-        for (std::size_t i = 0, end = entries.size(); i < end; ++i) {
-            apply_item_property(context, *target.item, *entries[i].property, to_local_state(target.before[i]));
-        }
-    }
-}
-
-void Property_set_apply_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
-{
-    for (const Target& target : m_targets) {
-        out_items.insert(target.item.get());
-        for (const std::optional<erhe::property::Property_value>& before : target.before) {
-            if (const std::shared_ptr<erhe::Item_base> referenced = referenced_item(before); referenced) {
-                out_items.insert(referenced.get());
-            }
-        }
-    }
-    for (const erhe::property::Property_set::Entry& entry : m_values.entries()) {
-        if (const std::shared_ptr<erhe::Item_base> referenced = referenced_item(std::optional<erhe::property::Property_value>{entry.value}); referenced) {
             out_items.insert(referenced.get());
         }
     }
