@@ -333,6 +333,24 @@ qualified names. Owner types are those `Property_registry` knows; the
 editor maps item type names to owner types the way `get_item_properties`
 does.
 
+- As built (C2): `item_type` is an owner type name, which for an item
+  is its type name (`Xformable` for a plain node); `get_item_properties`
+  reports it as `owner_type` on the item and on each sub-object
+  (`Mesh_primitive`), and the tool without `item_type` lists the owner
+  types (`Property_registry::get_owner_type_count`). The schema of a type
+  lists its owner chain and the attached registrations that apply to it;
+  secondary properties (D30) depend on the object and stay with
+  `get_addable_item_properties`. `default` is absent for a computed
+  property, a D31 per-object default (`x-erhe-default-per-object`) and an
+  object reference (a null reference has no `{"reference_id"}` form); an
+  object value takes `{"reference_id"}` or `{"reference_name"}`.
+  `set_item_properties` takes a `string_array` value as a JSON array of
+  strings, the schema's form. The default-write test found
+  `Typed::type_name_property` writable with default "" on classes whose
+  bridge accepts only the class's fixed token: it now has that token as
+  its per-object default (D31), and a bridged clear writes the object's
+  default layer value (D18).
+
 The static `mcp_tools.json` descriptor of `set_item_properties` stays
 generic and points to `get_property_schema`. This replaces the audit's
 "generate `mcp_tools.json` descriptors from metadata": once the per-type
@@ -387,7 +405,7 @@ effort before commit. Targets that must build: `editor`, `src/example`,
 
 A3 and C1 can swap order; C3 must come after both.
 
-Done: A1, A2, A3, A4, C1. Next: B1.
+Done: A1, A2, A3, A4, C1, C2. Next: B1.
 
 ## 6. Notification design (B1)
 

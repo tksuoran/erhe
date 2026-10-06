@@ -55,7 +55,7 @@ TEST(Bridged_property, reads_and_writes_go_through_the_bridge)
     o.set_value(bridged_position, glm::vec3{4.0f, 5.0f, 6.0f});
     EXPECT_EQ(o.change_count("bridged_position"), std::size_t{1});
 
-    // Clear writes the metadata default.
+    // Clear writes the default layer: the registry default (no per-object one).
     o.clear_value(bridged_position);
     EXPECT_EQ(o.position, (glm::vec3{1.0f, 2.0f, 3.0f}));
     EXPECT_EQ(o.change_count("bridged_position"), std::size_t{2});
@@ -94,4 +94,56 @@ TEST(Bridged_property, observers_and_batches_apply)
     }
     EXPECT_EQ(calls, 1);
     EXPECT_EQ(o.position, glm::vec3{2.0f});
+}
+
+namespace {
+
+// A bridged property with a per-object default (D31): the default layer is
+// the object's own value, which a clear writes through the bridge.
+auto type_bridge_default() -> Owner_type
+{
+    static const Owner_type id = allocate_owner_type(root_owner_type, "type_bridge_default");
+    return id;
+}
+
+class Bridged_default_object : public Test_object
+{
+public:
+    explicit Bridged_default_object(const float default_value)
+        : Test_object      {type_bridge_default()}
+        , per_object_default{default_value}
+    {
+    }
+    float value             {0.0f};
+    float per_object_default{0.0f};
+};
+
+const Property<float> bridged_with_object_default = Property<float>::register_property(
+    "bridged_with_object_default", type_bridge_default(),
+    Property_metadata{
+        .default_value = 1.0f,
+        .bridge = Property_bridge{
+            .get = [](const Dependency_object& o) -> Property_value { return static_cast<const Bridged_default_object&>(o).value; },
+            .set = [](Dependency_object& o, const Property_value& v) {
+                static_cast<Bridged_default_object&>(o).value = std::get<float>(v);
+            }
+        },
+        .compute_default = [](const Dependency_object& o) -> Property_value {
+            return static_cast<const Bridged_default_object&>(o).per_object_default;
+        }
+    }
+);
+
+} // anonymous namespace
+
+TEST(Bridged_property, clear_writes_the_per_object_default)
+{
+    Bridged_default_object o{5.0f};
+    o.set_value(bridged_with_object_default, 7.0f);
+    EXPECT_EQ(o.value, 7.0f);
+    EXPECT_EQ(std::get<float>(o.get_default_value(bridged_with_object_default.get())), 5.0f);
+
+    EXPECT_TRUE(o.clear_value(bridged_with_object_default.get()));
+    EXPECT_EQ(o.value, 5.0f) << "the object's default layer, not the registry default 1.0";
+    EXPECT_EQ(o.get_value(bridged_with_object_default), 5.0f);
 }

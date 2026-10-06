@@ -6,7 +6,10 @@
 #include "erhe_item/item.hpp"
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_property/dependency_property.hpp"
+
+#include <spdlog/spdlog.h>
 
 #include <gtest/gtest.h>
 
@@ -84,6 +87,50 @@ TEST(Typed_scope, scope_prim_type_name_is_fixed_by_the_class)
     EXPECT_FALSE(error.empty());
     EXPECT_FALSE(scope->set_value(erhe::Typed::type_name_property.get(), make_value(std::string{"Xform"})));
     EXPECT_EQ(scope->get_prim_type_name(), "Scope");
+}
+
+// D31: the per-object default of type_name is the class's fixed token, so a
+// clear (Reset to default) of the bridged property writes the one value the
+// bridge accepts; a class that fixes none clears to the empty token.
+namespace {
+
+// The error-level entries erhe logging stored after `serial` (the tail store
+// sink every make_logger logger writes to).
+[[nodiscard]] auto error_count_since(const uint64_t serial) -> std::size_t
+{
+    std::size_t count = 0;
+    erhe::log::get_tail_store_log().access_entries(
+        [serial, &count](std::deque<erhe::log::Entry>& entries) {
+            for (const erhe::log::Entry& entry : entries) {
+                if ((entry.serial > serial) && (entry.level >= spdlog::level::err)) {
+                    ++count;
+                }
+            }
+        }
+    );
+    return count;
+}
+
+} // anonymous namespace
+
+TEST(Typed_scope, type_name_clears_to_the_class_token)
+{
+    const std::shared_ptr<erhe::Scope> scope = std::make_shared<erhe::Scope>("Materials");
+    EXPECT_EQ(scope->get_default_value(erhe::Typed::type_name_property.get()), make_value(std::string{"Scope"}));
+    const uint64_t serial = erhe::log::get_tail_store_log().get_serial();
+    EXPECT_TRUE(scope->clear_value(erhe::Typed::type_name_property.get()));
+    EXPECT_EQ(scope->get_value(erhe::Typed::type_name_property), "Scope");
+    EXPECT_EQ(error_count_since(serial), std::size_t{0}) << "writing the class token is the accepted no-op";
+    // A different token is still the logged refusal (the observation works).
+    scope->set_prim_type_name("Xform");
+    EXPECT_EQ(scope->get_prim_type_name(), "Scope");
+    EXPECT_EQ(error_count_since(serial), std::size_t{1});
+
+    const std::shared_ptr<erhe::Typed> typed = std::make_shared<erhe::Typed>("thing");
+    EXPECT_TRUE(typed->set_value(erhe::Typed::type_name_property.get(), make_value(std::string{"PointInstancer"})));
+    EXPECT_EQ(typed->get_default_value(erhe::Typed::type_name_property.get()), make_value(std::string{}));
+    EXPECT_TRUE(typed->clear_value(erhe::Typed::type_name_property.get()));
+    EXPECT_EQ(typed->get_prim_type_name(), "");
 }
 
 TEST(Typed_scope, path_through_a_scope)

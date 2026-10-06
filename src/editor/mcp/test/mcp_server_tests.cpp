@@ -7003,3 +7003,206 @@ TEST_F(Mcp_test, set_item_properties_writes_a_sub_object_reference_by_id_and_nam
     EXPECT_NE(missing.text.find("material"), std::string::npos) << missing.text;
     EXPECT_EQ(undo_depth_of(client), depth);
 }
+
+// ---- get_property_schema (doc/plans/property_undo_and_reflective_mcp.md 4.2) ----
+
+namespace {
+
+// True when `value` has the shape `schema` describes: the subset of JSON
+// schema get_property_schema emits (type, enum, items, minItems / maxItems,
+// properties with min / maxProperties).
+[[nodiscard]] auto matches_schema(const json& schema, const json& value, std::string& out_error) -> bool
+{
+    const std::string type = schema.value("type", "");
+    if (type == "boolean") {
+        if (!value.is_boolean()) { out_error = "not a boolean: " + value.dump(); return false; }
+    } else if (type == "integer") {
+        if (!value.is_number_integer()) { out_error = "not an integer: " + value.dump(); return false; }
+    } else if (type == "number") {
+        if (!value.is_number()) { out_error = "not a number: " + value.dump(); return false; }
+    } else if (type == "string") {
+        if (!value.is_string()) { out_error = "not a string: " + value.dump(); return false; }
+    } else if (type == "array") {
+        if (!value.is_array()) { out_error = "not an array: " + value.dump(); return false; }
+        if (schema.contains("minItems") && (value.size() < schema.at("minItems").get<std::size_t>())) { out_error = "too few items: " + value.dump(); return false; }
+        if (schema.contains("maxItems") && (value.size() > schema.at("maxItems").get<std::size_t>())) { out_error = "too many items: " + value.dump(); return false; }
+        for (const json& element : value) {
+            if (!matches_schema(schema.at("items"), element, out_error)) {
+                return false;
+            }
+        }
+    } else if (type == "object") {
+        if (!value.is_object()) { out_error = "not an object: " + value.dump(); return false; }
+    } else {
+        out_error = "unknown schema type '" + type + "'";
+        return false;
+    }
+    if (schema.contains("enum")) {
+        const json& names = schema.at("enum");
+        if (std::find(names.begin(), names.end(), value) == names.end()) {
+            out_error = value.dump() + " is not in enum " + names.dump();
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] auto property_schema(Mcp_client& client, const std::string& owner_type) -> json
+{
+    Mcp_client::Tool_result result = client.call_tool("get_property_schema", json{{"item_type", owner_type}});
+    EXPECT_FALSE(result.is_error) << owner_type << ": " << result.text;
+    return result.is_error ? json{} : result.payload;
+}
+
+} // anonymous namespace
+
+// Every owner type the registry knows has a schema of the documented shape,
+// and every default it states has the shape of its own property schema.
+TEST_F(Mcp_test, get_property_schema_is_valid_for_every_owner_type)
+{
+    Mcp_client& client = Mcp_env::get().client();
+    Mcp_client::Tool_result listing = client.call_tool("get_property_schema", json::object());
+    ASSERT_FALSE(listing.is_error) << listing.text;
+    const json& owner_types = listing.payload.at("owner_types");
+    ASSERT_TRUE(owner_types.is_array());
+    ASSERT_FALSE(owner_types.empty());
+
+    std::vector<std::string> names;
+    for (const json& owner_type : owner_types) {
+        names.push_back(owner_type.at("name").get<std::string>());
+    }
+    for (const char* expected : {"Item_base", "Xformable", "Light", "Camera", "Material", "Mesh_primitive"}) {
+        EXPECT_NE(std::find(names.begin(), names.end(), expected), names.end()) << expected;
+    }
+    std::vector<std::string> sorted = names;
+    std::sort(sorted.begin(), sorted.end());
+    EXPECT_EQ(std::adjacent_find(sorted.begin(), sorted.end()), sorted.end()) << "owner type names are what item_type looks up, so they are unique";
+
+    std::size_t property_total = 0;
+    for (const json& owner_type : owner_types) {
+        const std::string name = owner_type.at("name").get<std::string>();
+        SCOPED_TRACE(name);
+        const json schema = property_schema(client, name);
+        ASSERT_EQ(schema.value("type", ""), "object") << schema.dump();
+        ASSERT_TRUE(schema.contains("properties") && schema.at("properties").is_object()) << schema.dump();
+        EXPECT_EQ(schema.at("properties").size(), owner_type.at("property_count").get<std::size_t>());
+        EXPECT_EQ(json::parse(schema.dump()), schema) << "the schema round-trips as JSON";
+        for (json::const_iterator it = schema.at("properties").cbegin(), end = schema.at("properties").cend(); it != end; ++it) {
+            const json& property = it.value();
+            SCOPED_TRACE(it.key());
+            ++property_total;
+            EXPECT_TRUE(property.contains("readOnly") && property.at("readOnly").is_boolean()) << property.dump();
+            EXPECT_TRUE(property.contains("x-erhe-type") && property.at("x-erhe-type").is_string()) << property.dump();
+            EXPECT_TRUE(property.contains("x-erhe-developer-only") && property.at("x-erhe-developer-only").is_boolean()) << property.dump();
+            EXPECT_FALSE(property.contains("minimum") || property.contains("maximum")) << "UI ranges are hints: " << property.dump();
+            if (property.contains("enum")) {
+                EXPECT_FALSE(property.at("enum").empty()) << property.dump();
+            }
+            if (property.contains("default")) {
+                std::string error;
+                EXPECT_TRUE(matches_schema(property, property.at("default"), error)) << error << " in " << property.dump();
+            }
+        }
+    }
+    EXPECT_GT(property_total, 0u);
+
+    // A known row: a light's intensity and its enumeration type.
+    const json light = property_schema(client, "Light");
+    ASSERT_TRUE(light.contains("properties"));
+    const json& light_properties = light.at("properties");
+    ASSERT_TRUE(light_properties.contains("intensity")) << light.dump();
+    EXPECT_EQ(light_properties.at("intensity").value("type", ""), "number");
+    ASSERT_TRUE(light_properties.contains("color")) << light.dump();
+    EXPECT_EQ(light_properties.at("color").value("maxItems", 0), 3);
+    ASSERT_TRUE(light_properties.contains("name")) << "the owner chain is included";
+
+    const Mcp_client::Tool_result unknown = client.call_tool("get_property_schema", json{{"item_type", "No_such_owner_type"}});
+    EXPECT_TRUE(unknown.is_error);
+}
+
+// For one item (or sub-object) of every owner type the test scene holds,
+// every writable property with a schema default is written to that default
+// in one set_item_properties call, which must succeed; undo restores.
+TEST_F(Mcp_test, set_item_properties_takes_every_schema_default)
+{
+    Mcp_client&       client = Mcp_env::get().client();
+    const std::string scene  = Mcp_env::get().scene_name();
+
+    Mcp_client::Tool_result created = client.call_tool("create_light", json{{"scene_name", scene}, {"name", "schema default light"}, {"type", "spot"}});
+    ASSERT_FALSE(created.is_error) << created.text;
+    ASSERT_NE(create_mesh_node(client, scene, "schema default mesh", -12.0), 0u);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+
+    std::vector<std::size_t> item_ids;
+    const auto collect = [&item_ids](const json& entries) {
+        for (const json& entry : entries) {
+            if (entry.contains("id") && entry.at("id").is_number_unsigned()) {
+                item_ids.push_back(entry.at("id").get<std::size_t>());
+            }
+        }
+    };
+    collect(client.call_tool("get_scene_nodes",     json{{"scene_name", scene}}).payload.value("nodes",     json::array()));
+    collect(client.call_tool("get_scene_materials", json{{"scene_name", scene}}).payload.value("materials", json::array()));
+    collect(client.call_tool("get_scene_textures",  json{{"scene_name", scene}}).payload.value("textures",  json::array()));
+    ASSERT_FALSE(item_ids.empty());
+
+    std::vector<std::string> covered;
+    const auto write_defaults = [&](const std::size_t item_id, const std::optional<std::size_t> sub_object, const std::string& owner_type) {
+        if (std::find(covered.begin(), covered.end(), owner_type) != covered.end()) {
+            return;
+        }
+        covered.push_back(owner_type);
+        SCOPED_TRACE(owner_type);
+        const json schema = property_schema(client, owner_type);
+        json properties = json::object();
+        for (json::const_iterator it = schema.at("properties").cbegin(), end = schema.at("properties").cend(); it != end; ++it) {
+            if (!it.value().value("readOnly", true) && it.value().contains("default")) {
+                properties[it.key()] = it.value().at("default");
+            }
+        }
+        if (properties.empty()) {
+            return;
+        }
+        json args = {{"item_id", item_id}, {"properties", properties}};
+        if (sub_object.has_value()) {
+            args["sub_object"] = sub_object.value();
+        }
+        const std::size_t       depth  = undo_depth_of(client);
+        Mcp_client::Tool_result result = client.call_tool("set_item_properties", args);
+        EXPECT_FALSE(result.is_error) << "item " << item_id << ": " << result.text << "\n" << properties.dump();
+        if (result.is_error) {
+            return;
+        }
+        if (result.payload.value("changed", false)) {
+            EXPECT_EQ(undo_depth_of(client), depth + 1) << "one undo entry";
+            ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+        }
+        EXPECT_EQ(undo_depth_of(client), depth);
+    };
+    for (const std::size_t item_id : item_ids) {
+        const json dump = property_dump(client, item_id);
+        if (!dump.contains("item")) {
+            continue;
+        }
+        write_defaults(item_id, std::nullopt, dump.at("item").value("owner_type", ""));
+        for (const json& sub_object : dump.value("sub_objects", json::array())) {
+            write_defaults(item_id, sub_object.at("index").get<std::size_t>(), sub_object.value("owner_type", ""));
+        }
+    }
+    // Reset to default of a material's type_name (a bridged property whose
+    // per-object default is the class's fixed token, D31) is accepted.
+    const std::size_t material_id = material_details().value("id", std::size_t{0});
+    ASSERT_NE(material_id, 0u);
+    Mcp_client::Tool_result reset_type_name = client.call_tool("set_item_properties", json{{"item_id", material_id}, {"properties", {{"type_name", nullptr}}}});
+    EXPECT_FALSE(reset_type_name.is_error) << reset_type_name.text;
+    EXPECT_EQ(item_property(client, static_cast<int>(material_id), "type_name").value("value", json()), json("Material"));
+
+    for (const char* expected : {"Light", "Material", "Mesh", "Mesh_primitive"}) {
+        EXPECT_NE(std::find(covered.begin(), covered.end(), expected), covered.end()) << expected << " covered";
+    }
+    std::string covered_list;
+    for (const std::string& name : covered) {
+        covered_list += name + " ";
+    }
+    GTEST_LOG_(INFO) << "owner types written to their defaults: " << covered_list;
+}

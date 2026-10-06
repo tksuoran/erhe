@@ -1,5 +1,5 @@
 // Mcp_server item property tools (get_item_properties, set_item_properties,
-// set_item_property, get_addable_item_properties):
+// set_item_property, get_addable_item_properties, get_property_schema):
 // the generic erhe::property view of any item (doc/erhe/property_system.md
 // D13). Values travel as strings through erhe_property/property_string.hpp,
 // so enumerations travel as their labels.
@@ -39,6 +39,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -256,11 +257,13 @@ auto Mcp_server::query_item_properties(const json& args) -> std::string
     }
 
     json result;
+    const erhe::property::Property_registry& registry = erhe::property::Property_registry::get();
     result["item"] = {
-        {"id",     item->get_id()},
-        {"name",   item->get_name()},
-        {"type",   std::string{item->get_type_name()}},
-        {"sealed", item->is_sealed()}, // lock_edit (D24): writes are refused
+        {"id",         item->get_id()},
+        {"name",       item->get_name()},
+        {"type",       std::string{item->get_type_name()}},
+        {"owner_type", std::string{registry.get_owner_name(item->get_property_owner_type())}}, // get_property_schema's item_type
+        {"sealed",     item->is_sealed()}, // lock_edit (D24): writes are refused
         {"style",  item->get_style() ? json(item->get_style()->get_reference_path()) : json(nullptr)} // D25
     };
     json properties = properties_json(m_context, *item, item.get());
@@ -274,6 +277,7 @@ auto Mcp_server::query_item_properties(const json& args) -> std::string
         sub_objects.push_back({
             {"index",      i},
             {"label",      item->get_property_sub_object_label(i)},
+            {"owner_type", std::string{registry.get_owner_name(sub_object->get_property_owner_type())}},
             {"properties", properties_json(m_context, *sub_object, nullptr)}
         });
     }
@@ -324,6 +328,257 @@ auto Mcp_server::query_addable_item_properties(const json& args) -> std::string
     }
     result["properties"] = properties;
     return make_json_content(result).dump();
+}
+
+namespace {
+
+// get_property_schema (doc/plans/property_undo_and_reflective_mcp.md section
+// 4.2): one JSON schema per owner type, generated from the registry.
+
+// A fixed-length array of `count` JSON values of `item_type`.
+auto fixed_array_schema(const char* item_type, const int count) -> json
+{
+    return json{
+        {"type",     "array"},
+        {"items",    {{"type", item_type}}},
+        {"minItems", count},
+        {"maxItems", count}
+    };
+}
+
+// The JSON form of each Property_type, the form set_item_properties takes.
+// The switch has no default: a new Property_type fails to compile (-Wswitch)
+// until it has its row here.
+auto property_type_schema(const erhe::property::Dependency_property& property) -> json
+{
+    using erhe::property::Property_type;
+    switch (property.get_type()) {
+        case Property_type::boolean:         return json{{"type", "boolean"}};
+        case Property_type::integer:         return json{{"type", "integer"}};
+        case Property_type::floating:        return json{{"type", "number"}};
+        case Property_type::double_floating: return json{{"type", "number"}};
+        case Property_type::vec2:            return fixed_array_schema("number", 2);
+        case Property_type::vec3:            return fixed_array_schema("number", 3);
+        case Property_type::vec4:            return fixed_array_schema("number", 4);
+        case Property_type::quat: {
+            json schema = fixed_array_schema("number", 4);
+            schema["x-erhe-component-order"] = "xyzw";
+            return schema;
+        }
+        case Property_type::ivec2:           return fixed_array_schema("integer", 2);
+        case Property_type::ivec3:           return fixed_array_schema("integer", 3);
+        case Property_type::ivec4:           return fixed_array_schema("integer", 4);
+        case Property_type::mat4: {
+            json schema = fixed_array_schema("number", 16);
+            schema["x-erhe-component-order"] = "column-major";
+            return schema;
+        }
+        case Property_type::string:          return json{{"type", "string"}};
+        case Property_type::asset_path:      return json{{"type", "string"}};
+        case Property_type::enumeration: {
+            // The enumerator names parse_value accepts (the Enum_info
+            // labels); without a table, the integer value.
+            const erhe::property::Enum_info* info = property.get_enum_info();
+            if (info == nullptr) {
+                return json{{"type", "integer"}};
+            }
+            json names = json::array();
+            for (const erhe::property::Enum_entry& entry : info->get_entries()) {
+                names.push_back(std::string{entry.label});
+            }
+            return json{{"type", "string"}, {"enum", names}};
+        }
+        case Property_type::float_array:     return json{{"type", "array"}, {"items", {{"type", "number"}}}};
+        case Property_type::int_array:       return json{{"type", "array"}, {"items", {{"type", "integer"}}}};
+        case Property_type::string_array:    return json{{"type", "array"}, {"items", {{"type", "string"}}}};
+        case Property_type::object:
+        case Property_type::weak_object: {
+            // D28: the referenced item by session id or by name / path in
+            // the item's scene, exactly one of the two.
+            return json{
+                {"type",       "object"},
+                {"properties", {
+                    {"reference_id",   {{"type", "integer"}}},
+                    {"reference_name", {{"type", "string"}}}
+                }},
+                {"minProperties",        1},
+                {"maxProperties",        1},
+                {"additionalProperties", false}
+            };
+        }
+    }
+    return json{};
+}
+
+// `value` in the JSON form property_type_schema describes. Object
+// references have no such form for a null reference and are not passed here.
+auto schema_value_json(const erhe::property::Dependency_property& property, const erhe::property::Property_value& value) -> json
+{
+    using erhe::property::Property_type;
+    const auto number_array = [](const float* components, const int count) -> json {
+        json array = json::array();
+        for (int i = 0; i < count; ++i) {
+            array.push_back(components[i]);
+        }
+        return array;
+    };
+    const auto integer_array = [](const int* components, const int count) -> json {
+        json array = json::array();
+        for (int i = 0; i < count; ++i) {
+            array.push_back(components[i]);
+        }
+        return array;
+    };
+    switch (property.get_type()) {
+        case Property_type::boolean:         return json(std::get<bool>(value));
+        case Property_type::integer:         return json(std::get<int>(value));
+        case Property_type::floating:        return json(std::get<float>(value));
+        case Property_type::double_floating: return json(std::get<double>(value));
+        case Property_type::vec2:            return number_array(&std::get<glm::vec2>(value).x, 2);
+        case Property_type::vec3:            return number_array(&std::get<glm::vec3>(value).x, 3);
+        case Property_type::vec4:            return number_array(&std::get<glm::vec4>(value).x, 4);
+        case Property_type::quat: {
+            const glm::quat& q = std::get<glm::quat>(value);
+            return json::array({q.x, q.y, q.z, q.w});
+        }
+        case Property_type::ivec2:           return integer_array(&std::get<glm::ivec2>(value).x, 2);
+        case Property_type::ivec3:           return integer_array(&std::get<glm::ivec3>(value).x, 3);
+        case Property_type::ivec4:           return integer_array(&std::get<glm::ivec4>(value).x, 4);
+        case Property_type::mat4:            return number_array(&std::get<glm::mat4>(value)[0].x, 16);
+        case Property_type::string:          return json(std::get<std::string>(value));
+        case Property_type::asset_path:      return json(std::get<erhe::property::Asset_path>(value).path);
+        case Property_type::enumeration: {
+            const int32_t                    raw  = std::get<erhe::property::Enum_value>(value).value;
+            const erhe::property::Enum_info* info = property.get_enum_info();
+            if (info == nullptr) {
+                return json(raw);
+            }
+            return json(std::string{info->label_for(raw)}); // "" when the value is not in the table
+        }
+        case Property_type::float_array:     return json(std::get<std::vector<float>>(value));
+        case Property_type::int_array:       return json(std::get<std::vector<int>>(value));
+        case Property_type::string_array:    return json(std::get<std::vector<std::string>>(value));
+        case Property_type::object:
+        case Property_type::weak_object:     return json(nullptr);
+    }
+    return json(nullptr);
+}
+
+// The schema of one property as an object of `owner_type` sees it: the type
+// form, readOnly, default (when the registry holds it for the type), the
+// UI hints and the erhe extensions.
+auto property_schema_json(
+    const erhe::property::Owner_type           owner_type,
+    const erhe::property::Dependency_property& property
+) -> json
+{
+    const erhe::property::Property_metadata& metadata = property.get_metadata(owner_type);
+    json schema = property_type_schema(property);
+    schema["x-erhe-type"] = erhe::property::c_str(property.get_type());
+    schema["readOnly"]    = property.is_read_only();
+    // The default layer as the registry holds it. None for a computed
+    // property (no layers, D26), for a per-object default (D31: the object
+    // computes it; get_item_properties reports it per item), and for an
+    // object reference (the null reference has no reference form).
+    const bool per_object_default = metadata.has_computed_default();
+    if (!metadata.is_computed() && !per_object_default && !erhe::property::is_object_reference_type(property.get_type())) {
+        schema["default"] = schema_value_json(property, property.get_default_value(owner_type));
+    }
+    if (per_object_default) {
+        schema["x-erhe-default-per-object"] = true;
+    }
+    const std::string_view tooltip = metadata.ui.tooltip;
+    const std::string_view group   = metadata.ui.group;
+    if (!tooltip.empty() || !group.empty()) {
+        schema["description"] = group.empty()
+            ? std::string{tooltip}
+            : (tooltip.empty() ? std::string{group} : fmt::format("{}: {}", group, tooltip));
+    }
+    if (!metadata.ui.label.empty()) {
+        schema["title"] = std::string{metadata.ui.label};
+    }
+    if (!group.empty()) {
+        schema["x-erhe-group"] = std::string{group};
+    }
+    // UI ranges are hints (a slider's span), not bounds: values outside are
+    // accepted unless the property's own validation refuses them.
+    if (metadata.ui.min.has_value()) {
+        schema["x-erhe-ui-minimum"] = metadata.ui.min.value();
+    }
+    if (metadata.ui.max.has_value()) {
+        schema["x-erhe-ui-maximum"] = metadata.ui.max.value();
+    }
+    schema["x-erhe-developer-only"] = metadata.ui.developer_only;
+    if (property.is_attached()) {
+        schema["x-erhe-attached"] = true;
+    }
+    if (metadata.inherits) {
+        schema["x-erhe-inherits"] = true;
+    }
+    if (metadata.is_computed()) {
+        schema["x-erhe-computed"] = true;
+    }
+    if (metadata.is_computed_writable()) {
+        // D26: a write of this property writes that stored property.
+        schema["x-erhe-writes"] = std::string{metadata.compute_writes->get_name()};
+    }
+    if (erhe::property::is_object_reference_type(property.get_type())) {
+        schema["x-erhe-reference-item-types"] = metadata.ui.reference_item_types;
+    }
+    return schema;
+}
+
+// Every property an object of `owner_type` has by its type: the owner chain
+// and the attached registrations that apply to it, as get_item_properties
+// lists them by name. Secondary properties (D30) depend on the object and
+// are listed by get_addable_item_properties.
+void for_each_schema_property(const erhe::property::Owner_type owner_type, const std::function<void(const erhe::property::Dependency_property&)>& callback)
+{
+    const erhe::property::Property_registry& registry = erhe::property::Property_registry::get();
+    registry.for_each_property_of_object(owner_type, callback);
+    registry.for_each_attached_property_of(owner_type, callback);
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_property_schema(const json& args) -> std::string
+{
+    const erhe::property::Property_registry& registry = erhe::property::Property_registry::get();
+    const std::string item_type = args.value("item_type", "");
+    if (item_type.empty()) {
+        // The owner types the registry knows, by the name item_type takes.
+        json owner_types = json::array();
+        for (std::size_t id = 0, end = registry.get_owner_type_count(); id < end; ++id) {
+            const erhe::property::Owner_type owner_type = static_cast<erhe::property::Owner_type>(id);
+            std::size_t property_count = 0;
+            for_each_schema_property(owner_type, [&property_count](const erhe::property::Dependency_property&) { ++property_count; });
+            owner_types.push_back({
+                {"name",           std::string{registry.get_owner_name(owner_type)}},
+                {"parent",         (owner_type == erhe::property::root_owner_type) ? json(nullptr) : json(std::string{registry.get_owner_name(registry.get_owner_parent(owner_type))})},
+                {"property_count", property_count}
+            });
+        }
+        return make_json_content(json{{"owner_types", owner_types}}).dump();
+    }
+
+    const std::optional<erhe::property::Owner_type> owner_type = registry.find_owner_type(item_type);
+    if (!owner_type.has_value()) {
+        return make_error_content("Unknown item_type '" + item_type + "': get_property_schema without item_type lists the owner types (get_item_properties reports an item's as owner_type)");
+    }
+    json properties = json::object();
+    for_each_schema_property(owner_type.value(), [&](const erhe::property::Dependency_property& property) {
+        properties[registry.qualified_name(property)] = property_schema_json(owner_type.value(), property);
+    });
+    json schema = {
+        {"$schema",    "https://json-schema.org/draft/2020-12/schema"},
+        {"title",      item_type},
+        {"type",       "object"},
+        {"properties", properties}
+    };
+    if (owner_type.value() != erhe::property::root_owner_type) {
+        schema["x-erhe-parent"] = std::string{registry.get_owner_name(registry.get_owner_parent(owner_type.value()))};
+    }
+    return make_json_content(schema).dump();
 }
 
 namespace {
@@ -524,6 +779,28 @@ auto parse_write_entry(
             return false;
         }
         out_entry.kind = Property_write_kind::clear;
+        return true;
+    }
+
+    if (value_json.is_array() && (property->get_type() == erhe::property::Property_type::string_array)) {
+        // A string list as a JSON array of strings (get_property_schema's
+        // form); the property string form (a quoted list) is a string.
+        std::vector<std::string> elements;
+        elements.reserve(value_json.size());
+        for (const json& element : value_json) {
+            if (!element.is_string()) {
+                out_error = "Property '" + name + "': string[] value array entries must be strings";
+                return false;
+            }
+            elements.push_back(element.get<std::string>());
+        }
+        out_entry.kind  = Property_write_kind::value;
+        out_entry.value = erhe::property::Property_value{std::move(elements)};
+        std::string validation_error;
+        if (!target.validate_value(*property, out_entry.value.value(), validation_error)) {
+            out_error = "'" + value_json.dump() + "' was rejected by property '" + name + "': " + validation_error;
+            return false;
+        }
         return true;
     }
 

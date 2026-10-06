@@ -503,6 +503,27 @@ scene was opened from (`doc/erhe/usd_compatibility_design.md` X5, whose table in
 The properties of a sub-object (a mesh primitive) carry no `origin`: no file
 spells a sub-object as a prim of its own.
 
+The item and each sub-object also report `owner_type`, the name
+`get_property_schema` takes.
+
+### get_property_schema
+
+Returns the JSON schema of the properties an owner type has, generated from
+the property registry at run time: `{"item_type": "Light"}` returns
+`{"type": "object", "properties": {...}}`, one entry per property of the
+type's owner chain plus the attached properties that apply to it (by
+qualified name). Each entry carries the JSON value form `set_item_properties`
+takes (vectors and quaternions as fixed-length number arrays, an
+enumeration as a string with its `enum` names, an object reference as
+`{"reference_id"}` or `{"reference_name"}`), `readOnly`, `default` (absent for
+computed properties, per-object defaults and object references),
+`description` and `title` from the UI tooltip, group and label, and the
+`x-erhe-*` extensions (`x-erhe-ui-minimum` / `x-erhe-ui-maximum` are slider
+hints, not bounds). Without `item_type` it lists the owner types (`name`,
+`parent`, `property_count`). What depends on one object - a row's
+visibility, a per-object default, secondary properties - is in
+`get_item_properties`, not in the schema.
+
 ### lock_items / unlock_items
 
 Lock or unlock items by ID. Locked items (`lock_edit` flag) cannot be deleted or have properties edited.

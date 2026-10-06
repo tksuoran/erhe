@@ -446,7 +446,18 @@ table, see D2a), and references to other objects (D28).
   lists the D12 Add Property candidates with the same per-property
   fields (`include_developer_only` adds the `developer_only` ones); an
   add is `set_item_property` with the qualified name, a remove is
-  `set_item_property` with a `null` value. A `scene.set_property` command
+  `set_item_property` with a `null` value. `get_property_schema(owner
+  type)` returns a JSON schema of the properties an object of that owner
+  type has by its type (the owner chain and the attached registrations
+  that apply, attached ones by qualified name), generated from the
+  registry: each property's JSON value form (one row per `Property_type`;
+  an enumeration lists its `Enum_info` labels, the names `parse_value`
+  accepts), `readOnly`, the registry `default` (absent for a computed
+  property, a D31 per-object default and an object reference), the
+  tooltip and group as `description`, and the UI range as
+  `x-erhe-ui-minimum` / `x-erhe-ui-maximum` hints; without an owner type
+  it lists the owner types. `get_item_properties` reports the item's and
+  each sub-object's `owner_type`. A `scene.set_property` command
   (`config/editor/commands.json`, `doc/editor/command_script.md`) with args
   `item`, `property`, `value` (and `sub_object`) uses the same conversion,
   so startup scripts can author properties.
@@ -505,7 +516,9 @@ table, see D2a), and references to other objects (D28).
 - D18 Bridged storage. `Property_metadata::bridge` (`Property_bridge`
   with `get` / `set` callbacks) stores a property outside the entry store:
   the object's own member is the local value, `set_value` / `clear_value`
-  go through `set` (clear writes the default), the property always reports
+  go through `set` (clear writes the object's default layer value -
+  the D31 per-object default when one is bound, else `default_value`),
+  the property always reports
   `Value_source::local`, never inherits, is listed by
   `for_each_local_value` and `Property_set::read_local_values`, and is
   coerced on every read. For state that already has an engineered
@@ -1205,7 +1218,12 @@ table, see D2a), and references to other objects (D28).
   half of `notify` without the inheritance propagation). The user is
   `Item_base::purpose_property` (`doc/erhe/usd_compatibility_design.md` M3),
   whose default is derived from the item's editor-only flag bits and
-  refreshed by `Item_base::set_flag_bits`.
+  refreshed by `Item_base::set_flag_bits`. On a bridged property (D18)
+  the per-object default is what a clear writes through the bridge:
+  `Typed::type_name_property`'s default is the class's fixed token
+  (`get_class_type_name`, empty for a plain `Typed`), the one value the
+  bridge accepts on such a class, so Reset to default of the row writes
+  it.
   When the default is another property of the same object, the
   registration declares it instead of computing it:
   `Property_metadata::default_from` names the source property (registered
@@ -1651,7 +1669,8 @@ Gradient and curve parameters have no `Property_value` form and stay in
   multi-selection, and the context menu (Reset to default, Copy / Paste
   Properties, Paste Properties as Style, Clear Style, Edit as expression,
   Remove expression). Every edit is one undoable operation.
-- MCP tools: `get_item_properties`, `set_item_properties` (several
+- MCP tools: `get_item_properties`, `get_property_schema` (the
+  per-owner-type JSON schema, D13), `set_item_properties` (several
   properties, one undo entry), `set_item_property` (with `value`,
   `expression` or `reference_id`), `set_item_style`, `clear_item_style`; `lock_items` /
   `unlock_items` toggle the seal; `set_item_flags` rejects the derived

@@ -91,6 +91,12 @@ void Typed::set_prim_type_name(const std::string_view prim_type_name)
 {
     const std::string_view class_type_name = get_class_type_name();
     if (!class_type_name.empty()) {
+        // The class token itself is the one value such a class holds: a
+        // write of it (a clear writes the D31 default, which is that token)
+        // changes nothing and is accepted.
+        if (prim_type_name == class_type_name) {
+            return;
+        }
         erhe::item::log->error(
             "type name of '{}' is fixed by its class to '{}'; '{}' rejected",
             get_name(), class_type_name, prim_type_name
@@ -176,6 +182,12 @@ const erhe::property::Property<std::string> Typed::type_name_property = erhe::pr
                 );
                 return false;
             }
+        },
+        // D31: the default is the class's fixed token (empty for a class
+        // that fixes none), the one value the bridge accepts on such a
+        // class, so a clear (Reset to default) of the row writes it.
+        .compute_default = [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+            return std::string{static_cast<const Typed&>(object).get_class_type_name()};
         }
     }
 );

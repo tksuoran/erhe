@@ -185,6 +185,10 @@ public:
     auto               allocate_owner_type(Owner_type parent, std::string_view name) -> Owner_type;
     [[nodiscard]] auto get_owner_parent   (Owner_type id) const -> Owner_type;
     [[nodiscard]] auto get_owner_name     (Owner_type id) const -> std::string_view;
+    // Number of allocated owner type ids: every id below it is valid, the
+    // root (0) included. Tooling walks the id table with it (the editor's
+    // MCP get_property_schema lists every owner type).
+    [[nodiscard]] auto get_owner_type_count() const -> std::size_t;
 
 private:
     Property_registry();

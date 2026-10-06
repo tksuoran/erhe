@@ -928,9 +928,10 @@ auto Dependency_object::clear_value_internal(const Dependency_property& property
     }
     if (metadata.bridge.is_bound()) {
         // A bridged property has no "unset" state: clearing writes the
-        // default (and drops an expression, through set_value_internal,
-        // which records the write).
-        return set_value_internal(property, metadata.default_value.value(), allow_read_only, false);
+        // object's default layer value (D31: the per-object default when
+        // one is bound, else the registry default) and drops an expression,
+        // through set_value_internal, which records the write.
+        return set_value_internal(property, get_default_layer_value(metadata), allow_read_only, false);
     }
     Effective_value_entry* entry = find_entry(property.get_index());
     if (entry == nullptr) {

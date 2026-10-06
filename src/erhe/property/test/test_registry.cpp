@@ -35,6 +35,25 @@ TEST(Property_registry, indices_are_distinct_and_resolve_back)
     EXPECT_GE(registry.get_count(), std::size_t{4});
 }
 
+TEST(Property_registry, owner_type_count_covers_every_allocated_id)
+{
+    Property_registry& registry = Property_registry::get();
+    const std::size_t count = registry.get_owner_type_count();
+    EXPECT_LT(static_cast<std::size_t>(type_a()), count);
+    EXPECT_LT(static_cast<std::size_t>(type_b()), count);
+    EXPECT_LT(static_cast<std::size_t>(type_c()), count);
+    EXPECT_EQ(registry.get_owner_name(root_owner_type), "root");
+    EXPECT_EQ(registry.get_owner_name(type_a()), "type_a");
+    // The walk tooling makes: every id below the count names an owner type.
+    bool found_type_b = false;
+    for (std::size_t id = 0; id < count; ++id) {
+        if (registry.get_owner_name(static_cast<Owner_type>(id)) == "type_b") {
+            found_type_b = true;
+        }
+    }
+    EXPECT_TRUE(found_type_b);
+}
+
 TEST(Property_registry, find_by_owner_and_name)
 {
     Property_registry& registry = Property_registry::get();

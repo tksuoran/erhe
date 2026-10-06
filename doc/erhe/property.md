@@ -90,7 +90,8 @@ inventory (and the owner's design section when the design changed).
   resolves the attached property `name` registered by the owner type
   `<owner>` on an object of its holder type (`applies_to`) -
   `qualified_name` produces that form,
-  `find_owner_type` the reverse of `get_owner_name`), enumeration of the
+  `find_owner_type` the reverse of `get_owner_name`; `get_owner_type_count`
+  bounds the owner type id table for a walk of every id), enumeration of the
   non-attached properties of an object's class
   (`for_each_property_of_object`: root-first, each level in registration
   order, a shadowed name or a multiply-owned property once at its nearest

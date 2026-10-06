@@ -146,6 +146,12 @@ auto Property_registry::get_owner_name(const Owner_type id) const -> std::string
     return m_owner_types[id].name;
 }
 
+auto Property_registry::get_owner_type_count() const -> std::size_t
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    return m_owner_types.size();
+}
+
 auto allocate_owner_type(const Owner_type parent, const std::string_view name) -> Owner_type
 {
     return Property_registry::get().allocate_owner_type(parent, name);

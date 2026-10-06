@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::property`: `Property_registry::get_owner_type_count()`, the number
+  of allocated owner type ids, for a walk of every owner type (the editor's
+  MCP `get_property_schema` listing).
+- `erhe::item`: `Typed::type_name_property` has a per-object default
+  (D31), the class's fixed type name (`get_class_type_name`).
 - `erhe::property`: `Property_write_recording` (`property_write_recording.hpp`),
   an RAII per-thread scope collecting the local-layer writes made while it is
   open as `Property_write_record`s (object, property, `before` / `after`
@@ -65,6 +70,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::property`: `Dependency_object::clear_value` of a bridged property
+  (D18) writes the object's default layer value (`get_default_value`: the
+  D31 per-object default when one is bound) instead of the registry
+  `default_value`.
 - `erhe::item`: the editor-only `Item_flags` bits (`tool`, `brush`,
   `controller`, `rendertarget`, `expand`, the hover bits,
   `show_in_developer_ui`, `show_debug_visualizations`, `affects_shadow`,

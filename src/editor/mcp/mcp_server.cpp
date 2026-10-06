@@ -938,6 +938,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
         { "get_item_properties",            &Mcp_server::query_item_properties                },
         { "get_addable_item_properties",    &Mcp_server::query_addable_item_properties        },
+        { "get_property_schema",            &Mcp_server::query_property_schema                },
         { "set_item_property",              &Mcp_server::action_set_item_property             },
         { "set_item_properties",            &Mcp_server::action_set_item_properties           },
         { "set_item_style",                 &Mcp_server::action_set_item_style                },
