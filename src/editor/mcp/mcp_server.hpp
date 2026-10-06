@@ -431,6 +431,7 @@ private:
     auto query_item_properties                (const nlohmann::json& args) -> std::string;
     auto query_addable_item_properties        (const nlohmann::json& args) -> std::string;
     auto action_set_item_property             (const nlohmann::json& args) -> std::string;
+    auto action_set_item_properties           (const nlohmann::json& args) -> std::string;
     auto action_set_item_style                (const nlohmann::json& args) -> std::string;
     auto action_create_style                  (const nlohmann::json& args) -> std::string;
     auto action_clear_item_style              (const nlohmann::json& args) -> std::string;

@@ -9,7 +9,8 @@ add_executable(${_target}
     # erhe::scene items and Property_write_recording; the editor functions
     # they call that need the whole editor (App_context::on_item_property_changed,
     # the scene lookup of is_item_reference_allowed, the asset usership of
-    # adopt_reference_usership, Asset_reference) get minimal test
+    # adopt_reference_usership, Asset_reference, the bone follow-ups of
+    # append_bone_connect_follow_ups) get minimal test
     # definitions in editor_glue.cpp. material_edit_operation.cpp is the
     # material edit factory of MCP edit_material.
     ${CMAKE_CURRENT_SOURCE_DIR}/../compound_operation.cpp

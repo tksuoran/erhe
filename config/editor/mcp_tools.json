@@ -9811,7 +9811,7 @@
     "name": "get_addable_item_properties"
   },
   {
-    "description": "Set one registered property of an item as an undoable operation (Property_set_operation). value is the property's string form (see get_item_properties) - 'true'/'false', a number, space- or comma-separated vector components, a quaternion as 'x y z w', or an enumeration label; a JSON number, bool or array of numbers is accepted too. Pass null (or omit value) to clear the local value so the property falls back to its inherited or default value. Rejected values (wrong type, enumeration label not in the table, failed validate) return an error and change nothing. The write is queued on the operation stack and applied on the next frame. An object property (a material texture slot, a primitive's material) takes value as the referenced item's name (resolved in the item's scene; empty or null clears) or reference_id as its session item id (disambiguates same-named items); the referenced item must belong to the item's scene or be a cross-scene referenceable asset. Pass sub_object to address one of the item's property sub-objects (a mesh primitive index from get_item_properties sub_objects). On a content-library folder, a category property is written by its qualified name ('Material.base_color' on a Materials folder) and cleared with a null value. A grid is addressed by its name or id like any item; its 'frame_node' (the node whose world transform the Node plane follows) takes reference_id, since a grid has no scene to resolve a name in.",
+    "description": "Set one registered property of an item as an undoable operation (Property_edit_operation). value is the property's string form (see get_item_properties) - 'true'/'false', a number, space- or comma-separated vector components, a quaternion as 'x y z w', or an enumeration label; a JSON number, bool or array of numbers is accepted too. Pass null (or omit value) to clear the local value so the property falls back to its inherited or default value. Rejected values (wrong type, enumeration label not in the table, failed validate) return an error and change nothing. The one-entry form of set_item_properties: the write executes immediately as one undo entry (a Property_edit_operation), so a later call in the same batch sees it, and the reply reports 'before' and 'after' (the local layer: null when unauthored, the value's string form, or {\"expression\": text}), 'value' (the effective value after the write) and 'changed' (false when a null value cleared a property that had no local value: nothing written, no undo entry). Setting a writable computed property (a light's flux) reports 'writes', the stored property its setter wrote, whose local layer before / after are reported. Writes made by changed callbacks are listed in 'cascaded'. An object property (a material texture slot, a primitive's material) takes value as the referenced item's name (resolved in the item's scene; empty or null clears) or reference_id as its session item id (disambiguates same-named items); the referenced item must belong to the item's scene or be a cross-scene referenceable asset. Pass sub_object to address one of the item's property sub-objects (a mesh primitive index from get_item_properties sub_objects). On a content-library folder, a category property is written by its qualified name ('Material.base_color' on a Materials folder) and cleared with a null value. A grid is addressed by its name or id like any item; its 'frame_node' (the node whose world transform the Node plane follows) takes reference_id, since a grid has no scene to resolve a name in.",
     "inputSchema": {
       "properties": {
         "item_id": {
@@ -9848,6 +9848,38 @@
       "type": "object"
     },
     "name": "set_item_property"
+  },
+  {
+    "description": "Set several registered properties of one item (or of one of its property sub-objects) as ONE undoable operation, executed immediately (a Property_edit_operation; one undo entry undoes them all). 'properties' maps each property name, as get_item_properties lists it (an attached or secondary property by its qualified name), to one of: a value in the forms set_item_property's value accepts (property string form, JSON number, bool, array of numbers; for an object property the referenced item's name or path, empty for a null reference); null to clear the local value (the property falls back to its style, inherited or default value); {\"expression\": \"...\"} for an expression (doc/erhe/property_system.md D22); {\"reference_id\": N} or {\"reference_name\": \"...\"} for an object property's referenced item by session id or by name / path in the item's scene. Every entry is checked before anything is written (unknown property, read-only, sealed item, parse, validation including the bridge validate such as a sibling-unique name, expression compilation, and the cross-scene reference check); one bad entry fails the whole call with an error naming the property and nothing is written. A refusal that only shows at write time (an entry that seals the item before a later one) also fails the call naming the property: nothing stays written and no undo entry is left. Entries are written in property-name order. The reply lists per entry 'name', 'before' and 'after' (the local layer: null when unauthored, the value's string form, or {\"expression\": text}), 'value' (the effective value after the write) and, for a writable computed property, 'writes' (the stored property its setter wrote, whose local layers are reported); 'cascaded' lists writes made by changed callbacks; 'changed' is false when the call only cleared properties without a local value (nothing written, no undo entry).",
+    "inputSchema": {
+      "properties": {
+        "item_id": {
+          "description": "Unique item id (any scene)",
+          "type": "integer"
+        },
+        "item_name": {
+          "description": "Item name or path, looked up in scene_name (or the first scene)",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene to look item_name up in (optional)",
+          "type": "string"
+        },
+        "sub_object": {
+          "description": "Index of the item's property sub-object to write (a mesh primitive); omit for the item itself",
+          "type": "integer"
+        },
+        "properties": {
+          "description": "Property name -> value | null | {\"expression\": text} | {\"reference_id\": id} | {\"reference_name\": name}",
+          "type": "object"
+        }
+      },
+      "required": [
+        "properties"
+      ],
+      "type": "object"
+    },
+    "name": "set_item_properties"
   },
   {
     "name": "create_style",

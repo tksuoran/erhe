@@ -1179,8 +1179,10 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
     const std::size_t camera_id = cameras.payload.at("cameras")[0].at("id").get<std::size_t>();
     check_one_entry("edit_camera", json{{"scene_name", scene}, {"camera_id", camera_id}, {"exposure", 2.0}, {"fov_y", 0.9}});
     check_one_entry("set_item_property", json{{"item_id", camera_id}, {"property", "exposure"}, {"value", 3.0}});
+    check_one_entry("set_item_properties", json{{"item_id", camera_id}, {"properties", {{"exposure", 3.5}, {"fov_y", 0.8}}}});
 
     // The undo restores the camera edit's values.
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
     ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
     ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
     ASSERT_TRUE(wait_until_idle(client, 30000));
@@ -6730,4 +6732,274 @@ TEST_F(Mcp_test, select_variant_undo_redo_round_trips_every_prims_property_dump)
 
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 4);
+}
+
+// ---- set_item_properties (doc/plans/property_undo_and_reflective_mcp.md 4.1) ----
+
+namespace {
+
+[[nodiscard]] auto undo_depth_of(Mcp_client& client) -> std::size_t
+{
+    return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+}
+
+[[nodiscard]] auto property_dump(Mcp_client& client, const std::size_t item_id) -> json
+{
+    Mcp_client::Tool_result result = client.call_tool("get_item_properties", json{{"item_id", item_id}});
+    EXPECT_FALSE(result.is_error) << result.text;
+    return result.is_error ? json{} : result.payload;
+}
+
+// The reply entry of one property of a set_item_properties reply.
+[[nodiscard]] auto reply_entry(const json& reply, const std::string& name) -> json
+{
+    for (const json& entry : reply.value("properties", json::array())) {
+        if (entry.value("name", "") == name) {
+            return entry;
+        }
+    }
+    return json{};
+}
+
+} // anonymous namespace
+
+// Several properties in one call: one undo entry, the reply's before / after
+// local layers and effective values, an expression set and restored, and a
+// null that clears the local layer; undo restores the full property dump.
+TEST_F(Mcp_test, set_item_properties_writes_all_in_one_undo_entry)
+{
+    Mcp_client& client      = Mcp_env::get().client();
+    const json  details     = material_details();
+    ASSERT_TRUE(details.contains("id")) << details.dump();
+    const std::size_t material_id = details.at("id").get<std::size_t>();
+
+    // An authored expression the call replaces with a value.
+    ASSERT_FALSE(client.call_tool("set_item_property", json{{"item_id", material_id}, {"property", "transmission"}, {"expression", "{metallic} * 0.25"}}).is_error);
+    // An authored value the call clears.
+    ASSERT_FALSE(client.call_tool("set_item_property", json{{"item_id", material_id}, {"property", "reflectance"}, {"value", 0.75}}).is_error);
+
+    const json        dump_before = property_dump(client, material_id);
+    const std::size_t depth       = undo_depth_of(client);
+    Mcp_client::Tool_result set = client.call_tool("set_item_properties", json{
+        {"item_id",    material_id},
+        {"properties", {
+            {"metallic",     0.5},
+            {"ior",          {{"expression", "{metallic} + 1.0"}}},
+            {"transmission", 0.125},
+            {"reflectance",  nullptr},
+            {"base_color",   {0.25, 0.5, 0.75}}
+        }}
+    });
+    ASSERT_FALSE(set.is_error) << set.text;
+    EXPECT_EQ(undo_depth_of(client), depth + 1) << "one undo entry for the whole call";
+    EXPECT_TRUE(set.payload.value("changed", false));
+
+    const json metallic = reply_entry(set.payload, "metallic");
+    EXPECT_EQ(metallic.value("after", json()), json("0.5")) << set.payload.dump();
+    EXPECT_EQ(metallic.value("value", json()), json("0.5"));
+    const json ior = reply_entry(set.payload, "ior");
+    EXPECT_TRUE(ior.at("before").is_null()) << set.payload.dump();
+    EXPECT_EQ(ior.at("after"), (json{{"expression", "{metallic} + 1.0"}}));
+    EXPECT_EQ(ior.value("value", json()), json("1.5")) << "the expression's effective value after the write";
+    const json transmission = reply_entry(set.payload, "transmission");
+    EXPECT_EQ(transmission.at("before"), (json{{"expression", "{metallic} * 0.25"}}));
+    EXPECT_EQ(transmission.at("after"),  json("0.125"));
+    const json reflectance = reply_entry(set.payload, "reflectance");
+    EXPECT_EQ(reflectance.at("before"), json("0.75"));
+    EXPECT_TRUE(reflectance.at("after").is_null()) << "null clears the local layer";
+    EXPECT_NE(item_property(client, static_cast<int>(material_id), "reflectance").value("source", ""), "local");
+
+    const json dump_after = property_dump(client, material_id);
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    EXPECT_EQ(property_dump(client, material_id), dump_before) << "one undo restores every property, the expression included";
+    EXPECT_EQ(item_property(client, static_cast<int>(material_id), "transmission").value("expression", json()), json("{metallic} * 0.25"));
+    EXPECT_EQ(item_property(client, static_cast<int>(material_id), "reflectance").value("local", json()), json("0.75"));
+    ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+    EXPECT_EQ(property_dump(client, material_id), dump_after);
+
+    // set_item_property is the one-entry form: executed now, with the reply.
+    Mcp_client::Tool_result single = client.call_tool("set_item_property", json{{"item_id", material_id}, {"property", "metallic"}, {"value", 0.25}});
+    ASSERT_FALSE(single.is_error) << single.text;
+    EXPECT_EQ(single.payload.value("before", json()), json("0.5")) << single.payload.dump();
+    EXPECT_EQ(single.payload.value("after",  json()), json("0.25"));
+    EXPECT_FALSE(single.payload.contains("queued"));
+    EXPECT_EQ(item_property(client, static_cast<int>(material_id), "metallic").value("value", json()), json("0.25")) << "no frame needed";
+
+    // Clearing only properties without a local layer changes nothing.
+    const std::size_t depth_clear = undo_depth_of(client);
+    Mcp_client::Tool_result noop = client.call_tool("set_item_properties", json{{"item_id", material_id}, {"properties", {{"reflectance", nullptr}}}});
+    ASSERT_FALSE(noop.is_error) << noop.text;
+    EXPECT_FALSE(noop.payload.value("changed", true));
+    EXPECT_EQ(undo_depth_of(client), depth_clear);
+}
+
+// One bad entry fails the call naming the property; nothing is written and
+// no undo entry is left. A refusal that shows only at write time (lock_edit
+// seals the item before the name is written) fails the same way.
+TEST_F(Mcp_test, set_item_properties_is_all_or_nothing)
+{
+    Mcp_client&       client = Mcp_env::get().client();
+    const std::string scene  = Mcp_env::get().scene_name();
+    const json        details = material_details();
+    const std::size_t material_id = details.at("id").get<std::size_t>();
+
+    const json        dump_before = property_dump(client, material_id);
+    const std::size_t depth       = undo_depth_of(client);
+    const auto expect_refused = [&](const json& properties, const std::string& named) {
+        SCOPED_TRACE(properties.dump());
+        Mcp_client::Tool_result refused = client.call_tool("set_item_properties", json{{"item_id", material_id}, {"properties", properties}});
+        EXPECT_TRUE(refused.is_error) << refused.text;
+        EXPECT_NE(refused.text.find(named), std::string::npos) << refused.text;
+        EXPECT_EQ(undo_depth_of(client), depth);
+        EXPECT_EQ(property_dump(client, material_id), dump_before) << "nothing written";
+    };
+    expect_refused(json{{"metallic", 0.9}, {"no_such_property", 1.0}},             "no_such_property");
+    expect_refused(json{{"metallic", 0.9}, {"roughness", "not a number"}},           "roughness");
+    expect_refused(json{{"metallic", 0.9}, {"ior", {{"expression", "{metallic"}}}},          "ior");
+    expect_refused(json{{"metallic", 0.9}, {"ior", {{"reference_id", 1}}}},          "ior");
+    expect_refused(json{{"metallic", 0.9}, {"ior", {{"unknown_form", 1}}}},          "ior");
+
+    // A sibling's name is refused before anything is written (bridge validate).
+    const std::size_t node_a = create_mesh_node(client, scene, "props node a", -6.0);
+    const std::size_t node_b = create_mesh_node(client, scene, "props node b", -8.0);
+    ASSERT_NE(node_a, 0u);
+    ASSERT_NE(node_b, 0u);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    const json        node_before = property_dump(client, node_b);
+    const std::size_t node_depth  = undo_depth_of(client);
+    Mcp_client::Tool_result duplicate = client.call_tool("set_item_properties", json{
+        {"item_id", node_b}, {"properties", {{"name", "props node a"}, {"visible", false}}}
+    });
+    EXPECT_TRUE(duplicate.is_error) << duplicate.text;
+    EXPECT_NE(duplicate.text.find("'name'"), std::string::npos) << duplicate.text;
+    EXPECT_EQ(undo_depth_of(client), node_depth);
+    EXPECT_EQ(property_dump(client, node_b), node_before);
+
+    // Write-time refusal: lock_edit (written first, by name order) seals the
+    // item, so the name write is refused while the operation runs.
+    Mcp_client::Tool_result sealed = client.call_tool("set_item_properties", json{
+        {"item_id", node_b}, {"properties", {{"lock_edit", true}, {"name", "props node renamed"}}}
+    });
+    EXPECT_TRUE(sealed.is_error) << sealed.text;
+    EXPECT_NE(sealed.text.find("'name'"), std::string::npos) << sealed.text;
+    EXPECT_EQ(undo_depth_of(client), node_depth) << "no undo entry";
+    EXPECT_EQ(property_dump(client, node_b), node_before) << "lock_edit written during the edit is restored";
+}
+
+// lock_edit together with other properties (doc/editor/operations.md
+// "Property_edit_operation", the seal order): undo and redo restore every
+// entry whichever side of the seal it is written on, and a write-time
+// refusal after the seal leaves nothing written.
+TEST_F(Mcp_test, set_item_properties_orders_writes_around_the_seal)
+{
+    Mcp_client&       client = Mcp_env::get().client();
+    const std::string scene  = Mcp_env::get().scene_name();
+    Mcp_client::Tool_result created = client.call_tool("create_light", json{{"scene_name", scene}, {"name", "props seal light"}, {"type", "point"}});
+    ASSERT_FALSE(created.is_error) << created.text;
+    const std::size_t light_id = created.payload.value("light_id", std::size_t{0});
+    ASSERT_NE(light_id, 0u) << created.payload.dump();
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+
+    // The seal written after an earlier-named property: records [color, lock_edit].
+    const json        dump_before = property_dump(client, light_id);
+    const std::size_t depth       = undo_depth_of(client);
+    Mcp_client::Tool_result seal = client.call_tool("set_item_properties", json{
+        {"item_id", light_id}, {"properties", {{"color", {1.0, 0.0, 0.0}}, {"lock_edit", true}}}
+    });
+    ASSERT_FALSE(seal.is_error) << seal.text;
+    EXPECT_EQ(undo_depth_of(client), depth + 1);
+    const json dump_sealed = property_dump(client, light_id);
+    EXPECT_TRUE(dump_sealed.at("item").value("sealed", false)) << dump_sealed.dump();
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    EXPECT_EQ(property_dump(client, light_id), dump_before) << "undo lifts the seal and restores the color";
+    ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+    EXPECT_EQ(property_dump(client, light_id), dump_sealed) << "redo writes the color and seals";
+
+    // On the sealed light, every entry is checked against the live state
+    // before anything is written: a name next to lock_edit false is refused
+    // as sealed (the Property_edit_operation tests cover an edit that lifts
+    // the seal and then writes). Lifting the seal alone is one undo entry.
+    const std::size_t depth_sealed = undo_depth_of(client);
+    Mcp_client::Tool_result unseal_and_rename = client.call_tool("set_item_properties", json{
+        {"item_id", light_id}, {"properties", {{"lock_edit", false}, {"name", "props seal light renamed"}}}
+    });
+    EXPECT_TRUE(unseal_and_rename.is_error) << unseal_and_rename.text;
+    EXPECT_NE(unseal_and_rename.text.find("'name'"), std::string::npos) << unseal_and_rename.text;
+    EXPECT_EQ(undo_depth_of(client), depth_sealed);
+    EXPECT_EQ(property_dump(client, light_id), dump_sealed) << "nothing written";
+    Mcp_client::Tool_result unseal = client.call_tool("set_item_property", json{{"item_id", light_id}, {"property", "lock_edit"}, {"value", false}});
+    ASSERT_FALSE(unseal.is_error) << unseal.text;
+    const json dump_unsealed = property_dump(client, light_id);
+    EXPECT_FALSE(dump_unsealed.at("item").value("sealed", true)) << dump_unsealed.dump();
+
+    // Write-time refusal after the seal: intensity is written, lock_edit
+    // seals, the name is refused; the rollback lifts the seal before it
+    // restores the intensity.
+    const std::size_t depth_refused = undo_depth_of(client);
+    Mcp_client::Tool_result refused = client.call_tool("set_item_properties", json{
+        {"item_id", light_id}, {"properties", {{"intensity", 5.0}, {"lock_edit", true}, {"name", "props seal light refused"}}}
+    });
+    EXPECT_TRUE(refused.is_error) << refused.text;
+    EXPECT_NE(refused.text.find("'name'"), std::string::npos) << refused.text;
+    EXPECT_EQ(undo_depth_of(client), depth_refused) << "no undo entry";
+    EXPECT_EQ(property_dump(client, light_id), dump_unsealed) << "nothing stays written";
+}
+
+// A sub-object (a mesh primitive's material) written by reference_id and by
+// reference_name; undo restores the previous reference.
+TEST_F(Mcp_test, set_item_properties_writes_a_sub_object_reference_by_id_and_name)
+{
+    Mcp_client&       client = Mcp_env::get().client();
+    const std::string scene  = Mcp_env::get().scene_name();
+    const std::size_t mesh   = create_mesh_node(client, scene, "props sub object mesh", -10.0);
+    ASSERT_NE(mesh, 0u);
+    const std::size_t material_a = ensure_material(client, scene, "props material a");
+    const std::size_t material_b = ensure_material(client, scene, "props material b");
+    ASSERT_NE(material_a, 0u);
+    ASSERT_NE(material_b, 0u);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+
+    const auto primitive_material = [&client, mesh]() -> json {
+        const json dump = property_dump(client, mesh);
+        for (const json& sub_object : dump.value("sub_objects", json::array())) {
+            if (sub_object.value("index", -1) != 0) {
+                continue;
+            }
+            for (const json& property : sub_object.at("properties")) {
+                if (property.value("name", "") == "material") {
+                    return property.value("reference_id", json());
+                }
+            }
+        }
+        return json{};
+    };
+    const json        original = primitive_material();
+    const std::size_t depth    = undo_depth_of(client);
+
+    Mcp_client::Tool_result by_id = client.call_tool("set_item_properties", json{
+        {"item_id", mesh}, {"sub_object", 0}, {"properties", {{"material", {{"reference_id", material_a}}}}}
+    });
+    ASSERT_FALSE(by_id.is_error) << by_id.text;
+    EXPECT_EQ(by_id.payload.value("sub_object", json()), json(0));
+    EXPECT_EQ(primitive_material(), json(material_a));
+    EXPECT_EQ(undo_depth_of(client), depth + 1);
+
+    Mcp_client::Tool_result by_name = client.call_tool("set_item_properties", json{
+        {"item_id", mesh}, {"sub_object", 0}, {"properties", {{"material", {{"reference_name", "props material b"}}}}}
+    });
+    ASSERT_FALSE(by_name.is_error) << by_name.text;
+    EXPECT_EQ(primitive_material(), json(material_b));
+    EXPECT_EQ(undo_depth_of(client), depth + 2);
+
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    EXPECT_EQ(primitive_material(), json(material_a));
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    EXPECT_EQ(primitive_material(), original);
+
+    Mcp_client::Tool_result missing = client.call_tool("set_item_properties", json{
+        {"item_id", mesh}, {"sub_object", 0}, {"properties", {{"material", {{"reference_name", "no such material"}}}}}
+    });
+    EXPECT_TRUE(missing.is_error);
+    EXPECT_NE(missing.text.find("material"), std::string::npos) << missing.text;
+    EXPECT_EQ(undo_depth_of(client), depth);
 }

@@ -92,21 +92,6 @@ private:
 // without an asset manager.
 void adopt_reference_usership(App_context& context, std::vector<Asset_reference>& userships, const std::shared_ptr<erhe::Item_base>& item);
 
-// D26: an undoable write of a writable computed property. The value goes
-// through the property's setter now, and the returned operation records
-// the stored property the setter writes (metadata `compute_writes`) with
-// the local state it had before and has after, so undo restores exactly
-// that state and execute re-applies it (idempotent). `target` is the item
-// or its sub-object (D29). Null when the property is not a writable
-// computed one, or the setter refused (a sealed item).
-[[nodiscard]] auto make_computed_write_operation(
-    const std::shared_ptr<erhe::Item_base>&      item,
-    std::optional<std::size_t>                   sub_object,
-    erhe::property::Dependency_object&           target,
-    const erhe::property::Dependency_property&   property,
-    const erhe::property::Property_value&        value
-) -> std::shared_ptr<Property_set_operation>;
-
 [[nodiscard]] auto to_local_state(const std::optional<erhe::property::Property_value>& value) -> std::optional<erhe::property::Local_state>;
 [[nodiscard]] auto describe_local_state(const erhe::property::Dependency_property& property, const std::optional<erhe::property::Local_state>& state) -> std::string;
 

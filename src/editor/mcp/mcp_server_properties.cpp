@@ -1,5 +1,5 @@
-// Mcp_server item property tools (get_item_properties, set_item_property,
-// get_addable_item_properties):
+// Mcp_server item property tools (get_item_properties, set_item_properties,
+// set_item_property, get_addable_item_properties):
 // the generic erhe::property view of any item (doc/erhe/property_system.md
 // D13). Values travel as strings through erhe_property/property_string.hpp,
 // so enumerations travel as their labels.
@@ -17,7 +17,8 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
-#include "operations/property_set_operation.hpp"
+#include "operations/item_property_apply.hpp"
+#include "operations/property_edit_operation.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/style_set_operation.hpp"
 #include "scene/item_lookup.hpp"
@@ -34,9 +35,13 @@
 #include "erhe_property/property_string.hpp"
 #include "erhe_property/property_style.hpp"
 
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -321,178 +326,513 @@ auto Mcp_server::query_addable_item_properties(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
+namespace {
+
+// What one entry of set_item_properties (or the one entry of
+// set_item_property) writes: a value, an expression, or a clear of the local
+// layer (doc/plans/property_undo_and_reflective_mcp.md section 4.1).
+enum class Property_write_kind : unsigned int {
+    value      = 0,
+    expression = 1,
+    clear      = 2
+};
+
+class Property_write_entry
+{
+public:
+    std::string                                   name;
+    const erhe::property::Dependency_property*    property{nullptr};
+    // D26: the stored property a writable computed property's setter
+    // writes; null for every other property.
+    const erhe::property::Dependency_property*    writes  {nullptr};
+    Property_write_kind                           kind    {Property_write_kind::clear};
+    std::optional<erhe::property::Property_value> value;
+    std::string                                   expression;
+};
+
+// The item, the D29 sub-object and the checked entries of one call.
+class Property_write_request
+{
+public:
+    std::shared_ptr<erhe::Item_base>    item;
+    std::optional<std::size_t>          sub_object;
+    erhe::property::Dependency_object*  target{nullptr};
+    std::vector<Property_write_entry>   entries;
+};
+
+// Resolves args (item_id | item_name, scene_name, sub_object) into
+// out_request.item / sub_object / target.
+auto resolve_write_target(App_context& context, const json& args, Property_write_request& out_request, std::string& out_error) -> bool
+{
+    out_request.item = resolve_item(context, args, out_error);
+    if (!out_request.item) {
+        return false;
+    }
+    erhe::Item_base& item = *out_request.item;
+    out_request.target = &item;
+    // D29: an optional sub-object index addresses e.g. a mesh primitive.
+    const auto sub_object_it = args.find("sub_object");
+    if ((sub_object_it != args.end()) && !sub_object_it->is_null()) {
+        if (!sub_object_it->is_number_unsigned()) {
+            out_error = "sub_object must be an integer index (see get_item_properties sub_objects)";
+            return false;
+        }
+        out_request.sub_object = sub_object_it->get<std::size_t>();
+        out_request.target     = item.get_property_sub_object(out_request.sub_object.value());
+        if (out_request.target == nullptr) {
+            out_error = "Item '" + item.get_name() + "' has no sub-object " + std::to_string(out_request.sub_object.value()) + " (it has " + std::to_string(item.get_property_sub_object_count()) + ")";
+            return false;
+        }
+    }
+    return true;
+}
+
+// The referenced item of an object value checked like the write will be:
+// the property's validation and bridge validate, then the D28 host check.
+auto check_object_value(
+    App_context&                                context,
+    const Property_write_request&               request,
+    const Property_write_entry&                 entry,
+    const std::shared_ptr<erhe::Item_base>&     referenced,
+    std::string&                                out_error
+) -> bool
+{
+    std::string validation_error;
+    if (!request.target->validate_value(*entry.property, entry.value.value(), validation_error)) {
+        out_error = "'" + referenced->get_name() + "' (" + std::string{referenced->get_type_name()} + ") was rejected by property '" + entry.name + "': " + validation_error;
+        return false;
+    }
+    if (!is_item_reference_allowed(context, *request.item, *referenced)) {
+        out_error = "property '" + entry.name + "' of '" + request.item->get_name() + "' cannot reference '" + referenced->get_name() + "' (" + std::string{referenced->get_type_name()} + "): it is in another scene and is not a cross-scene referenceable asset";
+        return false;
+    }
+    return true;
+}
+
+// Checks one entry against the live state of request.target - lookup,
+// read-only, seal (D24, the item's seal covering a sub-object), the value
+// form, parse, the property's validation and bridge validate, expression
+// compilation and the D28 host check - and fills out_entry. Nothing is
+// written. Every error names the property.
+auto parse_write_entry(
+    App_context&                  context,
+    const Property_write_request& request,
+    const std::string&            name,
+    const json&                   value_json,
+    Property_write_entry&         out_entry,
+    std::string&                  out_error
+) -> bool
+{
+    const erhe::Item_base&            item   = *request.item;
+    erhe::property::Dependency_object& target = *request.target;
+    out_entry.name = name;
+    const erhe::property::Dependency_property* property = erhe::property::Property_registry::get().find_for_object(target, name);
+    if (property == nullptr) {
+        out_error = "Item '" + item.get_name() + "' (" + std::string{item.get_type_name()} + ")" + (request.sub_object.has_value() ? " sub-object " + std::to_string(request.sub_object.value()) : std::string{}) + " has no property '" + name + "'";
+        return false;
+    }
+    out_entry.property = property;
+    if (property->is_read_only()) {
+        out_error = "Property '" + name + "' is read-only";
+        return false;
+    }
+    if (target.is_write_sealed(*property) || is_sealed_sub_object(item, target)) { // D24; lock_edit itself stays writable
+        out_error = "Property '" + name + "': item '" + item.get_name() + "' is sealed (lock_edit): set lock_edit false or unlock_items first, or edit the prefab's source scene";
+        return false;
+    }
+    const erhe::property::Property_metadata& metadata = property->get_metadata(target.get_property_owner_type());
+    if (metadata.is_computed_writable()) { // D26
+        out_entry.writes = metadata.compute_writes;
+    }
+    const bool is_object = erhe::property::is_object_reference_type(property->get_type());
+
+    if (value_json.is_object()) {
+        if (value_json.size() != 1) {
+            out_error = "Property '" + name + "': an object value takes exactly one of 'expression', 'reference_id' or 'reference_name'";
+            return false;
+        }
+        if (const auto expression_it = value_json.find("expression"); expression_it != value_json.end()) {
+            // An expression (doc/erhe/property_system.md D22).
+            if (out_entry.writes != nullptr) {
+                out_error = "Property '" + name + "' is computed: an expression cannot drive it (set '" + std::string{out_entry.writes->get_name()} + "' instead)";
+                return false;
+            }
+            if (!expression_it->is_string()) {
+                out_error = "Property '" + name + "': expression must be a string";
+                return false;
+            }
+            const std::string text = expression_it->get<std::string>();
+            std::string expression_error;
+            if (!erhe::property::validate_expression_text(*property, text, expression_error)) {
+                out_error = "expression '" + text + "' rejected for property '" + name + "': " + expression_error;
+                return false;
+            }
+            out_entry.kind       = Property_write_kind::expression;
+            out_entry.expression = text;
+            return true;
+        }
+        std::shared_ptr<erhe::Item_base> referenced{};
+        if (const auto reference_id_it = value_json.find("reference_id"); reference_id_it != value_json.end()) {
+            // D28: an object reference by the referenced item's session id,
+            // which disambiguates same-named items.
+            if (!is_object) {
+                out_error = "reference_id applies to object properties only; '" + name + "' is " + erhe::property::c_str(property->get_type());
+                return false;
+            }
+            if (!reference_id_it->is_number_unsigned()) {
+                out_error = "Property '" + name + "': reference_id must be an integer item id";
+                return false;
+            }
+            json id_args = json::object();
+            id_args["item_id"] = reference_id_it->get<std::size_t>();
+            std::string lookup_error;
+            referenced = resolve_item(context, id_args, lookup_error);
+            if (!referenced) {
+                out_error = "Property '" + name + "': reference_id: " + lookup_error;
+                return false;
+            }
+        } else if (const auto reference_name_it = value_json.find("reference_name"); reference_name_it != value_json.end()) {
+            // D28: a name or path resolved in the item's scene.
+            if (!is_object) {
+                out_error = "reference_name applies to object properties only; '" + name + "' is " + erhe::property::c_str(property->get_type());
+                return false;
+            }
+            if (!reference_name_it->is_string()) {
+                out_error = "Property '" + name + "': reference_name must be a string";
+                return false;
+            }
+            const std::string text = reference_name_it->get<std::string>();
+            referenced = resolve_reference_by_name(context, item, text);
+            if (!referenced) {
+                out_error = "Property '" + name + "': '" + text + "' does not name an item of the scene of '" + item.get_name() + "' (use reference_id for an item id)";
+                return false;
+            }
+        } else {
+            out_error = "Property '" + name + "': an object value takes exactly one of 'expression', 'reference_id' or 'reference_name'";
+            return false;
+        }
+        out_entry.kind  = Property_write_kind::value;
+        out_entry.value = erhe::property::make_object_reference(property->get_type(), referenced);
+        return check_object_value(context, request, out_entry, referenced, out_error);
+    }
+
+    if (value_json.is_null()) {
+        // Clear the local layer: the property falls back to its style,
+        // inherited or default value.
+        if (out_entry.writes != nullptr) {
+            out_error = "Property '" + name + "' is computed: it has no local value to clear";
+            return false;
+        }
+        out_entry.kind = Property_write_kind::clear;
+        return true;
+    }
+
+    // A string in property_string form, or a JSON number / bool / array of
+    // numbers, which is rendered to that form first.
+    std::string text;
+    if (value_json.is_string()) {
+        text = value_json.get<std::string>();
+    } else if (value_json.is_boolean()) {
+        text = value_json.get<bool>() ? "true" : "false";
+    } else if (value_json.is_number()) {
+        text = value_json.dump();
+    } else if (value_json.is_array()) {
+        for (const json& component : value_json) {
+            if (!component.is_number()) {
+                out_error = "Property '" + name + "': value array entries must be numbers";
+                return false;
+            }
+            if (!text.empty()) {
+                text += " ";
+            }
+            text += component.dump();
+        }
+    } else {
+        out_error = "Property '" + name + "': value must be a string, number, bool, array of numbers, null (reset to default), or an object with 'expression', 'reference_id' or 'reference_name'";
+        return false;
+    }
+    out_entry.kind = Property_write_kind::value;
+    if (is_object) {
+        // D28: a name resolved in the item's scene; empty clears the
+        // reference (a null reference as the local value).
+        if (text.empty()) {
+            out_entry.value = erhe::property::make_object_reference(property->get_type(), {});
+        } else {
+            const std::shared_ptr<erhe::Item_base> referenced = resolve_reference_by_name(context, item, text);
+            if (!referenced) {
+                out_error = "Property '" + name + "': '" + text + "' does not name an item of the scene of '" + item.get_name() + "' (use reference_id for an item id)";
+                return false;
+            }
+            out_entry.value = erhe::property::make_object_reference(property->get_type(), referenced);
+            return check_object_value(context, request, out_entry, referenced, out_error);
+        }
+    } else {
+        out_entry.value = erhe::property::parse_value(*property, text);
+    }
+    if (!out_entry.value.has_value()) {
+        out_error = "'" + text + "' is not a valid " + erhe::property::c_str(property->get_type()) + " for property '" + name + "'";
+        return false;
+    }
+    std::string validation_error;
+    if (!target.validate_value(*property, out_entry.value.value(), validation_error)) {
+        out_error = "'" + text + "' was rejected by property '" + name + "': " + validation_error;
+        return false;
+    }
+    return true;
+}
+
+// The local layer as the replies report it, in the form set_item_properties
+// accepts back: null (unauthored), the value's string form, or
+// {"expression": text}.
+auto local_state_json(const erhe::property::Dependency_property& property, const std::optional<erhe::property::Local_state>& state) -> json
+{
+    if (!state.has_value()) {
+        return json(nullptr);
+    }
+    if (const erhe::property::Expression_text* text = std::get_if<erhe::property::Expression_text>(&state.value()); text != nullptr) {
+        return json{{"expression", text->text}};
+    }
+    return value_json(property, std::get<erhe::property::Property_value>(state.value()));
+}
+
+auto item_json(const erhe::Item_base& item) -> json
+{
+    return json{{"id", item.get_id()}, {"name", item.get_name()}, {"type", std::string{item.get_type_name()}}};
+}
+
+// The result of write_item_properties: the error, or one reply object per
+// entry (name, before, after, value, writes) plus the recorded writes no
+// entry asked for (changed-callback cascades).
+class Property_write_result
+{
+public:
+    std::string                       error;
+    std::shared_ptr<erhe::Item_base>  item;
+    std::optional<std::size_t>        sub_object;
+    json                              entries{json::array()};
+    json                              cascaded{json::array()};
+    bool                              changed{false};
+};
+
+// The shared path of set_item_properties and set_item_property
+// (doc/plans/property_undo_and_reflective_mcp.md section 4.1): every entry is
+// checked against the live state before anything is written, then all of
+// them are written by one Property_edit_operation run with execute_now - one
+// undo entry. A refusal that shows only at write time puts the operation in
+// error: nothing stays written, no undo entry, and the error names the
+// property. Entries are written in the order given (property-name order for
+// a JSON object).
+auto write_item_properties(
+    App_context&                                     context,
+    const json&                                      args,
+    const std::vector<std::pair<std::string, json>>& properties
+) -> Property_write_result
+{
+    Property_write_result result;
+    if (context.operation_stack == nullptr) {
+        result.error = "Operation stack not available";
+        return result;
+    }
+    Property_write_request request;
+    if (!resolve_write_target(context, args, request, result.error)) {
+        return result;
+    }
+    result.item       = request.item;
+    result.sub_object = request.sub_object;
+    if (properties.empty()) {
+        result.error = "properties must name at least one property";
+        return result;
+    }
+    request.entries.reserve(properties.size());
+    for (const std::pair<std::string, json>& property : properties) {
+        Property_write_entry& entry = request.entries.emplace_back();
+        if (!parse_write_entry(context, request, property.first, property.second, entry, result.error)) {
+            log_mcp->warn("set_item_properties: {}", result.error);
+            return result;
+        }
+    }
+
+    // A clear of a property with no local layer writes nothing; a call made
+    // only of such clears changes nothing and leaves no undo entry.
+    const bool writes_anything = std::any_of(
+        request.entries.begin(), request.entries.end(),
+        [&request](const Property_write_entry& entry) {
+            return (entry.kind != Property_write_kind::clear) || request.target->read_local_state(*entry.property).has_value();
+        }
+    );
+
+    std::shared_ptr<Property_edit_operation> operation{};
+    if (writes_anything) {
+        erhe::Item_base& item = *request.item;
+        std::string description = (request.entries.size() == 1)
+            ? fmt::format(
+                "Set {} '{}'{} {}",
+                item.get_type_name(), item.get_name(),
+                request.sub_object.has_value() ? fmt::format(" [{}]", item.get_property_sub_object_label(request.sub_object.value())) : std::string{},
+                request.entries.front().name
+            )
+            : fmt::format(
+                "Set {} properties on {} '{}'{}",
+                request.entries.size(), item.get_type_name(), item.get_name(),
+                request.sub_object.has_value() ? fmt::format(" [{}]", item.get_property_sub_object_label(request.sub_object.value())) : std::string{}
+            );
+        // The edit captures the item: it owns the target sub-object.
+        operation = std::make_shared<Property_edit_operation>(
+            std::move(description),
+            [item_owner = request.item, target = request.target, entries = request.entries]() {
+                static_cast<void>(item_owner);
+                for (const Property_write_entry& entry : entries) {
+                    // A refused write is recorded as a refusal and fails the
+                    // operation; the return values add nothing to that.
+                    switch (entry.kind) {
+                        case Property_write_kind::value: {
+                            // D26: a writable computed property's setter
+                            // writes its stored property, which is recorded.
+                            static_cast<void>(target->set_value(*entry.property, entry.value.value()));
+                            break;
+                        }
+                        case Property_write_kind::expression: {
+                            static_cast<void>(target->set_expression(*entry.property, entry.expression));
+                            break;
+                        }
+                        case Property_write_kind::clear: {
+                            static_cast<void>(target->clear_value(*entry.property));
+                            break;
+                        }
+                    }
+                }
+            },
+            // The connected bones a Rig.tail / Rig.connected write moves, as
+            // the Properties window's rows (Property_set_operation) do.
+            Property_edit_follow_ups::bone_connect
+        );
+        context.operation_stack->execute_now(operation);
+        if (operation->has_error()) {
+            result.error = operation->get_error();
+            return result;
+        }
+        result.changed = true;
+    }
+
+    // Per entry: the record of the property it wrote (the stored property
+    // for a writable computed one), or its unchanged local layer when it
+    // wrote nothing.
+    const std::span<const Property_edit_operation::Record> records = operation ? operation->get_records() : std::span<const Property_edit_operation::Record>{};
+    std::vector<bool> reported(records.size(), false);
+    for (const Property_write_entry& entry : request.entries) {
+        const erhe::property::Dependency_property& written = (entry.writes != nullptr) ? *entry.writes : *entry.property;
+        json reply = {{"name", entry.name}};
+        bool found = false;
+        for (std::size_t i = 0, end = records.size(); i < end; ++i) {
+            const Property_edit_operation::Record& record = records[i];
+            if ((record.item == request.item) && (record.sub_object == request.sub_object) && (record.property == &written)) {
+                reply["before"] = local_state_json(written, record.before);
+                reply["after"]  = local_state_json(written, record.after);
+                reported[i] = true;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            const std::optional<erhe::property::Local_state> state = request.target->read_local_state(written);
+            reply["before"] = local_state_json(written, state);
+            reply["after"]  = local_state_json(written, state);
+        }
+        if (entry.writes != nullptr) {
+            reply["writes"] = std::string{entry.writes->get_name()};
+        }
+        reply["value"] = value_json(*entry.property, request.target->get_value(*entry.property)); // the effective value after the write
+        result.entries.push_back(std::move(reply));
+    }
+    for (std::size_t i = 0, end = records.size(); i < end; ++i) {
+        if (reported[i]) {
+            continue;
+        }
+        const Property_edit_operation::Record& record = records[i];
+        result.cascaded.push_back({
+            {"item",       item_json(*record.item)},
+            {"sub_object", record.sub_object.has_value() ? json(record.sub_object.value()) : json(nullptr)},
+            {"property",   std::string{record.property->get_name()}},
+            {"before",     local_state_json(*record.property, record.before)},
+            {"after",      local_state_json(*record.property, record.after)}
+        });
+    }
+    return result;
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_set_item_properties(const json& args) -> std::string
+{
+    const auto properties_it = args.find("properties");
+    if ((properties_it == args.end()) || !properties_it->is_object()) {
+        return make_error_content("properties must be an object mapping property names to values");
+    }
+    std::vector<std::pair<std::string, json>> properties;
+    properties.reserve(properties_it->size());
+    for (json::const_iterator it = properties_it->cbegin(), end = properties_it->cend(); it != end; ++it) {
+        properties.emplace_back(it.key(), it.value());
+    }
+    const Property_write_result result = write_item_properties(m_context, args, properties);
+    if (!result.error.empty()) {
+        return make_error_content(result.error);
+    }
+    json reply = {
+        {"item",       item_json(*result.item)},
+        {"sub_object", result.sub_object.has_value() ? json(result.sub_object.value()) : json(nullptr)},
+        {"properties", result.entries},
+        {"changed",    result.changed}
+    };
+    if (!result.cascaded.empty()) {
+        reply["cascaded"] = result.cascaded;
+    }
+    return make_json_content(reply).dump();
+}
+
+// The one-entry form of set_item_properties: value / expression /
+// reference_id arguments become the entry's value form.
 auto Mcp_server::action_set_item_property(const json& args) -> std::string
 {
-    if (m_context.operation_stack == nullptr) {
-        return make_error_content("Operation stack not available");
-    }
-    std::string error;
-    const std::shared_ptr<erhe::Item_base> item = resolve_item(m_context, args, error);
-    if (!item) {
-        return make_error_content(error);
-    }
     const std::string property_name = args.value("property", "");
     if (property_name.empty()) {
         return make_error_content("property is required");
     }
-    // D29: an optional sub-object index addresses e.g. a mesh primitive.
-    std::optional<std::size_t>         sub_object;
-    erhe::property::Dependency_object* target = item.get();
-    const auto sub_object_it = args.find("sub_object");
-    if ((sub_object_it != args.end()) && !sub_object_it->is_null()) {
-        if (!sub_object_it->is_number_unsigned()) {
-            return make_error_content("sub_object must be an integer index (see get_item_properties sub_objects)");
-        }
-        sub_object = sub_object_it->get<std::size_t>();
-        target     = item->get_property_sub_object(sub_object.value());
-        if (target == nullptr) {
-            return make_error_content("Item '" + item->get_name() + "' has no sub-object " + std::to_string(sub_object.value()) + " (it has " + std::to_string(item->get_property_sub_object_count()) + ")");
-        }
-    }
-    const erhe::property::Dependency_property* property = erhe::property::Property_registry::get().find_for_object(*target, property_name);
-    if (property == nullptr) {
-        return make_error_content("Item '" + item->get_name() + "' (" + std::string{item->get_type_name()} + ")" + (sub_object.has_value() ? " sub-object " + std::to_string(sub_object.value()) : std::string{}) + " has no property '" + property_name + "'");
-    }
-    if (property->is_read_only()) {
-        return make_error_content("Property '" + property_name + "' is read-only");
-    }
-    if (target->is_write_sealed(*property)) { // D24; lock_edit itself stays writable
-        return make_error_content("Item '" + item->get_name() + "' is sealed (lock_edit): set lock_edit false or unlock_items first, or edit the prefab's source scene");
-    }
-    const bool computed_writable = property->get_metadata(target->get_property_owner_type()).is_computed_writable(); // D26
-
-    // An expression (doc/erhe/property_system.md D22) instead of a value.
-    const auto expression_it = args.find("expression");
-    if ((expression_it != args.end()) && !expression_it->is_null()) {
-        if (computed_writable) {
-            return make_error_content("Property '" + property_name + "' is computed: an expression cannot drive it (set '" + std::string{property->get_metadata(target->get_property_owner_type()).compute_writes->get_name()} + "' instead)");
-        }
-        if (!expression_it->is_string()) {
-            return make_error_content("expression must be a string");
-        }
-        const std::string text = expression_it->get<std::string>();
-        if (!erhe::property::validate_expression_text(*property, text, error)) {
-            return make_error_content("expression '" + text + "' rejected for property '" + property_name + "': " + error);
-        }
-        const std::optional<erhe::property::Local_state> before = target->read_local_state(*property);
-        m_context.operation_stack->queue(
-            std::make_shared<Property_set_operation>(item, sub_object, *property, before, erhe::property::Local_state{erhe::property::Expression_text{text}})
-        );
-        json result = {
-            {"item",       {{"id", item->get_id()}, {"name", item->get_name()}, {"type", std::string{item->get_type_name()}}}},
-            {"property",   property_name},
-            {"before",     describe_local_state(*property, before)},
-            {"expression", text},
-            {"queued",     true}
-        };
-        return make_json_content(result).dump();
-    }
-
-    std::optional<erhe::property::Property_value> after;
-    const auto value_it        = args.find("value");
+    json value = nullptr;
+    const auto expression_it   = args.find("expression");
     const auto reference_id_it = args.find("reference_id");
-    const bool has_reference_id = (reference_id_it != args.end()) && !reference_id_it->is_null();
-    const bool clear = !has_reference_id && ((value_it == args.end()) || value_it->is_null());
-    if (has_reference_id) {
-        // D28: an object reference by the referenced item's session id,
-        // which disambiguates same-named items.
-        if (!erhe::property::is_object_reference_type(property->get_type())) {
-            return make_error_content("reference_id applies to object properties only; '" + property_name + "' is " + erhe::property::c_str(property->get_type()));
+    const auto value_it        = args.find("value");
+    if ((expression_it != args.end()) && !expression_it->is_null()) {
+        value = json{{"expression", *expression_it}};
+    } else if ((reference_id_it != args.end()) && !reference_id_it->is_null()) {
+        value = json{{"reference_id", *reference_id_it}};
+    } else if (value_it != args.end()) {
+        if (value_it->is_object()) {
+            return make_error_content("value must be a string, number, bool, array of numbers, or null (reset to default); use expression or reference_id for the other forms");
         }
-        if (!reference_id_it->is_number_unsigned()) {
-            return make_error_content("reference_id must be an integer item id");
-        }
-        json id_args = json::object();
-        id_args["item_id"] = reference_id_it->get<std::size_t>();
-        const std::shared_ptr<erhe::Item_base> referenced = resolve_item(m_context, id_args, error);
-        if (!referenced) {
-            return make_error_content("reference_id: " + error);
-        }
-        after = erhe::property::make_object_reference(property->get_type(), referenced);
-        std::string validation_error;
-        if (!target->validate_value(*property, after.value(), validation_error)) {
-            return make_error_content("'" + referenced->get_name() + "' (" + std::string{referenced->get_type_name()} + ") was rejected by property '" + property_name + "': " + validation_error);
-        }
-    } else if (!clear) {
-        // Accept a string in property_string form, or a JSON number / bool /
-        // array of numbers, which is rendered to that form first.
-        std::string text;
-        if (value_it->is_string()) {
-            text = value_it->get<std::string>();
-        } else if (value_it->is_boolean()) {
-            text = value_it->get<bool>() ? "true" : "false";
-        } else if (value_it->is_number()) {
-            text = value_it->dump();
-        } else if (value_it->is_array()) {
-            for (const json& component : *value_it) {
-                if (!component.is_number()) {
-                    return make_error_content("value array entries must be numbers");
-                }
-                if (!text.empty()) {
-                    text += " ";
-                }
-                text += component.dump();
-            }
-        } else {
-            return make_error_content("value must be a string, number, bool, array of numbers, or null (reset to default)");
-        }
-        if (erhe::property::is_object_reference_type(property->get_type())) {
-            // D28: a name resolved in the item's scene; empty clears.
-            if (text.empty()) {
-                after = erhe::property::make_object_reference(property->get_type(), {});
-            } else {
-                const std::shared_ptr<erhe::Item_base> referenced = resolve_reference_by_name(m_context, *item, text);
-                if (!referenced) {
-                    return make_error_content("'" + text + "' does not name an item of the scene of '" + item->get_name() + "' (use reference_id for an item id)");
-                }
-                after = erhe::property::make_object_reference(property->get_type(), referenced);
-            }
-        } else {
-            after = erhe::property::parse_value(*property, text);
-        }
-        if (!after.has_value()) {
-            return make_error_content("'" + text + "' is not a valid " + erhe::property::c_str(property->get_type()) + " for property '" + property_name + "'");
-        }
-        std::string validation_error;
-        if (!target->validate_value(*property, after.value(), validation_error)) {
-            log_mcp->warn("set_item_property '{}': {}", property_name, validation_error);
-            return make_error_content("'" + text + "' was rejected by property '" + property_name + "': " + validation_error);
-        }
+        value = *value_it;
     }
-
-    if (computed_writable) {
-        // D26: the value goes through the setter and the operation records
-        // the stored property it wrote.
-        if (!after.has_value()) {
-            return make_error_content("Property '" + property_name + "' is computed: it has no local value to clear");
-        }
-        const std::shared_ptr<Property_set_operation> operation = make_computed_write_operation(item, sub_object, *target, *property, after.value());
-        if (!operation) {
-            return make_error_content("Property '" + property_name + "' refused the value");
-        }
-        m_context.operation_stack->queue(operation);
-        json result = {
-            {"item",       {{"id", item->get_id()}, {"name", item->get_name()}, {"type", std::string{item->get_type_name()}}}},
-            {"sub_object", sub_object.has_value() ? json(sub_object.value()) : json(nullptr)},
-            {"property",   property_name},
-            {"writes",     std::string{operation->get_property().get_name()}},
-            {"after",      erhe::property::to_string(*property, after.value())},
-            {"queued",     true}
-        };
-        return make_json_content(result).dump();
+    const std::vector<std::pair<std::string, json>> properties{std::pair<std::string, json>{property_name, value}};
+    const Property_write_result result = write_item_properties(m_context, args, properties);
+    if (!result.error.empty()) {
+        return make_error_content(result.error);
     }
-    const std::optional<erhe::property::Local_state> before = target->read_local_state(*property);
-    m_context.operation_stack->queue(std::make_shared<Property_set_operation>(item, sub_object, *property, before, to_local_state(after)));
-
-    json result = {
-        {"item",     {{"id", item->get_id()}, {"name", item->get_name()}, {"type", std::string{item->get_type_name()}}}},
-        {"sub_object", sub_object.has_value() ? json(sub_object.value()) : json(nullptr)},
-        {"property", property_name},
-        {"before",   before.has_value() ? json(describe_local_state(*property, before)) : json(nullptr)},
-        {"after",    after.has_value() ? value_json(*property, after.value()) : json(nullptr)},
-        {"queued",   true}
+    const json& entry = result.entries.front();
+    json reply = {
+        {"item",       item_json(*result.item)},
+        {"sub_object", result.sub_object.has_value() ? json(result.sub_object.value()) : json(nullptr)},
+        {"property",   property_name},
+        {"before",     entry.at("before")},
+        {"after",      entry.at("after")},
+        {"value",      entry.at("value")},
+        {"changed",    result.changed}
     };
-    return make_json_content(result).dump();
+    if (entry.contains("writes")) {
+        reply["writes"] = entry.at("writes");
+    }
+    if (!result.cascaded.empty()) {
+        reply["cascaded"] = result.cascaded;
+    }
+    return make_json_content(reply).dump();
 }
 
 // Style layer (D25): the source item's local values become the target's

@@ -939,6 +939,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_item_properties",            &Mcp_server::query_item_properties                },
         { "get_addable_item_properties",    &Mcp_server::query_addable_item_properties        },
         { "set_item_property",              &Mcp_server::action_set_item_property             },
+        { "set_item_properties",            &Mcp_server::action_set_item_properties           },
         { "set_item_style",                 &Mcp_server::action_set_item_style                },
         { "create_style",                   &Mcp_server::action_create_style                  },
         { "clear_item_style",               &Mcp_server::action_clear_item_style              },

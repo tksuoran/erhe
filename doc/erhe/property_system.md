@@ -428,14 +428,18 @@ table, see D2a), and references to other objects (D28).
   the "Reset to default" clear, so undo brings the row back. A
   class-chain row keeps "Reset to default" as its only clear, because
   clearing it never removes the row.
-- D13 MCP. Three tools in `src/editor/mcp/`: `get_item_properties(item)` lists
-  (name, type, effective value, source, local value) and
-  `set_item_property(item, name, value)` writes through
-  `Property_set_operation`. Values travel as strings through D16, so
+- D13 MCP. Tools in `src/editor/mcp/mcp_server_properties.cpp`: `get_item_properties(item)` lists
+  (name, type, effective value, source, local value);
+  `set_item_properties(item, {name: value, ...})` writes several
+  properties of one item as one `Property_edit_operation`
+  (`doc/editor/operations.md`), executed at once, after checking every
+  entry against the live state (a bad entry fails the call naming the
+  property, nothing written), and `set_item_property(item, name, value)`
+  is its one-entry form. Values travel as strings through D16, so
   enumeration values travel as their labels; an object value (D28)
   travels as the referenced item's name with `reference_id` (its session
-  id) and `reference_type` alongside, and `set_item_property` also takes
-  `reference_id`. The listing has `sub_objects` and the write takes
+  id) and `reference_type` alongside, and the writes also take
+  `reference_id` (and `set_item_properties` `reference_name`). The listing has `sub_objects` and the write takes
   `sub_object` (D29). An attached property (R7) is listed by
   its qualified name (D3) with `attached` true, under the D12 listing
   rule, and is written by that name. `get_addable_item_properties(item)`
@@ -955,10 +959,12 @@ table, see D2a), and references to other objects (D28).
     expression stay rejected (one logged error, `false`): there is no
     local layer. The value it presents is still the provider's
     (`Value_source::computed`), so a set through the setter is read back
-    through the compute. The editor and the MCP server record an
+    through the compute. The Properties window records an
     undoable edit of such a property as a `Property_set_operation` of the
-    stored property (`make_computed_write_operation`,
-    `Dependency_property_rows::recorded_property`): the value goes
+    stored property (`Dependency_property_rows::recorded_property`), and
+    MCP `set_item_properties` / `set_item_property` write it with
+    `set_value` inside a `Property_edit_operation`, whose recording holds
+    the stored property's write: the value goes
     through the setter at once and the operation carries the stored
     property's local state before and after, so undo restores exactly
     that state; the row's tooltip names the property it writes
@@ -1645,8 +1651,9 @@ Gradient and curve parameters have no `Property_value` form and stay in
   multi-selection, and the context menu (Reset to default, Copy / Paste
   Properties, Paste Properties as Style, Clear Style, Edit as expression,
   Remove expression). Every edit is one undoable operation.
-- MCP tools: `get_item_properties`, `set_item_property` (with `value` or
-  `expression`), `set_item_style`, `clear_item_style`; `lock_items` /
+- MCP tools: `get_item_properties`, `set_item_properties` (several
+  properties, one undo entry), `set_item_property` (with `value`,
+  `expression` or `reference_id`), `set_item_style`, `clear_item_style`; `lock_items` /
   `unlock_items` toggle the seal; `set_item_flags` rejects the derived
   bits (`visible`, `shadow_cast`, `lightmapped`) with a hint to use
   `set_item_property`. Undo is verifiable through `undo` / `redo` and

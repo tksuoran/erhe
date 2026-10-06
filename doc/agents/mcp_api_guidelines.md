@@ -48,7 +48,7 @@ handler.
 The server carries two families of tools and each has its own job.
 
 - **Scene scripting** - `create_shape`, `transform_selection`,
-  `set_item_property`, `edit_material`, `import_gltf` and the rest - takes
+  `set_item_properties`, `set_item_property`, `edit_material`, `import_gltf` and the rest - takes
   explicit arguments and acts on scene state. This is how a script or an
   agent changes a document.
 - **UI driving** - the `get_imgui_*`, `imgui_*`, `mouse_*`, `key_press`,
@@ -104,4 +104,14 @@ undoable and is a defect. `Mcp_test.document_edits_record_one_undo_entry_each`
 edit tools; a new one adds its case there. Editor state that is not the
 document (window visibility, frame pacing, log levels, graphics presets) is
 not undoable.
+
+The reflective property write is `set_item_properties`: any number of
+registered properties of one item (or of one property sub-object) as one
+`Property_edit_operation` run with `execute_now()`, every entry checked
+against the live state before anything is written, so one bad entry fails
+the whole call naming the property. `set_item_property` is its one-entry
+form and also executes at once: a later call in the same `batch` sees the
+write, and the reply carries the property's `before` / `after` local layer
+and effective `value` (no `"queued"` field).
+
 

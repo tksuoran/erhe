@@ -3,16 +3,20 @@
 #include "editor_log.hpp"
 #include "operations/item_property_apply.hpp"
 #include "operations/property_set_operation.hpp"
+#include "rig/bone_connect.hpp"
 
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_property/property_metadata.hpp"
 #include "erhe_property/property_set.hpp"
 #include "erhe_property/property_write_recording.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
+
+#include <algorithm>
 
 namespace editor {
 
@@ -69,10 +73,94 @@ auto describe_property(const Owning_item& owner, erhe::property::Dependency_obje
     return fmt::format("'{}' on {}", name, describe_target(owner));
 }
 
+// True for a record of the item's own property that stays writable on a
+// sealed item (D24, Property_flags::writable_when_sealed: lock_edit), the
+// write that seals or unseals the item.
+[[nodiscard]] auto is_seal_record(const Property_edit_operation::Record& record) -> bool
+{
+    return
+        !record.sub_object.has_value() &&
+        ((record.property->get_metadata(record.item->get_property_owner_type()).flags & erhe::property::Property_flags::writable_when_sealed) != 0u);
+}
+
+// An item with a seal record and other records: where its seal record goes.
+class Seal_order
+{
+public:
+    const erhe::Item_base* item{nullptr};
+    std::size_t            seal_index{0};
+    std::size_t            last_other_index{0};
+    bool                   decided{false};
+    bool                   applied{false};
+};
+
+// Calls apply_record(i) once for every record index, in the seal order of
+// doc/editor/operations.md "Property_edit_operation": records keep record
+// order, except that per item a seal record is applied before that item's
+// other records when the item is sealed as the first of them is reached
+// (the seal record's state is then what lifts the seal), and after them
+// otherwise (a state that seals takes effect once they are written). The
+// sealed state is read live, so an item's seal reflects the records applied
+// before it.
+template <typename Apply_record>
+void apply_in_seal_order(const std::span<const Property_edit_operation::Record> records, Apply_record&& apply_record)
+{
+    // Undo / redo / rollback, not per frame; an edit seals or unseals
+    // rarely, so this is usually empty.
+    std::vector<Seal_order> seal_orders;
+    for (std::size_t i = 0, end = records.size(); i < end; ++i) {
+        if (!is_seal_record(records[i])) {
+            continue;
+        }
+        Seal_order order{.item = records[i].item.get(), .seal_index = i};
+        bool has_other = false;
+        for (std::size_t j = 0; j < end; ++j) {
+            if ((j != i) && (records[j].item.get() == order.item)) {
+                order.last_other_index = j;
+                has_other = true;
+            }
+        }
+        if (has_other) {
+            seal_orders.push_back(order);
+        }
+    }
+    for (std::size_t i = 0, end = records.size(); i < end; ++i) {
+        const erhe::Item_base* const item = records[i].item.get();
+        const std::vector<Seal_order>::iterator order = std::find_if(
+            seal_orders.begin(), seal_orders.end(), [item](const Seal_order& candidate) { return candidate.item == item; }
+        );
+        if (order == seal_orders.end()) {
+            apply_record(i);
+            continue;
+        }
+        if (!order->decided) {
+            order->decided = true;
+            if (item->is_sealed()) {
+                apply_record(order->seal_index);
+                order->applied = true;
+            }
+        }
+        if (i == order->seal_index) {
+            // Reached after the item's other records: its own position.
+            if (!order->applied && (i > order->last_other_index)) {
+                apply_record(i);
+                order->applied = true;
+            }
+            continue;
+        }
+        apply_record(i);
+        if ((i == order->last_other_index) && !order->applied && (order->seal_index < i)) {
+            apply_record(order->seal_index);
+            order->applied = true;
+        }
+    }
+}
+
 } // anonymous namespace
 
-Property_edit_operation::Property_edit_operation(std::string description, Edit_function edit)
-    : m_edit{std::move(edit)}
+Property_edit_operation::Property_edit_operation(std::string description, Edit_function edit, const Property_edit_follow_ups follow_ups)
+    : m_edit          {std::move(edit)}
+    , m_follow_up_kind{follow_ups}
 {
     ERHE_VERIFY(m_edit);
     set_description(std::move(description));
@@ -152,15 +240,21 @@ void Property_edit_operation::record(App_context& context)
     if (!error.empty()) {
         set_error(error);
         log_operations->warn("Op Execute {} failed: {}", describe(), error);
-        // Restore what the edit did write, in record order (as undo does).
+        // Restore what the edit did write, in seal order (as undo does).
         // The edit never reported these writes, so restoring them reports
         // nothing either.
         // m_records[i] is written[i] resolved (its before state moved there).
-        for (std::size_t i = 0, end = written.size(); i < end; ++i) {
-            if (!written[i].object->apply_local_state(*written[i].property, m_records[i].before)) {
-                log_operations->error("Op Execute {}: property '{}' could not be restored", describe(), written[i].property->get_name());
+        apply_in_seal_order(
+            m_records,
+            [this, &written](const std::size_t i) {
+                if (!written[i].object->apply_local_state(*written[i].property, m_records[i].before)) {
+                    log_operations->error(
+                        "Op Execute {}: {} could not be restored",
+                        describe(), describe_property(Owning_item{.item = m_records[i].item, .sub_object = m_records[i].sub_object}, *written[i].object, *written[i].property)
+                    );
+                }
             }
-        }
+        );
         m_records.clear();
         m_edit = {};
         return;
@@ -175,6 +269,17 @@ void Property_edit_operation::record(App_context& context)
     for (const Record& record : m_records) {
         context.on_item_property_changed(*record.item, *record.property);
     }
+    if (m_follow_up_kind == Property_edit_follow_ups::bone_connect) {
+        // Recorded after every write, so each reads the written state.
+        for (const Record& record : m_records) {
+            if (!record.sub_object.has_value()) {
+                append_bone_connect_follow_ups(*record.item, *record.property, m_follow_ups);
+            }
+        }
+        for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
+            follow_up->execute(context);
+        }
+    }
     // Released last: the function's captures may be the only owners of the
     // items it wrote, and the records above read those items through raw
     // pointers until m_records holds them.
@@ -188,12 +293,27 @@ void Property_edit_operation::apply(App_context& context, const State state)
     // Record order for both directions: an edit that wrote A, whose changed
     // callback wrote B, recorded [A, B]; restoring A first lets the callback
     // write B, and restoring B afterwards puts back B's own recorded state.
+    // Seal order on top of it: an item's seal record goes before or after
+    // the item's other records, so none of them meets the seal.
     // No change batch around the restores: a batch defers the changed
     // callbacks to its end, after the later records were restored, so a
     // callback of A would overwrite the restored B of a cascade [A, B].
-    for (const Record& record : m_records) {
-        apply_item_property(context, *record.item, record.sub_object, *record.property, (state == State::before) ? record.before : record.after);
-    }
+    apply_in_seal_order(
+        m_records,
+        [this, &context, state](const std::size_t i) {
+            const Record& record = m_records[i];
+            if (!apply_item_property(context, *record.item, record.sub_object, *record.property, (state == State::before) ? record.before : record.after)) {
+                // The item no longer accepts its recorded state (a state
+                // changed outside the undo history: a reference the D28 host
+                // check now refuses, a sub-object that is gone); the stack
+                // and the document disagree from here on.
+                log_operations->error(
+                    "Op {} {}: property '{}' on {} could not be applied",
+                    (state == State::before) ? "Undo" : "Redo", describe(), record.property->get_name(), describe_target(Owning_item{.item = record.item, .sub_object = record.sub_object})
+                );
+            }
+        }
+    );
 }
 
 void Property_edit_operation::execute(App_context& context)
@@ -204,16 +324,25 @@ void Property_edit_operation::execute(App_context& context)
         return;
     }
     apply(context, State::after);
+    for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
+        follow_up->execute(context);
+    }
 }
 
 void Property_edit_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
+    for (auto i = m_follow_ups.rbegin(), end = m_follow_ups.rend(); i != end; ++i) {
+        (*i)->undo(context);
+    }
     apply(context, State::before);
 }
 
 void Property_edit_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
 {
+    for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
+        follow_up->collect_item_references(out_items);
+    }
     for (const Record& record : m_records) {
         out_items.insert(record.item.get());
         for (const std::optional<erhe::property::Local_state>* state : {&record.before, &record.after}) {

@@ -27,8 +27,11 @@ class App_context;
 // runs the function once inside an erhe::property::Property_write_recording
 // and keeps, per written (object, property), the local state before the
 // first write and after the last. Redo applies the after states, undo the
-// before states, both in record order, each through apply_item_property, so
-// every write reaches App_context::on_item_property_changed.
+// before states, both in record order except for the seal (an item's
+// lock_edit record goes before its other records when it lifts the seal,
+// after them when it seals), each through apply_item_property, so every
+// write reaches App_context::on_item_property_changed; a state the item
+// refuses is logged as an error.
 //
 // The edit function writes only through set_value / property setters;
 // member writes that bypass the property layer (set_flag_bits,
@@ -39,6 +42,18 @@ class App_context;
 // value the D28 host check refuses), or an edit that wrote nothing, puts the
 // operation in error: the writes that happened are restored and
 // Operation_stack does not record it.
+// What a Property_edit_operation adds to the recorded writes.
+enum class Property_edit_follow_ups : unsigned int {
+    // The recorded writes only.
+    none         = 0,
+    // After the first execute, the Node_transform_operations the connected
+    // bone rule implies for every recorded Rig.tail / Rig.connected write on
+    // an item (rig/bone_connect.hpp), as Property_set_operation records
+    // them: redo runs them after the writes, undo undoes them (in reverse)
+    // before the restores, so the edit and the moves are one undo step.
+    bone_connect = 1
+};
+
 class Property_edit_operation : public Operation
 {
 public:
@@ -56,7 +71,7 @@ public:
         std::optional<erhe::property::Local_state>  after;
     };
 
-    Property_edit_operation(std::string description, Edit_function edit);
+    Property_edit_operation(std::string description, Edit_function edit, Property_edit_follow_ups follow_ups = Property_edit_follow_ups::none);
     ~Property_edit_operation() noexcept override;
 
     // Implements Operation
@@ -77,8 +92,10 @@ private:
     void record (App_context& context);
     void apply  (App_context& context, State state);
 
-    Edit_function                m_edit;
-    std::vector<Record>          m_records;
+    Edit_function                           m_edit;
+    Property_edit_follow_ups                m_follow_up_kind{Property_edit_follow_ups::none};
+    std::vector<Record>                     m_records;
+    std::vector<std::shared_ptr<Operation>> m_follow_ups;
     // Object values (D28) naming managed assets in either state: this
     // operation is a declared user of each (Property_set_operation does
     // the same).

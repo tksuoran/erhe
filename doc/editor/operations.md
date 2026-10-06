@@ -107,8 +107,8 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `reparent_item`)
   - `Item_reposition_in_parent_operation` -- reorder siblings
   - `Node_transform_operation` -- undo/redo node transforms
-  - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows, MCP `set_item_property`, and MCP `edit_light` / `edit_camera` (one per field, grouped into a `Compound_operation` with a `Node_transform_operation` for `edit_light`'s position)
-  - `Property_edit_operation` -- the property writes of an edit function, recorded on the first execute (see "Property_edit_operation" below); the Properties window's Paste Properties, MCP `edit_material`, the property opinions of a variant switch, the Hierarchy window's no-transform-update flag and the MCP physics edits
+  - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows and MCP `edit_light` / `edit_camera` (one per field, grouped into a `Compound_operation` with a `Node_transform_operation` for `edit_light`'s position)
+  - `Property_edit_operation` -- the property writes of an edit function, recorded on the first execute (see "Property_edit_operation" below); the Properties window's Paste Properties, MCP `set_item_properties` / `set_item_property`, MCP `edit_material`, the property opinions of a variant switch, the Hierarchy window's no-transform-update flag and the MCP physics edits
   - `Lightmap_tile_overrides_operation` -- a scene's lightmap quadtree leaf overrides before / after (the Lightmap window's and MCP's subdivide / merge); execute and undo let the Lightmap window re-prepare a live partition
   - `Collision_shape_set_operation` -- the collision shape a node's rigid body is made from, before / after (MCP `edit_physics_body` shape arguments): `Node_physics_system::set_collision_shape`, which recreates a live body. The before state is the node's authored shape (`Node_physics_system::get_authored_collision_shape`: the held shape without the center-of-mass wrapper the system adds for a nonzero `center_of_mass_offset`), so undo restores the same body shape and the offset is applied once. `Mesh_operation::capture_physics` takes the same authored shape for its versions.
   - `Scene_settings_set_operation` -- a scene's per-scene setting overrides (the codegen `Scene_settings`) before / after (MCP `set_scene_settings`). Execute and undo assign the struct and notify directly each consumer that keeps derived state from a field that changed, decided once at construction from the serialized fields: `camera_controls` -> `Fly_camera_tool::on_scene_camera_controls_changed()` (re-adopts the controls when the scene is hovered), `lightmap_tile_overrides` -> `Lightmap_window::on_tile_overrides_changed()`. `sky`, `grid`, `physics` and `shadow_frustum_fit` are read through `scene_settings_resolve.hpp` where they are used (sky and grid rendering, the lightmap bake's sky, the physics step and drags, the shadow fit), so nothing caches them; `clear_color` and `post_processing` have no reader. `scene_id` and `variant_selections` are managed by the scene (side-data identity; `Variant_select_operation`), and before and after must agree on them (verified).
@@ -173,6 +173,30 @@ properties (`Light::set_intensity`, `Material::set_data`).
   the changed callbacks to its end, after B was restored, so A's callback
   would overwrite it. Consumers are therefore notified per restored
   property, not once per object.
+- The seal (D24) orders an item's records on top of record order. A record
+  of the item's own property flagged `Property_flags::writable_when_sealed`
+  (`Item_base::lock_edit_property`) is the item's seal record, and every
+  other record of that item (sub-object records included, since the item's
+  seal covers its sub-objects) is written only while the item is unsealed.
+  When undo, redo or the rollback of a refused edit reaches the first record
+  of such an item, the item's live sealed state places its seal record: an
+  item that is sealed then gets its seal record applied first (the state
+  being applied lifts the seal), and an unsealed item gets it applied right
+  after its last other record (a state that seals takes effect once they
+  are written). Every other record keeps record order. So
+  `set_item_properties` with `{"color": ..., "lock_edit": true}` undoes the
+  seal before restoring the color, and an edit that lifts the seal and then
+  renames the item restores the name before re-sealing it. An edit that
+  unseals an item, writes it and re-seals it within the one edit has a seal
+  record whose before and after states both seal, which no order can
+  restore: its rollback, undo and redo log the refused writes as errors.
+- A state that `apply_item_property` refuses during undo or redo is logged
+  as an error naming the operation, property and item: the item no longer
+  accepts what the operation recorded (an object value the D28 host check
+  now refuses, a sub-object that is gone), so the undo history and the
+  document disagree from that point. It is an error log rather than a
+  verify because the cause is state changed outside the undo history, not
+  a defect of the operation.
 - Refusals: a write a gate refused during the edit (read-only, sealed,
   validate, bridge validate such as a sibling-unique name), a write on a
   sub-object of a sealed item (D24: a mesh primitive carries no seal of its
@@ -183,7 +207,7 @@ properties (`Light::set_intensity`, `Material::set_data`).
   it covers object values written through setters too), or an edit that
   wrote nothing puts the operation in error naming the property and item.
   The writes that did happen are restored from their before states (in
-  record order, without the consequence hook, since the edit never
+  the seal order above, without the consequence hook, since the edit never
   reported them), the operation keeps no records, and `Operation_stack`
   does not record it.
 - The edit function is released at the end of the first execute, after the
@@ -195,6 +219,15 @@ properties (`Light::set_intensity`, `Material::set_data`).
   referenced item.
 - `get_records()` lists the records (item, sub-object, property, before,
   after) for callers that report what an edit changed.
+- Follow-ups (`Property_edit_follow_ups`): constructed with
+  `bone_connect`, the first execute also records the
+  `Node_transform_operation`s the connected bone rule implies for every
+  recorded `Rig.tail` / `Rig.connected` write on an item
+  (`rig/bone_connect.hpp`), as `Property_set_operation` does, and runs
+  them; redo runs them after the writes and undo undoes them in reverse
+  before the restores, so the edit and the moves are one undo step. MCP
+  `set_item_properties` uses it; the default `none` records the writes
+  only (a variant switch applies file opinions without follow-ups).
 
 Edit functions write only through `set_value` and property setters. A
 member write that bypasses the property layer is invisible to the
@@ -227,6 +260,21 @@ section 3.3):
   first now holds. Paste Properties builds one per item (entries of
   properties the item's type has and that are writable) in a
   `Compound_operation` with the default `keep_siblings`.
+- MCP `set_item_properties` and its one-entry form `set_item_property`
+  (`mcp/mcp_server_properties.cpp`): every entry is checked against the
+  live state before the operation is built (lookup, read-only, seal,
+  parse, `validate_value` with the bridge validate, expression
+  compilation, the D28 host check), so one bad entry fails the call and
+  nothing is written; the operation, run with `execute_now`, writes the
+  entries in property-name order with `set_value`, `set_expression` or
+  `clear_value` (a writable computed property through `set_value`, whose
+  recording holds the stored property its setter writes). A refusal that
+  shows only while it runs (an entry that sets `lock_edit` before a later
+  one) is the operation's error, which the reply returns. The reply
+  reports each entry's before / after local layer from `get_records()`.
+  It runs with `Property_edit_follow_ups::bone_connect`, so a `Rig.tail`
+  or `Rig.connected` write moves the connected bones in the same undo
+  entry, as the Properties window row does.
 - `make_material_edit_operation` (`operations/material_edit_operation.hpp`):
   MCP `edit_material`, run with `execute_now` (the reply reports a refusal).
   It writes the `Material_values` fields that changed and, per texture

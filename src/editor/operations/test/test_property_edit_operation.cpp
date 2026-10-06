@@ -10,6 +10,7 @@
 #include "operations/compound_operation.hpp"
 #include "operations/property_edit_operation.hpp"
 
+#include "erhe_item/item.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -411,4 +412,101 @@ TEST_F(Property_edit_operation_test, compound_keep_siblings_leaves_the_accepted_
     EXPECT_EQ(local_float(a->read_local_state(Light::intensity_property.get())), 5.0f);
     compound.undo(context);
     EXPECT_EQ(local_float(a->read_local_state(Light::intensity_property.get())), 2.0f);
+}
+
+// The seal (D24) orders an item's records (doc/editor/operations.md
+// "Property_edit_operation"): lock_edit written after another property
+// records [color, lock_edit]; undo lifts the seal before it restores the
+// color, redo writes the color before it seals.
+TEST_F(Property_edit_operation_test, seal_written_after_another_property_undoes_and_redoes_both)
+{
+    const std::shared_ptr<Light> light = std::make_shared<Light>("light");
+    const glm::vec3 red{1.0f, 0.0f, 0.0f};
+
+    Property_edit_operation operation{
+        "color and seal",
+        [light, red]() {
+            light->set_value(Light::color_property, red);
+            light->set_value(erhe::Item_base::lock_edit_property, true);
+        }
+    };
+    operation.execute(context);
+    ASSERT_FALSE(operation.has_error()) << operation.get_error();
+    ASSERT_EQ(operation.get_records().size(), std::size_t{2});
+    EXPECT_EQ(operation.get_records()[1].property, &erhe::Item_base::lock_edit_property.get());
+    EXPECT_TRUE(light->is_sealed());
+
+    operation.undo(context);
+    EXPECT_FALSE(light->is_sealed());
+    EXPECT_FALSE(light->is_lock_edit());
+    EXPECT_FALSE(light->read_local_state(Light::color_property.get()).has_value()) << "the color is restored although the seal was recorded after it";
+
+    operation.execute(context); // redo
+    EXPECT_TRUE(light->is_sealed());
+    EXPECT_EQ(light->get_value(Light::color_property), red) << "the color is written before the seal";
+
+    operation.undo(context);
+    EXPECT_FALSE(light->is_sealed());
+    EXPECT_FALSE(light->read_local_state(Light::color_property.get()).has_value());
+}
+
+// The mirror case: on a sealed item the edit lifts the seal and then
+// renames the item; undo restores the name before it re-seals, redo lifts
+// the seal before it renames.
+TEST_F(Property_edit_operation_test, unseal_followed_by_another_property_undoes_and_redoes_both)
+{
+    const std::shared_ptr<Light> light = std::make_shared<Light>("light");
+    light->set_lock_edit(true);
+    ASSERT_TRUE(light->is_sealed());
+
+    Property_edit_operation operation{
+        "unseal and rename",
+        [light]() {
+            light->set_value(erhe::Item_base::lock_edit_property, false);
+            light->set_value(erhe::Item_base::name_property, std::string{"renamed"});
+        }
+    };
+    operation.execute(context);
+    ASSERT_FALSE(operation.has_error()) << operation.get_error();
+    ASSERT_EQ(operation.get_records().size(), std::size_t{2});
+    EXPECT_FALSE(light->is_sealed());
+    EXPECT_EQ(light->get_name(), "renamed");
+
+    operation.undo(context);
+    EXPECT_TRUE(light->is_sealed());
+    EXPECT_EQ(light->get_name(), "light") << "the name is restored before the seal";
+
+    operation.execute(context); // redo
+    EXPECT_FALSE(light->is_sealed());
+    EXPECT_EQ(light->get_name(), "renamed") << "the seal is lifted before the name is written";
+
+    operation.undo(context);
+    EXPECT_TRUE(light->is_sealed());
+    EXPECT_EQ(light->get_name(), "light");
+}
+
+// A write refused after the edit sealed the item: the rollback lifts the
+// seal before it restores the accepted write, so nothing stays written.
+TEST_F(Property_edit_operation_test, refused_write_after_a_seal_rolls_back_every_write)
+{
+    const std::shared_ptr<Light> light = std::make_shared<Light>("light");
+    light->set_value(Light::intensity_property, 2.0f);
+
+    Property_edit_operation operation{
+        "intensity, seal, name",
+        [light]() {
+            light->set_value(Light::intensity_property, 5.0f);
+            light->set_value(erhe::Item_base::lock_edit_property, true);
+            light->set_value(erhe::Item_base::name_property, std::string{"renamed"}); // refused: sealed
+        }
+    };
+    operation.execute(context);
+    ASSERT_TRUE(operation.has_error());
+    EXPECT_NE(operation.get_error().find("name"), std::string::npos) << operation.get_error();
+    EXPECT_TRUE(operation.get_records().empty());
+    EXPECT_EQ(hook_count(), std::size_t{0});
+    EXPECT_FALSE(light->is_sealed());
+    EXPECT_FALSE(light->is_lock_edit());
+    EXPECT_EQ(local_float(light->read_local_state(Light::intensity_property.get())), 2.0f) << "the intensity written before the seal is restored";
+    EXPECT_EQ(light->get_name(), "light");
 }

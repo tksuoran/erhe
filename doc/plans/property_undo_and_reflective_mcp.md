@@ -202,6 +202,13 @@ One operation class that replaces hand-written property before / after:
   independently authored b0. Reverse order would lose it. The first
   execute does not re-apply (the writes happened); it only runs
   `on_item_property_changed` per record.
+- As built (C1 review): the seal is the one exception to record order.
+  Undo, redo and the error-path rollback apply an item's seal record
+  (its `writable_when_sealed` property, `lock_edit`) before the item's
+  other records when the item is sealed as the first of them is reached,
+  and after them otherwise, so a write next to a seal in one edit is
+  restored instead of refused (`doc/editor/operations.md`
+  "Property_edit_operation").
 - Asset reference userships (`Property_set_operation`'s
   `adopt_userships`) are adopted for every object-reference record.
 - `collect_item_references` reports every recorded item, so asset unload
@@ -295,6 +302,16 @@ collision shape and scene settings operations of A3.
   to `execute_now` with the before / after reply, so a later call in the
   same `batch` sees the write. No in-repo script reads `queued` from it;
   C1 states the change in `doc/agents/mcp_api_guidelines.md`.
+- As built (C1): an object value also takes `{"reference_name": "..."}`
+  (a name or path in the item's scene) next to the property-string name
+  form; entries are written in property-name order (the JSON object's
+  order), so an entry that sets `lock_edit` refuses a later one at write
+  time; a writable computed property is written with `set_value` inside
+  the edit (the recording holds the stored property) and the reply names
+  it in `writes` - `make_computed_write_operation` had no other caller and
+  is deleted; a call that only clears properties without a local layer
+  writes nothing and replies `"changed": false` with no undo entry;
+  writes made by changed callbacks are listed in `cascaded`.
 
 ### 4.2 `get_property_schema`
 
@@ -370,7 +387,7 @@ effort before commit. Targets that must build: `editor`, `src/example`,
 
 A3 and C1 can swap order; C3 must come after both.
 
-Done: A1, A2, A3, A4. Next: B1.
+Done: A1, A2, A3, A4, C1. Next: B1.
 
 ## 6. Notification design (B1)
 
