@@ -17,8 +17,8 @@ apply_physics_force staggering, analytic capsule-capsule clearance check.
 Physics rig pattern:
 - every part is created motion_mode="none" (no body), rotated into pose,
   then given a body via create_physics_body shape="auto" with an explicit
-  mass (create_shape cannot set mass, and edit_physics_body's mass edit
-  does not rescale inertia),
+  mass (create_shape cannot set mass; a later Node_physics.mass write
+  through set_item_properties also works - it rescales the inertia),
 - per joint: two coincident anchor child nodes at the anatomical pivot
   (one per part), joined with shared motor settings - linear locked,
   angular limited, drives on all three angular axes,

@@ -6,10 +6,11 @@ matrices; commands in doc/testing.md "Shadow verification"): loads each station 
 of scripts/creations/creation_25_shadow_test_rooms.py (imported: every box,
 light pose, view, pose sweep and contact line comes from that module) in a
 headless editor, walks the test matrix with the MCP tool `set_graphics_preset`
-and the pose sweep with `edit_light` (the module's apply_light_pose()), renders
-each view with `render_scene_image`, applies the gates, prints a
-PASS / FAIL table, writes logs/shadow_verify/<timestamp>.json and exits
-non-zero on a FAIL with --enforce.
+and the pose sweep with `set_item_properties` on the light (the module's
+apply_light_pose()), renders each view with `render_scene_image`, applies
+the gates, prints a PASS / FAIL table, writes
+logs/shadow_verify/<timestamp>.json and exits non-zero on a FAIL with
+--enforce.
 
 Usage:
     py -3 scripts/shadow_verify.py [--matrix core|pairwise|full] [--poses full|short]

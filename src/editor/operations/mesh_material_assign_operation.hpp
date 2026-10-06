@@ -22,8 +22,10 @@ class App_context;
 // material set work): everything downstream - the Scene_host material hooks,
 // the material set slot references, the draw list re-register - hangs off
 // that call, so execute() and undo() differ only in which material they hand
-// it. Nothing else has to be rebuilt here, unlike a material edit (make_material_edit_operation),
-// which edits a material in place and can move a mesh between draw lists.
+// it. Nothing else has to be rebuilt here, unlike a material property edit
+// (a Property_edit_operation of set_item_properties or the Properties
+// window), which edits a material in place and can move a mesh between
+// draw lists.
 class Mesh_material_assign_operation : public Operation
 {
 public:

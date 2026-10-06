@@ -162,6 +162,12 @@ void wait_editor_time(Mcp_client& client, double seconds);
 [[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>;
 [[nodiscard]] auto wait_until_idle(Mcp_client& client, int timeout_ms) -> bool;
 
+// One entry of a batch tool call.
+[[nodiscard]] auto batch_call(const std::string& tool, const json& arguments) -> json
+{
+    return json{{"tool", tool}, {"arguments", arguments}};
+}
+
 // The scene every test runs in is created by Mcp_env::prepare(), from
 // this asset (textures for the texture tests) plus a material of its own.
 constexpr const char* c_textured_gltf      = "res/editor/assets/SM_Deccer_Cubes_Textured.glb";
@@ -358,16 +364,22 @@ protected:
         return r.payload;
     }
 
-    // Apply an edit and poll until the predicate holds against fresh material details.
+    // The test material's item id, the target of its set_item_properties edits.
+    auto material_id() -> std::size_t
+    {
+        const json details = material_details();
+        EXPECT_TRUE(details.contains("id")) << details.dump();
+        return details.value("id", std::size_t{0});
+    }
+
+    // Write material properties (set_item_properties) and poll until the
+    // predicate holds against fresh material details.
     template <typename Predicate>
-    void edit_and_wait(const json& edit_args, Predicate pred, int timeout_ms = 3000)
+    void edit_and_wait(const json& properties, Predicate pred, int timeout_ms = 3000)
     {
         Mcp_env& env = Mcp_env::get();
-        json full = edit_args;
-        full["scene_name"]    = env.scene_name();
-        full["material_name"] = env.material_name();
-        Mcp_client::Tool_result r = env.client().call_tool("edit_material", full);
-        ASSERT_FALSE(r.is_error) << "edit_material returned error: " << r.text;
+        Mcp_client::Tool_result r = env.client().call_tool("set_item_properties", json{{"item_id", material_id()}, {"properties", properties}});
+        ASSERT_FALSE(r.is_error) << "set_item_properties returned error: " << r.text;
 
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeout_ms};
         while (std::chrono::steady_clock::now() < deadline) {
@@ -411,7 +423,7 @@ TEST_F(Mcp_test, tools_list_includes_material_and_texture_tools)
     EXPECT_TRUE(has("get_scene_materials"));
     EXPECT_TRUE(has("get_material_details"));
     EXPECT_TRUE(has("get_scene_textures"));
-    EXPECT_TRUE(has("edit_material"));
+    EXPECT_TRUE(has("set_item_properties"));
     EXPECT_TRUE(has("create_material"));
     EXPECT_TRUE(has("batch"));
 }
@@ -776,9 +788,9 @@ TEST_F(Mcp_test, get_material_details_has_full_structure)
     }
 }
 
-// ---- edit_material: scalar / vector fields ---------------------------------
+// ---- material properties (set_item_properties): scalar / vector fields ------
 
-TEST_F(Mcp_test, edit_material_base_color_round_trip)
+TEST_F(Mcp_test, material_properties_base_color_round_trip)
 {
     json before = material_details();
     const json original = before["base_color"];
@@ -797,7 +809,7 @@ TEST_F(Mcp_test, edit_material_base_color_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_opacity_round_trip)
+TEST_F(Mcp_test, material_properties_opacity_round_trip)
 {
     json before = material_details();
     const double original = before["opacity"].get<double>();
@@ -813,7 +825,7 @@ TEST_F(Mcp_test, edit_material_opacity_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_metallic_round_trip)
+TEST_F(Mcp_test, material_properties_metallic_round_trip)
 {
     json before = material_details();
     const double original = before["metallic"].get<double>();
@@ -829,7 +841,7 @@ TEST_F(Mcp_test, edit_material_metallic_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_reflectance_round_trip)
+TEST_F(Mcp_test, material_properties_reflectance_round_trip)
 {
     json before = material_details();
     const double original = before["reflectance"].get<double>();
@@ -845,7 +857,7 @@ TEST_F(Mcp_test, edit_material_reflectance_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_ior_and_transmission_round_trip)
+TEST_F(Mcp_test, material_properties_ior_and_transmission_round_trip)
 {
     json before = material_details();
     const double original_ior          = before["ior"].get<double>();
@@ -871,25 +883,7 @@ TEST_F(Mcp_test, edit_material_ior_and_transmission_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_roughness_scalar_broadcasts_to_vec2)
-{
-    json before = material_details();
-    const json original = before["roughness"];
-
-    edit_and_wait(
-        json{{"roughness", 0.42}},
-        [](const json& d) {
-            return approx_equal(d["roughness"][0].get<double>(), 0.42)
-                && approx_equal(d["roughness"][1].get<double>(), 0.42);
-        }
-    );
-    edit_and_wait(
-        json{{"roughness", original}},
-        [&](const json& d) { return d["roughness"] == original; }
-    );
-}
-
-TEST_F(Mcp_test, edit_material_roughness_vec_round_trip)
+TEST_F(Mcp_test, material_properties_roughness_vec_round_trip)
 {
     json before = material_details();
     const json original = before["roughness"];
@@ -907,7 +901,7 @@ TEST_F(Mcp_test, edit_material_roughness_vec_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_emissive_round_trip)
+TEST_F(Mcp_test, material_properties_emissive_round_trip)
 {
     json before = material_details();
     const json original = before["emissive"];
@@ -926,7 +920,7 @@ TEST_F(Mcp_test, edit_material_emissive_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_normal_texture_scale_round_trip)
+TEST_F(Mcp_test, material_properties_normal_texture_scale_round_trip)
 {
     json before = material_details();
     const double original = before["normal_texture_scale"].get<double>();
@@ -942,7 +936,7 @@ TEST_F(Mcp_test, edit_material_normal_texture_scale_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_occlusion_texture_strength_round_trip)
+TEST_F(Mcp_test, material_properties_occlusion_texture_strength_round_trip)
 {
     json before = material_details();
     const double original = before["occlusion_texture_strength"].get<double>();
@@ -958,7 +952,7 @@ TEST_F(Mcp_test, edit_material_occlusion_texture_strength_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_bxdf_model_cycle)
+TEST_F(Mcp_test, material_properties_bxdf_model_cycle)
 {
     json before = material_details();
     const std::string original = before["bxdf_model"].get<std::string>();
@@ -966,18 +960,27 @@ TEST_F(Mcp_test, edit_material_bxdf_model_cycle)
         (original == "unlit")          ? "anisotropic_brdf" :
         (original == "anisotropic_brdf") ? "isotropic_brdf" :
                                            "unlit";
+    // get_material_details reports the enumerator token; the property takes
+    // the enumeration label (get_property_schema lists them).
+    auto label = [](const std::string& token) -> std::string {
+        return
+            (token == "unlit")            ? "Unlit" :
+            (token == "anisotropic_brdf") ? "Anisotropic BRDF" :
+            (token == "isotropic_brdf")   ? "Isotropic BRDF" :
+                                            token;
+    };
 
     edit_and_wait(
-        json{{"bxdf_model", target}},
+        json{{"bxdf_model", label(target)}},
         [target](const json& d) { return d["bxdf_model"].get<std::string>() == target; }
     );
     edit_and_wait(
-        json{{"bxdf_model", original}},
+        json{{"bxdf_model", label(original)}},
         [original](const json& d) { return d["bxdf_model"].get<std::string>() == original; }
     );
 }
 
-TEST_F(Mcp_test, edit_material_use_circular_brushed_metal_toggle)
+TEST_F(Mcp_test, material_properties_use_circular_brushed_metal_toggle)
 {
     json before = material_details();
     const bool original = before["use_circular_brushed_metal"].get<bool>();
@@ -992,7 +995,7 @@ TEST_F(Mcp_test, edit_material_use_circular_brushed_metal_toggle)
     );
 }
 
-TEST_F(Mcp_test, edit_material_use_aniso_control_toggle)
+TEST_F(Mcp_test, material_properties_use_aniso_control_toggle)
 {
     json before = material_details();
     const bool original = before["use_aniso_control"].get<bool>();
@@ -1007,85 +1010,70 @@ TEST_F(Mcp_test, edit_material_use_aniso_control_toggle)
     );
 }
 
-// ---- edit_material: error paths --------------------------------------------
+// ---- material properties (set_item_properties): error paths ----------------
 
-TEST_F(Mcp_test, edit_material_no_fields_returns_error)
+TEST_F(Mcp_test, material_properties_no_fields_returns_error)
 {
-    Mcp_env& env = Mcp_env::get();
-    Mcp_client::Tool_result r = env.client().call_tool("edit_material", json{
-        {"scene_name",    env.scene_name()},
-        {"material_name", env.material_name()}
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("set_item_properties", json{
+        {"item_id",    material_id()},
+        {"properties", json::object()}
     });
     EXPECT_TRUE(r.is_error) << "Expected error, got: " << r.text;
 }
 
-TEST_F(Mcp_test, edit_material_unknown_scene_returns_error)
+TEST_F(Mcp_test, material_properties_unknown_scene_returns_error)
 {
-    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("edit_material", json{
-        {"scene_name",    "__definitely_not_a_real_scene__"},
-        {"material_name", "anything"},
-        {"metallic",      0.5}
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("set_item_properties", json{
+        {"scene_name", "__definitely_not_a_real_scene__"},
+        {"item_name",  "anything"},
+        {"properties", {{"metallic", 0.5}}}
     });
     EXPECT_TRUE(r.is_error);
 }
 
-TEST_F(Mcp_test, edit_material_unknown_material_returns_error)
+TEST_F(Mcp_test, material_properties_unknown_material_returns_error)
 {
     Mcp_env& env = Mcp_env::get();
-    Mcp_client::Tool_result r = env.client().call_tool("edit_material", json{
-        {"scene_name",    env.scene_name()},
-        {"material_name", "__not_a_material_name_xyzzy__"},
-        {"metallic",      0.5}
+    Mcp_client::Tool_result r = env.client().call_tool("set_item_properties", json{
+        {"scene_name", env.scene_name()},
+        {"item_name",  "__not_a_material_name_xyzzy__"},
+        {"properties", {{"metallic", 0.5}}}
     });
     EXPECT_TRUE(r.is_error);
 }
 
-TEST_F(Mcp_test, edit_material_texture_samplers_must_be_object)
+TEST_F(Mcp_test, material_properties_must_be_object)
 {
-    Mcp_env& env = Mcp_env::get();
-    Mcp_client::Tool_result r = env.client().call_tool("edit_material", json{
-        {"scene_name",       env.scene_name()},
-        {"material_name",    env.material_name()},
-        {"texture_samplers", "not an object"}
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("set_item_properties", json{
+        {"item_id",    material_id()},
+        {"properties", "not an object"}
     });
     EXPECT_TRUE(r.is_error);
 }
 
-TEST_F(Mcp_test, edit_material_unknown_texture_name_returns_error)
+TEST_F(Mcp_test, material_properties_unknown_texture_name_returns_error)
 {
-    Mcp_env& env = Mcp_env::get();
-    Mcp_client::Tool_result r = env.client().call_tool("edit_material", json{
-        {"scene_name",    env.scene_name()},
-        {"material_name", env.material_name()},
-        {"texture_samplers", {
-            {"base_color", {{"texture", "__not_a_real_texture_name__"}}}
-        }}
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("set_item_properties", json{
+        {"item_id",    material_id()},
+        {"properties", {{"base_color_texture", {{"reference_name", "__not_a_real_texture_name__"}}}}}
     });
     EXPECT_TRUE(r.is_error);
 }
 
-TEST_F(Mcp_test, edit_material_unknown_texture_id_returns_error)
+TEST_F(Mcp_test, material_properties_unknown_texture_id_returns_error)
 {
-    Mcp_env& env = Mcp_env::get();
-    Mcp_client::Tool_result r = env.client().call_tool("edit_material", json{
-        {"scene_name",    env.scene_name()},
-        {"material_name", env.material_name()},
-        {"texture_samplers", {
-            {"base_color", {{"texture", 0xDEADBEEFu}}}
-        }}
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("set_item_properties", json{
+        {"item_id",    material_id()},
+        {"properties", {{"base_color_texture", {{"reference_id", 0xDEADBEEFu}}}}}
     });
     EXPECT_TRUE(r.is_error);
 }
 
-TEST_F(Mcp_test, edit_material_invalid_texture_reference_type_returns_error)
+TEST_F(Mcp_test, material_properties_invalid_texture_reference_type_returns_error)
 {
-    Mcp_env& env = Mcp_env::get();
-    Mcp_client::Tool_result r = env.client().call_tool("edit_material", json{
-        {"scene_name",    env.scene_name()},
-        {"material_name", env.material_name()},
-        {"texture_samplers", {
-            {"base_color", {{"texture", json::array({1, 2, 3})}}}
-        }}
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("set_item_properties", json{
+        {"item_id",    material_id()},
+        {"properties", {{"base_color_texture", json::array({1, 2, 3})}}}
     });
     EXPECT_TRUE(r.is_error);
 }
@@ -1104,12 +1092,11 @@ TEST_F(Mcp_test, batch_groups_operations_into_one_undo_entry)
 
     const double target1 = (orig_metallic < 0.5) ? 0.61 : 0.11;
     const double target2 = (orig_metallic < 0.5) ? 0.71 : 0.21;
+    const std::size_t id = material_id();
     Mcp_client::Tool_result batch = env.client().call_tool("batch", json{
         {"calls", json::array({
-            json{{"tool", "edit_material"}, {"arguments", {
-                {"scene_name", env.scene_name()}, {"material_name", env.material_name()}, {"metallic", target1}}}},
-            json{{"tool", "edit_material"}, {"arguments", {
-                {"scene_name", env.scene_name()}, {"material_name", env.material_name()}, {"metallic", target2}}}}
+            json{{"tool", "set_item_properties"}, {"arguments", {{"item_id", id}, {"properties", {{"metallic", target1}}}}}},
+            json{{"tool", "set_item_properties"}, {"arguments", {{"item_id", id}, {"properties", {{"metallic", target2}}}}}}
         })}
     });
     ASSERT_FALSE(batch.is_error) << batch.text;
@@ -1165,11 +1152,17 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
     };
 
     check_one_entry("create_light", json{{"scene_name", scene}, {"name", "undo test light"}, {"type", "point"}});
-    check_one_entry(
-        "edit_light",
-        json{{"scene_name", scene}, {"light_name", "undo test light"}, {"intensity", 7.5}, {"color", {1.0, 0.5, 0.25}}, {"position", {1.0, 2.0, 3.0}}}
-    );
-    check_one_entry("edit_material", json{{"scene_name", scene}, {"material_name", env.material_name()}, {"metallic", 0.25}});
+    std::size_t light_id = 0;
+    for (const json& light : client.call_tool("get_scene_lights", json{{"scene_name", scene}}).payload.value("lights", json::array())) {
+        if (light.value("name", "") == "undo test light") {
+            light_id = light.value("id", std::size_t{0});
+        }
+    }
+    ASSERT_NE(light_id, std::size_t{0});
+    check_one_entry("set_item_properties", json{{"item_id", light_id}, {"properties", {{"intensity", 7.5}, {"color", {1.0, 0.5, 0.25}}}}});
+    const std::size_t material_id = client.call_tool("get_material_details", json{{"scene_name", scene}, {"material_name", env.material_name()}}).payload.value("id", std::size_t{0});
+    ASSERT_NE(material_id, std::size_t{0});
+    check_one_entry("set_item_properties", json{{"item_id", material_id}, {"properties", {{"metallic", 0.25}}}});
     check_one_entry("lightmap_subdivide_tile", json{{"level", 0}, {"ix", 0}, {"iz", 0}});
     check_one_entry("lightmap_merge_tile",     json{{"level", 1}, {"ix", 0}, {"iz", 0}});
 
@@ -1177,7 +1170,7 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
     ASSERT_FALSE(cameras.is_error) << cameras.text;
     ASSERT_FALSE(cameras.payload.at("cameras").empty());
     const std::size_t camera_id = cameras.payload.at("cameras")[0].at("id").get<std::size_t>();
-    check_one_entry("edit_camera", json{{"scene_name", scene}, {"camera_id", camera_id}, {"exposure", 2.0}, {"fov_y", 0.9}});
+    check_one_entry("set_item_properties", json{{"item_id", camera_id}, {"properties", {{"exposure", 2.0}, {"fov_y", 0.9}}}});
     check_one_entry("set_item_property", json{{"item_id", camera_id}, {"property", "exposure"}, {"value", 3.0}});
     check_one_entry("set_item_properties", json{{"item_id", camera_id}, {"properties", {{"exposure", 3.5}, {"fov_y", 0.8}}}});
 
@@ -1194,8 +1187,10 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
         }
     }
 
-    // The physics edit tools and set_scene_settings (plan
-    // doc/plans/property_undo_and_reflective_mcp.md step A3).
+    // The physics edits and set_scene_settings (plan
+    // doc/plans/property_undo_and_reflective_mcp.md steps A3 and C3): the
+    // property fields through set_item_properties, the shape through
+    // set_collision_shape.
     ASSERT_FALSE(client.call_tool("create_shape", json{{"scene_name", scene}, {"shape", "box"}, {"name", "undo body a"}, {"motion_mode", "dynamic"}, {"position", {0.0, 20.0, 0.0}}}).is_error);
     ASSERT_FALSE(client.call_tool("create_shape", json{{"scene_name", scene}, {"shape", "box"}, {"name", "undo body b"}, {"motion_mode", "dynamic"}, {"position", {3.0, 20.0, 0.0}}}).is_error);
     ASSERT_FALSE(client.call_tool("create_physics_material",       json{{"scene_name", scene}, {"name", "undo material"}}).is_error);
@@ -1204,22 +1199,49 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
     ASSERT_TRUE(wait_until_idle(client, 30000));
     ASSERT_FALSE(client.call_tool("create_joint", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"connected_node_name", "undo body b"}}).is_error);
     ASSERT_TRUE(wait_until_idle(client, 30000));
+    const json body_a = json{{"scene_name", scene}, {"item_name", "undo body a"}};
+    auto with_properties = [](json target, const json& properties) -> json {
+        target["properties"] = properties;
+        return target;
+    };
 
-    check_one_entry("edit_physics_body", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"gravity_factor", 0.5}, {"material_name", "undo material"}, {"filter_name", "undo filter"}});
-    check_one_entry("edit_physics_body", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"shape", "sphere"}, {"radius", 0.4}});
-    // Shape and property fields together: still one entry.
-    check_one_entry("edit_physics_body", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"shape", "box"}, {"half_extents", {0.3, 0.3, 0.3}}, {"mass", 3.0}});
-    check_one_entry("edit_joint", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"enable_collision", true}, {"settings_name", "undo settings"}});
-    check_one_entry("edit_physics_material", json{{"scene_name", scene}, {"name", "undo material"}, {"restitution", 0.75}, {"linear_damping", 0.3}});
-    check_one_entry("edit_collision_filter", json{{"scene_name", scene}, {"name", "undo filter"}, {"collision_systems", {"undo system"}}});
     check_one_entry(
-        "edit_physics_joint_settings",
-        json{{"scene_name", scene}, {"name", "undo settings"}, {"limits", json::array({json{{"linear_axes", {true, false, false}}, {"min", -0.1}, {"max", 0.1}}})}}
+        "set_item_properties",
+        with_properties(body_a, json{
+            {"Node_physics.gravity_factor",   0.5},
+            {"Node_physics.physics_material", {{"reference_name", "undo material"}}},
+            {"Node_physics.collision_filter", {{"reference_name", "undo filter"}}}
+        })
     );
-    // ambient_light and settings together: one entry.
+    check_one_entry("set_collision_shape", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"shape", "sphere"}, {"radius", 0.4}});
+    // Shape and property fields in one batch: still one entry.
     check_one_entry(
-        "set_scene_settings",
-        json{{"scene_name", scene}, {"ambient_light", {0.2, 0.3, 0.4}}, {"settings", json{{"clear_color", {0.1, 0.2, 0.3, 1.0}}}}, {"merge", true}}
+        "batch",
+        json{{"calls", json::array({
+            batch_call("set_collision_shape", json{{"scene_name", scene}, {"node_name", "undo body a"}, {"shape", "box"}, {"half_extents", {0.3, 0.3, 0.3}}}),
+            batch_call("set_item_properties", with_properties(body_a, json{{"Node_physics.mass", 3.0}}))
+        })}}
+    );
+    const json joints = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "undo body a"}}).payload.value("joints", json::array());
+    ASSERT_FALSE(joints.empty());
+    const std::size_t joint_id = joints[0].value("id", std::size_t{0});
+    check_one_entry(
+        "set_item_properties",
+        json{{"item_id", joint_id}, {"properties", {{"enable_collision", true}, {"joint_settings", {{"reference_name", "undo settings"}}}}}}
+    );
+    check_one_entry("set_item_properties", json{{"scene_name", scene}, {"item_name", "undo material"}, {"properties", {{"restitution", 0.75}, {"linear_damping", 0.3}}}});
+    check_one_entry("set_item_properties", json{{"scene_name", scene}, {"item_name", "undo filter"}, {"properties", {{"collision_systems", {"undo system"}}}}});
+    check_one_entry(
+        "set_item_properties",
+        json{{"scene_name", scene}, {"item_name", "undo settings"}, {"properties", {{"trans_x_limit", "Limited"}, {"trans_x_limit_min", -0.1}, {"trans_x_limit_max", 0.1}}}}
+    );
+    // The scene item's ambient_light and the settings in one batch: one entry.
+    check_one_entry(
+        "batch",
+        json{{"calls", json::array({
+            batch_call("set_item_properties", json{{"scene_name", scene}, {"item_name", scene}, {"properties", {{"ambient_light", {0.2, 0.3, 0.4}}}}}),
+            batch_call("set_scene_settings",  json{{"scene_name", scene}, {"settings", json{{"clear_color", {0.1, 0.2, 0.3, 1.0}}}}, {"merge", true}})
+        })}}
     );
     check_one_entry("set_scene_settings", json{{"scene_name", scene}, {"settings", json{{"post_processing", false}}}});
 }
@@ -1282,21 +1304,30 @@ TEST_F(Mcp_test, physics_and_scene_settings_edits_undo_to_the_prior_state)
     ASSERT_TRUE(wait_until_idle(client, 30000));
     call("create_joint", json{{"scene_name", scene}, {"node_name", "body a"}, {"connected_node_name", "body b"}});
     ASSERT_TRUE(wait_until_idle(client, 30000));
-    call("edit_physics_body", json{{"scene_name", scene}, {"node_name", "body a"}, {"material_name", "material m"}, {"center_of_mass", {0.0, 0.25, 0.0}}});
+    auto set_properties = [&call, &scene](const std::string& item_name, const json& properties) -> Mcp_client::Tool_result {
+        return call("set_item_properties", json{{"scene_name", scene}, {"item_name", item_name}, {"properties", properties}});
+    };
+    set_properties("body a", json{{"Node_physics.physics_material", {{"reference_name", "material m"}}}, {"Node_physics.center_of_mass_offset", {0.0, 0.25, 0.0}}});
     ASSERT_TRUE(wait_until_idle(client, 30000));
     ASSERT_TRUE(physics_of("body a").contains("linear_damping")) << "body a has no live body";
     EXPECT_NEAR(physics_of("body a").at("linear_damping").get<double>(), 0.1, 1e-5);
     EXPECT_NEAR(physics_of("body a").at("center_of_mass")[1].get<double>(), 0.25, 1e-5);
 
     // Physics material: the live body follows the edit and its undo.
-    call("edit_physics_material", json{{"scene_name", scene}, {"name", "material m"}, {"linear_damping", 0.9}});
+    set_properties("material m", json{{"linear_damping", 0.9}});
     EXPECT_NEAR(physics_of("body a").at("linear_damping").get<double>(), 0.9, 1e-5);
     undo();
     EXPECT_NEAR(physics_of("body a").at("linear_damping").get<double>(), 0.1, 1e-5);
 
-    // Body properties and shape: undo restores the values and the authored
-    // shape, re-wrapped once with the center-of-mass offset.
-    call("edit_physics_body", json{{"scene_name", scene}, {"node_name", "body a"}, {"gravity_factor", 0.25}, {"is_trigger", true}, {"shape", "sphere"}, {"radius", 0.5}});
+    // Body properties and shape in one batch: one undo restores the values
+    // and the authored shape, re-wrapped once with the center-of-mass offset.
+    call(
+        "batch",
+        json{{"calls", json::array({
+            batch_call("set_item_properties", json{{"scene_name", scene}, {"item_name", "body a"}, {"properties", {{"Node_physics.gravity_factor", 0.25}, {"Node_physics.is_trigger", true}}}}),
+            batch_call("set_collision_shape", json{{"scene_name", scene}, {"node_name", "body a"}, {"shape", "sphere"}, {"radius", 0.5}})
+        })}}
+    );
     EXPECT_NEAR(physics_of("body a").at("gravity_factor").get<double>(), 0.25, 1e-6);
     EXPECT_TRUE(physics_of("body a").at("is_trigger").get<bool>());
     EXPECT_NEAR(physics_of("body a").at("center_of_mass")[1].get<double>(), 0.25, 1e-5);
@@ -1309,7 +1340,9 @@ TEST_F(Mcp_test, physics_and_scene_settings_edits_undo_to_the_prior_state)
     // Joint: the constraint is rebuilt from the property change on the edit
     // and on its undo (the live constraint's limits are the settings').
     EXPECT_FALSE(joint_x_limit().value("limited", true));
-    call("edit_joint", json{{"scene_name", scene}, {"node_name", "body a"}, {"settings_name", "settings s"}, {"enable_collision", true}});
+    const std::size_t joint_id = joint_of().value("id", std::size_t{0});
+    ASSERT_NE(joint_id, std::size_t{0});
+    call("set_item_properties", json{{"item_id", joint_id}, {"properties", {{"joint_settings", {{"reference_name", "settings s"}}}, {"enable_collision", true}}}});
     EXPECT_EQ(joint_of().value("joint_settings", ""), "settings s");
     EXPECT_TRUE(joint_of().value("enable_collision", false));
     EXPECT_TRUE(joint_x_limit().value("limited", false));
@@ -1323,10 +1356,21 @@ TEST_F(Mcp_test, physics_and_scene_settings_edits_undo_to_the_prior_state)
     ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
     ASSERT_TRUE(wait_until_idle(client, 30000));
     EXPECT_NEAR(joint_x_limit().value("max", 0.0), 0.1, 1e-6);
-    call("edit_physics_joint_settings", json{{"scene_name", scene}, {"name", "settings s"}, {"limits", json::array({json{{"linear_axes", {true, false, false}}, {"min", -0.2}, {"max", 0.2}}})}});
+    set_properties("settings s", json{{"trans_x_limit_min", -0.2}, {"trans_x_limit_max", 0.2}});
     EXPECT_NEAR(joint_x_limit().value("max", 0.0), 0.2, 1e-6);
     undo();
     EXPECT_NEAR(joint_x_limit().value("max", 0.0), 0.1, 1e-6);
+
+    // rebuild_joint re-captures the joint frames: runtime state, so no undo
+    // entry; the constraint is live again with the settings' limits.
+    const std::size_t depth_before_rebuild = call("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    const Mcp_client::Tool_result rebuilt = call("rebuild_joint", json{{"scene_name", scene}, {"node_name", "body a"}});
+    EXPECT_TRUE(rebuilt.payload.value("rebuilt", false)) << rebuilt.text;
+    EXPECT_EQ(rebuilt.payload.value("joint_id", std::size_t{0}), joint_id) << rebuilt.text;
+    EXPECT_EQ(rebuilt.payload.value("settings", ""), "settings s") << rebuilt.text;
+    EXPECT_EQ(call("get_undo_redo_stack", json::object()).payload.at("undo").size(), depth_before_rebuild) << "a rebuild records nothing";
+    EXPECT_NEAR(joint_x_limit().value("max", 0.0), 0.1, 1e-6);
+    EXPECT_TRUE(client.call_tool("rebuild_joint", json{{"scene_name", scene}, {"node_name", "body b"}}).is_error) << "body b has no joint";
 
     // Collision filter: undo restores the lists.
     auto filter_systems = [&client, &scene]() -> json {
@@ -1340,15 +1384,22 @@ TEST_F(Mcp_test, physics_and_scene_settings_edits_undo_to_the_prior_state)
         ADD_FAILURE() << "filter f not found: " << items.text;
         return json{};
     };
-    call("edit_collision_filter", json{{"scene_name", scene}, {"name", "filter f"}, {"collision_systems", {"system x"}}});
+    set_properties("filter f", json{{"collision_systems", {"system x"}}});
     EXPECT_EQ(filter_systems(), json::array({"system x"}));
     undo();
     EXPECT_EQ(filter_systems(), json::array());
 
-    // Scene settings: ambient light and the settings struct undo together;
-    // replace semantics keep the scene id; variant_selections are refused.
+    // Scene settings: the scene item's ambient light and the settings
+    // struct in one batch undo together; replace semantics keep the scene
+    // id; variant_selections are refused.
     const json before = call("get_scene_settings", json{{"scene_name", scene}}).payload;
-    call("set_scene_settings", json{{"scene_name", scene}, {"ambient_light", {0.2, 0.3, 0.4}}, {"settings", json{{"clear_color", {0.1, 0.2, 0.3, 1.0}}}}});
+    call(
+        "batch",
+        json{{"calls", json::array({
+            batch_call("set_item_properties", json{{"scene_name", scene}, {"item_name", scene}, {"properties", {{"ambient_light", {0.2, 0.3, 0.4}}}}}),
+            batch_call("set_scene_settings",  json{{"scene_name", scene}, {"settings", json{{"clear_color", {0.1, 0.2, 0.3, 1.0}}}}})
+        })}}
+    );
     const json during = call("get_scene_settings", json{{"scene_name", scene}}).payload;
     EXPECT_NEAR(during.at("ambient_light")[1].get<double>(), 0.3, 1e-6);
     ASSERT_TRUE(during.at("settings").is_object()) << during.dump();
@@ -1385,7 +1436,7 @@ TEST_F(Mcp_test, physics_and_scene_settings_edits_undo_to_the_prior_state)
 // A property edit refused at write time (here: a sealed physics material)
 // comes back as an error naming the property, leaves no undo entry and
 // keeps the redo history: the real Operation_stack and apply_item_property
-// path behind the MCP edit tools.
+// path behind set_item_properties.
 TEST_F(Mcp_test, refused_physics_edit_is_an_error_and_keeps_the_history)
 {
     Mcp_env&           env    = Mcp_env::get();
@@ -1410,15 +1461,15 @@ TEST_F(Mcp_test, refused_physics_edit_is_an_error_and_keeps_the_history)
     ASSERT_TRUE(wait_until_idle(client, 30000));
 
     // A redo entry to keep.
-    ASSERT_FALSE(client.call_tool("edit_physics_material", json{{"scene_name", scene}, {"name", "open material"}, {"restitution", 0.5}}).is_error);
+    ASSERT_FALSE(client.call_tool("set_item_properties", json{{"scene_name", scene}, {"item_name", "open material"}, {"properties", {{"restitution", 0.5}}}}).is_error);
     ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
     ASSERT_TRUE(wait_until_idle(client, 30000));
     const json stacks0 = stacks();
     ASSERT_FALSE(stacks0.at("redo").empty());
 
-    const Mcp_client::Tool_result refused = client.call_tool("edit_physics_material", json{{"scene_name", scene}, {"name", "sealed material"}, {"restitution", 0.25}, {"density", 3.0}});
+    const Mcp_client::Tool_result refused = client.call_tool("set_item_properties", json{{"item_id", sealed_id}, {"properties", {{"restitution", 0.25}, {"density", 3.0}}}});
     EXPECT_TRUE(refused.is_error) << refused.text;
-    EXPECT_NE(refused.text.find("restitution"), std::string::npos) << refused.text;
+    EXPECT_TRUE((refused.text.find("restitution") != std::string::npos) || (refused.text.find("density") != std::string::npos)) << "the error names a refused property: " << refused.text;
     ASSERT_TRUE(wait_until_idle(client, 30000));
     const json stacks1 = stacks();
     EXPECT_EQ(stacks1.at("undo").size(), stacks0.at("undo").size()) << "a refused edit leaves no undo entry";
@@ -1531,23 +1582,21 @@ TEST_F(Mcp_test, create_material_invalid_field_rejected_without_creating)
     EXPECT_TRUE(details.is_error) << "Material should not exist after a rejected create";
 }
 
-// ---- edit_material: texture_samplers (transforms always testable) ---------
+// ---- material properties: texture slot transforms (always testable) -------
 
-TEST_F(Mcp_test, edit_material_texture_transform_round_trip)
+TEST_F(Mcp_test, material_properties_texture_transform_round_trip)
 {
     json before = material_details();
     const json bs = before["texture_samplers"]["base_color"];
     const double orig_rotation = bs["rotation"].get<double>();
 
     edit_and_wait(
-        json{{"texture_samplers", {
-            {"base_color", {
-                {"texgen_mode", 1},
-                {"rotation",  0.1234},
-                {"offset",    json::array({0.5, 0.25})},
-                {"scale",     json::array({2.0, 3.0})}
-            }}
-        }}},
+        json{
+            {"base_color_texture_texgen_mode", 1},
+            {"base_color_texture_uv_rotation", 0.1234},
+            {"base_color_texture_uv_offset",   json::array({0.5, 0.25})},
+            {"base_color_texture_uv_scale",    json::array({2.0, 3.0})}
+        },
         [](const json& d) {
             const json& s = d["texture_samplers"]["base_color"];
             return s["texgen_mode"].get<int>() == 1
@@ -1560,14 +1609,12 @@ TEST_F(Mcp_test, edit_material_texture_transform_round_trip)
     );
 
     edit_and_wait(
-        json{{"texture_samplers", {
-            {"base_color", {
-                {"texgen_mode", bs["texgen_mode"].get<int>()},
-                {"rotation",  orig_rotation},
-                {"offset",    bs["offset"]},
-                {"scale",     bs["scale"]}
-            }}
-        }}},
+        json{
+            {"base_color_texture_texgen_mode", bs["texgen_mode"].get<int>()},
+            {"base_color_texture_uv_rotation", orig_rotation},
+            {"base_color_texture_uv_offset",   bs["offset"]},
+            {"base_color_texture_uv_scale",    bs["scale"]}
+        },
         [&](const json& d) {
             const json& s = d["texture_samplers"]["base_color"];
             return approx_equal(s["rotation"].get<double>(), orig_rotation);
@@ -1575,9 +1622,32 @@ TEST_F(Mcp_test, edit_material_texture_transform_round_trip)
     );
 }
 
-// ---- edit_material: texture assignment (the prepared scene has textures) ---
+// ---- material properties: texture slot references (the prepared scene has textures)
 
-TEST_F(Mcp_test, edit_material_texture_assign_by_name)
+namespace {
+
+// The base color slot's previous texture as a set_item_properties value: a
+// reference to the texture it held, or null (the slot's local value cleared).
+[[nodiscard]] auto restore_texture_value(const json& before_slot) -> json
+{
+    if (before_slot["texture_id"].is_null()) {
+        return json(nullptr);
+    }
+    return json{{"reference_id", before_slot["texture_id"]}};
+}
+
+[[nodiscard]] auto slot_restored(const json& d, const json& before_slot) -> bool
+{
+    const json& s = d["texture_samplers"]["base_color"];
+    if (before_slot["texture_id"].is_null()) {
+        return s["texture_id"].is_null();
+    }
+    return !s["texture_id"].is_null() && (s["texture_id"] == before_slot["texture_id"]);
+}
+
+} // anonymous namespace
+
+TEST_F(Mcp_test, material_properties_texture_assign_by_name)
 {
     Mcp_env& env = Mcp_env::get();
     const std::string tex_name = env.first_texture_name().value();
@@ -1586,36 +1656,20 @@ TEST_F(Mcp_test, edit_material_texture_assign_by_name)
     const json before_slot = before["texture_samplers"]["base_color"];
 
     edit_and_wait(
-        json{{"texture_samplers", {
-            {"base_color", {{"texture", tex_name}}}
-        }}},
+        json{{"base_color_texture", {{"reference_name", tex_name}}}},
         [&](const json& d) {
             const json& s = d["texture_samplers"]["base_color"];
             return s["texture_name"].is_string() && s["texture_name"].get<std::string>() == tex_name;
         }
     );
 
-    // Restore previous texture (which may be null = clear)
-    // The slot's previous texture id, or null to clear. (Brace-initializing
-    // a json from one value would make a one-element ARRAY, which
-    // edit_material rejects.)
-    const json restore_tex = before_slot["texture_id"];
     edit_and_wait(
-        json{{"texture_samplers", {
-            {"base_color", {{"texture", restore_tex}}}
-        }}},
-        [&](const json& d) {
-            const json& s = d["texture_samplers"]["base_color"];
-            if (before_slot["texture_id"].is_null()) {
-                return s["texture_id"].is_null();
-            }
-            return !s["texture_id"].is_null()
-                && s["texture_id"] == before_slot["texture_id"];
-        }
+        json{{"base_color_texture", restore_texture_value(before_slot)}},
+        [&](const json& d) { return slot_restored(d, before_slot); }
     );
 }
 
-TEST_F(Mcp_test, edit_material_texture_assign_by_id)
+TEST_F(Mcp_test, material_properties_texture_assign_by_id)
 {
     Mcp_env& env = Mcp_env::get();
     const std::size_t tex_id = env.first_texture_id().value();
@@ -1624,51 +1678,36 @@ TEST_F(Mcp_test, edit_material_texture_assign_by_id)
     const json before_slot = before["texture_samplers"]["base_color"];
 
     edit_and_wait(
-        json{{"texture_samplers", {
-            {"base_color", {{"texture", tex_id}}}
-        }}},
+        json{{"base_color_texture", {{"reference_id", tex_id}}}},
         [tex_id](const json& d) {
             const json& s = d["texture_samplers"]["base_color"];
             return s["texture_id"].is_number() && s["texture_id"].get<std::size_t>() == tex_id;
         }
     );
 
-    // The slot's previous texture id, or null to clear. (Brace-initializing
-    // a json from one value would make a one-element ARRAY, which
-    // edit_material rejects.)
-    const json restore_tex = before_slot["texture_id"];
     edit_and_wait(
-        json{{"texture_samplers", {
-            {"base_color", {{"texture", restore_tex}}}
-        }}},
-        [&](const json& d) {
-            const json& s = d["texture_samplers"]["base_color"];
-            if (before_slot["texture_id"].is_null()) {
-                return s["texture_id"].is_null();
-            }
-            return !s["texture_id"].is_null()
-                && s["texture_id"] == before_slot["texture_id"];
-        }
+        json{{"base_color_texture", restore_texture_value(before_slot)}},
+        [&](const json& d) { return slot_restored(d, before_slot); }
     );
 }
 
-TEST_F(Mcp_test, edit_material_texture_clear)
+TEST_F(Mcp_test, material_properties_texture_clear)
 {
     Mcp_env& env = Mcp_env::get();
     const std::size_t tex_id = env.first_texture_id().value();
 
     // First make sure something is assigned.
     edit_and_wait(
-        json{{"texture_samplers", {{"base_color", {{"texture", tex_id}}}}}},
+        json{{"base_color_texture", {{"reference_id", tex_id}}}},
         [tex_id](const json& d) {
             const json& s = d["texture_samplers"]["base_color"];
             return s["texture_id"].is_number() && s["texture_id"].get<std::size_t>() == tex_id;
         }
     );
 
-    // Now clear it.
+    // Now clear it (the empty name form is a null reference).
     edit_and_wait(
-        json{{"texture_samplers", {{"base_color", {{"texture", nullptr}}}}}},
+        json{{"base_color_texture", ""}},
         [](const json& d) {
             return d["texture_samplers"]["base_color"]["texture_id"].is_null();
         }
@@ -1700,16 +1739,13 @@ public:
         if (m_baseline.is_null()) {
             return;
         }
-        Mcp_env& env = Mcp_env::get();
-        json restore = json::object();
-        restore["scene_name"]    = env.scene_name();
-        restore["material_name"] = env.material_name();
+        json properties = json::object();
         for (const char* key : {"base_color", "opacity", "roughness", "metallic", "reflectance", "emissive", "ior", "transmission", "normal_texture_scale", "occlusion_texture_strength"}) {
             if (m_baseline.contains(key)) {
-                restore[key] = m_baseline[key];
+                properties[key] = m_baseline[key];
             }
         }
-        env.client().call_tool("edit_material", restore);
+        Mcp_env::get().client().call_tool("set_item_properties", json{{"item_id", m_baseline.value("id", std::size_t{0})}, {"properties", properties}});
     }
 
     Material_scalar_state_guard(const Material_scalar_state_guard&)            = delete;
@@ -1721,13 +1757,12 @@ private:
 
 // (b) NaN float must be rejected before the (after == before) short-circuit
 // and must not record a material edit on the undo stack.
-TEST_F(Mcp_test, edit_material_rejects_nan_opacity)
+TEST_F(Mcp_test, material_properties_rejects_nan_opacity)
 {
     Material_scalar_state_guard guard;
-    Mcp_env& env = Mcp_env::get();
     // nlohmann::json refuses to construct a number value from NaN
     // (parse() will fail), so build the body by hand to inject it.
-    const std::string body = R"({"jsonrpc":"2.0","id":"test","method":"tools/call","params":{"name":"edit_material","arguments":{"scene_name":")" + env.scene_name() + R"(","material_name":")" + env.material_name() + R"(","opacity":NaN}}})";
+    const std::string body = R"({"jsonrpc":"2.0","id":"test","method":"tools/call","params":{"name":"set_item_properties","arguments":{"item_id":)" + std::to_string(material_id()) + R"(,"properties":{"opacity":NaN}}}})";
 
     httplib::Client c{env_or("ERHE_MCP_TEST_HOST", "127.0.0.1"), env_or_int("ERHE_MCP_TEST_PORT", 3743)};
     c.set_read_timeout(10, 0);
@@ -1881,7 +1916,7 @@ TEST_F(Mcp_test, queue_overflow_returns_busy_error)
 
 // Ambiguous material names are not constructible: create_material refuses a
 // name already in the library (tested above) and sibling names are unique,
-// so edit_material's ambiguous-name refusal has no reachable test state.
+// so a by-name material lookup has no ambiguous state to test.
 
 // Bearer-token auth needs an editor started WITH a token, which cannot be
 // turned on in a running one: Mcp_auth_test uses a dedicated editor on
@@ -6494,15 +6529,27 @@ public:
         )
     });
 
+    // The light shares its name with its node: address it by id.
+    std::size_t floor_light_id = 0;
+    for (const json& light : client.call_tool("get_scene_lights", json{{"scene_name", floor_scene}}).payload.value("lights", json::array())) {
+        if (light.value("name", "") == c_shadow_light_name) {
+            floor_light_id = light.value("id", std::size_t{0});
+        }
+    }
+    EXPECT_NE(floor_light_id, std::size_t{0}) << "no light named " << c_shadow_light_name;
+    if (floor_light_id == 0) {
+        return measurements;
+    }
     Mcp_client::Tool_result directional = client.call_tool(
-        "edit_light",
+        "set_item_properties",
         json{
-            {"scene_name",  floor_scene},
-            {"light_name",  c_shadow_light_name},
-            {"type",        "directional"},
-            {"range",       0.0f},
-            {"intensity",   3.0f},
-            {"cast_shadow", true}
+            {"item_id", floor_light_id},
+            {"properties", {
+                {"light_type",  "Directional"},
+                {"range",       0.0f},
+                {"intensity",   3.0f},
+                {"cast_shadow", true}
+            }}
         }
     );
     EXPECT_FALSE(directional.is_error) << directional.text;
@@ -6592,13 +6639,13 @@ TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne_with_constant_depth_bias)
     }
 }
 
-// doc/plans/property_undo_and_reflective_mcp.md A4: edit_material is one
-// Property_edit_operation. A multi-property edit that overwrites an
-// expression (ior) and edits texture slot fields leaves an untouched
-// expression (transmission) alone; one undo returns the material's full
+// doc/plans/property_undo_and_reflective_mcp.md A4 / C3: a material edit
+// through set_item_properties is one Property_edit_operation. A
+// multi-property edit that overwrites an expression (ior) and edits texture
+// slot fields leaves an untouched expression (transmission) alone; one undo returns the material's full
 // property dump exactly to its prior state, the expression included, and
 // redo to the edited one.
-TEST_F(Mcp_test, edit_material_undo_redo_round_trips_the_property_dump_and_keeps_expressions)
+TEST_F(Mcp_test, material_properties_undo_redo_round_trips_the_property_dump_and_keeps_expressions)
 {
     Mcp_env&    env    = Mcp_env::get();
     Mcp_client& client = env.client();
@@ -6624,12 +6671,15 @@ TEST_F(Mcp_test, edit_material_undo_redo_round_trips_the_property_dump_and_keeps
 
     const json        dump_before = dump();
     const std::size_t depth       = undo_depth();
-    Mcp_client::Tool_result edited = client.call_tool("edit_material", json{
-        {"scene_name",       env.scene_name()},
-        {"material_name",    env.material_name()},
-        {"ior",              1.9},
-        {"metallic",         0.7},
-        {"texture_samplers", {{"base_color", {{"rotation", 0.5}, {"wrap", "clamp_to_edge"}}}}}
+    Mcp_client::Tool_result edited = client.call_tool("set_item_properties", json{
+        {"item_id",    material_id},
+        {"properties", {
+            {"ior",                            1.9},
+            {"metallic",                       0.7},
+            {"base_color_texture_uv_rotation", 0.5},
+            {"base_color_texture_wrap_u",      "Clamp to Edge"},
+            {"base_color_texture_wrap_v",      "Clamp to Edge"}
+        }}
     });
     ASSERT_FALSE(edited.is_error) << edited.text;
     EXPECT_TRUE(edited.payload.value("changed", false));
@@ -7123,6 +7173,43 @@ TEST_F(Mcp_test, get_property_schema_is_valid_for_every_owner_type)
 // For one item (or sub-object) of every owner type the test scene holds,
 // every writable property with a schema default is written to that default
 // in one set_item_properties call, which must succeed; undo restores.
+// The property tools resolve an item id in the asset manager's loaded
+// containers too (find_item_by_id): a material of a glTF file loaded as an
+// asset container - in no scene's library - is read and written by id,
+// and the write is one undo entry that undo takes back.
+TEST_F(Mcp_test, set_item_properties_reaches_a_loaded_container_material)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const Mcp_client::Tool_result acquired = client.call_tool(
+        "acquire_asset",
+        json{{"hold_name", "c3 container material"}, {"scope", "file"}, {"type", "material"}, {"path", c_textured_gltf}, {"name", "Material.Red"}}
+    );
+    ASSERT_FALSE(acquired.is_error) << acquired.text;
+    const int material_id = acquired.payload.value("item_id", 0);
+    ASSERT_NE(material_id, 0) << acquired.text;
+    for (const json& material : client.call_tool("get_scene_materials", json{{"scene_name", env.scene_name()}}).payload.value("materials", json::array())) {
+        EXPECT_NE(material.value("id", 0), material_id) << "the container material is not one of the scene's";
+    }
+
+    const double before = std::stod(item_property(client, material_id, "metallic").value("value", std::string{"-1"}));
+    const double target = (before < 0.5) ? 0.75 : 0.25;
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    const std::size_t depth = undo_depth();
+    const Mcp_client::Tool_result written = client.call_tool("set_item_properties", json{{"item_id", material_id}, {"properties", {{"metallic", target}}}});
+    ASSERT_FALSE(written.is_error) << written.text;
+    EXPECT_EQ(undo_depth(), depth + 1);
+    EXPECT_NEAR(std::stod(item_property(client, material_id, "metallic").value("value", std::string{"-1"})), target, 1e-6);
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    EXPECT_NEAR(std::stod(item_property(client, material_id, "metallic").value("value", std::string{"-1"})), before, 1e-6);
+
+    EXPECT_FALSE(client.call_tool("release_asset", json{{"hold_name", "c3 container material"}}).is_error);
+}
+
 TEST_F(Mcp_test, set_item_properties_takes_every_schema_default)
 {
     Mcp_client&       client = Mcp_env::get().client();

@@ -50,6 +50,32 @@ def launch_editor(editor_exe):
     print(f"launched {editor_exe} (no default scene)")
 
 
+# The sampler address mode enumeration labels the *_texture_wrap_u / _v
+# material properties take.
+WRAP_LABELS = {
+    "repeat":          "Repeat",
+    "clamp_to_edge":   "Clamp to Edge",
+    "mirrored_repeat": "Mirrored Repeat",
+}
+
+
+def camera_clip_range_properties(call, camera_id, z_near=None, z_far=None):
+    """The set_item_properties entries for a camera's clip range: z_near /
+    z_far name the property pair of the camera's projection type
+    (orthographic_z_near / _far for an orthographic projection,
+    perspective_z_near / _far otherwise), read from its projection_type
+    property. `call(tool, args)` is the caller's MCP call function."""
+    properties = call("get_item_properties", {"item_id": int(camera_id)}).get("properties", [])
+    projection = next((p.get("value") for p in properties if p.get("name") == "projection_type"), "")
+    prefix = "orthographic" if str(projection).startswith("Orthographic") else "perspective"
+    result = {}
+    if z_near is not None:
+        result[f"{prefix}_z_near"] = float(z_near)
+    if z_far is not None:
+        result[f"{prefix}_z_far"] = float(z_far)
+    return result
+
+
 class Creation:
     """Wraps an McpClient with busy-retry, scene bootstrap and camera/screenshot
     helpers used by every creation script."""
@@ -497,6 +523,45 @@ class Creation:
     def materials(self):
         return self.call("get_scene_materials", {"scene_name": self.scene}).get("materials", [])
 
+    # ------------------------------------------------- reflective properties
+
+    def set_properties(self, item_id, properties):
+        """Write registered properties of one item as ONE undoable edit
+        (set_item_properties; get_item_properties / get_property_schema list
+        the names and value forms). Lights, cameras and materials are
+        addressed by id: a light or camera shares its name with its node."""
+        return self.mutate("set_item_properties", {
+            "item_id": int(item_id), "properties": properties})
+
+    def material_id(self, name):
+        for material in self.materials():
+            if material.get("name") == name:
+                return material["id"]
+        raise RuntimeError(f"material not found: {name}")
+
+    def light_id(self, name):
+        for light in self.call("get_scene_lights", {"scene_name": self.scene}).get("lights", []):
+            if light.get("name") == name:
+                return light["id"]
+        raise RuntimeError(f"light not found: {name}")
+
+    def clip_range(self, camera_id, z_near=None, z_far=None):
+        """The camera's clip range entries for set_properties (the pair of
+        its projection type, camera_clip_range_properties)."""
+        return camera_clip_range_properties(self.call, camera_id, z_near=z_near, z_far=z_far)
+
+    def camera_id(self):
+        """Id of the scene's first camera, or None."""
+        cameras = self.call("get_scene_cameras", {"scene_name": self.scene}).get("cameras", [])
+        return cameras[0]["id"] if cameras else None
+
+    def physics_material_id(self, name):
+        items = self.call("get_physics_items", {"scene_name": self.scene})
+        for material in items.get("physics_materials", []):
+            if material.get("name") == name:
+                return material["id"]
+        raise RuntimeError(f"physics material not found: {name}")
+
     TEXTURE_SLOTS = ("base_color", "metallic_roughness", "normal", "occlusion", "emissive")
 
     def make_material(self, base_name=None, clear_textures=False, **edits):
@@ -553,9 +618,10 @@ class Creation:
             "slot": slot, "graph_texture": graph_texture,
         })
         if wrap is not None:
-            self.mutate("edit_material", {
-                "scene_name": self.scene, "material_name": material_name,
-                "texture_samplers": {slot: {"wrap": wrap}},
+            wrap_u, wrap_v = (wrap, wrap) if isinstance(wrap, str) else (wrap[0], wrap[1])
+            self.set_properties(self.material_id(material_name), {
+                f"{slot}_texture_wrap_u": WRAP_LABELS[wrap_u],
+                f"{slot}_texture_wrap_v": WRAP_LABELS[wrap_v],
             })
 
     # ------------------------------------------------------- geometry graph
@@ -874,14 +940,18 @@ class Creation:
 
     def _send_scene_settings(self, new_entries, ambient=None):
         """Send per-scene setting overrides. merge=True (server-side deep
-        merge, 2026-08-08) keeps earlier overrides - no client accumulator."""
-        args = {"scene_name": self.scene}
+        merge, 2026-08-08) keeps earlier overrides - no client accumulator.
+        The ambient color is the scene item's ambient_light property (the
+        scene item is addressed by the scene's name)."""
         if ambient is not None:
-            args["ambient_light"] = [float(v) for v in ambient]
+            self.mutate("set_item_properties", {
+                "scene_name": self.scene, "item_name": self.scene,
+                "properties": {"ambient_light": [float(v) for v in ambient][:3]},
+            })
         if new_entries:
-            args["settings"] = new_entries
-            args["merge"] = True
-        self.mutate("set_scene_settings", args)
+            self.mutate("set_scene_settings", {
+                "scene_name": self.scene, "settings": new_entries, "merge": True,
+            })
 
     def ambience(self, ambient=None, clear_color=None, grid=None, sky=None):
         """Scene mood knobs. grid / sky accept a bool (visibility / enable)
@@ -898,11 +968,9 @@ class Creation:
         self._send_scene_settings(settings, ambient=ambient)
 
     def exposure(self, value):
-        cameras = self.call("get_scene_cameras", {"scene_name": self.scene}).get("cameras", [])
-        if cameras:
-            self.mutate("edit_camera", {
-                "scene_name": self.scene, "camera_id": cameras[0]["id"],
-                "exposure": float(value)})
+        camera_id = self.camera_id()
+        if camera_id is not None:
+            self.set_properties(camera_id, {"exposure": float(value)})
 
     def shadow_range(self, value, z_far=None):
         """Camera shadow range / far distance: raise it early when a scene
@@ -912,12 +980,11 @@ class Creation:
         the same value): the projection default is only 64 m, so big
         scenes - e.g. the tree garden's back row - silently far-plane
         clip otherwise. Pass z_far explicitly to decouple them."""
-        cameras = self.call("get_scene_cameras", {"scene_name": self.scene}).get("cameras", [])
-        if cameras:
-            self.mutate("edit_camera", {
-                "scene_name": self.scene, "camera_id": cameras[0]["id"],
-                "shadow_range": float(value),
-                "z_far": float(z_far if z_far is not None else value)})
+        camera_id = self.camera_id()
+        if camera_id is not None:
+            properties = {"shadow_range": float(value)}
+            properties.update(self.clip_range(camera_id, z_far=(z_far if z_far is not None else value)))
+            self.set_properties(camera_id, properties)
 
     # -------------------------------------------------------------- physics
 
@@ -1008,7 +1075,8 @@ class Creation:
         edited to the given fields on every later call): the carrier of
         friction, restitution, combine modes, linear/angular damping,
         wind_receptivity and density for every body that names it
-        (create_physics_body material_name=...). Returns the name."""
+        (create_physics_material takes friction_combine / restitution_combine
+        as 'average' / 'minimum' / 'maximum' / 'multiply'). Returns the name."""
         args = {"scene_name": self.scene, "name": name}
         args.update(fields)
         try:
@@ -1017,7 +1085,11 @@ class Creation:
             if "already exists" not in str(error):
                 raise
             if fields:
-                self.mutate("edit_physics_material", args)
+                properties = {
+                    key: (value.capitalize() if key.endswith("_combine") else value)
+                    for key, value in fields.items()
+                }
+                self.set_properties(self.physics_material_id(name), properties)
         return name
 
     def joint_settings(self, name, limits, drives=None):

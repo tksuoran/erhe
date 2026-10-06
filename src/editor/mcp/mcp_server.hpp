@@ -287,8 +287,6 @@ private:
     auto action_create_node     (const nlohmann::json& args) -> std::string;
     auto action_create_light    (const nlohmann::json& args) -> std::string;
     auto action_create_skin     (const nlohmann::json& args) -> std::string;
-    auto action_edit_light      (const nlohmann::json& args) -> std::string;
-    auto action_edit_camera     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
     auto action_advance_time    (const nlohmann::json& args) -> std::string;
     auto action_advance_frames  (const nlohmann::json& args) -> std::string;
@@ -305,7 +303,6 @@ private:
     auto action_add_tags        (const nlohmann::json& args) -> std::string;
     auto action_remove_tags     (const nlohmann::json& args) -> std::string;
     auto action_batch           (const nlohmann::json& args) -> std::string;
-    auto action_edit_material   (const nlohmann::json& args) -> std::string;
     auto action_create_material (const nlohmann::json& args) -> std::string;
     auto action_assign_mesh_material(const nlohmann::json& args) -> std::string;
     auto action_copy_library_item(const nlohmann::json& args) -> std::string;
@@ -347,15 +344,12 @@ private:
     auto action_reset_composition_pass_stats(const nlohmann::json& args) -> std::string;
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;
-    auto action_edit_physics_body  (const nlohmann::json& args) -> std::string;
+    auto action_set_collision_shape(const nlohmann::json& args) -> std::string;
     auto action_create_joint(const nlohmann::json& args) -> std::string;
-    auto action_edit_joint  (const nlohmann::json& args) -> std::string;
+    auto action_rebuild_joint(const nlohmann::json& args) -> std::string;
     auto action_create_physics_material(const nlohmann::json& args) -> std::string;
-    auto action_edit_physics_material  (const nlohmann::json& args) -> std::string;
     auto action_create_collision_filter(const nlohmann::json& args) -> std::string;
-    auto action_edit_collision_filter  (const nlohmann::json& args) -> std::string;
     auto action_create_physics_joint_settings(const nlohmann::json& args) -> std::string;
-    auto action_edit_physics_joint_settings  (const nlohmann::json& args) -> std::string;
     auto action_set_joint_constraint_visualization(const nlohmann::json& args) -> std::string;
     auto query_joint_constraint_state             (const nlohmann::json& args) -> std::string;
     auto action_capture_screenshot           (const nlohmann::json& args) -> std::string;

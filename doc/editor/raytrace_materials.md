@@ -155,8 +155,9 @@ machinery. The raster fragment shader ignores both fields.
 
 Editing surface: Properties window rows ("IOR" 1.0 to 3.0, "Transmission" 0.0 to
 1.0), the MCP `get_material_details` / `get_scene_materials` serialization,
-`edit_material` parsing and the tool schema, plus the `mcp_server_tests`
-material round-trip assertions.
+`set_item_properties` on the `ior` / `transmission` properties (and
+`create_material`'s fields), plus the `mcp_server_tests` material
+round-trip assertions.
 
 ### D7: glTF import and export
 
@@ -198,12 +199,12 @@ raster and ray traced output.
 - Textured and coloured materials visibly match the raster viewport: compare a
   screenshot with the `set_ray_trace` PNG readback side by side.
 - A material round-trip keeps `ior` and `transmission`:
-  `edit_material` -> `save_scene` -> reload -> `get_material_details`, and
+  `set_item_properties` -> `save_scene` -> reload -> `get_material_details`, and
   `export_gltf` / `import_gltf`.
 - A glass sphere (transmission 1, ior 1.5) over a textured floor shows an
   inverted refracted image through the sphere, Fresnel brightening at grazing
   angles and a total-internal-reflection ring. Varying `ior` through
-  `edit_material` between captures changes the refraction.
+  `set_item_properties` between captures changes the refraction.
 
 ## Future work
 

@@ -25,11 +25,10 @@ references/settling_rock_piles.md.
 - `apply_physics_force` pokes a dynamic body (force / torque / impulse +
   optional world `point`). Impulses act immediately; forces last one
   fixed step (re-apply for a sustained push).
-- `edit_physics_body` initial-velocity gotcha: `linear_velocity` only
-  stores into the create info, and a shape edit in the SAME call
-  recreates the body BEFORE it lands. Two calls: first
-  `{linear_velocity, mass, ...}`, then `{shape, ...}` to trigger the
-  recreation that applies it.
+- Initial-velocity gotcha: `Node_physics.initial_linear_velocity`
+  (`set_item_properties`) is applied when the body is created. Write it
+  (with `Node_physics.mass`, ...) first, then call `set_collision_shape`
+  to trigger the recreation that applies it.
 
 - A SAVED joint needs a body on both sides: glTF cannot store a
   world-anchored joint (the exporter skips it with a warning), so hang
@@ -54,9 +53,9 @@ apply_physics_force shove).
 - Explicit masses are essential for motor sizing. Create every part
   `motion_mode="none"`, pose it, then attach the body with
   `create_physics_body shape="auto" mass=<explicit>` (gravity_factor
-  stays 1 - the point is to carry the weight). (`edit_physics_body`
-  mass edits DO rescale inertia since 2026-08-08, so post-hoc mass
-  tuning is safe too.)
+  stays 1 - the point is to carry the weight). (`Node_physics.mass`
+  writes through `set_item_properties` DO rescale inertia since
+  2026-08-08, so post-hoc mass tuning is safe too.)
 - Size stiffness per joint from its static hold torque = (weight share
   at the contact point) x (horizontal lever from joint to contact), for
   ~0.02 rad of sag; graduate along the limb (spider hip 2400 -> toe 100

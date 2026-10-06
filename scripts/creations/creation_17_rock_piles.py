@@ -165,9 +165,9 @@ class RockYard:
                     f"Rock f{friction:g}",
                     static_friction=friction, dynamic_friction=friction,
                     restitution=0.02, angular_damping=0.35, linear_damping=0.05)
-        calls = [{"tool": "edit_physics_body", "arguments": {
-            "scene_name": self.c.scene, "node_id": node_id,
-            "material_name": materials[friction],
+        calls = [{"tool": "set_item_properties", "arguments": {
+            "item_id": node_id,
+            "properties": {"Node_physics.physics_material": {"reference_name": materials[friction]}},
         }} for node_id, friction in self.body_ids]
         for i in range(0, len(calls), 40):
             self.c.batch(calls[i:i + 40])

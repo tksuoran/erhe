@@ -340,7 +340,7 @@ TEST_F(Material_set_gpu_test, clean_update_writes_nothing)
 }
 
 // V2.8. R5: an edit through the Material object, exactly as a colour-picker
-// drag and the MCP edit_material tool do it. Every such write is a property
+// drag and the MCP set_item_properties tool do it. Every such write is a property
 // write and so advances the material's change serial, which is what the next
 // update() compares against.
 TEST_F(Material_set_gpu_test, material_data_edit_dirties_the_set)

@@ -100,8 +100,9 @@ duration is meaningful from the first frame.
 
 `Mcp_test.document_edits_record_one_undo_entry_each`
 (`src/editor/mcp/test/mcp_server_tests.cpp`) asserts one undo entry, undo and
-redo for `create_light`, `edit_light`, `edit_camera`, `edit_material`,
-`set_item_property` and the two lightmap tile tools; the rule it checks
+redo for `create_light`, `set_item_properties` (lights, cameras, materials,
+the physics items), `set_item_property`, `set_collision_shape`,
+`set_scene_settings` and the two lightmap tile tools; the rule it checks
 (`doc/agents/mcp_api_guidelines.md` "Document edits are operations") covers
 every tool that changes the document. `config/editor/mcp_tools.json` does not
 say which of its tools those are. Give each tool a class - document edit,

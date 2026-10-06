@@ -836,10 +836,11 @@ def section_build_scene():
             "linear_damping": 0.05, "angular_damping": 0.07, "wind_receptivity": 0.5, "density": 2.0,
         })
         check(S, "create_physics_material", bool(material) and material.get("created"), str(material))
-        edited = mutate("edit_physics_body", {
-            "scene_name": scene, "node_name": "P6 Box", "material_name": "Roundtrip rubber",
+        edited = mutate("set_item_properties", {
+            "scene_name": scene, "item_name": "P6 Box",
+            "properties": {"Node_physics.physics_material": {"reference_name": "Roundtrip rubber"}},
         })
-        check(S, "edit_physics_body (material_name)", bool(edited) and "material_name" in edited.get("applied", []), str(edited))
+        check(S, "set_item_properties (Node_physics.physics_material)", bool(edited) and edited.get("changed"), str(edited))
         joint = mutate("create_joint", {
             "scene_name": scene, "node_name": "P6 Sphere", "connected_node_name": "P6 Box",
         })
@@ -940,11 +941,13 @@ def section_build_scene():
 
     def block_material():
         # Material fields that serialize through ERHE_material.
-        edited = mutate("edit_material", {
-            "scene_name": scene, "material_name": E2E_STATE.get("material"),
-            "roughness": [0.3, 0.6], "bxdf_model": "anisotropic_brdf",
+        material_id = next((m["id"] for m in call("get_scene_materials", {"scene_name": scene}).get("materials", [])
+                            if m.get("name") == E2E_STATE.get("material")), None)
+        edited = mutate("set_item_properties", {
+            "item_id": material_id,
+            "properties": {"roughness": [0.3, 0.6], "bxdf_model": "Anisotropic BRDF"},
         })
-        check(S, "edit_material anisotropic fields", bool(edited) and edited.get("changed"), str(edited))
+        check(S, "set_item_properties material anisotropic fields", bool(edited) and edited.get("changed"), str(edited))
 
     def block_graph_mesh():
         # Graph mesh bound to a scene node (ERHE_node_graphs node binding).
@@ -2223,11 +2226,12 @@ def usd_physics_leg(S):
         "friction_combine": "minimum",
     })
     check(S, "physics: create_physics_material", bool(material) and material.get("created"), str(material))
-    edited = mutate("edit_physics_body", {
-        "scene_name": scene_name, "node_name": "Crate", "material_name": "Roundtrip_ice",
+    edited = mutate("set_item_properties", {
+        "scene_name": scene_name, "item_name": "Crate",
+        "properties": {"Node_physics.physics_material": {"reference_name": "Roundtrip_ice"}},
     })
-    check(S, "physics: edit_physics_body (material_name)",
-          bool(edited) and "material_name" in edited.get("applied", []), str(edited))
+    check(S, "physics: set_item_properties (Node_physics.physics_material)",
+          bool(edited) and edited.get("changed"), str(edited))
     joint = mutate("create_joint", {
         "scene_name": scene_name, "node_name": "Sensor", "connected_node_name": "Anchor",
         "settings_name": "Hinge_settings", "enable_collision": True,
@@ -2786,9 +2790,10 @@ def section_scene_ambient_light():
     scene_name = create_fresh_scene(S)
     if scene_name is None:
         return
-    mutate("set_scene_settings", {"scene_name": scene_name, "ambient_light": [0.5, 0.1, 0.1]})
+    mutate("set_item_properties", {"scene_name": scene_name, "item_name": scene_name,
+                                   "properties": {"ambient_light": [0.5, 0.1, 0.1]}})
     state = scene_ambient_state(scene_name)
-    check(S, "set_scene_settings writes the scene's LOCAL ambient value",
+    check(S, "set_item_properties writes the scene's LOCAL ambient value",
           (state[0] == "local") and (state[1] == local_text), str(state))
 
     answer = mutate("save_scene", {"scene_name": scene_name, "path": str(AMBIENT_LOCAL_GLB)})
@@ -2833,7 +2838,8 @@ def section_scene_ambient_light():
         return
     if not usd_open_scene(S, USD_DATA_DIR / "cube.usda", "cube"):
         return
-    mutate("set_scene_settings", {"scene_name": "cube", "ambient_light": [0.5, 0.1, 0.1]})
+    mutate("set_item_properties", {"scene_name": "cube", "item_name": "cube",
+                                   "properties": {"ambient_light": [0.5, 0.1, 0.1]}})
     if not usd_save_scene(S, "cube", AMBIENT_USDA):
         return
     usd_close_scene(S, "cube")

@@ -74,11 +74,11 @@ node). The Create menu also creates Physics Material, Collision Filter
 and Joint Settings content-library items. An edit of a shared item reaches
 the live simulation through the observers `Node_physics_system` and
 `Joint_system` subscribe to it. The MCP tools are `get_physics_items`,
-`create_physics_body` / `edit_physics_body`, `create_joint` /
-`edit_joint`, `create_physics_material` / `edit_physics_material`,
-`create_collision_filter` / `edit_collision_filter`,
-`create_physics_joint_settings` / `edit_physics_joint_settings`, plus the
-physics fields of `get_node_details`.
+`create_physics_body`, `set_collision_shape`, `create_joint`,
+`rebuild_joint`, `create_physics_material`, `create_collision_filter`,
+`create_physics_joint_settings`, `set_item_properties` for every property
+field of these (`doc/agents/mcp_server_usage.md` "Physics Tools"), plus
+the physics fields of `get_node_details`.
 
 ## Export design
 

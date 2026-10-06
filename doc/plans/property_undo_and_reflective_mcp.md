@@ -378,6 +378,42 @@ under 40 script lines, about 25 test lines, about 96 doc lines.
 `mcp_tools.json` is recounted before C3 (the scout counted 298 entries,
 the reviewer 329 `"name"` keys, which include nested schema names).
 
+- As built (C3): eight tools are deleted (`edit_light`, `edit_camera`,
+  `edit_material`, `edit_physics_body`, `edit_joint`,
+  `edit_physics_material`, `edit_collision_filter`,
+  `edit_physics_joint_settings`; `mcp_tools.json` 302 -> 296 entries).
+  `set_collision_shape` is the shape half of `edit_physics_body` (a `mesh`
+  shape is refused while `Node_physics.motion_mode` is dynamic, so a caller
+  writes the motion mode first); `rebuild_joint` is the runtime re-capture
+  (no undo entry; `Mcp_test.physics_and_scene_settings_edits_undo_to_the_prior_state`
+  calls it). `set_scene_settings` requires `settings`, and an
+  `ambient_light` argument is refused with the replacement named: the
+  scene item's `ambient_light` property, `set_item_properties` with
+  `item_name` = the scene name. What one old call combined (shape and
+  property fields, ambient light and settings) is a `batch`, still one
+  undo entry. `make_material_edit_operation` lost its only caller and is
+  deleted with its `editor_operation_tests` case; the material round trip
+  stays covered by `Mcp_test.material_properties_undo_redo_round_trips_the_property_dump_and_keeps_expressions`.
+  Behavior that went with the tools: `edit_material` clamped
+  `base_color`, `opacity`, `roughness`, `metallic`, `reflectance`,
+  `transmission` and `occlusion_texture_strength` to [0, 1], `ior` to
+  [1, 3], floored `emissive` at 0 and broadcast a scalar roughness. A
+  property write refuses `metallic`, `opacity`, `transmission`,
+  `occlusion_texture_strength` (and `alpha_cutoff`) outside [0, 1] (their
+  `unit_range` validation) and takes `base_color`, `roughness`,
+  `reflectance`, `emissive` and `ior` as given (the UI range is a hint).
+  `edit_material` refused a material name that several materials shared
+  (with `candidate_ids`); `item_name` resolves to the first match, and the
+  id is the unambiguous form. The property tools reach the materials of
+  loaded asset containers by id, as `edit_material` did:
+  `find_item_by_id` (`scene/item_lookup.hpp`) looks in the scenes, then in
+  the asset manager (`Mcp_test.set_item_properties_reaches_a_loaded_container_material`).
+  Enumerations take their labels (`Spot`, `Clamp to Edge`, `Anisotropic BRDF`). Lights,
+  cameras and materials are addressed by id in the scripts, because a
+  light or camera shares its name with its node and a by-name lookup finds
+  the node first (`scripts/creations/common.py` `set_properties`,
+  `material_id`, `light_id`, `camera_id`, `physics_material_id`).
+
 Follow-up found in A3: the Properties window scene override rows
 (`properties.cpp`, `override_struct`) and `Fly_camera_tool::get_writable_camera_controls`
 write `Scene_settings` directly - not undoable, and an undo of an earlier
@@ -405,7 +441,7 @@ effort before commit. Targets that must build: `editor`, `src/example`,
 
 A3 and C1 can swap order; C3 must come after both.
 
-Done: A1, A2, A3, A4, C1, C2. Next: B1.
+Done: A1, A2, A3, A4, C1, C2, C3. Next: B1.
 
 ## 6. Notification design (B1)
 

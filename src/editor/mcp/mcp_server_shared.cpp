@@ -299,23 +299,6 @@ auto find_resource_parent(Scene_root& scene_root, const json& args, std::shared_
     return {};
 }
 
-auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>
-{
-    const std::size_t light_id   = args.value(id_key, std::size_t{0});
-    const std::string light_name = args.value(name_key, "");
-    if ((light_id == 0) && light_name.empty()) {
-        return {};
-    }
-    for (const auto& light_layer : scene_root.get_scene().get_light_layers()) {
-        for (const std::shared_ptr<erhe::scene::Light>& light : light_layer->lights) {
-            if ((light_id != 0) ? (light->get_id() == light_id) : (light->get_name() == light_name)) {
-                return light;
-            }
-        }
-    }
-    return {};
-}
-
 auto parse_light_type(const std::string& type, const erhe::scene::Light_type fallback) -> erhe::scene::Light_type
 {
     if (type == "directional") { return erhe::scene::Light_type::directional; }

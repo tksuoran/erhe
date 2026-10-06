@@ -43,6 +43,9 @@ when done.
 """
 import json, math, os, subprocess, sys, time, urllib.request
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "creations"))
+from common import camera_clip_range_properties  # noqa: E402
+
 REPO  = r"D:\erhe"
 # A large scene (Bistro) is painfully slow in the Debug build; point this at
 # build_ninja_win_vulkan_release for those. Both builds render the same, so an
@@ -141,12 +144,26 @@ def viewport_camera(scene):
     return None
 
 
+def camera_id(scene, name):
+    """Item id of the scene camera named `name` (a camera shares its name with
+    its node, so set_item_properties addresses it by id)."""
+    cams = rpc("get_scene_cameras", {"scene_name": scene})
+    for entry in (cams.get("cameras", []) if isinstance(cams, dict) else []):
+        if isinstance(entry, dict) and entry.get("name") == name:
+            return entry.get("id")
+    return None
+
+
+def set_camera_properties(scene, name, properties):
+    return rpc("set_item_properties", {"item_id": camera_id(scene, name), "properties": properties})
+
+
 def set_exposure(scene):
     cam = viewport_camera(scene)
     print("  viewport camera:", cam)
     if cam is None:
         return
-    print("  exposure:", rpc("edit_camera", {"scene_name": scene, "camera_name": cam, "exposure": EXPOSURE}))
+    print("  exposure:", set_camera_properties(scene, cam, {"exposure": EXPOSURE}))
 
 
 def frame_scene(scene):
@@ -191,8 +208,8 @@ def frame_scene(scene):
                 cam = nm; break
     print("  camera to move:", cam)
     if cam:
-        print("  edit_camera:", rpc("edit_camera", {"scene_name": scene, "camera_name": cam,
-                                                    "z_near": max(diag*0.001, 0.01), "z_far": diag*8.0}))
+        print("  camera clip range:", set_camera_properties(scene, cam, camera_clip_range_properties(
+            rpc, camera_id(scene, cam), z_near=max(diag*0.001, 0.01), z_far=diag*8.0)))
         print("  cameras after edit:", json.dumps(rpc("get_scene_cameras", {"scene_name": scene}))[:400])
         print("  set_node_transform:", rpc("set_node_transform", {
             "scene_name": scene, "node_name": cam, "space": "world",

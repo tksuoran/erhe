@@ -48,8 +48,10 @@ material preview's per-thumbnail assignment - go through it.
 **R5 - A material edit becomes visible without the editing code announcing it.**
 Writing `material->data.base_color` directly, or re-baking a texture a material
 references, changes what is rendered. Code that edits materials knows nothing
-about how they reach the GPU: `properties.cpp` writes fields directly while a
-colour picker is dragged, and the MCP `edit_material` tool does the same.
+about how they reach the GPU: the Properties window writes a field on every
+frame a colour picker is dragged, and the MCP `set_item_properties` tool writes
+fields through `Dependency_object::set_value` inside a
+`Property_edit_operation`; neither tells the renderer.
 
 **R6 - Scenes and render paths do not share slot numbering.** What one scene or
 one path renders is unaffected by what another renders in the same frame. Today
@@ -1087,11 +1089,12 @@ mechanism no writer can slip past.
 
 **Why a hash and not a version counter on `Material`.** A `data_serial` bumped
 by every writer is cheaper, but it can be missed, and *is* missed the moment
-someone writes `material->data.base_color = ...` directly - which is what
-`properties.cpp` does while a colour picker is being dragged, and what the MCP
-`edit_material` tool does. R5 exists because that failure is silent, produces
-exactly the class of "the mesh did not change colour" bug this document opens
-with, and would be indistinguishable from it in a report. The hash cannot be
+some writer forgets to bump it - and the material's writers (the Properties
+window while a colour picker is being dragged, the MCP `set_item_properties`
+tool through `Dependency_object::set_value` inside a
+`Property_edit_operation`, a texture graph bake) know nothing about the
+renderer. R5 exists because that failure is silent, produces exactly the class
+of "the mesh did not change colour" bug this document opens with, and would be indistinguishable from it in a report. The hash cannot be
 missed: it reads the same bytes the record write reads.
 
 The cost is a hash of a few hundred bytes per member material per frame - for a
@@ -1199,8 +1202,8 @@ and the BRDF material slot are therefore one commit (phase 4).
 
 **Phase 1 - MCP surface for the regression test.**
 The MCP tool table has `get_scene_materials` (`mcp_server.cpp:491`),
-`get_material_details` (`:495`), `edit_material` (`:555`) and `create_material`
-(`:556`), but no way to assign a material to a mesh primitive and no way to read
+`get_material_details` (`:495`) and `create_material` (`:556`), but no way to
+assign a material to a mesh primitive and no way to read
 back what a *cached draw-list record* resolved to - `query_draw_lists`
 (`mcp/mcp_server_scene_query.cpp:184-247`) reports counts and diagnostics only,
 and the record bytes sit behind `Draw_list_scene`'s private

@@ -1,4 +1,5 @@
-// Mcp_server material editing tool (edit_material and its field / texture-slot helpers).
+// Mcp_server material tools (create_material and its field / texture-slot helpers,
+// assign_mesh_material, copy_library_item).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
@@ -6,17 +7,14 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
-#include "app_scenes.hpp"
-#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
-#include "operations/material_edit_operation.hpp"
-#include "operations/property_edit_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/material_preview.hpp"
+#include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 #include "texture_graph/graph_texture.hpp"
 
@@ -406,7 +404,7 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
     return entry;
 }
 
-// Optional material fields shared by edit_material and create_material.
+// Optional material fields of create_material.
 // Applies each present field of `args` to `after`, recording it in
 // `applied`; returns an error message on invalid input. `library` is only
 // needed for texture_samplers lookups.
@@ -617,154 +615,7 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
 
 auto Mcp_server::find_material_by_id(const std::size_t material_id) -> std::shared_ptr<erhe::primitive::Material>
 {
-    if (m_context.app_scenes != nullptr) {
-        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
-            const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-            if (!library) {
-                continue;
-            }
-            for (const std::shared_ptr<erhe::primitive::Material>& mat : library->get_all<erhe::primitive::Material>()) {
-                if (mat->get_id() == material_id) {
-                    return mat;
-                }
-            }
-        }
-    }
-    if (m_context.asset_manager != nullptr) {
-        return std::dynamic_pointer_cast<erhe::primitive::Material>(m_context.asset_manager->find_loaded_by_id(material_id));
-    }
-    return {};
-}
-
-auto Mcp_server::action_edit_material(const json& args) -> std::string
-{
-    if (m_context.operation_stack == nullptr) {
-        json r = make_text_content("Operation stack not available");
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    const std::string scene_name    = args.value("scene_name", "");
-    const std::string material_name = args.value("material_name", "");
-    const std::size_t material_id   = args.value("material_id", std::size_t{0});
-
-    std::shared_ptr<erhe::primitive::Material> material;
-    std::shared_ptr<Content_library>           library;
-    if (material_id != 0) {
-        // The id path (unique item ids): reaches materials in any scene's
-        // library AND the asset manager's loaded containers, which live in
-        // no scene. Texture-sampler edits need a scene library for texture
-        // lookup, so they resolve against the material's hosting scene when
-        // it has one.
-        material = find_material_by_id(material_id);
-        if (!material) {
-            json r = make_text_content("Material not found with id: " + std::to_string(material_id));
-            r["isError"] = true;
-            return r.dump();
-        }
-        // R5.6: materials are not hosted; the manager records the defining
-        // scene (null for loaded containers' materials, which live in no
-        // scene - sampler edits then have no library, as before).
-        if (m_context.asset_manager != nullptr) {
-            const std::shared_ptr<Scene_root> defining_scene_root = m_context.asset_manager->get_defining_scene_root(*material);
-            if (defining_scene_root) {
-                library = defining_scene_root->get_content_library();
-            }
-        }
-    } else {
-        Scene_root* sr = find_scene(scene_name);
-        if (sr == nullptr) {
-            json r = make_text_content("Scene not found: " + scene_name);
-            r["isError"] = true;
-            return r.dump();
-        }
-
-        library = sr->get_content_library();
-        if (!library) {
-            json r = make_text_content("No materials in scene: " + scene_name);
-            r["isError"] = true;
-            return r.dump();
-        }
-
-        const auto& mat_list = library->get_all<erhe::primitive::Material>();
-        std::vector<std::size_t> matching_ids;
-        for (const auto& mat : mat_list) {
-            if (mat->get_name() == material_name) {
-                if (!material) {
-                    material = mat;
-                }
-                matching_ids.push_back(mat->get_id());
-            }
-        }
-        if (!material) {
-            json r = make_text_content("Material not found: " + material_name);
-            r["isError"] = true;
-            return r.dump();
-        }
-        if (matching_ids.size() > 1) {
-            // Ambiguous: refuse to mutate. Return the candidate ids so the
-            // caller can re-issue with a disambiguating material_id.
-            json r = make_text_content(
-                "Material name '" + material_name + "' matches " +
-                std::to_string(matching_ids.size()) + " materials"
-            );
-            r["isError"]      = true;
-            r["candidate_ids"] = matching_ids;
-            return r.dump();
-        }
-    }
-
-    if (material->is_lock_edit()) {
-        json r = make_text_content("Material is locked: " + material_name);
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    const erhe::primitive::Material_values before_values = material->get_values();
-    erhe::primitive::Material_values       after_values  = before_values;
-    const erhe::primitive::Material_data   before        = material->get_data();
-    erhe::primitive::Material_data         after         = before;
-
-    json applied = json::object();
-    const std::optional<std::string> field_error = apply_material_fields(args, library, after_values, after, applied);
-    if (field_error.has_value()) {
-        json r = make_text_content(field_error.value());
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    if (applied.empty()) {
-        json r = make_text_content("No editable material fields supplied");
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    // The changed property fields and texture slot fields as one
-    // Property_edit_operation (one undo entry; fields that did not change
-    // are not written, so their local layers - an expression - stay). Null
-    // when the call changes nothing.
-    const std::shared_ptr<Property_edit_operation> operation = make_material_edit_operation(material, before_values, after_values, before, after);
-    if (!operation) {
-        return make_json_content({
-            {"name",     material->get_name()},
-            {"id",       material->get_id()},
-            {"applied",  applied},
-            {"changed",  false}
-        }).dump();
-    }
-    m_context.operation_stack->execute_now(operation);
-    if (operation->has_error()) {
-        json r = make_text_content("edit_material failed: " + operation->get_error());
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    return make_json_content({
-        {"name",    material->get_name()},
-        {"id",      material->get_id()},
-        {"applied", applied},
-        {"changed", true}
-    }).dump();
+    return std::dynamic_pointer_cast<erhe::primitive::Material>(find_item_by_id(m_context, material_id));
 }
 
 auto Mcp_server::action_create_material(const json& args) -> std::string
@@ -791,8 +642,9 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
         return r.dump();
     }
 
-    // Refuse duplicate names: edit_material addresses materials by name, so
-    // a second material with the same name would make both unaddressable.
+    // Refuse duplicate names: the material tools (assign_mesh_material,
+    // set_material_texture_source) address materials by name, so a second
+    // material with the same name would make both unaddressable.
     // The existing id is returned so the caller can reuse or rename.
     for (const auto& mat : library->get_all<erhe::primitive::Material>()) {
         if (mat->get_name() == name) {
@@ -890,7 +742,7 @@ auto Mcp_server::action_assign_mesh_material(const json& args) -> std::string
         );
     }
 
-    // Material resolution mirrors edit_material: the id path reaches any
+    // Material resolution: the id path reaches any
     // scene's library and the asset manager (cross-scene assignment is a real
     // gesture - dragging one scene's material onto another scene's mesh), the
     // name path looks in the target scene's own library.

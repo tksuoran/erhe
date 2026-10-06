@@ -739,17 +739,22 @@ def render_camera(v, root_offset=(0.0, 0.0, 0.0)):
             "shadow_range": v["shadow_range"]}
 
 
+LIGHT_TYPE_LABELS = {"directional": "Directional", "point": "Point", "spot": "Spot"}
+
+
 def apply_light_pose(c, scene, light_name, p, root_offset=(0.0, 0.0, 0.0)):
     """Set the station light to pose `p` (station-local; root translated by
-    root_offset): edit_light sets type, range, intensity and spot angles,
-    set_node_transform the world translation + rotation (edit_light's own
-    `position` resets the node rotation)."""
-    args = {"scene_name": scene, "light_name": light_name, "type": p["type"], "range": p["range"],
-            "intensity": p["intensity"], "cast_shadow": True}
+    root_offset): set_item_properties on the light sets type, range,
+    intensity and spot angles, set_node_transform the world translation +
+    rotation of its node (light and node share the name)."""
+    lights = c.call("get_scene_lights", {"scene_name": scene}).get("lights", [])
+    light_id = next(light["id"] for light in lights if light.get("name") == light_name)
+    properties = {"light_type": LIGHT_TYPE_LABELS[p["type"]], "range": p["range"],
+                  "intensity": p["intensity"], "cast_shadow": True}
     if p["type"] == "spot":
-        args["outer_spot_angle"] = math.radians(p["outer_spot_angle_deg"])
-        args["inner_spot_angle"] = math.radians(p["inner_spot_angle_deg"])
-    c.mutate("edit_light", args)
+        properties["outer_spot_angle"] = math.radians(p["outer_spot_angle_deg"])
+        properties["inner_spot_angle"] = math.radians(p["inner_spot_angle_deg"])
+    c.set_properties(light_id, properties)
     c.set_node_transform(light_name, translation=to_world(p["position"], root_offset),
                          rotation_xyzw=p["rotation_xyzw"])
 
@@ -765,10 +770,10 @@ def set_headlight(c, enabled):
 
 
 def place_view(c, v):
-    cameras = c.call("get_scene_cameras", {"scene_name": c.scene}).get("cameras", [])
-    c.mutate("edit_camera", {"scene_name": c.scene, "camera_id": cameras[0]["id"],
-                             "fov_y": math.radians(v["fov_y_deg"]), "z_near": v["near"],
-                             "z_far": v["far"], "shadow_range": v["shadow_range"]})
+    camera_id = c.camera_id()
+    properties = {"fov_y": math.radians(v["fov_y_deg"]), "shadow_range": v["shadow_range"]}
+    properties.update(c.clip_range(camera_id, z_near=v["near"], z_far=v["far"]))
+    c.set_properties(camera_id, properties)
     c.place_camera(v["eye"], v["target"], tuple(v["up"]))
 
 

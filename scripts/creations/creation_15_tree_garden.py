@@ -296,13 +296,9 @@ def main():
     # (the projection default is 64 m - the first framing of this garden
     # far-plane clipped its back row), so the overview can sit at a
     # comfortable distance with a moderate lens.
-    cameras = c.call("get_scene_cameras", {"scene_name": c.scene}).get("cameras", [])
-    if cameras:
-        c.mutate("edit_camera", {
-            "scene_name": c.scene,
-            "camera_name": cameras[0].get("name") or cameras[0].get("node"),
-            "fov_y": 0.9,
-        })
+    camera_id = c.camera_id()
+    if camera_id is not None:
+        c.set_properties(camera_id, {"fov_y": 0.9})
     c.place_camera([0.0, 24.0, 58.0], [0.0, 14.0, -12.0])
     c.screenshot("logs/creations/tree_garden.png")
     c.place_camera([-34.0, 8.0, 26.0], [8.0, 12.0, -18.0])

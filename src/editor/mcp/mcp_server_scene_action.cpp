@@ -32,7 +32,6 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
-#include "operations/property_set_operation.hpp"
 #include "operations/scene_settings_set_operation.hpp"
 #include "physics/physics_tool.hpp"
 #include "prefabs/instance_structure.hpp"
@@ -316,37 +315,22 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // Everything is checked before anything is written; the edits become
-    // one undo entry (doc/agents/mcp_api_guidelines.md "Document edits are
-    // operations").
-    std::vector<std::shared_ptr<Operation>> operations;
-    bool settings_unchanged = false;
-    if (args.contains("ambient_light")) {
-        const json& value = args["ambient_light"];
-        if (!value.is_array() || (value.size() < 3)) {
-            json r = make_text_content("ambient_light must be an array of 3 or 4 numbers");
-            r["isError"] = true;
-            return r.dump();
-        }
-        // The ambient color is a registered property of the scene item, so
-        // the write is recorded like set_item_property and is undoable. A
-        // fourth number is accepted for the file form and ignored.
-        const erhe::property::Dependency_property& ambient_property = *erhe::scene::Scene::ambient_light_property.get_ptr();
-        erhe::scene::Scene& scene = sr->get_scene();
-        operations.push_back(
-            std::make_shared<Property_set_operation>(
-                sr->get_scene_item(),
-                ambient_property,
-                scene.read_local_state(ambient_property),
-                erhe::property::Local_state{
-                    erhe::property::Property_value{
-                        glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()}
-                    }
-                }
-            )
+    // The scene's ambient color is the scene item's ambient_light property,
+    // written with set_item_properties like any other property.
+    if (!args.contains("settings")) {
+        json r = make_text_content(
+            args.contains("ambient_light")
+                ? "set_scene_settings has no ambient_light: it is the scene item's ambient_light property (set_item_properties with item_name = the scene name)"
+                : "settings is required"
         );
+        r["isError"] = true;
+        return r.dump();
     }
-    if (args.contains("settings")) {
+    // Everything is checked before anything is written; the edit is one
+    // undo entry (doc/agents/mcp_api_guidelines.md "Document edits are
+    // operations").
+    std::shared_ptr<Operation> operation{};
+    {
         const json& value = args["settings"];
         if (!value.is_object()) {
             json r = make_text_content("settings must be an object (Scene_settings shape; {} resets every override)");
@@ -420,40 +404,27 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         // Settings equal to the current ones are no edit and leave no undo
         // entry (the codegen struct has no comparison; its serialization
         // compares field by field).
-        if (serialize(new_settings, 0) == serialize(current_settings, 0)) {
-            settings_unchanged = true;
-        } else {
-            operations.push_back(
-                std::make_shared<Scene_settings_set_operation>(
-                    Scene_settings_set_operation::Parameters{
-                        .scene_root = sr->shared_from_this(),
-                        .before     = current_settings,
-                        .after      = std::move(new_settings)
-                    }
-                )
+        if (serialize(new_settings, 0) != serialize(current_settings, 0)) {
+            operation = std::make_shared<Scene_settings_set_operation>(
+                Scene_settings_set_operation::Parameters{
+                    .scene_root = sr->shared_from_this(),
+                    .before     = current_settings,
+                    .after      = std::move(new_settings)
+                }
             );
         }
     }
-    const bool changed = !operations.empty();
-    if (changed) {
-        const std::shared_ptr<Operation> operation = (operations.size() == 1)
-            ? operations.front()
-            : std::make_shared<Compound_operation>(
-                Compound_operation::Parameters{
-                    .operations  = std::move(operations),
-                    .child_error = Compound_child_error::roll_back
-                }
-            );
+    if (operation) {
         m_context.operation_stack->execute_now(operation);
         if (operation->has_error()) {
             return make_error_content(operation->get_error());
         }
     }
     json reply = {
-        {"updated",    changed},
+        {"updated",    static_cast<bool>(operation)},
         {"scene_name", sr->get_name()}
     };
-    if (settings_unchanged) {
+    if (!operation) {
         reply["settings"] = "unchanged";
     }
     return make_json_content(reply).dump();
@@ -3267,235 +3238,6 @@ auto Mcp_server::action_create_child_prim(const json& args) -> std::string
         {"node",    parent->get_name()},
         {"node_id", parent->get_id()},
         {"type",    type_key}
-    }).dump();
-}
-
-auto Mcp_server::action_edit_light(const json& args) -> std::string
-{
-    const std::string scene_name = args.value("scene_name", "");
-    Scene_root* sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        json r = make_text_content("Scene not found: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    // Accept light_id / light_name, and also bare id / name for convenience.
-    std::shared_ptr<erhe::scene::Light> light = find_light_in_scene(*sr, args, "light_id", "light_name");
-    if (!light) {
-        light = find_light_in_scene(*sr, args, "id", "name");
-    }
-    if (!light) {
-        json r = make_text_content("Light not found (specify light_id or light_name)");
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    auto read_vec3 = [&args](const char* key, glm::vec3& out_value) -> bool {
-        const json value = args.value(key, json());
-        if (value.is_array() && (value.size() == 3)) {
-            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
-            return true;
-        }
-        return false;
-    };
-
-    // Every field is one Property_set_operation (the position one
-    // Node_transform_operation), executed now as one undo entry, the path
-    // the Properties window takes for the same fields.
-    std::vector<std::shared_ptr<Operation>> operations;
-    const auto set_property = [&](const erhe::property::Dependency_property& property, const erhe::property::Property_value& value) {
-        operations.push_back(
-            std::make_shared<Property_set_operation>(
-                light,
-                property,
-                light->read_local_state(property),
-                std::optional<erhe::property::Local_state>{erhe::property::Local_state{value}}
-            )
-        );
-    };
-    if (args.contains("type")) {
-        const std::string type_str = args.value("type", "");
-        if ((type_str != "directional") && (type_str != "point") && (type_str != "spot")) {
-            json r = make_text_content("Invalid light type '" + type_str + "' (expected directional, point or spot)");
-            r["isError"] = true;
-            return r.dump();
-        }
-        // Light::type re-buckets the light for rendering (forward variant +
-        // shadow technique). Other type-dependent fields (e.g. range) are
-        // left exactly as provided by the caller.
-        set_property(erhe::scene::Light::light_type_property.get(), erhe::property::make_value(parse_light_type(type_str, light->get_light_type())));
-    }
-    glm::vec3 color{};
-    if (read_vec3("color", color)) {
-        set_property(erhe::scene::Light::color_property.get(), erhe::property::Property_value{color});
-    }
-    if (args.contains("intensity")) {
-        set_property(erhe::scene::Light::intensity_property.get(), erhe::property::Property_value{args.value("intensity", light->get_intensity())});
-    }
-    if (args.contains("range")) {
-        set_property(erhe::scene::Light::range_property.get(), erhe::property::Property_value{args.value("range", light->get_range())});
-    }
-    if (args.contains("cast_shadow")) {
-        set_property(erhe::scene::Light::cast_shadow_property.get(), erhe::property::Property_value{args.value("cast_shadow", light->get_cast_shadow())});
-    }
-    if (args.contains("inner_spot_angle")) {
-        set_property(erhe::scene::Light::inner_spot_angle_property.get(), erhe::property::Property_value{args.value("inner_spot_angle", light->get_inner_spot_angle())});
-    }
-    if (args.contains("outer_spot_angle")) {
-        set_property(erhe::scene::Light::outer_spot_angle_property.get(), erhe::property::Property_value{args.value("outer_spot_angle", light->get_outer_spot_angle())});
-    }
-    glm::vec3 position{};
-    const bool has_position = read_vec3("position", position);
-    if (has_position) {
-        // The light's world transform becomes a translation to `position`.
-        const std::shared_ptr<erhe::scene::Node> parent = light->get_parent_node();
-        const glm::mat4 world_from_light  = erhe::math::create_translation<float>(position);
-        const glm::mat4 parent_from_light = parent ? (parent->node_from_world() * world_from_light) : world_from_light;
-        operations.push_back(
-            std::make_shared<Node_transform_operation>(
-                Node_transform_operation::Parameters{
-                    .node                    = light,
-                    .parent_from_node_before = light->parent_from_node_transform(),
-                    .parent_from_node_after  = erhe::scene::Trs_transform{parent_from_light},
-                    .xform_op_stack_before   = light->copy_xform_op_stack()
-                }
-            )
-        );
-    }
-    if (!operations.empty()) {
-        m_context.operation_stack->execute_now(
-            (operations.size() == 1)
-                ? operations.front()
-                : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
-        );
-    }
-
-    json changed = json::object();
-    if (args.contains("type")) {
-        changed["type"] = args.value("type", "");
-    }
-    if (args.contains("color")) {
-        const glm::vec3 value = light->get_color();
-        changed["color"] = {value.x, value.y, value.z};
-    }
-    if (args.contains("intensity")) {
-        changed["intensity"] = light->get_intensity();
-    }
-    if (args.contains("range")) {
-        changed["range"] = light->get_range();
-    }
-    if (args.contains("cast_shadow")) {
-        changed["cast_shadow"] = light->get_cast_shadow();
-    }
-    if (args.contains("inner_spot_angle")) {
-        changed["inner_spot_angle"] = light->get_inner_spot_angle();
-    }
-    if (args.contains("outer_spot_angle")) {
-        changed["outer_spot_angle"] = light->get_outer_spot_angle();
-    }
-    if (has_position) {
-        changed["position"] = {position.x, position.y, position.z};
-    }
-
-    return make_json_content({
-        {"light_id",   light->get_id()},
-        {"light_name", light->get_name()},
-        {"changed",    changed}
-    }).dump();
-}
-
-auto Mcp_server::action_edit_camera(const json& args) -> std::string
-{
-    const std::string scene_name = args.value("scene_name", "");
-    Scene_root* sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        json r = make_text_content("Scene not found: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    const std::size_t camera_id   = args.contains("camera_id") ? args.value("camera_id", std::size_t{0}) : args.value("id", std::size_t{0});
-    const std::string camera_name = args.contains("camera_name") ? args.value("camera_name", "") : args.value("name", "");
-    std::shared_ptr<erhe::scene::Camera> camera{};
-    for (const std::shared_ptr<erhe::scene::Camera>& candidate : sr->get_scene().get_cameras()) {
-        if ((camera_id != 0) ? (candidate->get_id() == camera_id) : (!camera_name.empty() && (candidate->get_name() == camera_name))) {
-            camera = candidate;
-            break;
-        }
-    }
-    if (!camera) {
-        json r = make_text_content("Camera not found (specify camera_id or camera_name)");
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    // One Property_set_operation per field, executed now as one undo entry.
-    // z_near / z_far edit the clip range of the camera's projection type
-    // (Projection::get_z_near()): the orthographic pair for an orthographic
-    // camera, the perspective pair otherwise.
-    std::vector<std::shared_ptr<Operation>> operations;
-    const auto set_property = [&](const erhe::property::Dependency_property& property, const float value) {
-        operations.push_back(
-            std::make_shared<Property_set_operation>(
-                camera,
-                property,
-                camera->read_local_state(property),
-                std::optional<erhe::property::Local_state>{erhe::property::Local_state{erhe::property::Property_value{value}}}
-            )
-        );
-    };
-    const bool orthographic = camera->projection()->is_orthographic();
-    if (args.contains("exposure")) {
-        set_property(erhe::scene::Camera::exposure_property.get(), args.value("exposure", camera->get_exposure()));
-    }
-    if (args.contains("shadow_range")) {
-        set_property(erhe::scene::Camera::shadow_range_property.get(), args.value("shadow_range", camera->get_shadow_range()));
-    }
-    if (args.contains("fov_y")) {
-        set_property(erhe::scene::Camera::fov_y_property.get(), args.value("fov_y", camera->projection()->fov_y));
-    }
-    if (args.contains("z_near")) {
-        set_property(
-            orthographic ? erhe::scene::Camera::orthographic_z_near_property.get() : erhe::scene::Camera::perspective_z_near_property.get(),
-            args.value("z_near", camera->projection()->get_z_near())
-        );
-    }
-    if (args.contains("z_far")) {
-        set_property(
-            orthographic ? erhe::scene::Camera::orthographic_z_far_property.get() : erhe::scene::Camera::perspective_z_far_property.get(),
-            args.value("z_far", camera->projection()->get_z_far())
-        );
-    }
-    if (!operations.empty()) {
-        m_context.operation_stack->execute_now(
-            (operations.size() == 1)
-                ? operations.front()
-                : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
-        );
-    }
-
-    json changed = json::object();
-    if (args.contains("exposure")) {
-        changed["exposure"] = camera->get_exposure();
-    }
-    if (args.contains("shadow_range")) {
-        changed["shadow_range"] = camera->get_shadow_range();
-    }
-    if (args.contains("fov_y")) {
-        changed["fov_y"] = camera->projection()->fov_y;
-    }
-    if (args.contains("z_near")) {
-        changed["z_near"] = camera->projection()->get_z_near();
-    }
-    if (args.contains("z_far")) {
-        changed["z_far"] = camera->projection()->get_z_far();
-    }
-
-    return make_json_content({
-        {"camera_id",   camera->get_id()},
-        {"camera_name", camera->get_name()},
-        {"changed",     changed}
     }).dump();
 }
 

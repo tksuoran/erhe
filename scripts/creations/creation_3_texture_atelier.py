@@ -170,8 +170,7 @@ def main():
             normal_graph = bricks_normal(c)
             c.bind_material_texture(mat, normal_graph, slot="normal")
         if label == "Lava":
-            c.mutate("edit_material", {"scene_name": c.scene, "material_name": mat,
-                                       "emissive": [1.2, 0.35, 0.05]})
+            c.set_properties(c.material_id(mat), {"emissive": [1.2, 0.35, 0.05]})
             c.bind_material_texture(mat, graph_name, slot="emissive")
 
         c.shape("box", f"Plinth {label}", [x, PLINTH_H * 0.5, 0.0],

@@ -2032,121 +2032,6 @@
     "name": "create_skin"
   },
   {
-    "description": "Edit an existing light in place (by light_id or light_name). Changing 'type' re-buckets the light for shadow rendering. 'position' moves the light's node. Only the provided fields change.",
-    "inputSchema": {
-      "properties": {
-        "cast_shadow": {
-          "description": "Whether the light casts shadows",
-          "type": "boolean"
-        },
-        "color": {
-          "description": "New linear RGB color [r, g, b]",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "inner_spot_angle": {
-          "description": "Spot inner cone angle in radians",
-          "type": "number"
-        },
-        "intensity": {
-          "description": "New light intensity",
-          "type": "number"
-        },
-        "light_id": {
-          "description": "ID of the light to edit (from get_scene_lights)",
-          "type": "integer"
-        },
-        "light_name": {
-          "description": "Name of the light to edit (alternative to light_id)",
-          "type": "string"
-        },
-        "outer_spot_angle": {
-          "description": "Spot outer cone angle in radians",
-          "type": "number"
-        },
-        "position": {
-          "description": "New world position [x, y, z] for the light's node",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "range": {
-          "description": "New light range / far distance",
-          "type": "number"
-        },
-        "scene_name": {
-          "description": "Name of the scene",
-          "type": "string"
-        },
-        "type": {
-          "description": "New light type",
-          "enum": [
-            "directional",
-            "point",
-            "spot"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "scene_name"
-      ],
-      "type": "object"
-    },
-    "name": "edit_light"
-  },
-  {
-    "description": "Edit an existing camera in place (by camera_id or camera_name). 'exposure' scales scene content brightness in the standard shader; overlay meshes (transform gizmo, hotbar) deliberately ignore it. Only the provided fields change.",
-    "inputSchema": {
-      "properties": {
-        "camera_id": {
-          "description": "ID of the camera to edit (from get_scene_cameras)",
-          "type": "integer"
-        },
-        "camera_name": {
-          "description": "Name of the camera to edit (alternative to camera_id)",
-          "type": "string"
-        },
-        "exposure": {
-          "description": "New exposure value (1.0 = neutral)",
-          "type": "number"
-        },
-        "fov_y": {
-          "description": "New vertical field of view in radians (perspective_vertical cameras)",
-          "type": "number"
-        },
-        "scene_name": {
-          "description": "Name of the scene",
-          "type": "string"
-        },
-        "shadow_range": {
-          "description": "New shadow range / far distance",
-          "type": "number"
-        },
-        "z_far": {
-          "description": "New far clip plane distance of the camera's projection type: the perspective or the orthographic clip range (default perspective projection is 64 m - big scenes clip without raising this)",
-          "type": "number"
-        },
-        "z_near": {
-          "description": "New near clip plane distance of the camera's projection type: the perspective or the orthographic clip range (an orthographic near plane may be negative, behind the camera)",
-          "type": "number"
-        }
-      },
-      "required": [
-        "scene_name"
-      ],
-      "type": "object"
-    },
-    "name": "edit_camera"
-  },
-  {
     "description": "Toggle dynamic physics simulation, or set it explicitly with 'enabled'",
     "inputSchema": {
       "properties": {
@@ -2474,393 +2359,7 @@
     "name": "remove_tags"
   },
   {
-    "description": "Edit material properties including texture assignments (undoable). Only fields supplied are changed.",
-    "inputSchema": {
-      "properties": {
-        "alpha_cutoff": {
-          "description": "Alpha cutoff in [0, 1] for blending_mode alpha_test (default 0.5)",
-          "type": "number"
-        },
-        "base_color": {
-          "description": "Linear RGB base color [r, g, b]",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "blending_mode": {
-          "description": "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test discard in the opaque pass",
-          "enum": [
-            "opaque",
-            "alpha_blend",
-            "multiply",
-            "add",
-            "subtract",
-            "screen_door",
-            "alpha_test"
-          ],
-          "type": "string"
-        },
-        "bxdf_model": {
-          "description": "Selects which BxDF the standard shader applies",
-          "enum": [
-            "unlit",
-            "isotropic_brdf",
-            "anisotropic_brdf",
-            "anisotropic_slope",
-            "anisotropic_engine_ready"
-          ],
-          "type": "string"
-        },
-        "emissive": {
-          "description": "Linear RGB emissive [r, g, b]",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "ior": {
-          "description": "Index of refraction in [1, 3] (KHR_materials_ior; default 1.5)",
-          "type": "number"
-        },
-        "material_id": {
-          "description": "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over the name path)",
-          "type": "integer"
-        },
-        "material_name": {
-          "description": "Name of the material to edit",
-          "type": "string"
-        },
-        "metallic": {
-          "description": "Metallic factor in [0, 1]",
-          "type": "number"
-        },
-        "normal_texture_scale": {
-          "description": "Normal map scale",
-          "type": "number"
-        },
-        "occlusion_texture_strength": {
-          "description": "Occlusion map strength",
-          "type": "number"
-        },
-        "opacity": {
-          "description": "Opacity in [0, 1]",
-          "type": "number"
-        },
-        "reflectance": {
-          "description": "Dielectric reflectance in [0, 1]",
-          "type": "number"
-        },
-        "roughness": {
-          "description": "Roughness; either [x, y] for anisotropic or a single number applied to both."
-        },
-        "scene_name": {
-          "description": "Name of the scene (name path; not needed with material_id)",
-          "type": "string"
-        },
-        "texture_samplers": {
-          "description": "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list). Each slot holds a single texture reference, so assigning or clearing a texture also replaces/clears any Graph Texture binding on that slot.",
-          "properties": {
-            "base_color": {
-              "properties": {
-                "mag_filter": {
-                  "description": "Sampler magnification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "min_filter": {
-                  "description": "Sampler minification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "offset": {
-                  "description": "UV offset [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "rotation": {
-                  "description": "UV rotation in radians",
-                  "type": "number"
-                },
-                "scale": {
-                  "description": "UV scale [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "tex_coord": {
-                  "description": "UV channel index (e.g. 0 for TEXCOORD_0)",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "texture": {
-                  "description": "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."
-                },
-                "wrap": {
-                  "description": "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."
-                }
-              },
-              "type": "object"
-            },
-            "emissive": {
-              "properties": {
-                "mag_filter": {
-                  "description": "Sampler magnification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "min_filter": {
-                  "description": "Sampler minification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "offset": {
-                  "description": "UV offset [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "rotation": {
-                  "description": "UV rotation in radians",
-                  "type": "number"
-                },
-                "scale": {
-                  "description": "UV scale [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "tex_coord": {
-                  "description": "UV channel index (e.g. 0 for TEXCOORD_0)",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "texture": {
-                  "description": "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."
-                },
-                "wrap": {
-                  "description": "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."
-                }
-              },
-              "type": "object"
-            },
-            "metallic_roughness": {
-              "properties": {
-                "mag_filter": {
-                  "description": "Sampler magnification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "min_filter": {
-                  "description": "Sampler minification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "offset": {
-                  "description": "UV offset [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "rotation": {
-                  "description": "UV rotation in radians",
-                  "type": "number"
-                },
-                "scale": {
-                  "description": "UV scale [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "tex_coord": {
-                  "description": "UV channel index (e.g. 0 for TEXCOORD_0)",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "texture": {
-                  "description": "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."
-                },
-                "wrap": {
-                  "description": "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."
-                }
-              },
-              "type": "object"
-            },
-            "normal": {
-              "properties": {
-                "mag_filter": {
-                  "description": "Sampler magnification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "min_filter": {
-                  "description": "Sampler minification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "offset": {
-                  "description": "UV offset [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "rotation": {
-                  "description": "UV rotation in radians",
-                  "type": "number"
-                },
-                "scale": {
-                  "description": "UV scale [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "tex_coord": {
-                  "description": "UV channel index (e.g. 0 for TEXCOORD_0)",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "texture": {
-                  "description": "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."
-                },
-                "wrap": {
-                  "description": "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."
-                }
-              },
-              "type": "object"
-            },
-            "occlusion": {
-              "properties": {
-                "mag_filter": {
-                  "description": "Sampler magnification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "min_filter": {
-                  "description": "Sampler minification filter (default linear)",
-                  "enum": [
-                    "nearest",
-                    "linear"
-                  ],
-                  "type": "string"
-                },
-                "offset": {
-                  "description": "UV offset [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "rotation": {
-                  "description": "UV rotation in radians",
-                  "type": "number"
-                },
-                "scale": {
-                  "description": "UV scale [u, v]",
-                  "items": {
-                    "type": "number"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "tex_coord": {
-                  "description": "UV channel index (e.g. 0 for TEXCOORD_0)",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "texture": {
-                  "description": "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."
-                },
-                "wrap": {
-                  "description": "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."
-                }
-              },
-              "type": "object"
-            }
-          },
-          "type": "object"
-        },
-        "transmission": {
-          "description": "Transmission factor in [0, 1] (KHR_materials_transmission); > 0 makes the GPU ray tracer refract through the surface",
-          "type": "number"
-        },
-        "use_aniso_control": {
-          "description": "Enable anisotropic shading control",
-          "type": "boolean"
-        },
-        "use_circular_brushed_metal": {
-          "description": "Enable circular brushed metal shading variant",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "scene_name",
-        "material_name"
-      ],
-      "type": "object"
-    },
-    "name": "edit_material"
-  },
-  {
-    "description": "Create a new material under parent_id / parent_name (any prim), or in the scene's Materials scope without one, and return its id. Accepts the same fields as edit_material; omitted fields keep the engine defaults (white, roughness 0.5, non-metal, opaque isotropic BRDF). Undoable; the insert executes on the next editor frame.",
+    "description": "Create a new material under parent_id / parent_name (any prim), or in the scene's Materials scope without one, and return its id. Takes the material fields below; omitted fields keep the engine defaults (white, roughness 0.5, non-metal, opaque isotropic BRDF). Undoable; the insert executes on the next editor frame. Later edits of the material are set_item_properties on the returned id (its registered properties: base_color, roughness, the *_texture slot references and the per-slot texture transform and sampler properties, ...).",
     "inputSchema": {
       "properties": {
         "alpha_cutoff": {
@@ -3359,18 +2858,9 @@
     "name": "get_scene_variants"
   },
   {
-    "description": "Set a scene's per-scene state: ambient light color and/or the per-scene setting overrides (#239). By default 'settings' REPLACES the whole Scene_settings object (omitted fields return to the editor-global default; {} clears every override); with merge: true the given fields deep-merge (RFC 7386) over the current settings instead - omitted fields keep their values, null deletes an override. scene_id and variant_selections are managed by the scene: they are kept, and a different value is refused (variant_selections change through select_variant). The call is one undo entry. These persist in the ERHE_scene extension when the scene is saved.",
+    "description": "Set a scene's per-scene setting overrides (#239); the ambient light color is the scene item's ambient_light property (set_item_properties with item_name = the scene name). By default 'settings' REPLACES the whole Scene_settings object (omitted fields return to the editor-global default; {} clears every override); with merge: true the given fields deep-merge (RFC 7386) over the current settings instead - omitted fields keep their values, null deletes an override. scene_id and variant_selections are managed by the scene: they are kept, and a different value is refused (variant_selections change through select_variant). The call is one undo entry. These persist in the ERHE_scene extension when the scene is saved.",
     "inputSchema": {
       "properties": {
-        "ambient_light": {
-          "description": "Ambient light color [r, g, b] or [r, g, b, a]",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 4,
-          "minItems": 3,
-          "type": "array"
-        },
         "merge": {
           "description": "Deep-merge 'settings' over the current settings instead of replacing them (default false)",
           "type": "boolean"
@@ -3385,7 +2875,8 @@
         }
       },
       "required": [
-        "scene_name"
+        "scene_name",
+        "settings"
       ],
       "type": "object"
     },
@@ -4738,18 +4229,9 @@
     "name": "create_physics_body"
   },
   {
-    "description": "Edit the rigid body attached to a scene node. Only fields supplied are changed; shape fields replace the collision shape (recreates the body).",
+    "description": "Replace the collision shape of the rigid body attached to a scene node (one undo entry, a Collision_shape_set_operation; the body is recreated with the new shape). The body's property fields - Node_physics.motion_mode, is_trigger, mass, gravity_factor, center_of_mass_offset, initial velocities, physics_material, collision_filter - are written with set_item_properties.",
     "inputSchema": {
       "properties": {
-        "angular_velocity": {
-          "description": "Initial angular velocity [x, y, z] (world space, applied at body creation)",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
         "axis": {
           "description": "Shape axis (default y)",
           "enum": [
@@ -4763,23 +4245,6 @@
           "description": "Tapered capsule / cylinder bottom radius (default 0.5)",
           "type": "number"
         },
-        "center_of_mass": {
-          "description": "Center of mass offset [x, y, z]",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "filter_name": {
-          "description": "Collision filter name from the content library (empty string clears)",
-          "type": "string"
-        },
-        "gravity_factor": {
-          "description": "Gravity factor (default 1.0)",
-          "type": "number"
-        },
         "half_extents": {
           "description": "Box / cylinder half extents [x, y, z] (default [0.5, 0.5, 0.5])",
           "items": {
@@ -4789,40 +4254,9 @@
           "minItems": 3,
           "type": "array"
         },
-        "is_trigger": {
-          "description": "Create as a sensor / trigger volume",
-          "type": "boolean"
-        },
         "length": {
           "description": "Capsule / tapered shape axial length (default 1.0)",
           "type": "number"
-        },
-        "linear_velocity": {
-          "description": "Initial linear velocity [x, y, z] (world space, applied at body creation)",
-          "items": {
-            "type": "number"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "mass": {
-          "description": "Mass; 0 = spec infinite-mass convention; omitted = derived from the shape",
-          "type": "number"
-        },
-        "material_name": {
-          "description": "Physics material name from the content library (empty string clears)",
-          "type": "string"
-        },
-        "motion_mode": {
-          "description": "Motion mode (default dynamic; kinematic = kinematic physical)",
-          "enum": [
-            "static",
-            "kinematic",
-            "kinematic_non_physical",
-            "dynamic"
-          ],
-          "type": "string"
         },
         "node_id": {
           "description": "Node ID (preferred over node_name when both given)",
@@ -4841,7 +4275,7 @@
           "type": "string"
         },
         "shape": {
-          "description": "Collision shape; auto (default) = convex hull from the node's mesh, unit box when the node has no mesh. mesh shapes are static/kinematic only.",
+          "description": "Collision shape; auto = convex hull from the node's mesh, unit box when the node has no mesh. mesh shapes are static/kinematic only (refused while Node_physics.motion_mode is dynamic).",
           "enum": [
             "auto",
             "box",
@@ -4858,18 +4292,15 @@
         "top_radius": {
           "description": "Tapered capsule / cylinder top radius (default 0.5)",
           "type": "number"
-        },
-        "wake": {
-          "description": "Wake the (dynamic) body as soon as it enters the world instead of starting asleep; replaces a follow-up wake_physics_bodies pass",
-          "type": "boolean"
         }
       },
       "required": [
-        "scene_name"
+        "scene_name",
+        "shape"
       ],
       "type": "object"
     },
-    "name": "edit_physics_body"
+    "name": "set_collision_shape"
   },
   {
     "description": "Create a new Joint prim below a scene node (undoable): joins the nearest self-or-ancestor rigid body of that node (the joint's first frame node) to that of the connected node (the second frame node; none = the world). Any number of joints may name one body; the joint prim shows up as a child of the node in get_node_details 'joints'.",
@@ -4912,25 +4343,9 @@
     "name": "create_joint"
   },
   {
-    "description": "Edit a Joint prim below a scene node. Only fields supplied are changed; changes rebuild the constraint.",
+    "description": "Rebuild a Joint prim's constraint below a scene node, re-capturing the joint frames from the current node transforms. Runtime simulation state, not a document edit: no undo entry. The joint's fields (body_1, joint_settings, enable_collision) are properties written with set_item_properties, which rebuild the constraint on the edit, its undo and its redo.",
     "inputSchema": {
       "properties": {
-        "connect_to_world": {
-          "description": "Clear the connected node (constrain to the world)",
-          "type": "boolean"
-        },
-        "connected_node_id": {
-          "description": "Connected node ID (no connected node = constrain to the world)",
-          "type": "integer"
-        },
-        "connected_node_name": {
-          "description": "Connected node name",
-          "type": "string"
-        },
-        "enable_collision": {
-          "description": "Keep collision enabled between the joined bodies (default false)",
-          "type": "boolean"
-        },
         "joint_index": {
           "description": "Index among the node's child Joint prims (default 0)",
           "type": "integer"
@@ -4943,16 +4358,8 @@
           "description": "Node name (used when node_id is absent)",
           "type": "string"
         },
-        "rebuild": {
-          "description": "Rebuild the constraint, re-capturing joint frames from current node transforms",
-          "type": "boolean"
-        },
         "scene_name": {
           "description": "Name of the scene",
-          "type": "string"
-        },
-        "settings_name": {
-          "description": "Physics joint settings name from the content library (empty = free six-dof joint)",
           "type": "string"
         }
       },
@@ -4961,7 +4368,7 @@
       ],
       "type": "object"
     },
-    "name": "edit_joint"
+    "name": "rebuild_joint"
   },
   {
     "description": "Create a shared physics material under parent_id / parent_name (any prim), or in its kind Scope of the scene without one (undoable)",
@@ -5041,79 +4448,6 @@
     "name": "create_physics_material"
   },
   {
-    "description": "Edit a shared physics material (friction, restitution, combine modes, damping, wind receptivity, density); changes re-apply to all bodies using it. Only fields supplied are changed.",
-    "inputSchema": {
-      "properties": {
-        "angular_damping": {
-          "description": "Angular damping of every body using the material (default 0.05)",
-          "type": "number"
-        },
-        "density": {
-          "description": "Mass per shape volume of a body without an explicit mass; scales the shape mass (default 1)",
-          "type": "number"
-        },
-        "dynamic_friction": {
-          "description": "Dynamic friction (default 0.6)",
-          "type": "number"
-        },
-        "friction_combine": {
-          "description": "Friction combine mode",
-          "enum": [
-            "average",
-            "minimum",
-            "maximum",
-            "multiply"
-          ],
-          "type": "string"
-        },
-        "linear_damping": {
-          "description": "Linear damping of every body using the material (default 0.05)",
-          "type": "number"
-        },
-        "name": {
-          "description": "Name of the physics material to edit",
-          "type": "string"
-        },
-        "new_name": {
-          "description": "Rename the physics material",
-          "type": "string"
-        },
-        "restitution": {
-          "description": "Restitution (default 0.0)",
-          "type": "number"
-        },
-        "restitution_combine": {
-          "description": "Restitution combine mode",
-          "enum": [
-            "average",
-            "minimum",
-            "maximum",
-            "multiply"
-          ],
-          "type": "string"
-        },
-        "scene_name": {
-          "description": "Name of the scene",
-          "type": "string"
-        },
-        "static_friction": {
-          "description": "Static friction (default 0.6)",
-          "type": "number"
-        },
-        "wind_receptivity": {
-          "description": "Wind drag coefficient in kg/s of every body using the material: the scene wind applies force = wind_receptivity * (wind_velocity - body_velocity) each fixed step; 0 (default) = unaffected",
-          "type": "number"
-        }
-      },
-      "required": [
-        "scene_name",
-        "name"
-      ],
-      "type": "object"
-    },
-    "name": "edit_physics_material"
-  },
-  {
     "description": "Create a shared collision filter under parent_id / parent_name (any prim), or in its kind Scope of the scene without one (undoable)",
     "inputSchema": {
       "properties": {
@@ -5162,52 +4496,6 @@
       "type": "object"
     },
     "name": "create_collision_filter"
-  },
-  {
-    "description": "Edit a shared collision filter; system lists supplied replace the existing lists and re-apply to all bodies using the filter",
-    "inputSchema": {
-      "properties": {
-        "collide_with_systems": {
-          "description": "Non-empty = collide only with these systems (allowlist)",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "collision_systems": {
-          "description": "Systems the body belongs to",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "name": {
-          "description": "Name of the collision filter to edit",
-          "type": "string"
-        },
-        "new_name": {
-          "description": "Rename the collision filter",
-          "type": "string"
-        },
-        "not_collide_with_systems": {
-          "description": "Used when collide_with_systems is empty: never collide with these",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "scene_name": {
-          "description": "Name of the scene",
-          "type": "string"
-        }
-      },
-      "required": [
-        "scene_name",
-        "name"
-      ],
-      "type": "object"
-    },
-    "name": "edit_collision_filter"
   },
   {
     "description": "Create shared physics joint settings (limits + drives) under parent_id / parent_name (any prim), or in its kind Scope of the scene without one (undoable)",
@@ -5325,119 +4613,6 @@
       "type": "object"
     },
     "name": "create_physics_joint_settings"
-  },
-  {
-    "description": "Edit shared physics joint settings; limits / drives arrays supplied replace the existing ones and all joints using the settings are rebuilt",
-    "inputSchema": {
-      "properties": {
-        "drives": {
-          "description": "Drive (motor) entries",
-          "items": {
-            "properties": {
-              "axis": {
-                "maximum": 2,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "damping": {
-                "type": "number"
-              },
-              "max_force": {
-                "description": "Maximum force (absent = unlimited)",
-                "type": "number"
-              },
-              "mode": {
-                "enum": [
-                  "force",
-                  "acceleration"
-                ],
-                "type": "string"
-              },
-              "position_target": {
-                "type": "number"
-              },
-              "stiffness": {
-                "description": "> 0 selects a position motor, else a velocity motor",
-                "type": "number"
-              },
-              "type": {
-                "enum": [
-                  "linear",
-                  "angular"
-                ],
-                "type": "string"
-              },
-              "velocity_target": {
-                "type": "number"
-              }
-            },
-            "type": "object"
-          },
-          "type": "array"
-        },
-        "limits": {
-          "description": "Per-axis limit entries",
-          "items": {
-            "properties": {
-              "angular_axes": {
-                "description": "Rotation axes [x, y, z] this limit applies to",
-                "items": {
-                  "type": "boolean"
-                },
-                "maxItems": 3,
-                "minItems": 3,
-                "type": "array"
-              },
-              "damping": {
-                "description": "Soft limit damping",
-                "type": "number"
-              },
-              "linear_axes": {
-                "description": "Translation axes [x, y, z] this limit applies to",
-                "items": {
-                  "type": "boolean"
-                },
-                "maxItems": 3,
-                "minItems": 3,
-                "type": "array"
-              },
-              "max": {
-                "description": "Upper bound (absent = unbounded; min == max fixes the axis)",
-                "type": "number"
-              },
-              "min": {
-                "description": "Lower bound (absent = unbounded)",
-                "type": "number"
-              },
-              "stiffness": {
-                "description": "Soft limit spring stiffness (absent = hard limit)",
-                "type": "number"
-              }
-            },
-            "type": "object"
-          },
-          "type": "array"
-        },
-        "name": {
-          "description": "Name of the joint settings to edit",
-          "type": "string"
-        },
-        "new_name": {
-          "description": "Rename the joint settings",
-          "type": "string"
-        },
-        "scene_name": {
-          "description": "Name of the scene",
-          "type": "string"
-        }
-      },
-      "required": [
-        "scene_name",
-        "name"
-      ],
-      "type": "object"
-    },
-    "name": "edit_physics_joint_settings"
   },
   {
     "description": "Set a viewport's joint constraint debug visualization (doc/editor/tools.md, Debug_visualizations): which constraints are drawn (filter) and which kinds (physics joints, IK limits), and at which level physics joint limits are drawn (contract: the erhe::physics joint contract, the same on every backend; backend: what the built physics backend simulates). Omitted arguments keep their value. Applies to every viewport, or to the one titled 'viewport'.",

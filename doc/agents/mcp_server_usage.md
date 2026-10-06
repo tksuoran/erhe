@@ -142,7 +142,7 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_cameras","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{cameras: [{name, node, exposure, shadow_range}]}`
+Returns: `{cameras: [{name, id, node, exposure, shadow_range, fov_y, selectable}]}`. A camera is edited with `set_item_properties` on its `id` (`exposure`, `shadow_range`, `fov_y`, `perspective_z_near` / `perspective_z_far` or the `orthographic_` pair, ...).
 
 ### get_scene_lights
 
@@ -154,7 +154,7 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_lights","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{lights: [{name, node, type, color, intensity, range}]}`
+Returns: `{lights: [{name, id, node, type, color, intensity, range, cast_shadow, ...}]}`. A light is edited with `set_item_properties` on its `id` (`light_type` as `Directional` / `Point` / `Spot`, `color`, `intensity`, `range`, `cast_shadow`, `inner_spot_angle`, `outer_spot_angle`, ...): a light shares its name with its node, so a lookup by name finds the node. Its position is its node's transform (`set_node_transform`).
 
 ### get_scene_materials
 
@@ -182,7 +182,7 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_materials","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{materials: [{name, base_color, metallic, roughness, emissive}]}`
+Returns: `{materials: [{name, id, base_color, metallic, roughness, emissive}]}`. A material is edited with `set_item_properties` on its `id`: the value fields (`base_color`, `roughness` as `[x, y]`, `bxdf_model` by its label, ...), the slot texture references (`base_color_texture` and the other `<slot>_texture` properties, as `{"reference_id"}` / `{"reference_name"}`, empty for none) and the per-slot transform and sampler properties (`<slot>_texture_uv_rotation`, `_uv_offset`, `_uv_scale`, `_texgen_mode`, `_wrap_u`, `_wrap_v`, `_min_filter`, `_mag_filter`, ...).
 
 ### get_material_details
 
@@ -524,6 +524,29 @@ hints, not bounds). Without `item_type` it lists the owner types (`name`,
 visibility, a per-object default, secondary properties - is in
 `get_item_properties`, not in the schema.
 
+### set_item_properties / set_item_property
+
+Write registered properties of one item (or of one property sub-object) as
+one undoable `Property_edit_operation`: `{"item_id": 12, "properties":
+{"intensity": 5.0, "color": [1, 0.5, 0.2]}}` (or `item_name` + `scene_name`).
+The id is the unambiguous form and also reaches the items of loaded asset
+containers (`load_asset_file`, `acquire_asset`), which are in no scene. A
+name or path is looked up in the scene and resolves to the first match in
+the lookup order - the scene item, the prims of the scene tree, then the
+content library (materials, styles, textures, joint settings, animations,
+brushes, physics materials, collision filters, graph assets and their
+nodes) - so a name two items share (a light and its node, a material and
+a node) names the first of them.
+Every entry is checked before anything is written; the reply lists each
+entry's `before` / `after` local layer and effective `value`.
+`set_item_property` is the one-entry form. This is the edit path for every
+property-backed field: lights, cameras, materials and the physics items
+("Physics Tools" below). The scene's ambient color is the `ambient_light`
+property of the scene item, addressed by the scene's name:
+`{"scene_name": "S", "item_name": "S", "properties": {"ambient_light": [0.1, 0.1, 0.1]}}`;
+`set_scene_settings` takes the per-scene setting overrides (`settings`,
+`merge`).
+
 ### lock_items / unlock_items
 
 Lock or unlock items by ID. Locked items (`lock_edit` flag) cannot be deleted or have properties edited.
@@ -572,7 +595,19 @@ Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loa
 
 ## Physics Tools
 
-Create and edit KHR_physics_rigid_bodies features: the rigid body values of a node, the `Joint` prims and the shared content-library items (physics materials, collision filters, joint settings). Creation tools queue undoable operations ("queued": true in the response - the object exists on the next editor frame). Edit tools apply immediately. Nodes are addressed by `node_id` (preferred) or `node_name`.
+Create KHR_physics_rigid_bodies features: the rigid body values of a node, the `Joint` prims and the shared content-library items (physics materials, collision filters, joint settings). Creation tools queue undoable operations ("queued": true in the response - the object exists on the next editor frame). Nodes are addressed by `node_id` (preferred) or `node_name`.
+
+Every field of these features is a registered property, edited with `set_item_properties` (one undo entry per call; `get_property_schema` lists the names and value forms):
+
+| Feature | Item | Properties |
+|---|---|---|
+| Rigid body | the node | `Node_physics.motion_mode`, `is_trigger`, `mass`, `gravity_factor`, `initial_linear_velocity`, `initial_angular_velocity`, `center_of_mass_offset`, `physics_material`, `collision_filter` (all with the `Node_physics.` prefix; references as `{"reference_name": ...}` or `{"reference_id": ...}`) |
+| Joint | the `Joint` prim (its id is in `get_node_details` `joints`) | `body_0`, `body_1`, `joint_settings`, `enable_collision` - a write rebuilds the constraint, and so do its undo and redo |
+| Physics material | the material | `name`, `static_friction`, `dynamic_friction`, `restitution`, `friction_combine`, `restitution_combine` (`Average` / `Minimum` / `Maximum` / `Multiply`), `linear_damping`, `angular_damping`, `wind_receptivity`, `density` - the bodies using it follow |
+| Collision filter | the filter | `name`, `collision_systems`, `collide_with_systems`, `not_collide_with_systems` (JSON arrays of strings) - the bodies using it follow |
+| Joint settings | the settings | `name` and eleven properties per axis (`trans_x`, `trans_y`, `trans_z`, `rot_x`, `rot_y`, `rot_z`): `<axis>_limit` (`Free` / `Limited`), `<axis>_limit_min`, `<axis>_limit_max`, `<axis>_limit_stiffness`, `<axis>_limit_damping`, `<axis>_drive` (`Off` / `Force` / `Acceleration`), `<axis>_drive_max_force`, `<axis>_drive_position_target`, `<axis>_drive_velocity_target`, `<axis>_drive_stiffness`, `<axis>_drive_damping` - the joints using them rebuild |
+
+What is not a property has its own tool: the collision shape (`set_collision_shape`) and the re-capture of a joint's frames (`rebuild_joint`).
 
 ### get_physics_items
 
@@ -586,9 +621,9 @@ curl -X POST http://127.0.0.1:3743/mcp \
 
 Returns: `{physics_materials: [...], collision_filters: [...], physics_joint_settings: [...]}`
 
-### create_physics_body / edit_physics_body
+### create_physics_body / set_collision_shape
 
-Give a node a rigid body / edit it, by writing the node's `Node_physics.*` values (doc/erhe/property_system.md section 4.26). One rigid body per node. `get_node_details` reports the body under `physics` (`motion_mode`, `collision_shape`, `mass`, `is_trigger`, `physics_material`, `collision_filter`, ...).
+Give a node a rigid body by writing the node's `Node_physics.*` values (doc/erhe/property_system.md section 4.26). One rigid body per node. `get_node_details` reports the body under `physics` (`motion_mode`, `collision_shape`, `mass`, `is_trigger`, `physics_material`, `collision_filter`, ...).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -599,17 +634,18 @@ curl -X POST http://127.0.0.1:3743/mcp \
 Parameters (all optional except `scene_name` + node reference):
 - `shape` - `auto` (default: convex hull from the node's mesh, unit box without one), `box`, `sphere`, `capsule`, `tapered_capsule`, `cylinder`, `tapered_cylinder`, `convex_hull`, `mesh` (static/kinematic only); with shape params `half_extents`, `radius`, `bottom_radius`, `top_radius`, `length`, `axis`
 - `motion_mode` - `static`, `kinematic`, `kinematic_non_physical`, `dynamic` (default)
-- `mass`, `friction`, `restitution`, `linear_damping`, `angular_damping`, `gravity_factor`
+- `mass`, `gravity_factor`
 - `is_trigger` - create as sensor/trigger volume
 - `linear_velocity`, `angular_velocity` - initial velocities `[x, y, z]` (applied at body creation)
 - `center_of_mass` - `[x, y, z]` offset
-- `material_name`, `filter_name` - shared item names from the content library (empty string clears in edit)
+- `material_name`, `filter_name` - shared item names from the content library
+- `wake` - the dynamic body enters the world awake
 
-`edit_physics_body` takes the same fields; only fields supplied are changed. Shape fields replace the collision shape and recreate the body. `mass` / `friction` / `restitution` / damping edit the live body.
+`set_collision_shape` replaces the collision shape of a node that has a body (`shape` and the shape params above; one undo entry through `Collision_shape_set_operation`, which recreates a live body). A `mesh` shape is refused while `Node_physics.motion_mode` is dynamic: write the motion mode first.
 
-### create_joint / edit_joint
+### create_joint / rebuild_joint
 
-Create a `Joint` prim below a node / edit it (`create_joint` / `edit_joint`). The joint joins the nearest self-or-ancestor rigid body of that node - its first frame node - to that of the connected node (no connected node = the world).
+Create a `Joint` prim below a node. The joint joins the nearest self-or-ancestor rigid body of that node - its first frame node - to that of the connected node (no connected node = the world).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -617,9 +653,11 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_joint","arguments":{"scene_name":"Default Scene","node_name":"Door","connected_node_name":"Frame","settings_name":"Hinge","enable_collision":false}}}'
 ```
 
-Parameters: node reference, `connected_node_id`/`connected_node_name` (optional), `settings_name` (optional, empty = free six-dof joint), `enable_collision` (default false). `edit_joint` additionally takes `joint_index` (default 0, for nodes with several joints), `connect_to_world` (clear the connected node) and `rebuild` (re-capture joint frames from current node transforms).
+Parameters: node reference, `connected_node_id`/`connected_node_name` (optional), `settings_name` (optional, empty = free six-dof joint), `enable_collision` (default false).
 
-### create_physics_material / edit_physics_material
+`rebuild_joint` (node reference, `joint_index`, default 0, for nodes with several joints) re-captures the joint frames from the current node transforms and recreates the constraint. It changes runtime simulation state, not the document, so it records no undo entry.
+
+### create_physics_material
 
 Shared physics material in the content library.
 
@@ -629,9 +667,9 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_material","arguments":{"scene_name":"Default Scene","name":"Ice","static_friction":0.05,"dynamic_friction":0.02,"restitution":0.1,"friction_combine":"minimum"}}}'
 ```
 
-Fields: `static_friction`, `dynamic_friction`, `restitution`, `friction_combine`, `restitution_combine` (`average`/`minimum`/`maximum`/`multiply`). Edits re-apply the material to all bodies using it. `edit_physics_material` also takes `new_name`.
+Fields: `static_friction`, `dynamic_friction`, `restitution`, `friction_combine`, `restitution_combine` (`average`/`minimum`/`maximum`/`multiply`), `linear_damping`, `angular_damping`, `wind_receptivity`, `density`.
 
-### create_collision_filter / edit_collision_filter
+### create_collision_filter
 
 Shared collision filter (collision-system lists).
 
@@ -641,9 +679,9 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_collision_filter","arguments":{"scene_name":"Default Scene","name":"Debris","collision_systems":["debris"],"not_collide_with_systems":["debris"]}}}'
 ```
 
-Fields: `collision_systems`, `collide_with_systems` (allowlist), `not_collide_with_systems` (denylist, used when the allowlist is empty). In edit, lists supplied replace the existing lists and re-apply to all bodies using the filter.
+Fields: `collision_systems`, `collide_with_systems` (allowlist), `not_collide_with_systems` (denylist, used when the allowlist is empty).
 
-### create_physics_joint_settings / edit_physics_joint_settings
+### create_physics_joint_settings
 
 Shared joint settings (per-axis limits + drives).
 
@@ -653,7 +691,7 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_joint_settings","arguments":{"scene_name":"Default Scene","name":"Hinge","limits":[{"linear_axes":[true,true,true],"min":0,"max":0},{"angular_axes":[false,true,false],"min":-1.57,"max":1.57},{"angular_axes":[true,false,true],"min":0,"max":0}]}}}'
 ```
 
-`limits` entries: `linear_axes`/`angular_axes` (`[x, y, z]` booleans), `min`, `max` (absent = unbounded; min == max fixes the axis), `stiffness` (absent = hard limit), `damping`. `drives` entries: `type` (`linear`/`angular`), `mode` (`force`/`acceleration`), `axis` (0-2), `max_force`, `position_target`, `velocity_target`, `stiffness` (> 0 selects a position motor), `damping`. In edit, arrays supplied replace the existing ones and all joints using the settings are rebuilt automatically.
+`limits` entries: `linear_axes`/`angular_axes` (`[x, y, z]` booleans), `min`, `max` (absent = unbounded; min == max fixes the axis), `stiffness` (absent = hard limit), `damping`. `drives` entries: `type` (`linear`/`angular`), `mode` (`force`/`acceleration`), `axis` (0-2), `max_force`, `position_target`, `velocity_target`, `stiffness` (> 0 selects a position motor), `damping`.
 
 ### wake_physics_bodies
 

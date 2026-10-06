@@ -178,6 +178,25 @@ auto find_item_in_scene_by_id(Scene_root& scene_root, const std::size_t id) -> s
     return find_item_in_scene(scene_root, [id](const erhe::Item_base& item) { return item.get_id() == id; });
 }
 
+auto find_item_by_id(App_context& context, const std::size_t id) -> std::shared_ptr<erhe::Item_base>
+{
+    if (context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+            if (!scene_root) {
+                continue;
+            }
+            std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_id(*scene_root, id);
+            if (item) {
+                return item;
+            }
+        }
+    }
+    if (context.asset_manager != nullptr) {
+        return context.asset_manager->find_loaded_by_id(id);
+    }
+    return {};
+}
+
 auto find_item_in_scene_by_name(Scene_root& scene_root, const std::string_view name) -> std::shared_ptr<erhe::Item_base>
 {
     return find_item_in_scene(scene_root, [name](const erhe::Item_base& item) { return item.get_name() == name; });

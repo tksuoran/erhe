@@ -75,10 +75,12 @@ auto find_grid(App_context& context, const std::size_t item_id, const std::strin
     return {};
 }
 
-// Resolves args.item_id (any scene, or a grid) or args.item_name - an item
-// name or an item path (doc/erhe/usd_compatibility_design.md M1) - in
-// args.scene_name, or in the first scene when absent, falling back to the
-// grids.
+// Resolves args.item_id (any scene, a loaded asset container, or a grid)
+// or args.item_name - an item name or an item path
+// (doc/erhe/usd_compatibility_design.md M1) - in args.scene_name, or in the
+// first scene when absent, falling back to the grids. A name resolves to
+// the first match in find_item_in_scene_by_name's order; the id is the
+// unambiguous form.
 auto resolve_item(App_context& context, const json& args, std::string& out_error) -> std::shared_ptr<erhe::Item_base>
 {
     const std::size_t item_id    = args.value("item_id", std::size_t{0});
@@ -91,16 +93,10 @@ auto resolve_item(App_context& context, const json& args, std::string& out_error
     }
 
     if (item_id != 0) {
-        if (context.app_scenes != nullptr) {
-            for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
-                if (!scene_root) {
-                    continue;
-                }
-                std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_id(*scene_root, item_id);
-                if (item) {
-                    return item;
-                }
-            }
+        // Scene items, then loaded asset container items (find_item_by_id).
+        std::shared_ptr<erhe::Item_base> item = find_item_by_id(context, item_id);
+        if (item) {
+            return item;
         }
         std::shared_ptr<erhe::Item_base> grid = find_grid(context, item_id, {});
         if (grid) {

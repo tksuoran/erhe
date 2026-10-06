@@ -48,8 +48,9 @@ tick, no mode switch).
   multiplicative scale ladder caps per-brush primitive count -
   `common.quantize_scale`) + power-law sizes (`common.power_law_size`);
   pre-heap with sphere-drop packing (largest first, each rested on the
-  heap) so the settle compacts instead of exploding; batch
-  `edit_physics_body` friction 0.9 / restitution 0.02 /
+  heap) so the settle compacts instead of exploding; give the bodies (one
+  batch of `set_item_properties` `Node_physics.physics_material` writes) a
+  physics material with friction 0.9 / restitution 0.02 /
   angular_damping 0.35 so rocks pile instead of scattering. Boulders
   > 1 m want the ANGULAR archetypes (an evenly-jittered 30-point hull
   reads as a geodesic ball at boulder scale).

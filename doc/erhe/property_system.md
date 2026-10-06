@@ -336,8 +336,8 @@ table, see D2a), and references to other objects (D28).
   `item->get_property_sub_object(index)`, the item stays the one the
   operation names and seals against, and a sub-object that no longer
   exists at apply time is a logged no-op.
-  A multi-property edit - Paste Properties, the MCP `edit_material` tool
-  (property fields and texture slot fields) - is a
+  A multi-property edit - Paste Properties, the MCP `set_item_properties`
+  tool (on a material: the value fields and the texture slot fields) - is a
   `Property_edit_operation` (`doc/editor/operations.md`
   "Property_edit_operation"), which records the exact local layer of every
   property it writes.
@@ -799,7 +799,7 @@ table, see D2a), and references to other objects (D28).
     seals an instance subtree with it (`seal_instance_subtree`, together
     with the two viewport locks, never unsealed: a refresh re-clones). It
     was honored only by hand-written checks: the Properties window disables
-    its typed blocks and the name field, MCP `edit_material` refuses a
+    its typed blocks and the name field, the MCP material edit refused a
     locked material, delete skips locked items, and the transform and
     selection tools read the viewport locks. The generic property rows
     (D12), `Property_set_operation` (D11), MCP `set_item_property` and
@@ -1875,7 +1875,7 @@ any-property observer (D21) to its material whenever its
 the create info), with `reapply_physics_material()` as the callback; the
 token lives in the scene's node physics system, so the callback never
 outlives the body, and a material edit from any writer - Properties row, `Property_set_operation`,
-MCP `edit_physics_material` or `set_item_property`, glTF import - reaches
+MCP `set_item_properties` / `set_item_property`, glTF import - reaches
 every live body through the `IRigid_body` interface. The Properties
 window draws the material as generic rows only.
 
@@ -2133,8 +2133,6 @@ every migration:
   registration order across translation units is not the chain order.
 - `find_scene("")` in the MCP server does not default to the first scene
   even where a tool's schema says so; default explicitly.
-- MCP `edit_physics_body` is not undoable: an `undo` after it pops the
-  previous operation.
 - The Visual Studio MCP server may refuse connections; the crash fallback
   is the headless editor launched with stderr redirected to a file (the
   crash handler prints a symbolized backtrace there).
@@ -2266,7 +2264,7 @@ subscribes an any-property observer (D21) to its filter whenever its
 `collision_filter` property is set and in its constructors, with
 `reapply_collision_filter()` as the callback, so the backend recompiles the
 filter snapshot after an edit from any writer - the generic row,
-`Property_set_operation`, MCP `edit_collision_filter` or `set_item_property`,
+`Property_set_operation`, MCP `set_item_properties` / `set_item_property`,
 a file load. No scan of the open scenes and no hand-written row remain.
 
 Both file formats carry the three lists in their own entry, so the
@@ -2390,14 +2388,15 @@ inherits from a folder or takes from a style supplied by that folder or style
 after a reload, since the KHR entry states effective values, and it is where a
 joint-settings item's name lives, `PhysicsJoint` having no name field.
 
-**MCP.** Every tool keeps its argument shape, the KHR-shaped `limits` and
-`drives` arrays being a facade over the properties:
-`create_physics_joint_settings` and `edit_physics_joint_settings` apply an
-entry per axis by the glTF read rule and refuse an entry that names no axis or
-an axis outside 0..2 with an error naming the entry index;
+**MCP.** `create_physics_joint_settings` keeps its argument shape, the
+KHR-shaped `limits` and `drives` arrays being a facade over the properties:
+it applies an entry per axis by the glTF read rule and refuses an entry
+that names no axis or an axis outside 0..2 with an error naming the entry
+index;
 `get_physics_items` rebuilds the arrays from the mirror, so a caller reads
-back the array it wrote; `get_item_properties` / `set_item_property` /
-`get_addable_item_properties` reach all 66 by qualified name.
+back the array it wrote; `get_item_properties` / `set_item_properties` /
+`get_addable_item_properties` reach all 66 by name (an edit is
+`set_item_properties` on them).
 
 Test: `src/erhe/physics/test/test_joint_settings_properties.cpp` (defaults,
 setter to mirror, untyped access with enum labels, an inherited value reaching

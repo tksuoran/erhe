@@ -978,9 +978,10 @@ def build_station(c, name, ddgi=True):
 
 
 def place_view(c, v):
-    cameras = c.call("get_scene_cameras", {"scene_name": c.scene}).get("cameras", [])
-    c.mutate("edit_camera", {"scene_name": c.scene, "camera_id": cameras[0]["id"],
-                             "fov_y": math.radians(v["fov_y_deg"]), "z_near": 0.02})
+    camera_id = c.camera_id()
+    properties = {"fov_y": math.radians(v["fov_y_deg"])}
+    properties.update(c.clip_range(camera_id, z_near=0.02))
+    c.set_properties(camera_id, properties)
     c.place_camera(v["eye"], v["target"])
 
 

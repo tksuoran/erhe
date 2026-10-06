@@ -139,8 +139,9 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
   `angular_damping ~0.1`.
 - Stiffness/max_force scale with segment thickness: stiff base, floppy
   tip reads plant-like.
-- **Wind**: set `wind_receptivity` (kg/s) on segment bodies via
-  create/edit_physics_body - increasing toward the tip (e.g. 0.7 base ->
+- **Wind**: set `wind_receptivity` (kg/s) on the physics material the
+  segment bodies use (`common.physics_material(..., wind_receptivity=...)`,
+  one material per value) - increasing toward the tip (e.g. 0.7 base ->
   1.5 tip). Enable scene wind through `set_scene_settings` physics
   override; the object MUST carry `"_version": 2` or the wind fields are
   silently dropped by version migration (same trap as sky `_version`).

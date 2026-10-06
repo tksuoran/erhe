@@ -14,7 +14,7 @@ Implements the undo/redo operation system and all concrete editor operations.
 
 - **`Mesh_operation`** -- Base for operations that modify mesh geometry. Contains a list of `Entry` objects, each storing before/after mesh primitives and node physics. `make_entries()` helper applies a geometry transformation function to all selected meshes. After each geometry transform, the output is sanitized (`Geometry::sanitize()` - fixes degenerate facets and NaN/Inf vertices) and validated (`Geometry::validate()`). When sanitization fixes problems, the pre-operation input geometry is saved to `debug_geometry/` as a `.geogram` file for investigation. A result with no facets (every face deleted, a merge by distance that collapses the mesh) is a legal result: it yields an empty `Primitive` that renders and raytraces nothing (`doc/erhe/primitive.md` "Empty primitives"), the mesh keeps it (no rigid body, since it has no convex hull), and undo restores the previous primitive like for any other operation.
 
-- **`Compound_operation`** -- Groups multiple operations into a single undo step; undo runs the children in reverse. `Compound_operation::Parameters::child_error` says what the first execute does with a child that is in error after its own first execute: `Compound_child_error::keep_siblings` (the default) leaves that child inert and its siblings applied, and the compound is recorded; `Compound_child_error::roll_back` undoes the children executed before it in reverse order and gives the compound the child's error, so `Operation_stack` does not record it and nothing of the compound stays applied. The MCP edit tools that group several operations into one call use `roll_back` (`edit_physics_body` with shape and property fields, `set_scene_settings` with `ambient_light` and `settings`).
+- **`Compound_operation`** -- Groups multiple operations into a single undo step; undo runs the children in reverse. `Compound_operation::Parameters::child_error` says what the first execute does with a child that is in error after its own first execute: `Compound_child_error::keep_siblings` (the default) leaves that child inert and its siblings applied, and the compound is recorded; `Compound_child_error::roll_back` undoes the children executed before it in reverse order and gives the compound the child's error, so `Operation_stack` does not record it and nothing of the compound stays applied. The variant switch's compound uses `roll_back` (`make_select_variant_operation`, below).
 
 - **Geometry operations** (all extend `Mesh_operation`):
   - `Catmull_clark_subdivision_operation`, `Sqrt3_subdivision_operation`
@@ -107,10 +107,10 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `reparent_item`)
   - `Item_reposition_in_parent_operation` -- reorder siblings
   - `Node_transform_operation` -- undo/redo node transforms
-  - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows and MCP `edit_light` / `edit_camera` (one per field, grouped into a `Compound_operation` with a `Node_transform_operation` for `edit_light`'s position)
-  - `Property_edit_operation` -- the property writes of an edit function, recorded on the first execute (see "Property_edit_operation" below); the Properties window's Paste Properties, MCP `set_item_properties` / `set_item_property`, MCP `edit_material`, the property opinions of a variant switch, the Hierarchy window's no-transform-update flag and the MCP physics edits
+  - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows
+  - `Property_edit_operation` -- the property writes of an edit function, recorded on the first execute (see "Property_edit_operation" below); the Properties window's Paste Properties, MCP `set_item_properties` / `set_item_property` (every MCP property edit: lights, cameras, materials, the physics items, the scene item's `ambient_light`), the property opinions of a variant switch and the Hierarchy window's no-transform-update flag
   - `Lightmap_tile_overrides_operation` -- a scene's lightmap quadtree leaf overrides before / after (the Lightmap window's and MCP's subdivide / merge); execute and undo let the Lightmap window re-prepare a live partition
-  - `Collision_shape_set_operation` -- the collision shape a node's rigid body is made from, before / after (MCP `edit_physics_body` shape arguments): `Node_physics_system::set_collision_shape`, which recreates a live body. The before state is the node's authored shape (`Node_physics_system::get_authored_collision_shape`: the held shape without the center-of-mass wrapper the system adds for a nonzero `center_of_mass_offset`), so undo restores the same body shape and the offset is applied once. `Mesh_operation::capture_physics` takes the same authored shape for its versions.
+  - `Collision_shape_set_operation` -- the collision shape a node's rigid body is made from, before / after (MCP `set_collision_shape`): `Node_physics_system::set_collision_shape`, which recreates a live body. The before state is the node's authored shape (`Node_physics_system::get_authored_collision_shape`: the held shape without the center-of-mass wrapper the system adds for a nonzero `center_of_mass_offset`), so undo restores the same body shape and the offset is applied once. `Mesh_operation::capture_physics` takes the same authored shape for its versions.
   - `Scene_settings_set_operation` -- a scene's per-scene setting overrides (the codegen `Scene_settings`) before / after (MCP `set_scene_settings`). Execute and undo assign the struct and notify directly each consumer that keeps derived state from a field that changed, decided once at construction from the serialized fields: `camera_controls` -> `Fly_camera_tool::on_scene_camera_controls_changed()` (re-adopts the controls when the scene is hovered), `lightmap_tile_overrides` -> `Lightmap_window::on_tile_overrides_changed()`. `sky`, `grid`, `physics` and `shadow_frustum_fit` are read through `scene_settings_resolve.hpp` where they are used (sky and grid rendering, the lightmap bake's sky, the physics step and drags, the shadow fit), so nothing caches them; `clear_color` and `post_processing` have no reader. `scene_id` and `variant_selections` are managed by the scene (side-data identity; `Variant_select_operation`), and before and after must agree on them (verified).
   - `Merge_operation` -- merge multiple meshes
   - `Separate_selection_operation` (`operations/separate_operation.hpp`) --
@@ -275,14 +275,6 @@ section 3.3):
   It runs with `Property_edit_follow_ups::bone_connect`, so a `Rig.tail`
   or `Rig.connected` write moves the connected bones in the same undo
   entry, as the Properties window row does.
-- `make_material_edit_operation` (`operations/material_edit_operation.hpp`):
-  MCP `edit_material`, run with `execute_now` (the reply reports a refusal).
-  It writes the `Material_values` fields that changed and, per texture
-  slot, only the slot fields that changed, each through its own property as
-  a local value: a changed field is an explicit request, so it becomes local
-  even when it equals the default; only a slot texture set to null clears
-  the slot's local value. An unchanged field is not written, so an
-  expression on it stays through the edit as well as through its undo.
 - `make_select_variant_operation` (`operations/variant_select_operation.hpp`):
   every opinion and `active` write of the switch, in collection order (the
   sets the left block declares, deepest first, then the switched set, then
@@ -309,18 +301,17 @@ section 3.3):
 mesh primitive property, a cascade, a refused write, a refused reference,
 a primitive write on a sealed mesh, an edit that writes nothing, and an
 edit function that is the only owner of its items, and for the property
-bag, the material edit and the no-transform-update flag an undo / redo round
-trip of the item's full property dump with an overwritten expression
-restored (`test_migrated_property_edits.cpp`). The test compiles
-`property_edit_operation.cpp`, `material_edit_operation.cpp` and
-`item_property_apply.cpp`; the editor
+bag and the no-transform-update flag an undo / redo round trip of the
+item's full property dump with an overwritten expression restored
+(`test_migrated_property_edits.cpp`). The test compiles
+`property_edit_operation.cpp` and `item_property_apply.cpp`; the editor
 functions they call that need the whole editor
 (`App_context::on_item_property_changed`, the scene lookup of
 `is_item_reference_allowed`, the asset usership) have minimal test
 definitions in `editor_glue.cpp`. In the running editor, `mcp_server_tests`
 covers the same round trip of the full property dump (`get_item_properties`)
-for `edit_material` (an overwritten expression restored, an untouched one
-kept) and for a variant switch of `nested_variants.usda` (every prim).
+for a material edit through `set_item_properties` (an overwritten
+expression restored, an untouched one kept) and for a variant switch of `nested_variants.usda` (every prim).
 
 ## Primitive swaps keep the node in place
 

@@ -20,6 +20,13 @@ class Scene_root;
 [[nodiscard]] auto find_item_in_scene_by_id  (Scene_root& scene_root, std::size_t id)        -> std::shared_ptr<erhe::Item_base>;
 [[nodiscard]] auto find_item_in_scene_by_name(Scene_root& scene_root, std::string_view name) -> std::shared_ptr<erhe::Item_base>;
 
+// Any item by unique id: the items of every registered scene
+// (find_item_in_scene_by_id, in scene order), then the asset manager's
+// loaded assets - the builtins and the entries of every loaded container,
+// which live in no scene (Asset_manager::find_loaded_by_id). The id-addressed
+// MCP tools resolve items through this one lookup.
+[[nodiscard]] auto find_item_by_id(App_context& context, std::size_t id) -> std::shared_ptr<erhe::Item_base>;
+
 // The item a stored reference text names (doc/erhe/usd_compatibility_design.md M1):
 // a text holding '/' is a path (erhe::Hierarchy::get_path()) and is looked
 // up first from the scene's root node and then from the content library

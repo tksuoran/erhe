@@ -119,7 +119,7 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
 
     // One integer compare per live member. Every write to what a record is
     // built from advances the material's change serial - the colour picker
-    // drag and the MCP edit_material tool go through Material's setters and so
+    // drag and the MCP set_item_properties tool go through Material's properties and so
     // through on_property_changed, and a texture graph bake that lands a
     // different texture behind a slot's reference notifies the material - so a
     // serial that did not move means the record this slot already carries is

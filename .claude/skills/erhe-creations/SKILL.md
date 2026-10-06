@@ -354,10 +354,11 @@ following its construction logic:
 - **Texture slots default to clamp-to-edge** (2026-08-10): a material
   slot without an explicit sampler renders clamped, so any UV that runs
   past [0, 1] smears the edge texel into stripe bands. Tiling textures
-  need `bind_material_texture(..., wrap="repeat")`, which routes through
-  the `edit_material` per-slot sampler args (`wrap` string or [u, v]
-  pair: repeat / clamp_to_edge / mirrored_repeat, plus `min_filter` /
-  `mag_filter` nearest|linear). The Properties window has matching
+  need `bind_material_texture(..., wrap="repeat")` (`wrap` string or
+  [u, v] pair: repeat / clamp_to_edge / mirrored_repeat), which writes the
+  slot's `<slot>_texture_wrap_u` / `_wrap_v` material properties with
+  `set_item_properties` (`<slot>_texture_min_filter` / `_mag_filter` take
+  `Nearest` / `Linear` the same way). The Properties window has matching
   Wrap/Filter rows per bound slot.
 
 ## Lighting

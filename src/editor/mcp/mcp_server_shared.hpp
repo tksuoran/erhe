@@ -127,8 +127,6 @@ auto prim_move_refusal(const erhe::Hierarchy& prim, const erhe::Hierarchy& new_p
 // (a reference instance, prefabs/instance_structure.hpp).
 auto find_resource_parent(Scene_root& scene_root, const json& args, std::shared_ptr<erhe::Hierarchy>& out_parent) -> std::optional<std::string>;
 
-auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>;
-
 auto parse_light_type(const std::string& type, const erhe::scene::Light_type fallback) -> erhe::scene::Light_type;
 
 template <typename T>

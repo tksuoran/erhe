@@ -64,8 +64,8 @@ editor subsystems                  scene graph, brushes, geometry,
 | Geometry reuse: pooled brushes, `place_brush`, `place_brush_instances` (N placements, one frame, one undo entry, `parent_index` chaining), pose nodes for scaled parents | The **content library** (per-scene brush/material/texture collections): every placement of one brush shares its `Primitive` (GPU buffers, raytrace shape); brushes persist in saved scenes via the `ERHE_brushes` glTF extension |
 | `create_node` groups / joint anchors (mandatory one-subtree-per-object hierarchy) | Scene graph nodes with world-preserving reparent (`Node::set_parent`), `Item_insert_remove_operation` |
 | `set_node_transform` (absolute, selection-free, undoable) | `Node_transform_operation`; teleports the rigid body to the pose without impulses |
-| `create_material` / `edit_material` (base color, metallic, roughness, emissive, `blending_mode` + `opacity` for raster transparency, `transmission` for the ray tracer) | The PBR material system and per-scene material library |
-| `create_light` / `edit_light`, `edit_camera` (`exposure`, `shadow_range`, `z_far`) | Scene lights (directional/point/spot) with shadow maps, camera projection and shadow-fit machinery |
+| `create_material`, then `set_item_properties` on its id (base color, metallic, roughness, emissive, `blending_mode` + `opacity` for raster transparency, `transmission` for the ray tracer, slot samplers) | The PBR material system and per-scene material library |
+| `create_light`, then `set_item_properties` on the light or camera id (`common.exposure` / `common.shadow_range`: `exposure`, `shadow_range`, `perspective_z_far`) | Scene lights (directional/point/spot) with shadow maps, camera projection and shadow-fit machinery |
 | `set_scene_settings` (sky, grid, clear color, physics/wind overrides; `merge: true` deep merge) | Versioned per-scene `Scene_settings` (codegen serialization; unversioned sub-objects are rejected loudly - a missing `_version` would silently drop newer fields) |
 | Undo safety everywhere | Every mutating tool goes through the editor's `Operation_stack`, so an AI-built scene is fully undoable in the UI |
 
@@ -99,7 +99,7 @@ per node.
 
 | Creation feature | Editor feature underneath |
 |---|---|
-| `create_physics_body` (`shape: "auto"` mesh hulls, mass, `gravity_factor`, `material_name`, `wake`), `edit_physics_body`, `create_physics_material` / `edit_physics_material` (friction, restitution, damping, `wind_receptivity`, density) | the node's `Node_physics.*` values over Jolt rigid bodies, sharing `Physics_material` items that carry how the matter behaves; `auto` builds a convex hull of the node's own mesh |
+| `create_physics_body` (`shape: "auto"` mesh hulls, mass, `gravity_factor`, `material_name`, `wake`), `set_item_properties` on the node's `Node_physics.*` values, `set_collision_shape`, `create_physics_material` (friction, restitution, damping, `wind_receptivity`, density; `common.physics_material` edits an existing one through `set_item_properties`) | the node's `Node_physics.*` values over Jolt rigid bodies, sharing `Physics_material` items that carry how the matter behaves; `auto` builds a convex hull of the node's own mesh |
 | `create_physics_joint` + shared `create_physics_joint_settings` (limits + per-axis drives) | Six-dof Jolt constraints; drives with `position_target 0` act as **rest-pose motors** - the basis for swaying foliage and the standing spider ragdoll |
 | `create_collision_filter` (self-denylist groups) | Jolt collision layers/filters - e.g. sibling sway spines that must not collide with each other |
 | Scene wind (`common.wind`, `wind_*` settings) | Per-step force `receptivity * (wind_velocity - body_velocity)` on every receptive body, with gusts, turbulence and a wavelength phase field |

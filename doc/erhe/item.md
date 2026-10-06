@@ -318,8 +318,7 @@ and is the identifier a USD prim path is.
   by a content-library entry node answers from the entry node's siblings; every
   other item has no namespace and accepts every name. The `name` property's
   bridge validation calls it, so the Properties window row and the MCP
-  `set_item_property` inherit the refusal, and the MCP `new_name` arguments
-  check it directly.
+  `set_item_properties` / `set_item_property` inherit the refusal.
 
 ## Dependencies
 

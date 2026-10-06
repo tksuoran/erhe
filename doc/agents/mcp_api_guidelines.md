@@ -48,7 +48,7 @@ handler.
 The server carries two families of tools and each has its own job.
 
 - **Scene scripting** - `create_shape`, `transform_selection`,
-  `set_item_properties`, `set_item_property`, `edit_material`, `import_gltf` and the rest - takes
+  `set_item_properties`, `set_item_property`, `import_gltf` and the rest - takes
   explicit arguments and acts on scene state. This is how a script or an
   agent changes a document.
 - **UI driving** - the `get_imgui_*`, `imgui_*`, `mouse_*`, `key_press`,
@@ -113,5 +113,16 @@ the whole call naming the property. `set_item_property` is its one-entry
 form and also executes at once: a later call in the same `batch` sees the
 write, and the reply carries the property's `before` / `after` local layer
 and effective `value` (no `"queued"` field).
+
+A field that is a registered property is edited through
+`set_item_properties` and has no per-type edit tool: lights, cameras,
+materials, the physics items and the scene's `ambient_light` are written
+that way (`doc/agents/mcp_server_usage.md` "set_item_properties /
+set_item_property"). A per-type tool exists only for what is not a
+property: `set_collision_shape` (the collision shape, through
+`Collision_shape_set_operation`), `rebuild_joint` (runtime state, no undo
+entry) and `set_scene_settings` (the codegen `Scene_settings` struct,
+through `Scene_settings_set_operation`). `get_property_schema` lists the
+property names and value forms of each owner type.
 
 

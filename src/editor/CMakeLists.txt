@@ -379,8 +379,6 @@ erhe_target_sources_grouped(
     operations/kind_scope_operation.hpp
     operations/library_attach_operation.cpp
     operations/library_attach_operation.hpp
-    operations/material_edit_operation.cpp
-    operations/material_edit_operation.hpp
     operations/geometry_operations.cpp
     operations/geometry_operations.hpp
     operations/operation.cpp

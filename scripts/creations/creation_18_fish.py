@@ -450,8 +450,7 @@ def build_fish(c):
                                  roughness=0.38, metallic=0.05)
     # ensure_material returns a pre-existing material unchanged (--only path);
     # the factor must be white or it tints the albedo texture.
-    c.mutate("edit_material", {"scene_name": c.scene, "material_name": body_mat,
-                               "base_color": [1.0, 1.0, 1.0]})
+    c.set_properties(c.material_id(body_mat), {"base_color": [1.0, 1.0, 1.0]})
     build_skin_graphs(c)
     c.bind_material_texture(body_mat, ALBEDO_GRAPH, slot="base_color", wrap="repeat")
     c.bind_material_texture(body_mat, NORMAL_GRAPH, slot="normal", wrap="repeat")
@@ -1023,8 +1022,7 @@ def _mandarin_body_part(c, cfg, part):
                                  base_color=[1.0, 1.0, 1.0],
                                  roughness=cfg.get("body_roughness", 0.28),
                                  metallic=0.02)
-    c.mutate("edit_material", {"scene_name": c.scene, "material_name": body_mat,
-                               "base_color": [1.0, 1.0, 1.0]})
+    c.set_properties(c.material_id(body_mat), {"base_color": [1.0, 1.0, 1.0]})
     albedo_name, normal_name = build_mandarin_skin(
         c, key, part.get("skin", cfg["skin"]))
     c.bind_material_texture(body_mat, albedo_name, slot="base_color", wrap="repeat")

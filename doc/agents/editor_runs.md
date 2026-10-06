@@ -132,7 +132,8 @@ fall into:
   `get_physics_items`, `get_shadow_fit_debug`, `get_async_status`.
 - **Actions**: `create_shape`, `create_node`, `place_brush`,
   `request_brush_geometry`, `select_items`, `transform_selection`,
-  `reparent_item`, `create_scope`, `edit_material`,
+  `reparent_item`, `create_scope`, `set_item_properties` (lights, cameras,
+  materials, physics items, the scene's `ambient_light`),
   `lock_items`/`unlock_items`, `add_tags`/`remove_tags`, `toggle_physics` +
   the `*_physics_*` family, mesh-component editing
   (`set_mesh_component_mode`, `select_mesh_components`,
