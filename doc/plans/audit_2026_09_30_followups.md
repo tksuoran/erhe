@@ -71,12 +71,43 @@ on culling.
   runtime on Linux) and its deviceless set passes locally with no report
   (1368 of 1368 with clang 18 and the CI options).
 
+- Items 13 and 14, reflective MCP item edits and data-model undo: the
+  landed design is in the current documents (`doc/erhe/property.md` "Write
+  recording", `doc/editor/operations.md` "Property_edit_operation",
+  `doc/editor/coding_rules.md` "Document change notifications",
+  `doc/agents/mcp_server_usage.md` `set_item_properties` /
+  `get_property_schema`); the remaining work is
+  `doc/plans/property_undo_and_reflective_mcp.md`.
+
 ## Next
 
-Items 13 and 14, selected 2026-10-05, worked together: the plan, its steps
-and order are in `doc/plans/property_undo_and_reflective_mcp.md`. What else
-is open is listed under "Open parts of worked items" and "Follow-ups found
-by review".
+### Branch review: `property-undo-reflective-mcp`
+
+Items 13 and 14 and the deterministic editor clock (`doc/editor/time.md`;
+remaining work in `doc/plans/deterministic_editor_clock.md`) are on the
+branch `property-undo-reflective-mcp`, based on `fb2a68113` (= `origin/main`
+when the branch started). The branch awaits a medium-effort review of the
+whole branch before the user pushes or merges it; `main` is never pushed by
+an agent without an explicit user request.
+
+- Review scope: `git diff fb2a68113..property-undo-reflective-mcp` (and
+  `git log` of the same range for the per-step commit messages).
+- Known verification gaps: `doc/plans/property_undo_and_reflective_mcp.md`
+  section 4 (the lightusd-only variant switch round trip, the long / GPU
+  scripts checked only with `py_compile`, the material value ranges).
+- Verification recipe: `doc/testing.md` - the headless Vulkan tree
+  (`doc/agents/linux.md`), `ctest -L editor` for `mcp_server_tests`, and
+  `scripts/ci_run_tests.py` for the deviceless set.
+- On lavapipe the first `Mcp_test` case of a `ctest -L editor` run fails in
+  setup with "Request timed out" in about half the runs; it is the known
+  first-request timeout under "Follow-ups found by review" below, not a
+  regression of the branch.
+
+### After the review
+
+What else is open is listed under "Open parts of worked items" and
+"Follow-ups found by review"; the next medium-term item is picked from
+`doc/reference/audit_erhe_2026_09_30.md` section 8.
 
 ## Open parts of worked items
 

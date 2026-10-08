@@ -237,8 +237,15 @@ properties are bridges whose setter calls it; write the flag property with
 `Node_transform_operation`), `Node_physics_system::set_collision_shape`
 (that is `Collision_shape_set_operation`), `Item_base::set_name` (write
 `Item_base::name_property` with `set_value`), or any setter that assigns a
-plain member. Structural changes (insert, remove,
-reparent, geometry replacement) stay bespoke operations.
+plain member. Operations that change more than local property layers
+are bespoke: the structural ones (insert, remove, parent, reposition,
+scope, library attach), the `Mesh_operation` family and other geometry
+edits, `Node_transform_operation` (bus message, physics teleport, and
+`set_parent_from_node` is a member write), `Style_set_operation` (the
+style layer), `Variant_select_operation` (variant table and
+`Scene_settings`), `Collision_shape_set_operation`,
+`Scene_settings_set_operation`, animation edits, lightmap tile overrides,
+and the scene builder, raytrace and import operations.
 
 There is no run-time check for such member writes. The item mutation
 serial (`erhe::get_item_mutation_serial()`, `item.hpp`) cannot provide one:
@@ -248,8 +255,7 @@ transform, physics or other plain member writes, so a serial comparison
 around the edit would both flag correct edits and miss the writes it is
 meant to catch.
 
-Edits built on it (doc/plans/property_undo_and_reflective_mcp.md
-section 3.3):
+Edits built on it:
 
 - `make_property_set_edit_operation` (`property_edit_operation.hpp`): a
   `Property_set` written as local values on one item. Each entry is checked
@@ -315,6 +321,8 @@ expression restored, an untouched one kept) and for a variant switch of `nested_
 
 ## Committed node transforms
 
+Which mechanism owns which change notification is stated in
+[coding_rules.md](coding_rules.md) "Document change notifications".
 A committed node transform is announced by one function,
 `announce_committed_node_transform()` (`scene/node_transform_commit.hpp`):
 it sends `Node_touched_message` and, when the node's subtree holds a
@@ -440,4 +448,4 @@ Geometry operations run asynchronously via `async_for_nodes_with_mesh()` (in `it
 
 ## Future work
 
-- [plans/property_undo_and_reflective_mcp.md](../plans/property_undo_and_reflective_mcp.md): property edits recorded instead of hand-coded before / after, and the MCP item-edit tools replaced by one reflective verb.
+- [plans/property_undo_and_reflective_mcp.md](../plans/property_undo_and_reflective_mcp.md): scene settings edits of the Properties window and the fly camera through `Scene_settings_set_operation`, the notification gaps of property edits (lighting announcement for mesh edits, draw-list rebuild outside operations, physics teleport of property transform writes), an edit that re-seals within itself, and the open verification runs.

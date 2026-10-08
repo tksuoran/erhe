@@ -122,7 +122,13 @@ set_item_property"). A per-type tool exists only for what is not a
 property: `set_collision_shape` (the collision shape, through
 `Collision_shape_set_operation`), `rebuild_joint` (runtime state, no undo
 entry) and `set_scene_settings` (the codegen `Scene_settings` struct,
-through `Scene_settings_set_operation`). `get_property_schema` lists the
-property names and value forms of each owner type.
+through `Scene_settings_set_operation`; it refuses an `ambient_light`
+argument and names the scene item's `ambient_light` property instead).
+`get_property_schema` lists the property names and value forms of each
+owner type.
 
+## Future work
 
+- [plans/property_undo_and_reflective_mcp.md](../plans/property_undo_and_reflective_mcp.md):
+  the scene settings edits that still bypass `Scene_settings_set_operation`,
+  and the script runs that verify the move to `set_item_properties`.

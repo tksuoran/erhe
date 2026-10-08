@@ -62,7 +62,7 @@ The editor is the main application built on the erhe C++ graphics engine. It pro
 - `Tool_select_message` -- active tool changed
 - `Render_scene_view_message` -- scene view rendering requested
 
-Messages can be synchronous (`sync_only`), queued (`queue_only`), or both. Queued messages are flushed once per frame via `App_message_bus::update()`.
+Messages can be synchronous (`sync_only`), queued (`queue_only`), or both. Queued messages are flushed once per frame via `App_message_bus::update()`. The message bus is one of six change-notification mechanisms; which one owns which event is in [coding_rules.md](coding_rules.md) "Document change notifications".
 
 ### Scene (`scene/`)
 

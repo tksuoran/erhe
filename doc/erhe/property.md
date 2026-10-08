@@ -65,7 +65,8 @@ inventory (and the owner's design section when the design changed).
 - **`Property_bridge`** - `get` / `set` callbacks that store a property in
   the object's own member instead of the entry store. A bridged property is
   always `Value_source::local`, never inherits, is coerced on every read,
-  and clearing it writes the default. `Node`'s translation / rotation /
+  and clearing it writes the object's default layer value (the D31
+  per-object default when one is bound, else the registry default). `Node`'s translation / rotation /
   scale are bridged onto its `Trs_transform`; the editor's geometry graph
   node parameters are bridged onto the node members (keyed on the node
   kind's owner type id, with `set` ending in the node's `mark_dirty`,

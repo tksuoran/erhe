@@ -57,6 +57,13 @@
   DONE::item-0-removed-from-queue-2026-09-05|?user-interactive{material-sampler-rows,brush-material-row,graph-mesh-row}
 ✓capture_inheritance_snapshot-cost-FIXED-2026-09-21{6d6960261+a3cd73b22;supplied-properties-of-the-two-ancestor-chains-only}
 
+@property-undo+reflective-mcp::DONE-on-branch-property-undo-reflective-mcp{audit-items-13+14;review-pending;remaining->doc/plans/property_undo_and_reflective_mcp.md}
+  Property_write_recording::erhe::property{records-local-layer-writes¬Property_changed_args;first-before+last-after;refusals-counted;doc/erhe/property.md"Write recording"}
+  Property_edit_operation::editor{edit-function-recorded-once;doc/editor/operations.md"Property_edit_operation"}+MCP-set_item_properties+get_property_schema{doc/agents/mcp_server_usage.md}
+  !trap::member-writes-invisible-to-recording{set_flag_bits+set_parent_from_node+set_collision_shape+set_name+plain-member-setters}→edit-functions-write-via-set_value/property-setters-only;no-runtime-check{item-mutation-serial-cannot-serve}
+  !trap::undo-runs-FORWARD-record-order¬reverse{cascade:A-callback-writes-B→records[A,B];undo-A-then-B-restores-independent-B};no-Change_batch-around-restores{batch-defers-callbacks-past-B-restore}
+  !trap::seal-order{item-seal-record(writable_when_sealed=lock_edit)-applied-first-if-item-sealed-else-after-its-other-records};unseal+write+reseal-in-one-edit=unrestorable{plan-sec-3}
+  !trap::bridged-clear-writes-object-default-layer{D31-per-object-default-else-registry-default;Typed::type_name_property-default=class-token}
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
 ?user-interactive-check{folders+category-props+texture-slots+styles+node-attachment-values+camera+physics-materials}→expect-fixes;then-migrations{Node_physics-first}

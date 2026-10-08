@@ -512,40 +512,96 @@ Returns the JSON schema of the properties an owner type has, generated from
 the property registry at run time: `{"item_type": "Light"}` returns
 `{"type": "object", "properties": {...}}`, one entry per property of the
 type's owner chain plus the attached properties that apply to it (by
-qualified name). Each entry carries the JSON value form `set_item_properties`
-takes (vectors and quaternions as fixed-length number arrays, an
-enumeration as a string with its `enum` names, an object reference as
-`{"reference_id"}` or `{"reference_name"}`), `readOnly`, `default` (absent for
-computed properties, per-object defaults and object references),
-`description` and `title` from the UI tooltip, group and label, and the
-`x-erhe-*` extensions (`x-erhe-ui-minimum` / `x-erhe-ui-maximum` are slider
-hints, not bounds). Without `item_type` it lists the owner types (`name`,
-`parent`, `property_count`). What depends on one object - a row's
-visibility, a per-object default, secondary properties - is in
-`get_item_properties`, not in the schema.
+qualified name). `item_type` is an owner type name; for an item it is its
+type name (`Xformable` for a plain node). Without `item_type` it lists the
+owner types (`name`, `parent`, `property_count`; bounded by
+`Property_registry::get_owner_type_count`).
+
+Each entry carries the JSON value form `set_item_properties` takes, one form
+per `Property_type`:
+
+| Property type | JSON form |
+|---|---|
+| `boolean` / `integer` / `floating` / `double_floating` | `boolean` / `integer` / `number` / `number` |
+| `vec2` / `vec3` / `vec4`, `ivec2` / `ivec3` / `ivec4` | fixed-length `number` / `integer` array (`minItems` = `maxItems`) |
+| `quat` | 4 numbers, `x-erhe-component-order` `xyzw` |
+| `mat4` | 16 numbers, `x-erhe-component-order` `column-major` |
+| `string`, `asset_path` | `string` |
+| `enumeration` | `string` with `enum` = the `Enum_info` labels `parse_value` accepts (`Spot`, `Clamp to Edge`); `integer` without a table |
+| `float_array` / `int_array` / `string_array` | variable-length array of `number` / `integer` / `string` |
+| `object`, `weak_object` | `{"reference_id": <id>}` or `{"reference_name": "<name or path>"}`, exactly one |
+
+and `readOnly`, `default` (the registry default; absent for a computed
+property, a per-object default and an object reference), `title` (the UI
+label) and `description` (group and tooltip). The `x-erhe-*` keys:
+`x-erhe-type` (the `Property_type` name), `x-erhe-group`,
+`x-erhe-ui-minimum` / `x-erhe-ui-maximum` (slider hints, not bounds, which
+is why the standard `minimum` / `maximum` are not used),
+`x-erhe-developer-only`, `x-erhe-default-per-object` (a D31 per-object
+default; `get_item_properties` reports the value per item),
+`x-erhe-attached`, `x-erhe-inherits`, `x-erhe-computed`, `x-erhe-writes`
+(the stored property a writable computed property writes) and
+`x-erhe-reference-item-types` (object references). What depends on one
+object - a row's visibility, a per-object default, secondary properties
+(`get_addable_item_properties`) - is in `get_item_properties`, not in the
+schema.
 
 ### set_item_properties / set_item_property
 
-Write registered properties of one item (or of one property sub-object) as
-one undoable `Property_edit_operation`: `{"item_id": 12, "properties":
-{"intensity": 5.0, "color": [1, 0.5, 0.2]}}` (or `item_name` + `scene_name`).
-The id is the unambiguous form and also reaches the items of loaded asset
-containers (`load_asset_file`, `acquire_asset`), which are in no scene. A
-name or path is looked up in the scene and resolves to the first match in
-the lookup order - the scene item, the prims of the scene tree, then the
-content library (materials, styles, textures, joint settings, animations,
-brushes, physics materials, collision filters, graph assets and their
-nodes) - so a name two items share (a light and its node, a material and
-a node) names the first of them.
-Every entry is checked before anything is written; the reply lists each
-entry's `before` / `after` local layer and effective `value`.
-`set_item_property` is the one-entry form. This is the edit path for every
-property-backed field: lights, cameras, materials and the physics items
-("Physics Tools" below). The scene's ambient color is the `ambient_light`
-property of the scene item, addressed by the scene's name:
-`{"scene_name": "S", "item_name": "S", "properties": {"ambient_light": [0.1, 0.1, 0.1]}}`;
+Write registered properties of one item (or of one property sub-object,
+`sub_object`) as one undoable `Property_edit_operation` run at once
+(`execute_now`): `{"item_id": 12, "properties": {"intensity": 5.0, "color":
+[1, 0.5, 0.2], "range": null, "inner_spot_angle": {"expression":
+"outer_spot_angle * 0.5"}, "physics_material": {"reference_id": 33}}}` (or
+`item_name` + `scene_name`). A `null` value clears the local layer (on a
+bridged property it writes the object's default), `{"expression": ...}`
+installs an expression, an object value takes `{"reference_id"}` or
+`{"reference_name"}` (a name or path in the item's scene), and a
+`string_array` value is a JSON array of strings.
+
+The id is the unambiguous form. It resolves through `find_item_by_id`
+(`src/editor/scene/item_lookup.hpp`): the items of every scene in scene
+order, then the asset manager's loaded assets - the builtins and the
+entries of loaded asset containers (`load_asset_file`, `acquire_asset`),
+which are in no scene. A name or path is looked up in the scene and
+resolves to the first match in the lookup order - the scene item, the
+prims of the scene tree, then the content library (materials, styles,
+textures, joint settings, animations, brushes, physics materials,
+collision filters, graph assets and their nodes) - so a name two items
+share (a light and its node, a material and a node) names the first of
+them.
+
+Every entry is checked against the live state before anything is written
+(lookup, parse, read-only, seal, validation including the bridge
+validate, expression compilation, the cross-scene reference check), so one
+bad entry fails the call naming the property and nothing is written. The
+entries are written in property-name order; a refusal that shows only
+while they are written (an entry that sets `lock_edit` before a later
+one) fails the operation, nothing stays written and the reply names it.
+The reply lists each entry's `before` / `after` local layer and effective
+`value`, the stored property a writable computed property wrote
+(`writes`), and the writes made by changed callbacks (`cascaded`). A call
+that only clears properties without a local layer writes nothing and
+replies `"changed": false` with no undo entry. Because the edit executes at
+once, a later call in the same `batch` sees the write.
+`set_item_property` is the one-entry form.
+
+Values are taken as the property's validation allows: a UI range is a
+hint. On a material, `metallic`, `opacity`, `transmission`,
+`occlusion_texture_strength` and `alpha_cutoff` refuse a value outside
+[0, 1] (their `unit_range` validation); `base_color`, `roughness`,
+`reflectance`, `emissive` and `ior` are taken as given.
+
+This is the edit path for every property-backed field: lights, cameras,
+materials and the physics items ("Physics Tools" below). The scene's
+ambient color is the `ambient_light` property of the scene item, addressed
+by the scene's name:
+`{"scene_name": "S", "item_name": "S", "properties": {"ambient_light": [0.1, 0.1, 0.1]}}`.
 `set_scene_settings` takes the per-scene setting overrides (`settings`,
-`merge`).
+required; `merge`) as one `Scene_settings_set_operation`; it refuses an
+`ambient_light` argument and names the scene item property instead. What
+one call to several tools combines (a collision shape and body properties,
+the ambient light and the settings) is a `batch`, one undo entry.
 
 ### lock_items / unlock_items
 

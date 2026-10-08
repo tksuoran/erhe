@@ -110,6 +110,32 @@ out of the scene. So a cached reference must handle BOTH.
   reports every such cached reference. See
   `doc/editor/import_undo_reference_clearing.md`.
 
+## Document change notifications
+
+Six mechanisms carry changes to the editor's derived state. Each owns one
+kind of event; code that reacts to a change subscribes to the mechanism
+that owns that event, and code that makes a change reaches it through that
+mechanism:
+
+| Mechanism | Owns | Thread |
+|---|---|---|
+| Property changed callbacks and `App_context::on_item_property_changed()` | consequences of a document property write; every property-writing operation (`Property_set_operation`, `Property_edit_operation`, `Style_set_operation`) calls the hook on execute, undo and redo | main |
+| `erhe::scene::INode_system::on_values_changed()` | dispatch of node property changes to the per-scene node systems (layout, rig, draw mode, physics, geometry graph); driven by the property callback, so it is a property observer with a system dispatcher | main |
+| `Scene_host` callbacks | mesh / light structure events (add, remove, primitive change), which are not property writes and may arrive from worker threads | any |
+| `Transform_observer` | world-transform dirtiness, derived state of the hierarchy | main |
+| `Item_host` register / unregister hooks | prim registration (feeds the content library) | main |
+| `App_message_bus` messages | editor-wide UI and tool notification (`doc/editor/editor.md` "App_message_bus") | main, queued |
+
+- An undoable property edit reaches its consequences through
+  `on_item_property_changed()` only; it does not also send a message for
+  the same write. A consequence that needs a message (a committed node
+  transform, below) is sent from that hook.
+- Restoring a property restores what the node systems derived from it,
+  because `on_values_changed` runs from the property callback. State
+  outside the property layer (a collision shape, a physics body teleport,
+  geometry) has its own operation and its own notification.
+- A message carries only fields some subscriber reads.
+
 ## Node transform writes
 
 - Code that commits a node transform (an operation's execute / undo / redo,
@@ -139,3 +165,11 @@ structs) and to `src/editor/config/logging.json`.
   is treated as version `1`). Include `"_version"` only when the object has
   been migrated to version `2` or later.
 - Use 4-space indentation, consistent with existing files.
+
+## Future work
+
+- [plans/property_undo_and_reflective_mcp.md](../plans/property_undo_and_reflective_mcp.md):
+  the open notification gaps (lighting announcement for mesh property
+  edits, the draw-list rebuild reached only from operations, the
+  per-frame `Material_set` serial comparison, the physics teleport of a
+  transform written through a property operation).

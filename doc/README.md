@@ -218,7 +218,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/async_asset_loading_design.md](editor/async_asset_loading_design.md) (mostly stable): Design record behind async asset loading (numbered sections cited from code)
 - [editor/brushes.md](editor/brushes.md) (stable): Implements the brush system for placing parametric mesh shapes onto surfaces
 - [editor/child_prim_creation.md](editor/child_prim_creation.md) (stable): Creating a typed child prim under any prim from the Hierarchy context menu and MCP
-- [editor/coding_rules.md](editor/coding_rules.md) (stable): Rules for editor code: part construction, logging, scene-hosted references, config JSON
+- [editor/coding_rules.md](editor/coding_rules.md) (stable): Rules for editor code: part construction, logging, scene-hosted references, change notification ownership, node transform writes, config JSON
 - [editor/command_script.md](editor/command_script.md) (stable): Startup commands.json scene script: commands, execution and undo model
 - [editor/config.md](editor/config.md) (stable): Editor configuration loading
 - [editor/content_library.md](editor/content_library.md) (mostly stable): Indexes a scene's reusable resources - materials, brushes, styles, textures, physics items, animations, skins and node graphs - which live as prims in the scene's own tree
@@ -340,7 +340,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/crash_signal.md](plans/crash_signal.md) (in progress): Positive crash signal for harness-run apps
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
 - [plans/debug_renderer_anti_aliasing.md](plans/debug_renderer_anti_aliasing.md) (in progress): Debug renderer: analytic anti-aliasing for wide lines
-- [plans/deterministic_editor_clock.md](plans/deterministic_editor_clock.md) (proposed): Deterministic editor clock for headless, cloud and CI runs
+- [plans/deterministic_editor_clock.md](plans/deterministic_editor_clock.md) (in progress): Deterministic editor clock for headless, cloud and CI runs
 - [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
 - [plans/scene_roundtrip_failures.md](plans/scene_roundtrip_failures.md) (proposed): The three failing checks of `scripts/scene_roundtrip_verify.py` (physics drift, device loss on the draw-list path, two USD diffs): facts established, repro, next steps
 - [plans/editor.md](plans/editor.md) (proposed): Editor: outstanding feature work
@@ -374,7 +374,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
-- [plans/property_undo_and_reflective_mcp.md](plans/property_undo_and_reflective_mcp.md) (proposed): Data-model undo by property write recording and reflective MCP item edits (audit items 13, 14)
+- [plans/property_undo_and_reflective_mcp.md](plans/property_undo_and_reflective_mcp.md) (in progress): Data-model undo and reflective MCP item edits (audit items 13, 14): remaining work - scene settings writers outside the operation, notification gaps, verification runs
 - [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (in progress): FABRIK inverse kinematics requirements
