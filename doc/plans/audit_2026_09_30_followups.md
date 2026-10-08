@@ -86,8 +86,12 @@ on culling.
 Items 13 and 14 and the deterministic editor clock (`doc/editor/time.md`;
 remaining work in `doc/plans/deterministic_editor_clock.md`) are on the
 branch `property-undo-reflective-mcp`, based on `fb2a68113` (= `origin/main`
-when the branch started). The branch awaits a medium-effort review of the
-whole branch before the user pushes or merges it; `main` is never pushed by
+when the branch started). The medium-effort review of the whole branch is
+done (2026-10-08): no correctness defect; its two findings are fixed
+(CHANGELOG line) or recorded under "Follow-ups found by review"
+(non-stepping MCP deferrals). `ctest -L editor` on the headless lavapipe
+tree, 110 cases: 108 pass, the lightusd variant case skips, and the one
+failure was the known first-case timeout (passes on rerun). Pushing or merging is the user's decision; `main` is never pushed by
 an agent without an explicit user request.
 
 - Review scope: `git diff fb2a68113..property-undo-reflective-mcp` (and
