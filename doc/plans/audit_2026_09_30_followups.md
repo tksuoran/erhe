@@ -172,3 +172,16 @@ when the editor takes no progress step for `k_request_timeout` (5 s,
 that under software Vulkan; the same case passes when run again. Open: the
 readiness signal or the expiry has to account for the slow first frames
 instead of the first case absorbing them.
+
+Only the deferrals that advance a gesture or a frame count record a progress
+step (`note_request_step()`: gesture, drag_selection, physics_drag,
+advance_frames). The other multi-frame deferrals (`render_scene_image`,
+`rc_texels`, the ImGui recording and scroll-to-item requests,
+`reference_indirect_diffuse`, the file I/O requests in
+`mcp_server_file_io.cpp`) keep a 5 s budget counted from enqueue, so a large
+`render_scene_image` on a slow software-Vulkan frame rate can still expire
+mid-capture (the expiry releases the capture cleanly). Open: each deferral
+that makes per-frame progress records its step, or
+`doc/agents/mcp_server_usage.md` states the budget for the non-stepping
+tools. Found by the medium-effort review of the `property-undo-reflective-mcp`
+branch.

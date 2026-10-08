@@ -70,6 +70,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::window`: the SDL backend's `Input_event::timestamp_ns` is
+  `steady_clock` nanoseconds, as in the GLFW backend (`SDL_GetTicksNS()`
+  mapped with an offset sampled at SDL init), no longer raw
+  `SDL_GetTicksNS()`. `erhe::imgui`: `Imgui_host::process_events(dt_s,
+  time_ns)` takes the caller's clock; `time_ns` is in the input event
+  timestamp domain.
 - `erhe::property`: `Dependency_object::clear_value` of a bridged property
   (D18) writes the object's default layer value (`get_default_value`: the
   D31 per-object default when one is bound) instead of the registry
