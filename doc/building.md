@@ -170,7 +170,7 @@ disabling unused features and selecting different backends.
 
 **ERHE_BUILD_TESTS** -- Builds the gtest suites (see `doc/testing.md`). Every configure wrapper passes extra arguments through to cmake, so `scripts\configure_vs2026_opengl.bat -DERHE_BUILD_TESTS=ON` (or `bash scripts/configure_ninja_linux_vulkan.sh -DERHE_BUILD_TESTS=ON`) enables them in a regular build tree. The `erhe_tests` target then builds every test executable, and `ctest --test-dir <build_dir> -C <config>` runs them; `--label-exclude "gpu|editor"` leaves out the tests that need a graphics device or a running editor, which is what CI runs.
 
-**ERHE_USD_LIBRARY** -- `lightusd` builds `erhe::usd` on LightUSD (`doc/erhe/usd.md`) and the `describe_usd_file` MCP tool. The Windows configure wrappers and the Android build pass `lightusd`.
+**ERHE_USD_LIBRARY** -- `lightusd` builds `erhe::usd` on LightUSD (`doc/erhe/usd.md`) and the `describe_usd_file` MCP tool. The Windows and Linux configure wrappers and the Android build pass `lightusd`.
 
 **ERHE_MALLOC_LIBRARY** -- Routes C++ `new`/`delete` to the allocator. `jemalloc` runs its autoconf `configure` once per build tree at configure time (`cmake/jemalloc.cmake`).
 

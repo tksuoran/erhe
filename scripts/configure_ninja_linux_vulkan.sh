@@ -23,5 +23,6 @@ cmake \
     -DERHE_RAYTRACE_LIBRARY=bvh \
     -DERHE_SVG_LIBRARY=plutosvg \
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz \
+    -DERHE_USD_LIBRARY=lightusd \
     -DERHE_WINDOW_LIBRARY=sdl \
     -DERHE_XR_LIBRARY=none

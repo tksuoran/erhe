@@ -91,13 +91,15 @@ done (2026-10-08): no correctness defect; its two findings are fixed
 (CHANGELOG line) or recorded under "Follow-ups found by review"
 (non-stepping MCP deferrals). `ctest -L editor` on the headless lavapipe
 tree, 110 cases: 108 pass, the lightusd variant case skips, and the one
-failure was the known first-case timeout (passes on rerun). Pushing or merging is the user's decision; `main` is never pushed by
+failure was the known first-case timeout (passes on rerun). With the Linux
+configure wrappers passing `ERHE_USD_LIBRARY=lightusd`, the same set passes
+110 of 110, the variant switch round trip included. Pushing or merging is the user's decision; `main` is never pushed by
 an agent without an explicit user request.
 
 - Review scope: `git diff fb2a68113..property-undo-reflective-mcp` (and
   `git log` of the same range for the per-step commit messages).
 - Known verification gaps: `doc/plans/property_undo_and_reflective_mcp.md`
-  section 4 (the lightusd-only variant switch round trip, the long / GPU
+  section 4 (the long / GPU
   scripts checked only with `py_compile`, the material value ranges).
 - Verification recipe: `doc/testing.md` - the headless Vulkan tree
   (`doc/agents/linux.md`), `ctest -L editor` for `mcp_server_tests`, and

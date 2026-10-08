@@ -67,9 +67,6 @@ support it or to refuse such an edit at its first execute.
 
 ## 4. Verification gaps
 
-- `Mcp_test.select_variant_undo_redo_round_trips_every_prims_property_dump`
-  skips unless the editor is built with `ERHE_USD_LIBRARY=lightusd`; it has
-  not run yet. Run it on a lightusd headless tree.
 - The long and GPU-heavy scripts whose MCP calls moved from the per-type
   edit tools to `set_item_properties` / `set_collision_shape` /
   `set_scene_settings` have only been checked with `py_compile`:
