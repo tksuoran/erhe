@@ -477,8 +477,7 @@ for frames 1 to 12; run scripts wait for frame 12.
   and OpenGL joins the dedicated mode by making its context current on the
   render thread once (`Context_window::make_current`), the GL worker
   context pool unchanged. The pacing half of the frame start stays on the
-  main thread. `erhe::xr::check_gl_context_in_current_in_this_thread()`
-  latches the first caller's thread id and is re-latched then.
+  main thread.
 - **Metal.** The Metal backend takes the dedicated thread and pipelining
   defaults but its `Device_impl` has not been audited against the "Thread
   safety" table; a macOS run of the image and race gates is pending.

@@ -4,7 +4,6 @@
 #include <openxr/openxr_reflection.h>
 
 #include <sstream>
-#include <thread>
 
 #define GEN_C_STR_CASE(name, val) case name: return #name;
 #define GEN_C_STR(T)                            \
@@ -108,15 +107,6 @@ auto check(XrResult result, const spdlog::level::level_enum log_level) -> bool
         return false;
     }
     return true;
-}
-
-void check_gl_context_in_current_in_this_thread()
-{
-    static std::thread::id xr_gl_thread_id{std::this_thread::get_id()};
-
-    if (xr_gl_thread_id != std::this_thread::get_id()) {
-        log_xr->error("XR GL thread error");
-    }
 }
 
 } // namespace erhe::xr
