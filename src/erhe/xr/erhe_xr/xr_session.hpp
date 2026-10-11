@@ -123,6 +123,14 @@ public:
     [[nodiscard]] auto create_quad_layer(uint32_t width, uint32_t height, const std::string& debug_label) -> std::unique_ptr<Quad_layer>;
     void register_quad_layer  (Quad_layer* quad_layer);
     void unregister_quad_layer(Quad_layer* quad_layer);
+    // xrWaitSwapchainImage on every registered quad layer's acquired image
+    // (once per acquire). Called immediately before each command buffer
+    // submit in render_frame() / render_frame_multiview(), so the wait is
+    // deferred to the last moment before the GPU may write the image.
+    void wait_quad_layer_images();
+    // xrReleaseSwapchainImage on every registered quad layer's acquired
+    // image. Called from end_frame(), after every submit of the frame.
+    void release_quad_layer_images();
     [[nodiscard]] auto get_view_count              () const -> uint32_t;
     [[nodiscard]] auto get_xr_session              () const -> XrSession;
     // Swapchain formats picked by enumerate_swapchain_formats() during

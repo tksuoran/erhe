@@ -14,6 +14,7 @@ OpenXR integration for VR/AR headset support. Wraps the OpenXR API to provide in
 - `Headset_config` -- Configuration flags (codegen-generated from `definitions/headset_config.py`): openxr enable, openxr_mirror, debug, validation, api_dump, quad view, composition_depth_layer, swapchain_depth_attachment, visibility_mask, hand tracking, passthrough_fb, composition_alpha, CPU/GPU performance level, boost_on_thermal_warning.
 - `Render_view` -- Per-eye render target info: pose, FOV, texture handles, dimensions, format.
 - `Swapchain` / `Swapchain_image` -- OpenXR swapchain wrappers for acquiring/releasing/waiting on swapchain images.
+- `Quad_layer` -- One `XrCompositionLayerQuad` backed by its own color swapchain. Callers `acquire()` the texture, record into it, then `release()` to mark it rendered. `Xr_session` runs `xrWaitSwapchainImage` on acquired quad (and projection) images immediately before each command buffer submit in `render_frame()` / `render_frame_multiview()`, and `xrReleaseSwapchainImage` in `end_frame()`, after every submit of the frame.
 - `Pose` / `Hand_tracking_joint` -- GLM-compatible pose and hand joint data.
 
 ## Public API

@@ -60,7 +60,8 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     , m_implicit_cpu_event_signal_value {other.m_implicit_cpu_event_signal_value}
     , m_wait_for_cpu_pending            {std::move(other.m_wait_for_cpu_pending)}
     , m_signal_gpu_pending              {std::move(other.m_signal_gpu_pending)}
-    , m_signal_cpu_pending              {std::move(other.m_signal_cpu_pending)}
+    , m_signal_own_cpu_completion       {other.m_signal_own_cpu_completion}
+    , m_signal_own_cpu_completion_value {other.m_signal_own_cpu_completion_value}
     , m_swapchain_used                  {other.m_swapchain_used}
 {
     other.m_device              = nullptr;
@@ -99,7 +100,8 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_implicit_cpu_event_signal_value = other.m_implicit_cpu_event_signal_value;
     m_wait_for_cpu_pending            = std::move(other.m_wait_for_cpu_pending);
     m_signal_gpu_pending              = std::move(other.m_signal_gpu_pending);
-    m_signal_cpu_pending              = std::move(other.m_signal_cpu_pending);
+    m_signal_own_cpu_completion       = other.m_signal_own_cpu_completion;
+    m_signal_own_cpu_completion_value = other.m_signal_own_cpu_completion_value;
     m_swapchain_used                  = other.m_swapchain_used;
 
     other.m_device              = nullptr;
@@ -207,59 +209,55 @@ void Command_buffer_impl::end_swapchain(const Frame_end_info& /*frame_end_info*/
     // No submit yet; legacy end_frame still drives present.
 }
 
-void Command_buffer_impl::wait_for_cpu(Command_buffer& other)
+void Command_buffer_impl::signal_gpu_completion_to(Command_buffer& consumer)
 {
-    // Capture the current signal value: this cb's submit will block on
-    // CPU until other's MTL::SharedEvent reaches that value, which
-    // happens when other's GPU work completes (signal_cpu was registered
-    // and fires via encodeSignalEvent at end-of-cb).
-    Command_buffer_impl& other_impl = other.get_impl();
+    // Bump the consumer's GPU event signal value now so the consumer's
+    // subsequent wait_for_gpu_completion_signal() reads the value this
+    // cb will signal. The actual encodeSignalEvent is deferred until
+    // encode_synchronization (must land after the cb's last encoder).
+    Command_buffer_impl& consumer_impl = consumer.get_impl();
+    consumer_impl.m_implicit_gpu_event_signal_value++;
     Sync_entry entry{};
-    entry.command_buffer = &other;
-    entry.value          = other_impl.m_implicit_cpu_event_signal_value;
-    m_wait_for_cpu_pending.push_back(entry);
-}
-
-void Command_buffer_impl::wait_for_gpu(Command_buffer& other)
-{
-    // Metal positional cb model: encodeWaitForEvent must land BEFORE
-    // any encoder we record on this cb. Encode it now (callers are
-    // expected to call wait_for_gpu after begin() and before any
-    // make_render/compute/blit_command_encoder).
-    ERHE_VERIFY(m_mtl_command_buffer != nullptr);
-    Command_buffer_impl& other_impl = other.get_impl();
-    if (other_impl.m_implicit_gpu_event != nullptr) {
-        m_mtl_command_buffer->encodeWait(
-            other_impl.m_implicit_gpu_event,
-            other_impl.m_implicit_gpu_event_signal_value
-        );
-    }
-}
-
-void Command_buffer_impl::signal_gpu(Command_buffer& other)
-{
-    // Bump the target's GPU event signal value now so any subsequent
-    // wait_for_gpu(other) reads the value this cb will signal. The
-    // actual encodeSignalEvent is deferred until encode_synchronization
-    // (must land after the cb's last encoder).
-    Command_buffer_impl& other_impl = other.get_impl();
-    other_impl.m_implicit_gpu_event_signal_value++;
-    Sync_entry entry{};
-    entry.command_buffer = &other;
-    entry.value          = other_impl.m_implicit_gpu_event_signal_value;
+    entry.command_buffer = &consumer;
+    entry.value          = consumer_impl.m_implicit_gpu_event_signal_value;
     m_signal_gpu_pending.push_back(entry);
 }
 
-void Command_buffer_impl::signal_cpu(Command_buffer& other)
+void Command_buffer_impl::wait_for_gpu_completion_signal()
 {
-    // Same shape as signal_gpu but on the SharedEvent so CPU waiters
-    // (wait_for_cpu) can observe completion.
-    Command_buffer_impl& other_impl = other.get_impl();
-    other_impl.m_implicit_cpu_event_signal_value++;
+    // Wait on this cb's own GPU event at the value a producer's
+    // signal_gpu_completion_to(this) bumped it to. Metal positional cb
+    // model: encodeWait must land BEFORE any encoder we record on this
+    // cb, so encode it now (callers call this after begin() and before
+    // any make_render/compute/blit_command_encoder).
+    ERHE_VERIFY(m_mtl_command_buffer != nullptr);
+    if (m_implicit_gpu_event != nullptr) {
+        m_mtl_command_buffer->encodeWait(m_implicit_gpu_event, m_implicit_gpu_event_signal_value);
+    }
+}
+
+void Command_buffer_impl::signal_cpu_completion()
+{
+    // Same shape as signal_gpu_completion_to but on this cb's own
+    // SharedEvent so CPU waiters (wait_for_cpu_completion_of(this)) can
+    // observe completion. The value is captured now so that a wait
+    // registered after this call reads it.
+    m_implicit_cpu_event_signal_value++;
+    m_signal_own_cpu_completion       = true;
+    m_signal_own_cpu_completion_value = m_implicit_cpu_event_signal_value;
+}
+
+void Command_buffer_impl::wait_for_cpu_completion_of(Command_buffer& producer)
+{
+    // Capture the current signal value: this cb's submit will block on
+    // CPU until producer's MTL::SharedEvent reaches that value, which
+    // happens when producer's GPU work completes (signal_cpu_completion
+    // was registered and fires via encodeSignalEvent at end-of-cb).
+    Command_buffer_impl& producer_impl = producer.get_impl();
     Sync_entry entry{};
-    entry.command_buffer = &other;
-    entry.value          = other_impl.m_implicit_cpu_event_signal_value;
-    m_signal_cpu_pending.push_back(entry);
+    entry.command_buffer = &producer;
+    entry.value          = producer_impl.m_implicit_cpu_event_signal_value;
+    m_wait_for_cpu_pending.push_back(entry);
 }
 
 void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, std::size_t offset, const void* data, std::size_t length)
@@ -632,7 +630,7 @@ void Command_buffer_impl::encode_synchronization()
 {
     if (m_mtl_command_buffer == nullptr) {
         m_signal_gpu_pending.clear();
-        m_signal_cpu_pending.clear();
+        m_signal_own_cpu_completion = false;
         return;
     }
 
@@ -646,15 +644,12 @@ void Command_buffer_impl::encode_synchronization()
     }
     m_signal_gpu_pending.clear();
 
-    for (const Sync_entry& entry : m_signal_cpu_pending) {
-        ERHE_VERIFY(entry.command_buffer != nullptr);
-        Command_buffer_impl& target_impl = entry.command_buffer->get_impl();
-        if (target_impl.m_implicit_cpu_event == nullptr) {
-            continue;
+    if (m_signal_own_cpu_completion) {
+        if (m_implicit_cpu_event != nullptr) {
+            m_mtl_command_buffer->encodeSignalEvent(m_implicit_cpu_event, m_signal_own_cpu_completion_value);
         }
-        m_mtl_command_buffer->encodeSignalEvent(target_impl.m_implicit_cpu_event, entry.value);
+        m_signal_own_cpu_completion = false;
     }
-    m_signal_cpu_pending.clear();
 }
 
 auto Command_buffer_impl::get_swapchain_used() const noexcept -> Swapchain_impl*

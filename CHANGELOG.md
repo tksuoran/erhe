@@ -58,6 +58,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `Command_buffer` synchronization methods renamed to
+  state the edge direction and drop the self-argument: `signal_gpu(c)` is
+  `signal_gpu_completion_to(c)`, `wait_for_gpu(self)` is
+  `wait_for_gpu_completion_signal()`, `signal_cpu(self)` is
+  `signal_cpu_completion()`, `wait_for_cpu(p)` is
+  `wait_for_cpu_completion_of(p)`. The implicit primitives and the
+  consumer-owned semaphore model are unchanged.
 - `erhe::item`: the editor-only `Item_flags` bits (`tool`, `brush`,
   `controller`, `rendertarget`, `expand`, the hover bits,
   `show_in_developer_ui`, `show_debug_visualizations`, `affects_shadow`,

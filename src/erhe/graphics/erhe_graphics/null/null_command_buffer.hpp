@@ -43,10 +43,10 @@ public:
     [[nodiscard]] auto begin_swapchain   (const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool;
     void               end_swapchain     (const Frame_end_info& frame_end_info);
 
-    void wait_for_cpu(Command_buffer& other);
-    void wait_for_gpu(Command_buffer& other);
-    void signal_gpu  (Command_buffer& other);
-    void signal_cpu  (Command_buffer& other);
+    void signal_gpu_completion_to    (Command_buffer& consumer);
+    void wait_for_gpu_completion_signal();
+    void signal_cpu_completion       ();
+    void wait_for_cpu_completion_of  (Command_buffer& producer);
 
     void upload_to_buffer         (const Buffer& buffer, std::size_t offset, const void* data, std::size_t length);
     void upload_to_texture        (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);

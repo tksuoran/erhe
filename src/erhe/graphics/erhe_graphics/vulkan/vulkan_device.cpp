@@ -1508,8 +1508,8 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         return;
     }
 
-    // CPU-side wait phase: any wait_for_cpu(other) registered on the
-    // cbs in this batch is converted into a vkWaitForFences before the
+    // CPU-side wait phase: any wait_for_cpu_completion_of(producer)
+    // registered on the cbs in this batch is converted into a vkWaitForFences before the
     // submit is enqueued. Done up front so a batched submit never
     // partially blocks.
     for (Command_buffer* command_buffer : command_buffers) {
@@ -1647,12 +1647,13 @@ void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Attach the cb's own implicit fence to its submit (signal_cpu(other)
-    // routes other's fence into VkSubmitInfo2; self works the same way),
-    // submit, then block on that fence only. Unlike wait_idle() this fires
-    // no completion handlers and touches no frame state, so it is safe
+    // Attach the cb's own implicit fence to its submit, submit, then
+    // block on that fence only. Unlike wait_idle() this fires no
+    // completion handlers and touches no frame state, so it is safe
     // mid-frame while the frame's own command buffer is still recording.
-    command_buffer.signal_cpu(command_buffer);
+    // Make the submit signal the cb's CPU-observable primitive when its
+    // GPU work completes.
+    command_buffer.signal_cpu_completion();
     Command_buffer* command_buffers[] = { &command_buffer };
     submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
 

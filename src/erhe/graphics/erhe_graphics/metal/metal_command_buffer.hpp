@@ -33,8 +33,9 @@ enum class Memory_barrier_mask : unsigned int;
 // MTL::CommandBuffer allocated from the device's MTL::CommandQueue in
 // begin(), plus a per-cb MTL::Fence used to serialize encoders inside
 // the cb and a pair of GPU/CPU sync primitives (MTL::Event /
-// MTL::SharedEvent) used by wait_for_gpu / wait_for_cpu / signal_gpu /
-// signal_cpu for cross-cb synchronization.
+// MTL::SharedEvent) used by signal_gpu_completion_to /
+// wait_for_gpu_completion_signal / signal_cpu_completion /
+// wait_for_cpu_completion_of for cross-cb synchronization.
 class Command_buffer_impl final
 {
 public:
@@ -54,10 +55,10 @@ public:
     [[nodiscard]] auto begin_swapchain   (const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool;
     void               end_swapchain     (const Frame_end_info& frame_end_info);
 
-    void wait_for_cpu(Command_buffer& other);
-    void wait_for_gpu(Command_buffer& other);
-    void signal_gpu  (Command_buffer& other);
-    void signal_cpu  (Command_buffer& other);
+    void signal_gpu_completion_to    (Command_buffer& consumer);
+    void wait_for_gpu_completion_signal();
+    void signal_cpu_completion       ();
+    void wait_for_cpu_completion_of  (Command_buffer& producer);
 
     void upload_to_buffer         (const Buffer& buffer, std::size_t offset, const void* data, std::size_t length);
     void upload_to_texture        (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
@@ -81,10 +82,11 @@ public:
     // waitForFence at start and updateFence at end.
     [[nodiscard]] auto get_inter_encoder_fence() const noexcept -> MTL::Fence*;
 
-    // Implicit per-cb sync primitives. The "GPU event" backs wait_for_gpu /
-    // signal_gpu (MTL::Event encoded on the MTL::CommandBuffer). The "CPU
-    // event" backs wait_for_cpu / signal_cpu (MTL::SharedEvent that the
-    // CPU can block on via waitUntilSignaledValue).
+    // Implicit per-cb sync primitives. The "GPU event" backs
+    // signal_gpu_completion_to / wait_for_gpu_completion_signal
+    // (MTL::Event encoded on the MTL::CommandBuffer). The "CPU event"
+    // backs signal_cpu_completion / wait_for_cpu_completion_of
+    // (MTL::SharedEvent that the CPU can block on via waitUntilSignaledValue).
     [[nodiscard]] auto get_implicit_gpu_event              () const noexcept -> MTL::Event*;
     [[nodiscard]] auto get_implicit_gpu_event_signal_value () const noexcept -> std::uint64_t;
     [[nodiscard]] auto get_implicit_cpu_event              () const noexcept -> MTL::SharedEvent*;
@@ -97,18 +99,19 @@ public:
     // set_implicit_sync pattern.
     void set_implicit_sync(MTL::Event* gpu_event, MTL::SharedEvent* cpu_event) noexcept;
 
-    // CPU-side wait phase of submit. For each wait_for_cpu(other)
-    // registered, blocks on other's MTL::SharedEvent until the captured
+    // CPU-side wait phase of submit. For each wait_for_cpu_completion_of(producer)
+    // registered, blocks on producer's MTL::SharedEvent until the captured
     // signal value is reached. Called by Device_impl::submit_command_buffers
     // before the cb is committed.
     void pre_submit_wait();
 
     // Encode pending signal events onto m_mtl_command_buffer for each
-    // signal_gpu / signal_cpu registered. Must be called after every
-    // encoder for this cb has called endEncoding (Metal disallows event
-    // encode while an encoder is open) and before commit. wait_for_gpu
-    // is encoded immediately at call time (Metal positional cb model);
-    // see the method comment.
+    // signal_gpu_completion_to registered and for signal_cpu_completion.
+    // Must be called after every encoder for this cb has called
+    // endEncoding (Metal disallows event encode while an encoder is
+    // open) and before commit. wait_for_gpu_completion_signal is encoded
+    // immediately at call time (Metal positional cb model); see the
+    // method comment.
     void encode_synchronization();
 
     // Swapchain that this cb engaged via begin_swapchain, or nullptr.
@@ -127,19 +130,25 @@ private:
     MTL::SharedEvent*          m_implicit_cpu_event{nullptr};
     std::uint64_t              m_implicit_cpu_event_signal_value{0};
 
-    // Sync registrations populated by wait_for_cpu / signal_gpu /
-    // signal_cpu. wait_for_gpu is NOT recorded here -- Metal positional
-    // event encoding requires the wait to land before the user's
-    // encoders, so wait_for_gpu encodes immediately at call time.
+    // Sync registrations populated by wait_for_cpu_completion_of /
+    // signal_gpu_completion_to / signal_cpu_completion.
+    // wait_for_gpu_completion_signal is NOT recorded here -- Metal
+    // positional event encoding requires the wait to land before the
+    // user's encoders, so it encodes immediately at call time.
     class Sync_entry
     {
     public:
         Command_buffer* command_buffer{nullptr};
         std::uint64_t   value{0};
     };
+    // Producers whose CPU event this cb's submit blocks on.
     std::vector<Sync_entry> m_wait_for_cpu_pending;
+    // Consumers whose GPU event this cb signals at encode_synchronization.
     std::vector<Sync_entry> m_signal_gpu_pending;
-    std::vector<Sync_entry> m_signal_cpu_pending;
+    // This cb signals its own CPU event at encode_synchronization
+    // (signal_cpu_completion); the value is captured at registration.
+    bool                    m_signal_own_cpu_completion{false};
+    std::uint64_t           m_signal_own_cpu_completion_value{0};
 
     // Set by begin_swapchain when the per-frame swapchain lookup
     // succeeds. Cleared by Device_impl::submit_command_buffers after

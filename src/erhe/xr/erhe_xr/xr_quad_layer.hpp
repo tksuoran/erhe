@@ -22,11 +22,21 @@ class Xr_session;
 // with the owning session so Xr_session::end_frame() can enumerate and submit
 // every visible, rendered quad layer after the projection layer.
 //
-// Per-frame usage:
-//   erhe::graphics::Texture* texture = quad_layer->acquire(); // acquire + wait
-//   ... render UI into texture ...
-//   quad_layer->release();                                    // release + mark rendered
+// Per-frame usage (caller side):
+//   erhe::graphics::Texture* texture = quad_layer->acquire(); // xrAcquireSwapchainImage only
+//   ... record rendering into texture ...
+//   quad_layer->release();                                    // mark rendered
 // build_layer() then succeeds for this frame.
+//
+// Waiting and releasing the swapchain image are driven by the owning
+// Xr_session, not by the caller: xrWaitSwapchainImage is deferred to the
+// last possible moment -- render_frame() / render_frame_multiview() call
+// wait_image() on every registered layer immediately before each command
+// buffer submit, so the CPU-blocking wait overlaps with recording -- and
+// xrReleaseSwapchainImage runs in end_frame(), after every submit that
+// writes the image has landed (XR_KHR_vulkan_enable2 requires submit
+// before release). Recording only references the texture; the GPU writes
+// it only once the command buffer is submitted, which is after the wait.
 class Quad_layer
 {
 public:
@@ -46,12 +56,23 @@ public:
     [[nodiscard]] auto get_width () const -> uint32_t;
     [[nodiscard]] auto get_height() const -> uint32_t;
 
-    // Acquire + wait the next swapchain image and return the erhe texture to
-    // render into (nullptr if not visible / invalid / acquire failed). The
-    // acquired image is held until release() is called.
+    // Acquire the next swapchain image (no wait) and return the erhe texture
+    // to record rendering into (nullptr if not visible / invalid / acquire
+    // failed). The image is held until Xr_session releases it in end_frame().
     [[nodiscard]] auto acquire() -> erhe::graphics::Texture*;
-    // Release the acquired image and mark the layer rendered for this frame.
+    // Mark the layer rendered for this frame: the caller has finished
+    // recording into the acquired texture. Does not wait or release.
     void release();
+
+    // Called by Xr_session immediately before each command buffer submit:
+    // xrWaitSwapchainImage on the acquired image, once per acquire. Returns
+    // false when the wait fails; true when it succeeds or there is nothing
+    // to wait for.
+    [[nodiscard]] auto wait_image() -> bool;
+    // Called by Xr_session in end_frame() (after every submit): waits if the
+    // image has not been waited yet (the spec requires wait before release),
+    // then xrReleaseSwapchainImage. No-op when no image is acquired.
+    void release_image();
 
     void set_visible       (bool visible);
     void set_pose          (const XrPosef& pose_in_stage);
@@ -99,6 +120,8 @@ private:
     Xr_session&                    m_session;
     Swapchain                      m_swapchain;
     std::optional<Swapchain_image> m_acquired_image;
+    // True once wait_image() has waited on m_acquired_image.
+    bool                           m_image_waited        {false};
     uint32_t                       m_width               {0};
     uint32_t                       m_height              {0};
     bool                           m_visible             {false};

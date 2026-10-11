@@ -565,9 +565,10 @@ void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_b
         erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
         m_app_context.imgui_renderer->render_draw_data(render_encoder, *render_pass);
     }
-    // finish_render() may issue a blit (generate_mipmaps) or release the
-    // swapchain image; neither can be recorded inside an active Vulkan render
-    // pass -- must run after scoped_render_pass ends.
+    // finish_render() may issue a blit (generate_mipmaps), which cannot be
+    // recorded inside an active Vulkan render pass -- must run after
+    // scoped_render_pass ends. (Path B only marks the quad layer rendered;
+    // Xr_session waits on and releases the swapchain image itself.)
     m_view->finish_render(command_buffer, m_app_context);
 }
 

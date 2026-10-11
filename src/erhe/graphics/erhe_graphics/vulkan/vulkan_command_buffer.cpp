@@ -60,19 +60,21 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     , m_open_debug_label_count   {other.m_open_debug_label_count}
     , m_implicit_semaphore       {other.m_implicit_semaphore}
     , m_implicit_fence           {other.m_implicit_fence}
-    , m_wait_for_cpu_list      {std::move(other.m_wait_for_cpu_list)}
-    , m_wait_for_gpu_list  {std::move(other.m_wait_for_gpu_list)}
-    , m_signal_gpu_list    {std::move(other.m_signal_gpu_list)}
-    , m_signal_cpu_list        {std::move(other.m_signal_cpu_list)}
+    , m_wait_for_cpu_producers   {std::move(other.m_wait_for_cpu_producers)}
+    , m_signal_gpu_consumers     {std::move(other.m_signal_gpu_consumers)}
+    , m_wait_for_own_gpu_signal  {other.m_wait_for_own_gpu_signal}
+    , m_signal_own_cpu_completion{other.m_signal_own_cpu_completion}
     , m_swapchain_used           {other.m_swapchain_used}
 {
-    other.m_device_impl            = nullptr;
-    other.m_vk_command_buffer      = VK_NULL_HANDLE;
-    other.m_recording              = false;
-    other.m_open_debug_label_count = 0;
-    other.m_implicit_semaphore     = VK_NULL_HANDLE;
-    other.m_implicit_fence         = VK_NULL_HANDLE;
-    other.m_swapchain_used         = nullptr;
+    other.m_device_impl               = nullptr;
+    other.m_vk_command_buffer         = VK_NULL_HANDLE;
+    other.m_recording                 = false;
+    other.m_open_debug_label_count    = 0;
+    other.m_implicit_semaphore        = VK_NULL_HANDLE;
+    other.m_implicit_fence            = VK_NULL_HANDLE;
+    other.m_wait_for_own_gpu_signal   = false;
+    other.m_signal_own_cpu_completion = false;
+    other.m_swapchain_used            = nullptr;
 }
 
 auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Command_buffer_impl&
@@ -99,11 +101,11 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_open_debug_label_count  = other.m_open_debug_label_count;
     m_implicit_semaphore      = other.m_implicit_semaphore;
     m_implicit_fence          = other.m_implicit_fence;
-    m_wait_for_cpu_list     = std::move(other.m_wait_for_cpu_list);
-    m_wait_for_gpu_list = std::move(other.m_wait_for_gpu_list);
-    m_signal_gpu_list   = std::move(other.m_signal_gpu_list);
-    m_signal_cpu_list       = std::move(other.m_signal_cpu_list);
-    m_swapchain_used          = other.m_swapchain_used;
+    m_wait_for_cpu_producers    = std::move(other.m_wait_for_cpu_producers);
+    m_signal_gpu_consumers      = std::move(other.m_signal_gpu_consumers);
+    m_wait_for_own_gpu_signal   = other.m_wait_for_own_gpu_signal;
+    m_signal_own_cpu_completion = other.m_signal_own_cpu_completion;
+    m_swapchain_used            = other.m_swapchain_used;
 
     other.m_device_impl            = nullptr;
     other.m_vk_command_buffer      = VK_NULL_HANDLE;
@@ -235,36 +237,36 @@ auto Command_buffer_impl::get_implicit_fence() const noexcept -> VkFence
     return m_implicit_fence;
 }
 
-void Command_buffer_impl::wait_for_cpu(Command_buffer& other)
+void Command_buffer_impl::signal_gpu_completion_to(Command_buffer& consumer)
 {
-    m_wait_for_cpu_list.push_back(&other);
+    m_signal_gpu_consumers.push_back(&consumer);
 }
 
-void Command_buffer_impl::wait_for_gpu(Command_buffer& other)
+void Command_buffer_impl::wait_for_gpu_completion_signal()
 {
-    m_wait_for_gpu_list.push_back(&other);
+    m_wait_for_own_gpu_signal = true;
 }
 
-void Command_buffer_impl::signal_gpu(Command_buffer& other)
+void Command_buffer_impl::signal_cpu_completion()
 {
-    m_signal_gpu_list.push_back(&other);
+    m_signal_own_cpu_completion = true;
 }
 
-void Command_buffer_impl::signal_cpu(Command_buffer& other)
+void Command_buffer_impl::wait_for_cpu_completion_of(Command_buffer& producer)
 {
-    m_signal_cpu_list.push_back(&other);
+    m_wait_for_cpu_producers.push_back(&producer);
 }
 
 void Command_buffer_impl::pre_submit_wait()
 {
-    if (m_wait_for_cpu_list.empty()) {
+    if (m_wait_for_cpu_producers.empty()) {
         return;
     }
     ERHE_VERIFY(m_device_impl != nullptr);
     const VkDevice vulkan_device = m_device_impl->get_vulkan_device();
-    for (Command_buffer* other : m_wait_for_cpu_list) {
-        ERHE_VERIFY(other != nullptr);
-        const VkFence fence = other->get_impl().get_implicit_fence();
+    for (Command_buffer* producer : m_wait_for_cpu_producers) {
+        ERHE_VERIFY(producer != nullptr);
+        const VkFence fence = producer->get_impl().get_implicit_fence();
         if (fence == VK_NULL_HANDLE) {
             continue;
         }
@@ -283,7 +285,7 @@ void Command_buffer_impl::pre_submit_wait()
             record->fence_wait_duration += erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin;
         }
     }
-    m_wait_for_cpu_list.clear();
+    m_wait_for_cpu_producers.clear();
 }
 
 void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, const std::size_t offset, const void* data, const std::size_t length)
@@ -727,24 +729,24 @@ void Command_buffer_impl::collect_synchronization(Vulkan_submit_info& submit_inf
         .deviceMask    = 0,
     });
 
-    for (Command_buffer* other : m_wait_for_gpu_list) {
-        ERHE_VERIFY(other != nullptr);
-        const VkSemaphore semaphore = other->get_impl().get_implicit_semaphore();
-        ERHE_VERIFY(semaphore != VK_NULL_HANDLE);
+    if (m_wait_for_own_gpu_signal) {
+        // A producer registered signal_gpu_completion_to(this); wait on
+        // this cb's own implicit semaphore.
+        ERHE_VERIFY(m_implicit_semaphore != VK_NULL_HANDLE);
         submit_info.wait_semaphores.push_back(VkSemaphoreSubmitInfo{
             .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
             .pNext       = nullptr,
-            .semaphore   = semaphore,
+            .semaphore   = m_implicit_semaphore,
             .value       = 0,
             .stageMask   = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
             .deviceIndex = 0,
         });
+        m_wait_for_own_gpu_signal = false;
     }
-    m_wait_for_gpu_list.clear();
 
-    for (Command_buffer* other : m_signal_gpu_list) {
-        ERHE_VERIFY(other != nullptr);
-        const VkSemaphore semaphore = other->get_impl().get_implicit_semaphore();
+    for (Command_buffer* consumer : m_signal_gpu_consumers) {
+        ERHE_VERIFY(consumer != nullptr);
+        const VkSemaphore semaphore = consumer->get_impl().get_implicit_semaphore();
         ERHE_VERIFY(semaphore != VK_NULL_HANDLE);
         submit_info.signal_semaphores.push_back(VkSemaphoreSubmitInfo{
             .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -755,17 +757,15 @@ void Command_buffer_impl::collect_synchronization(Vulkan_submit_info& submit_inf
             .deviceIndex = 0,
         });
     }
-    m_signal_gpu_list.clear();
+    m_signal_gpu_consumers.clear();
 
-    if (!m_signal_cpu_list.empty()) {
+    if (m_signal_own_cpu_completion) {
         // VkSubmitInfo2 carries a single VkFence. Multiple cbs in the
         // same submit cannot each pin a different one.
-        ERHE_VERIFY(m_signal_cpu_list.size() == 1);
         ERHE_VERIFY(submit_info.fence == VK_NULL_HANDLE);
-        const VkFence fence = m_signal_cpu_list.front()->get_impl().get_implicit_fence();
-        ERHE_VERIFY(fence != VK_NULL_HANDLE);
-        submit_info.fence = fence;
-        m_signal_cpu_list.clear();
+        ERHE_VERIFY(m_implicit_fence != VK_NULL_HANDLE);
+        submit_info.fence = m_implicit_fence;
+        m_signal_own_cpu_completion = false;
     }
 
     if (m_swapchain_used != nullptr) {
