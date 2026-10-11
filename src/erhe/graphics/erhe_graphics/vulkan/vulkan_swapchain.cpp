@@ -1603,15 +1603,15 @@ void Swapchain_impl::poll_present_timing(const uint64_t frame_id)
             continue;
         }
         // presentId is device frame index + 1 (see present_image).
-        const std::int64_t frame_id = static_cast<std::int64_t>(timing.presentId) - 1;
+        const std::int64_t feedback_frame_id = static_cast<std::int64_t>(timing.presentId) - 1;
         erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl.get_frame_time_recorder();
-        recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::achieved_present_time, achieved_seconds);
+        recorder.set(feedback_frame_id, &erhe::frame_pacing::Frame_time_record::achieved_present_time, achieved_seconds);
         if (queue_ops_time != 0) {
             const double queue_ops_seconds = stage_time_to_seconds(
                 queue_ops_time, m_timing_calibration_queue_ops_valid, m_timing_calibration_queue_ops_value
             );
             if (queue_ops_seconds > 0.0) {
-                recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::achieved_queue_ops_time, queue_ops_seconds);
+                recorder.set(feedback_frame_id, &erhe::frame_pacing::Frame_time_record::achieved_queue_ops_time, queue_ops_seconds);
             }
         }
         if (!m_present_feedback_logged) {
