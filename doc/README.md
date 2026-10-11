@@ -120,6 +120,96 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - A release renames `[Unreleased]` to the version and date and opens a new
   empty `[Unreleased]` above it.
 
+## Library dependencies
+
+How the `erhe_<name>` libraries link to each other, from the
+`target_link_libraries` calls in `src/erhe/<name>/CMakeLists.txt`. An arrow
+points from a library to a library it links. The graph is transitively
+reduced: a link that is also reachable through another path is left out
+(`erhe::scene_renderer` links `erhe::graphics` directly, and the graph shows
+it through `erhe::renderer`). Dashed arrows exist only with the named backend
+(`ERHE_GRAPHICS_API=opengl`, `ERHE_XR_LIBRARY=openxr`). `erhe_pch` and the
+`erhe_smoke` executable are not shown; `erhe::version` links no other erhe
+library. The diagram uses the ELK layout engine with model order ignored, so
+ELK's layer sweep is free to reorder nodes to minimize edge crossings.
+
+```mermaid
+---
+config:
+  layout: elk
+  elk:
+    considerModelOrder: NONE
+---
+flowchart TD
+    buffer --> profile
+    buffer --> utility
+    circular_ring_buffer --> utility
+    codegen --> file
+    commands --> window
+    commands -. OpenXR .-> xr
+    dataformat --> log
+    file --> defer
+    file --> log
+    frame_pacing --> profile
+    geometry --> math
+    geometry_renderer --> renderer
+    gl --> dataformat
+    gltf --> scene
+    gltf --> task
+    erhe_graph["graph"] --> defer
+    erhe_graph --> item
+    graphics --> circular_ring_buffer
+    graphics --> file
+    graphics --> frame_pacing
+    graphics --> item
+    graphics --> math
+    graphics --> window
+    imgui --> commands
+    imgui --> renderer
+    imgui --> rendergraph
+    item --> property
+    log --> hash
+    log --> verify
+    math --> dataformat
+    math --> profile
+    message_bus --> profile
+    net --> log
+    physics --> primitive
+    primitive --> graphics
+    primitive --> raytrace
+    profile -. OpenGL .-> gl
+    property --> log
+    property --> profile
+    property --> utility
+    raytrace --> buffer
+    raytrace --> file
+    raytrace --> geometry
+    raytrace --> time
+    renderer --> codegen
+    renderer --> scene
+    renderer --> ui
+    rendergraph --> erhe_graph
+    rendergraph --> graphics
+    scene --> primitive
+    scene_renderer --> message_bus
+    scene_renderer --> renderer
+    task --> graphics
+    texgen --> verify
+    time --> log
+    time --> profile
+    ui --> graphics
+    usd --> scene
+    utility --> verify
+    voxel --> geometry
+    window --> dataformat
+    window --> defer
+    window --> time
+    window --> utility
+    xr --> codegen
+    xr --> graphics
+    version
+```
+
 ## Index
 
 
