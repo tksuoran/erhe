@@ -22,6 +22,11 @@ Render_target::Render_target(const Render_target_create_info& create_info)
 
 Render_target::~Render_target() noexcept = default;
 
+auto Render_target::get_sample_count() const -> int
+{
+    return m_sample_count;
+}
+
 auto Render_target::get_color_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
 {
     return m_color_texture;

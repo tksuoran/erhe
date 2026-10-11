@@ -157,17 +157,17 @@ public:
     std::size_t                                  next_handle_index{0};
 };
 
-// Device-frame lifecycle state (OpenXR-style three phases, plus an
-// optional nested swapchain-frame layer). Device_impl transitions through
-// these as wait_frame/begin_frame/begin_swapchain_frame/... are called.
+// Device-frame lifecycle state of one frame-in-flight slot (OpenXR-style
+// three phases, plus an optional nested swapchain-frame layer). Each slot
+// has its own state, so slot A may be recording on one thread while slot B
+// is waited on another. wait_for_frame_start() (the pacing half of the
+// frame start) does not touch this state.
 //
-//   idle               --wait_frame()--------> waited
-//   waited             --begin_frame(info)---> in_swapchain_frame (compat: combined)
-//   waited             --begin_frame()-------> recording          (future: device-only)
-//   recording          --begin_swapchain_frame--> in_swapchain_frame
-//   in_swapchain_frame --end_swapchain_frame----> recording
-//   recording          --end_frame()---------> idle               (future)
-//   in_swapchain_frame --end_frame(info)-----> idle               (compat: combined)
+//   idle               --acquire_frame_slot(F)--> waited
+//   waited             --begin_frame()-------> recording
+//   recording          --end_frame(F)--------> idle
+//   waited             --end_frame(F)--------> idle
+//   in_swapchain_frame --end_frame(F)--------> idle
 enum class Device_frame_state : uint8_t
 {
     idle,
@@ -176,9 +176,33 @@ enum class Device_frame_state : uint8_t
     in_swapchain_frame
 };
 
+// The state of one frame-in-flight slot and the id of the frame that holds
+// it (valid while state != idle).
+class Device_frame_slot
+{
+public:
+    Device_frame_state state   {Device_frame_state::idle};
+    uint64_t           frame_id{0};
+};
+
 [[nodiscard]] auto c_str(Device_frame_state state) -> const char*;
 
 class Device;
+
+// Thread safety (doc/erhe/graphics.md "Thread safety" has the full table).
+// With frame pipelining the main role prepares frame N+1 (M2: uploads,
+// resource creation and destruction, ring buffer ranges, standalone
+// submits) while the render role records, submits and ends frame N (R).
+// Every member both roles reach is either
+// - guarded by a mutex named next to it, held only for the bookkeeping
+//   (m_queue_mutex is the exception: Vulkan requires the queue to be
+//   externally synchronized for the whole submit / present / wait idle),
+// - split per frame-in-flight slot: the main role touches only the slot of
+//   the frame it prepares, the render role only the slot of the frame it
+//   renders, and a slot changes hands only through acquire_frame_slot (main)
+//   after the render role ended the frame that held it (ordered by the
+//   editor's kick / join), or
+// - owned by one role, stated next to the member.
 class Device_impl final
 {
 public:
@@ -194,45 +218,72 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl  () noexcept;
 
-    [[nodiscard]] auto wait_frame () -> bool;
+    // The two halves of Device::wait_frame() (doc/erhe/graphics.md "Frame
+    // lifecycle"). wait_for_frame_start: GPU clock calibration and frame
+    // bracket harvest for the frame being started; reads no frame-slot
+    // state. acquire_frame_slot: the order rule, the timeline wait and the
+    // pool resets for the slot of frame_id.
+    // Roles: wait_for_frame_start and acquire_frame_slot are main role
+    // (M1 / M2), begin_frame and end_frame the render role (R); each asserts
+    // its thread through erhe::utility::Thread_roles (no-op when the roles
+    // are unset: init, tests). acquire_frame_slot reads m_render_frame_id
+    // under m_frame_id_mutex; begin_frame / end_frame touch only the slot of
+    // the frame they render.
+                  void wait_for_frame_start(uint64_t frame_id);
+    [[nodiscard]] auto acquire_frame_slot  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame() -> bool;
+    // end_frame(): ends the oldest open frame; end_frame(frame_id) verifies
+    // frame_id is that frame.
     [[nodiscard]] auto end_frame  () -> bool;
+    [[nodiscard]] auto end_frame  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
+    // vkDeviceWaitIdle, then completes every frame ended before the wait
+    // (ring buffer ranges, completion handlers); when no frame is open it
+    // also runs the handlers of frames that never ended. The handlers of an
+    // open frame stay queued: that frame's command buffers may still be
+    // recording (the other role's frame, or this role's own unsubmitted
+    // upload command buffer).
     void               wait_idle            ();
     void               clear_render_pipeline_cache();
+    // vkDeviceWaitIdle under m_queue_mutex (the call requires every queue of
+    // the device to be externally synchronized). For the backend's own
+    // drain points (swapchain recreation, the emulated swapchain capture,
+    // destruction); wait_idle() also completes the ended frames.
+    [[nodiscard]] auto device_wait_idle() -> VkResult;
+    // Serializes host access to the graphics and present queues: every
+    // vkQueueSubmit*, vkQueuePresentKHR, queue debug label and
+    // vkDeviceWaitIdle of the backend runs under it.
+    [[nodiscard]] auto get_queue_mutex() -> std::mutex&;
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
-
-    // Transitional: Command_buffer_impl took over wait_for_swapchain /
-    // begin_swapchain / end_swapchain (was wait/begin/end_swapchain_frame
-    // here). It still needs to flip m_had_swapchain_frame so the legacy
-    // end_frame submit branch picks the swapchain path. Goes away with
-    // the legacy single-cb-per-frame path.
-    friend class Command_buffer_impl;
 
     void start_frame_capture();
     void end_frame_capture  ();
 
-    // Active render pass tracking
+    // The device of the process (single device).
     [[nodiscard]] static auto get_device_impl            () -> Device_impl*;
     // Allocate a fresh primary VkCommandBuffer from the pool owned by
-    // (current_frame_in_flight_slot, thread_slot), wrap it in a new
+    // (frame-in-flight slot of get_frame_index(), thread_slot), wrap it in a new
     // Command_buffer that lives in the pool, and return that
     // Command_buffer by reference. The returned cb is in the initial
     // state -- the caller must call begin() on it before recording. Its
     // lifetime is tied to the pool: vkResetCommandPool runs when the
     // frame-in-flight slot's submit fence reports completion, freeing
-    // every cb that was allocated from the pool that cycle.
+    // every cb that was allocated from the pool that cycle. Verifies the
+    // calling role's frame is open (its slot waited or recording, held by
+    // that frame) and stamps the frame id into the cb.
     [[nodiscard]] auto get_command_buffer                (unsigned int thread_slot) -> Command_buffer&;
 
-    [[nodiscard]] auto get_active_render_pass            () const -> VkRenderPass;
-    [[nodiscard]] auto get_active_render_pass_impl       () const -> Render_pass_impl*;
-                  void set_active_render_pass_impl       (Render_pass_impl* render_pass_impl);
-
+    // Both roles submit (the render role its frame, the main role standalone
+    // work in M2); the vkQueueSubmit2 and the implicit present run under
+    // m_queue_mutex, the fence wait of submit_command_buffer_and_wait does not.
     void submit_command_buffers   (std::span<Command_buffer* const> command_buffers);
     void submit_command_buffer_and_wait(Command_buffer& command_buffer);
+    // Any thread. The handler runs on the thread that observes the
+    // completion of the calling role's current frame (get_frame_index()):
+    // update_frame_completion (render role) or wait_idle.
     void add_completion_handler   (std::function<void(Device_impl&)> callback);
     void on_thread_enter          ();
     // No per-context resources in the Vulkan backend; see Device::Device.
@@ -284,7 +335,8 @@ public:
 
     // Target present time (frame pacing FR3, step P2.3): stored here, read
     // by Swapchain_impl::present_image for the matching frame id. Reference-
-    // clock seconds; 0.0 = no request.
+    // clock seconds; 0.0 = no request. Render role only: set in R before the
+    // frame's submit, read by that submit (asserted).
     void               set_present_target_time(std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
     [[nodiscard]] auto get_present_target_time(std::int64_t frame_id) const -> double;
 
@@ -295,29 +347,42 @@ public:
 
     // GPU timer infrastructure. Backed by a single shared VkQueryPool sized
     // for s_max_gpu_timers timestamps per frame in flight. Slots are
-    // allocated by Gpu_timer_impl and freed in its dtor; results are
-    // retrieved in wait_frame after the fence wait guarantees the slice has
-    // completed on the GPU. See vulkan_gpu_timer.cpp for details.
+    // allocated by Gpu_timer_impl and retired by its destructor: the timer
+    // is unhooked at once (no result is stored into it after that) and the
+    // slot is released when the frame current at the destruction completes,
+    // so the timestamps a frame in flight already recorded never land in a
+    // slot a new timer was given. Results are retrieved in acquire_frame_slot
+    // after the timeline wait guarantees the slice has completed on the GPU.
+    // Every member of the timer state is guarded by m_gpu_timer_mutex. See
+    // vulkan_gpu_timer.cpp for details.
     static constexpr std::size_t s_max_gpu_timers = 128;
     [[nodiscard]] auto allocate_gpu_timer_slot       (Gpu_timer_impl* timer) -> int;
+                  void retire_gpu_timer_slot        (int slot);
                   void release_gpu_timer_slot       (int slot);
-                  void record_gpu_timer_begin_query (VkCommandBuffer cb, int slot);
-                  void record_gpu_timer_end_query   (VkCommandBuffer cb, int slot);
-                  void maybe_reset_gpu_timer_slice  (VkCommandBuffer cb);
+    // frame_id is the frame of the cb recorded into (Command_buffer_impl::get_frame_id);
+    // it selects the query pool slice.
+                  void record_gpu_timer_begin_query (VkCommandBuffer cb, uint64_t frame_id, int slot);
+                  void record_gpu_timer_end_query   (VkCommandBuffer cb, uint64_t frame_id, int slot);
+                  void maybe_reset_gpu_timer_slice  (VkCommandBuffer cb, uint64_t frame_id);
     [[nodiscard]] auto get_gpu_timer_timestamp_period() const -> double;
     [[nodiscard]] auto are_gpu_timers_supported      () const -> bool;
 
     // Frame-spanning GPU timestamp bracket (implementation plan step P0.3):
-    // one begin/end timestamp pair per frame, host-reset in wait_frame,
-    // polled non-blocking every frame, calibrated into the reference clock.
-    // The bracket covers the frame's FIRST command buffer (begin at its
-    // vkBeginCommandBuffer, end at its vkEndCommandBuffer); the editor
-    // records one primary cb per frame, so this is the whole frame span.
-    // Multi-cb frames cover only the first cb - refine when that matters.
-    void               record_frame_bracket_begin   (VkCommandBuffer cb);
-    void               record_frame_bracket_end     (VkCommandBuffer cb);
-    void               poll_frame_bracket_results   ();
-    void               update_gpu_calibration       ();
+    // one begin/end timestamp pair per frame, host-reset in
+    // acquire_frame_slot, polled non-blocking by wait_for_frame_start,
+    // calibrated into the reference clock.
+    // The begin timestamp is recorded at the vkBeginCommandBuffer of the
+    // frame's first command buffer; the end timestamp is recorded by
+    // end_frame into the device-owned frame-end command buffer, which rides
+    // on the frame's final (timeline-signal) submit - so the bracket spans
+    // every submit of the frame on the queue, whichever cb ends first.
+    // record_frame_bracket_end returns that recorded cb, or VK_NULL_HANDLE
+    // when the bracket is off or no cb began this frame.
+    void               record_frame_bracket_begin   (VkCommandBuffer cb, uint64_t frame_id);
+    [[nodiscard]] auto record_frame_bracket_end     (uint64_t frame_id) -> VkCommandBuffer;
+    void               reset_frame_end_command_pool (std::size_t in_flight_slot);
+    void               poll_frame_bracket_results   (uint64_t started_frame_id);
+    void               update_gpu_calibration       (uint64_t started_frame_id);
     [[nodiscard]] auto gpu_ticks_to_reference_seconds(uint64_t ticks) const -> double;
 
     // Calibrated host time domains (VK_KHR_calibrated_timestamps). Which host
@@ -426,8 +491,13 @@ public:
         VkPipelineStageFlags                           outgoing_dst_stage  = 0,
         VkAccessFlags                                  outgoing_dst_access = 0
     ) -> VkRenderPass;
-    [[nodiscard]] auto allocate_descriptor_set          () -> VkDescriptorSet;
-    void               reset_descriptor_pool            ();
+    // Fallback descriptor sets (no VK_KHR_push_descriptor), allocated from
+    // the descriptor pool of the frame-in-flight slot of frame_id (the frame
+    // of the command buffer being recorded). Both roles allocate, each from
+    // its own frame's pool; m_descriptor_pool_mutex serializes the calls
+    // (worker threads share the main role's frame). acquire_frame_slot
+    // resets the slot's pool after the timeline wait retired its last use.
+    [[nodiscard]] auto allocate_descriptor_set          (uint64_t frame_id) -> VkDescriptorSet;
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -446,13 +516,26 @@ public:
     ) -> VkBool32;
 
     [[nodiscard]] auto get_number_of_frames_in_flight() const -> size_t;
+    // The frame of the calling role (Device::get_frame_index()): the render
+    // role gets m_render_frame_id (which only it writes, so it reads it
+    // without a lock), every other caller get_prepare_frame_id() (under
+    // m_frame_id_mutex).
     [[nodiscard]] auto get_frame_index               () const -> uint64_t;
-    [[nodiscard]] auto get_frame_in_flight_index     () const -> uint64_t;
+    // The frame-in-flight slot of a frame id (frame_id % frames in flight).
+    // The swapchains index their per-slot state with it, from the frame id
+    // of the command buffer that drives them.
+    [[nodiscard]] auto get_frame_slot_index          (uint64_t frame_id) const -> std::size_t;
 
     // True when the GPU has fully retired all work submitted for the given
     // frame index -- resources last referenced by that frame's command
-    // buffers can be safely reused or destroyed.
+    // buffers can be safely reused or destroyed. Any thread: reads
+    // m_latest_completed_frame under m_frame_id_mutex.
     [[nodiscard]] auto is_frame_completed            (uint64_t frame) const -> bool;
+    // True once end_frame() ended the frame (every command buffer of it is
+    // submitted; the GPU may still run it). Any thread: reads
+    // m_render_frame_id under m_frame_id_mutex, so what the ending role
+    // wrote before it ended the frame is visible to the caller.
+    [[nodiscard]] auto is_frame_ended                (uint64_t frame) const -> bool;
 
     // Per-frame-in-flight submission resources used by Swapchain_impl. Device_impl
     // owns the command pools and their command buffers; the submit_fence slot is
@@ -462,29 +545,44 @@ public:
     void               reset_device_frame_command_pool   (size_t index);
     void               ensure_device_frame_slot          (size_t index);
 
-    // Per-frame descriptor operation counters (for trace logging).
-    // Public so Render_command_encoder_impl and Texture_heap_impl
-    // can increment them without friend declarations.
-    uint32_t m_desc_push_buf_count  {0};
-    uint32_t m_desc_push_img_count  {0};
-    uint32_t m_desc_alloc_set_count {0};
-    uint32_t m_desc_heap_bind_count {0};
-    uint32_t m_desc_draw_count      {0};
-
 private:
     static constexpr size_t       s_number_of_frames_in_flight = 2;
     static constexpr unsigned int s_number_of_thread_slots     = 8;
 
-    void update_frame_completion();
+    // Signals the device timeline at frame_id (the frame being ended) and
+    // advances m_render_frame_id (render role).
+    void update_frame_completion(uint64_t frame_id);
 
-    // Single point of truth for transitioning m_state. Every assignment
-    // to m_state goes through here so that one trace site captures all
-    // transitions along with frame_index and slot -- critical for
-    // diagnosing frame-lifecycle / slot-desync bugs. The site parameter
-    // is a short literal naming the caller (e.g. "wait_frame",
-    // "begin_frame", "end_frame"); it shows up in the trace and makes
-    // the log skimmable.
-    void set_state(Device_frame_state new_state, const char* site);
+    // Runs frame_completed for every frame up to and including
+    // last_completed_frame not completed yet, under m_completion_run_mutex
+    // (the render role's update_frame_completion and a main role wait_idle
+    // may both get here).
+    void complete_frames_through(uint64_t last_completed_frame);
+
+    // Runs and removes every completion handler (destruction, and wait_idle
+    // when no frame is open).
+    void drain_completion_handlers();
+
+    // Resets the fallback descriptor pool of a frame-in-flight slot
+    // (acquire_frame_slot, after the timeline wait).
+    void reset_descriptor_pool(std::size_t in_flight_slot);
+
+    // The frame the main role works on: the newest frame started by
+    // wait_for_frame_start() or acquired, otherwise the next frame to be
+    // acquired. With frame pipelining the main role starts frame N+1 while
+    // the render role still renders frame N: from the start on, the main
+    // role's frame is N+1, as it is in the serial schedule once frame N
+    // ended. Reads the frame ids under m_frame_id_mutex.
+    [[nodiscard]] auto get_prepare_frame_id() const -> uint64_t;
+
+    // Single point of truth for transitioning a frame slot's state. Every
+    // assignment to m_frame_slots[].state goes through here so that one
+    // trace site captures all transitions along with the frame id and
+    // slot -- critical for diagnosing frame-lifecycle / slot-desync bugs.
+    // The site parameter is a short literal naming the caller (e.g.
+    // "acquire_frame_slot", "begin_frame", "end_frame"); it shows up in
+    // the trace and makes the log skimmable.
+    void set_state(uint64_t frame_id, Device_frame_state new_state, const char* site);
 
     // True when this physical device would support GPU ray tracing but it
     // must be left disabled because RenderDoc capture is active.
@@ -528,6 +626,10 @@ private:
     ) -> float;
     [[nodiscard]] auto choose_physical_device(Surface_impl* surface_impl, std::vector<const char*>& device_extensions_c_str) -> bool;
 
+    // Retires one completed frame: the ring buffer ranges, then the
+    // completion handlers of that frame (taken out of the list under
+    // m_completion_handler_mutex, run without it, so a handler may destroy
+    // objects that add handlers). Called with m_completion_run_mutex held.
     void frame_completed(uint64_t frame);
 
     erhe::window::Context_window* m_context_window{nullptr};
@@ -541,8 +643,19 @@ private:
         uint64_t                          frame_number;
         std::function<void(Device_impl&)> callback;
     };
+    // m_completion_handlers: any thread adds (add_completion_handler), the
+    // completing thread takes; guarded by m_completion_handler_mutex.
+    // m_completion_run_mutex serializes completing frames (frame_completed,
+    // m_completion_handler_scratch); lock order: m_completion_run_mutex,
+    // then the ring buffer pool, then m_completion_handler_mutex /
+    // m_frame_id_mutex. Never held across a GPU wait.
+    std::mutex                      m_completion_run_mutex;
+    std::mutex                      m_completion_handler_mutex;
     std::vector<Completion_handler> m_completion_handlers;
+    std::vector<Completion_handler> m_completion_handler_scratch;
 
+    // Locked internally (Device_sync_pool::m_mutex): the implicit semaphore
+    // and fence of every command buffer come from it on both roles.
     std::unique_ptr<Device_sync_pool>          m_sync_pool;
 
     VkInstance               m_vulkan_instance            {VK_NULL_HANDLE};
@@ -567,13 +680,20 @@ private:
     uint32_t                 m_graphics_queue_family_index{0};
     uint32_t                 m_present_queue_family_index {0};
 
+    // Serializes host access to m_vulkan_graphics_queue and
+    // m_vulkan_present_queue (get_queue_mutex()).
+    std::mutex               m_queue_mutex;
+
     // Per-frame-in-flight submission resources consumed by Swapchain_impl.
     // Device_impl owns the VkCommandPool + VkCommandBuffer; Swapchain_impl
-    // populates/recycles submit_fence from its own fence pool.
+    // populates/recycles submit_fence from its own fence pool. Render role
+    // only (the swapchain belongs to the render role), per slot.
     std::array<Device_frame_in_flight, s_number_of_frames_in_flight> m_device_submit_history{};
 
     // [frame_in_flight_slot][thread_slot] command pools + their
-    // currently-allocated Command_buffers. Pools are created once at
+    // currently-allocated Command_buffers. Split per frame slot (each role
+    // gets command buffers of its own frame) and per thread slot (one
+    // recording thread per thread slot of a frame: the caller's contract). Pools are created once at
     // Device_impl construction with VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
     // and torn down at destruction. Each frame the per-slot pools are
     // wholesale-reset (vkResetCommandPool + clear the
@@ -584,40 +704,53 @@ private:
         s_number_of_frames_in_flight
     > m_command_pools{};
 
+    // Device-internal per-frame-in-flight command pool + its single primary
+    // cb, separate from the user thread slots: end_frame records the frame
+    // bracket end timestamp into it and submits it with the frame's
+    // timeline signal. Created once at construction, reset by acquire_frame_slot
+    // together with the per-thread pools (same timeline gate).
+    std::array<VkCommandPool,   s_number_of_frames_in_flight> m_frame_end_command_pools  {};
+    std::array<VkCommandBuffer, s_number_of_frames_in_flight> m_frame_end_command_buffers{};
+
     VkSemaphore              m_vulkan_frame_end_semaphore {VK_NULL_HANDLE};
+
+    // Frame ids. m_frame_id_mutex guards every write of the four and every
+    // read by a role that does not write the member:
+    // - m_render_frame_id: the oldest open frame, the one end_frame() ends
+    //   next; when no frame is open, the next frame to be acquired. Written
+    //   only by update_frame_completion (the role that ends frames, the
+    //   render role); that role reads it without the lock. Frame ids start
+    //   at 1.
+    // - m_prepare_frame_id: the newest acquired frame (0: none yet). Written
+    //   only by acquire_frame_slot (main role). Invariant while frames are
+    //   open: m_render_frame_id <= m_prepare_frame_id < m_render_frame_id + N.
+    // - m_started_frame_id: the newest frame wait_for_frame_start() started
+    //   (0: none yet). Written only by wait_for_frame_start (main role).
+    // - m_latest_completed_frame: one past the newest frame the GPU retired
+    //   and frame_completed ran for; advanced under m_completion_run_mutex
+    //   by complete_frames_through, read by is_frame_completed (any thread).
+    mutable std::mutex       m_frame_id_mutex;
     uint64_t                 m_latest_completed_frame     {0}; // GPU
-    uint64_t                 m_frame_index                {1}; // CPU
+    uint64_t                 m_render_frame_id            {1};
+    uint64_t                 m_prepare_frame_id           {0};
+    uint64_t                 m_started_frame_id           {0};
 
     // Target present time request (frame pacing FR3, step P2.3) plus the
     // pacer-computed present-request holdback deadline (claim C15; derived
-    // from the tracked grid, deviation 12).
+    // from the tracked grid, deviation 12). Render role only.
     std::int64_t             m_present_target_frame_id    {-1};
     double                   m_present_target_time_seconds{0.0};
     double                   m_present_target_hold_until_seconds{0.0};
     // Present-request holdback timer (claim C15 mitigation).
     erhe::time::Waitable_timer m_present_holdback_timer;
 
-    // Current device-frame lifecycle state. Drives the assertions in
-    // wait_frame / begin_frame / begin_swapchain_frame / end_swapchain_frame
-    // / end_frame and backs is_in_device_frame / is_in_swapchain_frame.
-    Device_frame_state       m_state{Device_frame_state::idle};
-    // Set by Command_buffer_impl::begin_swapchain on success. Originally
-    // read by the legacy end_frame() submit branch to pick
-    // Swapchain_impl::end_frame; that branch is gone now (presentation
-    // moved to submit_command_buffers). Kept as a debug breadcrumb and
-    // cleared at end_frame() so the next frame starts fresh.
-    bool                     m_had_swapchain_frame{false};
-
-public:
-    // Serializes recording into the active device frame command buffer
-    // across worker threads (init taskflow etc). Only the in-frame paths
-    // of upload_to_buffer / upload_to_texture / clear_texture /
-    // transition_texture_layout and the Blit_command_encoder recording
-    // scope need to hold this. At steady-state rendering the tick runs
-    // single-threaded so the lock is uncontested.
-    std::mutex m_recording_mutex;
-
-private:
+    // Per-frame-in-flight-slot lifecycle state. Drives the assertions in
+    // acquire_frame_slot / begin_frame / end_frame / get_command_buffer and
+    // backs is_in_swapchain_frame. Per slot: acquire_frame_slot (main role)
+    // writes the slot of the frame it acquires, which no open frame holds;
+    // begin_frame / end_frame (render role) write the slot of the frame they
+    // render; each role reads only the slot of its own frame.
+    std::array<Device_frame_slot, s_number_of_frames_in_flight> m_frame_slots{};
 
 
     void report_device_fault_khr();
@@ -661,7 +794,10 @@ private:
     VkPipelineCache                               m_pipeline_cache           {VK_NULL_HANDLE};
     VkDescriptorSetLayout                         m_descriptor_set_layout    {VK_NULL_HANDLE};
     VkDescriptorSetLayout                         m_texture_set_layout       {VK_NULL_HANDLE};
-    VkDescriptorPool                              m_per_frame_descriptor_pool{VK_NULL_HANDLE};
+    // Fallback descriptor pools (no push descriptors), one per frame in
+    // flight; see allocate_descriptor_set.
+    std::mutex                                    m_descriptor_pool_mutex;
+    std::array<VkDescriptorPool, s_number_of_frames_in_flight> m_per_frame_descriptor_pools{};
     class Cached_pipeline
     {
     public:
@@ -673,20 +809,26 @@ private:
     std::mutex                                    m_compatible_render_pass_mutex;
     std::unordered_map<std::size_t, VkRenderPass> m_compatible_render_pass_map;
 
-    // For ring buffer:
-    bool                                      m_need_sync{false};
+    // Locked internally, ring buffers per role (ring_buffer_pool.hpp).
     Ring_buffer_pool                          m_ring_buffer_pool{m_device, 2 * 1024 * 1024};
 
     // GPU timers. m_gpu_timer_query_pool is sized for
     // s_max_gpu_timers * 2 * s_number_of_frames_in_flight queries, laid out
     // as [slice 0 | slice 1] where each slice has 2 queries per timer
-    // (begin, end). m_gpu_timer_mutex serializes free-list and
-    // fired-bitmap mutations from any thread that touches a Gpu_timer
-    // (ctor/dtor, write_begin/write_end, wait_frame result-read).
+    // (begin, end); a slice is the frame-in-flight slot of the recording
+    // command buffer's frame. m_gpu_timer_mutex serializes the free list,
+    // the timer pointers, the fired bitmaps and the reset flags from any
+    // thread that touches a Gpu_timer (ctor/dtor, write_begin/write_end,
+    // acquire_frame_slot result-read, which stores results into the timers
+    // with the mutex held so a timer being destroyed is never written).
     VkQueryPool m_gpu_timer_query_pool      {VK_NULL_HANDLE};
 
-    // Frame-spanning GPU timestamp bracket state (step P0.3). One pool of
-    // two queries (begin, end) per ring slot: wait_frame host-resets the
+    // Frame-spanning GPU timestamp bracket state (step P0.3). The query
+    // pools and m_frame_bracket_frame_id are main role only (acquire_frame_slot,
+    // wait_for_frame_start); m_frame_bracket_begun is per frame-in-flight slot
+    // (acquire_frame_slot resets it, the first command buffer begun for the
+    // frame sets it, end_frame reads it). One pool of
+    // two queries (begin, end) per ring slot: acquire_frame_slot host-resets the
     // slot it is about to reuse, and a host reset is only valid once every
     // submitted command buffer referencing that pool has completed - with
     // one pool per slot that is exactly frame (F - ring), retired long ago,
@@ -696,10 +838,17 @@ private:
     std::array<VkQueryPool, s_frame_bracket_ring> m_frame_bracket_query_pools{};
     bool         m_frame_bracket_enabled{false};
     std::array<std::int64_t, s_frame_bracket_ring> m_frame_bracket_frame_id{};
-    bool         m_frame_bracket_begun{false};
-    bool         m_frame_bracket_ended{false};
+    // Per frame-in-flight slot: the frame's bracket begin timestamp was
+    // recorded (by the first cb of that frame to begin).
+    std::array<bool, s_number_of_frames_in_flight> m_frame_bracket_begun{};
     bool         m_host_query_reset   {false};
     bool         m_report_address_binding{false};
+    // GPU clock calibration and host time domain offsets: written by
+    // wait_for_frame_start (the main thread in the editor's M1), read by the
+    // present-timing conversions on the thread that presents (the render
+    // thread), so both sides hold m_time_calibration_mutex. The *_frame
+    // throttle fields are touched only by wait_for_frame_start.
+    mutable std::mutex m_time_calibration_mutex;
     bool         m_gpu_calibration_valid       {false};
     double       m_gpu_calibration_host_seconds{0.0};
     uint64_t     m_gpu_calibration_device_ticks{0};
@@ -719,7 +868,9 @@ private:
         double          ticks_per_second{1.0};
         double          offset_seconds  {0.0};
     };
-    void refresh_host_time_domain_offsets();
+    void refresh_host_time_domain_offsets(uint64_t started_frame_id);
+    // host_domain_value_to_seconds with m_time_calibration_mutex held.
+    [[nodiscard]] auto host_domain_value_to_seconds_locked(VkTimeDomainKHR domain, uint64_t value) const -> double;
     std::vector<Host_time_domain> m_host_time_domains;
     VkTimeDomainKHR m_calibrated_host_time_domain{VK_TIME_DOMAIN_DEVICE_KHR};
     uint64_t        m_host_time_domain_offset_frame{0};
@@ -740,9 +891,7 @@ private:
     TracyVkCtx  m_tracy_vk_ctx{nullptr};
 #endif
 
-    // Active render pass tracking
     static Device_impl*  s_device_impl;
-    Render_pass_impl*    m_active_render_pass{nullptr};
 
     // Optional hooks used when erhe::xr wraps Vulkan creation via
     // XR_KHR_vulkan_enable2. Stored as a raw pointer; lifetime is managed by

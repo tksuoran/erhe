@@ -10,6 +10,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene_renderer/content_wide_line_interface.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
@@ -33,8 +34,7 @@ public:
 };
 
 [[nodiscard]] inline auto build_per_view_camera(
-    const erhe::scene::Projection&            projection,
-    const erhe::scene::Node&                  node,
+    const erhe::scene::Camera_snapshot&       camera,
     const erhe::math::Viewport&               viewport,
     const float                               pixel_scale,
     const bool                                reverse_depth,
@@ -42,11 +42,12 @@ public:
     const erhe::math::Coordinate_conventions& conventions
 ) -> Per_view_camera
 {
-    const erhe::scene::Transform clip_from_camera = projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
-    const glm::mat4              clip_from_world  = clip_from_camera.get_matrix() * node.node_from_world();
-    const glm::mat4              world_from_node  = node.world_from_node();
-    const glm::vec4              view_position_in_world{world_from_node[3]};
-    const erhe::scene::Projection::Fov_sides fov  = projection.get_fov_sides(viewport);
+    const erhe::scene::Projection& projection       = camera.projection();
+    const erhe::scene::Transform   clip_from_camera = projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
+    const glm::mat4                clip_from_world  = clip_from_camera.get_matrix() * camera.node_from_world();
+    const glm::mat4&               world_from_node  = camera.world_from_node();
+    const glm::vec4                view_position_in_world{world_from_node[3]};
+    const erhe::scene::Projection::Fov_sides fov    = projection.get_fov_sides(viewport);
     return Per_view_camera{
         .clip_from_world        = clip_from_world,
         .viewport               = glm::vec4{

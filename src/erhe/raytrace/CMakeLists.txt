@@ -40,6 +40,14 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
         erhe_raytrace/bvh/bvh_scene.hpp
     )
     set(impl_link_libraries bvh)
+    # GCC -O3 reports a -Wstringop-overflow false positive from std::vector
+    # insert inlined through bvh::v2::MiniTreeBuilder::Bin::merge (the bvh
+    # headers are already a system include; the diagnostic is attributed to
+    # libstdc++'s own header, so SYSTEM does not silence it).
+    set_source_files_properties(
+        erhe_raytrace/bvh/bvh_geometry.cpp
+        PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:GNU>:-Wno-stringop-overflow>"
+    )
 endif ()
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "none")
     erhe_target_sources_grouped(

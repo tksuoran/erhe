@@ -4,6 +4,7 @@
 #include "renderable.hpp"
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/probe_grid.hpp"
+#include "renderers/render_frame_results.hpp"
 #include "renderers/scene_tlas.hpp"
 
 #include "erhe_graphics/sampler.hpp"
@@ -18,6 +19,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <random>
 #include <span>
 #include <string>
@@ -37,6 +40,7 @@ namespace erhe::graphics {
     class Shader_stage_extension;
     class Texture;
     class Texture_heap;
+    class Texture_reference;
 }
 namespace erhe::scene_renderer {
     class Material_buffer;
@@ -53,6 +57,7 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class Render_context;
+class Ray_trace_slot;
 class Scene_root;
 
 // The GPU passes of one DDGI update, each timed separately.
@@ -177,38 +182,39 @@ public:
         App_message_bus&                         app_message_bus,
         erhe::scene_renderer::Program_interface& program_interface,
         erhe::scene_renderer::Mesh_memory&       mesh_memory,
-        const Ddgi_config&                       config,
         Producer_selection                       selection
     );
     ~Ddgi_renderer() noexcept;
 
     [[nodiscard]] auto is_supported() const -> bool;
-    // Selected as the indirect diffuse source AND supported AND a usable
-    // grid was fitted.
+    // Render phase: selected as the indirect diffuse source AND supported AND
+    // a usable grid was fitted. The main thread reads Rendered_state::active.
     [[nodiscard]] auto is_active   () const -> bool;
-    // DDGI is the selected indirect diffuse source.
+    // DDGI is the selected indirect diffuse source in the calling role's
+    // Render_settings copy (App_context::render_settings): the render phase
+    // reads the frame it renders, the main thread the latest snapshot of the
+    // setting set_indirect_diffuse_source() stores.
     [[nodiscard]] auto is_selected () const -> bool;
-    // Called by set_indirect_diffuse_source() only. Deselecting releases the
-    // probe textures, the grid and the pass timings; selecting leaves the
-    // refit to the next tick.
-    void               set_selection(Producer_selection selection);
+    // Render phase, at its start, every frame: applies the frame's source
+    // selection to the render-phase state. Deselecting releases the probe
+    // textures, the grid and the pass timings; selecting leaves the refit to
+    // the next tick. The change reaches the render phase only as the frame's
+    // settings copy, so this compares the copy with what the previous frame
+    // applied.
+    void               apply_frame_settings();
 
-    [[nodiscard]] auto get_grid                    () const -> const Grid&;
+    // Render phase: the probe atlases the ticks create and replace. The main
+    // thread shows them through get_texture_reference().
     [[nodiscard]] auto get_irradiance_texture      () const -> const std::shared_ptr<erhe::graphics::Texture>&;
     [[nodiscard]] auto get_distance_texture        () const -> const std::shared_ptr<erhe::graphics::Texture>&;
     [[nodiscard]] auto get_probe_data_texture      () const -> const std::shared_ptr<erhe::graphics::Texture>&;
     [[nodiscard]] auto get_ray_data_texture        () const -> const std::shared_ptr<erhe::graphics::Texture>&;
-    [[nodiscard]] auto get_texture_byte_count      () const -> std::size_t;
-    // Rays per probe actually used (the configured value rounded up to the
-    // trace workgroup size), and the interior octahedral resolutions.
-    [[nodiscard]] auto get_rays_per_probe          () const -> int;
-    [[nodiscard]] auto get_irradiance_texels       () const -> int;
-    [[nodiscard]] auto get_distance_texels         () const -> int;
-    // Probes updated per tick (config budget clamped to the grid), and how
-    // many ticks one full sweep of the grid therefore takes.
-    [[nodiscard]] auto get_probes_per_update       () const -> int;
+    // The probe atlases for the DDGI window, resolved by the render thread
+    // when it draws the window; their sizes are Rendered_state::atlas_sizes.
+    enum class Atlas : unsigned int { irradiance = 0, distance, probe_data, ray_data };
+    static constexpr std::size_t c_atlas_count = 4;
+    [[nodiscard]] auto get_texture_reference(Atlas atlas) const -> const std::shared_ptr<erhe::graphics::Texture_reference>&;
     [[nodiscard]] auto get_instance_count          () const -> std::size_t;
-    [[nodiscard]] auto get_stats                   () const -> Stats;
 
     // The probe volume parameters the forward pass samples with: the fitted
     // grid plus the sampling settings. Invalid (counts 0) unless active.
@@ -228,6 +234,10 @@ public:
     // c_max_irradiance_query_points); record_irradiance_query() records the
     // dispatch into the frame after the probe update; poll_irradiance_query()
     // reports the state and reads the results back once that frame retired.
+    // The main thread begins, cancels and polls, the render phase records:
+    // the query state is shared under m_query_mutex (with frame pipelining
+    // the render phase records while the main thread prepares the next
+    // frame).
     [[nodiscard]] auto begin_irradiance_query      (std::span<const Irradiance_query_point> points) -> bool;
     void               cancel_irradiance_query     ();
     [[nodiscard]] auto poll_irradiance_query       () -> Irradiance_query_state;
@@ -249,7 +259,8 @@ public:
     // whether DDGI is enabled or not (needs ray query support). tick()
     // records it in per-frame chunks of c_reference_rays_per_frame rays;
     // one query at a time, same state machine as the irradiance query plus
-    // failed (get_reference_query_error() says why).
+    // failed (get_reference_query_error() says why), shared the same way
+    // under m_reference_mutex.
     [[nodiscard]] auto begin_reference_query        (std::span<const Irradiance_query_point> points, const Reference_query_settings& settings) -> bool;
     void               cancel_reference_query       ();
     [[nodiscard]] auto poll_reference_query         () -> Irradiance_query_state;
@@ -258,12 +269,9 @@ public:
     // The DDGI intensity the results include.
     [[nodiscard]] auto get_reference_query_intensity() const -> float;
 
-    // Probe relocation / classification state, read back on request
-    // (doc/editor/ddgi.md "Probe state"). request_probe_states() asks for a
-    // copy of the probe data texture after the next probe update (no-op
-    // while one is in flight); poll_probe_states() reads a retired copy into
-    // the snapshot and reports whether the snapshot is valid for the current
-    // grid. The snapshot holds one vec4 per probe, indexed like
+    // Probe relocation / classification state, read back from the probe data
+    // texture (doc/editor/ddgi.md "Probe state") while the probe overlay is
+    // on or after request_probe_states(). One vec4 per probe, indexed like
     // probe_index = x + counts.x * (y + counts.y * z): xyz the relocation
     // offset in world units, w the state (1 active, 0 inactive).
     class Probe_state_summary
@@ -277,10 +285,46 @@ public:
     };
     static constexpr float c_relocated_offset_m = 1.0e-3f;
 
+    // What a tick of the render phase leaves for the main thread, one per
+    // frame in flight (Render_frame_results): the fitted grid and its
+    // sampling resolutions, the measured cost, and the newest probe state
+    // readback that retired. Read by the probe overlay (M2), the DDGI window
+    // and the MCP queries as the last rendered frame's.
+    class Rendered_state
+    {
+    public:
+        bool                   active{false}; // is_active()
+        Grid                   grid{};
+        // Width and height of each Atlas (0 when it does not exist).
+        std::array<glm::ivec2, c_atlas_count> atlas_sizes{};
+        // Rays per probe actually used (the configured value rounded up to
+        // the trace workgroup size), and the interior octahedral resolutions.
+        int                    rays_per_probe    {0};
+        int                    irradiance_texels {0};
+        int                    distance_texels   {0};
+        // Probes updated per tick (config budget clamped to the grid).
+        int                    probes_per_update {0};
+        std::size_t            texture_byte_count{0};
+        Stats                  stats{};
+        // The probe states hold a readback of this grid.
+        bool                   probe_states_valid{false};
+        Probe_state_summary    probe_state_summary{};
+        std::vector<glm::vec4> probe_states;
+        // The render phase's readback serial the probe states were copied
+        // at: a slot copies the vector only when a newer readback retired.
+        uint64_t               probe_states_serial{0};
+    };
+
+    // Main thread: asks the render phase for a probe state readback after
+    // its next probe update (no-op while one is in flight); the result
+    // reaches a later frame's Rendered_state.
     void               request_probe_states       ();
-    [[nodiscard]] auto poll_probe_states          () -> bool;
-    [[nodiscard]] auto get_probe_state_summary    () const -> const Probe_state_summary&;
-    [[nodiscard]] auto get_probe_states           () const -> std::span<const glm::vec4>;
+    // The state the tick of frame_index left: the main thread passes
+    // App_context::last_rendered_frame_index (the last rendered frame), the
+    // probe overlay App_context::get_results_frame_index() (it also draws in
+    // the render phase, for the headset); null when DDGI did not tick in
+    // that frame or nothing was rendered yet.
+    [[nodiscard]] auto get_rendered_state         (std::optional<uint64_t> frame_index) const -> const Rendered_state*;
 
     // Refits the grid, reallocates the probe textures when needed, and
     // records this tick's probe update into the command buffer while DDGI
@@ -311,7 +355,7 @@ private:
 
     // Refits + reallocates when needed. Returns false when there is no
     // usable volume this tick.
-    [[nodiscard]] auto update_volume(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root) -> bool;
+    [[nodiscard]] auto update_volume(erhe::graphics::Command_buffer& command_buffer, const Ray_trace_slot& slot) -> bool;
 
     // Writes this tick's control UBO (grid, dispatch window, rotation).
     [[nodiscard]] auto update_control_buffer() -> erhe::graphics::Ring_buffer_range;
@@ -338,8 +382,10 @@ private:
     );
 
     // True while a reference query has chunks left to record.
-    [[nodiscard]] auto reference_needs_dispatch() const -> bool;
+    [[nodiscard]] auto reference_needs_dispatch() -> bool;
     void               fail_reference_query    (const char* reason);
+    // Under m_reference_mutex.
+    [[nodiscard]] auto reference_needs_dispatch_locked() const -> bool;
 
     // Records the next chunk of the reference query against this frame's
     // trace inputs (the same TLAS, light block and material set the probe
@@ -358,11 +404,20 @@ private:
         erhe::scene_renderer::Program_interface& program_interface
     );
 
-    // Copies the probe data texture into a host-visible buffer: the mirror
-    // the debug overlay reads, or the probe state readback. Recorded into the
-    // frame's command buffer, so the overlay sees the previous frame's
-    // probes - fine for a debug aid, and it costs no stall.
-    void copy_probe_data(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Buffer& destination);
+    // Copies the probe data texture into the host-visible readback buffer,
+    // for the probe overlay or a requested probe state readback. One copy in
+    // flight at a time; poll_probe_readback() decodes it once its frame
+    // retired, so the overlay follows the probes a few frames late - fine
+    // for a debug aid, and it costs no stall.
+    void copy_probe_data(erhe::graphics::Command_buffer& command_buffer);
+    // Render phase: decodes a retired readback into m_probe_states.
+    void poll_probe_readback();
+    // Render phase: the tick's probe field update and reference query
+    // chunk; tick() publishes its Rendered_state after it.
+    void tick_field(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
+    // Render phase: fills this frame's Rendered_state.
+    void publish_rendered_state();
+    [[nodiscard]] auto get_stats() const -> Stats;
 
     // Per-pass GPU timer plus a fixed ring of its recent results.
     class Pass_timing
@@ -380,14 +435,17 @@ private:
     void sample_pass_timings();
     void clear_pass_timings ();
 
+    // The calling role's copy of the DDGI settings
+    // (App_context::render_settings->ddgi): the render phase reads the copy of
+    // the frame it renders, so the config is fetched at each use, never kept.
+    [[nodiscard]] auto get_config() const -> const Ddgi_config&;
+
     // A uniformly distributed random rotation for this tick's ray set.
     [[nodiscard]] auto next_random_rotation() -> glm::vec4;
 
     erhe::graphics::Device& m_graphics_device;
     App_context&            m_context;
-    // Live reference to the editor's Ddgi_config (editor_settings.ddgi).
-    const Ddgi_config&      m_config;
-    Producer_selection      m_selection{Producer_selection::deselected};
+    Producer_selection      m_selection{Producer_selection::deselected}; // render phase: the applied selection (apply_frame_settings())
     bool                    m_supported{false};
 
     Grid m_grid{};
@@ -478,22 +536,29 @@ private:
 
     std::mt19937 m_random_engine{0x0DD91u};
 
-    // Host-visible mirror of the probe data texture (xyz relocation offset,
-    // w state), refreshed while the probe overlay is enabled.
+    // Host-visible copy of the probe data texture (xyz relocation offset,
+    // w state), recorded while the probe overlay is on or a probe state
+    // readback is requested; render phase owned.
     std::unique_ptr<erhe::graphics::Buffer> m_probe_readback_buffer;
-    bool                                    m_probe_readback_valid{false};
-
-    // Probe state readback (request_probe_states()): a separate host-visible
-    // copy, so the overlay's per-frame copies never overwrite one being read.
-    // The snapshot vector is filled on the MCP path only.
-    std::unique_ptr<erhe::graphics::Buffer> m_probe_state_readback_buffer;
-    bool                                    m_probe_state_requested        {false};
-    bool                                    m_probe_state_in_flight        {false};
-    bool                                    m_probe_state_valid            {false};
-    uint64_t                                m_probe_state_frame            {0};
-    uint64_t                                m_probe_state_copy_update_count{0};
-    std::vector<glm::vec4>                  m_probe_states;
+    bool                                    m_probe_readback_in_flight     {false};
+    uint64_t                                m_probe_readback_frame         {0};
+    uint64_t                                m_probe_readback_update_count  {0};
+    Grid                                    m_probe_readback_grid{};
+    int                                     m_probe_readback_tiles_per_row {0};
+    // request_probe_states() (main thread) sets the pending flag; the tick
+    // takes it under the mutex into the render phase's request.
+    std::mutex                              m_probe_state_request_mutex;
+    bool                                    m_probe_state_request_pending  {false};
+    bool                                    m_probe_state_requested        {false}; // render phase
+    std::array<std::shared_ptr<erhe::graphics::Texture_reference>, c_atlas_count> m_texture_references;
+    // The newest decoded readback (render phase owned), published into the
+    // frame's Rendered_state; the serial counts decoded readbacks.
+    bool                                    m_probe_states_valid           {false};
+    Grid                                    m_probe_states_grid{};
     Probe_state_summary                     m_probe_state_summary;
+    std::vector<glm::vec4>                  m_probe_states;
+    uint64_t                                m_probe_states_serial          {0};
+    Render_frame_results<Rendered_state>    m_rendered_states;
 
     std::array<Pass_timing, c_ddgi_pass_count> m_pass_timings;
     uint64_t                                   m_update_count       {0};
@@ -515,6 +580,8 @@ private:
     const erhe::graphics::Sampler*                            m_ddgi_sampler{nullptr};
     std::vector<Irradiance_query_point>                       m_query_points;
     std::vector<glm::vec3>                                    m_query_results;
+    // Guards the query state, points, results, frame and update count.
+    std::mutex                                                m_query_mutex;
     Irradiance_query_state                                    m_query_state       {Irradiance_query_state::idle};
     uint64_t                                                  m_query_frame       {0};
     uint64_t                                                  m_query_update_count{0};
@@ -535,6 +602,9 @@ private:
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_reference_pipeline;
     std::unique_ptr<erhe::graphics::Buffer>                   m_reference_input_buffer;
     std::unique_ptr<erhe::graphics::Buffer>                   m_reference_output_buffer;
+    // Guards the reference query state below (points, results, settings,
+    // error, state, next point, frame, intensity).
+    std::mutex                                                m_reference_mutex;
     std::vector<Irradiance_query_point>                       m_reference_points;
     std::vector<Reference_irradiance_sample>                  m_reference_results;
     Reference_query_settings                                  m_reference_settings{};

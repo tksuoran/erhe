@@ -4,6 +4,7 @@
 #include "erhe_graphics/vulkan/vulkan_device_sync_pool.hpp"
 #include "erhe_graphics/vulkan/vulkan_emulated_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
@@ -55,6 +56,7 @@ Command_buffer_impl::~Command_buffer_impl() noexcept
 Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     : m_device_impl              {other.m_device_impl}
     , m_debug_label              {std::move(other.m_debug_label)}
+    , m_frame_id                 {other.m_frame_id}
     , m_vk_command_buffer        {other.m_vk_command_buffer}
     , m_recording                {other.m_recording}
     , m_open_debug_label_count   {other.m_open_debug_label_count}
@@ -65,6 +67,8 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     , m_wait_for_own_gpu_signal  {other.m_wait_for_own_gpu_signal}
     , m_signal_own_cpu_completion{other.m_signal_own_cpu_completion}
     , m_swapchain_used           {other.m_swapchain_used}
+    , m_active_render_pass_impl  {other.m_active_render_pass_impl}
+    , m_descriptor_counters      {other.m_descriptor_counters}
 {
     other.m_device_impl               = nullptr;
     other.m_vk_command_buffer         = VK_NULL_HANDLE;
@@ -75,6 +79,7 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     other.m_wait_for_own_gpu_signal   = false;
     other.m_signal_own_cpu_completion = false;
     other.m_swapchain_used            = nullptr;
+    other.m_active_render_pass_impl   = nullptr;
 }
 
 auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Command_buffer_impl&
@@ -96,6 +101,7 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
 
     m_device_impl             = other.m_device_impl;
     m_debug_label             = std::move(other.m_debug_label);
+    m_frame_id                = other.m_frame_id;
     m_vk_command_buffer       = other.m_vk_command_buffer;
     m_recording               = other.m_recording;
     m_open_debug_label_count  = other.m_open_debug_label_count;
@@ -106,6 +112,8 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_wait_for_own_gpu_signal   = other.m_wait_for_own_gpu_signal;
     m_signal_own_cpu_completion = other.m_signal_own_cpu_completion;
     m_swapchain_used            = other.m_swapchain_used;
+    m_active_render_pass_impl   = other.m_active_render_pass_impl;
+    m_descriptor_counters       = other.m_descriptor_counters;
 
     other.m_device_impl            = nullptr;
     other.m_vk_command_buffer      = VK_NULL_HANDLE;
@@ -114,12 +122,43 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     other.m_implicit_semaphore     = VK_NULL_HANDLE;
     other.m_implicit_fence         = VK_NULL_HANDLE;
     other.m_swapchain_used         = nullptr;
+    other.m_active_render_pass_impl = nullptr;
     return *this;
+}
+
+auto Command_buffer_impl::get_active_render_pass_impl() const noexcept -> Render_pass_impl*
+{
+    return m_active_render_pass_impl;
+}
+
+auto Command_buffer_impl::get_active_render_pass() const noexcept -> VkRenderPass
+{
+    return (m_active_render_pass_impl != nullptr) ? m_active_render_pass_impl->get_render_pass() : VK_NULL_HANDLE;
+}
+
+void Command_buffer_impl::set_active_render_pass_impl(Render_pass_impl* const render_pass_impl) noexcept
+{
+    m_active_render_pass_impl = render_pass_impl;
+}
+
+auto Command_buffer_impl::get_descriptor_counters() noexcept -> Descriptor_counters&
+{
+    return m_descriptor_counters;
 }
 
 auto Command_buffer_impl::get_debug_label() const noexcept -> erhe::utility::Debug_label
 {
     return m_debug_label;
+}
+
+auto Command_buffer_impl::get_frame_id() const noexcept -> std::uint64_t
+{
+    return m_frame_id;
+}
+
+void Command_buffer_impl::set_frame_id(const std::uint64_t frame_id) noexcept
+{
+    m_frame_id = frame_id;
 }
 
 void Command_buffer_impl::begin()
@@ -149,8 +188,8 @@ void Command_buffer_impl::begin()
     // render pass) because vkCmdResetQueryPool is forbidden inside a render
     // pass. Subsequent cbs in the same frame find the flag already cleared
     // and skip the reset. See Device_impl::maybe_reset_gpu_timer_slice.
-    m_device_impl->maybe_reset_gpu_timer_slice(m_vk_command_buffer);
-    m_device_impl->record_frame_bracket_begin(m_vk_command_buffer);
+    m_device_impl->maybe_reset_gpu_timer_slice(m_vk_command_buffer, m_frame_id);
+    m_device_impl->record_frame_bracket_begin(m_vk_command_buffer, m_frame_id);
     m_recording = true;
     ERHE_VULKAN_TRACE(
         "Command_buffer_impl::begin() vk_cb=0x{:x} label='{}'",
@@ -173,7 +212,6 @@ void Command_buffer_impl::end()
     // Rendergraph::execute() via Rendergraph_node::submits_command_buffer().
     ERHE_VERIFY(m_open_debug_label_count == 0);
 
-    m_device_impl->record_frame_bracket_end(m_vk_command_buffer);
     const VkResult result = vkEndCommandBuffer(m_vk_command_buffer);
     if (result != VK_SUCCESS) {
         log_context->critical(
@@ -280,10 +318,11 @@ void Command_buffer_impl::pre_submit_wait()
             m_device_impl->report_device_fault("pre_submit_wait vkWaitForFences");
             std::abort();
         }
-        erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl->get_frame_time_recorder();
-        if (erhe::frame_pacing::Frame_time_record* record = recorder.find(static_cast<std::int64_t>(m_device_impl->get_frame_index()))) {
-            record->fence_wait_duration += erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin;
-        }
+        m_device_impl->get_frame_time_recorder().add(
+            static_cast<std::int64_t>(m_frame_id),
+            &erhe::frame_pacing::Frame_time_record::fence_wait_duration,
+            erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin
+        );
     }
     m_wait_for_cpu_producers.clear();
 }
@@ -385,9 +424,10 @@ void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, const std::size
     vkCmdPipelineBarrier2(m_vk_command_buffer, &post_copy_dep_info);
 
     // Defer staging buffer destruction until the GPU has consumed this
-    // frame. add_completion_handler queues against the current
-    // m_frame_index; the timeline semaphore signaled by end_frame is
-    // what releases the handler.
+    // frame. add_completion_handler queues against the calling role's
+    // frame (Device_impl::get_frame_index(), the frame of this cb); the
+    // timeline semaphore signaled by that frame's end_frame is what
+    // releases the handler.
     device_impl.add_completion_handler(
         [allocator, staging_buffer, staging_allocation](Device_impl&) {
             vmaDestroyBuffer(allocator, staging_buffer, staging_allocation);
@@ -775,8 +815,8 @@ void Command_buffer_impl::collect_synchronization(Vulkan_submit_info& submit_inf
         // per-slot present-semaphore so vkQueuePresentKHR (called via
         // Swapchain_impl::present from submit_command_buffers right
         // after the submit succeeds) can wait on cb completion.
-        const VkSemaphore acquire_semaphore = m_swapchain_used->get_active_acquire_semaphore();
-        const VkSemaphore present_semaphore = m_swapchain_used->get_active_present_semaphore();
+        const VkSemaphore acquire_semaphore = m_swapchain_used->get_active_acquire_semaphore(m_frame_id);
+        const VkSemaphore present_semaphore = m_swapchain_used->get_active_present_semaphore(m_frame_id);
         if (acquire_semaphore != VK_NULL_HANDLE) {
             submit_info.wait_semaphores.push_back(VkSemaphoreSubmitInfo{
                 .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -812,19 +852,21 @@ auto Command_buffer_impl::wait_for_swapchain(Frame_state& out_frame_state) -> bo
     // the Vulkan swapchain owns its own per-frame-in-flight pacing
     // (vkAcquireNextImageKHR + acquire/present semaphore setup) which
     // also drives ensure_device_frame_slot for per-thread pool resets.
+    // The swapchain indexes its per-slot state by this command buffer's
+    // frame id.
     ERHE_VERIFY(m_device_impl != nullptr);
     Surface* surface = m_device_impl->get_surface();
     if (surface != nullptr) {
         if (surface->get_impl().is_headless()) {
             // Headless: drive the emulated swapchain instead of a real one.
             Emulated_swapchain_impl* emulated_swapchain = surface->get_impl().get_emulated_swapchain();
-            if ((emulated_swapchain != nullptr) && emulated_swapchain->wait_frame(out_frame_state)) {
+            if ((emulated_swapchain != nullptr) && emulated_swapchain->wait_frame(m_frame_id, out_frame_state)) {
                 return true;
             }
         } else {
             Swapchain* swapchain = surface->get_swapchain();
             if (swapchain != nullptr) {
-                const bool ok = swapchain->get_impl().wait_frame(out_frame_state);
+                const bool ok = swapchain->get_impl().wait_frame(m_frame_id, out_frame_state);
                 ERHE_VULKAN_TRACE(
                     "Command_buffer_impl::wait_for_swapchain() ok={}",
                     ok
@@ -863,7 +905,7 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
         }
         const bool ok = emulated_swapchain->begin_frame(frame_begin_info);
         out_frame_state.should_render = ok;
-        // Intentionally do NOT set m_swapchain_used / m_had_swapchain_frame:
+        // Intentionally do NOT set m_swapchain_used:
         // the emulated frame submits as an ordinary no-present device frame
         // (no acquire/present semaphores, no vkQueuePresentKHR).
         return ok;
@@ -876,13 +918,13 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
         return false;
     }
 
-    const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
+    const bool ok = swapchain->get_impl().begin_frame(m_frame_id, frame_begin_info);
     out_frame_state.should_render = ok;
     ERHE_VULKAN_TRACE(
         "Command_buffer_impl::begin_swapchain() ok={} acquire_sem=0x{:x} present_sem=0x{:x}",
         ok,
-        reinterpret_cast<std::uintptr_t>(swapchain->get_impl().get_active_acquire_semaphore()),
-        reinterpret_cast<std::uintptr_t>(swapchain->get_impl().get_active_present_semaphore())
+        reinterpret_cast<std::uintptr_t>(swapchain->get_impl().get_active_acquire_semaphore(m_frame_id)),
+        reinterpret_cast<std::uintptr_t>(swapchain->get_impl().get_active_present_semaphore(m_frame_id))
     );
     if (ok) {
         // Remember that this cb feeds the swapchain so
@@ -890,11 +932,6 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
         // acquire (wait) and present (signal) semaphores into the
         // submit. Cleared after collect_synchronization runs.
         m_swapchain_used = &swapchain->get_impl();
-        // Friend access: tell the still-existing legacy end_frame submit
-        // branch that this frame engaged the swapchain, so it picks the
-        // Swapchain_impl::end_frame path (acquire-wait + present-signal +
-        // vkQueuePresentKHR). Goes away with the legacy single-cb path.
-        m_device_impl->m_had_swapchain_frame = true;
     }
     return ok;
 }

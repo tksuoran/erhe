@@ -55,6 +55,15 @@ enum class Device_frame_state : uint8_t
     in_swapchain_frame
 };
 
+// The state of one frame-in-flight slot and the id of the frame that holds
+// it (valid while state != idle). See the Vulkan Device_frame_slot.
+class Device_frame_slot
+{
+public:
+    Device_frame_state state   {Device_frame_state::idle};
+    uint64_t           frame_id{0};
+};
+
 // Shared (share-group-wide) GL object kinds whose deletion must scrub
 // every context's binding cache, not only the deleting context's.
 // Container objects (vertex arrays, framebuffers) are per-context and go
@@ -78,9 +87,11 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl() noexcept;
 
-    [[nodiscard]] auto wait_frame () -> bool;
+                  void wait_for_frame_start(uint64_t frame_id);
+    [[nodiscard]] auto acquire_frame_slot  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame() -> bool;
     [[nodiscard]] auto end_frame  () -> bool;
+    [[nodiscard]] auto end_frame  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
@@ -88,11 +99,6 @@ public:
     void               clear_render_pipeline_cache();
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
-
-    // Transitional: see Vulkan Device_impl. Command_buffer_impl took
-    // over the swapchain-frame entry points and still needs to flip
-    // m_had_swapchain_frame for the legacy end_frame path.
-    friend class Command_buffer_impl;
 
     void resize_swapchain_to_window();
     void start_frame_capture       ();
@@ -130,6 +136,7 @@ public:
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
+    // The frame of the calling role (Device::get_frame_index()).
     [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
     [[nodiscard]] auto get_number_of_frames_in_flight     () const -> std::size_t;
     // Conservative: see Device::is_frame_completed().
@@ -189,7 +196,7 @@ public:
     // a destructor running on some other context queues the name here for
     // the owning context to delete. Each context drains its own queue:
     // future worker contexts at acquire, and the MAIN context in
-    // wait_frame() - it never becomes current again, so "drain on next
+    // acquire_frame_slot() - it never becomes current again, so "drain on next
     // make-current" would never fire for it.
     void queue_vertex_array_delete_on_context(int context_index, unsigned int name);
     void queue_framebuffer_delete_on_context (int context_index, unsigned int name);
@@ -206,7 +213,7 @@ public:
     // context's bind-epoch snapshot, the name-recycling guard - for every
     // OTHER live context. Each context drains its own queue at the same
     // points as the container-delete queues: the MAIN context in
-    // wait_frame(), future worker contexts at acquire.
+    // acquire_frame_slot(), future worker contexts at acquire.
     void on_shared_object_deleted(Gl_shared_object_kind kind, unsigned int name);
     void drain_shared_object_scrubs_for_current_context();
 
@@ -355,9 +362,13 @@ private:
     std::array<Frame_sync, 16>            m_frame_syncs;
     // Sizing hint only; see get_number_of_frames_in_flight().
     static constexpr std::size_t          s_number_of_frames_in_flight = 3;
-    uint64_t                              m_frame_index{1};
-    Device_frame_state                    m_state{Device_frame_state::idle};
-    bool                                  m_had_swapchain_frame{false};
+    [[nodiscard]] auto get_frame_slot_index(uint64_t frame_id) const -> std::size_t;
+    // The oldest open frame (end_frame() ends it), or the next frame to be
+    // acquired when none is open. Frame ids start at 1.
+    uint64_t                              m_render_frame_id{1};
+    // The newest acquired frame (0: none yet).
+    uint64_t                              m_prepare_frame_id{0};
+    std::array<Device_frame_slot, s_number_of_frames_in_flight> m_frame_slots{};
     std::chrono::steady_clock::time_point m_last_ok_frame_timestamp;
     std::vector<uint64_t>                 m_pending_frames;
     std::vector<uint64_t>                 m_completed_frames;
@@ -373,12 +384,13 @@ private:
     std::unique_ptr<Ring_buffer_client>   m_staging_buffer;
 
     // GL has no native command buffer object. Each call to
-    // get_command_buffer() allocates a fresh wrapper here; the
-    // wrappers are kept alive until the next wait_frame() so anything
-    // submit_command_buffers / start_render_pass / encoders captured
-    // by reference stays valid for the duration of a frame's recording.
-    // wait_frame() clears the vector at the start of each frame.
-    std::vector<std::unique_ptr<Command_buffer>> m_command_buffers;
+    // get_command_buffer() allocates a fresh wrapper into the vector of the
+    // calling role's frame slot; the wrappers are kept alive until the next
+    // acquire_frame_slot() of that slot so anything submit_command_buffers /
+    // start_render_pass / encoders captured by reference stays valid for
+    // the duration of the frame's recording, also while a newer frame is
+    // acquired.
+    std::array<std::vector<std::unique_ptr<Command_buffer>>, s_number_of_frames_in_flight> m_command_buffers;
 
     // RenderDoc
     //erhe::window::Context_window* m_context_window           {nullptr};

@@ -7,6 +7,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
+#include <mutex>
 #include <vector>
 
 namespace erhe::graphics {
@@ -48,7 +50,9 @@ public:
     Emulated_swapchain_impl(Emulated_swapchain_impl&&) = delete;
     Emulated_swapchain_impl& operator=(Emulated_swapchain_impl&&) = delete;
 
-    [[nodiscard]] auto wait_frame (Frame_state& out_frame_state) -> bool;
+    // frame_id: the frame id of the command buffer that drives the frame
+    // (Command_buffer_impl::get_frame_id); its slot is primed.
+    [[nodiscard]] auto wait_frame (uint64_t frame_id, Frame_state& out_frame_state) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto present    () -> bool;
 
@@ -65,9 +69,12 @@ public:
     [[nodiscard]] auto get_depth_image_view() const -> VkImageView;
     [[nodiscard]] auto get_vk_depth_format () const -> VkFormat;
 
-    // Reads the most recently composited color image back to host memory as
-    // tightly packed 8-bit RGBA (alpha forced to 255). Returns false if no
-    // frame has been composited yet. Used by the headless screenshot path; the
+    // Reads the color image of the newest composited frame that has ended
+    // (Device_impl::is_frame_ended: every command buffer of it submitted)
+    // back to host memory as tightly packed 8-bit RGBA (alpha forced to
+    // 255). Returns false if no such frame exists yet. Used by the headless
+    // screenshot path from the main thread, which with frame pipelining runs
+    // while the render thread records the next frame into another image; the
     // emulated swapchain leaves its color images in TRANSFER_SRC_OPTIMAL, so
     // the copy is a drop-in. Synchronous (drains the GPU); intended for
     // infrequent diagnostic capture, not the hot path.
@@ -88,12 +95,20 @@ private:
     VkFormat                   m_color_format    {VK_FORMAT_UNDEFINED};
     VkFormat                   m_depth_format    {VK_FORMAT_UNDEFINED};
     uint32_t                   m_image_index     {0};
-    // Index of the image whose swapchain render pass was most recently
-    // recorded (set in mark_render_pass_recorded). This is the fully
-    // composited frame the readback path reads. m_have_composited gates the
-    // readback until at least one frame has been rendered.
-    uint32_t                   m_last_composited_index{0};
-    bool                       m_have_composited      {false};
+    // The images whose swapchain render pass was recorded most recently
+    // (mark_render_pass_recorded, render role) with the device frame that
+    // recorded them: [0] the newest, [1] the one before. The readback (main
+    // role) reads the newest of them whose frame has ended. Guarded by
+    // m_composited_mutex.
+    class Composited_frame
+    {
+    public:
+        uint64_t frame_id   {0};
+        uint32_t image_index{0};
+        bool     valid      {false};
+    };
+    std::mutex                 m_composited_mutex;
+    std::array<Composited_frame, 2> m_composited{};
     std::vector<VkImage>       m_images;
     std::vector<VmaAllocation> m_allocations;
     std::vector<VkImageView>   m_views;

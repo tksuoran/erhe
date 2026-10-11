@@ -161,8 +161,8 @@ instead of hanging.
 
 ## Delivery
 
-`Asset_manager::flush_pending_removals()` is called from `Editor::tick`
-immediately before the message bus pump, and from nowhere else. That point is
+`Asset_manager::flush_pending_removals()` is called from
+`Editor::frame_prepare_phase()` (M2) immediately before the message bus pump, and from nowhere else. That point is
 chosen: it is after `m_operation_stack->update()`, so an undo performed this
 frame is announced this frame; after `m_imgui_windows->end_frame()`, so it is
 outside ImGui iteration; and outside both `Content_library::mutex` and the

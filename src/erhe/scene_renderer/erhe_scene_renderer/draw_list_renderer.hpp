@@ -71,7 +71,7 @@ public:
         // marked per-slot in the joint buffer (see debug_target_joint).
         // .y: 1 = show zero-weight vertices as black.
         const glm::uvec4&                                      debug_joint_indices{0xffffffffu, 0, 0, 0};
-        const std::span<glm::vec4>&                            debug_joint_colors{};
+        const std::span<const glm::vec4>&                      debug_joint_colors{};
         // Active joint for the joint_weight_ramp debug mode, matched per
         // joint slot by Joint_buffer::update(). nullptr = none.
         const erhe::scene::Node*                               debug_target_joint{nullptr};

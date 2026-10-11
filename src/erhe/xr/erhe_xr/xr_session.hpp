@@ -16,6 +16,7 @@ namespace erhe::window   { class Context_window; }
 
 namespace erhe::xr {
 
+class Frame_timing;
 class Quad_layer;
 class Xr_instance;
 
@@ -89,7 +90,12 @@ public:
     [[nodiscard]] auto begin_session               () -> bool;
     [[nodiscard]] auto end_session                 () -> bool;
     [[nodiscard]] auto is_session_running          () const -> bool;
-    [[nodiscard]] auto begin_frame                 () -> bool;
+    // xrBeginFrame for the frame `timing` came from (Headset::wait_frame).
+    // Keeps the timing's predicted display time as the render-side display
+    // time that render_frame*() and end_frame() use, so a wait_frame() of
+    // the next frame on another thread does not change the frame being
+    // rendered (doc/editor/render_thread.md section 2.2).
+    [[nodiscard]] auto begin_frame                 (const Frame_timing& timing) -> bool;
     [[nodiscard]] auto wait_frame                  () -> XrFrameState*;
     [[nodiscard]] auto render_frame                (erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool;
     // Multiview render frame variant: acquires a single shared layered
@@ -102,8 +108,15 @@ public:
     [[nodiscard]] auto render_frame_multiview      (erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     [[nodiscard]] auto end_frame                   (const bool rendered) -> bool;
 
+    // Device thread slot render_frame() / render_frame_multiview() take
+    // their view command buffers from (Device::get_command_buffer). Default
+    // 0. A program that renders the XR frame on a thread with its own slot
+    // sets that slot here, so no two threads record from one slot's pools
+    // (the editor sets its render slot when the frame loop starts).
+    void set_command_buffer_thread_slot(unsigned int thread_slot);
+
     // Locate the per-view poses + fovs for the current predicted display time
-    // (set by begin_frame_'s xrWaitFrame) without acquiring swapchains or
+    // (set by Headset::wait_frame's xrWaitFrame) without acquiring swapchains or
     // rendering. xrLocateViews is a pure query and may be called multiple times
     // per frame, so this is safe to call before the render-frame locate; it is
     // used by the headset shadow fit to build a combined culling frustum before
@@ -164,7 +177,7 @@ public:
     [[nodiscard]] auto get_state               () const -> XrSessionState;
 
     // XR_FB_performance_metrics: refresh the cached counter values once. Call
-    // each tick from Headset::begin_frame_; cheap (runtime-cached lookup).
+    // each tick from Headset::begin_frame; cheap (runtime-cached lookup).
     void query_performance_metrics();
     [[nodiscard]] auto get_perf_counters() const -> const std::vector<Xr_perf_counter>&;
 
@@ -252,6 +265,7 @@ private:
     std::optional<Swapchain>                      m_shared_color_swapchain;
     std::optional<Swapchain>                      m_shared_depth_stencil_swapchain;
     bool                                          m_use_multiview{false};
+    unsigned int                                  m_command_buffer_thread_slot{0};
     std::vector<XrView>                           m_xr_views;
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;
     std::vector<XrCompositionLayerDepthInfoKHR>   m_xr_composition_layer_depth_infos;
@@ -270,7 +284,13 @@ private:
     XrSpace                                       m_xr_reference_space_view {XR_NULL_HANDLE};
     XrSpaceLocation                               m_view_location;
     XrSessionState                                m_xr_session_state{XR_SESSION_STATE_UNKNOWN};
+    // Written by wait_frame() (xrWaitFrame); read by the frame-preparing
+    // calls of the waiting thread (xrSyncActions, view pose, hand tracking,
+    // locate_views).
     XrFrameState                                  m_xr_frame_state;
+    // Predicted display time of the frame begin_frame() began; read by
+    // render_frame*() and end_frame() on the thread that renders the frame.
+    XrTime                                        m_render_display_time{0};
     Hand_tracker                                  m_hand_tracker_left;
     Hand_tracker                                  m_hand_tracker_right;
     XrPassthroughFB                               m_passthrough_fb      {XR_NULL_HANDLE};

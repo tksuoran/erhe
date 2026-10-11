@@ -2207,9 +2207,12 @@ auto Mcp_server::action_imgui_scroll_to_item(const nlohmann::json& args) -> std:
 //
 // Which frame is annotated: capture_screenshot arms item recording and defers,
 // so the frame that records is the frame right after the request. In the
-// headless build capture_last_frame() then reads back exactly that frame. In
-// the windowed build the readback needs a frame of its own, so the recorded
-// frame is the one right before the captured one. That is acceptable because
+// headless build capture_last_frame() then reads back the newest frame that
+// has ended: exactly that frame in the serial schedule; with frame
+// pipelining the frame before the render phase still running, which can be
+// the recorded frame or the one before it. In the windowed build the
+// readback needs a frame of its own, so the recorded frame is the one right
+// before the captured one. That is acceptable because
 // the rectangles come from ImGui's layout, which only moves when something
 // drives it; nothing drives it between two frames of one MCP call, and a
 // gesture that does move it is a separate call that has already returned.

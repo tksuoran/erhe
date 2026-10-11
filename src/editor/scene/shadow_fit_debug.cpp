@@ -34,8 +34,9 @@ auto dump_shadow_fit_debug(const erhe::scene_renderer::Light_projections& light_
 {
     json result = json::object();
 
-    const erhe::scene::Camera* const view_camera = light_projections.parameters.view_camera;
-    result["view_camera"]  = (view_camera != nullptr) ? view_camera->get_name() : std::string{};
+    // The view camera as the render phase's copy (no name: the copy carries
+    // the view parameters only).
+    const erhe::scene::Camera_snapshot* const view_camera = light_projections.parameters.view_camera;
     result["shadow_range"] = (view_camera != nullptr) ? view_camera->get_shadow_range() : 0.0f;
 
     // The fit derives its view frustum from this camera + viewport. On the
@@ -43,7 +44,7 @@ auto dump_shadow_fit_debug(const erhe::scene_renderer::Light_projections& light_
     // placeholder root camera (perspective_vertical) with an empty viewport
     // (aspect_ratio() falls back to 1.0) rather than the actual stereo eye
     // frusta - surfacing these makes that mismatch visible directly in the dump.
-    const erhe::scene::Projection* const projection = (view_camera != nullptr) ? view_camera->projection() : nullptr;
+    const erhe::scene::Projection* const projection = (view_camera != nullptr) ? &view_camera->projection() : nullptr;
     if (projection != nullptr) {
         result["view_camera_projection_type"] = erhe::scene::Projection::c_type_strings[static_cast<unsigned int>(projection->projection_type)];
         result["view_camera_fov_x_deg"]       = glm::degrees(projection->fov_x);
@@ -71,7 +72,7 @@ auto dump_shadow_fit_debug(const erhe::scene_renderer::Light_projections& light_
     json lights = json::array();
     const std::size_t count = std::min(transforms.size(), fit_debug_data.size());
     for (std::size_t i = 0; i < count; ++i) {
-        const erhe::scene::Light* const                    light = transforms[i].light;
+        const erhe::scene::Light_snapshot* const           light = transforms[i].light;
         const erhe::scene::Shadow_frustum_fit_debug_data&  fd    = fit_debug_data[i];
 
         json light_json = json::object();

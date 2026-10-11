@@ -10,6 +10,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+
 namespace erhe::scene_renderer {
 
 Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Device& graphics_device, const int max_draw_count)
@@ -174,6 +176,67 @@ auto Draw_indirect_buffer::update(
     return Draw_indirect_buffer_range{
         std::move(buffer_range),
         draw_indirect_count
+    };
+}
+
+void Draw_indirect_buffer::append_commands(
+    const Render_bucket&                                                  bucket,
+    const erhe::primitive::Primitive_mode                                 primitive_mode,
+    std::vector<erhe::graphics::Draw_indexed_primitives_indirect_command>& out
+) const
+{
+    ERHE_PROFILE_FUNCTION();
+
+    constexpr uint32_t instance_count{1};
+    constexpr uint32_t base_instance {0};
+    for (const Mesh_primitive_entry& entry : bucket.entries) {
+        // The variant bucketing chose - do not re-derive it here.
+        const erhe::primitive::Buffer_mesh* buffer_mesh = entry.buffer_mesh;
+        ERHE_VERIFY(buffer_mesh != nullptr);
+        const erhe::primitive::Index_range index_range = buffer_mesh->index_range(primitive_mode);
+        ERHE_VERIFY(index_range.index_count > 0);
+        const uint32_t base_index  = buffer_mesh->base_index();
+        const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
+        const uint32_t base_vertex = (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
+            ? buffer_mesh->expanded_base_vertex()
+            : buffer_mesh->base_vertex();
+        out.push_back(
+            erhe::graphics::Draw_indexed_primitives_indirect_command{
+                static_cast<uint32_t>(index_range.index_count),
+                instance_count,
+                first_index,
+                base_vertex,
+                base_instance
+            }
+        );
+    }
+}
+
+auto Draw_indirect_buffer::update(
+    const std::span<const erhe::graphics::Draw_indexed_primitives_indirect_command> commands
+) -> Draw_indirect_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(!commands.empty());
+    const std::size_t                 entry_size     = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
+    const std::size_t                 max_byte_count = commands.size() * entry_size;
+    erhe::graphics::Ring_buffer_range buffer_range   = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    const std::span<std::byte>        gpu_data       = buffer_range.get_span();
+    std::size_t write_offset{0};
+    for (const erhe::graphics::Draw_indexed_primitives_indirect_command& command : commands) {
+        erhe::graphics::Draw_indexed_primitives_indirect_command draw_command = command;
+        if (m_max_index_count_enable) {
+            draw_command.index_count = std::min(draw_command.index_count, static_cast<uint32_t>(m_max_index_count));
+        }
+        erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));
+        write_offset += entry_size;
+    }
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
+    return Draw_indirect_buffer_range{
+        std::move(buffer_range),
+        commands.size()
     };
 }
 

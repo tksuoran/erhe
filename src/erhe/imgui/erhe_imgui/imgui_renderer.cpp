@@ -10,7 +10,6 @@
 # include "erhe_gl/wrapper_functions.hpp"
 #endif
 
-#include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
 
 #include "erhe_graphics/blit_command_encoder.hpp"
@@ -30,12 +29,15 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
+#include <algorithm>
 #include <cstring>
+#include <span>
 
 #include <string>
 
@@ -464,9 +466,18 @@ Imgui_renderer::Imgui_renderer(
         m_nearest_sampler,
         &m_bind_group_layout
     );
+
+    m_frame_slots.resize(m_graphics_device.get_number_of_frames_in_flight());
 }
 
 Imgui_renderer::~Imgui_renderer() noexcept = default;
+
+Imgui_texture::~Imgui_texture() noexcept = default;
+
+auto Imgui_texture::get_referenced_texture() const -> const erhe::graphics::Texture*
+{
+    return texture.get();
+}
 
 void Imgui_renderer::lock_mutex()
 {
@@ -578,24 +589,50 @@ auto Imgui_renderer::icon_font() const -> ImFont*
     return m_icon_font;
 }
 
-void Imgui_renderer::begin_frame()
+void Imgui_renderer::begin_frame(const uint64_t frame_index)
 {
-    ImFontAtlasUpdateNewFrame(&m_font_atlas, static_cast<int>(m_graphics_device.get_frame_index()), true);
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m3_imgui);
+    m_imgui_frame_index = frame_index;
+    ImFontAtlasUpdateNewFrame(&m_font_atlas, static_cast<int>(frame_index), true);
 }
 
-void Imgui_renderer::at_end_of_frame(std::function<void()>&& func)
+auto Imgui_renderer::get_imgui_frame_index() const -> uint64_t
 {
-    m_at_end_of_frame.push_back(std::move(func));
+    return m_imgui_frame_index;
+}
+
+auto Imgui_renderer::get_render_frame_index() const -> uint64_t
+{
+    return m_graphics_device.get_frame_index();
+}
+
+auto Imgui_renderer::get_number_of_frames_in_flight() const -> std::size_t
+{
+    return m_frame_slots.size();
+}
+
+void Imgui_renderer::push_draw_texture_reference(const std::shared_ptr<erhe::graphics::Texture_reference>& texture_reference)
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m3_imgui);
+    Frame_slot& slot = m_frame_slots[m_imgui_frame_index % m_frame_slots.size()];
+    slot.draw_texture_references.push_back(texture_reference);
+}
+
+void Imgui_renderer::set_draw_data_wait(std::function<void()> wait)
+{
+    m_draw_data_wait = std::move(wait);
+}
+
+void Imgui_renderer::wait_for_draw_data()
+{
+    if (m_draw_data_wait) {
+        m_draw_data_wait();
+    }
 }
 
 void Imgui_renderer::next_frame()
 {
     ERHE_PROFILE_FUNCTION();
-
-    for (auto& operation : m_at_end_of_frame) {
-        operation();
-    }
-    m_at_end_of_frame.clear();
 
     // Release texture references displaced during render_draw_data(). Done
     // here, outside Rendergraph::execute(), because the last reference can
@@ -607,7 +644,9 @@ void Imgui_renderer::next_frame()
 void Imgui_renderer::release_texture_references()
 {
     std::lock_guard<std::recursive_mutex> lock{m_mutex};
-    m_draw_texture_references.clear();
+    for (Frame_slot& slot : m_frame_slots) {
+        slot.draw_texture_references.clear();
+    }
     m_retained_texture_references.clear();
     m_expired_texture_references.clear();
 }
@@ -908,7 +947,7 @@ auto Imgui_renderer::image(Draw_texture_parameters&& parameters) -> bool
             parameters.uv0, parameters.uv1,
             parameters.background_color, parameters.tint_color
         );
-        m_draw_texture_references.push_back(parameters.texture_reference);
+        push_draw_texture_reference(parameters.texture_reference);
     } else {
         ImGui::Dummy(ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)});
     }
@@ -961,62 +1000,55 @@ auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
         from_glm(parameters.background_color),
         from_glm(parameters.tint_color)
     );
-    m_draw_texture_references.push_back(parameters.texture_reference);
+    push_draw_texture_reference(parameters.texture_reference);
     return ImGui::IsItemClicked();
 }
 
-void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_buffer& command_buffer)
+void Imgui_renderer::push_texture_rect(
+    const Imgui_texture_request_kind      kind,
+    const std::shared_ptr<Imgui_texture>& texture,
+    ImTextureData*                        tex,
+    const ImTextureRect&                  rect
+)
 {
-    erhe::graphics::Scoped_debug_group pass_scope{command_buffer, "Imgui_renderer::update_texture()"};
+    const int                 pitch      = tex->GetPitch();
+    const std::size_t         row_offset = static_cast<std::size_t>(rect.y) * static_cast<std::size_t>(pitch);
+    const std::size_t         byte_count = static_cast<std::size_t>(rect.h) * static_cast<std::size_t>(pitch);
+    const std::uint8_t* const src        = static_cast<const std::uint8_t*>(tex->GetPixels()) + row_offset;
 
+    Imgui_texture_request& request = m_texture_requests.emplace_back();
+    request.kind            = kind;
+    request.frame_index     = m_imgui_frame_index;
+    request.texture         = texture;
+    request.format          = (tex->Format == ImTextureFormat_RGBA32) ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_scalar_unorm;
+    request.texture_width   = tex->Width;
+    request.texture_height  = tex->Height;
+    request.x               = rect.x;
+    request.y               = rect.y;
+    request.width           = rect.w;
+    request.height          = rect.h;
+    request.bytes_per_pixel = tex->BytesPerPixel;
+    request.pitch           = pitch;
+    request.pixels.assign(src, src + byte_count);
+}
+
+void Imgui_renderer::queue_texture_request(ImTextureData* tex)
+{
     ERHE_VERIFY(tex != nullptr);
 
     if (tex->Status == ImTextureStatus_WantCreate) {
-        // Create and upload new texture to graphics system
         IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
 
-        /// Create texture
-        const erhe::graphics::Texture_create_info create_info{
-            .device      = m_graphics_device,
-            .usage_mask  =
-                erhe::graphics::Image_usage_flag_bit_mask::sampled |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-            .pixelformat = (tex->Format == ImTextureFormat_RGBA32) ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_scalar_unorm,
-            .use_mipmaps = false,
-            .width       = tex->Width,
-            .height      = tex->Height,
-            .depth       = 1,
-            .level_count = 1,
-            .row_stride  = tex->GetPitch(),
-            .debug_label = "ImGui texture"
-        };
-        auto texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, create_info);
-        m_imgui_textures.push_back(texture); // This keeps textures alive
-        log_imgui->trace("created texture {}", fmt::ptr(texture.get()));
-
-        // Upload pixel data
+        // The texture object exists from here on, so this frame's commands
+        // carry its id; the render thread creates and fills the GPU texture.
+        std::shared_ptr<Imgui_texture> texture = std::make_shared<Imgui_texture>();
+        m_imgui_textures.push_back(texture);
+        log_imgui->trace("queued texture create {}", fmt::ptr(texture.get()));
         {
-            const std::span<const std::uint8_t> src_span{
-                static_cast<const std::uint8_t*>(tex->GetPixels()),
-                static_cast<size_t>(tex->GetSizeInBytes())
-            };
-            std::size_t                        byte_count = src_span.size_bytes();
-            erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "font upload"};
-            erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-            std::span<std::byte>               dst_span     = buffer_range.get_span();
-            memcpy(dst_span.data(), src_span.data(), byte_count);
-            buffer_range.bytes_written(byte_count);
-            buffer_range.close();
-
-            erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
-            encoder.copy_from_buffer(
-                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer(), .bytes_per_row = static_cast<std::uintptr_t>(tex->GetPitch()), .bytes_per_image = static_cast<std::uintptr_t>(tex->GetSizeInBytes())},
-                glm::ivec3{tex->Width, tex->Height, 1},
-                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
-            );
-            buffer_range.release();
+            std::lock_guard<std::mutex> lock{m_texture_request_mutex};
+            const ImTextureRect whole{0, 0, static_cast<unsigned short>(tex->Width), static_cast<unsigned short>(tex->Height)};
+            push_texture_rect(Imgui_texture_request_kind::create, texture, tex, whole);
         }
-
         tex->SetTexID(
             Erhe_ImTextureID{
                 .texture_reference = texture.get(),
@@ -1032,123 +1064,230 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
     } else if (tex->Status == ImTextureStatus_WantUpdates) {
 
         // Update selected blocks. We only ever write to textures regions which have never been used before!
-        Erhe_ImTextureID                         texture_id        = tex->GetTexID();
-        const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
-        const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
-        ERHE_VERIFY(texture != nullptr);
-        log_imgui->trace("updating texture {}", fmt::ptr(texture));
-
-        erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
-        auto update_rect = [this, &encoder, texture, tex](ImTextureRect& r) -> void
+        const erhe::graphics::Texture_reference* texture_reference = tex->GetTexID().texture_reference;
+        const auto i = std::find_if(
+            m_imgui_textures.begin(),
+            m_imgui_textures.end(),
+            [texture_reference](const std::shared_ptr<Imgui_texture>& entry) { return entry.get() == texture_reference; }
+        );
+        ERHE_VERIFY(i != m_imgui_textures.end());
+        log_imgui->trace("queued texture update {}", fmt::ptr(i->get()));
         {
-            const std::span<const std::uint8_t> src_span{
-                static_cast<const std::uint8_t*>(tex->GetPixels()),
-                static_cast<size_t>(tex->GetSizeInBytes())
-            };
-            const std::size_t buffer_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
-            const std::size_t byte_count    = src_span.size_bytes();
-
-            erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "ImGui Draw Texture Update"};
-            erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-            std::span<std::byte>               dst_span     = buffer_range.get_span();
-            memcpy(dst_span.data(), src_span.data(), byte_count);
-            buffer_range.bytes_written(byte_count);
-            buffer_range.close();
-
-            encoder.copy_from_buffer(
-                erhe::graphics::Buffer_texel_location{.buffer = buffer_range.get_buffer()->get_buffer(), .offset = buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, .bytes_per_row = static_cast<std::uintptr_t>(tex->GetPitch()), .bytes_per_image = static_cast<std::uintptr_t>(tex->GetSizeInBytes())},
-                glm::ivec3{r.w, r.h, 1},
-                erhe::graphics::Texture_location{.texture = texture, .slice = 0, .level = 0, .origin = glm::ivec3{r.x, r.y, 0}}
-            );
-            buffer_range.release();
-        };
-
-        if (tex->Updates.Size < 20) {
-            for (ImTextureRect& r : tex->Updates) {
-                update_rect(r);
+            std::lock_guard<std::mutex> lock{m_texture_request_mutex};
+            if (tex->Updates.Size < 20) {
+                for (const ImTextureRect& r : tex->Updates) {
+                    push_texture_rect(Imgui_texture_request_kind::update, *i, tex, r);
+                }
+            } else {
+                push_texture_rect(Imgui_texture_request_kind::update, *i, tex, tex->UpdateRect);
             }
-        } else {
-            update_rect(tex->UpdateRect);
         }
         tex->SetStatus(ImTextureStatus_OK);
 
-    } else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0) {
+    } else if ((tex->Status == ImTextureStatus_WantDestroy) && (tex->UnusedFrames > 0)) {
 
-        const Erhe_ImTextureID                   texture_id        = tex->GetTexID();
-        const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
-        const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
-        ERHE_VERIFY(texture != nullptr);
-        log_imgui->trace("removing texture {}", fmt::ptr(texture));
-        m_imgui_textures.erase(
-            std::remove_if(
-                m_imgui_textures.begin(),
-                m_imgui_textures.end(),
-                [texture](const std::shared_ptr<erhe::graphics::Texture>& entry) {
-                    return entry.get() == texture;
-                }
-            ),
-            m_imgui_textures.end()
+        const erhe::graphics::Texture_reference* texture_reference = tex->GetTexID().texture_reference;
+        const auto i = std::find_if(
+            m_imgui_textures.begin(),
+            m_imgui_textures.end(),
+            [texture_reference](const std::shared_ptr<Imgui_texture>& entry) { return entry.get() == texture_reference; }
         );
+        ERHE_VERIFY(i != m_imgui_textures.end());
+        log_imgui->trace("queued texture destroy {}", fmt::ptr(i->get()));
+        {
+            // The request holds the last reference: the render thread drops
+            // it when it records this frame, after the frames that drew it.
+            std::lock_guard<std::mutex> lock{m_texture_request_mutex};
+            Imgui_texture_request& request = m_texture_requests.emplace_back();
+            request.kind        = Imgui_texture_request_kind::destroy;
+            request.frame_index = m_imgui_frame_index;
+            request.texture     = std::move(*i);
+        }
+        m_imgui_textures.erase(i);
 
         tex->SetTexID(ImTextureID_Invalid);
         tex->SetStatus(ImTextureStatus_Destroyed);
     }
 }
 
-void Imgui_renderer::update_draw_data_textures(erhe::graphics::Command_buffer& command_buffer)
+void Imgui_renderer::copy_draw_data(Imgui_draw_data_copy& out)
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m3_imgui);
+
+    out.frame_index      = m_imgui_frame_index;
+    out.is_frame_stamped = true;
+    out.valid            = false;
+    out.vertices  .clear();
+    out.indices   .clear();
+    out.commands  .clear();
+    out.draw_lists.clear();
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr) {
         return;
     }
-    if (draw_data->Textures == nullptr) {
-        return;
-    }
-    for (ImTextureData* tex : *draw_data->Textures) {
-        if (tex->Status != ImTextureStatus_OK) {
-            update_texture(tex, command_buffer);
+    if (draw_data->Textures != nullptr) {
+        for (ImTextureData* tex : *draw_data->Textures) {
+            if (tex->Status != ImTextureStatus_OK) {
+                queue_texture_request(tex);
+            }
         }
     }
+
+    out.valid             = true;
+    out.display_pos       = draw_data->DisplayPos;
+    out.display_size      = draw_data->DisplaySize;
+    out.framebuffer_scale = draw_data->FramebufferScale;
+    for (int n = 0; n < draw_data->CmdLists.Size; ++n) {
+        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        out.draw_lists.push_back(
+            Imgui_draw_list_range{
+                .vertex_offset  = out.vertices.size(),
+                .vertex_count   = static_cast<std::size_t>(cmd_list->VtxBuffer.Size),
+                .index_offset   = out.indices.size(),
+                .index_count    = static_cast<std::size_t>(cmd_list->IdxBuffer.Size),
+                .command_offset = out.commands.size(),
+                .command_count  = static_cast<std::size_t>(cmd_list->CmdBuffer.Size)
+            }
+        );
+        out.vertices.insert(out.vertices.end(), cmd_list->VtxBuffer.begin(), cmd_list->VtxBuffer.end());
+        out.indices .insert(out.indices .end(), cmd_list->IdxBuffer.begin(), cmd_list->IdxBuffer.end());
+        for (const ImDrawCmd& command : cmd_list->CmdBuffer) {
+            // The copy is drawn after the next frame may have rewritten the
+            // context, so it carries no ImTextureData pointer (the id is
+            // resolved here, after the requests above set it) and no
+            // callback (erhe's hosts install none; a callback would need
+            // its live ImDrawList).
+            ERHE_VERIFY(command.UserCallback == nullptr);
+            ImDrawCmd& copy = out.commands.emplace_back(command);
+            copy.TexRef = ImTextureRef{command.TexRef.GetTexID()};
+        }
+    }
+}
+
+void Imgui_renderer::run_texture_request(Imgui_texture_request& request, erhe::graphics::Command_buffer& command_buffer)
+{
+    ERHE_VERIFY(request.texture);
+    if (request.kind == Imgui_texture_request_kind::destroy) {
+        log_imgui->trace("removing texture {}", fmt::ptr(request.texture->texture.get()));
+        request.texture.reset();
+        return;
+    }
+
+    erhe::graphics::Scoped_debug_group pass_scope{command_buffer, "Imgui_renderer::update_texture()"};
+
+    if (request.kind == Imgui_texture_request_kind::create) {
+        ERHE_VERIFY(!request.texture->texture);
+        const erhe::graphics::Texture_create_info create_info{
+            .device      = m_graphics_device,
+            .usage_mask  =
+                erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+            .pixelformat = request.format,
+            .use_mipmaps = false,
+            .width       = request.texture_width,
+            .height      = request.texture_height,
+            .depth       = 1,
+            .level_count = 1,
+            .row_stride  = request.pitch,
+            .debug_label = "ImGui texture"
+        };
+        request.texture->texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, create_info);
+        log_imgui->trace("created texture {}", fmt::ptr(request.texture->texture.get()));
+    }
+
+    erhe::graphics::Texture* texture = request.texture->texture.get();
+    ERHE_VERIFY(texture != nullptr);
+
+    const std::size_t                  byte_count = request.pixels.size();
+    erhe::graphics::Ring_buffer_client texture_upload_buffer{
+        m_graphics_device,
+        erhe::graphics::Buffer_target::transfer_src,
+        (request.kind == Imgui_texture_request_kind::create) ? "font upload" : "ImGui Draw Texture Update"
+    };
+    erhe::graphics::Ring_buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    std::span<std::byte>              dst_span     = buffer_range.get_span();
+    memcpy(dst_span.data(), request.pixels.data(), byte_count);
+    buffer_range.bytes_written(byte_count);
+    buffer_range.close();
+
+    const std::size_t column_offset = static_cast<std::size_t>(request.x) * static_cast<std::size_t>(request.bytes_per_pixel);
+    erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
+    encoder.copy_from_buffer(
+        erhe::graphics::Buffer_texel_location{
+            .buffer          = buffer_range.get_buffer()->get_buffer(),
+            .offset          = buffer_range.get_byte_start_offset_in_buffer() + column_offset,
+            .bytes_per_row   = static_cast<std::uintptr_t>(request.pitch),
+            .bytes_per_image = static_cast<std::uintptr_t>(byte_count)
+        },
+        glm::ivec3{request.width, request.height, 1},
+        erhe::graphics::Texture_location{.texture = texture, .slice = 0, .level = 0, .origin = glm::ivec3{request.x, request.y, 0}}
+    );
+    buffer_range.release();
+}
+
+void Imgui_renderer::update_draw_data_textures(erhe::graphics::Command_buffer& command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    const uint64_t              frame_index = get_render_frame_index();
+    std::lock_guard<std::mutex> lock{m_texture_request_mutex};
+    std::size_t                 run_count{0};
+    for (Imgui_texture_request& request : m_texture_requests) {
+        if (request.frame_index > frame_index) {
+            break; // queued by a later frame's ImGui phase
+        }
+        run_texture_request(request, command_buffer);
+        ++run_count;
+    }
+    m_texture_requests.erase(m_texture_requests.begin(), m_texture_requests.begin() + static_cast<std::ptrdiff_t>(run_count));
 }
 
 void Imgui_renderer::render_draw_data(
     erhe::graphics::Render_command_encoder& render_encoder,
     const erhe::graphics::Render_pass&      render_pass,
+    const Imgui_draw_data_copy&             draw_data,
     erhe::graphics::Surface_transform       transform
 )
 {
     SPDLOG_LOGGER_TRACE(log_frame, "begin Imgui_renderer::render_draw_data()");
 
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
-    // Move texture references to the retained set instead of clearing them.
-    // Multiple ImGui hosts share m_draw_texture_references but render_draw_data()
-    // is called per-host. The retained set keeps references alive until the next
-    // frame's first render_draw_data() replaces them. The displaced references
-    // are parked in m_expired_texture_references and released in next_frame():
-    // this code runs inside Rendergraph::execute() (under the rendergraph
-    // mutex), and dropping the last reference here can destroy a
-    // Rendergraph_node whose destructor re-locks that mutex to unregister.
-    ERHE_DEFER(
-        if (!m_draw_texture_references.empty()) {
+    // Move the frame's texture references (pushed by the ImGui phase into
+    // the draw data's frame slot) to the retained set. Multiple ImGui hosts
+    // share the slot but render_draw_data() is called per host: the first
+    // call of the frame takes them. The retained set keeps references alive
+    // until the next drawn frame's first render_draw_data() replaces them.
+    // The displaced references are parked in m_expired_texture_references
+    // and released in next_frame(): this code runs inside
+    // Rendergraph::execute() (under the rendergraph mutex), and dropping the
+    // last reference here can destroy a Rendergraph_node whose destructor
+    // re-locks that mutex to unregister.
+    {
+        Frame_slot& slot = m_frame_slots[draw_data.frame_index % m_frame_slots.size()];
+        if (!slot.draw_texture_references.empty()) {
             m_expired_texture_references.insert(
                 m_expired_texture_references.end(),
                 std::make_move_iterator(m_retained_texture_references.begin()),
                 std::make_move_iterator(m_retained_texture_references.end())
             );
-            m_retained_texture_references = std::move(m_draw_texture_references);
+            m_retained_texture_references.clear();
+            m_retained_texture_references.swap(slot.draw_texture_references);
         }
-    );
+    }
 
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    if (draw_data == nullptr) {
+    if (!draw_data.valid) {
         return;
     }
 
-    const int fb_width  = (int)(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
-    const int fb_height = (int)(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
+    const int fb_width  = (int)(draw_data.display_size.x * draw_data.framebuffer_scale.x);
+    const int fb_height = (int)(draw_data.display_size.y * draw_data.framebuffer_scale.y);
     if (fb_width <= 0 || fb_height <= 0) {
         return;
     }
@@ -1165,12 +1304,12 @@ void Imgui_renderer::render_draw_data(
     // Negate Y scale and translate to map ImGui Y-down to NDC Y-up.
     // This replaces the shader-side gl_Position.y negate.
     const float scale[2] = {
-         2.0f / draw_data->DisplaySize.x,
-        -2.0f / draw_data->DisplaySize.y
+         2.0f / draw_data.display_size.x,
+        -2.0f / draw_data.display_size.y
     };
     const float translate[2] = {
-        -1.0f - draw_data->DisplayPos.x * scale[0],
-         1.0f - draw_data->DisplayPos.y * scale[1]
+        -1.0f - draw_data.display_pos.x * scale[0],
+         1.0f - draw_data.display_pos.y * scale[1]
     };
 
     // Presentation pre-rotation (Android). clip_rotation is a column-major mat2
@@ -1238,14 +1377,16 @@ void Imgui_renderer::render_draw_data(
 
     m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
-    for (int n = 0; n < draw_data->CmdLists.Size; n++) {
+    for (const Imgui_draw_list_range& cmd_list : draw_data.draw_lists) {
         erhe::graphics::Scoped_debug_group cmd_list_scope{render_encoder.get_command_buffer(), "CmdList"};
 
-        // log_frame->trace("CmdList {}", n);
-        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        const std::span<const ImDrawVert> cmd_list_vertices{draw_data.vertices.data() + cmd_list.vertex_offset,  cmd_list.vertex_count};
+        const std::span<const ImDrawIdx>  cmd_list_indices {draw_data.indices .data() + cmd_list.index_offset,   cmd_list.index_count};
+        const std::span<const ImDrawCmd>  cmd_list_commands{draw_data.commands.data() + cmd_list.command_offset, cmd_list.command_count};
+        const int                         command_count = static_cast<int>(cmd_list_commands.size());
 
-        std::size_t vertex_byte_count         = static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes());
-        std::size_t index_byte_count          = static_cast<size_t>(cmd_list->IdxBuffer.size_in_bytes());
+        std::size_t vertex_byte_count         = cmd_list_vertices.size_bytes();
+        std::size_t index_byte_count          = cmd_list_indices .size_bytes();
         std::size_t draw_parameter_byte_count = m_imgui_program_interface.block_offsets.draw_parameter_struct_array;
         std::size_t draw_indirect_byte_count  = 0;
 
@@ -1261,15 +1402,9 @@ void Imgui_renderer::render_draw_data(
             const erhe::graphics::Sampler* batch_array_sampler = nullptr;
             {
                 int cmd_i;
-                for (cmd_i = cmd_batch_start; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
-                    const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
-                    if (pcmd->UserCallback != nullptr) {
-                        if (pcmd->UserCallback == ImGui::GetPlatformIO().DrawCallback_ResetRenderState) {
-                            log_imgui->debug("ImDrawCallback_ResetRenderState - ignored");
-                        } else {
-                            pcmd->UserCallback(cmd_list, pcmd);
-                        }
-                    } else {
+                for (cmd_i = cmd_batch_start; cmd_i < command_count; cmd_i++) {
+                    const ImDrawCmd* pcmd = &cmd_list_commands[cmd_i];
+                    { // the copy carries no callbacks (copy_draw_data)
                         // Check texture heap
                         const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
                         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
@@ -1345,34 +1480,28 @@ void Imgui_renderer::render_draw_data(
             write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.clip_rotation, clip_rotation_cpu_data);
             draw_parameter_write_offset += m_imgui_program_interface.block_offsets.draw_parameter_struct_array;
 
-            const ImVec2 clip_off   = draw_data->DisplayPos;
-            const ImVec2 clip_scale = draw_data->FramebufferScale;
+            const ImVec2 clip_off   = draw_data.display_pos;
+            const ImVec2 clip_scale = draw_data.framebuffer_scale;
 
             // Upload vertex buffer
             const std::span<const uint8_t> vertex_cpu_data{
-                reinterpret_cast<const uint8_t*>(cmd_list->VtxBuffer.begin()),
-                static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes())
+                reinterpret_cast<const uint8_t*>(cmd_list_vertices.data()),
+                cmd_list_vertices.size_bytes()
             };
             write(vertex_gpu_data, vertex_write_offset, vertex_cpu_data);
 
             // Upload index buffer
             static_assert(sizeof(uint16_t) == sizeof(ImDrawIdx));
             const std::span<const uint16_t> index_cpu_data{
-                cmd_list->IdxBuffer.begin(),
-                static_cast<size_t>(cmd_list->IdxBuffer.size())
+                cmd_list_indices.data(),
+                cmd_list_indices.size()
             };
             write(index_gpu_data, index_write_offset, index_cpu_data);
 
             // Pass 2: fill buffers
             for (int cmd_i = cmd_batch_start; cmd_i < cmd_batch_end; cmd_i++) {
-                const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
-                if (pcmd->UserCallback != nullptr) {
-                    if (pcmd->UserCallback == ImGui::GetPlatformIO().DrawCallback_ResetRenderState) {
-                        log_imgui->info("ImDrawCallback_ResetRenderState - skipped");
-                    } else {
-                        pcmd->UserCallback(cmd_list, pcmd);
-                    }
-                } else {
+                const ImDrawCmd* pcmd = &cmd_list_commands[cmd_i];
+                { // the copy carries no callbacks (copy_draw_data)
                     // Project scissor/clipping rectangles into framebuffer space
                     const ImVec4 clip_rect{
                         (pcmd->ClipRect.x - clip_off.x) * clip_scale.x,
@@ -1501,7 +1630,7 @@ void Imgui_renderer::render_draw_data(
                 index_buffer_range         .cancel();
             }
 
-            if (cmd_batch_end == cmd_list->CmdBuffer.Size) {
+            if (cmd_batch_end == command_count) {
                 break;
             } else {
                 m_texture_heap->reset_heap(render_encoder.get_command_buffer());

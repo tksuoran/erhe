@@ -32,7 +32,6 @@ namespace erhe::scene {
 namespace erhe::scene_renderer {
 
 class Draw_list;
-class Draw_list_scene;
 class Material_set;
 class Render_bucket;
 
@@ -183,8 +182,7 @@ public:
         const Render_bucket&                bucket,
         const Material_set*                 material_source,
         erhe::primitive::Primitive_mode     primitive_mode,
-        const Primitive_interface_settings& settings,
-        bool                                use_id_ranges = false
+        const Primitive_interface_settings& settings
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Draw-list overload (doc/erhe/draw_list_renderer.md R8/R8a; the
@@ -195,17 +193,35 @@ public:
     // arguments emits exactly the matching draw commands. Records are copied
     // from draw_list.primitive_records (doc/erhe/draw_list_performance_improvements.md)
     // with only the pass-dependent color / size patched; settings that need
-    // per-mesh evaluation fall back to write_primitive() via draw_list_scene.
-    // No id ranges.
+    // per-mesh evaluation (Primitive_color_source::id_offset, a size source
+    // other than constant_size) are not supported (verified). No id ranges.
+    // Reads no Mesh: draw_list is a published copy the render phase owns.
     auto update(
         const Draw_list&                    draw_list,
         std::size_t                         begin,
         std::size_t                         end,
-        const Draw_list_scene&              draw_list_scene,
         std::span<const std::uint8_t>       entry_passes,
         const Primitive_interface_settings& settings,
         std::size_t&                        out_primitive_count
     ) -> erhe::graphics::Ring_buffer_range;
+
+    // Prepare-phase half of the bucket path (render_bucket_snapshot.hpp):
+    // appends one complete record per entry of bucket to out, exactly the
+    // bytes update(bucket, ...) writes into the ring buffer, pass color and
+    // size included. Reads the meshes; main thread. No id ranges: the id
+    // offset starts at 0 for every call, as for update(bucket, ...).
+    void append_records(
+        const Render_bucket&                bucket,
+        const Material_set*                 material_source,
+        erhe::primitive::Primitive_mode     primitive_mode,
+        const Primitive_interface_settings& settings,
+        std::vector<std::byte>&             out
+    ) const;
+
+
+    // Render-phase half: copies prepared records (append_records()) into a
+    // ring buffer range. Reads no Mesh.
+    auto update(std::span<const std::byte> records) -> erhe::graphics::Ring_buffer_range;
 
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Node>>& nodes,
@@ -227,17 +243,38 @@ public:
         std::size_t                   index_of_gltf_primitive_in_mesh{0};
     };
 
-    void reset_id_ranges();
+    // append_records() for the id pass: io_id_offset carries the id offset across
+    // calls (start it at first_id_offset), and every record's id range is
+    // appended to id_ranges - the offset -> (mesh, primitive) table a
+    // readback of the pass's ids resolves against.
+    void append_records(
+        const Render_bucket&                bucket,
+        const Material_set*                 material_source,
+        erhe::primitive::Primitive_mode     primitive_mode,
+        const Primitive_interface_settings& settings,
+        uint32_t&                           io_id_offset,
+        std::vector<Id_range>&              id_ranges,
+        std::vector<std::byte>&             out
+    ) const;
+
+    // The first id an id pass assigns: the Id_renderer clears its color
+    // attachment to 0, so id 0 is the "background / no hit" sentinel. Range
+    // offsets only increase from here (the per-primitive alignment only
+    // adds), so no range includes 0.
+    static constexpr uint32_t first_id_offset = 1;
+
+    // Size in bytes of one primitive record (Primitive_interface layout).
+    [[nodiscard]] auto get_record_size() const -> std::size_t { return m_primitive_interface.primitive_struct.get_size_bytes(); }
     // Capacity of one primitive block (P3a chunking bound for draw lists).
     [[nodiscard]] auto get_max_primitive_count() const -> std::size_t { return m_primitive_interface.max_primitive_count; }
-    [[nodiscard]] auto id_offset() const -> uint32_t;
-    [[nodiscard]] auto id_ranges() const -> const std::vector<Id_range>&;
 
 private:
     Primitive_interface&  m_primitive_interface;
-    // Shared per-primitive record writer for both the Render_bucket and the
-    // Draw_list overloads (single implementation, no drift). Advances
-    // write_offset by one record and maintains m_id_offset / m_id_ranges.
+    // Shared per-primitive record writer of the Render_bucket paths (the ring
+    // buffer update and the prepared append_records(); single implementation,
+    // no drift). Advances write_offset by one record and id_offset by the
+    // id alignment, and with id_ranges non-null appends the primitive's id
+    // range and advances id_offset past it.
     void write_primitive(
         erhe::scene::Mesh&                  mesh,
         const Material_set*                 material_source,
@@ -247,13 +284,11 @@ private:
         const erhe::primitive::Buffer_mesh& buffer_mesh,
         erhe::primitive::Primitive_mode     primitive_mode,
         const Primitive_interface_settings& settings,
-        bool                                use_id_ranges,
+        uint32_t&                           io_id_offset,
+        std::vector<Id_range>*              id_ranges,
         std::span<std::byte>                primitive_gpu_data,
         std::size_t&                        write_offset
-    );
-
-    uint32_t              m_id_offset{0};
-    std::vector<Id_range> m_id_ranges;
+    ) const;
 };
 
 } // namespace erhe::scene_renderer

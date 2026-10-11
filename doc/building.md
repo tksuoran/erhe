@@ -144,6 +144,7 @@ attempt and the launch must be retried.
 | `ERHE_NAVIGATION_LIBRARY` | Navigation mesh library | `recastnavigation`, `none` | `none` |
 | `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
 | `ERHE_TRACY_ON_DEMAND` | Tracy records only while a profiler is connected | `ON`, `OFF` | `ON` |
+| `ERHE_TRACY_CALLSTACK_DEPTH` | Callstack depth captured with every Tracy function zone; `0` records zones without callstacks | integer | `32` |
 | `ERHE_XR_LIBRARY` | XR library | `openxr`, `none` | `none` |
 | `ERHE_AUDIO_LIBRARY` | Audio library | `miniaudio`, `none` | `none` |
 | `ERHE_FONT_RASTERIZATION_LIBRARY` | Font rasterization | `freetype`, `none` | `freetype` |
@@ -156,6 +157,7 @@ attempt and the launch must be retried.
 | `ERHE_BUILD_TESTS` | Build the `erhe_<name>_tests` gtest targets | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_UBSAN` | UndefinedBehaviorSanitizer (Clang, GCC, AppleClang; ignored on MSVC) | `ON`, `OFF` | `OFF` |
+| `ERHE_USE_TSAN` | ThreadSanitizer (Clang, GCC; exclusive with `ERHE_USE_ASAN`, ignored on MSVC and AppleClang) | `ON`, `OFF` | `OFF` |
 | `ERHE_WARNINGS_AS_ERRORS` | Warnings as errors on every erhe target (`-Werror`, `/WX`); the CPM dependencies keep their own policy | `ON`, `OFF` | `ON` |
 | `ERHE_USE_FPNG` | Build the fpng image writer (fast PNG save) | `ON`, `OFF` | `ON` |
 | `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` | `OFF` |
@@ -182,6 +184,8 @@ tabulated in `doc/erhe/physics.md`. Set to `none` to disable physics.
 
 **ERHE_PROFILE_LIBRARY** -- The main profiler is Tracy (the configure wrappers enable it). Superluminal and nvtx support exists but is likely stale.
 
+**ERHE_TRACY_CALLSTACK_DEPTH** -- Every `ERHE_PROFILE_FUNCTION()` zone captures a callstack of this depth (`ZoneScopedS`). The capture costs about 0.6 us per zone, which on a frame with thousands of zones adds milliseconds and makes the Tracy run slower than the unprofiled one; a frame-time capture (`scripts/render_thread_bench.py --tracy`) wants `0`, which records plain zones (`ZoneScoped`). The default keeps the callstacks for the zone-tree and startup profiles.
+
 **ERHE_TRACY_ON_DEMAND** -- Sets Tracy's `TRACY_ON_DEMAND`. `ON` records only while a profiler is connected, so a run without one costs nothing. `OFF` records from process start and buffers the events until a profiler connects; use it to profile startup - `py -3 scripts/tracy_startup_profile.py` starts `tracy-capture` first, then the editor, stops it after frame 12 and reports the time to frame 12, named zones (`--zone`, `--within`) and the main-thread zone tree (`--timeline <ms>`); it finds `tracy-capture` / `tracy-csvexport` through `--tracy-dir` or `ERHE_TRACY_DIR` - in a build tree that is always run with a profiler attached, because the buffer grows for as long as none is.
 
 **ERHE_WINDOW_LIBRARY** -- Use `sdl` (or `none` for headless). `glfw` is still recognized but deprecated; SDL is the window library going forward.
@@ -204,7 +208,11 @@ tree. UBSan is the default check set with recovery on: a report is printed
 and the program continues unless the `UBSAN_OPTIONS=halt_on_error=1`
 runtime option is set, which is what the CI sanitizer entry does
 (`doc/testing.md` "CI"). The Windows `*_asan.bat` wrappers below set
-`ERHE_USE_ASAN`.
+`ERHE_USE_ASAN`. `ERHE_USE_TSAN` adds ThreadSanitizer the same way (Clang
+and GCC; exclusive with ASan): the race gate of the editor's render thread
+(`doc/editor/editor.md` "Frame phases and the render thread"); run the
+editor with `TSAN_OPTIONS` naming a suppressions file for the GPU driver
+and windowing libraries, which are not instrumented.
 
 **ERHE_WARNINGS_AS_ERRORS** -- Each toolchain file applies erhe's warning
 set per erhe target (`erhe_target_settings_toolchain`) and, with this option,

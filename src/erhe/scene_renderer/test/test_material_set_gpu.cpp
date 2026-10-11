@@ -186,7 +186,9 @@ protected:
     }
 
     // Binds the set and reads back the base colour the record at `slot`
-    // carries. Returns {r, g, b}.
+    // carries. Returns {r, g, b}. The frame runs the set's per-frame
+    // update() before binding, as every owner does: update() publishes the
+    // copy and heap the frame binds (a clean update writes nothing).
     [[nodiscard]] auto read_base_color(Material_set& material_set, const uint32_t slot) -> glm::vec3
     {
         {
@@ -204,6 +206,7 @@ protected:
                 erhe::graphics::Compute_command_encoder encoder = device().make_compute_command_encoder(command_buffer);
                 encoder.set_bind_group_layout(m_layout.get());
                 encoder.set_compute_pipeline(*m_pipeline);
+                material_set.update(command_buffer);
                 const bool bound = material_set.bind(encoder);
                 EXPECT_TRUE(bound);
                 encoder.set_buffer(erhe::graphics::Buffer_target::storage, m_readback.get(), 0, 4 * sizeof(float), 1);

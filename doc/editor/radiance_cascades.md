@@ -33,15 +33,21 @@ selects the producer of the one probe field the forward pass samples:
 - Every change goes through `set_indirect_diffuse_source()`
   (`src/editor/renderers/indirect_diffuse.{hpp,cpp}`), called by the three
   combos when they report an edit and by the MCP tools `set_indirect_diffuse`
-  and `set_ddgi`. It stores the value and hands each producer its
-  `Producer_selection`: the deselected producer releases its textures right
-  there, the selected one fits on its next tick. The producers are
-  constructed with the selection of the loaded (and migrated) settings, and
-  do not poll the setting.
-- `Editor::tick()`, after `flush_draw_lists()`, ticks radiance cascades only
+  and `set_ddgi`. It stores the value; the render phase reads it as the
+  frame's `Render_settings` copy. Each producer's `is_selected()` reads the
+  calling role's copy, and at the start of every render phase
+  `apply_frame_settings()` applies the frame's selection to the
+  producer's render-phase state (`Producer_selection`): the deselected
+  producer releases its textures there, the selected one fits on its next
+  tick. The change reaches the render phase only as the frame's copy, so
+  the producer compares it with the selection the previous frame applied.
+  The producers are constructed with the selection of the loaded (and
+  migrated) settings.
+- `Editor::frame_render_phase()` (R, `doc/editor/editor.md` "Frame phases
+  and the render thread") ticks radiance cascades only
   while they are selected. DDGI ticks every frame for pending reference
   irradiance queries (which do not depend on the source) and updates its
-  probes only while selected. `Editor::tick()` then publishes the selected
+  probes only while selected. `frame_render_phase()` then publishes the selected
   producer's field - `get_indirect_diffuse_field()`
   (`src/editor/renderers/indirect_diffuse.{hpp,cpp}`), a `Probe_field` of
   `Ddgi_parameters` and the three atlases from `Ddgi_renderer::get_field()`
@@ -95,10 +101,10 @@ The layout math is pure (`src/editor/renderers/radiance_cascades_layout.{hpp,cpp
 glm only) and unit tested by `editor_renderer_tests`
 (`src/editor/renderers/test/`).
 
-- **Content box.** `compute_padded_content_bounds()`
-  (`src/editor/renderers/content_bounds.{hpp,cpp}`) - the union of the
-  visible content meshes' world bounds, grown by the padding - shared with
-  DDGI. So is the refit rule, `Probe_volume_bounds`
+- **Content box.** `pad_content_bounds()`
+  (`src/editor/renderers/content_bounds.{hpp,cpp}`) grows the content bounds
+  of the scene's `Ray_trace_scene` slot (the union of the visible content
+  meshes' world bounds, prepared in M2) by the padding - shared with DDGI. So is the refit rule, `Probe_volume_bounds`
   (`src/editor/renderers/probe_grid.{hpp,cpp}`): the layout is refitted when a
   fit setting changes (to the content exactly), when the content leaves the
   volume (grown to include both) or shrinks below half of it (to the
@@ -294,7 +300,8 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   `Material_set`, a `Light_buffer` with projections fitted by
   `fit_trace_light_projections()` (`src/editor/renderers/trace_lights.{hpp,cpp}`,
   shared with `Ddgi_renderer`; no trace without a scene camera), and the
-  renderer's own `Scene_tlas`, rebuilt each frame it traces. Binding points
+  renderer's own `Scene_tlas`, rebuilt each frame it traces from the scene's
+  `Ray_trace_scene` slot (doc/editor/raytrace.md "Ray_trace_scene"). Binding points
   follow DDGI's trace layout: material 0, light 1, control 2, instance
   records 3, TLAS 4, raw atlas 5 (`rgba16f`), distance 6 (`rgba32f`),
   neighbour atlas 7 (`rgba16f`; the raw variants bind their raw atlas
@@ -371,9 +378,11 @@ count, not to the trace budget.
   and the upper probe's state does not mark it inside geometry. The
   trilinear weights of the usable probes are renormalized to sum to 1.
   No mode is better everywhere (measured under "Verification"), so
-  all three stay selectable; `set_merge_mode()` is called by the change sites
-  (the Radiance Cascades window combo, MCP `set_radiance_cascades`) after
-  they store the setting, and the constructor takes the loaded one.
+  all three stay selectable. The change sites (the Radiance Cascades window
+  combo, MCP `set_radiance_cascades`) store the setting;
+  `apply_frame_settings()` applies the frame's `Render_settings` copy at
+  the start of the render phase, and the constructor takes the loaded
+  one.
   With no usable upper probe, `upper = (0, 0)`: nothing beyond the
   interval is known, and the texel keeps its own interval. The fallback is
   rare and did not change a measured value: on every station the results
@@ -567,6 +576,16 @@ in the CPU phase only ([ddgi.md](ddgi.md) "Traps"). It is an editor aid:
   grid, so after a refit or a cascade change the probes draw grey until the
   next copy retires. With `none` nothing is copied and the buffer is
   released; `probe_overlay.readback_count` of the MCP stats stays put.
+- **Publication**: the tick (render phase) leaves the fitted layout, the
+  reduced copy (grid, probe list, brightest irradiance, summary, readback
+  count), whether the renderer is active, the field parameters, the texture
+  memory, fit count, cost, applied merge mode and the atlas preview size in
+  a `Rendered_state` per frame in flight; the probe list is copied into a
+  slot only when a newer copy was reduced. `render()` (M2), the Radiance
+  Cascades window and the MCP stats read the last rendered frame's
+  (`get_rendered_state(App_context::last_rendered_frame_index)`,
+  [editor.md](editor.md) "Frame phases and the render thread"), never the
+  renderer's render-phase members.
 
 ## Radiance Cascades window
 
@@ -591,8 +610,12 @@ The atlases carry beta in alpha, which the ImGui image widget would use as
 opacity (every hit texel would vanish), so the preview is an opaque copy
 written by `res/editor/shaders/rc_preview.comp` into one preview texture
 (`Radiance_cascades_renderer::request_preview()`), after the trace and the
-merge. The window requests it each frame it shows the preview and the next
-tick records it, so the copy costs nothing while the window is closed.
+merge. The window requests it each frame it shows the preview (the request
+is handed to the render phase under a mutex) and the next tick records it,
+so the copy costs nothing while the window is closed. The tick creates and
+replaces the preview texture, so the window draws it through
+`get_preview_texture_reference()`, which the render thread resolves when it
+draws the window, sized from the last rendered frame's `Rendered_state`.
 
 ## MCP
 

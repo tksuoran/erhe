@@ -14,8 +14,11 @@ erhe_target_sources_grouped(
     erhe_utility/env.hpp
     erhe_utility/pimpl_ptr.cpp
     erhe_utility/pimpl_ptr.hpp
+    erhe_utility/thread_roles.cpp
+    erhe_utility/thread_roles.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(${_target} PUBLIC erhe::verify)
 
 erhe_target_settings(${_target} "erhe")

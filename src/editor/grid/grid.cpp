@@ -10,6 +10,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/viewport_scene_view.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_math/math_util.hpp"
@@ -329,7 +330,7 @@ void Grid::render(const Render_context& context)
     const App_context& app_context = context.app_context;
     const Grid_config* cfg = nullptr;
     if (app_context.editor_settings != nullptr) {
-        const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+        const std::shared_ptr<Scene_root>& scene_root = context.scene_root;
         cfg = (scene_root != nullptr)
             ? &get_effective_grid(*app_context.editor_settings, *scene_root)
             : &app_context.editor_settings->grid;
@@ -355,27 +356,6 @@ void Grid::render(const Render_context& context)
     const int   cell_div  = (cfg != nullptr) ? cfg->cell_div  : m_cell_div;
     const float cell_size = (cfg != nullptr) ? cfg->cell_size : m_cell_size;
 
-    // TODO Handling visibility here may add latency, but I guess that is okay.
-    //      If Gr\id overrided handle_flag_bits_update(), it could handle visibility
-    //      changes more directly, but it would then need access to App_rendering.
-    context.app_context.app_rendering->set_grid_visibility(visible);
-    context.app_context.app_rendering->set_grid_frame(
-        get_view_frame(context.camera),
-        behind ? Grid_depth_mode::behind_content : Grid_depth_mode::depth_tested
-    );
-    context.app_context.app_rendering->set_grid_label(
-        glm::vec4{
-            label_enable ? 1.0f : 0.0f,
-            label_text_fr,
-            std::max(1.0f, std::round(label_spacing)), // shader formats integer values only
-            label_fade
-        }
-    );
-    context.app_context.app_rendering->set_grid_colors(level_colors, label_color);
-    context.app_context.app_rendering->set_grid_line_widths(
-        glm::vec4{level_widths[0], level_widths[1], level_widths[2], level_widths[3]}
-    );
-
     // Derive the 4 grid LOD level cell sizes from cell size and cell div,
     // preserving the old CPU grid semantics: level1 = cell size (major
     // lines), level2 = cell size / cell div (minor lines = snap step),
@@ -384,9 +364,36 @@ void Grid::render(const Render_context& context)
     // shader level sizes {10, 1, 0.1, 0.01}.
     const float div  = static_cast<float>(std::max(1, cell_div));
     const float size = std::max(0.001f, cell_size);
-    context.app_context.app_rendering->set_grid_sizes(
-        glm::vec4{size * div, size, size / div, size / (div * div)}
-    );
+
+    const Grid_frame frame = get_view_frame(context.camera);
+    Grid_pass_state grid{};
+    grid.enabled                    = visible;
+    grid.parameters.world_from_grid = frame.world_from_grid;
+    grid.parameters.grid_flags      = glm::vec4{
+        frame.label_sign.x,
+        frame.label_sign.y,
+        behind ? 1.0f : 0.0f,
+        0.0f
+    };
+    grid.parameters.grid_label = glm::vec4{
+        label_enable ? 1.0f : 0.0f,
+        label_text_fr,
+        std::max(1.0f, std::round(label_spacing)), // shader formats integer values only
+        label_fade
+    };
+    grid.parameters.grid_color       = level_colors;
+    grid.parameters.grid_label_color = label_color;
+    grid.parameters.grid_line_width  = glm::vec4{level_widths[0], level_widths[1], level_widths[2], level_widths[3]};
+    grid.parameters.grid_size        = glm::vec4{size * div, size, size / div, size / (div * div)};
+
+    // A viewport records its grid into its render state for the frame being
+    // prepared, so each view draws its own grid; the headset (no viewport)
+    // sets the grid pass inputs it prepares its composition from.
+    if (context.viewport_scene_view != nullptr) {
+        context.viewport_scene_view->record_grid(grid);
+    } else {
+        context.app_context.app_rendering->set_grid(grid);
+    }
 }
 
 void Grid::update()

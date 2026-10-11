@@ -594,8 +594,16 @@ void Physics_tool::tool_render(const Render_context& context)
     constexpr glm::vec3 axis_y{0.0f, 1.0f, 0.0f};
     constexpr glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
 
-    if (m_show_drag_body && (m_drag_constraint.get_drag_point_body() != nullptr)) {
-        const glm::mat4 m = m_drag_constraint.get_drag_point_body()->get_world_transform();
+    Scene_root* const drag_scene_root = m_drag_constraint.get_scene_root();
+    if (m_show_drag_body && (m_drag_constraint.get_drag_point_body() != nullptr) && (drag_scene_root != nullptr)) {
+        // Render phase: the next frame's overlap phase moves the drag point
+        // body (Physics_drag_constraint::on_fixed_step) and steps the world
+        // while this runs.
+        glm::mat4 m{1.0f};
+        {
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> physics_step_lock{drag_scene_root->get_physics_step_mutex()};
+            m = m_drag_constraint.get_drag_point_body()->get_world_transform();
+        }
         const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
         const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
         const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};

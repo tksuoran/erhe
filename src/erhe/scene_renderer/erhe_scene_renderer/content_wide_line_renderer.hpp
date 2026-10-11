@@ -5,6 +5,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/content_wide_line_feed.hpp"
 #include "erhe_scene_renderer/content_wide_line_view_writer.hpp"
 
 #include <glm/glm.hpp>
@@ -36,6 +37,24 @@ namespace erhe::scene_renderer {
 class Content_wide_line_interface;
 class Mesh_memory;
 
+// Tent wide-line method controls, passed per frame to
+// Content_wide_line_renderer::set_view_params(). use_tent selects between the
+// simple single-plane quad (false) and the two-face surface tent (true); both
+// are kept because each wins in different cases. line_bias_margin is the
+// tent's surface-line depth-bias headroom in depth-buffer resolvable units
+// (ULPs). line_bias_clamp is the max toward-camera face-plane extrapolation
+// per tent corner (ULPs); it bounds show-through where thin geometry overlaps
+// in screen space. Defaults: tent off (the simple quad is the no-regression
+// default), a 1024-ULP bias headroom matching Debug_renderer's default, and a
+// 2048-ULP clamp.
+class Content_wide_line_tent_settings
+{
+public:
+    bool  use_tent        {false};
+    float line_bias_margin{1024.0f};
+    float line_bias_clamp {2048.0f};
+};
+
 // Abstract owner of the content wide-line rendering path. The editor
 // constructs the compute implementation via
 // make_content_wide_line_compute_renderer below; callers see only this
@@ -43,9 +62,9 @@ class Mesh_memory;
 //
 // Frame protocol:
 //   renderer.begin_frame();
-//   renderer.set_view_params(views, reverse_depth, depth_range, conventions);
+//   renderer.set_view_params(views, tent_settings, reverse_depth, depth_range, conventions);
 //   renderer.set_joint_buffer(client, std::move(range));    // optional
-//   for each mesh: renderer.add_mesh(mesh_memory, mesh, color, line_width, group);
+//   renderer.add_feed(feed);   // prepared by prepare_mesh(), or add_mesh() per mesh
 //   renderer.compute(compute_encoder);
 //   renderer.render (render_encoder, pipeline_state, blend, group, multiview);
 //   renderer.end_frame();
@@ -64,28 +83,16 @@ public:
     // nullptr on construction failure, so a live pointer means enabled.
     [[nodiscard]] auto is_enabled() const -> bool { return true; }
 
-    // Tent wide-line method controls. use_tent selects
-    // between the simple single-plane quad (false) and the two-face surface
-    // tent (true) at runtime; both are kept because each wins in different
-    // cases. line_bias_margin is the tent's surface-line depth-bias headroom in
-    // depth-buffer resolvable units (ULPs).
-    void               set_use_tent        (bool value)   { m_use_tent = value; }
-    [[nodiscard]] auto get_use_tent        () const -> bool  { return m_use_tent; }
-    void               set_line_bias_margin(float margin)  { m_line_bias_margin = margin; }
-    [[nodiscard]] auto get_line_bias_margin() const -> float { return m_line_bias_margin; }
-    // Max toward-camera face-plane extrapolation per tent corner (ULPs); bounds
-    // show-through where thin geometry overlaps in screen space.
-    void               set_line_bias_clamp (float ulps)   { m_line_bias_clamp = ulps; }
-    [[nodiscard]] auto get_line_bias_clamp () const -> float { return m_line_bias_clamp; }
-
     void begin_frame();
 
-    // Cache the per-frame view + depth conventions. Eagerly builds the
-    // Per_view_camera array consumed by the subclass's write_view_block
-    // calls. Call once per frame between begin_frame() and the first
-    // add_mesh() / compute() / render().
+    // Cache the per-frame view + depth conventions and the tent settings of
+    // the frame (the caller passes the render phase's copy of its settings).
+    // Eagerly builds the Per_view_camera array consumed by the subclass's
+    // write_view_block calls. Call once per frame between begin_frame() and
+    // the first add_mesh() / compute() / render().
     void set_view_params(
         std::span<const Camera_view_input>        views,
+        const Content_wide_line_tent_settings&    tent_settings,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
         const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
@@ -99,10 +106,25 @@ public:
         erhe::graphics::Ring_buffer_range&& joint_buffer_range
     );
 
-    // Queue this mesh's edge-line primitives for rendering. group
-    // partitions dispatches across composition passes (selection
-    // outline, selected, not_selected, ...). Subclass picks which
-    // primitives carry usable edge data.
+    // Prepare phase (main thread, or wherever the mesh is owned): appends
+    // the records of this mesh's edge-line primitives to out - the
+    // original-variant edge-line ranges, world_from_node, the skin's joint
+    // slot - and counts the mesh. group partitions dispatches across
+    // composition passes (selection outline, selected, not_selected, ...).
+    static void prepare_mesh(
+        Mesh_memory&             mesh_memory,
+        const erhe::scene::Mesh& mesh,
+        const glm::vec4&         color,
+        float                    line_width,
+        uint32_t                 group,
+        Content_wide_line_feed&  out
+    );
+
+    // Render phase: queue the dispatches of a prepared feed. Reads no Mesh.
+    void add_feed(const Content_wide_line_feed& feed);
+
+    // prepare_mesh() and add_feed() of one mesh on the calling thread: the
+    // headset, which feeds where it renders.
     void add_mesh(
         Mesh_memory&             mesh_memory,
         const erhe::scene::Mesh& mesh,
@@ -142,21 +164,10 @@ protected:
         Content_wide_line_interface& interface_
     );
 
-    // Subclass entry point for per-mesh-primitive dispatch construction.
-    // The base's add_mesh() has already verified the mesh has a node,
-    // computed world_from_node, and resolved the skin's base_joint_index.
-    // The subclass inspects buffer_mesh for the edge-data ranges and
-    // either pushes a dispatch or skips.
-    virtual void add_primitive(
-        Mesh_memory&                        mesh_memory,
-        const erhe::primitive::Buffer_mesh& buffer_mesh,
-        const glm::mat4&                    world_from_node,
-        const glm::vec4&                    color,
-        float                               line_width,
-        uint32_t                            group,
-        bool                                mesh_is_skinned,
-        uint32_t                            base_joint_index
-    ) = 0;
+    // Subclass entry point for per-primitive dispatch construction from a
+    // prepared record; the subclass decides whether the dispatch takes the
+    // skinned path.
+    virtual void add_record(const Content_wide_line_record& record) = 0;
 
     // Subclass hook for end_frame() -- release any per-dispatch ring
     // buffer ranges and clear dispatch queues. Called after the base
@@ -180,15 +191,6 @@ private:
     std::vector<Per_view_camera>       m_per_view_cameras;
     Dispatch_per_frame_params          m_frame_params{};
     bool                               m_view_params_set{false};
-
-    // Tent wide-line method state. Defaults: tent off (the
-    // simple single-plane quad is the no-regression default; the tent is opt-in
-    // via the Visual Style toggle), a 1024-ULP bias headroom matching
-    // Debug_renderer's default, and a 2048-ULP toward-camera extrapolation clamp
-    // (anti show-through on overlapping thin geometry) used when the tent is on.
-    bool                               m_use_tent{false};
-    float                              m_line_bias_margin{1024.0f};
-    float                              m_line_bias_clamp{2048.0f};
 
     erhe::graphics::Ring_buffer_client* m_joint_buffer_client{nullptr};
     erhe::graphics::Ring_buffer_range   m_joint_buffer_range;

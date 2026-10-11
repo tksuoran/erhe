@@ -273,8 +273,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         std::shared_ptr<erhe::primitive::Material> material = slot_material;
         thumbnail_drawn = m_context.thumbnails->draw(
             material,
-            [&context = m_context, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
-                context.material_preview->render_preview(texture, material);
+            [&context = m_context, material](erhe::graphics::Command_buffer& command_buffer, const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
+                context.material_preview->render_preview(command_buffer, texture, material);
             },
             c_slot_size
         );

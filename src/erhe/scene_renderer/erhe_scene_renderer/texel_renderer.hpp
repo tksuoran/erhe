@@ -13,7 +13,7 @@ namespace erhe::graphics {
     class Render_pass;
     class Shader_stages;
 }
-namespace erhe::scene { class Camera; }
+namespace erhe::scene { class Camera_snapshot; }
 namespace erhe::math  { class Viewport; }
 
 namespace erhe::scene_renderer {
@@ -41,7 +41,7 @@ public:
         erhe::graphics::Render_command_encoder&                     render_encoder;
         const erhe::graphics::Shader_stages*                        shader_stages    {nullptr};
         const erhe::graphics::Render_pass&                          render_pass;
-        const erhe::scene::Camera*                                  camera           {nullptr};
+        const erhe::scene::Camera_snapshot*                         camera           {nullptr};
         const Light_projections*                                    light_projections{nullptr};
         erhe::math::Viewport                                        viewport;
     };

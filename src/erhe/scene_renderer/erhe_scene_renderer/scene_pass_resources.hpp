@@ -63,7 +63,7 @@ public:
     // visibility Shader_debug::shadow_visibility shows. Set per render by the
     // request that wants a specific light (render_scene_image); 0 otherwise.
     uint32_t                                                           shadow_debug_light_index{0};
-    const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
+    std::span<const Joint_pose>                                        joint_poses      {}; // the frame's posed joints (Joint_poses::capture)
     // The material slot space this pass resolves through, already updated for
     // this frame (doc/erhe/draw_list_material_set.md D5). The pass binds it
     // and looks slots up in it; it never creates, updates or resets one.
@@ -148,10 +148,10 @@ public:
     };
 
     auto begin_pass(
-        const Base_render_parameters& base,
-        const glm::uvec4&             debug_joint_indices,
-        const std::span<glm::vec4>&   debug_joint_colors,
-        const erhe::scene::Node*      debug_target_joint
+        const Base_render_parameters&     base,
+        const glm::uvec4&                 debug_joint_indices,
+        const std::span<const glm::vec4>& debug_joint_colors,
+        const erhe::scene::Node*          debug_target_joint
     ) -> Pass_state;
     void end_pass(Pass_state& state, erhe::graphics::Render_command_encoder& render_encoder);
 

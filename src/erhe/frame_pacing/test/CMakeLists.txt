@@ -3,6 +3,7 @@ add_executable(${_target}
     main.cpp
     frame_pacing_plant.hpp
     test_frame_pacer_claims.cpp
+    test_frame_time_recorder.cpp
 )
 
 target_link_libraries(${_target}

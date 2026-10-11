@@ -234,7 +234,7 @@ existing bucket whose `accept()` returns true or starts a new bucket.
   `vertex_format_edge_line.streams.front()`). Because pools key on
   `Vertex_stream` pointer identity, the edge-line stream (vec4 position +
   vec4 smooth normal) lives in its own dedicated pool, distinct from
-  the main mesh vertex pools. `Content_wide_line_renderer::add_mesh`
+  the main mesh vertex pools. `Content_wide_line_renderer::prepare_mesh`
   consumes the range via `Mesh_memory::get_vertex_buffer(range)` to
   resolve the underlying `Buffer*`.
 

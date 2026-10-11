@@ -403,7 +403,7 @@ inline ImCubicBezierIntersectResult ImCubicBezierLineIntersect(const ImVec2& p0,
     // Expand and collect terms to form linear combinations of original Bezier
     // controls.  This ends up with a vector cubic in t:
     //     (-P0+3P1-3P2+P3)t^3 + (3P0-6P1+3P2)t^2 + (-3P0+3P1)t + P0
-    //             /\                  /\                /\       /\
+    //             ^^                  ^^                ^^       ^^
     //             ||                  ||                ||       ||
     //             c3                  c2                c1       c0
 

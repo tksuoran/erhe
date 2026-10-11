@@ -14,7 +14,9 @@
 #include "erhe_math/input_axis.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_renderer/view.hpp"
+#include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_xr/headset.hpp"
 
 #include <span>
@@ -161,9 +163,20 @@ public:
     void attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe::scene_renderer::Mesh_memory& mesh_memory);
 
     // Public API
-    auto begin_frame   () -> bool;
+    // Frame phases (doc/editor/render_thread.md section 2.2): wait_frame()
+    // runs in M1, poll_events() and update_actions() in M2, begin_frame(),
+    // render_headset() and end_frame() in R. wait_frame() waits only when
+    // the previous M2's poll_events() succeeded (the session state it
+    // applied is one frame old in M1). It returns the timing instead of
+    // storing it, so the timing reaches R through the frame packet;
+    // begin_frame() stores it as render-phase state, read by
+    // render_headset().
+    [[nodiscard]] auto wait_frame    () -> erhe::xr::Frame_timing;
+    auto begin_frame   (const erhe::xr::Frame_timing& frame_timing) -> bool;
     auto poll_events   () -> bool;
-    auto update_actions() -> bool;
+    // Requires a waited frame (frame_timing.wait_ok), not a begun one:
+    // xrSyncActions and the view pose use the wait's predicted display time.
+    auto update_actions(const erhe::xr::Frame_timing& frame_timing) -> bool;
     auto render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool;
 
     void end_frame                ();
@@ -280,6 +293,7 @@ private:
 
     // Per-frame scratch of render_headset(), cleared at use so the capacity
     // is kept: one camera view input and one debug renderer view per eye.
+    std::vector<erhe::scene::Camera_snapshot>            m_view_camera_snapshots; // per eye, captured in the render phase (the headset owns its eye cameras)
     std::vector<erhe::scene_renderer::Camera_view_input> m_view_inputs;
     std::vector<erhe::renderer::View>                    m_debug_views;
     erhe::math::Input_axis                               m_translate_x;
@@ -326,6 +340,10 @@ private:
     // update_id_render). Not flagged visible / show_in_ui -- it is never
     // composited, only used as a projection source.
     std::shared_ptr<erhe::scene::Camera>                 m_pointer_pick_camera;
+    // The scene's posed joints as this view captured them after its own
+    // update_node_transforms() in the render phase (the headset still
+    // records against poses located in R; doc/editor/render_thread.md section 2.2).
+    erhe::scene_renderer::Joint_poses                    m_render_joint_poses;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     // Indexed by Render_view::slot; entries are created lazily on first
     // use. Disjoint from m_view_resources so the per-eye fallback path
@@ -344,7 +362,7 @@ private:
 
     float                                                m_finger_to_viewport_distance_threshold{0.1f};
 
-    bool                                                 m_poll_events_ok{false};
+    bool                                                 m_poll_events_ok{true};  // true until the first M2 poll: the init pump already polled, so frame 1's xrWaitFrame runs
     bool                                                 m_update_actions_ok{false};
     bool                                                 m_request_renderdoc_capture{false};
     bool                                                 m_renderdoc_capture_started{false};
@@ -358,6 +376,8 @@ private:
     // to the per-eye path. The ID pick pass (update_id_render) is single-
     // view and runs once per frame regardless of this flag.
     bool                                                 m_use_multiview{false};
+    // Render-phase state: written by begin_frame() and reset by
+    // render_headset(), both in R.
     erhe::xr::Frame_timing                               m_frame_timing{};
     uint64_t                                             m_frame_number{0};
 

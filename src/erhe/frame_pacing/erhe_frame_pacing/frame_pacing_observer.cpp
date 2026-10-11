@@ -100,18 +100,22 @@ void Frame_pacing_observer::deliver_pending(Frame_time_recorder& recorder, const
         if (entry.frame_id != frame_id) {
             continue; // never scheduled through the observer (startup) or evicted
         }
-        const Frame_time_record* const record = recorder.find(frame_id);
-        if (record == nullptr) {
+        Frame_time_record record{};
+        if (!recorder.get(frame_id, record)) {
             entry.cpu_delivered      = true;
             entry.gpu_delivered      = true;
             entry.feedback_delivered = true;
             continue;
         }
-        if (!entry.cpu_delivered && (record->cpu_slot_end > 0.0)) {
-            m_pacer->on_cpu_done(frame_id, record->cpu_service_time());
+        if (!entry.cpu_delivered && (record.cpu_slot_end > 0.0)) {
+            m_pacer->on_cpu_done(frame_id, record.cpu_service_time());
             entry.cpu_delivered = true;
-            if (record->pacer_wait_end > record->pacer_wait_begin) {
-                const double wait_span = record->pacer_wait_end - record->pacer_wait_begin;
+            // Both pacer waits: the release gate (pacer_wait, M1 in the
+            // editor) and the FR5 present-wait clamp (present_wait, M2).
+            const double release_wait_span = std::max(0.0, record.pacer_wait_end   - record.pacer_wait_begin);
+            const double present_wait_span = std::max(0.0, record.present_wait_end - record.present_wait_begin);
+            if ((release_wait_span > 0.0) || (present_wait_span > 0.0)) {
+                const double wait_span = release_wait_span + present_wait_span;
                 m_pacer_wait_sum = m_pacer_wait_sum + wait_span;
                 m_pacer_wait_max = std::max(m_pacer_wait_max, wait_span);
                 ++m_pacer_wait_count;
@@ -120,17 +124,17 @@ void Frame_pacing_observer::deliver_pending(Frame_time_recorder& recorder, const
                 }
             }
         }
-        if (!entry.gpu_delivered && (record->gpu_frame_end > record->gpu_frame_begin)) {
+        if (!entry.gpu_delivered && (record.gpu_frame_end > record.gpu_frame_begin)) {
             // Latency measured from the actual start of per-frame work: the
             // pacer wait end when a wait ran, else the CPU slot begin
             // (observer mode: no wait is enforced).
-            const double release = (record->pacer_wait_end > 0.0) ? record->pacer_wait_end : record->cpu_slot_begin;
+            const double release = (record.pacer_wait_end > 0.0) ? record.pacer_wait_end : record.cpu_slot_begin;
             m_pacer->on_gpu_done(
                 frame_id,
-                record->gpu_frame_end,
-                record->cpu_service_time(),
-                record->gpu_frame_end - record->gpu_frame_begin,
-                record->gpu_frame_end - release
+                record.gpu_frame_end,
+                record.cpu_service_time(),
+                record.gpu_frame_end - record.gpu_frame_begin,
+                record.gpu_frame_end - release
             );
             entry.gpu_delivered = true;
             ++m_gpu_sample_count;
@@ -144,12 +148,12 @@ void Frame_pacing_observer::deliver_pending(Frame_time_recorder& recorder, const
                 }
             }
         }
-        if (!entry.feedback_delivered && (record->achieved_present_time > 0.0)) {
-            m_pacer->on_present_feedback(frame_id, record->achieved_present_time);
+        if (!entry.feedback_delivered && (record.achieved_present_time > 0.0)) {
+            m_pacer->on_present_feedback(frame_id, record.achieved_present_time);
             entry.feedback_delivered = true;
             ++m_feedback_count;
             if (entry.predicted_display > 0.0) {
-                const double error = std::abs(record->achieved_present_time - entry.predicted_display);
+                const double error = std::abs(record.achieved_present_time - entry.predicted_display);
                 m_prediction_error_sum += error;
                 m_prediction_error_max  = std::max(m_prediction_error_max, error);
                 ++m_prediction_error_count;

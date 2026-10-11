@@ -248,16 +248,37 @@ lifecycle:
   `Ray_trace_renderer`, held as a `unique_ptr` member, published to
   `App_context` in `fill_app_context()`. A part constructor may not read
   `context.editor_settings` - it is assigned after part construction.
-- Ticked from `Editor::tick()` after `flush_draw_lists()`, recording into
-  `m_app_context.current_command_buffer`. `Editor::tick()` then publishes
+- Ticked from `Editor::frame_render_phase()` (R, `doc/editor/editor.md`
+  "Frame phases and the render thread"), recording into the frame command
+  buffer passed to it. `frame_render_phase()` then publishes
   the selected producer's field (`get_indirect_diffuse_field()`,
   `Ddgi_renderer::get_field()` while DDGI is selected) with
   `m_forward_renderer->set_ddgi(params, irradiance, distance, probe_data)`.
   The volume is scene-global, so it is neither a rendergraph node nor per-view.
 - `is_supported()` mirrors `Ray_trace_renderer::is_supported()`.
 - `Ddgi_renderer` is also a `Renderable`: the probe overlay
-  (`debug_draw_probes`) draws probe spheres coloured from a periodic probe-data
-  readback.
+  (`debug_draw_probes`) draws probe spheres coloured from the probe state
+  readback ("Probe state"), in M2.
+- What a tick leaves for the main thread is a `Rendered_state` per frame in
+  flight, written at the end of every tick: whether DDGI is active
+  (`is_active()`), the fitted grid, the size of each probe atlas, rays per
+  probe, the octahedral resolutions, probes per update, the texture bytes,
+  `get_stats()` ("Performance") and the newest decoded probe state readback
+  (the vector is copied into a slot only when a newer readback was decoded).
+  The probe overlay, the Ddgi window and the MCP tools read the last rendered
+  frame's (`get_rendered_state(App_context::last_rendered_frame_index)`,
+  `doc/editor/editor.md` "Frame phases and the render thread"), never the
+  renderer's render-phase members.
+- The selection follows the frame's `Render_settings` copy of the
+  indirect diffuse source: `is_selected()` reads the calling role's copy,
+  and `apply_frame_settings()` at the start of every render phase releases
+  the probe textures, the grid and the pass timings when DDGI was
+  deselected since the previous frame ([radiance_cascades.md](radiance_cascades.md)
+  "Source selection").
+- The ticks create and replace the probe atlases, so the Ddgi window draws
+  each through `get_texture_reference(Atlas)`, a reference the render
+  thread resolves when it draws the window, sized from the last rendered
+  frame's `Rendered_state::atlas_sizes`.
 
 ## Performance
 
@@ -269,8 +290,10 @@ timestamps are taken after all earlier work completes, so the passes partition
 the update's wall time: `relocate` runs concurrently with the blends (no barrier
 between them) and usually reads close to 0, and the total is exact.
 
-`Ddgi_renderer::get_stats()` is the single source of the derived figures the
-Ddgi window's "GPU time" section and the MCP tool report:
+`Ddgi_renderer::get_stats()` (render phase, into each tick's
+`Rendered_state`) is the single source of the derived figures the
+Ddgi window's "GPU time" section and the MCP tool report as of the last
+rendered frame:
 
 - per pass and total: the last measurement and the mean over the last
   `c_timing_history_size` (60) measurements, in milliseconds. A result lags its
@@ -295,16 +318,22 @@ derived figures above, `texture_bytes`, and `probe_states` (below).
 
 ## Probe state
 
-The relocation / classification state is observable without the overlay:
-every `get_indirect_diffuse_stats` call asks `Ddgi_renderer` for a copy of
-the probe data texture after the next probe update
-(`request_probe_states()`, a transfer into its own host-visible buffer,
-recorded only on request) and reports the most recent copy that has retired
-(`poll_probe_states()`): `probe_states` = `update_count` (field updates when
-copied), `active`, `inactive`, `relocated` (`|offset|` > 1 mm) and
-`max_offset_over_spacing`, or `null` until the first copy retires. The
-optional argument `probes` (`[[x, y, z], ...]` grid coordinates) adds
-`probe_data`, index-aligned: `{coords, offset, state}` from the same copy.
+The relocation / classification state is read back from the probe data
+texture into one host-visible buffer after a probe update, at most one copy
+in flight, while the probe overlay is on or after `request_probe_states()`
+(every `get_indirect_diffuse_stats` call asks for one while the last
+rendered frame's state is active; the main thread sets the request under a
+mutex and the next tick takes it). A later tick decodes
+the copy once its frame retired into one vec4 per probe (offset xyz, state
+w, by probe index) plus a summary, and publishes it in the tick's
+`Rendered_state`, valid while the decoded grid is the current one. The MCP
+tool reports the newest decoded copy as of the last rendered frame:
+`probe_states` = `update_count` (field updates when copied), `active`,
+`inactive`, `relocated` (`|offset|` > 1 mm) and `max_offset_over_spacing`,
+or `null` until the first copy is decoded. The optional argument `probes`
+(`[[x, y, z], ...]` grid coordinates) adds `probe_data`, index-aligned:
+`{coords, offset, state}` from the same copy. The probe overlay draws the
+same copy, so it follows the probes a few frames late.
 
 GI test stations at the pinned settings, converged: `probe_offset_sweep` 18
 inactive / 65 relocated of 600 (the inactive ones sit where two room shells
@@ -321,7 +350,7 @@ instead of an 8-bit tonemapped screenshot of it. While a field is published,
 `ddgi_sample_irradiance` - the forward pass's function - with the forward
 pass's light block contents (the `Probe_field` of `get_indirect_diffuse_field()`
 in `src/editor/renderers/indirect_diffuse.{hpp,cpp}`, the single source of what
-`Editor::tick()` publishes, plus the scene ambient) and the same three
+`Editor::frame_render_phase()` publishes, plus the scene ambient) and the same three
 atlases and sampler. The query machinery lives in `Ddgi_renderer`, but it
 samples whichever producer is selected: DDGI's field or the radiance
 cascades field ([radiance_cascades.md](radiance_cascades.md) "Reduce").
@@ -344,7 +373,7 @@ occlusion, the configured `intensity` included.
   ambient per sample - what the forward pass shades with then.
 - Flow: the first MCP pass hands the points to
   `Ddgi_renderer::begin_irradiance_query()` and defers the request;
-  `Editor::tick()` calls `record_irradiance_query()` with the field it just
+  `Editor::frame_render_phase()` calls `record_irradiance_query()` with the field it just
   published, after the producers' updates, which fills a persistent
   host-visible input buffer, dispatches one
   thread per point into a persistent host-visible output buffer and records
@@ -393,7 +422,8 @@ interpolation, visibility), never by what a ray sees.
   with an error otherwise) and one open scene with a camera (the light block
   fit needs one; the query fails with that reason otherwise).
 - Flow: `Ddgi_renderer::begin_reference_query()` takes the points;
-  `Ddgi_renderer::tick()` builds its trace inputs - `Scene_tlas`, light
+  `Ddgi_renderer::tick()` builds its trace inputs - the `Scene_tlas` from the
+  scene's `Ray_trace_scene` slot, light
   block, material set - once for both the probe update and a pending
   reference query, and records the query as `ddgi_reference.comp`
   dispatches of whole points, about `c_reference_rays_per_frame` (2^21) rays
@@ -464,10 +494,13 @@ of the group means; 128 and 512 rays per probe agree within 2 %):
 The renderer is built out of these parts; the labels are cited from source
 comments.
 
-**1. `Scene_tlas`** (`src/editor/renderers/scene_tlas.{hpp,cpp}`) - the bottom
-level cache, the per-frame-in-flight top level slots and the instance-record
-SSBO, shared with `Ray_trace_renderer`. `Lightmap_baker` keeps its own copy of
-this code because its instance records carry texcoord-2 addresses.
+**1. `Scene_tlas`** (`src/editor/renderers/scene_tlas.{hpp,cpp}`) - the
+renderer's per-frame-in-flight top level slots and instance-record SSBO, built
+from the scene root's `Ray_trace_scene` slot of the frame, whose bottom level
+structures are shared with `Ray_trace_renderer` and the radiance cascades
+(doc/editor/raytrace.md "Ray_trace_scene"); the volume is fitted to the slot's
+content bounds. `Lightmap_baker` keeps its own copy of this code because its
+instance records carry texcoord-2 addresses.
 
 **2. Settings and skeleton.** `Ddgi_config`
 (`src/editor/config/definitions/ddgi_config.py`, erhe_codegen, `reflect=True`,

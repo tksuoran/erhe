@@ -20,6 +20,7 @@
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
 #include "app_message_bus.hpp"
+#include "app_rendering.hpp"
 #include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "items.hpp"
@@ -880,10 +881,11 @@ auto Mcp_server::action_lightmap_bake_direct(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // Hand the fresh atlas to the forward renderer so lightmapped draws
-    // sample it (per-primitive scale/offset gates each draw).
-    if (m_context.forward_renderer != nullptr) {
-        m_context.forward_renderer->set_lightmap_texture(m_context.lightmap_baker->get_lightmap_texture());
+    // Bind the fresh atlas for the forward passes so lightmapped draws
+    // sample it (per-primitive scale/offset gates each draw); the render
+    // phase picks it up from the frame packet.
+    if (m_context.app_rendering != nullptr) {
+        m_context.app_rendering->set_lightmap_texture(m_context.lightmap_baker->get_lightmap_texture());
     }
     json result{
         {"baked",  true},

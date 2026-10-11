@@ -1,7 +1,9 @@
 #pragma once
 
+#include "renderers/composer.hpp"
 #include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/viewport_render_state.hpp"
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_scene/camera.hpp"
@@ -118,6 +120,32 @@ public:
 
     // Implements Rendergraph_node
     auto get_type_name           () const -> std::string_view override { return "Viewport_scene_view"; }
+
+    // M2: copies the render state (Viewport_render_state) of the frame it
+    // prepares from the live members, then records this view's tools,
+    // renderables and debug visualizations into the debug and text
+    // renderers (one frame slot per view), under the conditions
+    // execute_rendergraph_node() renders with. The render phase reads the
+    // state of the frame it renders and expands and draws the slot
+    // (doc/editor/editor.md "Frame phases and the render thread"). The
+    // command buffer is the upload command buffer; the recording needs it
+    // for debug groups only.
+    void prepare_render(erhe::graphics::Command_buffer& upload_command_buffer);
+    // M2, the last step (App_rendering::prepare_composition): prepares this
+    // view's composition (pass gating and bucketed draws) into the frame's
+    // composer slot, under the same conditions execute_rendergraph_node()
+    // renders with, reading the render state prepare_render() copied. The
+    // render phase draws the slot and reads no mesh for the bucket passes.
+    void prepare_composition(uint64_t frame_index, std::size_t frames_in_flight, int64_t host_system_time_ns);
+    // The render state copy of frame_index (one per frame in flight);
+    // verifies prepare_render() filled it for that frame.
+    [[nodiscard]] auto get_render_state(uint64_t frame_index) const -> const Viewport_render_state&;
+
+    // M2, from Grid::render() while prepare_render() records the tools: the
+    // grid composition pass inputs of this view for the frame being
+    // prepared.
+    void record_grid(const Grid_pass_state& grid);
+
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Post-processing overlay pass (issue #230). Called by Viewport_overlay_node
@@ -134,6 +162,10 @@ public:
 
     // Public API
     void set_window_viewport         (erhe::math::Viewport viewport);
+    // Main thread (the graphics preset change): the content render target's
+    // MSAA sample count, applied by the render phase of the next prepared
+    // frame (Viewport_render_state::msaa_sample_count).
+    void set_msaa_sample_count       (int sample_count);
     void set_is_scene_view_hovered   (bool is_hovered);
     void set_camera                  (const std::shared_ptr<erhe::scene::Camera>& camera);
     void update_pointer_2d_position  (glm::vec2 position_in_viewport);
@@ -180,6 +212,15 @@ public:
 private:
     void update_hover_with_id_render();
 
+    // M2 (prepare_composition): the edge-line feed of the wide-line passes,
+    // gated as the passes draw (enabled, the view's render style), with each
+    // pass's primitive settings at the prepared frame's host time.
+    void prepare_wide_line_feed(
+        const Render_context&                         context,
+        int64_t                                       host_system_time_ns,
+        erhe::scene_renderer::Content_wide_line_feed& out
+    );
+
     // (Re)builds the overlay render target (color matching the content sample
     // count + single-sample resolved output) and its render pass, which loads
     // the content render target's depth/stencil attachment. See issue #230.
@@ -205,6 +246,7 @@ private:
 
     // viewport for 3d camera
     erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0};
+    int                                m_msaa_sample_count    {0};
 
     erhe::scene_renderer::Shader_debug m_shader_debug                   {erhe::scene_renderer::Shader_debug::none};
     Renderer_choice                    m_renderer_choice                {Renderer_choice::forward};
@@ -226,10 +268,11 @@ private:
     const erhe::graphics::Texture*               m_overlay_depth_texture{nullptr};
     int                                          m_overlay_width {0};
     int                                          m_overlay_height{0};
-    // Set when render() recorded a debug-renderer frame that render_overlay_pass()
-    // must draw (and end) after post-processing; cleared there. If the overlay
-    // pass is skipped (early-out), the next render() releases the stale frame.
-    bool                                         m_debug_renderer_frame_pending{false};
+    // The render state, one copy per frame in flight, indexed by frame
+    // index modulo their count; sized at the first prepare_render().
+    std::vector<Viewport_render_state>           m_render_states;
+    // This view's prepared composition, one slot per frame in flight.
+    Composer_frame_slots                         m_composer_slots;
 };
 
 }

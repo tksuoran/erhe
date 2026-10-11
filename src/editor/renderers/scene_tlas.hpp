@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace erhe::graphics {
@@ -19,27 +18,18 @@ namespace erhe::graphics {
     class Device;
     class Ring_buffer_client;
 }
-namespace erhe::primitive {
-    class Buffer_mesh;
-    class Primitive;
-}
-namespace erhe::scene {
-    class Mesh_layer;
-}
-namespace erhe::scene_renderer {
-    class Material_set;
-    class Mesh_memory;
-}
 
 namespace editor {
 
-// Shared GPU acceleration structure builder for the ray-query consumers
-// (Ray_trace_renderer, DDGI probe tracing - doc/editor/ddgi.md phase 1).
-//
-// Owns three things the consumers used to each own a copy of:
-//  - a bottom level structure cache, one entry per unique Buffer_mesh,
-//    built lazily and read in place from the Mesh_memory vertex / index
-//    pools (non-skinned meshes only),
+class Ray_trace_slot;
+
+// The render phase half of a ray-query consumer's acceleration structures
+// (Ray_trace_renderer, Ddgi_renderer, Radiance_cascades_renderer). Each
+// consumer owns one; what they trace is the scene root's Ray_trace_scene,
+// whose slot for the frame (prepared in M2) update() reads:
+//  - the bottom level structures live in the slot's shared
+//    Ray_trace_geometry objects, one per unique geometry for every
+//    consumer; update() creates and builds the missing ones,
 //  - one top level structure per frame-in-flight slot (rebuilding a
 //    structure a still-in-flight frame reads is a data race),
 //  - the per-instance record SSBO the shaders read through buffer device
@@ -105,10 +95,9 @@ public:
     };
 
     Scene_tlas(
-        erhe::graphics::Device&            graphics_device,
-        erhe::scene_renderer::Mesh_memory& mesh_memory,
-        unsigned int                       instance_record_binding_point,
-        const std::string&                 debug_label
+        erhe::graphics::Device& graphics_device,
+        unsigned int            instance_record_binding_point,
+        const std::string&      debug_label
     );
     ~Scene_tlas() noexcept;
 
@@ -119,78 +108,22 @@ public:
     // Instance count of the most recent update() (diagnostics / MCP).
     [[nodiscard]] auto get_instance_count() const -> std::size_t;
 
-    // Cached bottom level structure count, for memory reporting
-    // (doc/editor/reloadable_asset_loads.md). Each entry pins its Primitive, and
-    // through it the GPU vertex / index ranges, so this is the figure that
-    // must drop when imported content is released.
-    [[nodiscard]] auto get_blas_count() const -> std::size_t;
-
-    // Builds any missing bottom level structures into command_buffer,
-    // gathers the visible non-skinned content mesh primitives into this
-    // frame's top level structure, and uploads their records. Must be
-    // called outside a render pass. Returns an invalid Frame when there is
-    // nothing to trace against.
-    //
-    // material_source is the set the tracing dispatch binds - the scene root's
-    // FORWARD set (doc/erhe/draw_list_material_set.md D5). Each instance
-    // record's material_index is a slot in it, so the two must be the same
-    // object; null writes slot 0 for every instance.
-    [[nodiscard]] auto update(
-        erhe::graphics::Command_buffer&                command_buffer,
-        const erhe::scene::Mesh_layer&                 content_layer,
-        const erhe::scene_renderer::Material_set*      material_source
-    ) -> Frame;
+    // Builds the slot's missing bottom level structures into command_buffer,
+    // builds this frame's top level structure from the slot's instances, and
+    // uploads the slot's records. Render phase; must be called outside a
+    // render pass. The records' material_index values are slots in the scene
+    // root's FORWARD material set (doc/erhe/draw_list_material_set.md D5),
+    // which the tracing dispatch binds.
+    [[nodiscard]] auto update(erhe::graphics::Command_buffer& command_buffer, const Ray_trace_slot& slot) -> Frame;
 
     void bind_instance_records(erhe::graphics::Compute_command_encoder& encoder, const Frame& frame);
 
 private:
-    class Blas_entry
-    {
-    public:
-        // Pins the GPU vertex/index ranges the structure references.
-        std::shared_ptr<erhe::primitive::Primitive>             primitive;
-        std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
-        bool                                                    built{false};
-    };
-
-    // Drops cached bottom level structures whose primitive nothing else refers to.
-//
-    // Without this the cache is an unbounded pin: each entry holds a
-    // shared_ptr<Primitive>, and through it the GPU vertex / index ranges, so
-    // content removed from the scene (an undone glTF import) can never give its
-    // memory back (doc/editor/reloadable_asset_loads.md).
-//
-    // The refcount is tested on render_shape, not on the Primitive: Primitive's
-    // copy constructor is defaulted and render_shape is a shared_ptr, so two
-    // distinct Primitive objects can produce the same Buffer_mesh key, and a
-    // use_count of 1 on the entry's Primitive could still have a live mesh
-    // referring to the same shape. use_count() == 1 on the shape means the cache
-    // is the last owner.
-//
-    // Erasing synchronously is safe: ~Acceleration_structure defers the device
-    // destroy to frame completion, and each top level structure is built and
-    // consumed inside a single update(), so no submitted frame still names an
-    // evicted structure. The key cannot dangle either - it points into a by-value
-    // member of the shape the entry itself keeps alive until the erase.
-    void evict_unreferenced_blas();
-
-    [[nodiscard]] auto get_or_create_blas(
-        erhe::graphics::Command_buffer&                    command_buffer,
-        const std::shared_ptr<erhe::primitive::Primitive>& primitive,
-        const erhe::primitive::Buffer_mesh&                buffer_mesh
-    ) -> erhe::graphics::Acceleration_structure*;
-
     erhe::graphics::Device&                             m_graphics_device;
-    erhe::scene_renderer::Mesh_memory&                  m_mesh_memory;
     std::string                                         m_debug_label;
     erhe::graphics::Shader_resource                     m_instance_struct;
     erhe::graphics::Shader_resource                     m_instance_block;
     std::unique_ptr<erhe::graphics::Ring_buffer_client> m_instance_record_buffer;
-
-    // Bottom level structure per unique Buffer_mesh; update() evicts the
-    // entries whose render shape no other owner holds
-    // (evict_unreferenced_blas()).
-    std::unordered_map<const erhe::primitive::Buffer_mesh*, Blas_entry> m_blas_cache;
 
     // One top level structure per frame-in-flight slot. Slot count must be
     // >= the backend's frames in flight (Vulkan: 2).
@@ -205,7 +138,6 @@ private:
 
     // Per-frame scratch, cleared at point of use (capacity kept).
     std::vector<erhe::graphics::Acceleration_structure_instance> m_instances;
-    std::vector<Instance_record_data>                            m_instance_records;
 };
 
 } // namespace editor

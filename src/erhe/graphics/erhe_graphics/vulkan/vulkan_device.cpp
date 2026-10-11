@@ -15,6 +15,7 @@
 #include "erhe_graphics/swapchain.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
@@ -74,16 +75,33 @@ auto c_str(const Device_frame_state state) -> const char*
     return "?";
 }
 
-void Device_impl::set_state(const Device_frame_state new_state, const char* const site)
+void Device_impl::set_state(const uint64_t frame_id, const Device_frame_state new_state, const char* const site)
 {
     static_cast<void>(site);
+    const std::size_t  slot_index = get_frame_slot_index(frame_id);
+    Device_frame_slot& slot       = m_frame_slots[slot_index];
     ERHE_VULKAN_SYNC_TRACE(
-        "[STATE] {} -> {} (at {}), frame_index={}, slot={}",
-        c_str(m_state), c_str(new_state), site,
-        m_frame_index,
-        m_frame_index % get_number_of_frames_in_flight()
+        "[STATE] {} -> {} (at {}), frame_id={}, slot={}",
+        c_str(slot.state), c_str(new_state), site,
+        frame_id,
+        slot_index
     );
-    m_state = new_state;
+    slot.state    = new_state;
+    slot.frame_id = frame_id;
+}
+
+auto Device_impl::get_frame_slot_index(const uint64_t frame_id) const -> std::size_t
+{
+    return static_cast<std::size_t>(frame_id % s_number_of_frames_in_flight);
+}
+
+auto Device_impl::get_prepare_frame_id() const -> uint64_t
+{
+    // While no frame is open m_prepare_frame_id is the last ended frame and
+    // m_render_frame_id the next one to be acquired; a started frame not yet
+    // acquired is the main role's frame already.
+    const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+    return std::max(std::max(m_prepare_frame_id, m_render_frame_id), m_started_frame_id);
 }
 
 auto Device_impl::get_device_frame_in_flight(size_t index) -> Device_frame_in_flight&
@@ -111,6 +129,7 @@ auto Device_impl::wait_for_displayed_frame(const std::int64_t frame_id, const ui
 
 void Device_impl::set_present_target_time(const std::int64_t frame_id, const double target_time_seconds, const double hold_until_seconds)
 {
+    erhe::utility::Thread_roles::assert_render_thread();
     m_present_target_frame_id           = frame_id;
     m_present_target_time_seconds       = target_time_seconds;
     m_present_target_hold_until_seconds = hold_until_seconds;
@@ -148,9 +167,11 @@ void Device_impl::ensure_device_frame_slot(size_t index)
             report_device_fault("wait_for_frame vkWaitForFences");
             abort();
         }
-        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
-            record->fence_wait_duration += erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin;
-        }
+        m_device.get_frame_time_recorder().add(
+            static_cast<std::int64_t>(get_frame_index()),
+            &erhe::frame_pacing::Frame_time_record::fence_wait_duration,
+            erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin
+        );
         m_sync_pool->recycle_fence(df.submit_fence);
         reset_device_frame_command_pool(index);
         // The submit fence has signaled, so all command buffers
@@ -176,6 +197,7 @@ void Device_impl::ensure_device_frame_slot(size_t index)
             // again from the start of vk_command_buffers.
             thread_pool.next_handle_index = 0;
         }
+        reset_frame_end_command_pool(index);
         df.submit_fence = VK_NULL_HANDLE;
     }
     df.submit_fence = m_sync_pool->get_fence();
@@ -233,7 +255,7 @@ void Device_impl::reset_device_frame_command_pool(size_t index)
 
 Device_impl::~Device_impl() noexcept
 {
-    vkDeviceWaitIdle(m_vulkan_device);
+    static_cast<void>(device_wait_idle());
 
 #if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
     if (m_tracy_vk_ctx != nullptr) {
@@ -266,8 +288,11 @@ Device_impl::~Device_impl() noexcept
         }
     }
     m_compatible_render_pass_map.clear();
-    if (m_per_frame_descriptor_pool != VK_NULL_HANDLE) {
-        vkDestroyDescriptorPool(m_vulkan_device, m_per_frame_descriptor_pool, nullptr);
+    for (VkDescriptorPool& pool : m_per_frame_descriptor_pools) {
+        if (pool != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(m_vulkan_device, pool, nullptr);
+            pool = VK_NULL_HANDLE;
+        }
     }
     if (m_texture_set_layout != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(m_vulkan_device, m_texture_set_layout, nullptr);
@@ -302,7 +327,7 @@ Device_impl::~Device_impl() noexcept
     // add completion handlers for VMA deallocation
     m_ring_buffer_pool.clear();
 
-    vkDeviceWaitIdle(m_vulkan_device);
+    static_cast<void>(device_wait_idle());
 
     for (Device_frame_in_flight& device_frame : m_device_submit_history) {
         if (device_frame.command_pool != VK_NULL_HANDLE) {
@@ -323,10 +348,16 @@ Device_impl::~Device_impl() noexcept
             }
         }
     }
-
-    for (const Completion_handler& entry : m_completion_handlers) {
-        entry.callback(*this);
+    // The frame-end cbs are freed with their pools.
+    for (std::size_t frame_slot = 0; frame_slot < s_number_of_frames_in_flight; ++frame_slot) {
+        if (m_frame_end_command_pools[frame_slot] != VK_NULL_HANDLE) {
+            vkDestroyCommandPool(m_vulkan_device, m_frame_end_command_pools[frame_slot], nullptr);
+            m_frame_end_command_pools[frame_slot]   = VK_NULL_HANDLE;
+            m_frame_end_command_buffers[frame_slot] = VK_NULL_HANDLE;
+        }
     }
+
+    drain_completion_handlers();
 
     if (m_vulkan_frame_end_semaphore != VK_NULL_HANDLE) {
         vkDestroySemaphore(m_vulkan_device, m_vulkan_frame_end_semaphore, nullptr);
@@ -409,55 +440,52 @@ auto Device_impl::get_texture_set_layout() const -> VkDescriptorSetLayout
     return m_texture_set_layout;
 }
 
-auto Device_impl::allocate_descriptor_set() -> VkDescriptorSet
+auto Device_impl::allocate_descriptor_set(const uint64_t frame_id) -> VkDescriptorSet
 {
-    if (m_per_frame_descriptor_pool == VK_NULL_HANDLE) {
+    const std::size_t      in_flight_slot = get_frame_slot_index(frame_id);
+    const VkDescriptorPool pool           = m_per_frame_descriptor_pools[in_flight_slot];
+    if (pool == VK_NULL_HANDLE) {
         return VK_NULL_HANDLE;
     }
 
     const VkDescriptorSetAllocateInfo allocate_info{
         .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .pNext              = nullptr,
-        .descriptorPool     = m_per_frame_descriptor_pool,
+        .descriptorPool     = pool,
         .descriptorSetCount = 1,
         .pSetLayouts        = &m_descriptor_set_layout
     };
 
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
-    VkResult result = vkAllocateDescriptorSets(m_vulkan_device, &allocate_info, &descriptor_set);
+    VkResult        result         = VK_SUCCESS;
+    {
+        // The pool is externally synchronized; the main role's worker
+        // threads share its frame's pool.
+        const std::lock_guard<std::mutex> lock{m_descriptor_pool_mutex};
+        result = vkAllocateDescriptorSets(m_vulkan_device, &allocate_info, &descriptor_set);
+    }
     if (result != VK_SUCCESS) {
         log_context->warn("vkAllocateDescriptorSets() failed with {}", static_cast<int32_t>(result));
         return VK_NULL_HANDLE;
     }
 
-    ++m_desc_alloc_set_count;
-    ERHE_VULKAN_DESC_TRACE("[ALLOC_SET]");
+    ERHE_VULKAN_DESC_TRACE("[ALLOC_SET] frame={}", frame_id);
     return descriptor_set;
 }
 
-void Device_impl::reset_descriptor_pool()
+void Device_impl::reset_descriptor_pool(const std::size_t in_flight_slot)
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VULKAN_DESC_TRACE(
-        "[FRAME_SUMMARY] frame={} push_buf={} push_img={} alloc_set={} heap_binds={} draws={}",
-        m_frame_index,
-        m_desc_push_buf_count,
-        m_desc_push_img_count,
-        m_desc_alloc_set_count,
-        m_desc_heap_bind_count,
-        m_desc_draw_count
-    );
-    m_desc_push_buf_count  = 0;
-    m_desc_push_img_count  = 0;
-    m_desc_alloc_set_count = 0;
-    m_desc_heap_bind_count = 0;
-    m_desc_draw_count      = 0;
-
-    if (m_per_frame_descriptor_pool != VK_NULL_HANDLE) {
-        vkResetDescriptorPool(m_vulkan_device, m_per_frame_descriptor_pool, 0);
+    const VkDescriptorPool pool = m_per_frame_descriptor_pools[in_flight_slot];
+    if (pool == VK_NULL_HANDLE) {
+        return;
     }
-    ERHE_VULKAN_DESC_TRACE("[POOL_RESET] frame={}", m_frame_index);
+    {
+        const std::lock_guard<std::mutex> lock{m_descriptor_pool_mutex};
+        vkResetDescriptorPool(m_vulkan_device, pool, 0);
+    }
+    ERHE_VULKAN_DESC_TRACE("[POOL_RESET] slot={}", in_flight_slot);
 }
 
 auto Device_impl::get_cached_pipeline(const std::size_t hash) -> VkPipeline
@@ -668,7 +696,7 @@ auto Device_impl::get_or_create_compatible_render_pass(
         });
         depth_ref.attachment = static_cast<uint32_t>(attachments.size() - 1);
         depth_ref.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT |
-            (has_stencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0u);
+            (has_stencil ? static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_STENCIL_BIT) : VkImageAspectFlags{0});
     }
 
     // Fragment density map attachment for render-pass compatibility under
@@ -1517,10 +1545,28 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         command_buffer->get_impl().pre_submit_wait();
     }
 
+    // Every cb of one submit belongs to the same device frame; its frame
+    // id keys the frame time record, the present target and the
+    // swapchain-bridge fence slot below.
+    const uint64_t frame_id = command_buffers.front()->get_impl().get_frame_id();
     Vulkan_submit_info submit_info_aggregate;
     submit_info_aggregate.command_buffers.reserve(command_buffers.size());
     for (Command_buffer* command_buffer : command_buffers) {
+        ERHE_VERIFY(command_buffer->get_impl().get_frame_id() == frame_id);
         command_buffer->get_impl().collect_synchronization(submit_info_aggregate);
+#if defined(ERHE_LOG_VULKAN)
+        const Descriptor_counters& counters = command_buffer->get_impl().get_descriptor_counters();
+        ERHE_VULKAN_DESC_TRACE(
+            "[CB_SUMMARY] frame={} cb='{}' push_buf={} push_img={} alloc_set={} heap_binds={} draws={}",
+            frame_id,
+            command_buffer->get_debug_label().string_view(),
+            counters.push_buf_count,
+            counters.push_img_count,
+            counters.alloc_set_count,
+            counters.heap_bind_count,
+            counters.draw_count
+        );
+#endif
     }
 
     const VkSubmitInfo2 submit_info{
@@ -1544,7 +1590,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     // setup_frame/submit_fence path.
     VkFence submit_fence = submit_info_aggregate.fence;
     if (!submit_info_aggregate.swapchains_to_present.empty() && (submit_fence == VK_NULL_HANDLE)) {
-        const size_t slot = static_cast<size_t>(get_frame_in_flight_index());
+        const size_t slot = get_frame_slot_index(frame_id);
         submit_fence = m_device_submit_history[slot].submit_fence;
     }
 
@@ -1556,10 +1602,14 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         reinterpret_cast<std::uintptr_t>(submit_fence),
         submit_info_aggregate.swapchains_to_present.size()
     );
-    if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
-        record->submit_time = erhe::frame_pacing::Frame_time_recorder::now();
+    erhe::frame_pacing::Frame_time_recorder& recorder = m_device.get_frame_time_recorder();
+    const std::int64_t                       record_id = static_cast<std::int64_t>(frame_id);
+    recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::submit_time, erhe::frame_pacing::Frame_time_recorder::now());
+    VkResult result = VK_SUCCESS;
+    {
+        const std::lock_guard<std::mutex> queue_lock{m_queue_mutex};
+        result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, submit_fence);
     }
-    const VkResult result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, submit_fence);
     if (result != VK_SUCCESS) {
         log_context->critical(
             "vkQueueSubmit2() in submit_command_buffers failed with {} {}",
@@ -1583,14 +1633,14 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     // submitted above - only the present is delayed - and the wait is
     // stamped as an involuntary wait (excluded from CPU service time).
     if (!submit_info_aggregate.swapchains_to_present.empty()) {
-        const double target_seconds = get_present_target_time(static_cast<std::int64_t>(m_frame_index));
+        const double target_seconds = get_present_target_time(record_id);
         // The holdback deadline comes from the pacer (decision.hold_until):
         // it is derived from the TRACKED grid period, because the queried
         // refreshDuration can be grossly wrong (4.2% measured after an
         // app-driven fullscreen mode set, driver report issue #2) - a
         // holdback interval derived from it can release the request before
         // the previous vblank's deadline, defeating the mitigation.
-        const double release_time = (m_present_target_frame_id == static_cast<std::int64_t>(m_frame_index))
+        const double release_time = (m_present_target_frame_id == record_id)
             ? m_present_target_hold_until_seconds
             : 0.0;
         if ((target_seconds > 0.0) && (release_time > 0.0) && get_graphics_config().frame_pacing_present_holdback) {
@@ -1607,29 +1657,21 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
             if (wait_seconds > s_max_holdback_wait_s) {
                 log_context->warn(
                     "present holdback capped: frame {} release {:.1f} ms ahead",
-                    m_frame_index, wait_seconds * 1000.0
+                    frame_id, wait_seconds * 1000.0
                 );
                 wait_seconds = s_max_holdback_wait_s;
             }
             if (wait_seconds > 0.0) {
-                erhe::frame_pacing::Frame_time_record* const record =
-                    m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index));
-                if (record != nullptr) {
-                    record->present_holdback_begin = erhe::frame_pacing::Frame_time_recorder::now();
-                }
+                recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_holdback_begin, erhe::frame_pacing::Frame_time_recorder::now());
                 m_present_holdback_timer.wait_for(wait_seconds);
-                if (record != nullptr) {
-                    record->present_holdback_end = erhe::frame_pacing::Frame_time_recorder::now();
-                }
+                recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_holdback_end, erhe::frame_pacing::Frame_time_recorder::now());
             }
         }
-        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
-            record->present_request_time = erhe::frame_pacing::Frame_time_recorder::now();
-        }
+        recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_request_time, erhe::frame_pacing::Frame_time_recorder::now());
     }
     for (Swapchain_impl* swapchain : submit_info_aggregate.swapchains_to_present) {
         ERHE_VERIFY(swapchain != nullptr);
-        const bool present_ok = swapchain->present();
+        const bool present_ok = swapchain->present(frame_id);
         ERHE_VULKAN_TRACE("submit_command_buffers: implicit present ok={}", present_ok);
         static_cast<void>(present_ok);
     }
@@ -1637,9 +1679,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         // FIFO backpressure can block inside vkQueuePresentKHR; the span
         // present_request..present_return is an involuntary wait excluded
         // from the CPU service time (doc/frame_pacing/inputs.md 3.2).
-        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
-            record->present_return_time = erhe::frame_pacing::Frame_time_recorder::now();
-        }
+        recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_return_time, erhe::frame_pacing::Frame_time_recorder::now());
     }
 }
 
@@ -1681,7 +1721,9 @@ void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
 
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
-    m_completion_handlers.emplace_back(m_frame_index, std::move(callback));
+    const uint64_t frame_number = get_frame_index();
+    const std::lock_guard<std::mutex> lock{m_completion_handler_mutex};
+    m_completion_handlers.emplace_back(frame_number, std::move(callback));
 }
 
 void Device_impl::on_thread_enter()
@@ -1691,49 +1733,126 @@ void Device_impl::on_thread_enter()
 void Device_impl::frame_completed(const uint64_t completed_frame)
 {
     m_ring_buffer_pool.frame_completed(completed_frame);
-    for (const Completion_handler& entry : m_completion_handlers) {
-        if (entry.frame_number == completed_frame) {
-            entry.callback(*this);
+
+    // Take this frame's handlers out of the list (keeping both lists in
+    // insertion order), then run them without the list lock: a handler may
+    // destroy objects whose destructors add handlers.
+    m_completion_handler_scratch.clear();
+    {
+        const std::lock_guard<std::mutex> lock{m_completion_handler_mutex};
+        std::size_t keep_count = 0;
+        for (std::size_t i = 0, end = m_completion_handlers.size(); i < end; ++i) {
+            Completion_handler& entry = m_completion_handlers[i];
+            if (entry.frame_number == completed_frame) {
+                m_completion_handler_scratch.push_back(std::move(entry));
+            } else {
+                if (keep_count != i) {
+                    m_completion_handlers[keep_count] = std::move(entry);
+                }
+                ++keep_count;
+            }
         }
+        m_completion_handlers.erase(m_completion_handlers.begin() + static_cast<std::ptrdiff_t>(keep_count), m_completion_handlers.end());
     }
-    auto i = std::remove_if(
-        m_completion_handlers.begin(),
-        m_completion_handlers.end(),
-        [completed_frame](Completion_handler& entry) { return entry.frame_number == completed_frame; }
-    );
-    if (i != m_completion_handlers.end()) {
-        m_completion_handlers.erase(i, m_completion_handlers.end());
+    for (const Completion_handler& entry : m_completion_handler_scratch) {
+        entry.callback(*this);
+    }
+    m_completion_handler_scratch.clear();
+}
+
+void Device_impl::complete_frames_through(const uint64_t last_completed_frame)
+{
+    const std::lock_guard<std::mutex> run_lock{m_completion_run_mutex};
+    uint64_t next_frame = 0;
+    {
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        next_frame = m_latest_completed_frame;
+    }
+    for (; next_frame <= last_completed_frame; ++next_frame) {
+        // is_frame_completed(next_frame) stays false while its handlers run
+        // (the completed frame becomes visible after them).
+        frame_completed(next_frame);
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        m_latest_completed_frame = next_frame + 1;
     }
 }
 
-auto Device_impl::wait_frame() -> bool
+void Device_impl::drain_completion_handlers()
+{
+    const std::lock_guard<std::mutex> run_lock{m_completion_run_mutex};
+    // A handler may add handlers; run until none is left.
+    for (;;) {
+        m_completion_handler_scratch.clear();
+        {
+            const std::lock_guard<std::mutex> lock{m_completion_handler_mutex};
+            if (m_completion_handlers.empty()) {
+                break;
+            }
+            std::swap(m_completion_handler_scratch, m_completion_handlers);
+        }
+        for (const Completion_handler& entry : m_completion_handler_scratch) {
+            entry.callback(*this);
+        }
+    }
+    m_completion_handler_scratch.clear();
+}
+
+void Device_impl::wait_for_frame_start(const uint64_t frame_id)
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(m_state == Device_frame_state::idle);
+    // GPU frame bracket (step P0.3): refresh calibration and harvest
+    // completed brackets non-blocking. May run while another thread still
+    // records, submits and ends the previous frame, so nothing here reads
+    // the frame-slot state (the started frame id is written under
+    // m_frame_id_mutex, below); the calibration is shared with the
+    // present-timing conversions under m_time_calibration_mutex and the
+    // records are written through the (locked) Frame_time_recorder.
+    update_gpu_calibration(frame_id);
+    poll_frame_bracket_results(frame_id);
 
-    // CPU slot begin (frame pacing data requirements): wait_frame is the
-    // first per-frame device call on the app's frame path.
-    m_device.get_frame_time_recorder().begin_frame(static_cast<std::int64_t>(m_frame_index)).cpu_slot_begin =
-        erhe::frame_pacing::Frame_time_recorder::now();
+    {
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        m_started_frame_id = frame_id;
+    }
+}
 
-    // GPU frame bracket (step P0.3): refresh calibration, harvest completed
-    // brackets non-blocking, and host-reset this frame's query pair.
-    update_gpu_calibration();
-    poll_frame_bracket_results();
+auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Order rule: frames are acquired strictly in id order, and at most N
+    // frames are open (frame_id - m_render_frame_id < N), so the slot of
+    // frame_id is not held by an open frame.
+    erhe::utility::Thread_roles::assert_main_thread();
+    const uint64_t N = get_number_of_frames_in_flight();
+    {
+        // m_render_frame_id is the render role's; it may advance (end_frame
+        // of the frame being rendered) while this reads it, which only
+        // widens the window the checks allow.
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        ERHE_VERIFY(frame_id == m_prepare_frame_id + 1);
+        ERHE_VERIFY(frame_id >= m_render_frame_id);
+        ERHE_VERIFY(frame_id - m_render_frame_id < N);
+    }
+    const size_t slot = get_frame_slot_index(frame_id);
+    ERHE_VERIFY(m_frame_slots[slot].state == Device_frame_state::idle);
+
+    // Host-reset this frame's bracket query pair. Keyed on the frame
+    // id; the slot was last used by frame F - s_frame_bracket_ring,
+    // retired long before the timeline wait below.
     if (m_frame_bracket_enabled) {
         ERHE_PROFILE_SCOPE("vkResetQueryPool");
-        const std::size_t bracket_slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
+        const std::size_t bracket_slot = static_cast<std::size_t>(frame_id % s_frame_bracket_ring);
         vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[bracket_slot], 0, 2);
-        m_frame_bracket_frame_id[bracket_slot] = static_cast<std::int64_t>(m_frame_index);
-        m_frame_bracket_begun = false;
-        m_frame_bracket_ended = false;
+        m_frame_bracket_frame_id[bracket_slot] = static_cast<std::int64_t>(frame_id);
+        m_frame_bracket_begun[slot] = false;
     }
 
     // Per-(frame_in_flight, thread) command pool reset, gated on the
     // device's timeline semaphore. update_frame_completion (called from
-    // end_frame) signals m_vulkan_frame_end_semaphore at value
-    // m_frame_index right before incrementing, so once the GPU reaches
+    // end_frame) signals m_vulkan_frame_end_semaphore at the id of the
+    // frame it ends, so once the GPU reaches
     // value F-N the previous use of the slot we're about to enter
     // (frame F-N, slot S = F % N) has fully retired and its cbs +
     // implicit fences/semaphores can be recycled.
@@ -1743,11 +1862,9 @@ auto Device_impl::wait_frame() -> bool
     // F-N before clearing. The clear destroys each
     // Command_buffer wrapper, which in turn recycles its implicit
     // VkSemaphore / VkFence back to Device_sync_pool.
-    const size_t   slot = static_cast<size_t>(get_frame_in_flight_index());
-    const uint64_t N    = get_number_of_frames_in_flight();
-    if (m_frame_index > N) {
-        ERHE_PROFILE_SCOPE("wait_frame: vkWaitSemaphores");
-        const uint64_t wait_value = m_frame_index - N;
+    if (frame_id > N) {
+        ERHE_PROFILE_SCOPE("acquire_frame_slot: vkWaitSemaphores");
+        const uint64_t wait_value = frame_id - N;
         const VkSemaphoreWaitInfo wait_info{
             .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
             .pNext          = nullptr,
@@ -1758,12 +1875,14 @@ auto Device_impl::wait_frame() -> bool
         };
         const double semaphore_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
         const VkResult result = vkWaitSemaphores(m_vulkan_device, &wait_info, UINT64_MAX);
-        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
-            record->fence_wait_duration += erhe::frame_pacing::Frame_time_recorder::now() - semaphore_wait_begin;
-        }
+        m_device.get_frame_time_recorder().add(
+            static_cast<std::int64_t>(frame_id),
+            &erhe::frame_pacing::Frame_time_record::fence_wait_duration,
+            erhe::frame_pacing::Frame_time_recorder::now() - semaphore_wait_begin
+        );
         if (result != VK_SUCCESS) {
             log_context->critical(
-                "vkWaitSemaphores() in wait_frame failed with {} {}",
+                "vkWaitSemaphores() in acquire_frame_slot failed with {} {}",
                 static_cast<int32_t>(result), c_str(result)
             );
             abort();
@@ -1774,11 +1893,11 @@ auto Device_impl::wait_frame() -> bool
     for (Per_thread_command_pool& thread_pool : thread_pools) {
         thread_pool.allocated_command_buffers.clear();
         if (thread_pool.command_pool != VK_NULL_HANDLE) {
-            ERHE_PROFILE_SCOPE("wait_frame: vkResetCommandPool");
+            ERHE_PROFILE_SCOPE("acquire_frame_slot: vkResetCommandPool");
             const VkResult reset_result = vkResetCommandPool(m_vulkan_device, thread_pool.command_pool, 0);
             if (reset_result != VK_SUCCESS) {
                 log_context->critical(
-                    "vkResetCommandPool() in wait_frame failed with {} {}",
+                    "vkResetCommandPool() in acquire_frame_slot failed with {} {}",
                     static_cast<int32_t>(reset_result), c_str(reset_result)
                 );
                 abort();
@@ -1788,6 +1907,8 @@ auto Device_impl::wait_frame() -> bool
         // again from the start of vk_command_buffers.
         thread_pool.next_handle_index = 0;
     }
+    reset_frame_end_command_pool(slot);
+    reset_descriptor_pool(slot);
 
     // Read GPU timer results from the slice we are about to reuse. The
     // timeline-semaphore wait above has already guaranteed that this
@@ -1845,18 +1966,18 @@ auto Device_impl::wait_frame() -> bool
                     if ((begin_avail == 0) || (end_avail == 0)) {
                         continue;
                     }
-                    Gpu_timer_impl* timer = nullptr;
-                    {
-                        const std::lock_guard<std::mutex> lock{m_gpu_timer_mutex};
-                        timer = m_gpu_timer_by_index[i];
-                    }
-                    if (timer == nullptr) {
-                        continue;
-                    }
                     const uint64_t delta_ticks =
                         ((end_ts & m_gpu_timer_valid_mask) - (begin_ts & m_gpu_timer_valid_mask))
                         & m_gpu_timer_valid_mask;
                     const double   delta_ns    = static_cast<double>(delta_ticks) * m_gpu_timer_timestamp_period;
+                    // Stored with the mutex held: the timer destructor
+                    // unhooks the timer under the same mutex, so a timer
+                    // being destroyed on another thread is never written.
+                    const std::lock_guard<std::mutex> lock{m_gpu_timer_mutex};
+                    Gpu_timer_impl* const timer = m_gpu_timer_by_index[i];
+                    if (timer == nullptr) {
+                        continue;
+                    }
                     timer->store_last_result_ns(static_cast<uint64_t>(delta_ns));
                 }
             }
@@ -1866,7 +1987,11 @@ auto Device_impl::wait_frame() -> bool
         m_gpu_timer_reset_pending[slot] = true;
     }
 
-    set_state(Device_frame_state::waited, "wait_frame");
+    {
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        m_prepare_frame_id = frame_id;
+    }
+    set_state(frame_id, Device_frame_state::waited, "acquire_frame_slot");
     return true;
 }
 
@@ -1875,22 +2000,26 @@ auto Device_impl::begin_frame() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-    ERHE_VULKAN_SYNC_TRACE("[FRAME_BEGIN] frame_index={}", m_frame_index);
+    erhe::utility::Thread_roles::assert_render_thread();
+    // The legacy shim acts on the oldest open frame.
+    const uint64_t frame_id = m_render_frame_id;
+    const size_t   slot     = get_frame_slot_index(frame_id);
+    ERHE_VERIFY(m_frame_slots[slot].state == Device_frame_state::waited);
+    ERHE_VERIFY(m_frame_slots[slot].frame_id == frame_id);
+    ERHE_VULKAN_SYNC_TRACE("[FRAME_BEGIN] frame_id={}", frame_id);
 
-    // CPU slot begin fallback for callers that skip wait_frame; the normal
-    // frame path opened the record there (do not wipe its wait stamps).
-    if (m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index)) == nullptr) {
-        m_device.get_frame_time_recorder().begin_frame(static_cast<std::int64_t>(m_frame_index)).cpu_slot_begin =
-            erhe::frame_pacing::Frame_time_recorder::now();
+    // CPU slot begin fallback for callers whose record was evicted; the
+    // normal frame path opened the record in Device::wait_for_frame_start
+    // (do not wipe its wait stamps).
+    erhe::frame_pacing::Frame_time_recorder& recorder = m_device.get_frame_time_recorder();
+    if (!recorder.contains(static_cast<std::int64_t>(frame_id))) {
+        recorder.begin_frame(static_cast<std::int64_t>(frame_id), erhe::frame_pacing::Frame_time_recorder::now());
     }
 
     // Open a device frame for recording with no swapchain involvement.
-    // Reset the per-frame descriptor pool, open the slot's primary
-    // command buffer for recording, and flip state. The caller may then
-    // nest a swapchain frame via begin_swapchain_frame.
-    reset_descriptor_pool();
-    m_had_swapchain_frame = false;
+    // Open the slot's primary command buffer for recording, and flip state
+    // (acquire_frame_slot reset the slot's descriptor pool). The caller may
+    // then nest a swapchain frame via begin_swapchain_frame.
 
     // Open the slot's device command buffer. The slot must have been
     // primed exactly once before begin_frame: either by
@@ -1902,7 +2031,6 @@ auto Device_impl::begin_frame() -> bool
     // point. The assert catches future regressions of the slot-priming
     // contract immediately, instead of letting cb=NULL propagate into
     // get_device_frame_command_buffer warnings tens of upload sites later.
-    const size_t slot = static_cast<size_t>(get_frame_in_flight_index());
     Device_frame_in_flight& df = m_device_submit_history[slot];
     ERHE_VERIFY(df.command_buffer != VK_NULL_HANDLE);
     const VkCommandBufferBeginInfo begin_info{
@@ -1925,7 +2053,7 @@ auto Device_impl::begin_frame() -> bool
         }
     }
 
-    set_state(Device_frame_state::recording, "begin_frame");
+    set_state(frame_id, Device_frame_state::recording, "begin_frame");
     return true;
 }
 
@@ -1943,54 +2071,64 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 
 auto Device_impl::end_frame() -> bool
 {
+    return end_frame(m_render_frame_id);
+}
+
+auto Device_impl::end_frame(const uint64_t frame_id) -> bool
+{
     ERHE_PROFILE_FUNCTION();
 
-    // CONTRACT: end_frame advances the frame index. That is its ONLY job.
+    // CONTRACT: end_frame ends the oldest open frame. That is its ONLY job.
     //
-    // It does not submit any command buffer, it does not present any
-    // swapchain image, and it does not touch any GPU resource other
-    // than the device-owned timeline semaphore that update_frame_completion
-    // signals. Callers must have already submitted every cb they
+    // It submits no caller command buffer and presents no swapchain
+    // image; the only GPU work it issues is the device-owned frame-end cb
+    // (the frame bracket end timestamp, when the bracket is running) in
+    // the submit that signals the device timeline semaphore in
+    // update_frame_completion. Callers must have already submitted every cb they
     // recorded via Device::submit_command_buffers (which presents
     // implicitly when a cb engaged a swapchain via begin_swapchain).
     //
-    // Mechanics: update_frame_completion() submits an empty
-    // vkQueueSubmit2 that signals m_vulkan_frame_end_semaphore at the
-    // current m_frame_index, then increments m_frame_index. The next
-    // wait_frame() consults the timeline semaphore at value
-    // (m_frame_index - N) to gate per-(frame_in_flight, thread_slot)
-    // command-pool reset.
+    // Mechanics: update_frame_completion() submits a vkQueueSubmit2 (the
+    // frame-end cb or nothing) that signals m_vulkan_frame_end_semaphore at
+    // frame_id, then advances m_render_frame_id. The acquire_frame_slot()
+    // of frame_id + N consults the timeline semaphore at value frame_id to
+    // gate per-(frame_in_flight, thread_slot) command-pool reset.
+    erhe::utility::Thread_roles::assert_render_thread();
+    ERHE_VERIFY(frame_id == m_render_frame_id);
+    const Device_frame_slot& slot = m_frame_slots[get_frame_slot_index(frame_id)];
+    ERHE_VERIFY(slot.frame_id == frame_id);
     ERHE_VERIFY(
-        (m_state == Device_frame_state::in_swapchain_frame) ||
-        (m_state == Device_frame_state::recording) ||
-        (m_state == Device_frame_state::waited)
+        (slot.state == Device_frame_state::in_swapchain_frame) ||
+        (slot.state == Device_frame_state::recording) ||
+        (slot.state == Device_frame_state::waited)
     );
 
-    m_had_swapchain_frame = false;
-    if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
-        record->cpu_slot_end = erhe::frame_pacing::Frame_time_recorder::now();
-    }
-    if (m_frame_index == 240) {
+    m_device.get_frame_time_recorder().set(
+        static_cast<std::int64_t>(frame_id),
+        &erhe::frame_pacing::Frame_time_record::cpu_slot_end,
+        erhe::frame_pacing::Frame_time_recorder::now()
+    );
+    if (frame_id == 240) {
         // One-shot sanity line for the frame time records (P0.2 acceptance).
-        const erhe::frame_pacing::Frame_time_record* sample = m_device.get_frame_time_recorder().find(238);
-        if (sample != nullptr) {
+        erhe::frame_pacing::Frame_time_record sample{};
+        if (m_device.get_frame_time_recorder().get(238, sample)) {
             log_debug->info(
                 "frame time record sample (frame 238): cpu_slot_span={:.3f} ms cpu_service={:.3f} ms fence_wait={:.3f} ms acquire={:.3f} ms submit={} present_request={} gpu_span={:.3f} ms gpu_end_to_present={:.3f} ms",
-                sample->cpu_slot_span() * 1000.0,
-                sample->cpu_service_time() * 1000.0,
-                sample->fence_wait_duration * 1000.0,
-                (sample->acquire_end > sample->acquire_begin) ? (sample->acquire_end - sample->acquire_begin) * 1000.0 : 0.0,
-                sample->submit_time > 0.0,
-                sample->present_request_time > 0.0,
-                (sample->gpu_frame_end > sample->gpu_frame_begin) ? (sample->gpu_frame_end - sample->gpu_frame_begin) * 1000.0 : 0.0,
-                ((sample->achieved_present_time > 0.0) && (sample->gpu_frame_end > 0.0)) ? (sample->achieved_present_time - sample->gpu_frame_end) * 1000.0 : 0.0
+                sample.cpu_slot_span() * 1000.0,
+                sample.cpu_service_time() * 1000.0,
+                sample.fence_wait_duration * 1000.0,
+                (sample.acquire_end > sample.acquire_begin) ? (sample.acquire_end - sample.acquire_begin) * 1000.0 : 0.0,
+                sample.submit_time > 0.0,
+                sample.present_request_time > 0.0,
+                (sample.gpu_frame_end > sample.gpu_frame_begin) ? (sample.gpu_frame_end - sample.gpu_frame_begin) * 1000.0 : 0.0,
+                ((sample.achieved_present_time > 0.0) && (sample.gpu_frame_end > 0.0)) ? (sample.achieved_present_time - sample.gpu_frame_end) * 1000.0 : 0.0
             );
         }
     }
-    update_frame_completion();
+    update_frame_completion(frame_id);
 
-    ERHE_VULKAN_SYNC_TRACE("[FRAME_END] frame_index={}", m_frame_index);
-    set_state(Device_frame_state::idle, "end_frame");
+    ERHE_VULKAN_SYNC_TRACE("[FRAME_END] frame_id={}", frame_id);
+    set_state(frame_id, Device_frame_state::idle, "end_frame");
     return true;
 }
 
@@ -2001,7 +2139,7 @@ auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
     // Swapchain_impl::end_frame, but presentation has moved into
     // Device::submit_command_buffers (driven by Command_buffer::begin_swapchain).
     // The argument is now ignored; both overloads have identical
-    // behaviour: advance frame index. This overload is kept only so
+    // behaviour: end the oldest open frame. This overload is kept only so
     // existing call sites compile while they migrate to the no-args form.
     static_cast<void>(frame_end_info);
     return end_frame();
@@ -2019,7 +2157,19 @@ auto Device_impl::recreate_surface_for_new_window() -> bool
 
 void Device_impl::wait_idle()
 {
-    const VkResult result = vkDeviceWaitIdle(m_vulkan_device);
+    // m_render_frame_id is the oldest open frame (or the next one); frames
+    // strictly less than it have ended (their final submit, the timeline
+    // signal, is queued). Read before the wait: a frame the other role
+    // ends during the wait may still be running on the GPU after it.
+    uint64_t render_frame_id  = 0;
+    bool     any_frame_open   = false;
+    {
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        render_frame_id = m_render_frame_id;
+        any_frame_open  = (m_prepare_frame_id >= m_render_frame_id);
+    }
+
+    const VkResult result = device_wait_idle();
     if (result != VK_SUCCESS) {
         log_context->error(
             "vkDeviceWaitIdle() failed with {} {}",
@@ -2028,47 +2178,63 @@ void Device_impl::wait_idle()
         report_device_fault("wait_idle vkDeviceWaitIdle");
     }
 
-    // Every frame submitted so far is guaranteed complete on the GPU.
-    // Drive frame_completed() up to the last submitted frame so ring
-    // buffers recycle and completion handlers fire.
-    //
-    // m_frame_index is the next frame to be submitted; frames strictly
-    // less than m_frame_index have already called update_frame_completion()
-    // (which does ++m_frame_index). update_frame_completion() also advances
-    // m_latest_completed_frame as the GPU timeline semaphore reports
-    // completion; here we just force-complete everything up to the latest
-    // submitted.
-    if (m_frame_index > 0) {
-        const uint64_t last_submitted = m_frame_index - 1;
-        for (; m_latest_completed_frame <= last_submitted; ++m_latest_completed_frame) {
-            frame_completed(m_latest_completed_frame);
-        }
+    // Every frame ended before the wait is complete on the GPU: retire them
+    // so ring buffers recycle and completion handlers fire.
+    // update_frame_completion() advances the same way as the GPU timeline
+    // semaphore reports completion; here everything up to the latest ended
+    // frame is forced.
+    if (render_frame_id > 0) {
+        complete_frames_through(render_frame_id - 1);
     }
 
-    // Anything left in m_completion_handlers is for a frame that never
-    // submitted - drain it too so staging buffers etc. are released.
-    for (const Completion_handler& entry : m_completion_handlers) {
-        entry.callback(*this);
+    // With no frame open, anything left in m_completion_handlers is for a
+    // frame that never ended - drain it too so staging buffers etc. are
+    // released. With a frame open its handlers stay: its command buffers
+    // may still be recording and its uploads may not be submitted yet.
+    if (!any_frame_open) {
+        drain_completion_handlers();
     }
-    m_completion_handlers.clear();
+}
+
+auto Device_impl::device_wait_idle() -> VkResult
+{
+    const std::lock_guard<std::mutex> queue_lock{m_queue_mutex};
+    return vkDeviceWaitIdle(m_vulkan_device);
+}
+
+auto Device_impl::get_queue_mutex() -> std::mutex&
+{
+    return m_queue_mutex;
 }
 
 auto Device_impl::is_in_swapchain_frame() const -> bool
 {
-    return m_state == Device_frame_state::in_swapchain_frame;
+    return m_frame_slots[get_frame_slot_index(m_render_frame_id)].state == Device_frame_state::in_swapchain_frame;
 }
 
-void Device_impl::update_frame_completion()
+void Device_impl::update_frame_completion(const uint64_t frame_id)
 {
     ERHE_PROFILE_FUNCTION();
 
     VkResult result = VK_SUCCESS;
 
+    // The frame's final submit: the timeline signal, plus the frame-end cb
+    // carrying the frame bracket end timestamp when the bracket is running.
+    // Being last on the queue, its bottom-of-pipe timestamp lands after
+    // every earlier submit of the frame.
+    const VkCommandBuffer frame_end_command_buffer = record_frame_bracket_end(frame_id);
+    const VkCommandBufferSubmitInfo frame_end_command_buffer_info{
+        .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .pNext         = nullptr,
+        .commandBuffer = frame_end_command_buffer,
+        .deviceMask    = 0,
+    };
+    const bool has_frame_end_command_buffer = (frame_end_command_buffer != VK_NULL_HANDLE);
     const VkSemaphoreSubmitInfo signal_semaphore_info{
         .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .pNext       = nullptr,
         .semaphore   = m_vulkan_frame_end_semaphore,
-        .value       = m_frame_index,
+        .value       = frame_id,
         .stageMask   = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
         .deviceIndex = 0,
     };
@@ -2078,14 +2244,15 @@ void Device_impl::update_frame_completion()
         .flags                    = 0,
         .waitSemaphoreInfoCount   = 0,
         .pWaitSemaphoreInfos      = nullptr,
-        .commandBufferInfoCount   = 0,
-        .pCommandBufferInfos      = nullptr,
+        .commandBufferInfoCount   = has_frame_end_command_buffer ? 1u : 0u,
+        .pCommandBufferInfos      = has_frame_end_command_buffer ? &frame_end_command_buffer_info : nullptr,
         .signalSemaphoreInfoCount = 1,
         .pSignalSemaphoreInfos    = &signal_semaphore_info,
     };
-    ERHE_VULKAN_TRACE("vkQueueSubmit2() end of frame timeline semaphore @ frame index = {}", m_frame_index);
+    ERHE_VULKAN_TRACE("vkQueueSubmit2() end of frame timeline semaphore @ frame id = {}", frame_id);
     {
         ERHE_PROFILE_SCOPE("vkQueueSubmit2");
+        const std::lock_guard<std::mutex> queue_lock{m_queue_mutex};
         result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
         if (result != VK_SUCCESS) {
             log_context->critical("vkQueueSubmit2() failed with {} {}", static_cast<int32_t>(result), c_str(result));
@@ -2094,11 +2261,15 @@ void Device_impl::update_frame_completion()
         }
     }
 
-    ++m_frame_index;
+    ERHE_VERIFY(frame_id == m_render_frame_id);
+    {
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        ++m_render_frame_id;
+    }
     ERHE_VULKAN_SYNC_TRACE(
-        "[FRAME_INDEX] advanced to {} (slot now {})",
-        m_frame_index,
-        m_frame_index % get_number_of_frames_in_flight()
+        "[FRAME_INDEX] render frame advanced to {} (slot now {})",
+        m_render_frame_id,
+        get_frame_slot_index(m_render_frame_id)
     );
 
     uint64_t latest_completed_frame{0};
@@ -2109,10 +2280,7 @@ void Device_impl::update_frame_completion()
     if (result != VK_SUCCESS) {
         log_context->error("vkGetSemaphoreCounterValue() failed with {} {}", static_cast<int32_t>(result), c_str(result));
     } else {
-        for (; m_latest_completed_frame <= latest_completed_frame; ++m_latest_completed_frame) {
-            // log_context->trace("GPU has completed frame index = {}", m_latest_completed_frame);
-            frame_completed(m_latest_completed_frame);
-        }
+        complete_frames_through(latest_completed_frame);
     }
 }
 
@@ -2124,7 +2292,6 @@ auto Device_impl::allocate_ring_buffer_entry(
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_need_sync = true;
     const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
     return m_ring_buffer_pool.allocate(required_alignment, ring_buffer_usage, byte_count);
 }
@@ -2414,7 +2581,29 @@ auto Device_impl::get_sync_pool() -> Device_sync_pool&
 auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
 {
     ERHE_VERIFY(thread_slot < s_number_of_thread_slots);
-    const size_t frame_slot = static_cast<size_t>(get_frame_in_flight_index());
+    // The calling role records only into the frame it works on, and only
+    // while that frame is open: its slot is waited or recording and held
+    // by that frame (doc/erhe/graphics.md "Frame lifecycle").
+    const uint64_t           frame_id   = get_frame_index();
+    const size_t             frame_slot = get_frame_slot_index(frame_id);
+    const Device_frame_slot& slot_state = m_frame_slots[frame_slot];
+    if (
+        (slot_state.frame_id != frame_id) ||
+        (
+            (slot_state.state != Device_frame_state::waited) &&
+            (slot_state.state != Device_frame_state::recording) &&
+            (slot_state.state != Device_frame_state::in_swapchain_frame)
+        )
+    ) {
+        ERHE_FATAL(
+            "get_command_buffer(%u): frame %llu is not open (slot %zu state %s, holds frame %llu)",
+            thread_slot,
+            static_cast<unsigned long long>(frame_id),
+            frame_slot,
+            c_str(slot_state.state),
+            static_cast<unsigned long long>(slot_state.frame_id)
+        );
+    }
     Per_thread_command_pool& pool = m_command_pools[frame_slot][thread_slot];
     ERHE_VERIFY(pool.command_pool != VK_NULL_HANDLE);
 
@@ -2458,6 +2647,7 @@ auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer
 
     auto command_buffer = std::make_unique<Command_buffer>(m_device, label);
     command_buffer->get_impl().set_vulkan_command_buffer(vk_command_buffer);
+    command_buffer->get_impl().set_frame_id(frame_id);
 
     // Implicit per-cb sync primitives, owned for the lifetime of the
     // wrapper (until the per-thread pool is reset on the next frame
@@ -2480,24 +2670,6 @@ auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer
     return *pool.allocated_command_buffers.back();
 }
 
-auto Device_impl::get_active_render_pass() const -> VkRenderPass
-{
-    if (m_active_render_pass != nullptr) {
-        return m_active_render_pass->m_render_pass;
-    }
-    return VK_NULL_HANDLE;
-}
-
-auto Device_impl::get_active_render_pass_impl() const -> Render_pass_impl*
-{
-    return m_active_render_pass;
-}
-
-void Device_impl::set_active_render_pass_impl(Render_pass_impl* render_pass_impl)
-{
-    m_active_render_pass = render_pass_impl;
-}
-
 auto Device_impl::get_number_of_frames_in_flight() const -> size_t
 {
     return s_number_of_frames_in_flight;
@@ -2505,20 +2677,24 @@ auto Device_impl::get_number_of_frames_in_flight() const -> size_t
 
 auto Device_impl::get_frame_index() const -> uint64_t
 {
-    return m_frame_index;
-}
-
-auto Device_impl::get_frame_in_flight_index() const -> uint64_t
-{
-    return m_frame_index % get_number_of_frames_in_flight();
+    return erhe::utility::Thread_roles::is_render_role() ? m_render_frame_id : get_prepare_frame_id();
 }
 
 auto Device_impl::is_frame_completed(const uint64_t frame) const -> bool
 {
     // m_latest_completed_frame is one past the last frame the GPU has
-    // retired: both advancing loops (update_frame_completion() and
-    // wait_for_idle()) leave it at completed + 1.
+    // retired: complete_frames_through() (update_frame_completion() and
+    // wait_idle()) leaves it at completed + 1.
+    const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
     return frame < m_latest_completed_frame;
+}
+
+auto Device_impl::is_frame_ended(const uint64_t frame) const -> bool
+{
+    // m_render_frame_id is the oldest open frame (or the next one to be
+    // acquired): every frame before it has ended.
+    const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+    return frame < m_render_frame_id;
 }
 
 auto Device_impl::are_gpu_timers_supported() const -> bool
@@ -2548,6 +2724,28 @@ auto Device_impl::allocate_gpu_timer_slot(Gpu_timer_impl* timer) -> int
     return -1;
 }
 
+void Device_impl::retire_gpu_timer_slot(const int slot)
+{
+    if ((slot < 0) || (static_cast<std::size_t>(slot) >= s_max_gpu_timers)) {
+        return;
+    }
+    {
+        // Unhook the timer at once: acquire_frame_slot stores no result into
+        // it after this.
+        const std::lock_guard<std::mutex> lock{m_gpu_timer_mutex};
+        m_gpu_timer_by_index[static_cast<std::size_t>(slot)] = nullptr;
+    }
+    // The slot stays in use until the frame current now completes: a
+    // command buffer of this frame (or of the other role's older frame) may
+    // have recorded timestamps into it, which a new timer given the slot
+    // must not see.
+    add_completion_handler(
+        [slot](Device_impl& device_impl) {
+            device_impl.release_gpu_timer_slot(slot);
+        }
+    );
+}
+
 void Device_impl::release_gpu_timer_slot(int slot)
 {
     if (slot < 0) {
@@ -2565,12 +2763,12 @@ void Device_impl::release_gpu_timer_slot(int slot)
     }
 }
 
-void Device_impl::record_gpu_timer_begin_query(VkCommandBuffer cb, int slot)
+void Device_impl::record_gpu_timer_begin_query(VkCommandBuffer cb, const uint64_t frame_id, int slot)
 {
     if ((slot < 0) || !m_gpu_timers_supported || (m_gpu_timer_query_pool == VK_NULL_HANDLE)) {
         return;
     }
-    const std::size_t in_flight = static_cast<std::size_t>(get_frame_in_flight_index());
+    const std::size_t in_flight = get_frame_slot_index(frame_id);
     const std::size_t index     = static_cast<std::size_t>(slot);
     const std::size_t slice_size = s_max_gpu_timers * 2;
     const std::size_t query_idx  = in_flight * slice_size + index * 2;
@@ -2586,12 +2784,12 @@ void Device_impl::record_gpu_timer_begin_query(VkCommandBuffer cb, int slot)
     );
 }
 
-void Device_impl::record_gpu_timer_end_query(VkCommandBuffer cb, int slot)
+void Device_impl::record_gpu_timer_end_query(VkCommandBuffer cb, const uint64_t frame_id, int slot)
 {
     if ((slot < 0) || !m_gpu_timers_supported || (m_gpu_timer_query_pool == VK_NULL_HANDLE)) {
         return;
     }
-    const std::size_t in_flight = static_cast<std::size_t>(get_frame_in_flight_index());
+    const std::size_t in_flight = get_frame_slot_index(frame_id);
     const std::size_t index     = static_cast<std::size_t>(slot);
     const std::size_t slice_size = s_max_gpu_timers * 2;
     const std::size_t query_idx  = in_flight * slice_size + index * 2 + 1;
@@ -2813,33 +3011,36 @@ auto Device_impl::is_host_time_domain(const VkTimeDomainKHR domain) const -> boo
     return false;
 }
 
-void Device_impl::refresh_host_time_domain_offsets()
+void Device_impl::refresh_host_time_domain_offsets(const uint64_t started_frame_id)
 {
     if (m_host_time_domains.empty()) {
         return;
     }
-    if (m_host_time_domain_offsets_valid && ((m_frame_index - m_host_time_domain_offset_frame) < 120)) {
+    if (m_host_time_domain_offsets_valid && ((started_frame_id - m_host_time_domain_offset_frame) < 120)) {
         return;
     }
+    // Measure outside the lock (the domain and tick rate of each entry are
+    // fixed after init); publish the offsets under it.
     for (Host_time_domain& entry : m_host_time_domains) {
         double offset_seconds = 0.0;
         if (measure_host_time_domain_offset(entry.domain, entry.ticks_per_second, offset_seconds)) {
+            const std::lock_guard<std::mutex> lock{m_time_calibration_mutex};
             entry.offset_seconds = offset_seconds;
         }
     }
-    m_host_time_domain_offset_frame  = m_frame_index;
+    m_host_time_domain_offset_frame  = started_frame_id;
     m_host_time_domain_offsets_valid = true;
 }
 
-void Device_impl::update_gpu_calibration()
+void Device_impl::update_gpu_calibration(const uint64_t started_frame_id)
 {
     ERHE_PROFILE_FUNCTION();
 
-    refresh_host_time_domain_offsets();
+    refresh_host_time_domain_offsets(started_frame_id);
     if (!m_capabilities.m_calibrated_timestamps || !m_gpu_timers_supported) {
         return;
     }
-    if (m_gpu_calibration_valid && ((m_frame_index - m_gpu_calibration_frame) < 120)) {
+    if (m_gpu_calibration_valid && ((started_frame_id - m_gpu_calibration_frame) < 120)) {
         return;
     }
     const PFN_vkGetCalibratedTimestampsKHR get_calibrated_timestamps =
@@ -2870,14 +3071,16 @@ void Device_impl::update_gpu_calibration()
         log_context->warn("vkGetCalibratedTimestamps() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         return;
     }
+    const std::lock_guard<std::mutex> lock{m_time_calibration_mutex};
     m_gpu_calibration_device_ticks = timestamps[0];
-    m_gpu_calibration_host_seconds = host_calibrated_value_to_seconds(timestamps[1]);
-    m_gpu_calibration_frame        = m_frame_index;
+    m_gpu_calibration_host_seconds = host_domain_value_to_seconds_locked(m_calibrated_host_time_domain, timestamps[1]);
+    m_gpu_calibration_frame        = started_frame_id;
     m_gpu_calibration_valid        = true;
 }
 
 auto Device_impl::gpu_ticks_to_reference_seconds(const uint64_t ticks) const -> double
 {
+    const std::lock_guard<std::mutex> lock{m_time_calibration_mutex};
     const double delta_ticks = static_cast<double>(
         static_cast<int64_t>(ticks - m_gpu_calibration_device_ticks)
     );
@@ -2885,6 +3088,12 @@ auto Device_impl::gpu_ticks_to_reference_seconds(const uint64_t ticks) const -> 
 }
 
 auto Device_impl::host_domain_value_to_seconds(const VkTimeDomainKHR domain, const uint64_t value) const -> double
+{
+    const std::lock_guard<std::mutex> lock{m_time_calibration_mutex};
+    return host_domain_value_to_seconds_locked(domain, value);
+}
+
+auto Device_impl::host_domain_value_to_seconds_locked(const VkTimeDomainKHR domain, const uint64_t value) const -> double
 {
     for (const Host_time_domain& entry : m_host_time_domains) {
         if (entry.domain == domain) {
@@ -2896,6 +3105,7 @@ auto Device_impl::host_domain_value_to_seconds(const VkTimeDomainKHR domain, con
 
 auto Device_impl::reference_seconds_to_host_domain_value(const VkTimeDomainKHR domain, const double seconds) const -> uint64_t
 {
+    const std::lock_guard<std::mutex> lock{m_time_calibration_mutex};
     for (const Host_time_domain& entry : m_host_time_domains) {
         if (entry.domain == domain) {
             const double domain_seconds = seconds - entry.offset_seconds;
@@ -2918,30 +3128,74 @@ auto Device_impl::reference_seconds_to_host_calibrated_value(const double second
     return reference_seconds_to_host_domain_value(m_calibrated_host_time_domain, seconds);
 }
 
-void Device_impl::record_frame_bracket_begin(VkCommandBuffer cb)
+void Device_impl::record_frame_bracket_begin(VkCommandBuffer cb, const uint64_t frame_id)
 {
-    if (!m_frame_bracket_enabled || m_frame_bracket_begun) {
+    const std::size_t in_flight_slot = get_frame_slot_index(frame_id);
+    if (!m_frame_bracket_enabled || m_frame_bracket_begun[in_flight_slot]) {
         return;
     }
-    const std::size_t slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
+    const std::size_t slot = static_cast<std::size_t>(frame_id % s_frame_bracket_ring);
     // Bottom-of-pipe begin: fires when previously submitted work has drained,
     // i.e. when the GPU actually becomes free to start this frame (execution
     // span, not queued span). See doc/frame_pacing/inputs.md section 3.3.
     vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pools[slot], 0);
-    m_frame_bracket_begun = true;
+    m_frame_bracket_begun[in_flight_slot] = true;
 }
 
-void Device_impl::record_frame_bracket_end(VkCommandBuffer cb)
+auto Device_impl::record_frame_bracket_end(const uint64_t frame_id) -> VkCommandBuffer
 {
-    if (!m_frame_bracket_enabled || !m_frame_bracket_begun || m_frame_bracket_ended) {
+    const std::size_t in_flight_slot = get_frame_slot_index(frame_id);
+    if (!m_frame_bracket_enabled || !m_frame_bracket_begun[in_flight_slot]) {
+        return VK_NULL_HANDLE;
+    }
+    // acquire_frame_slot reset this frame-in-flight slot's frame-end pool, so the
+    // cb is in the initial state.
+    const VkCommandBuffer cb             = m_frame_end_command_buffers[in_flight_slot];
+    ERHE_VERIFY(cb != VK_NULL_HANDLE);
+    const VkCommandBufferBeginInfo begin_info{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext            = nullptr,
+        .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo = nullptr
+    };
+    const VkResult begin_result = vkBeginCommandBuffer(cb, &begin_info);
+    if (begin_result != VK_SUCCESS) {
+        log_context->critical(
+            "vkBeginCommandBuffer() for frame-end cb failed with {} {}",
+            static_cast<int32_t>(begin_result), c_str(begin_result)
+        );
+        abort();
+    }
+    const std::size_t bracket_slot = static_cast<std::size_t>(frame_id % s_frame_bracket_ring);
+    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pools[bracket_slot], 1);
+    const VkResult end_result = vkEndCommandBuffer(cb);
+    if (end_result != VK_SUCCESS) {
+        log_context->critical(
+            "vkEndCommandBuffer() for frame-end cb failed with {} {}",
+            static_cast<int32_t>(end_result), c_str(end_result)
+        );
+        abort();
+    }
+    return cb;
+}
+
+void Device_impl::reset_frame_end_command_pool(const std::size_t in_flight_slot)
+{
+    const VkCommandPool pool = m_frame_end_command_pools[in_flight_slot];
+    if (pool == VK_NULL_HANDLE) {
         return;
     }
-    const std::size_t slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
-    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pools[slot], 1);
-    m_frame_bracket_ended = true;
+    const VkResult result = vkResetCommandPool(m_vulkan_device, pool, 0);
+    if (result != VK_SUCCESS) {
+        log_context->critical(
+            "vkResetCommandPool() for frame-end pool failed with {} {}",
+            static_cast<int32_t>(result), c_str(result)
+        );
+        abort();
+    }
 }
 
-void Device_impl::poll_frame_bracket_results()
+void Device_impl::poll_frame_bracket_results(const uint64_t started_frame_id)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -2950,7 +3204,9 @@ void Device_impl::poll_frame_bracket_results()
     }
     for (std::size_t slot = 0; slot < s_frame_bracket_ring; ++slot) {
         const std::int64_t frame_id = m_frame_bracket_frame_id[slot];
-        if ((frame_id < 0) || (frame_id == static_cast<std::int64_t>(m_frame_index))) {
+        // Slots of frames not yet ended may be read here (availability is
+        // checked); the started frame's own slot has not been reset yet.
+        if ((frame_id < 0) || (frame_id >= static_cast<std::int64_t>(started_frame_id))) {
             continue;
         }
         uint64_t data[4] = {0, 0, 0, 0}; // (value, availability) x 2
@@ -2972,20 +3228,21 @@ void Device_impl::poll_frame_bracket_results()
         }
         const uint64_t begin_ticks = data[0] & m_gpu_timer_valid_mask;
         const uint64_t end_ticks   = data[2] & m_gpu_timer_valid_mask;
-        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(frame_id)) {
-            record->gpu_frame_begin = gpu_ticks_to_reference_seconds(begin_ticks);
-            record->gpu_frame_end   = gpu_ticks_to_reference_seconds(end_ticks);
-        }
+        m_device.get_frame_time_recorder().set(
+            frame_id,
+            &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_ticks_to_reference_seconds(begin_ticks),
+            &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_ticks_to_reference_seconds(end_ticks)
+        );
         m_frame_bracket_frame_id[slot] = -1;
     }
 }
 
-void Device_impl::maybe_reset_gpu_timer_slice(VkCommandBuffer cb)
+void Device_impl::maybe_reset_gpu_timer_slice(VkCommandBuffer cb, const uint64_t frame_id)
 {
     if (!m_gpu_timers_supported || (m_gpu_timer_query_pool == VK_NULL_HANDLE)) {
         return;
     }
-    const std::size_t in_flight = static_cast<std::size_t>(get_frame_in_flight_index());
+    const std::size_t in_flight = get_frame_slot_index(frame_id);
     bool need_reset = false;
     {
         const std::lock_guard<std::mutex> lock{m_gpu_timer_mutex};

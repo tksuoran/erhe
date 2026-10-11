@@ -95,7 +95,7 @@ out of the scene. So a cached reference must handle BOTH.
   no manager lookups, no linear scans - because undoing a large import
   announces thousands of items in one message.
 - The message is published once per frame by
-  `Asset_manager::flush_pending_removals()`, from `Editor::tick` just before
+  `Asset_manager::flush_pending_removals()`, from `Editor::frame_prepare_phase()` just before
   the message bus pump. The producers are the content-library detach walk
   (`release_host_for_subtree`), `Item_insert_remove_operation`, and
   `Asset_manager::on_scene_unregistered` - so no new removal path needs its
@@ -109,6 +109,38 @@ out of the scene. So a cached reference must handle BOTH.
   running editor over MCP) and the `get_editor_references` MCP query, which
   reports every such cached reference. See
   `doc/editor/import_undo_reference_clearing.md`.
+
+## ImGui-time work
+
+A window's `imgui()`, a menu entry and a host begin callback run inside the
+ImGui iteration of the main thread's prepare phase, and under the render
+thread plan they will run while the render phase renders the same frame
+(`doc/editor/render_thread.md` section 2.6). Code there reads and writes ImGui
+state and the live editor state the windows own; it does not create windows,
+viewports or rendergraph nodes, record GPU work, run a blocking load, or
+mutate an object the render phase reads (a rendergraph node's material,
+size, enabled flag or connections, a renderer's selection). Such work is
+deferred in one of two ways:
+
+- `App_context::imgui_windows->queue([...] { ... })`: a one-shot operation
+  the editor runs at the start of the next frame's prepare phase
+  (`Imgui_windows::flush_queue`, `doc/editor/editor.md` "Frame phases and the
+  render thread"), with the upload command buffer open. Menu commands, the
+  Operations window's buttons and parameterized invokers, the Item tree's
+  context menu operations, the asset browser's inline imports, the Create
+  window's rendertarget button and the indirect diffuse source / merge mode
+  combos use it.
+- A request the owner serves in its own prepare phase step: the Properties
+  material preview (`Material_preview::request_preview` -> `update`), the
+  BRDF slice (`Brdf_slice::show_brdf_slice` -> `update`), the Depth
+  Visualization window (`set_shadow_renderer_node`, the light slot, the size
+  and enabled -> `update`), the Lightmap window's buttons (request flags ->
+  `update`) and undo / redo (`Operation_stack::queue_undo` / `queue_redo`,
+  served by `Operation_stack::update` before the queued operations).
+
+The ImGui-time draw of a texture passes it as a `Texture_reference`, which
+the ImGui host resolves in the render phase; after a resize the window shows
+the previous render for one frame.
 
 ## Config JSON formatting
 

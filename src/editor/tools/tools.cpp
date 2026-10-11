@@ -37,6 +37,10 @@ void Tools::register_tool(Tool* tool)
     }
 }
 
+// The CPU phase of a view (no encoder): the tools record lines and labels
+// into the debug and text renderers. Runs on the main thread in M2
+// (Viewport_scene_view::record_view_tools); the headset view still runs it
+// inside the render phase.
 void Tools::render_viewport_tools(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();

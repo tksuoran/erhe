@@ -1,9 +1,12 @@
 #include "renderers/ray_trace_renderer.hpp"
+#include "renderers/ray_trace_scene.hpp"
 
 #include "app_context.hpp"
 #include "config/generated/ray_trace_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "renderers/render_settings.hpp"
+#include "renderers/render_texture_reference.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_graphics/bind_group_layout.hpp"
@@ -34,6 +37,7 @@
 #include "erhe_scene_renderer/material_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -73,12 +77,10 @@ Ray_trace_renderer::Ray_trace_renderer(
     erhe::graphics::Command_buffer&          init_command_buffer,
     App_context&                             context,
     erhe::scene_renderer::Program_interface& program_interface,
-    erhe::scene_renderer::Mesh_memory&       mesh_memory,
-    const Ray_trace_config&                  config
+    erhe::scene_renderer::Mesh_memory&       mesh_memory
 )
     : m_graphics_device{graphics_device}
     , m_context        {context}
-    , m_config         {config}
     , m_control_block{
         graphics_device,
         "ray_trace_control",
@@ -88,6 +90,14 @@ Ray_trace_renderer::Ray_trace_renderer(
 {
     using namespace erhe::graphics;
     using erhe::utility::Debug_label;
+
+    m_rendered_outputs.resize(graphics_device.get_number_of_frames_in_flight());
+    // Resolved by the render thread when it draws the Ray Trace window.
+    m_output_texture_reference = std::make_shared<Render_texture_reference>(
+        [this]() -> const erhe::graphics::Texture* {
+            return m_output_texture.get();
+        }
+    );
 
     // The compute shader fetches the committed triangle's positions for the
     // geometric normal: with position fetch straight from the acceleration
@@ -106,7 +116,6 @@ Ray_trace_renderer::Ray_trace_renderer(
     // ray-query consumers).
     m_scene_tlas = std::make_unique<Scene_tlas>(
         graphics_device,
-        mesh_memory,
         c_instance_record_binding_point,
         "Ray_trace_renderer"
     );
@@ -275,6 +284,11 @@ Ray_trace_renderer::Ray_trace_renderer(
 
 Ray_trace_renderer::~Ray_trace_renderer() noexcept = default;
 
+auto Ray_trace_renderer::get_config() const -> const Ray_trace_config&
+{
+    return m_context.render_settings->ray_trace;
+}
+
 auto Ray_trace_renderer::is_supported() const -> bool
 {
     return m_pipeline != nullptr;
@@ -282,46 +296,88 @@ auto Ray_trace_renderer::is_supported() const -> bool
 
 auto Ray_trace_renderer::is_enabled() const -> bool
 {
+    erhe::utility::Thread_roles::assert_main_thread();
     return m_enabled;
 }
 
 void Ray_trace_renderer::set_enabled(const bool enabled)
 {
+    erhe::utility::Thread_roles::assert_main_thread();
     m_enabled = enabled;
+}
+
+void Ray_trace_renderer::set_render_enabled(const bool enabled)
+{
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    m_render_enabled = enabled;
 }
 
 auto Ray_trace_renderer::get_output_texture() const -> std::shared_ptr<erhe::graphics::Texture>
 {
+    erhe::utility::Thread_roles::assert_render_thread();
     return m_output_texture;
 }
 
-auto Ray_trace_renderer::get_instance_count() const -> std::size_t
+auto Ray_trace_renderer::get_output_texture_reference() const -> const std::shared_ptr<erhe::graphics::Texture_reference>&
 {
-    return m_scene_tlas ? m_scene_tlas->get_instance_count() : 0;
+    return m_output_texture_reference;
 }
 
-auto Ray_trace_renderer::get_blas_count() const -> std::size_t
+auto Ray_trace_renderer::get_rendered_output(const std::optional<uint64_t> frame_index) const -> const Rendered_output*
 {
-    return m_scene_tlas ? m_scene_tlas->get_blas_count() : 0;
+    return m_rendered_outputs.find(frame_index);
 }
 
-auto Ray_trace_renderer::read_output_rgba8(std::vector<uint8_t>& out_pixels) -> bool
+void Ray_trace_renderer::publish_rendered_output()
+{
+    Rendered_output& output = m_rendered_outputs.write(m_graphics_device.get_frame_index());
+    output.width          = m_output_texture ? m_output_texture->get_width () : 0;
+    output.height         = m_output_texture ? m_output_texture->get_height() : 0;
+    output.instance_count = m_scene_tlas ? m_scene_tlas->get_instance_count() : 0;
+}
+
+auto Ray_trace_renderer::request_output_readback() -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_readback_mutex};
+    if ((m_readback_state == Readback_state::requested) || (m_readback_state == Readback_state::in_flight)) {
+        return false;
+    }
+    m_readback_pixels.clear();
+    m_readback_state = Readback_state::requested;
+    return true;
+}
+
+void Ray_trace_renderer::cancel_output_readback()
+{
+    const std::lock_guard<std::mutex> lock{m_readback_mutex};
+    if (m_readback_state == Readback_state::requested) {
+        m_readback_state = Readback_state::idle;
+    }
+}
+
+void Ray_trace_renderer::record_output_readback(erhe::graphics::Command_buffer& command_buffer)
 {
     using namespace erhe::graphics;
 
+    erhe::utility::Thread_roles::assert_render_thread();
+    const std::lock_guard<std::mutex> lock{m_readback_mutex};
+    if (m_readback_state != Readback_state::requested) {
+        return;
+    }
     if (!is_supported() || !m_output_texture) {
-        return false;
+        m_readback_state = Readback_state::failed;
+        return;
     }
     const int         width         = m_output_texture->get_width();
     const int         height        = m_output_texture->get_height();
     const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 4u;
     const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
 
-    // Self-contained mini-submit on a dedicated thread slot, mirroring
-    // Texture_renderer::render_and_read_rgba8: blit the output texture into a
-    // host-visible buffer, wait, map. The texture is transitioned back to
-    // shader_read_only_optimal so the ImGui display keeps working.
-    Buffer readback{
+    // Blit the output texture into a host-visible buffer in this frame's
+    // command buffer, after every pass of the frame that writes or samples
+    // it. The texture goes back to shader_read_only_optimal so the ImGui
+    // display keeps working.
+    m_readback_buffer = std::make_unique<Buffer>(
         m_graphics_device,
         Buffer_create_info{
             .capacity_byte_count                    = byte_count,
@@ -331,62 +387,82 @@ auto Ray_trace_renderer::read_output_rgba8(std::vector<uint8_t>& out_pixels) -> 
             .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
             .debug_label                            = erhe::utility::Debug_label{"ray trace readback"}
         }
-    };
-
-    constexpr unsigned int readback_thread_slot = 7;
-    Command_buffer& command_buffer = m_graphics_device.get_command_buffer(readback_thread_slot);
-    command_buffer.begin();
+    );
     command_buffer.transition_texture_layout(*m_output_texture, Image_layout::transfer_src_optimal);
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
             erhe::graphics::Texture_location{.texture = m_output_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
             glm::ivec3{width, height, 1},
-            erhe::graphics::Buffer_texel_location{.buffer = &readback, .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
+            erhe::graphics::Buffer_texel_location{.buffer = m_readback_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
         );
     }
     command_buffer.transition_texture_layout(*m_output_texture, Image_layout::shader_read_only_optimal);
-    command_buffer.end();
+    // Transfer writes -> host reads once the frame's fence has signalled.
+    command_buffer.memory_barrier(Memory_barrier_mask::client_mapped_buffer_barrier_bit);
 
-    erhe::graphics::Command_buffer* command_buffers[] = { &command_buffer };
-    m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{command_buffers});
-    m_graphics_device.wait_idle();
+    m_readback_width  = width;
+    m_readback_height = height;
+    m_readback_frame  = m_graphics_device.get_frame_index();
+    m_readback_state  = Readback_state::in_flight;
+}
 
-    const std::span<std::byte> mapped = readback.map_bytes(0, byte_count);
-    if (mapped.size() < byte_count) {
-        return false;
+auto Ray_trace_renderer::poll_output_readback() -> Readback_state
+{
+    const std::lock_guard<std::mutex> lock{m_readback_mutex};
+    if ((m_readback_state != Readback_state::in_flight) || !m_graphics_device.is_frame_completed(m_readback_frame)) {
+        return m_readback_state;
     }
-    out_pixels.resize(byte_count);
-    std::memcpy(out_pixels.data(), mapped.data(), byte_count);
-    readback.unmap();
-    return true;
+    const std::size_t          byte_count = static_cast<std::size_t>(m_readback_width) * static_cast<std::size_t>(m_readback_height) * 4u;
+    const std::span<std::byte> mapped     = m_readback_buffer->map_bytes(0, byte_count);
+    m_readback_buffer->invalidate(0, byte_count);
+    if (mapped.size() < byte_count) {
+        m_readback_buffer->unmap();
+        m_readback_buffer.reset();
+        m_readback_state = Readback_state::failed;
+        return m_readback_state;
+    }
+    m_readback_pixels.resize(byte_count);
+    std::memcpy(m_readback_pixels.data(), mapped.data(), byte_count);
+    m_readback_buffer->unmap();
+    m_readback_buffer.reset();
+    m_readback_state = Readback_state::complete;
+    return m_readback_state;
+}
+
+void Ray_trace_renderer::take_output_readback(std::vector<uint8_t>& out_pixels, int& out_width, int& out_height)
+{
+    const std::lock_guard<std::mutex> lock{m_readback_mutex};
+    ERHE_VERIFY(m_readback_state == Readback_state::complete);
+    out_pixels.swap(m_readback_pixels);
+    m_readback_pixels.clear();
+    out_width        = m_readback_width;
+    out_height       = m_readback_height;
+    m_readback_state = Readback_state::idle;
 }
 
 void Ray_trace_renderer::render(
     erhe::graphics::Command_buffer&                command_buffer,
     Scene_root&                                    scene_root,
-    const erhe::scene::Camera&                     camera,
+    const erhe::scene::Camera_snapshot&            camera,
     const erhe::math::Viewport&                    viewport,
     const erhe::scene_renderer::Light_projections* light_projections
 )
 {
     using namespace erhe::graphics;
 
-    if (!is_supported() || !m_enabled) {
+    if (!is_supported() || !m_render_enabled) {
         return;
     }
-    const erhe::scene::Projection* camera_projection = camera.projection();
-    const erhe::scene::Node*       camera_node       = &camera;
-    if ((camera_projection == nullptr) || (camera_node == nullptr)) {
-        return;
-    }
-    erhe::scene::Mesh_layer* content_layer = scene_root.layers().content();
-    if (content_layer == nullptr) {
-        return;
+    const Ray_trace_scene* ray_trace_scene = scene_root.get_ray_trace_scene();
+    if (ray_trace_scene == nullptr) {
+        return; // a root without device dependencies traces nothing
     }
     if ((viewport.width < 1) || (viewport.height < 1)) {
         return;
     }
+    // The prepare phase's view of the scene for this frame.
+    const Ray_trace_slot& slot = ray_trace_scene->get_slot(m_graphics_device.get_frame_index());
 
     // Output texture at the viewport's resolution divided by the configured
     // downscale factor (1 = one ray per viewport pixel, 2 = each traced
@@ -394,7 +470,7 @@ void Ray_trace_renderer::render(
     // recreated on resize / scale change (the Vulkan texture impl defers
     // the old image's destruction to frame completion, so in-flight frames
     // and the ImGui display holding the previous shared_ptr stay valid).
-    const float downscale     = std::clamp(m_config.downscale, 1.0f, 8.0f);
+    const float downscale     = std::clamp(get_config().downscale, 1.0f, 8.0f);
     const int   output_width  = std::max(1, static_cast<int>(static_cast<float>(viewport.width ) / downscale));
     const int   output_height = std::max(1, static_cast<int>(static_cast<float>(viewport.height) / downscale));
     if (!m_output_texture ||
@@ -404,7 +480,7 @@ void Ray_trace_renderer::render(
             m_graphics_device,
             Texture_create_info{
                 .device      = m_graphics_device,
-                // transfer_src backs read_output_rgba8() (MCP set_ray_trace save_path).
+                // transfer_src backs record_output_readback() (MCP set_ray_trace save_path).
                 .usage_mask  = Image_usage_flag_bit_mask::storage | Image_usage_flag_bit_mask::sampled | Image_usage_flag_bit_mask::transfer_src,
                 .type        = Texture_type::texture_2d,
                 .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
@@ -420,22 +496,23 @@ void Ray_trace_renderer::render(
     // (doc/erhe/draw_list_material_set.md D5, D6). This dispatch binds it and
     // the TLAS instance records name slots in it.
     erhe::scene_renderer::Material_set& material_set = scene_root.get_material_set();
-    if (material_set.get_live_count() == 0) {
+    if (slot.forward_material_live_count == 0) {
         // No materials means no shadeable content; keep the last output.
+        publish_rendered_output();
         return;
     }
 
-    // Acceleration structures + per-instance records for this frame (shared
-    // Scene_tlas helper: bottom level cache, per-frame-in-flight top level
-    // slot, instance record ring buffer).
-    Scene_tlas::Frame tlas_frame = m_scene_tlas->update(command_buffer, *content_layer, &material_set);
+    // Acceleration structures + per-instance records for this frame (the
+    // scene's shared bottom level structures, this renderer's per-frame-in-
+    // flight top level slot and instance record ring buffer).
+    Scene_tlas::Frame tlas_frame = m_scene_tlas->update(command_buffer, slot);
     ERHE_VERIFY(tlas_frame.is_valid());
 
     // Lights + ambient. Light_buffer::update() writes per-light data only
     // for lights present in light_projections (their world/texture
     // transforms come from there), so with no projections available pass no
     // lights - ambient still applies.
-    const glm::vec3 ambient_light = scene_root.get_scene().get_ambient_light();
+    const glm::vec3 ambient_light = scene_root.get_render_settings(m_graphics_device.get_frame_index()).ambient_light;
     Ring_buffer_range light_range = m_light_buffer->update(light_projections, ambient_light);
 
     // Runtime knobs from Ray_trace_config, clamped to sane / compile-time
@@ -443,8 +520,8 @@ void Ray_trace_renderer::render(
     Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, m_control_block.get_size_bytes());
     {
         std::span<std::byte> gpu_data    = control_range.get_span();
-        const uint32_t       max_rays    = static_cast<uint32_t>(std::clamp(m_config.max_rays,    1, 1024));
-        const uint32_t       max_bounces = static_cast<uint32_t>(std::clamp(m_config.max_bounces, 0, c_max_bounces));
+        const uint32_t       max_rays    = static_cast<uint32_t>(std::clamp(get_config().max_rays,    1, 1024));
+        const uint32_t       max_bounces = static_cast<uint32_t>(std::clamp(get_config().max_bounces, 0, c_max_bounces));
         std::memset(gpu_data.data(), 0, m_control_block.get_size_bytes());
         write(gpu_data, m_control_max_rays_offset,    as_span(max_rays));
         write(gpu_data, m_control_max_bounces_offset, as_span(max_bounces));
@@ -459,8 +536,7 @@ void Ray_trace_renderer::render(
     // path (composition_pass uses camera.get_exposure() the same way).
     const Device_info& info = m_graphics_device.get_info();
     Ring_buffer_range camera_range = m_camera_buffer->update(
-        *camera_projection,
-        *camera_node,
+        camera,
         viewport,
         camera.get_exposure(),
         erhe::scene_renderer::Grid_parameters{},
@@ -498,6 +574,7 @@ void Ray_trace_renderer::render(
     // The output becomes a sampled texture for the ImGui display.
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
     command_buffer.transition_texture_layout(*m_output_texture, Image_layout::shader_read_only_optimal);
+    publish_rendered_output();
 }
 
 } // namespace editor

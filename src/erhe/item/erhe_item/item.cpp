@@ -8,21 +8,28 @@
 #include <fmt/format.h>
 
 #include <filesystem>
+#include <mutex>
 #include <sstream>
 
 namespace erhe {
 
 namespace {
-uint64_t s_item_mutation_serial{0};
+// Items are created and flagged on any thread (the render thread creates
+// ImGui textures, asset loaders create items on workers) while the main
+// thread polls the serial, so the counter is mutex-protected.
+std::mutex s_item_mutation_serial_mutex;
+uint64_t   s_item_mutation_serial{0};
 }
 
 auto get_item_mutation_serial() -> uint64_t
 {
+    const std::lock_guard<std::mutex> lock{s_item_mutation_serial_mutex};
     return s_item_mutation_serial;
 }
 
 void bump_item_mutation_serial()
 {
+    const std::lock_guard<std::mutex> lock{s_item_mutation_serial_mutex};
     ++s_item_mutation_serial;
 }
 

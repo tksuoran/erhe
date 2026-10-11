@@ -38,7 +38,8 @@ public:
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Public API
-    [[nodiscard]] auto get_light_index() -> int&;
+    [[nodiscard]] auto get_light_index() const -> int { return m_light_index; }
+    void set_light_index(int light_index) { m_light_index = light_index; }
 
 private:
     erhe::scene_renderer::Forward_renderer& m_forward_renderer;
@@ -72,15 +73,26 @@ public:
     void imgui () override;
     void hidden() override;
 
+    // Main thread, M2: applies what imgui() requested (the shadow node to
+    // read, the light slot, the output size, enabled) to the render graph
+    // node, outside the ImGui iteration (doc/editor/render_thread.md section 2.6).
+    void update();
+
 private:
     void on_close_scene          (const std::shared_ptr<Scene_root>& scene_root);
-    void set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node);
+    void set_shadow_renderer_node  (const std::shared_ptr<Shadow_render_node>& shadow_node);
+    void apply_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node);
     [[nodiscard]] auto find_first_shadow_node(const Scene_root* scene_root) const -> std::shared_ptr<Shadow_render_node>;
     [[nodiscard]] auto view_combo(const Scene_root* scene_root) -> Shadow_render_node*;
 
     App_context&                                         m_context;
-    std::unique_ptr<Depth_to_color_rendergraph_node>     m_depth_to_color_node{};
-    std::weak_ptr<Shadow_render_node>                    m_shadow_renderer_node{};
+    std::shared_ptr<Depth_to_color_rendergraph_node>     m_depth_to_color_node{};
+    std::weak_ptr<Shadow_render_node>                    m_shadow_renderer_node{}; // the node connected (update)
+    std::weak_ptr<Shadow_render_node>                    m_requested_shadow_node{};
+    bool                                                 m_shadow_node_request_pending{false};
+    bool                                                 m_requested_enabled{false};
+    int                                                  m_requested_area_size{0};
+    int                                                  m_light_index{0};
     // weak_ptr so the window does not keep a closed scene alive; the
     // close_scene subscription clears it (doc/editor/coding_rules.md
     // "Scene-hosted references in editor parts").

@@ -24,9 +24,24 @@ Command_buffer::~Command_buffer() noexcept = default;
 Command_buffer::Command_buffer(Command_buffer&& other) noexcept = default;
 auto Command_buffer::operator=(Command_buffer&& other) noexcept -> Command_buffer& = default;
 
+auto Command_buffer::get_active_render_pass() const noexcept -> Render_pass*
+{
+    return m_active_render_pass;
+}
+
+void Command_buffer::set_active_render_pass(Render_pass* const render_pass) noexcept
+{
+    m_active_render_pass = render_pass;
+}
+
 auto Command_buffer::get_debug_label() const noexcept -> erhe::utility::Debug_label
 {
     return m_impl->get_debug_label();
+}
+
+auto Command_buffer::get_frame_id() const noexcept -> std::uint64_t
+{
+    return m_impl->get_frame_id();
 }
 
 void Command_buffer::begin()

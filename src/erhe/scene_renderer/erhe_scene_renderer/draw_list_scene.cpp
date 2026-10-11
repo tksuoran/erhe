@@ -23,6 +23,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <iterator>
@@ -256,6 +257,7 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     , m_primitive_record_stride{create_info.primitive_interface->primitive_struct.get_size_bytes()}
     , m_multiview_view_counts  {create_info.multiview_view_counts.begin(), create_info.multiview_view_counts.end()}
     , m_owner_thread_id        {std::this_thread::get_id()}
+    , m_exclude_unlit_from_shadows{create_info.exclude_unlit_from_shadows}
 {
     ERHE_VERIFY(create_info.mesh_memory          != nullptr);
     ERHE_VERIFY(create_info.shader_variant_cache != nullptr);
@@ -264,6 +266,15 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
 }
 
 Draw_list_scene::~Draw_list_scene() noexcept = default;
+
+void Draw_list_scene::assert_render_phase()
+{
+    // Drawing reads the lists publish() published in M2; it runs in the
+    // render phase, on the render thread (doc/editor/render_thread.md
+    // section 2.7).
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+}
 
 void Draw_list_scene::assert_main_thread() const
 {
@@ -299,6 +310,7 @@ void Draw_list_scene::release_object(const uint32_t object_index)
     object.alive            = false;
     ++object.generation;
     m_free_object_indices.push_back(object_index);
+    mark_shadow_bounds_changed();
 }
 
 auto Draw_list_scene::get_or_create_draw_list(const Draw_list_key& key) -> uint32_t
@@ -309,9 +321,20 @@ auto Draw_list_scene::get_or_create_draw_list(const Draw_list_key& key) -> uint3
     }
     const uint32_t index = static_cast<uint32_t>(m_draw_lists.size());
     m_draw_lists.emplace_back();
-    m_draw_lists.back().key = key;
+    Draw_list& draw_list = m_draw_lists.back();
+    draw_list.key      = key;
+    draw_list.identity = ++m_draw_list_identity;
+    draw_list.serial   = ++m_draw_list_serial;
     m_draw_list_index_by_key.emplace(key, index);
     return index;
+}
+
+auto Draw_list_scene::edit_draw_list(const uint32_t draw_list_index) -> Draw_list&
+{
+    ERHE_VERIFY(draw_list_index < m_draw_lists.size());
+    Draw_list& draw_list = m_draw_lists[draw_list_index];
+    draw_list.serial = ++m_draw_list_serial;
+    return draw_list;
 }
 
 void Draw_list_scene::add_entries(const uint32_t object_index)
@@ -321,6 +344,7 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
     Draw_list_object& object = m_objects[object_index];
     ERHE_VERIFY(object.alive);
     ERHE_VERIFY(object.locations.empty());
+    mark_shadow_bounds_changed();
     const erhe::scene::Mesh* mesh = object.info.mesh.get();
     ERHE_VERIFY(mesh != nullptr);
 
@@ -353,7 +377,7 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             key.primitive_key_hash   = classification.key.get_hash();
 
             const uint32_t draw_list_index = get_or_create_draw_list(key);
-            Draw_list&     draw_list       = m_draw_lists[draw_list_index];
+            Draw_list&     draw_list       = edit_draw_list(draw_list_index);
 
             const erhe::primitive::Buffer_mesh& buffer_mesh = *classification.buffer_mesh;
             Draw_list_entry entry{};
@@ -374,20 +398,13 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
                     .entry_index     = static_cast<uint32_t>(draw_list.entries.size())
                 }
             );
-            const bool first_entry = draw_list.entries.empty();
             draw_list.entries.push_back(entry);
             ERHE_VERIFY(draw_list.primitive_records.size() == (draw_list.entries.size() - 1) * m_primitive_record_stride);
             draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
             write_entry_record(object, entry, get_record(object.locations.back()));
-
-            // R17: resolve at registration (color: every enumerated view
-            // config, once the environment is known; shadow sub-variants
-            // resolve lazily on first use, R4a). A list that was empty has
-            // no valid cached resolution to reuse only if it is brand new;
-            // reused empty lists keep theirs.
-            if (first_entry && (purpose == Draw_purpose::color) && draw_list.color_resolutions.empty()) {
-                resolve_color_list(draw_list);
-            }
+            // The shader stages resolve in the render phase, at the list's
+            // first draw (R17): the color environment they combine with is
+            // the render phase's.
         }
     }
     write_object_bounds(object_index);
@@ -395,7 +412,7 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
 
 void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
 {
-    Draw_list& draw_list = m_draw_lists[location.draw_list_index];
+    Draw_list& draw_list = edit_draw_list(location.draw_list_index);
     ERHE_VERIFY(location.entry_index < draw_list.entries.size());
     const uint32_t last_index = static_cast<uint32_t>(draw_list.entries.size() - 1);
     if (location.entry_index != last_index) {
@@ -426,7 +443,7 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
 
 auto Draw_list_scene::get_record(const Draw_list_entry_location& location) -> std::byte*
 {
-    Draw_list& draw_list = m_draw_lists[location.draw_list_index];
+    Draw_list& draw_list = edit_draw_list(location.draw_list_index);
     ERHE_VERIFY(location.entry_index < draw_list.entries.size());
     ERHE_VERIFY(draw_list.primitive_records.size() == draw_list.entries.size() * m_primitive_record_stride);
     return draw_list.primitive_records.data() + static_cast<std::size_t>(location.entry_index) * m_primitive_record_stride;
@@ -571,7 +588,7 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     // fit bounds the object from its posed joints at gather time.
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
     for (const Draw_list_entry_location& location : object.locations) {
-        m_draw_lists[location.draw_list_index].entries[location.entry_index].world_aabb = world_aabb;
+        edit_draw_list(location.draw_list_index).entries[location.entry_index].world_aabb = world_aabb;
     }
     // The caster vertex shader's node-space input bound (Caster_vertex_extent).
     glm::vec3 node_abs_extent{0.0f};
@@ -586,6 +603,7 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
         node_abs_extent = glm::max(node_abs_extent, glm::max(glm::abs(node_aabb.min), glm::abs(node_aabb.max)));
     }
     object.node_abs_extent = node_abs_extent;
+    mark_shadow_bounds_changed();
 }
 
 void Draw_list_scene::write_object_transform(const uint32_t object_index)
@@ -600,9 +618,10 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
     for (const Draw_list_entry_location& location : object.locations) {
         write_transform_fields(get_record(location), offsets, *node);
-        m_draw_lists[location.draw_list_index].entries[location.entry_index].world_aabb = world_aabb;
+        edit_draw_list(location.draw_list_index).entries[location.entry_index].world_aabb = world_aabb;
     }
     object.transform_serial = node->node_data.transforms.world_from_node_serial;
+    mark_shadow_bounds_changed();
 }
 
 void Draw_list_scene::write_object_gpu_slots(const uint32_t object_index)
@@ -672,15 +691,15 @@ void Draw_list_scene::update_object_transform(const uint32_t object_index)
     ++m_transform_update_count;
 }
 
-void Draw_list_scene::sync_gpu_slots()
+void Draw_list_scene::sync_joint_slots()
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Materials need no sync any more: a cached record's material_index is
-    // this scene's own Material_set slot, assigned before the record was
-    // written and held for as long as the record exists (R2, R3). What is
-    // left is the joint half, whose slots are still assigned per
-    // Joint_buffer::update() call by the drawing renderer.
+    // Materials need no sync: a cached record's material_index is this
+    // scene's own Material_set slot, assigned before the record was written
+    // and held for as long as the record exists (R2, R3). What is left is the
+    // joint half: Joint_poses::capture() assigns each skin's slot when it
+    // captures the frame's poses, which the caller did before publish().
     for (const uint32_t object_index : m_skinned_object_indices) {
         const Draw_list_object& object = m_objects[object_index];
         ERHE_VERIFY(object.alive);
@@ -698,6 +717,7 @@ void Draw_list_scene::remove_entries(const uint32_t object_index)
     ERHE_PROFILE_FUNCTION();
 
     Draw_list_object& object = m_objects[object_index];
+    mark_shadow_bounds_changed();
     // Remove in reverse so that swap-removes inside the same list never
     // move an entry that this object still has to remove.
     while (!object.locations.empty()) {
@@ -1013,8 +1033,9 @@ void Draw_list_scene::set_object_flags(const Draw_list_object_id id, const uint6
     }
     object.flag_bits = item_flag_bits;
     for (const Draw_list_entry_location& location : object.locations) {
-        m_draw_lists[location.draw_list_index].entries[location.entry_index].flag_bits = item_flag_bits;
+        edit_draw_list(location.draw_list_index).entries[location.entry_index].flag_bits = item_flag_bits;
     }
+    mark_shadow_bounds_changed();
 }
 
 void Draw_list_scene::set_object_flags(const erhe::scene::Mesh* mesh, const uint64_t item_flag_bits)
@@ -1033,14 +1054,10 @@ void Draw_list_scene::set_exclude_unlit_from_shadows(const bool value)
     // Shadow list membership is baked into the cached entries; the flag only
     // takes effect once they are re-classified.
     //
-    // ENQUEUED, not applied here (D1d): the caller is Shadow_render_node,
-    // three lines before Shadow_renderer::render(), i.e. inside
-    // execute_rendergraph_node and after this frame's Material_set::update().
-    // Rebuilding there would take references that could assign a slot past the
-    // written copy, and would rewrite every cached record mid-frame after some
-    // viewport passes may already have consumed them. The consequence to
-    // accept is that the frame the user toggles the setting renders shadows
-    // with the previous caster classification, self-correcting on the next.
+    // ENQUEUED, not applied here (D1d): the next flush_pending() rebuilds,
+    // ahead of its queued register / unregister / refresh ops and before
+    // that frame's material set update, so every cached record and material
+    // slot of the frame comes from one classification.
     log_draw_list->info("Draw_list_scene: exclude unlit from shadows = {}; queueing draw list rebuild", value);
     enqueue_rebuild_all();
 }
@@ -1216,6 +1233,7 @@ void Draw_list_scene::flush_pending()
 {
     ERHE_PROFILE_FUNCTION();
     assert_main_thread();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
 
     std::vector<Pending_op>& ops = m_flushing;
     {
@@ -1330,14 +1348,86 @@ void Draw_list_scene::flush_pending()
     check_material_changes();
 }
 
-// --- Resolution ----------------------------------------------------------------
+// --- Publishing (prepare phase) -------------------------------------------------
 
-auto Draw_list_scene::get_object_mesh(const uint32_t object_index) const -> erhe::scene::Mesh*
+void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t frames_in_flight)
 {
-    ERHE_VERIFY(object_index < m_objects.size());
-    const Draw_list_object& object = m_objects[object_index];
-    ERHE_VERIFY(object.alive);
-    return object.info.mesh.get();
+    ERHE_PROFILE_FUNCTION();
+    assert_main_thread();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    ERHE_VERIFY(frames_in_flight > 0);
+
+    // The joint slots first: the rewrite bumps the serials of the lists it
+    // touches, so the copy below carries the frame's base_joint_index.
+    sync_joint_slots();
+
+    // The slot count is the device's frames in flight, fixed for the
+    // device's lifetime: sized once, so the render phase indexes a vector
+    // that never reallocates.
+    if (m_draw_list_slots.empty()) {
+        m_draw_list_slots.resize(frames_in_flight);
+    }
+    ERHE_VERIFY(m_draw_list_slots.size() == frames_in_flight);
+
+    Draw_list_slot& slot = m_draw_list_slots[frame_index % frames_in_flight];
+    slot.frame_index = frame_index;
+    slot.published   = true;
+    if ((slot.serial == m_draw_list_serial) && (slot.lists.size() == m_draw_lists.size())) {
+        return; // no list changed since this slot was last published
+    }
+    slot.serial = m_draw_list_serial;
+
+    // Lists are only ever appended, except by rebuild_all(), which recreates
+    // them all (new identities and serials, so every one is copied below).
+    // A grown slot list starts at serial 0, which no working list carries.
+    slot.lists.resize(m_draw_lists.size());
+    for (std::size_t i = 0, end = m_draw_lists.size(); i < end; ++i) {
+        const Draw_list& source      = m_draw_lists[i];
+        Draw_list&       destination = slot.lists[i];
+        if (destination.serial == source.serial) {
+            continue;
+        }
+        // The key is the list's identity: it changes only with the identity.
+        if (destination.identity != source.identity) {
+            destination.key      = source.key;
+            destination.identity = source.identity;
+        }
+        // assign() reuses the capacity the slot's copy already has.
+        destination.entries          .assign(source.entries.begin(),           source.entries.end());
+        destination.primitive_records.assign(source.primitive_records.begin(), source.primitive_records.end());
+        destination.serial = source.serial;
+        ++m_published_list_copy_count;
+    }
+}
+
+auto Draw_list_scene::get_published_draw_lists(const uint64_t frame_index) const -> const std::vector<Draw_list>&
+{
+    ERHE_VERIFY(!m_draw_list_slots.empty());
+    const Draw_list_slot& slot = m_draw_list_slots[frame_index % m_draw_list_slots.size()];
+    // The prepare phase of this frame published the slot (and the prepare
+    // phase of no later frame has reused it yet).
+    ERHE_VERIFY(slot.published && (slot.frame_index == frame_index));
+    return slot.lists;
+}
+
+// --- Resolution (render phase) --------------------------------------------------
+
+auto Draw_list_scene::get_resolutions(const std::size_t draw_list_index, const Draw_list& draw_list) -> Draw_list_resolutions&
+{
+    // Grows with the list count (lists are appended in the prepare phase);
+    // capacity is kept, so a steady state allocates nothing.
+    if (m_resolutions.size() <= draw_list_index) {
+        m_resolutions.resize(draw_list_index + 1);
+    }
+    Draw_list_resolutions& resolutions = m_resolutions[draw_list_index];
+    if (resolutions.identity != draw_list.identity) {
+        resolutions.identity      = draw_list.identity;
+        resolutions.color.clear();
+        resolutions.shadow        = {nullptr, nullptr, nullptr};
+        resolutions.color_failed  = false;
+        resolutions.shadow_failed = false;
+    }
+    return resolutions;
 }
 
 void Draw_list_scene::set_color_environment(const Color_environment& environment)
@@ -1349,15 +1439,19 @@ void Draw_list_scene::set_color_environment(const Color_environment& environment
     m_color_environment_set = true;
     ++m_color_environment_change_count;
     // R18/R21: only cached resolutions change - never list contents.
-    for (Draw_list& draw_list : m_draw_lists) {
-        draw_list.color_resolutions.clear();
-        draw_list.color_resolution_failed = false;
+    for (Draw_list_resolutions& resolutions : m_resolutions) {
+        resolutions.color.clear();
+        resolutions.color_failed = false;
     }
 }
 
-auto Draw_list_scene::resolve_color_stages(Draw_list& draw_list, const uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*
+auto Draw_list_scene::resolve_color_stages(
+    Draw_list_resolutions& resolutions,
+    const Draw_list&       draw_list,
+    const uint16_t         multiview_count
+) -> const erhe::graphics::Reloadable_shader_stages*
 {
-    for (const Draw_list_color_resolution& resolution : draw_list.color_resolutions) {
+    for (const Draw_list_color_resolution& resolution : resolutions.color) {
         if (resolution.multiview_count == multiview_count) {
             return resolution.stages;
         }
@@ -1383,28 +1477,32 @@ auto Draw_list_scene::resolve_color_stages(Draw_list& draw_list, const uint16_t 
     const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
     const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
     if (stages == nullptr) {
-        if (!draw_list.color_resolution_failed) {
+        if (!resolutions.color_failed) {
             log_draw_list->warn("No color shader variant for draw list: {}", draw_list.key.describe());
-            draw_list.color_resolution_failed = true;
+            resolutions.color_failed = true;
         }
     }
-    draw_list.color_resolutions.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .stages = stages});
+    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .stages = stages});
     return stages;
 }
 
-void Draw_list_scene::resolve_color_list(Draw_list& draw_list)
+void Draw_list_scene::resolve_color_list(Draw_list_resolutions& resolutions, const Draw_list& draw_list)
 {
     for (const uint32_t view_count : m_multiview_view_counts) {
-        static_cast<void>(resolve_color_stages(draw_list, static_cast<uint16_t>(view_count)));
+        static_cast<void>(resolve_color_stages(resolutions, draw_list, static_cast<uint16_t>(view_count)));
     }
 }
 
-auto Draw_list_scene::resolve_shadow_stages(Draw_list& draw_list, const Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*
+auto Draw_list_scene::resolve_shadow_stages(
+    Draw_list_resolutions&   resolutions,
+    const Draw_list&         draw_list,
+    const Shadow_sub_variant sub_variant
+) -> const erhe::graphics::Reloadable_shader_stages*
 {
     const std::size_t slot = static_cast<std::size_t>(sub_variant);
-    ERHE_VERIFY(slot < draw_list.shadow_resolutions.size());
-    if (draw_list.shadow_resolutions[slot] != nullptr) {
-        return draw_list.shadow_resolutions[slot];
+    ERHE_VERIFY(slot < resolutions.shadow.size());
+    if (resolutions.shadow[slot] != nullptr) {
+        return resolutions.shadow[slot];
     }
     // Shadow key: USE_SKINNING (from registration) plus the sub-variant's forced
     // bits, empty environment - as Shadow_renderer::draw_shadow_casters builds it.
@@ -1430,14 +1528,14 @@ auto Draw_list_scene::resolve_shadow_stages(Draw_list& draw_list, const Shadow_s
     const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
     const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
     if (stages == nullptr) {
-        if (!draw_list.shadow_resolution_failed) {
+        if (!resolutions.shadow_failed) {
             log_draw_list->warn("No shadow shader variant ({}) for draw list: {}", c_str(sub_variant), draw_list.key.describe());
-            draw_list.shadow_resolution_failed = true;
+            resolutions.shadow_failed = true;
         }
         return nullptr;
     }
     ++m_lazy_resolution_count;
-    draw_list.shadow_resolutions[slot] = stages;
+    resolutions.shadow[slot] = stages;
     return stages;
 }
 
@@ -1461,7 +1559,7 @@ namespace {
 } // anonymous namespace
 
 void Draw_list_scene::draw_list_chunks(
-    Draw_list&                               draw_list,
+    const Draw_list&                         draw_list,
     erhe::graphics::Render_command_encoder&  render_encoder,
     erhe::graphics::Render_pipeline&         render_pipeline,
     Primitive_buffer&                        primitive_buffer,
@@ -1481,14 +1579,15 @@ void Draw_list_scene::draw_list_chunks(
     // One pass decision per entry, shared by the record and the command
     // writer so ERHE_DRAW_ID indexes stay paired: the filter on the mirrored
     // flag bits, then the pass frustum (view or light) on the entry's world
-    // AABB.
+    // AABB. Every entry of a list has the list's mobility; skinned entries
+    // are never culled (their bounds follow the joints and they carry none).
+    const bool cull = !frustum_planes.empty() && (draw_list.key.mobility != Draw_mobility::skinned);
     m_entry_passes.resize(entry_count);
     for (std::size_t i = 0; i < entry_count; ++i) {
         const Draw_list_entry& entry = draw_list.entries[i];
         bool passes = filter(entry.flag_bits);
-        if (passes && !frustum_planes.empty() && entry.world_aabb.is_valid_3d()) {
-            const Draw_list_object& object = m_objects[entry.object_index];
-            if ((object.mobility != Draw_mobility::skinned) && !erhe::math::aabb_in_convex_volume(frustum_planes, entry.world_aabb)) {
+        if (passes && cull && entry.world_aabb.is_valid_3d()) {
+            if (!erhe::math::aabb_in_convex_volume(frustum_planes, entry.world_aabb)) {
                 passes = false;
                 ++statistics.culled_count;
             }
@@ -1518,7 +1617,7 @@ void Draw_list_scene::draw_list_chunks(
         }
 
         std::size_t primitive_count = 0;
-        erhe::graphics::Ring_buffer_range primitive_range = primitive_buffer.update(draw_list, begin, end, *this, entry_passes, primitive_settings, primitive_count);
+        erhe::graphics::Ring_buffer_range primitive_range = primitive_buffer.update(draw_list, begin, end, entry_passes, primitive_settings, primitive_count);
         if (primitive_count == 0) {
             primitive_range.release();
             continue;
@@ -1560,13 +1659,15 @@ void Draw_list_scene::draw_list_chunks(
 }
 
 auto Draw_list_scene::has_drawable_entries(
+    const uint64_t                               frame_index,
     const Draw_purpose                           purpose,
     const std::span<const erhe::scene::Layer_id> layers,
     const Draw_blending_selection                blending,
     const erhe::Item_filter&                     filter
 ) const -> bool
 {
-    for (const Draw_list& draw_list : m_draw_lists) {
+    assert_render_phase();
+    for (const Draw_list& draw_list : get_published_draw_lists(frame_index)) {
         const Draw_list_key& key = draw_list.key;
         if ((key.purpose != purpose) || draw_list.entries.empty()) {
             continue;
@@ -1588,13 +1689,13 @@ auto Draw_list_scene::has_drawable_entries(
 auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Draw_statistics
 {
     ERHE_PROFILE_FUNCTION();
-    assert_main_thread();
+    assert_render_phase();
 
     Draw_statistics statistics{};
     ERHE_VERIFY(parameters.render_pass != nullptr);
 
     set_color_environment(parameters.environment);
-    sync_gpu_slots();
+    const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
 
     const Draw_blending classes_both[] = { Draw_blending::opaque, Draw_blending::translucent };
     const std::span<const Draw_blending> classes =
@@ -1603,18 +1704,26 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                                                                              std::span<const Draw_blending>{classes_both, 2};
 
     for (const Draw_blending blending : classes) {
-        for (std::size_t list_index = 0, list_end = m_draw_lists.size(); list_index < list_end; ++list_index) {
-            Draw_list& draw_list = m_draw_lists[list_index];
-            const Draw_list_key& key = draw_list.key;
+        for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
+            const Draw_list&     draw_list = draw_lists[list_index];
+            const Draw_list_key& key       = draw_list.key;
             if ((key.purpose != Draw_purpose::color) || (key.blending != blending) || draw_list.entries.empty()) {
                 continue;
             }
             if (!layer_selected(parameters.layers, key.layer_id)) {
                 continue;
             }
-            const std::size_t resolution_count_before = draw_list.color_resolutions.size();
-            const erhe::graphics::Reloadable_shader_stages* stages = resolve_color_stages(draw_list, parameters.multiview_count);
-            if (draw_list.color_resolutions.size() != resolution_count_before) {
+            // R17 / R19: a list's first color draw (and the first after an
+            // environment change) resolves every enumerated view
+            // configuration; a configuration outside that set resolves
+            // lazily here, once.
+            Draw_list_resolutions& resolutions = get_resolutions(list_index, draw_list);
+            if (resolutions.color.empty()) {
+                resolve_color_list(resolutions, draw_list);
+            }
+            const std::size_t resolution_count_before = resolutions.color.size();
+            const erhe::graphics::Reloadable_shader_stages* stages = resolve_color_stages(resolutions, draw_list, parameters.multiview_count);
+            if (resolutions.color.size() != resolution_count_before) {
                 ++m_lazy_resolution_count;
             }
             if (stages == nullptr) {
@@ -1663,23 +1772,24 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
 auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics
 {
     ERHE_PROFILE_FUNCTION();
-    assert_main_thread();
+    assert_render_phase();
 
     Draw_statistics statistics{};
     ERHE_VERIFY(parameters.render_pass != nullptr);
     ERHE_VERIFY(parameters.color_blend != nullptr);
-    sync_gpu_slots();
+    const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
 
-    for (std::size_t list_index = 0, list_end = m_draw_lists.size(); list_index < list_end; ++list_index) {
-        Draw_list& draw_list = m_draw_lists[list_index];
-        const Draw_list_key& key = draw_list.key;
+    for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
+        const Draw_list&     draw_list = draw_lists[list_index];
+        const Draw_list_key& key       = draw_list.key;
         if ((key.purpose != Draw_purpose::shadow) || draw_list.entries.empty()) {
             continue;
         }
         if (!layer_selected(parameters.layers, key.layer_id)) {
             continue;
         }
-        const erhe::graphics::Reloadable_shader_stages* stages = resolve_shadow_stages(draw_list, parameters.sub_variant);
+        Draw_list_resolutions& resolutions = get_resolutions(list_index, draw_list);
+        const erhe::graphics::Reloadable_shader_stages* stages = resolve_shadow_stages(resolutions, draw_list, parameters.sub_variant);
         if (stages == nullptr) {
             continue;
         }
@@ -1714,21 +1824,71 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
     return statistics;
 }
 
-void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_gather_parameters& parameters) const
+void Draw_list_scene::prepare_shadow_bounds(
+    const Shadow_bounds_selection& selection,
+    const uint64_t                 frame_index,
+    const std::size_t              frames_in_flight
+)
 {
     ERHE_PROFILE_FUNCTION();
     assert_main_thread();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    ERHE_VERIFY(frames_in_flight > 0);
 
-    parameters.caster_world_aabbs.clear();
-    parameters.receiver_world_aabbs.clear();
-    parameters.caster_vertex_extents.clear();
+    // The slot count is the device's frames in flight, fixed for the
+    // device's lifetime: sized once, so the render phase indexes a vector
+    // that never reallocates.
+    if (m_shadow_bounds_slots.empty()) {
+        m_shadow_bounds_slots.resize(frames_in_flight);
+    }
+    ERHE_VERIFY(m_shadow_bounds_slots.size() == frames_in_flight);
+
+    Shadow_bounds_slot& slot = m_shadow_bounds_slots[frame_index % frames_in_flight];
+    slot.frame_index = frame_index;
+    slot.prepared    = true;
+
+    const bool same_selection =
+        (slot.caster_filter == selection.caster_filter) &&
+        std::equal(slot.layers.begin(), slot.layers.end(), selection.layers.begin(), selection.layers.end());
+    if (same_selection && (slot.serial == m_shadow_bounds_serial) && update_skinned_shadow_bounds(slot)) {
+        return;
+    }
+    gather_shadow_bounds(selection, slot);
+}
+
+auto Draw_list_scene::get_shadow_bounds(const uint64_t frame_index) const -> const Shadow_bounds&
+{
+    assert_render_phase();
+    ERHE_VERIFY(!m_shadow_bounds_slots.empty());
+    const Shadow_bounds_slot& slot = m_shadow_bounds_slots[frame_index % m_shadow_bounds_slots.size()];
+    // The prepare phase of this frame filled the slot (and the prepare
+    // phase of no later frame has reused it yet).
+    ERHE_VERIFY(slot.prepared && (slot.frame_index == frame_index));
+    return slot.bounds;
+}
+
+void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_selection& selection, Shadow_bounds_slot& slot)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ++m_shadow_bounds_gather_count;
+    slot.layers.assign(selection.layers.begin(), selection.layers.end());
+    slot.caster_filter = selection.caster_filter;
+    slot.serial        = m_shadow_bounds_serial;
+
+    Shadow_bounds& bounds = slot.bounds;
+    bounds.caster_world_aabbs.clear();
+    bounds.receiver_world_aabbs.clear();
+    bounds.caster_vertex_extents.clear();
+    slot.skinned_objects.clear();
 
     constexpr uint64_t visible_active = erhe::Item_flags::visible | erhe::Item_flags::active;
-    for (const Draw_list_object& object : m_objects) {
+    for (uint32_t object_index = 0, end = static_cast<uint32_t>(m_objects.size()); object_index < end; ++object_index) {
+        const Draw_list_object& object = m_objects[object_index];
         if (!object.alive || object.locations.empty()) {
             continue;
         }
-        if (!layer_selected(parameters.layers, object.layer_id)) {
+        if (!layer_selected(selection.layers, object.layer_id)) {
             continue;
         }
         if ((object.flag_bits & visible_active) != visible_active) {
@@ -1738,7 +1898,7 @@ void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_gather_parameters
         // left out the primitives that never cast (unlit when excluded,
         // translucent), so a mesh made only of those is a receiver only.
         bool is_caster = false;
-        if (parameters.caster_filter(object.flag_bits)) {
+        if (selection.caster_filter(object.flag_bits)) {
             for (const Draw_list_entry_location& location : object.locations) {
                 if (m_draw_lists[location.draw_list_index].key.purpose == Draw_purpose::shadow) {
                     is_caster = true;
@@ -1746,36 +1906,62 @@ void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_gather_parameters
                 }
             }
         }
-        if (!is_caster && !parameters.gather_receivers) {
-            continue;
-        }
         const erhe::scene::Mesh* mesh = object.info.mesh.get();
         ERHE_VERIFY(mesh != nullptr);
         // Every entry of an object carries the object's world AABB; a skinned
         // object's entries carry none (its bounds follow the joints), so it
-        // is bounded here from its posed joints.
+        // is bounded here from its posed joints, and again by every
+        // update_skinned_shadow_bounds().
+        const bool                      skinned        = (object.mobility == Draw_mobility::skinned);
         const Draw_list_entry_location& first_location = object.locations.front();
-        const erhe::math::Aabb aabb = (object.mobility == Draw_mobility::skinned)
+        const erhe::math::Aabb aabb = skinned
             ? mesh->get_aabb_world()
             : m_draw_lists[first_location.draw_list_index].entries[first_location.entry_index].world_aabb;
-        if (!aabb.is_valid_3d()) {
-            continue;
+        const bool valid = aabb.is_valid_3d();
+        Shadow_bounds_skinned_object skinned_object{.object_index = object_index, .valid = valid};
+        if (valid) {
+            skinned_object.receiver_position = static_cast<uint32_t>(bounds.receiver_world_aabbs.size());
+            bounds.receiver_world_aabbs.push_back(aabb);
+            if (is_caster) {
+                skinned_object.caster_position = static_cast<uint32_t>(bounds.caster_world_aabbs.size());
+                bounds.caster_world_aabbs.push_back(aabb);
+                const glm::mat4 world_from_node = mesh->world_from_node();
+                bounds.caster_vertex_extents.push_back(
+                    Caster_vertex_extent{
+                        .world_from_node_linear = glm::mat3{world_from_node},
+                        .world_translation      = glm::vec3{world_from_node[3]},
+                        .node_abs_extent        = object.node_abs_extent
+                    }
+                );
+            }
         }
-        if (parameters.gather_receivers) {
-            parameters.receiver_world_aabbs.push_back(aabb);
-        }
-        if (is_caster) {
-            parameters.caster_world_aabbs.push_back(aabb);
-            const glm::mat4 world_from_node = mesh->world_from_node();
-            parameters.caster_vertex_extents.push_back(
-                Caster_vertex_extent{
-                    .world_from_node_linear = glm::mat3{world_from_node},
-                    .world_translation      = glm::vec3{world_from_node[3]},
-                    .node_abs_extent        = object.node_abs_extent
-                }
-            );
+        if (skinned) {
+            slot.skinned_objects.push_back(skinned_object);
         }
     }
+}
+
+auto Draw_list_scene::update_skinned_shadow_bounds(Shadow_bounds_slot& slot) const -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Shadow_bounds& bounds = slot.bounds;
+    for (const Shadow_bounds_skinned_object& skinned_object : slot.skinned_objects) {
+        const Draw_list_object&  object = m_objects[skinned_object.object_index];
+        const erhe::scene::Mesh* mesh   = object.info.mesh.get();
+        ERHE_VERIFY(mesh != nullptr);
+        const erhe::math::Aabb aabb = mesh->get_aabb_world();
+        if (aabb.is_valid_3d() != skinned_object.valid) {
+            return false;
+        }
+        if (skinned_object.receiver_position != Shadow_bounds_skinned_object::none) {
+            bounds.receiver_world_aabbs[skinned_object.receiver_position] = aabb;
+        }
+        if (skinned_object.caster_position != Shadow_bounds_skinned_object::none) {
+            bounds.caster_world_aabbs[skinned_object.caster_position] = aabb;
+        }
+    }
+    return true;
 }
 
 } // namespace erhe::scene_renderer

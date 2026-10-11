@@ -247,6 +247,7 @@ void Brush_preview::on_items_removed(const Removed_items& removed)
 }
 
 void Brush_preview::render_preview(
+    erhe::graphics::Command_buffer&                 command_buffer,
     const std::shared_ptr<erhe::graphics::Texture>& texture,
     unsigned int                                    texture_layer,
     const std::shared_ptr<Brush>&                   brush,
@@ -269,10 +270,11 @@ void Brush_preview::render_preview(
         ? &m_context.editor_settings->brush_preview_edge_lines
         : nullptr;
     const glm::quat orientation = glm::angleAxis(2.0f * time_s, glm::vec3{0.0f, 1.0f, 0.0f});
-    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), orientation, false, edge_lines);
+    render_preview(command_buffer, texture, texture_layer, brush_scaled.primitive, brush->get_material(), orientation, false, edge_lines);
 }
 
 void Brush_preview::render_preview(
+    erhe::graphics::Command_buffer&                    command_buffer,
     const std::shared_ptr<erhe::graphics::Texture>&    texture,
     unsigned int                                       texture_layer,
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
@@ -312,8 +314,6 @@ void Brush_preview::render_preview(
         m_mesh.reset();
     }
 
-    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
     m_context.mesh_memory->flush(command_buffer);
 
     if (m_mesh) {
@@ -418,12 +418,20 @@ void Brush_preview::render_preview(
 
     m_scene_root_shared->get_hosted_scene()->update_node_transforms();
 
-    const auto& layers = m_scene_root_shared->layers();
-    erhe::scene_renderer::Light_set& light_set = m_scene_root_shared->get_light_set();
-    light_set.resolve(layers.light()->lights, get_light_count_limits());
+    // The preview root is not prepared by the frame loop: its render
+    // settings copy (read by the composition pass) and its light set for
+    // this frame are made here, on the main thread.
+    const erhe::scene_renderer::Light_set& light_set = m_scene_root_shared->snapshot_preview_render_settings(
+        *m_context.editor_settings,
+        get_light_count_limits(),
+        m_context.graphics_device->get_frame_index(),
+        m_context.graphics_device->get_number_of_frames_in_flight()
+    );
+    // The preview camera as the copy the renderers read (main thread).
+    const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
     m_light_projections.apply(
         light_set,
-        m_camera.get(),
+        &camera_snapshot,
         viewport,
         erhe::math::Viewport{},
         m_shadow_texture,
@@ -435,8 +443,7 @@ void Brush_preview::render_preview(
         erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
         const erhe::scene_renderer::Camera_view_input single_view_input{
-            .projection = m_camera->projection(),
-            .node       = m_camera.get(),
+            .camera     = &camera_snapshot,
             .viewport   = viewport
         };
         const Render_context context{
@@ -447,7 +454,9 @@ void Brush_preview::render_preview(
             .scene_view          = *this,
             .viewport_config     = m_viewport_config,
             .camera              = m_camera.get(),
+            .camera_snapshot     = &camera_snapshot,
             .viewport_scene_view = nullptr,
+            .scene_root          = m_scene_root_shared,
             .viewport            = viewport,
             .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
         };

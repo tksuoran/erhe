@@ -39,16 +39,16 @@ chasing through cold scene objects.
 Registration, re-registration and `rebuild_all()` write the full record for
 every entry: records are always complete, and the hooks only keep them current.
 
-## Fast and slow path in `Primitive_buffer::update(Draw_list, ...)`
+## `Primitive_buffer::update(Draw_list, ...)` copies records only
 
-- Fast path (memcpy the record, then patch color and size) when the settings
-  are expressible without per-mesh evaluation: `face_id_base_provider ==
-  nullptr`, `color_source != id_offset`, `size_source == constant_size`. Every
-  pass that the `Composition_pass` routing rule sends to draw lists (polygon
-  fill, no forced variant bits) and every shadow pass satisfies this.
-- Otherwise the per-entry `write_primitive()` path runs. It is a single
-  implementation shared with the `Render_bucket` overload, so the two cannot
-  drift.
+It memcpys the record and patches color and size. The settings must be
+expressible without per-mesh evaluation - `color_source != id_offset`,
+`size_source == constant_size` - which it and `Draw_list_renderer::render()`
+verify. Every pass that the `Composition_pass` routing rule sends to draw
+lists (polygon fill, no forced variant bits) and every shadow pass satisfies
+this; the id pass and the non-fill primitive modes take the bucket path. The
+draw list it reads is the copy published for the render phase
+(`doc/erhe/draw_list_renderer.md` section 9.3), so it reads no `Mesh`.
 
 ## What this does not cover
 
@@ -68,9 +68,11 @@ every entry: records are always complete, and the hooks only keep them current.
   tools, viewports, headset, physics, animation, MCP - runs before the flush.
 - These records are what R12b of `doc/erhe/draw_list_renderer.md` means by a hook
   keeping a cached value current instead of reading it live at upload time.
-- The joint-slot sync counter is non-zero right after a scene load, because
-  records are written at registration before the first `Joint_buffer::update`
-  assigns the slots. That is one-time and expected.
+- The joint-slot sync counter is non-zero right after a scene load when a
+  new skin's slot differs from the value its records were written with at
+  registration, before the frame's `Joint_poses::capture` assigned it; the
+  per-frame publish rewrites them in the same prepare phase. That is one-time
+  and expected.
 
 ## Verification
 

@@ -16,6 +16,8 @@
 #include <vector>
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 
 namespace erhe::graphics {
     class Acceleration_structure;
@@ -206,7 +208,7 @@ public:
 
     // Procedural sky lighting for the gather's hemisphere ray (plan: "Next
     // up - procedural sky lighting"). LUTs belong to Sky_renderer; the
-    // caller refreshes this every frame before tick() (the LUT pointers
+    // caller refreshes this every frame before prepare_tick() (the LUT pointers
     // must stay valid across the frame). Sky contributes only when enabled
     // AND both LUTs are set; a change resets accumulation via the lighting
     // hash.
@@ -237,6 +239,16 @@ public:
     [[nodiscard]] auto get_options() const -> const Bake_options& { return m_options; }
 
     void set_sky_lighting(const Sky_lighting& sky) { m_sky = sky; }
+
+    // The baker's standalone submits (record + submit + Device::wait_idle on
+    // the main thread: the G-buffer raster, the direct and offline bakes,
+    // the display clear, tile restore and readbacks) write or read textures
+    // the render phase records with (the tick slot's G-buffer and atlases,
+    // the display atlas the forward passes sample). With frame pipelining
+    // the render phase of the previous frame may still record while the
+    // prepare phase runs, so each joins it first through this hook
+    // (App_context::join_render_phase; unset = nothing to join).
+    void set_join_render_phase(std::function<void()> join_render_phase);
 
     // Tile texture side (power of two, default 1024) and how many tiles may
     // be resident in the display atlas at once (default 9 = a 3x3 slot
@@ -432,26 +444,42 @@ public:
     // tile's regions (per-tile reorder).
     auto build_chart_order_keys(int tile = -1) -> std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>;
 
-    // Interactive bake loop (plan section 3a): record one budgeted gather
-    // slice plus resolve + dilate publish into the given command buffer
-    // (the open frame command buffer; the rendergraph samples the published
-    // atlas later in the same submission). Handles change-driven
-    // invalidation internally: light/occluder edits reset accumulation,
-    // lightmapped-mesh edits additionally re-raster the G-buffer.
+    // Interactive bake loop (plan section 3a), split along the editor's
+    // frame phases (doc/editor/editor.md "Frame phases and the render
+    // thread"; doc/editor/lightmap_baking.md section 3a "Frame phases").
     //
-    // The gather walks the layout one spatial tile at a time (the working
-    // set is tile-sized); the N tiles whose world bounds are nearest the
-    // camera hold the display slots and gather (N = the resident budget,
-    // further clamped by max_active_tiles > 0 when a camera position is
-    // given). Tiles that lose their slot render unlit and release their
-    // accumulation textures.
-    void tick(
-        erhe::graphics::Command_buffer& command_buffer,
-        Scene_root&                     scene_root,
-        float                           min_face_texels,
-        const glm::vec3*                camera_position  = nullptr,
-        int                             max_active_tiles = 0
+    // prepare_tick() runs in the main thread's prepare phase (M2) and
+    // makes every decision of one tick: change-driven invalidation (light /
+    // occluder edits reset accumulation, lightmapped-mesh edits re-raster
+    // the G-buffer, the lightmapped set relayouts), camera-ranked residency
+    // (the N tiles whose world bounds are nearest the camera hold the
+    // display slots and gather, N = the resident budget, further clamped by
+    // max_active_tiles > 0 when a camera position is given; tiles that lose
+    // their slot release their accumulation), the restore queue, the
+    // cursor band, the publish cadence, the region mapping writes onto the
+    // scene's mesh primitives (publish_regions) and the occluder set. It
+    // creates the textures and acceleration structures the tick needs and
+    // stores what the render phase records in the tick slot of the frame
+    // it prepares (Tick_slot: the plan, the pending clears, the occluder
+    // instances and records, the pending BLAS builds and the gather block).
+    // It verifies that slot's previous plan was recorded (stage none).
+    //
+    // record_tick() runs in the render phase (R) and records the tick slot
+    // of the frame it renders into the frame command buffer: target clears,
+    // BLAS builds, the TLAS, the budgeted gather slice and the resolve +
+    // publish into the display atlas the rendergraph samples later in the
+    // same submission, then marks the slot consumed. It reads only the tick
+    // slot (Record_inputs: every texture, layout fact, option and the seam
+    // vertices it records with) and writes only the slot and its TLAS slot,
+    // so the prepare phase of a later frame may replace any of those objects
+    // while it records.
+    void prepare_tick(
+        Scene_root&      scene_root,
+        float            min_face_texels,
+        const glm::vec3* camera_position  = nullptr,
+        int              max_active_tiles = 0
     );
+    void record_tick(erhe::graphics::Command_buffer& command_buffer);
 
     // ---- Offline bake-to-disk (one tile at a time, bounded memory) ----
     //
@@ -555,11 +583,59 @@ public:
     static constexpr int s_padding  = 4; // texels around each region (mips + bilinear)
 
 private:
+    // Calls the set_join_render_phase() hook before a standalone submit.
+    void join_render_phase();
+    // Resolve / publish variant (record_resolve_and_dilate, the tick plan).
+    enum class Publish_kind : unsigned int {
+        none,     // no publish (mid-sweep tick: the display keeps the last publish)
+        raw,      // resolve + dilate, no denoise
+        denoised  // resolve + JNLM denoise + dilate
+    };
+
     void ensure_gbuffer_targets();
+
+    // Everything the record_* functions below read, captured by the prepare
+    // phase for the frame (Tick_slot::inputs) or by a standalone bake right
+    // before it records (fill_record_inputs). The shared_ptrs keep the
+    // objects alive while a frame that names them is in flight, so the
+    // prepare phase may replace the members (a new layout, a G-buffer
+    // re-raster) while the render phase records an older frame.
+    class Record_inputs;
+    // Clear-and-fill from the current members, for the tile the record
+    // resolves / publishes (-1: none). Leaves the adjust pass off
+    // (take_adjust).
+    void fill_record_inputs(Record_inputs& inputs, int tile) const;
+    // The one-shot virtual-offset decision, made where the work is
+    // planned: when the current G-buffer still needs it, moves the smooth
+    // position target into inputs (the record releases it with the inputs)
+    // and marks the G-buffer adjusted.
+    void take_adjust(Record_inputs& inputs);
+
+    // Standalone users (bake_direct, offline_tick): create the bake targets
+    // and record their pending clears into command_buffer at once.
     void ensure_bake_targets(erhe::graphics::Command_buffer& command_buffer);
-    // Lazily create (and clear when dirty) the given tile's accumulation
-    // texture; returns it. Records the clear into command_buffer.
+    // Create (or recreate for a new layout) the working atlas, the dilate
+    // scratch and the display atlas. A fresh target, or a display atlas
+    // whose layout changed, gets a pending clear (m_working_clear_pending /
+    // m_display_clear_pending) that record_bake_target_clears() records, or
+    // that prepare_tick() moves into its tick slot; the CPU-side
+    // consequences of the display clear (no tile published, no slot white
+    // clear left) apply here.
+    void create_bake_targets();
+    void record_bake_target_clears (erhe::graphics::Command_buffer& command_buffer);
+    void record_working_atlas_clear(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs);
+    void record_display_atlas_clear(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs);
+    // Standalone users: lazily create (and clear when dirty) the given
+    // tile's accumulation texture; returns it. Records the clear into
+    // command_buffer.
     auto ensure_tile_accum(erhe::graphics::Command_buffer& command_buffer, int tile) -> erhe::graphics::Texture*;
+    // Create the tile's accumulation texture when missing; a fresh or dirty
+    // accumulation restarts its sweep count here and gets a pending clear
+    // (Tile_state::accum_clear_pending) that record_tile_accum_clear()
+    // records, or that prepare_tick() moves into its tick slot.
+    auto prepare_tile_accum(int tile) -> erhe::graphics::Texture*;
+    void record_tile_accum_clear(erhe::graphics::Command_buffer& command_buffer, int tile);
+    void record_accum_clear     (erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Texture& accum);
     // Free every rebuildable working-set allocation, keeping only the
     // display atlas (see set_baking_enabled).
 
@@ -568,7 +644,7 @@ private:
     void queue_dirty_tiles_for_save();
 
     // Three-tier change-detection hashes over the bake inputs (see
-    // compute_scene_hashes); shared by tick() and monitor_paused_scene().
+    // compute_scene_hashes); shared by prepare_tick() and monitor_paused_scene().
     class Scene_hashes
     {
     public:
@@ -615,37 +691,49 @@ private:
         glm::vec4 params;
     };
 
-    [[nodiscard]] auto collect_lights(Scene_root& scene_root) const -> std::vector<Light_record>;
+    // Clear-and-fill: the visible, active scene lights as gather records.
+    void collect_lights(Scene_root& scene_root, std::vector<Light_record>& out_lights) const;
     void write_gather_ubo(std::byte* data, const std::vector<Light_record>& lights, uint32_t frame_index, uint32_t base_texel_y) const;
-    // Collect occluder instances + gather records; builds missing BLAS into
-    // the command buffer. Every visible non-skinned content mesh occludes.
+    // Collect occluder instances + gather records. Every visible
+    // non-skinned content mesh occludes. Missing BLAS are created and
+    // queued in m_blas_pending_build; record_pending_blas_builds() records
+    // their builds at once for the standalone bakes, prepare_tick() moves
+    // them into its tick slot for the render phase.
     void collect_instances(
-        erhe::graphics::Command_buffer&                              command_buffer,
         Scene_root&                                                  scene_root,
         std::vector<erhe::graphics::Acceleration_structure_instance>& out_instances,
         std::vector<Lm_instance_record>&                             out_records
     );
-    // Record resolve (tile accum -> working running average), optionally
-    // the JNLM denoise, then the dilation ping-pong; leaves the working
-    // atlas shader-readable. Operates on the tile-sized targets; the
-    // G-buffer must hold the same tile (denoise guides).
-    void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, int tile, bool with_denoise);
+    void record_pending_blas_builds(erhe::graphics::Command_buffer& command_buffer);
+    void record_blas_builds        (erhe::graphics::Command_buffer& command_buffer, std::span<erhe::graphics::Acceleration_structure* const> blas_list);
+    // Record resolve (tile accum -> working running average), the JNLM
+    // denoise for Publish_kind::denoised, then the dilation ping-pong;
+    // leaves the working atlas shader-readable. Operates on the tile-sized
+    // targets; the G-buffer must hold the same tile (denoise guides).
+    void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs, Publish_kind kind);
     // Copy the tile-sized working atlas into the tile's sub-rect of the
     // page-sized display atlas (both left shader-readable).
-    void record_display_publish(erhe::graphics::Command_buffer& command_buffer, int tile);
+    void record_display_publish(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs);
     // Overwrite freshly assigned display slots with white (the unbaked
     // look): a new occupant's regions map into the slot immediately, but
     // the slot still holds the previous occupant's published texels until
-    // the first publish/restore. Consumes m_slots_pending_white_clear;
-    // called by tick() after ensure_bake_targets.
-    void record_pending_slot_white_clears(erhe::graphics::Command_buffer& command_buffer);
+    // the first publish/restore. slot_origins are the tick slot's copy of
+    // m_slots_pending_white_clear; called by record_tick() after the target
+    // clears.
+    void record_slot_white_clears(
+        erhe::graphics::Command_buffer& command_buffer,
+        const Record_inputs&            inputs,
+        std::span<const glm::ivec2>     slot_origins
+    );
     // One-shot virtual-offset pass (article sample-position adjustment):
-    // rewrites the position G-buffer in place, once per G-buffer bake.
+    // rewrites the position G-buffer in place, once per G-buffer bake;
+    // records nothing unless take_adjust() put the pass into the inputs.
     // bind_instance_records binds the Lm_instance_record SSBO (binding 1)
     // into the adjust encoder - the committed_face_normal position-fetch
     // fallback reads it (the caller owns the buffer, ring range or plain).
     void record_adjust(
         erhe::graphics::Command_buffer&                                       command_buffer,
+        const Record_inputs&                                                  inputs,
         erhe::graphics::Acceleration_structure&                               tlas,
         const std::function<void(erhe::graphics::Compute_command_encoder&)>&  bind_instance_records
     );
@@ -656,15 +744,14 @@ private:
         std::shared_ptr<erhe::primitive::Primitive>            primitive; // keeps the Buffer_mesh alive
         std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
     };
-    // Same unbounded pin as Scene_tlas's cache, and the same remedy: drop
-    // entries whose primitive nothing else refers to, so content removed from
-    // the scene can give its memory back. Tested on render_shape.use_count(),
+    // Each entry pins its primitive and through it the GPU ranges, so the
+    // cache sweeps: drop entries whose primitive nothing else refers to, so
+    // content removed from the scene can give its memory back. Tested on render_shape.use_count(),
     // because a defaulted Primitive copy can alias one Buffer_mesh key
     // (doc/editor/reloadable_asset_loads.md).
     void evict_unreferenced_blas();
 
     auto get_or_create_blas(
-        erhe::graphics::Command_buffer&                    command_buffer,
         const std::shared_ptr<erhe::primitive::Primitive>& primitive,
         const erhe::primitive::Buffer_mesh&                buffer_mesh
     ) -> erhe::graphics::Acceleration_structure*;
@@ -706,7 +793,7 @@ private:
     // m_position_texture, so the gather never reads this directly.
     std::shared_ptr<erhe::graphics::Texture>           m_smooth_position_texture;
     bool                                               m_gbuffer_valid{false};
-    bool                                               m_gbuffer_adjusted{false}; // virtual-offset pass ran for this G-buffer
+    bool                                               m_gbuffer_adjusted{false}; // virtual-offset pass taken (take_adjust) for this G-buffer
     // VK_EXT_conservative_rasterization is available (m_pipeline_conservative
     // exists); Coverage_mode::conservative falls back to jitter_9 otherwise.
     bool                                               m_conservative_supported{false};
@@ -804,6 +891,10 @@ private:
     public:
         std::shared_ptr<erhe::graphics::Texture> accum;
         bool     accum_dirty{true};  // clear before the next gather (fresh texture or reset)
+        // prepare_tile_accum() consumed accum_dirty; the clear itself is
+        // recorded by record_tile_accum_clear() (standalone bakes), or moved
+        // into the tick slot by prepare_tick().
+        bool     accum_clear_pending{false};
         bool     published  {false}; // display holds at least one complete sweep of this tile
         bool     active     {true};  // within the camera clamp; inactive tiles skip gathering
         bool     has_content{false}; // at least one region packed into this tile
@@ -827,8 +918,9 @@ private:
     std::vector<int>                                   m_tiles_pending_save;
     std::vector<int>                                   m_tiles_pending_restore;
     // Freshly assigned display slots awaiting their white overwrite
-    // (record_pending_slot_white_clears); a successful disk restore
-    // unqueues its slot, a full-page clear empties the list.
+    // (prepare_tick moves them into its tick slot for
+    // record_slot_white_clears); a successful disk restore unqueues its
+    // slot, a full-page clear empties the list.
     std::vector<int>                                   m_slots_pending_white_clear;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_struct;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_block;
@@ -906,7 +998,7 @@ private:
         bool                                                      partitioned
     ) -> bool;
     void build_seam_vertices();
-    void record_seam_blend(erhe::graphics::Command_buffer& command_buffer, int tile);
+    void record_seam_blend(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs);
     erhe::dataformat::Vertex_format                     m_seam_vertex_format;
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_seam_vertex_input;
     std::unique_ptr<erhe::graphics::Bind_group_layout>  m_seam_layout;
@@ -916,8 +1008,10 @@ private:
     std::unique_ptr<erhe::graphics::Ring_buffer_client> m_seam_vertex_ring;
     // Ordered by tile: m_tile_seam_ranges[tile] = (first vertex, count)
     // into m_seam_vertices, positions relative to the tile origin so the
-    // pass rasters into the tile-sized working atlas.
-    std::vector<Seam_vertex>                            m_seam_vertices;
+    // pass rasters into the tile-sized working atlas. Immutable once built:
+    // build_seam_vertices() replaces it whole, so the record inputs of a
+    // frame in flight keep the vertices they were captured with.
+    std::shared_ptr<const std::vector<Seam_vertex>>     m_seam_vertices;
     std::vector<std::pair<uint32_t, uint32_t>>          m_tile_seam_ranges;
 
     // Per-tick uploads ride the device ring buffers (the frame command
@@ -931,7 +1025,7 @@ private:
     std::unique_ptr<erhe::graphics::Buffer>            m_direct_gather_ubo;
     std::unique_ptr<erhe::graphics::Buffer>            m_direct_instance_ssbo;
 
-    // Per-frame-in-flight TLAS slots for tick() (rebuilding the single
+    // Per-frame-in-flight TLAS slots for record_tick() (rebuilding the single
     // TLAS a still-in-flight frame reads would be a data race; mirrors
     // Ray_trace_renderer). bake_direct() keeps using m_tlas (wait_idle).
     static constexpr std::size_t s_tlas_slot_count = 4;
@@ -953,8 +1047,9 @@ private:
     };
     Offline_state m_offline_state{};
 
-    Bake_options m_options{};
-    Sky_lighting m_sky{};
+    Bake_options          m_options{};
+    Sky_lighting          m_sky{};
+    std::function<void()> m_join_render_phase; // set_join_render_phase()
     bool     m_baking_enabled   {false};
     bool     m_reset_requested  {false};
     // The scene changed while paused (monitor_paused_scene): the display
@@ -973,22 +1068,139 @@ private:
     int      m_cursor_y         {0};     // next band start row within the cursor tile
     uint32_t m_frame_counter    {0};     // RNG decorrelation across ticks
     bool     m_hashes_initialized{false};
-    // Layout invalidations land in the same frame as the primitive swap
-    // that caused them, but the swapped meshes' vertex uploads sit in the
-    // FRAME command buffer (submitted at end of frame) while the G-buffer
-    // bake is a standalone submit that would run first - rastering
-    // not-yet-copied buffers into permanently black regions. Set on layout
-    // change; the tick skips one G-buffer bake so the upload-carrying frame
-    // is submitted ahead of the bake on the same queue.
+    // Layout invalidations land in the same prepare phase (M2) as the
+    // primitive swap that caused them, but the swapped meshes' vertex
+    // uploads ride that M2's upload command buffer, which the render phase
+    // submits first, while the G-buffer bake is a standalone submit that
+    // would run in M2, before it - rastering not-yet-copied buffers into
+    // permanently black regions. Set on layout change; prepare_tick skips
+    // one G-buffer bake, so the bake runs in the next M2, after the
+    // upload-carrying submit on the same queue.
     bool     m_gbuffer_upload_defer{false};
     uint64_t m_hash_lighting    {0};     // lights + occluder transforms
     uint64_t m_hash_gbuffer     {0};     // lightmapped region transforms
     uint64_t m_hash_layout      {0};     // lightmapped set + grid parameters
     Scene_root* m_layout_scene_root{nullptr}; // scene update_layout() ran for
 
-    // Per-tick scratch (capacity kept across frames).
-    std::vector<erhe::graphics::Acceleration_structure_instance> m_tick_instances;
-    std::vector<Lm_instance_record>                              m_tick_records;
+    // Standalone bake scratch (bake_direct, offline_tick; capacity kept).
+    std::vector<erhe::graphics::Acceleration_structure_instance> m_standalone_instances;
+    std::vector<Lm_instance_record>                              m_standalone_records;
+    // prepare_tick() light collection scratch; the lights reach the render
+    // phase inside the tick slot's gather block.
+    std::vector<Light_record>                                    m_tick_lights;
+    // BLAS created by collect_instances() whose build is not recorded yet:
+    // a standalone bake records them at once, prepare_tick() moves them
+    // into its tick slot.
+    std::vector<erhe::graphics::Acceleration_structure*>         m_blas_pending_build;
+
+    // Pending target clears (create_bake_targets): a standalone bake records
+    // them at once (record_bake_target_clears), prepare_tick() moves them
+    // into its tick slot.
+    bool     m_working_clear_pending{false};
+    bool     m_display_clear_pending{false};
+
+    class Record_inputs
+    {
+    public:
+        // Working atlas, dilate scratch and display atlas (create_bake_targets).
+        std::shared_ptr<erhe::graphics::Texture>        working;
+        std::shared_ptr<erhe::graphics::Texture>        dilate;
+        std::shared_ptr<erhe::graphics::Texture>        display;
+        // G-buffer of the tile (ensure_gbuffer_targets / bake_gbuffer).
+        std::shared_ptr<erhe::graphics::Texture>        position;
+        std::shared_ptr<erhe::graphics::Texture>        normal;
+        std::shared_ptr<erhe::graphics::Texture>        albedo;
+        // Supersampled ray origins; null unless valid for this G-buffer.
+        std::shared_ptr<erhe::graphics::Texture>        origin;
+        int                                             origin_factor{0};
+        // The tile's accumulation (Tile_state::accum).
+        std::shared_ptr<erhe::graphics::Texture>        accum;
+        // Non-null: the one-shot adjust pass runs (take_adjust).
+        std::shared_ptr<erhe::graphics::Texture>        smooth_position;
+        erhe::graphics::Compute_pipeline*               adjust_pipeline{nullptr};
+        int                                             tile_size{0};
+        // Where the tile publishes into the display atlas; none when the
+        // tile holds no display slot.
+        bool                                            has_publish_slot{false};
+        glm::ivec2                                      publish_slot_origin{0, 0};
+        // The tile's seam lines.
+        std::shared_ptr<const std::vector<Seam_vertex>> seam_vertices;
+        uint32_t                                        seam_first_vertex{0};
+        uint32_t                                        seam_vertex_count{0};
+        // The Bake_options fields the records read.
+        bool                                            dilation     {false};
+        bool                                            seam_blend   {false};
+        float                                           gutter_texels{0.0f};
+    };
+
+    // What prepare_tick() (M2) decided and record_tick() (R) records. The
+    // stage is how far the tick got; each stage includes the ones before it
+    // (record_tick compares with >=), so a tick that returned early records
+    // the work it had already set up, as the single-phase tick recorded it
+    // before returning.
+    enum class Tick_stage : unsigned int {
+        none,      // nothing to record
+        targets,   // target clears, slot white clears, the tile's accumulation clear
+        occluders, // + the pending BLAS builds
+        gather     // + TLAS, adjust, the gather slice and the publish
+    };
+    class Tick_plan
+    {
+    public:
+        Tick_stage   stage    {Tick_stage::none};
+        int          tile     {-1};    // cursor tile of this tick
+        int          tile_size{0};
+        int          band_rows{0};
+        Publish_kind publish  {Publish_kind::none};
+    };
+    // One tick's plan and recording inputs per device frame in flight,
+    // indexed by the role-keyed Device::get_frame_index() (get_tick_slot()):
+    // prepare_tick() fills the slot of the frame the main thread prepares,
+    // record_tick() records the slot of the frame the render phase renders
+    // and marks it consumed (stage none), so with frame pipelining the
+    // prepare phase of frame N+1 never touches what the render phase of
+    // frame N records. Sized once; the vectors keep their capacity.
+    class Tick_slot
+    {
+    public:
+        Tick_plan                                                    plan;
+        // Target clears taken from the working set.
+        bool                                                         working_clear{false};
+        bool                                                         display_clear{false};
+        // Display slot origins to overwrite with white (fresh occupants,
+        // stale inactive publishes), taken from m_slots_pending_white_clear.
+        std::vector<glm::ivec2>                                      white_clear_origins;
+        // What the records read (the cursor tile's accumulation among it,
+        // held so an eviction in a later prepare phase cannot release it
+        // first), captured for this frame; and the accumulation's pending
+        // clear.
+        Record_inputs                                                inputs;
+        bool                                                         accum_clear{false};
+        std::vector<erhe::graphics::Acceleration_structure_instance> instances;
+        std::vector<Lm_instance_record>                              records;
+        std::vector<erhe::graphics::Acceleration_structure*>         blas_pending_build;
+        // The gather uniform block, written in full by prepare_tick()
+        // (lights, sky, RNG frame index, band start); the render phase
+        // copies it into its ring buffer range.
+        std::vector<std::byte>                                       gather_block;
+        erhe::graphics::Texture*                                     transmittance_lut{nullptr};
+        erhe::graphics::Texture*                                     multiscatter_lut {nullptr};
+    };
+    std::vector<Tick_slot> m_tick_slots;
+    [[nodiscard]] auto get_tick_slot() -> Tick_slot&;
+    void record_tick_slot(erhe::graphics::Command_buffer& command_buffer, const Tick_slot& tick_slot);
+
+    // BLAS evicted from m_blas_cache while a tick slot of a frame still in
+    // flight may reference them (instances, pending builds): kept until
+    // that frame's slot comes around again (get_frame_index() at eviction +
+    // frames in flight), then destroyed by the prepare phase.
+    class Retired_blas
+    {
+    public:
+        uint64_t   frame_index{0};
+        Blas_entry entry;
+    };
+    std::vector<Retired_blas> m_retired_blas;
 };
 
 } // namespace editor

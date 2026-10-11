@@ -532,7 +532,7 @@ Device_impl::Device_impl(
     VkInstanceCreateInfo instance_create_info = {
         .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext                   = nullptr,
-        .flags                   = portability_enumeration_enabled ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR : 0u,
+        .flags                   = portability_enumeration_enabled ? static_cast<VkInstanceCreateFlags>(VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR) : VkInstanceCreateFlags{0},
         .pApplicationInfo        = &application_info,
         .enabledLayerCount       = static_cast<uint32_t>(enabled_instance_layers_c_str.size()),
         .ppEnabledLayerNames     = enabled_instance_layers_c_str.data(),
@@ -923,7 +923,7 @@ Device_impl::Device_impl(
         query_features_chain_last        = query_features_chain_last->pNext;
     }
     // Host query reset (core 1.2): backs the frame-bracket query ring
-    // (implementation plan step P0.3) - reset from the CPU in wait_frame
+    // (implementation plan step P0.3) - reset from the CPU in acquire_frame_slot
     // without needing a command buffer.
     VkPhysicalDeviceHostQueryResetFeatures query_host_query_reset_features{
         .sType          = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES,
@@ -1881,7 +1881,7 @@ Device_impl::Device_impl(
             // Driver-reported heap budgets for vmaGetHeapBudgets(); the
             // flag is only valid when VK_EXT_memory_budget was enabled on
             // the device (VMA falls back to internal estimates without it).
-            (m_device_extensions.m_VK_EXT_memory_budget ? VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT : VmaAllocatorCreateFlags{0}),
+            (m_device_extensions.m_VK_EXT_memory_budget ? static_cast<VmaAllocatorCreateFlags>(VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT) : VmaAllocatorCreateFlags{0}),
         .physicalDevice                 = m_vulkan_physical_device, // VkPhysicalDevice VMA_NOT_NULL physicalDevice;
         .device                         = m_vulkan_device,          // VkDevice VMA_NOT_NULL device;
         .preferredLargeHeapBlockSize    = 0,
@@ -1975,6 +1975,52 @@ Device_impl::Device_impl(
                 fmt::format("Device cb pool (frame_slot={}, thread_slot={})", frame_slot, thread_slot).c_str()
             );
         }
+
+        // The device-internal frame-end pool and its one cb (frame bracket
+        // end timestamp, recorded by end_frame).
+        const VkCommandPoolCreateInfo frame_end_pool_create_info{
+            .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext            = nullptr,
+            .flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+            .queueFamilyIndex = m_graphics_queue_family_index
+        };
+        const VkResult frame_end_pool_result = vkCreateCommandPool(
+            m_vulkan_device, &frame_end_pool_create_info, nullptr, &m_frame_end_command_pools[frame_slot]
+        );
+        if (frame_end_pool_result != VK_SUCCESS) {
+            log_context->critical(
+                "vkCreateCommandPool() failed with {} {} for frame-end pool (frame_slot={})",
+                static_cast<int32_t>(frame_end_pool_result), c_str(frame_end_pool_result), frame_slot
+            );
+            abort();
+        }
+        set_debug_label(
+            VK_OBJECT_TYPE_COMMAND_POOL,
+            reinterpret_cast<uint64_t>(m_frame_end_command_pools[frame_slot]),
+            fmt::format("Device frame-end cb pool (frame_slot={})", frame_slot).c_str()
+        );
+        const VkCommandBufferAllocateInfo frame_end_allocate_info{
+            .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext              = nullptr,
+            .commandPool        = m_frame_end_command_pools[frame_slot],
+            .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+        const VkResult frame_end_cb_result = vkAllocateCommandBuffers(
+            m_vulkan_device, &frame_end_allocate_info, &m_frame_end_command_buffers[frame_slot]
+        );
+        if (frame_end_cb_result != VK_SUCCESS) {
+            log_context->critical(
+                "vkAllocateCommandBuffers() failed with {} {} for frame-end cb (frame_slot={})",
+                static_cast<int32_t>(frame_end_cb_result), c_str(frame_end_cb_result), frame_slot
+            );
+            abort();
+        }
+        set_debug_label(
+            VK_OBJECT_TYPE_COMMAND_BUFFER,
+            reinterpret_cast<uint64_t>(m_frame_end_command_buffers[frame_slot]),
+            fmt::format("Device frame-end cb (frame_slot={})", frame_slot).c_str()
+        );
     }
 
     const VkSemaphoreTypeCreateInfo semaphore_type_create_info{
@@ -2385,9 +2431,15 @@ Device_impl::Device_impl(
                 .pPoolSizes    = pool_sizes
             };
 
-            result = vkCreateDescriptorPool(m_vulkan_device, &pool_create_info, nullptr, &m_per_frame_descriptor_pool);
-            if (result != VK_SUCCESS) {
-                log_context->error("vkCreateDescriptorPool() for fallback pool failed with {}", static_cast<int32_t>(result));
+            // One pool per frame in flight: acquire_frame_slot resets the
+            // pool of the slot it acquires, after the timeline wait retired
+            // the slot's previous frame.
+            for (VkDescriptorPool& pool : m_per_frame_descriptor_pools) {
+                result = vkCreateDescriptorPool(m_vulkan_device, &pool_create_info, nullptr, &pool);
+                if (result != VK_SUCCESS) {
+                    log_context->error("vkCreateDescriptorPool() for fallback pool failed with {}", static_cast<int32_t>(result));
+                    pool = VK_NULL_HANDLE;
+                }
             }
         }
 
@@ -2403,7 +2455,7 @@ Device_impl::Device_impl(
     // when constructed. Per-slice reset is recorded by the first
     // Command_buffer::begin of each frame (driven by m_gpu_timer_reset_pending,
     // see Command_buffer_impl::begin). Results are read from the slice
-    // we are about to reuse in Device_impl::wait_frame, AFTER the
+    // we are about to reuse in Device_impl::acquire_frame_slot, AFTER the
     // timeline-semaphore wait that guarantees the slice has completed.
     {
         // Re-query the graphics queue family's properties to read
@@ -2473,7 +2525,7 @@ Device_impl::Device_impl(
                 );
                 // Frame-spanning GPU timestamp bracket ring (step P0.3):
                 // one two-query pool per slot (vulkan_device.hpp), host
-                // reset by wait_frame when the slot comes round again.
+                // reset by acquire_frame_slot when the slot comes round again.
                 if (m_host_query_reset) {
                     bool bracket_ok = true;
                     for (std::size_t slot = 0; slot < s_frame_bracket_ring; ++slot) {

@@ -18,6 +18,7 @@ depending on the selected backend.
 - `ERHE_PROFILE_COLOR(name, color)` -- colored profiling scope
 - `ERHE_PROFILE_GPU_SCOPE(name)` -- GPU profiling zone
 - `ERHE_PROFILE_GPU_CONTEXT` / `ERHE_PROFILE_FRAME_END` -- GPU context and frame markers
+- `ERHE_PROFILE_THREAD_NAME(name)` -- name the calling thread in the profiler (Tracy `tracy::SetThreadName`; no-op for the other back ends)
 - `ERHE_PROFILE_MUTEX(Type, var)` -- declare a mutex visible to the profiler
 - `ERHE_PROFILE_LOCKABLE_BASE(Type)` -- base type for lockable (Tracy `LockableBase` or plain type)
 - `ERHE_PROFILE_MESSAGE(msg, len)` / `ERHE_PROFILE_MESSAGE_LITERAL(msg)` -- log messages to profiler

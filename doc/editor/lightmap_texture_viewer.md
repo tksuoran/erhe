@@ -16,7 +16,12 @@ each region's `erhe::geometry::Geometry`, and changes nothing. Companion to
   `Imgui_renderer::image(erhe::imgui::Draw_texture_parameters{...})`. The
   texture combo selects the published atlas or the G-buffer position, normal and
   albedo debug views; an exposure slider multiplies the atlas tint, because the
-  atlas is linear HDR and values above 1 clamp.
+  atlas is linear HDR and values above 1 clamp. The window passes the texture
+  itself: the baker creates and replaces the atlas and G-buffer textures on
+  the main thread (the prepare phase and the direct bakes), and the render
+  phase reaches them only through the copies the prepare phase makes for it
+  (the tick slot, the packet's atlas binding;
+  [`lightmap_baking.md`](lightmap_baking.md) section 3a "Frame phases").
 - Pan and zoom are the window's two view members, `m_zoom` (atlas-texel to
   screen-pixel scale) and `m_pan` (screen offset of the atlas origin), with
   `screen_from_uv` and `uv_from_screen` derived from them and used by every

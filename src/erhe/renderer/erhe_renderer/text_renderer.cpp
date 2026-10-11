@@ -16,6 +16,7 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_ui/font.hpp"
 
@@ -191,7 +192,9 @@ Text_renderer::Text_renderer(
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
         }
     }
+    , m_frames{graphics_device.get_number_of_frames_in_flight()}
 {
+    ERHE_VERIFY(!m_frames.empty());
     ERHE_PROFILE_FUNCTION();
 
     config.enabled   = enabled;
@@ -234,6 +237,25 @@ Text_renderer::Text_renderer(
 
 Text_renderer::~Text_renderer() noexcept = default;
 
+auto Text_renderer::get_recording_frame() -> Frame&
+{
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    Frame&         frame       = m_frames[frame_index % m_frames.size()];
+    if (frame.frame_index != frame_index) {
+        // First print of this device frame: the frame that used the entry
+        // before has drawn or released its prints.
+        ERHE_VERIFY(frame.vertex_buffer_ranges.empty());
+        frame.frame_index = frame_index;
+        frame.frame_slot  = 0;
+    }
+    return frame;
+}
+
+void Text_renderer::set_frame_slot(const std::size_t frame_slot)
+{
+    get_recording_frame().frame_slot = frame_slot;
+}
+
 void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_color, const std::string_view text)
 {
     ERHE_PROFILE_FUNCTION();
@@ -256,24 +278,27 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
     const std::size_t ssbo_min_byte_count = m_vertex_ssbo_block.get_size_bytes();
     const std::size_t acquire_byte_count  = std::max({vertex_byte_count, min_range_size, ssbo_min_byte_count});
 
-    if (m_vertex_buffer_ranges.empty())  {
-        m_vertex_buffer_ranges.push_back(
-            m_vertex_ssbo_buffer.acquire(
-                erhe::graphics::Ring_buffer_usage::CPU_write,
-                acquire_byte_count
-            )
-        );
-    }
+    Frame&                     frame                = get_recording_frame();
+    std::vector<Vertex_range>& vertex_buffer_ranges = frame.vertex_buffer_ranges;
 
-    if (m_vertex_buffer_ranges.back().get_writable_byte_count() < vertex_byte_count) {
-        m_vertex_buffer_ranges.push_back(
-            m_vertex_ssbo_buffer.acquire(
-                erhe::graphics::Ring_buffer_usage::CPU_write,
-                acquire_byte_count
-            )
+    // A range serves one frame slot: the first print of a slot, and a print
+    // that does not fit the slot's last range, open a new one.
+    const bool need_new_range =
+        vertex_buffer_ranges.empty() ||
+        (vertex_buffer_ranges.back().frame_slot != frame.frame_slot) ||
+        (vertex_buffer_ranges.back().range.get_writable_byte_count() < vertex_byte_count);
+    if (need_new_range) {
+        vertex_buffer_ranges.push_back(
+            Vertex_range{
+                .frame_slot = frame.frame_slot,
+                .range      = m_vertex_ssbo_buffer.acquire(
+                    erhe::graphics::Ring_buffer_usage::CPU_write,
+                    acquire_byte_count
+                )
+            }
         );
     }
-    erhe::graphics::Ring_buffer_range& vertex_buffer_range = m_vertex_buffer_ranges.back();
+    erhe::graphics::Ring_buffer_range& vertex_buffer_range = vertex_buffer_ranges.back().range;
     std::size_t                        span_write_offset   = vertex_buffer_range.get_written_byte_count();
     const auto                         vertex_gpu_data     = vertex_buffer_range.get_span();
     std::byte* const                   start               = vertex_gpu_data.data();
@@ -314,12 +339,32 @@ void Text_renderer::render(
     erhe::graphics::Render_command_encoder& encoder,
     const erhe::graphics::Render_pass&      render_pass,
     erhe::math::Viewport                    viewport,
-    const bool                              multiview
+    const bool                              multiview,
+    const std::size_t                       frame_slot
 )
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
-    if (m_vertex_buffer_ranges.empty()) {
+    // The calling role's device frame; a frame nothing was printed into has
+    // nothing to draw.
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    Frame&         frame       = m_frames[frame_index % m_frames.size()];
+    if (frame.frame_index != frame_index) {
+        ERHE_VERIFY(frame.vertex_buffer_ranges.empty()); // the entry's earlier frame was drawn or released
+        return;
+    }
+    std::vector<Vertex_range>& vertex_buffer_ranges = frame.vertex_buffer_ranges;
+
+    bool any_range_in_slot = false;
+    for (const Vertex_range& vertex_range : vertex_buffer_ranges) {
+        if (vertex_range.frame_slot == frame_slot) {
+            any_range_in_slot = true;
+            break;
+        }
+    }
+    if (!any_range_in_slot) {
         return;
     }
 
@@ -396,7 +441,11 @@ void Text_renderer::render(
     const std::size_t vertex_ssbo_stride = m_u_vertex_data_size;
     const std::size_t bytes_per_quad     = 4 * vertex_ssbo_stride;
 
-    for (erhe::graphics::Ring_buffer_range& vertex_buffer_range : m_vertex_buffer_ranges) {
+    for (Vertex_range& vertex_range : vertex_buffer_ranges) {
+        if (vertex_range.frame_slot != frame_slot) {
+            continue;
+        }
+        erhe::graphics::Ring_buffer_range& vertex_buffer_range = vertex_range.range;
         vertex_buffer_range.close();
 
         const std::size_t byte_count = vertex_buffer_range.get_written_byte_count();
@@ -415,7 +464,30 @@ void Text_renderer::render(
 
     m_texture_heap->unbind(encoder.get_command_buffer());
 
-    m_vertex_buffer_ranges.clear();
+    // Drop the drawn slot's ranges; the others stay for their own render().
+    std::erase_if(
+        vertex_buffer_ranges,
+        [frame_slot](const Vertex_range& vertex_range) { return vertex_range.frame_slot == frame_slot; }
+    );
+}
+
+void Text_renderer::release_frames()
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    // Releases the calling role's device frame.
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    Frame&         frame       = m_frames[frame_index % m_frames.size()];
+    if (frame.frame_index != frame_index) {
+        ERHE_VERIFY(frame.vertex_buffer_ranges.empty()); // the entry's earlier frame was drawn or released
+        return;
+    }
+    for (Vertex_range& vertex_range : frame.vertex_buffer_ranges) {
+        vertex_range.range.close();
+        vertex_range.range.release();
+    }
+    frame.vertex_buffer_ranges.clear();
 }
 
 } // namespace erhe::renderer

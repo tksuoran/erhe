@@ -18,6 +18,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_task/task.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <fmt/format.h>
 #include <taskflow/taskflow.hpp>
@@ -171,6 +172,11 @@ void Lightmap_streamer::ensure_texture()
     );
     // Defined content + layout before the first slot upload.
     constexpr unsigned int bake_thread_slot = 6;
+    // A standalone submit into the atlas the forward passes sample: join
+    // the render phase in flight first (App_context::join_render_phase).
+    if (m_context.join_render_phase) {
+        m_context.join_render_phase();
+    }
     Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
     command_buffer.begin();
     command_buffer.clear_texture(*m_texture, {0.0, 0.0, 0.0, 0.0});
@@ -183,6 +189,8 @@ void Lightmap_streamer::ensure_texture()
 
 void Lightmap_streamer::apply_tile_regions(Scene_root& scene_root, const int tile)
 {
+    // Writes the scene's mesh primitives: prepare phase (or outside a frame).
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     if ((tile < 0) || (tile >= static_cast<int>(m_manifest.tiles.size()))) {
         return;
     }
@@ -366,6 +374,11 @@ void Lightmap_streamer::upload_pending(Scene_root& scene_root)
     }
     const glm::ivec2 slot_origin = get_slot_origin(pending->slot);
     constexpr unsigned int bake_thread_slot = 6;
+    // A standalone submit into the atlas the forward passes sample: join
+    // the render phase in flight first (App_context::join_render_phase).
+    if (m_context.join_render_phase) {
+        m_context.join_render_phase();
+    }
     Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
     command_buffer.begin();
     command_buffer.transition_texture_layout(*m_texture, Image_layout::transfer_dst_optimal);
@@ -407,6 +420,7 @@ void Lightmap_streamer::upload_pending(Scene_root& scene_root)
 
 void Lightmap_streamer::reapply_regions(Scene_root& scene_root)
 {
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     if (!m_manifest_loaded || (m_scene_root != &scene_root)) {
         return; // nothing applied yet; the next update() publishes fresh
     }
@@ -418,6 +432,10 @@ void Lightmap_streamer::reapply_regions(Scene_root& scene_root)
 
 void Lightmap_streamer::update(Scene_root& scene_root, const glm::vec3* camera_position)
 {
+    // The residency decision, the tile upload (a standalone submit the
+    // mapping write waits for) and the mapping writes run together in the
+    // prepare phase.
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     if (m_scene_root != &scene_root) {
         reset();
         m_scene_root = &scene_root;

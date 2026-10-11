@@ -58,7 +58,9 @@ reports `capacity` bytes available without wrap.
 ## Notes
 
 - Single-threaded. The class has no mutex and uses no atomics; it expects to
-  be driven from one thread (the render thread, in the `erhe::graphics`
-  case).
+  be driven by one thread at a time, ordered by the caller. In the editor
+  the `erhe::graphics` ring buffers are driven by the main thread in M2 and
+  the render thread in R, which never run at the same time
+  (`doc/erhe/graphics.md` "Frame lifecycle").
 - The class does not touch any storage; it only manages bookkeeping. The
   bytes themselves live in whatever buffer the caller pairs with it.

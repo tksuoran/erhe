@@ -7,6 +7,7 @@
 #include "erhe_xr/generated/perf_settings_level.hpp"
 #include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "app_settings.hpp"
 #include "erhe_imgui/windows/performance_window.hpp"
 #include "xr/xr_perf_metric_plot.hpp"
@@ -35,6 +36,7 @@
 #include "xr/hand_tracker.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
@@ -49,6 +51,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/view.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -271,7 +274,7 @@ Headset_view::Headset_view(
         }
     }
 
-    m_rendergraph_node = std::make_shared<Headset_view_node>(rendergraph, *this);
+    m_rendergraph_node = erhe::rendergraph::make_rendergraph_node<Headset_view_node>(rendergraph, *this);
 
     m_shadow_render_node = app_rendering.create_shadow_node_for_scene_view(graphics_device, rendergraph, app_settings, *this);
     rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_render_node.get(), m_rendergraph_node.get());
@@ -755,17 +758,11 @@ void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buff
     // Joint UBO/SSBO, exactly as App_rendering::render_id: bind the same
     // Joint_buffer Forward_renderer uses so the ID skinning branch reads
     // posed joint matrices. Static-only scenes leave it null.
-    erhe::scene_renderer::Joint_buffer*                 joint_buffer{nullptr};
-    std::span<const std::shared_ptr<erhe::scene::Skin>> skins{};
-    if (m_context.forward_renderer != nullptr) {
-        erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
-        if (hosted_scene != nullptr) {
-            const std::vector<std::shared_ptr<erhe::scene::Skin>>& scene_skins = hosted_scene->get_skins();
-            if (!scene_skins.empty()) {
-                joint_buffer = &m_context.forward_renderer->get_joint_buffer();
-                skins        = std::span<const std::shared_ptr<erhe::scene::Skin>>{scene_skins.data(), scene_skins.size()};
-            }
-        }
+    erhe::scene_renderer::Joint_buffer* joint_buffer{nullptr};
+    m_render_joint_poses.capture(scene_root->get_scene().get_skins());
+    const std::span<const erhe::scene_renderer::Joint_pose> joint_poses = m_render_joint_poses.get_poses();
+    if ((m_context.forward_renderer != nullptr) && !joint_poses.empty()) {
+        joint_buffer = &m_context.forward_renderer->get_joint_buffer();
     }
 
     const int                  extent = Id_renderer::get_extent();
@@ -773,25 +770,34 @@ void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buff
 
     const auto& layers = scene_root->layers();
 
-    m_context.id_renderer->render(
+    const erhe::scene::Camera_snapshot pick_camera{*m_pointer_pick_camera};
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>> mesh_spans[] = {
+        layers.content()->meshes,
+        layers.rendertarget()->meshes
+    };
+    // The headset prepares its pick pass where it renders it, in the render
+    // phase (doc/editor/render_thread.md section 2.2 lists its live reads).
+    m_context.id_renderer->render_immediate(
+        Id_renderer::Prepare_parameters{
+            .mesh_spans      = mesh_spans,
+            // Same repurposing of id_renderer.enabled as the desktop path:
+            // false -> ID pass covers skinned meshes only (raytrace covers
+            // static), true -> ID pass covers everything.
+            .skinning_filter = m_context.id_renderer->covers_all_meshes()
+                ? Id_renderer::Skinning_filter::all
+                : Id_renderer::Skinning_filter::skinned_only
+        },
         Id_renderer::Render_parameters{
             .command_buffer     = command_buffer,
             .viewport           = viewport,
-            .camera             = *m_pointer_pick_camera,
-            .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
+            .camera             = pick_camera,
             .x                  = extent / 2,
             .y                  = extent / 2,
             .reverse_depth      = get_reverse_depth(),
             .depth_range        = get_depth_range(),
             .conventions        = get_conventions(),
             .joint_buffer       = joint_buffer,
-            .skins              = skins,
-            // Same repurposing of id_renderer.enabled as the desktop path:
-            // false -> ID pass covers skinned meshes only (raytrace covers
-            // static), true -> ID pass covers everything.
-            .skinning_filter    = m_context.id_renderer->enabled
-                ? Id_renderer::Skinning_filter::all
-                : Id_renderer::Skinning_filter::skinned_only,
+            .joint_poses        = joint_poses
         }
     );
 }
@@ -889,37 +895,61 @@ void Headset_view::update_hover_with_id_render()
     if (hover_rendertarget) { merge_hover(Hover_entry::rendertarget_slot, entry); }
 }
 
-auto Headset_view::begin_frame() -> bool
+auto Headset_view::wait_frame() -> erhe::xr::Frame_timing
 {
-    m_frame_timing = erhe::xr::Frame_timing{};
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
+        return erhe::xr::Frame_timing{};
+    }
+
+    if (!is_active()) {
+        return erhe::xr::Frame_timing{};
+    }
+
+    // m_poll_events_ok is main-thread state from the previous prepare phase
+    // (M2); xrWaitFrame is not called after a failed event poll.
+    if (!m_poll_events_ok) {
+        return erhe::xr::Frame_timing{};
+    }
+
+    return m_headset->wait_frame();
+}
+
+auto Headset_view::begin_frame(const erhe::xr::Frame_timing& frame_timing) -> bool
+{
+    m_frame_timing = frame_timing;
     if (!m_context.OpenXR || (m_headset == nullptr)) {
         return false;
     }
 
-    if (!is_active()) {
-        return false;
+    m_frame_timing.begin_ok = m_headset->begin_frame(m_frame_timing);
+    if (m_frame_timing.wait_ok && !m_frame_timing.begin_ok) {
+        // xrBeginFrame failed: there is no frame to render or end.
+        m_frame_timing.should_render = false;
     }
-
-    m_frame_timing = m_headset->begin_frame_();
     return m_frame_timing.begin_ok;
 }
 
 auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
     if (!m_context.OpenXR || (m_headset == nullptr)) {
         return false;
     }
 
-    if (!m_poll_events_ok) {
-        return false; // TODO Is this correct?
-    }
     if (!m_frame_timing.begin_ok) {
         return false;
     }
-    if (!m_update_actions_ok) {
-        return false; // TODO Is this correct?
+    // The frame began, so it must end in this frame too: an unpaired
+    // xrBeginFrame makes the next one return XR_FRAME_DISCARDED. A frame
+    // that cannot be used (events or actions failed this frame) is ended
+    // with no layers.
+    if (!m_poll_events_ok || !m_update_actions_ok) {
+        m_headset->end_frame(false);
+        m_frame_timing = erhe::xr::Frame_timing{};
+        return false;
     }
 
     // Reconcile the passthrough state with what the scene needs this frame:
@@ -939,11 +969,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         // Sky enable resolved per scene (#239): a scene may override the sky off,
         // which enables passthrough for this headset view.
         const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
-        const bool sky_enabled = (m_app_context.editor_settings == nullptr)
-            ? true
-            : ((sky_scene_root != nullptr)
-                ? get_effective_sky(*m_app_context.editor_settings, *sky_scene_root).enabled
-                : m_app_context.editor_settings->sky.enabled);
+        const bool sky_enabled = (sky_scene_root != nullptr)
+            ? sky_scene_root->get_render_settings(m_app_context.graphics_device->get_frame_index()).sky.enabled
+            : m_app_context.render_settings->sky.enabled;
         const bool want_passthrough =
             m_headset->get_configuration().passthrough_fb ||
             !sky_enabled;
@@ -994,6 +1022,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             erhe::xr::Render_views_frame& frame = const_cast<erhe::xr::Render_views_frame&>(frame_in);
             std::vector<erhe::scene_renderer::Camera_view_input>& view_inputs = m_view_inputs;
             view_inputs.clear();
+            m_view_camera_snapshots.clear();
             const erhe::math::Viewport viewport_xy{
                 .x      = 0,
                 .y      = 0,
@@ -1012,9 +1041,13 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 if (primary_camera == nullptr) {
                     primary_camera = camera;
                 }
+                // The eye camera as the copy the renderers read (the headset
+                // owns and updates its eye cameras in the render phase).
+                m_view_camera_snapshots.emplace_back(*camera);
+            }
+            for (const erhe::scene::Camera_snapshot& camera_snapshot : m_view_camera_snapshots) {
                 view_inputs.push_back(erhe::scene_renderer::Camera_view_input{
-                    .projection = camera->projection(),
-                    .node       = camera,
+                    .camera     = &camera_snapshot,
                     .viewport   = viewport_xy
                 });
             }
@@ -1038,14 +1071,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             std::vector<erhe::renderer::View>& debug_views = m_debug_views;
             debug_views.clear();
             for (const erhe::scene_renderer::Camera_view_input& view_input : view_inputs) {
-                ERHE_VERIFY(view_input.projection != nullptr);
-                ERHE_VERIFY(view_input.node       != nullptr);
-                const erhe::scene::Transform clip_from_camera = view_input.projection->clip_from_node_transform(
+                ERHE_VERIFY(view_input.camera != nullptr);
+                const erhe::scene::Projection& projection      = view_input.camera->projection();
+                const erhe::scene::Transform clip_from_camera = projection.clip_from_node_transform(
                     view_input.viewport, get_reverse_depth(), get_depth_range(), get_conventions()
                 );
-                const glm::mat4              clip_from_world = clip_from_camera.get_matrix() * view_input.node->node_from_world();
-                const glm::mat4              world_from_node = view_input.node->world_from_node();
-                const erhe::scene::Projection::Fov_sides fov  = view_input.projection->get_fov_sides(view_input.viewport);
+                const glm::mat4              clip_from_world = clip_from_camera.get_matrix() * view_input.camera->node_from_world();
+                const glm::mat4              world_from_node = view_input.camera->world_from_node();
+                const erhe::scene::Projection::Fov_sides fov  = projection.get_fov_sides(view_input.viewport);
                 debug_views.push_back(erhe::renderer::View{
                     .clip_from_world = clip_from_world,
                     .viewport        = glm::vec4{
@@ -1058,10 +1091,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .view_position_in_world = glm::vec4{world_from_node[3]}
                 });
             }
-            m_app_context.debug_renderer->begin_frame(
+            const std::size_t debug_frame_slot = m_app_context.debug_renderer->begin_frame(
                 viewport_xy,
                 std::span<const erhe::renderer::View>{debug_views}
             );
+            m_app_context.text_renderer->set_frame_slot(debug_frame_slot);
 
             // Render_context shared by the wide-line feed (below) and the
             // tool / renderable submission that follows. Encoder is
@@ -1079,7 +1113,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .scene_view          = *this,
                 .viewport_config     = m_viewport_config,
                 .camera              = primary_camera,
+                .camera_snapshot     = view_inputs.empty() ? nullptr : view_inputs.front().camera,
                 .viewport_scene_view = nullptr,
+                .scene_root          = get_scene_root(),
                 .viewport            = viewport_xy,
                 .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
             };
@@ -1094,7 +1130,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             const bool drive_wide_lines = (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled();
             if (drive_wide_lines) {
                 // The editor-global edge-line config (method + bias) reaches
-                // the renderer through apply_content_edge_lines_settings().
+                // the renderer as the frame's Render_settings copy (set_view_params()).
                 content_wide_line_renderer->begin_frame();
 
                 erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
@@ -1114,7 +1150,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         // Same resolution as Composition_pass and the viewport
                         // feed: the selection outline pulse, explicit settings,
                         // or the pass's render style.
-                        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, cpu_render_context);
+                        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, cpu_render_context, cpu_render_context.app_context.render_phase_host_system_time_ns);
                         const float     line_width = settings.constant_size;
                         const auto&     filter     = data.filter;
                         const uint32_t  group      = data.content_wide_line_group;
@@ -1156,8 +1192,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = m_app_context.graphics_device->make_compute_command_encoder(views_cb);
                     if (drive_wide_lines) {
+                        const Content_edge_lines_config& edge_lines = m_app_context.render_settings->content_edge_lines;
                         content_wide_line_renderer->set_view_params(
                             std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
+                            erhe::scene_renderer::Content_wide_line_tent_settings{
+                                .use_tent         = edge_lines.use_tent,
+                                .line_bias_margin = edge_lines.line_bias_margin,
+                                .line_bias_clamp  = edge_lines.line_bias_clamp
+                            },
                             get_reverse_depth(),
                             get_depth_range(),
                             get_conventions()
@@ -1169,11 +1211,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         // bind (T) pose. Mirrors viewport_scene_view: the
                         // update allocates a disjoint ring range from the one
                         // Forward_renderer's later render() requests.
-                        erhe::scene::Scene* scene_for_joints = scene_root->get_hosted_scene();
-                        if ((scene_for_joints != nullptr) && (m_app_context.forward_renderer != nullptr)) {
+                        if (m_app_context.forward_renderer != nullptr) {
+                            m_render_joint_poses.capture(scene_root->get_scene().get_skins());
                             erhe::scene_renderer::Joint_buffer& joint_buffer = m_app_context.forward_renderer->get_joint_buffer();
                             erhe::graphics::Ring_buffer_range joint_buffer_range = joint_buffer.update(
-                                glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, scene_for_joints->get_skins()
+                                glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, m_render_joint_poses.get_poses()
                             );
                             content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
                         }
@@ -1259,11 +1301,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // dispatches + barriers cannot run inside a render pass). Sky mode is
             // resolved per scene (#239).
             const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
-            const int sky_mode = (m_app_context.editor_settings == nullptr)
-                ? 0
-                : ((sky_scene_root != nullptr)
-                    ? get_effective_sky(*m_app_context.editor_settings, *sky_scene_root).mode
-                    : m_app_context.editor_settings->sky.mode);
+            const int sky_mode = (sky_scene_root != nullptr)
+                ? sky_scene_root->get_render_settings(m_app_context.graphics_device->get_frame_index()).sky.mode
+                : m_app_context.render_settings->sky.mode;
             if ((m_app_context.sky_renderer != nullptr) && (sky_mode == 1)) {
                 m_app_context.sky_renderer->ensure_luts(*m_app_context.graphics_device, views_cb);
             }
@@ -1280,7 +1320,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .scene_view          = *this,
                     .viewport_config     = m_viewport_config,
                     .camera              = primary_camera,
+                    .camera_snapshot     = view_inputs.empty() ? nullptr : view_inputs.front().camera,
                     .viewport_scene_view = nullptr,
+                    .scene_root          = get_scene_root(),
                     .viewport            = viewport_xy,
                     .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                     .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
@@ -1296,13 +1338,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 // above. multiview = true picks the multiview-compiled
                 // shader stages and the multiview bind group layout.
                 m_app_context.debug_renderer->render(
-                    encoder, multiview_render_pass, viewport_xy, /*multiview=*/true
+                    encoder, multiview_render_pass, viewport_xy, /*multiview=*/true, debug_frame_slot
                 );
             }
             if (drive_wide_lines) {
                 content_wide_line_renderer->end_frame();
             }
-            m_app_context.debug_renderer->end_frame();
+            // The frame slot's buffers are released by the editor at the
+            // end of the render phase (Debug_renderer::release_frames).
             return true;
         };
         m_headset->render_multiview(command_buffer, multiview_callback);
@@ -1312,6 +1355,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             m_renderdoc_capture_started = false;
         }
         m_headset->end_frame(m_frame_timing.should_render);
+        // As on the per-view path below: this frame's timing is consumed.
+        m_frame_timing = erhe::xr::Frame_timing{};
         return true;
     }
 
@@ -1384,9 +1429,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             };
 
             erhe::scene::Camera* view_camera = view_resources->get_camera();
+            // The eye camera as the copy the renderers read (the headset owns
+            // and updates its eye cameras in the render phase).
+            const erhe::scene::Camera_snapshot view_camera_snapshot{*view_camera};
             const erhe::scene_renderer::Camera_view_input single_view_input{
-                .projection = view_camera->projection(),
-                .node       = view_camera,
+                .camera     = &view_camera_snapshot,
                 .viewport   = viewport
             };
             Render_context render_context {
@@ -1396,7 +1443,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .scene_view          = *this,
                 .viewport_config     = m_viewport_config,
                 .camera              = view_camera,
+                .camera_snapshot     = &view_camera_snapshot,
                 .viewport_scene_view = nullptr,
+                .scene_root          = get_scene_root(),
                 .viewport            = viewport,
                 .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                 .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
@@ -1409,10 +1458,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 1.0f,
                 m_context.graphics_device->get_info().coordinate_conventions
             );
-            m_context.debug_renderer->begin_frame(
+            const std::size_t debug_frame_slot = m_context.debug_renderer->begin_frame(
                 render_context.viewport,
                 std::span<const erhe::renderer::View>(&debug_view, 1)
             );
+            m_context.text_renderer->set_frame_slot(debug_frame_slot);
             m_context.tools         ->render_viewport_tools(render_context);
             m_context.app_rendering ->render_viewport_renderables(render_context);
 
@@ -1436,11 +1486,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // Generate the atmosphere LUTs once before the render pass. Sky mode is
             // resolved per scene (#239).
             const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
-            const int sky_mode = (m_app_context.editor_settings == nullptr)
-                ? 0
-                : ((sky_scene_root != nullptr)
-                    ? get_effective_sky(*m_app_context.editor_settings, *sky_scene_root).mode
-                    : m_app_context.editor_settings->sky.mode);
+            const int sky_mode = (sky_scene_root != nullptr)
+                ? sky_scene_root->get_render_settings(m_app_context.graphics_device->get_frame_index()).sky.mode
+                : m_app_context.render_settings->sky.mode;
             if ((m_app_context.sky_renderer != nullptr) && (sky_mode == 1)) {
                 m_app_context.sky_renderer->ensure_luts(graphics_device, view_cb);
             }
@@ -1469,10 +1517,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 // When in mirror mode, speed up rendering by only rendering first view
                 if (!m_context.OpenXR_mirror || first_view) {
                     m_context.app_rendering ->render_composer(render_context, true, true);
-                    m_context.debug_renderer->render(encoder, *render_pass, render_context.viewport);
+                    m_context.debug_renderer->render(encoder, *render_pass, render_context.viewport, false, debug_frame_slot);
                 }
             } // end of render encoder scope - end of render pass
-            m_context.debug_renderer->end_frame();
+            // The frame slot's buffers are released by the editor at the end
+            // of the render phase (Debug_renderer::release_frames).
 
             if (m_context.OpenXR_mirror && first_view) {
                 // Copy from OpenXR to default framebuffer (window)
@@ -1551,7 +1600,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
 
     m_headset->end_frame(m_frame_timing.should_render);
 
-    // Paranoid
+    // This frame's timing is consumed; begin_frame() of the next frame
+    // stores the next one.
     m_frame_timing = erhe::xr::Frame_timing{};
 
     return true;
@@ -1623,6 +1673,10 @@ void Headset_view::update_camera_node()
         cache_combined_eye_frustum(m_located_eye_views);
     }
     update_root_camera_projection();
+
+    // The root camera as the copy the shadow render node fits to
+    // (Scene_view::get_render_camera()).
+    snapshot_render_view(m_root_camera.get());
 }
 
 void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views)
@@ -1910,7 +1964,7 @@ auto Headset_view::poll_events() -> bool
     return m_poll_events_ok;
 }
 
-auto Headset_view::update_actions() -> bool
+auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1925,7 +1979,7 @@ auto Headset_view::update_actions() -> bool
 
     m_finger_inputs.clear();
 
-    if (!m_frame_timing.begin_ok) {
+    if (!frame_timing.wait_ok) {
         return false;
     }
 
@@ -1942,8 +1996,9 @@ auto Headset_view::update_actions() -> bool
     // until the headset has been attached to a scene. Returning false also
     // keeps m_update_actions_ok false, so render_headset() skips the frame too.
     // Mirrors Scene_view::update_transforms()'s no-scene-root guard. The XR
-    // session stays healthy because poll_events()/begin_frame()/xrSyncActions
-    // have already run for this frame above.
+    // session stays healthy because poll_events()/wait_frame()/xrSyncActions
+    // have already run for this frame above (begin_frame() runs in the
+    // render phase).
     if (m_root_camera == nullptr) {
         return false;
     }

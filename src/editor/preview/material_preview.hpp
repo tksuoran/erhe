@@ -23,12 +23,24 @@ public:
     );
     ~Material_preview() noexcept;
 
-    void render_preview(const std::shared_ptr<erhe::primitive::Material>& material);
+    // Both overloads record into command_buffer: the frame command buffer
+    // when called from a Thumbnails::update() callback (render phase), the
+    // upload command buffer (App_context::current_command_buffer) when
+    // called from the prepare phase.
+    void render_preview(erhe::graphics::Command_buffer& command_buffer, const std::shared_ptr<erhe::primitive::Material>& material);
     void render_preview(
+        erhe::graphics::Command_buffer&                   command_buffer,
         const std::shared_ptr<erhe::graphics::Texture>&   texture,
         const std::shared_ptr<erhe::primitive::Material>& material
     );
     void show_preview  ();
+
+    // ImGui time (the Properties window): the material and size to render
+    // the preview with. update() (main thread, M2) renders the newest
+    // request into the upload command buffer; show_preview() draws the
+    // preview texture (the previous frame's render after a resize).
+    void request_preview(const std::shared_ptr<erhe::primitive::Material>& material, int area_size);
+    void update(erhe::graphics::Command_buffer& command_buffer);
 
     // Cached reference, for the MCP get_editor_references query
     // (doc/editor/import_undo_reference_clearing.md).
@@ -50,6 +62,9 @@ private:
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     std::shared_ptr<erhe::primitive::Material> m_last_material;
+    std::shared_ptr<erhe::primitive::Material> m_requested_material;
+    int                                        m_requested_area_size{0};
+    bool                                       m_request_pending{false};
 
     std::shared_ptr<erhe::scene::Node>         m_node;
     std::shared_ptr<erhe::scene::Mesh>         m_mesh;

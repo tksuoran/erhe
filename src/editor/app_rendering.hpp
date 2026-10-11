@@ -17,6 +17,7 @@
 #include <memory>
 
 namespace erhe::commands       { class Commands; }
+namespace erhe::graphics       { class Texture; }
 namespace erhe::imgui          { class Imgui_windows; }
 namespace erhe::scene          { class Xformable; using Node = Xformable; }
 namespace erhe::scene_renderer { class Content_wide_line_renderer; class Mesh_memory; }
@@ -30,11 +31,12 @@ class App_context;
 class App_message_bus;
 class App_rendering;
 class App_settings;
-class Grid_frame;
-enum class Grid_depth_mode : unsigned int;
+class Grid_pass_state;
+class Id_pass_prepared;
 class Programs;
 class Render_context;
 class Renderable;
+class Scene_image_view;
 class Scene_view;
 class Shadow_render_node;
 
@@ -101,11 +103,6 @@ public:
     erhe::graphics::Base_render_pipeline bone6_hidden_color;
 };
 
-// Applies editor_settings->content_edge_lines (method + bias) to the
-// content wide-line renderer. Called once the renderer exists and from the
-// Settings window when the section is edited, never per frame.
-void apply_content_edge_lines_settings(App_context& context);
-
 class App_rendering
 {
 public:
@@ -124,6 +121,30 @@ public:
         App_settings&                   app_settings,
         Scene_view&                     scene_view
     ) -> std::shared_ptr<Shadow_render_node>;
+
+    // Main thread, M2 after the views prepared: every shadow node copies its
+    // requested configuration, with the render settings copy's shadow
+    // technique, for the render phase of this frame to apply
+    // (Shadow_render_node::prepare).
+    void prepare_shadow_render_nodes();
+
+    // Main thread, the last M2 step (after update_material_sets() and the
+    // lightmap prepare phase, which settle the forward material slots and
+    // the lightmap uv transforms the records carry): every view that draws
+    // the composer in the render phase - the viewports and the scene image
+    // views - prepares its composition into its frame slot
+    // (Composer_frame_slots; doc/editor/editor.md "Frame phases and the
+    // render thread").
+    // Then every shadow node prepares its bucket path casters
+    // (Shadow_render_node::prepare_casters).
+    void prepare_composition(uint64_t frame_index, std::size_t frames_in_flight, int64_t host_system_time_ns);
+    // One view's composition (called by the views' prepare_composition()):
+    // the sky pass parameters for the view's scene, then Composer::prepare.
+    void prepare_composer(const Render_context& context, int64_t host_system_time_ns, Composer_prepared& out);
+    // Main thread: Scene_image_view lists itself for prepare_composition()
+    // for its lifetime.
+    void register_scene_image_view  (Scene_image_view* scene_image_view);
+    void unregister_scene_image_view(Scene_image_view* scene_image_view);
 
     [[nodiscard]] auto get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>;
     [[nodiscard]] auto get_all_shadow_nodes    () -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
@@ -146,20 +167,38 @@ public:
     void render_overlay             (const Render_context& context);
     void render_viewport_renderables(const Render_context& context);
     // Renders the selected composition-pass phases (content and/or overlay).
-    // The VR path renders both in one pass (no post-processing).
+    // The VR path renders both in one pass (no post-processing). Draws the
+    // composition prepared in context.composer_prepared; without one (the
+    // headset) the sky parameters are refreshed and each pass prepares
+    // where it renders.
     void render_composer            (const Render_context& context, bool include_content, bool include_overlay);
+    // M2, from Viewport_scene_view::prepare_composition (the last M2 step,
+    // after Id_renderer::begin_frame handed the frame its region scan): the
+    // view's id pass into its frame slot, under the gates render_id()
+    // renders under.
+    void prepare_id                 (const Render_context& context, Id_pass_prepared& out);
+    // Render phase: draws the id pass prepare_id() prepared for the view
+    // (Render_context::composer_prepared).
     void render_id                  (const Render_context& context);
     void process_start_capture      ();
     void process_end_capture        ();
-    void set_grid_visibility        (bool visible);
-    void set_grid_frame             (const Grid_frame& frame, Grid_depth_mode depth_mode);
-    void set_grid_label             (const glm::vec4& grid_label);
-    void set_grid_colors            (const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color);
-    void set_grid_line_widths       (const glm::vec4& level_widths);
-    void set_grid_sizes             (const glm::vec4& level_cell_sizes);
+    // The grid composition pass inputs of a view without a viewport render
+    // state (the headset, which prepares its composition where it renders
+    // it). A viewport records its grid into its render state instead
+    // (Viewport_scene_view::record_grid()).
+    void set_grid                   (const Grid_pass_state& grid);
     // Refreshes the sky composition pass parameters from the sky config effective
     // for the render context's scene (per-scene override or editor-global default).
     void update_sky_parameters      (const Render_context& context);
+
+    // The lightmap atlas the forward passes sample, chosen by the main
+    // thread: the editor's lightmap prepare phase (baker or streamer) and
+    // the MCP direct bake. M2 copies it into the Frame_packet and the render
+    // phase hands the packet's texture to the forward renderer, so R binds
+    // the atlas of the frame it renders while M2 of a later frame chooses
+    // the next one. Main thread only.
+    void set_lightmap_texture(const std::shared_ptr<erhe::graphics::Texture>& texture);
+    [[nodiscard]] auto get_lightmap_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
 
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);
@@ -235,6 +274,8 @@ private:
 
     erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
     App_context&              m_context;
+    // Device frames in flight: the composer passes' frame statistics slots.
+    std::size_t               m_frames_in_flight{0};
 
     // Commands
     Capture_frame_command     m_capture_frame_command;
@@ -252,6 +293,12 @@ private:
 
     ERHE_PROFILE_MUTEX(std::mutex, m_renderables_mutex);
     std::vector<Renderable*>       m_renderables;
+
+    // Main thread only (register / unregister / prepare_composition).
+    std::vector<Scene_image_view*> m_scene_image_views;
+
+    // Main thread only (set_lightmap_texture).
+    std::shared_ptr<erhe::graphics::Texture> m_lightmap_texture;
 };
 
 static constexpr unsigned int s_stencil_edge_lines               =  1u; // 0 inc

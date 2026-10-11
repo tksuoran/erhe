@@ -69,8 +69,8 @@ auto draw_brush_thumbnail(
         brush,
         // Deferred callback (see Thumbnails::draw): captures only whole-app
         // lifetime state and shared ownership of the brush.
-        [&app_context = context, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-            app_context.brush_preview->render_preview(texture, texture_layer, brush, time);
+        [&app_context = context, brush](erhe::graphics::Command_buffer& command_buffer, const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
+            app_context.brush_preview->render_preview(command_buffer, texture, texture_layer, brush, time);
         },
         placement.size
     );

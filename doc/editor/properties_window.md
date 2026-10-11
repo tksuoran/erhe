@@ -76,7 +76,16 @@ migrated" table lists the hand-written rows that are authored state; section
 - R4 Every material row is a property row (the slot samplers are the
   seven `<slot>_texture_*` sampler properties, section 4.1 of the design
   record); `material_properties` draws only the preview render and the
-  BRDF slice for a selected material.
+  BRDF slice for a selected material. The BRDF slice's phi / incident phi
+  sliders edit `Brdf_slice::phi` / `incident_phi` (main thread); the slice
+  node copies them, with the material, into the frame being prepared
+  (`Brdf_slice_rendergraph_node::prepare_rendergraph_node`,
+  `Rendergraph::prepare_frame`, which also settles the node's own material
+  set and the material's slot) and renders that copy, and the window shows
+  the slice through the node itself as the texture reference. The texture
+  preview of a selected texture item passes the texture directly: content
+  library textures are created by the main thread, never by the render
+  phase (`doc/editor/editor.md` "Frame phases and the render thread").
 - R5 List-valued state with no `Property_value` form (the record list
   editors: samplers, animation channels and samplers) and the
   scene's settings-override block keep their hand-written editor, drawn per

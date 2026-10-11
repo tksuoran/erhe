@@ -108,6 +108,7 @@ if (_gpu_tests_supported)
     add_executable(${_gpu_target}
         gpu_test_main.cpp
         test_m1_device_up.cpp
+        test_two_frames_open.cpp
         test_m2_clear_color.cpp
         test_m3_triangle.cpp
         test_m4_compute_ssbo.cpp

@@ -42,14 +42,14 @@ Swapchain_impl::Swapchain_impl(
     // on demand from m_device_impl.
 }
 
-auto Swapchain_impl::current_slot() const -> size_t
+auto Swapchain_impl::get_slot_index(const uint64_t frame_id) const -> size_t
 {
-    // Single source of truth for "which frame-in-flight slot is the
-    // current one". Defined by the device's frame index modulo N. The
-    // device advances this exactly once per Device_impl::end_frame; reads
-    // are stable for the duration of a single frame
-    // (wait_frame -> begin_frame -> ... -> end_frame).
-    return m_device_impl.get_frame_in_flight_index();
+    // Single source of truth for "which frame-in-flight slot holds this
+    // frame's swapchain state": the device's slot of the frame id. Every
+    // caller passes the frame id of the command buffer that drives the
+    // swapchain (Command_buffer_impl::get_frame_id), never the device's
+    // role-keyed frame index, so the lookup is the same on every thread.
+    return m_device_impl.get_frame_slot_index(frame_id);
 }
 
 Swapchain_impl::~Swapchain_impl() noexcept
@@ -67,8 +67,7 @@ void Swapchain_impl::release_resources()
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     VkResult result = VK_SUCCESS;
 
-    // TODO Queue thread safety
-    result = vkDeviceWaitIdle(vulkan_device);
+    result = m_device_impl.device_wait_idle();
     if (result != VK_SUCCESS) {
         if (result == VK_ERROR_DEVICE_LOST) {
             m_device_impl.report_device_fault("swapchain teardown vkDeviceWaitIdle");
@@ -138,6 +137,7 @@ void Swapchain_impl::release_resources()
 
     // Screenshot capture staging buffer(s). Safe to free here: the GPU was
     // drained by the vkDeviceWaitIdle at the top of this function.
+    const std::lock_guard<std::mutex> capture_lock{m_capture_mutex};
     VmaAllocator& allocator = m_device_impl.get_allocator();
     for (const auto& [buffer, allocation] : m_capture_garbage) {
         vmaDestroyBuffer(allocator, buffer, allocation);
@@ -168,85 +168,31 @@ void Swapchain_impl::reset_for_new_surface()
     // Restore higher-level state to the post-construction defaults so
     // wait_frame()'s state precondition holds and init_swapchain() does
     // not see a cached extent that would early-out the rebuild. The
-    // device frame-in-flight index is owned by Device_impl and keeps
-    // advancing across the reset; current_slot() therefore stays
-    // consistent with the device timeline.
+    // device frame ids are owned by Device_impl and keep advancing across
+    // the reset; the slots stay keyed by them.
     m_swapchain_extent     = VkExtent2D{0, 0};
     m_swapchain_format     = VK_FORMAT_UNDEFINED;
     m_depth_format         = VK_FORMAT_UNDEFINED;
     m_is_valid             = false;
     m_acquired_image_index = 0;
     m_state                = Swapchain_frame_state::idle;
-    m_capture_supported    = false; // re-decided by the next init_swapchain
+    {
+        const std::lock_guard<std::mutex> lock{m_capture_mutex};
+        m_capture_supported = false; // re-decided by the next init_swapchain
+    }
 }
 
-auto Swapchain_impl::submit_command_buffer() -> bool
-{
-    if (!is_valid()) {
-        return false;
-    }
-
-    ERHE_VERIFY(m_state == Swapchain_frame_state::render_pass_end);
-
-    const Swapchain_frame_in_flight& frame        = m_submit_history[current_slot()];
-    const Device_frame_in_flight&    device_frame = m_device_impl.get_device_frame_in_flight(current_slot());
-    VkQueue  vulkan_graphics_queue = m_device_impl.get_graphics_queue();
-    VkResult result                = VK_SUCCESS;
-
-    // Make a submission. Wait on the acquire semaphore and signal the present semaphore.
-    const VkSemaphoreSubmitInfo wait_semaphore_info{
-        .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .pNext       = nullptr,
-        .semaphore   = frame.acquire_semaphore,
-        .value       = 0,
-        .stageMask   = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .deviceIndex = 0,
-    };
-    const VkSemaphoreSubmitInfo signal_semaphore_info{
-        .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .pNext       = nullptr,
-        .semaphore   = frame.present_semaphore,
-        .value       = 0,
-        .stageMask   = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .deviceIndex = 0,
-    };
-    const VkCommandBufferSubmitInfo command_buffer_info{
-        .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-        .pNext         = nullptr,
-        .commandBuffer = device_frame.command_buffer,
-        .deviceMask    = 0,
-    };
-    const VkSubmitInfo2 submit_info{
-        .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-        .pNext                    = nullptr,
-        .flags                    = 0,
-        .waitSemaphoreInfoCount   = 1,
-        .pWaitSemaphoreInfos      = &wait_semaphore_info,
-        .commandBufferInfoCount   = 1,
-        .pCommandBufferInfos      = &command_buffer_info,
-        .signalSemaphoreInfoCount = 1,
-        .pSignalSemaphoreInfos    = &signal_semaphore_info,
-    };
-    log_swapchain->trace("vkQueueSubmit2()");
-    result = vkQueueSubmit2(vulkan_graphics_queue, 1, &submit_info, device_frame.submit_fence);
-    if (result != VK_SUCCESS) {
-        m_device_impl.get_device().device_message(
-            Message_severity::error,
-            fmt::format("vkQueueSubmit2() failed with {} {}", static_cast<int32_t>(result), c_str(result))
-        );
-    }
-
-    m_state = Swapchain_frame_state::command_buffer_submit;
-    return true;
-}
-
-auto Swapchain_impl::wait_frame(Frame_state& out_frame_state) -> bool
+auto Swapchain_impl::wait_frame(const uint64_t frame_id, Frame_state& out_frame_state) -> bool
 {
     ERHE_VERIFY(
         (m_state == Swapchain_frame_state::idle) ||
         (m_state == Swapchain_frame_state::image_present)
     );
 
+    // The swapchain has one state machine and one acquired image: the
+    // frame that waits here owns it until its present (begin_frame and
+    // present verify the id).
+    m_frame_id = frame_id;
     out_frame_state = Frame_state{};
 
     // (Re)build the swapchain when we have no handle, or the previous
@@ -266,7 +212,7 @@ auto Swapchain_impl::wait_frame(Frame_state& out_frame_state) -> bool
             out_frame_state.should_render = false;
             return false;
         }
-        init_swapchain();
+        init_swapchain(frame_id);
     }
 
     if (!m_is_valid) {
@@ -278,16 +224,17 @@ auto Swapchain_impl::wait_frame(Frame_state& out_frame_state) -> bool
         return false;
     }
 
-    setup_frame();
+    setup_frame(frame_id);
 
     m_state = Swapchain_frame_state::command_buffer_ready;
 
     return true;
 }
 
-auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
+auto Swapchain_impl::begin_frame(const uint64_t frame_id, const Frame_begin_info& frame_begin_info) -> bool
 {
     ERHE_VERIFY(m_state == Swapchain_frame_state::command_buffer_ready);
+    ERHE_VERIFY(frame_id == m_frame_id);
 
     VkResult result = VK_SUCCESS;
 
@@ -317,7 +264,7 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
 #if defined(ERHE_OS_MACOS)
         pin_drawable_size_to_swapchain_extent();
 #endif
-        result = acquire_next_image(&m_acquired_image_index);
+        result = acquire_next_image(frame_id, &m_acquired_image_index);
     }
 
     if (
@@ -326,7 +273,7 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
         (result == VK_ERROR_OUT_OF_DATE_KHR) ||
         (result == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT) // recreate re-acquires the exclusive mode
     ) {
-        init_swapchain();
+        init_swapchain(frame_id);
         if (!m_is_valid) {
             m_acquired_image_index = 0xffu;
             m_state                = Swapchain_frame_state::idle;
@@ -335,7 +282,7 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
 #if defined(ERHE_OS_MACOS)
         pin_drawable_size_to_swapchain_extent();
 #endif
-        result = acquire_next_image(&m_acquired_image_index);
+        result = acquire_next_image(frame_id, &m_acquired_image_index);
     }
     if ((result != VK_SUCCESS) && (result != VK_SUBOPTIMAL_KHR)) {
         log_context->warn("Could not obtain swapchain image, skipping frame");
@@ -349,124 +296,29 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
 
     // Allocate present_semaphore now that an image has been acquired.
     // setup_frame no longer does this unconditionally; see its comment.
-    Swapchain_frame_in_flight& frame = m_submit_history[current_slot()];
+    Swapchain_frame_in_flight& frame = m_submit_history[get_slot_index(frame_id)];
     ERHE_VERIFY(frame.present_semaphore == VK_NULL_HANDLE);
     frame.present_semaphore = get_semaphore();
     m_state = Swapchain_frame_state::image_ackquired;
     ERHE_VULKAN_SYNC_TRACE(
-        "[SWAPCHAIN_BEGIN] frame_index={} acquired_image_index={} submit_history_index={}",
-        m_device_impl.get_frame_index(), m_acquired_image_index, current_slot()
+        "[SWAPCHAIN_BEGIN] frame_id={} acquired_image_index={} submit_history_index={}",
+        frame_id, m_acquired_image_index, get_slot_index(frame_id)
     );
     return true;
 }
 
-// Called by Render_pass_impl::start_render_pass()
-auto Swapchain_impl::begin_render_pass(VkRenderPassBeginInfo& render_pass_begin_info) -> VkCommandBuffer
-{
-    if (!is_valid()) {
-        return VK_NULL_HANDLE;
-    }
-
-    ERHE_VERIFY(
-        (m_state == Swapchain_frame_state::image_ackquired) ||
-        (m_state == Swapchain_frame_state::render_pass_end)
-    );
-
-    //const Swapchain_frame_in_flight& frame = m_submit_history[current_slot()];
-    //VkQueue  vulkan_graphics_queue = m_device_impl.get_graphics_queue();
-    uint64_t frame_index           = m_device_impl.get_frame_index();
-
-    log_swapchain->trace(
-        "Swapchain_impl::begin_render_pass() slot = {} m_acquired_image_index = {} frame_index = {}",
-        current_slot(), m_acquired_image_index, frame_index
-    );
-
-    const VkCommandBuffer vulkan_command_buffer = get_command_buffer();
-    if (vulkan_command_buffer == VK_NULL_HANDLE) {
-        return VK_NULL_HANDLE;
-    }
-
-    // Note: the command buffer was already vkBeginCommandBuffer'd by
-    // Device_impl::begin_frame(). We just record vkCmdBeginRenderPass2 here
-    // and let Device_impl::end_frame() end + submit it.
-
-    if (
-        (m_swapchain_objects.framebuffers[m_acquired_image_index] == VK_NULL_HANDLE) ||
-        (m_swapchain_objects.render_pass [m_acquired_image_index] != render_pass_begin_info.renderPass)
-    ) {
-        init_swapchain_framebuffer(m_acquired_image_index, render_pass_begin_info.renderPass);
-    }
-
-    render_pass_begin_info.framebuffer = m_swapchain_objects.framebuffers[m_acquired_image_index];
-    render_pass_begin_info.renderArea  = VkRect2D{{0,0}, m_swapchain_extent};
-
-    const VkSubpassBeginInfo subpass_begin_info{
-        .sType    = VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO,
-        .pNext    = nullptr,
-        .contents = VK_SUBPASS_CONTENTS_INLINE
-    };
-    log_swapchain->trace("vkCmdBeginRenderPass2()");
-    vkCmdBeginRenderPass2(vulkan_command_buffer, &render_pass_begin_info, &subpass_begin_info);
-
-    m_state = Swapchain_frame_state::render_pass_begin;
-    return vulkan_command_buffer;
-}
-
-auto Swapchain_impl::end_render_pass() -> bool
-{
-    if (!is_valid()) {
-        return false;
-    }
-
-    ERHE_VERIFY(m_state == Swapchain_frame_state::render_pass_begin);
-
-    const VkCommandBuffer vulkan_command_buffer = get_command_buffer();
-    if (vulkan_command_buffer == VK_NULL_HANDLE) {
-        return false;
-    }
-
-    const VkSubpassEndInfo subpass_end_info{
-        .sType = VK_STRUCTURE_TYPE_SUBPASS_END_INFO,
-        .pNext = nullptr
-    };
-    log_swapchain->trace("vkCmdEndRenderPass2()");
-    vkCmdEndRenderPass2(vulkan_command_buffer, &subpass_end_info);
-
-    // Note: vkEndCommandBuffer is now done by Device_impl::end_frame(),
-    // which ends and submits the unified device-frame command buffer.
-
-    m_state = Swapchain_frame_state::render_pass_end;
-    return true;
-}
-
-auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
-{
-    if (m_state == Swapchain_frame_state::render_pass_end) {
-        const bool submit_ok = submit_command_buffer();
-        if (!submit_ok) {
-            return false;
-        }
-    }
-    ERHE_VERIFY(m_state == Swapchain_frame_state::command_buffer_submit);
-
-    static_cast<void>(frame_end_info);
-
-    return present();
-}
-
-auto Swapchain_impl::present() -> bool
+auto Swapchain_impl::present(const uint64_t frame_id) -> bool
 {
     // Drive vkQueuePresentKHR for the currently acquired image. Caller
     // is responsible for having submitted a cb that signals this
-    // swapchain's present_semaphore. No state assertion: the legacy
-    // end_frame path arrives here at command_buffer_submit (after its
-    // own submit_command_buffer ran), while the new implicit-present
-    // path (Device_impl::submit_command_buffers) arrives here at
-    // render_pass_end -- both are valid entry points.
-    const VkResult result = present_image(m_acquired_image_index);
+    // swapchain's present_semaphore (the implicit-present path,
+    // Device_impl::submit_command_buffers, which arrives here at
+    // render_pass_end).
+    ERHE_VERIFY(frame_id == m_frame_id);
+    const VkResult result = present_image(frame_id, m_acquired_image_index);
 
     if ((result == VK_SUBOPTIMAL_KHR) || (result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)) {
-        init_swapchain();
+        init_swapchain(frame_id);
         m_state = Swapchain_frame_state::image_present;
     } else if ((result == VK_ERROR_SURFACE_LOST_KHR) || (result == VK_ERROR_DEVICE_LOST) || (result == VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT)) {
         // Already logged by present_image, which also marked the
@@ -487,8 +339,8 @@ auto Swapchain_impl::present() -> bool
         m_state = Swapchain_frame_state::image_present;
     }
     ERHE_VULKAN_SYNC_TRACE(
-        "[SWAPCHAIN_END] frame_index={} acquired_image_index={} present_result={}",
-        m_device_impl.get_frame_index(), m_acquired_image_index, static_cast<int32_t>(result)
+        "[SWAPCHAIN_END] frame_id={} acquired_image_index={} present_result={}",
+        frame_id, m_acquired_image_index, static_cast<int32_t>(result)
     );
     return is_valid();
 }
@@ -542,9 +394,9 @@ void Swapchain_impl::cleanup_swapchain_objects(Swapchain_objects& garbage)
     garbage.framebuffers.clear();
 }
 
-void Swapchain_impl::add_present_to_history(const uint32_t index, const VkFence present_fence)
+void Swapchain_impl::add_present_to_history(const uint64_t frame_id, const uint32_t index, const VkFence present_fence)
 {
-    Swapchain_frame_in_flight& frame = m_submit_history[current_slot()];
+    Swapchain_frame_in_flight& frame = m_submit_history[get_slot_index(frame_id)];
 
     m_present_history.emplace_back();
     m_present_history.back().present_semaphore = frame.present_semaphore;
@@ -819,7 +671,7 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
     );
 }
 
-void Swapchain_impl::init_swapchain_framebuffer(const uint32_t index, VkRenderPass render_pass)
+void Swapchain_impl::init_swapchain_framebuffer(const uint64_t frame_id, const uint32_t index, VkRenderPass render_pass)
 {
     ERHE_VERIFY(render_pass != VK_NULL_HANDLE);
 
@@ -830,7 +682,7 @@ void Swapchain_impl::init_swapchain_framebuffer(const uint32_t index, VkRenderPa
     ) {
         Swapchain_objects need_cleanup{};
         need_cleanup.framebuffers.push_back(m_swapchain_objects.framebuffers[index]);
-        m_submit_history[current_slot()].swapchain_garbage.push_back(std::move(need_cleanup));
+        m_submit_history[get_slot_index(frame_id)].swapchain_garbage.push_back(std::move(need_cleanup));
         m_swapchain_objects.framebuffers[index] = VK_NULL_HANDLE;
     }
 
@@ -868,7 +720,7 @@ void Swapchain_impl::init_swapchain_framebuffer(const uint32_t index, VkRenderPa
     );
 }
 
-void Swapchain_impl::init_swapchain()
+void Swapchain_impl::init_swapchain(const uint64_t frame_id)
 {
     Vulkan_swapchain_create_info swapchain_create_info{};
     bool recreate_swapchain = m_surface_impl.update_swapchain(swapchain_create_info);
@@ -882,11 +734,11 @@ void Swapchain_impl::init_swapchain()
     }
     m_is_valid = surface_is_valid && !surface_is_empty;
     if (m_is_valid && recreate_swapchain) {
-        init_swapchain(swapchain_create_info);
+        init_swapchain(frame_id, swapchain_create_info);
     }
 }
 
-void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_create_info)
+void Swapchain_impl::init_swapchain(const uint64_t frame_id, Vulkan_swapchain_create_info& swapchain_create_info)
 {
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     VkResult       result        = VK_SUCCESS;
@@ -944,7 +796,7 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
 #endif
 
     // Schedule destruction of the old swapchain resources once this frame's submission is finished.
-    m_submit_history[current_slot()].swapchain_garbage.push_back(std::move(m_swapchain_objects));
+    m_submit_history[get_slot_index(frame_id)].swapchain_garbage.push_back(std::move(m_swapchain_objects));
 
     // Schedule destruction of the old swapchain itself once its last presentation is finished.
     if (old_swapchain != VK_NULL_HANDLE) {
@@ -978,7 +830,10 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
     // Screenshot capture needs to copy out of the swapchain images;
     // Surface_impl::update_swapchain added TRANSFER_SRC when the surface
     // supports it.
-    m_capture_supported = (swapchain_create_info.swapchain_create_info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
+    {
+        const std::lock_guard<std::mutex> lock{m_capture_mutex};
+        m_capture_supported = (swapchain_create_info.swapchain_create_info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
+    }
 
     if (!has_maintenance1()) {
         // When VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_EXT is used, image views
@@ -1006,24 +861,15 @@ auto Swapchain_impl::get_surface_impl() -> Surface_impl&
     return m_surface_impl;
 }
 
-auto Swapchain_impl::get_command_buffer() -> VkCommandBuffer
+auto Swapchain_impl::get_active_acquire_semaphore(const uint64_t frame_id) const -> VkSemaphore
 {
-    if (!is_valid()) {
-        return VK_NULL_HANDLE;
-    }
-
-    const Device_frame_in_flight& device_frame = m_device_impl.get_device_frame_in_flight(current_slot());
-
-    return device_frame.command_buffer;
+    ERHE_VERIFY(frame_id == m_frame_id);
+    return m_submit_history[get_slot_index(frame_id)].acquire_semaphore;
 }
 
-auto Swapchain_impl::get_active_acquire_semaphore() const -> VkSemaphore
+auto Swapchain_impl::acquire_swapchain_framebuffer(const uint64_t frame_id, VkRenderPass render_pass) -> VkFramebuffer
 {
-    return m_submit_history[current_slot()].acquire_semaphore;
-}
-
-auto Swapchain_impl::acquire_swapchain_framebuffer(VkRenderPass render_pass) -> VkFramebuffer
-{
+    ERHE_VERIFY(frame_id == m_frame_id);
     if (!is_valid()) {
         return VK_NULL_HANDLE;
     }
@@ -1031,7 +877,7 @@ auto Swapchain_impl::acquire_swapchain_framebuffer(VkRenderPass render_pass) -> 
         (m_swapchain_objects.framebuffers[m_acquired_image_index] == VK_NULL_HANDLE) ||
         (m_swapchain_objects.render_pass [m_acquired_image_index] != render_pass)
     ) {
-        init_swapchain_framebuffer(m_acquired_image_index, render_pass);
+        init_swapchain_framebuffer(frame_id, m_acquired_image_index, render_pass);
     }
     return m_swapchain_objects.framebuffers[m_acquired_image_index];
 }
@@ -1043,12 +889,10 @@ auto Swapchain_impl::get_swapchain_extent() const -> VkExtent2D
 
 void Swapchain_impl::mark_render_pass_recorded()
 {
-    // The user-cb model records vkCmdBeginRenderPass2 / vkCmdEndRenderPass2
-    // directly into the user's Command_buffer instead of going through
-    // Swapchain_impl::begin_render_pass / end_render_pass. The state
-    // machine still expects the image_acquired -> render_pass_begin ->
-    // render_pass_end -> command_buffer_submit chain, so flip it forward
-    // explicitly to satisfy the asserts on present.
+    // The render pass records vkCmdBeginRenderPass2 / vkCmdEndRenderPass2
+    // directly into the user's Command_buffer; this moves the state
+    // machine from image_ackquired to render_pass_end, the state the
+    // implicit present arrives at.
     if (m_state == Swapchain_frame_state::image_ackquired) {
         m_state = Swapchain_frame_state::render_pass_end;
     }
@@ -1056,16 +900,24 @@ void Swapchain_impl::mark_render_pass_recorded()
 
 auto Swapchain_impl::is_capture_supported() const -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_capture_mutex};
     return m_capture_supported;
 }
 
 void Swapchain_impl::request_capture()
 {
+    const std::lock_guard<std::mutex> lock{m_capture_mutex};
+    // A recorded capture not yet collected keeps its staging buffer: a new
+    // copy into it could land while read_back_capture() reads it.
+    if (m_capture_ready) {
+        return;
+    }
     m_capture_requested = true;
 }
 
-void Swapchain_impl::record_capture(VkCommandBuffer command_buffer)
+void Swapchain_impl::record_capture(const uint64_t frame_id, VkCommandBuffer command_buffer)
 {
+    const std::lock_guard<std::mutex> lock{m_capture_mutex};
     if (!m_capture_requested) {
         return;
     }
@@ -1195,7 +1047,7 @@ void Swapchain_impl::record_capture(VkCommandBuffer command_buffer)
 
     m_capture_extent      = m_swapchain_extent;
     m_capture_format      = m_swapchain_format;
-    m_capture_frame_index = m_device_impl.get_frame_index();
+    m_capture_frame_index = frame_id;
     m_capture_requested   = false;
     m_capture_ready       = true;
 }
@@ -1206,13 +1058,24 @@ auto Swapchain_impl::read_back_capture(
     std::vector<std::byte>& out_rgba8
 ) -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_capture_mutex};
     if (!m_capture_ready || (m_capture_buffer == VK_NULL_HANDLE)) {
+        return false;
+    }
+    // The frame that recorded the copy may still be recording (frame
+    // pipelining: the render thread records it while the main thread
+    // prepares the next frame); collect once it has been submitted.
+    if (!m_device_impl.is_frame_ended(m_capture_frame_index)) {
         return false;
     }
 
     // Reject a stale capture whose collector went away (m_capture_frame_index
     // member comment): the caller re-arms and gets a current frame instead.
     // The normal arm -> render -> collect cycle sees an age of 1.
+    // Reached from the main thread only (Device::capture_last_frame, the
+    // MCP capture_screenshot in M2), so the role-keyed device frame index
+    // is the frame the main thread prepares, one past the frame that
+    // recorded the capture.
     const uint64_t age = m_device_impl.get_frame_index() - m_capture_frame_index;
     if (age > 2) {
         m_capture_ready = false;
@@ -1222,8 +1085,7 @@ auto Swapchain_impl::read_back_capture(
     // Drain the GPU so the capture-carrying frame has fully executed before
     // the staging buffer is read (diagnostic / infrequent path, matching the
     // emulated swapchain readback).
-    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
-    vkDeviceWaitIdle(vulkan_device);
+    static_cast<void>(m_device_impl.device_wait_idle());
 
     VmaAllocator& allocator = m_device_impl.get_allocator();
     for (const auto& [buffer, allocation] : m_capture_garbage) {
@@ -1255,12 +1117,13 @@ auto Swapchain_impl::read_back_capture(
     return true;
 }
 
-auto Swapchain_impl::get_active_present_semaphore() const -> VkSemaphore
+auto Swapchain_impl::get_active_present_semaphore(const uint64_t frame_id) const -> VkSemaphore
 {
-    return m_submit_history[current_slot()].present_semaphore;
+    ERHE_VERIFY(frame_id == m_frame_id);
+    return m_submit_history[get_slot_index(frame_id)].present_semaphore;
 }
 
-void Swapchain_impl::setup_frame()
+void Swapchain_impl::setup_frame(const uint64_t frame_id)
 {
     VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     VkResult result        = VK_SUCCESS;
@@ -1270,14 +1133,13 @@ void Swapchain_impl::setup_frame()
     // - A semaphore for image acquire
     // - A semaphore for image present
 
-    // The slot is owned by Device_impl::m_frame_index (advanced exactly
-    // once per Device_impl::end_frame in update_frame_completion). Snapshot
-    // it here -- do not advance an independent counter, or the swapchain
-    // and device sides will desynchronize whenever an end_frame happens
-    // without a matching setup_frame (init-time prime, OpenXR-only ticks,
-    // etc.).
-    Swapchain_frame_in_flight& frame        = m_submit_history[current_slot()];
-    Device_frame_in_flight&    device_frame = m_device_impl.get_device_frame_in_flight(current_slot());
+    // The slot is the device's slot of the waiting command buffer's frame
+    // id -- not an independent counter, or the swapchain and device sides
+    // would desynchronize whenever an end_frame happens without a matching
+    // setup_frame (init-time prime, OpenXR-only ticks, etc.).
+    const size_t               slot         = get_slot_index(frame_id);
+    Swapchain_frame_in_flight& frame        = m_submit_history[slot];
+    Device_frame_in_flight&    device_frame = m_device_impl.get_device_frame_in_flight(slot);
     if (device_frame.submit_fence != VK_NULL_HANDLE) {
         result = vkWaitForFences(vulkan_device, 1, &device_frame.submit_fence, true, UINT64_MAX);
         if (result != VK_SUCCESS) {
@@ -1298,7 +1160,7 @@ void Swapchain_impl::setup_frame()
             frame.acquire_semaphore                = VK_NULL_HANDLE;
             frame.acquire_semaphore_pending_recycle = false;
         }
-        m_device_impl.reset_device_frame_command_pool(current_slot());
+        m_device_impl.reset_device_frame_command_pool(slot);
 
         // Destroy any garbage that's associated with this submission.
         for (Swapchain_objects& garbage : frame.swapchain_garbage) {
@@ -1326,7 +1188,7 @@ void Swapchain_impl::setup_frame()
     // never nest a swapchain frame from leaking a present_semaphore into
     // the slot (which would later trip the recycle-time VERIFY).
 
-    m_device_impl.ensure_device_frame_command_buffer(current_slot());
+    m_device_impl.ensure_device_frame_command_buffer(slot);
 
     m_state = Swapchain_frame_state::command_buffer_ready;
 }
@@ -1536,7 +1398,7 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
     );
 }
 
-void Swapchain_impl::update_present_timing_calibration()
+void Swapchain_impl::update_present_timing_calibration(const uint64_t frame_id)
 {
     if (!m_present_timing_active) {
         return;
@@ -1547,8 +1409,7 @@ void Swapchain_impl::update_present_timing_calibration()
     ) {
         return; // host time domain - no calibration needed
     }
-    const uint64_t frame_index = m_device_impl.get_frame_index();
-    if (m_timing_calibration_valid && ((frame_index - m_timing_calibration_frame) < 120)) {
+    if (m_timing_calibration_valid && ((frame_id - m_timing_calibration_frame) < 120)) {
         return;
     }
     const PFN_vkGetCalibratedTimestampsKHR get_calibrated_timestamps =
@@ -1607,7 +1468,7 @@ void Swapchain_impl::update_present_timing_calibration()
     }
     m_timing_calibration_domain_value = timestamps[0];
     m_timing_calibration_host_seconds = m_device_impl.host_calibrated_value_to_seconds(timestamps[1]);
-    m_timing_calibration_frame        = frame_index;
+    m_timing_calibration_frame        = frame_id;
     m_timing_calibration_valid        = true;
     if (with_queue_ops) {
         // Time domains must be unique within one vkGetCalibratedTimestamps
@@ -1642,12 +1503,12 @@ void Swapchain_impl::update_present_timing_calibration()
     }
 }
 
-void Swapchain_impl::poll_present_timing()
+void Swapchain_impl::poll_present_timing(const uint64_t frame_id)
 {
     if (!m_present_timing_active || (vkGetPastPresentationTimingEXT == nullptr)) {
         return;
     }
-    update_present_timing_calibration();
+    update_present_timing_calibration(frame_id);
     VkDevice vulkan_device = m_device_impl.get_vulkan_device();
 
     for (std::size_t i = 0; i < m_past_timings.size(); ++i) {
@@ -1743,15 +1604,14 @@ void Swapchain_impl::poll_present_timing()
         }
         // presentId is device frame index + 1 (see present_image).
         const std::int64_t frame_id = static_cast<std::int64_t>(timing.presentId) - 1;
-        if (erhe::frame_pacing::Frame_time_record* record = m_device_impl.get_frame_time_recorder().find(frame_id)) {
-            record->achieved_present_time = achieved_seconds;
-            if (queue_ops_time != 0) {
-                const double queue_ops_seconds = stage_time_to_seconds(
-                    queue_ops_time, m_timing_calibration_queue_ops_valid, m_timing_calibration_queue_ops_value
-                );
-                if (queue_ops_seconds > 0.0) {
-                    record->achieved_queue_ops_time = queue_ops_seconds;
-                }
+        erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl.get_frame_time_recorder();
+        recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::achieved_present_time, achieved_seconds);
+        if (queue_ops_time != 0) {
+            const double queue_ops_seconds = stage_time_to_seconds(
+                queue_ops_time, m_timing_calibration_queue_ops_valid, m_timing_calibration_queue_ops_value
+            );
+            if (queue_ops_seconds > 0.0) {
+                recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::achieved_queue_ops_time, queue_ops_seconds);
             }
         }
         if (!m_present_feedback_logged) {
@@ -1767,25 +1627,21 @@ void Swapchain_impl::poll_present_timing()
     }
 }
 
-auto Swapchain_impl::acquire_next_image(uint32_t* index) -> VkResult
+auto Swapchain_impl::acquire_next_image(const uint64_t frame_id, uint32_t* index) -> VkResult
 {
     VkDevice                   vulkan_device = m_device_impl.get_vulkan_device();
-    Swapchain_frame_in_flight& frame         = m_submit_history[current_slot()];
+    Swapchain_frame_in_flight& frame         = m_submit_history[get_slot_index(frame_id)];
 
     // Use a fence to know when acquire is done.  Without VK_EXT_swapchain_maintenance1, this
     // fence is used to infer when the _previous_ present to this image index has finished.
     // There is no need for this with VK_EXT_swapchain_maintenance1.
     VkFence acquire_fence = has_maintenance1() ? VK_NULL_HANDLE : get_fence();
 
-    erhe::frame_pacing::Frame_time_record* const time_record =
-        m_device_impl.get_frame_time_recorder().find(static_cast<std::int64_t>(m_device_impl.get_frame_index()));
-    if ((time_record != nullptr) && (time_record->acquire_begin == 0.0)) {
-        time_record->acquire_begin = erhe::frame_pacing::Frame_time_recorder::now();
-    }
+    erhe::frame_pacing::Frame_time_recorder& recorder  = m_device_impl.get_frame_time_recorder();
+    const std::int64_t                       record_id = static_cast<std::int64_t>(frame_id);
+    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_begin, erhe::frame_pacing::Frame_time_recorder::now());
     VkResult result = vkAcquireNextImageKHR(vulkan_device, m_vulkan_swapchain, UINT64_MAX, frame.acquire_semaphore, acquire_fence, index);
-    if ((time_record != nullptr) && (time_record->acquire_end == 0.0)) {
-        time_record->acquire_end = erhe::frame_pacing::Frame_time_recorder::now();
-    }
+    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_end, erhe::frame_pacing::Frame_time_recorder::now());
 
     if (has_maintenance1() && ((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR))) {
         // When VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_EXT is specified, image
@@ -1814,10 +1670,10 @@ auto Swapchain_impl::acquire_next_image(uint32_t* index) -> VkResult
     return result;
 }
 
-auto Swapchain_impl::present_image(uint32_t index) -> VkResult
+auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index) -> VkResult
 {
     VkQueue                    vulkan_present_queue = m_device_impl.get_present_queue();
-    Swapchain_frame_in_flight& frame                = m_submit_history[current_slot()];
+    Swapchain_frame_in_flight& frame                = m_submit_history[get_slot_index(frame_id)];
 
     VkPresentInfoKHR present_info{
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -1869,7 +1725,7 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
     }
 
     // Present id chaining (implementation plan step P0.4): id is the device
-    // frame index + 1 (ids must be non-zero and increasing), so feedback
+    // frame id + 1 (ids must be non-zero and increasing), so feedback
     // correlates to a frame record without a lookup table. Also the id
     // vkWaitForPresentKHR will use for the FR5 clamp later.
     uint64_t       present_id_value = 0;
@@ -1886,7 +1742,7 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         .pPresentIds    = &present_id_value
     };
     if (m_device_impl.get_capabilities().m_present_id) {
-        present_id_value = m_device_impl.get_frame_index() + 1;
+        present_id_value = frame_id + 1;
         // The legacy chain is the verified-working path on the current
         // NVIDIA driver; use id2 only when the legacy extension is absent.
         // (Both were exercised while bisecting the present-timing crash
@@ -1930,7 +1786,7 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         .presentStageQueries          = (m_present_stage_queries_mask != 0) ? m_present_stage_queries_mask : m_present_stage_queries,
         .targetTimeDomainPresentStage = 0
     };
-    const double target_seconds = m_device_impl.get_present_target_time(static_cast<std::int64_t>(m_device_impl.get_frame_index()));
+    const double target_seconds = m_device_impl.get_present_target_time(static_cast<std::int64_t>(frame_id));
     // No target-time requests while suppressed: a probe present asks for
     // feedback only.
     if (chain_timing && !m_present_timing_suppressed && (target_seconds > 0.0)) {
@@ -1942,7 +1798,7 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
             // feedback calibration (poll_present_timing) for the
             // present-stage-local domains, or convert directly for host
             // domains.
-            update_present_timing_calibration();
+            update_present_timing_calibration(frame_id);
             if (domain_is_calibrated) {
                 const double delta_ns = (target_seconds - m_timing_calibration_host_seconds) * 1e9;
                 timing_info.targetTime = m_timing_calibration_domain_value + static_cast<uint64_t>(static_cast<int64_t>(delta_ns));
@@ -2002,7 +1858,11 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         reinterpret_cast<std::uintptr_t>(frame.present_semaphore),
         reinterpret_cast<std::uintptr_t>(m_vulkan_swapchain)
     );
-    VkResult result = vkQueuePresentKHR(vulkan_present_queue, &present_info);
+    VkResult result = VK_SUCCESS;
+    {
+        const std::lock_guard<std::mutex> queue_lock{m_device_impl.get_queue_mutex()};
+        result = vkQueuePresentKHR(vulkan_present_queue, &present_info);
+    }
     ERHE_VULKAN_TRACE("vkQueuePresentKHR returned {}", static_cast<int32_t>(result));
     if ((result == VK_ERROR_SURFACE_LOST_KHR) || (result == VK_ERROR_DEVICE_LOST) || (result == VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT)) {
         // SURFACE_LOST: the underlying ANativeWindow / NSWindow / HWND
@@ -2036,7 +1896,7 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         // cannot be reset from the host, so destroy it instead of recycling.
         // The maintenance1 present fence was never enqueued either;
         // recycle_fence resets it, so returning it to the pool is safe.
-        vkDeviceWaitIdle(m_device_impl.get_vulkan_device());
+        static_cast<void>(m_device_impl.device_wait_idle());
         if (frame.present_semaphore != VK_NULL_HANDLE) {
             vkDestroySemaphore(m_device_impl.get_vulkan_device(), frame.present_semaphore, nullptr);
             frame.present_semaphore = VK_NULL_HANDLE;
@@ -2082,9 +1942,9 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         }
     }
 
-    add_present_to_history(index, present_fence);
+    add_present_to_history(frame_id, index, present_fence);
     cleanup_present_history();
-    poll_present_timing();
+    poll_present_timing(frame_id);
 
     return result;
 }
@@ -2106,7 +1966,7 @@ auto Swapchain_impl::wait_for_displayed_frame(const std::int64_t frame_id, const
     {
         return Present_wait_result::unsupported;
     }
-    const uint64_t present_id = static_cast<uint64_t>(frame_id) + 1; // present_image(): presentId = device frame index + 1
+    const uint64_t present_id = static_cast<uint64_t>(frame_id) + 1; // present_image(): presentId = device frame id + 1
     if (present_id > m_max_present_id_submitted) {
         // Not presented through this VkSwapchainKHR (startup, or right
         // after recreation); waiting could only time out.

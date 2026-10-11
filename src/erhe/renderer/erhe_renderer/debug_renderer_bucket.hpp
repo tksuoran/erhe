@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <vector>
@@ -102,19 +103,23 @@ public:
 class Debug_draw_view_span
 {
 public:
-    // The span's views are Debug_renderer_bucket::m_span_views
-    // [first_view, first_view + view_count): a flat per-bucket store that is
-    // cleared (capacity kept) every frame, so starting a view span does not
-    // allocate in steady state.
+    // The span's views are the bucket frame's span_views
+    // [first_view, first_view + view_count): a flat per-bucket, per-frame
+    // store that is cleared (capacity kept) every frame, so starting a view
+    // span does not allocate in steady state.
     // Single-view: view_count == 1, cameras[0] only is populated in
     // the UBO and view_count = 1 at runtime. Multiview: view_count ==
     // Debug_renderer view_count, cameras[0..N-1] are populated and
     // view_count = N so the compute shader loops over all eyes and the
     // multiview vertex shader can slab-index by gl_ViewIndex.
+    // frame_slot is the Debug_renderer::begin_frame() slot the span was
+    // recorded for: render() draws one slot, release_buffers() releases all
+    // slots of one device frame.
     std::size_t first_view;
     std::size_t view_count;
     std::size_t begin;
     std::size_t end;
+    std::size_t frame_slot;
 };
 
 class Debug_renderer_bucket
@@ -122,23 +127,33 @@ class Debug_renderer_bucket
 public:
     Debug_renderer_bucket(erhe::graphics::Device& graphics_device, Debug_renderer& debug_renderer, Debug_renderer_config config);
 
-    void clear           ();
+    // The draws are kept per device frame in flight; every call names the
+    // device frame (Device::get_frame_index() of the calling role, which
+    // Debug_renderer passes) and touches only that frame's draws.
     auto match           (const Debug_renderer_config& config) const -> bool;
-    void dispatch_compute(erhe::graphics::Compute_command_encoder& command_encoder);
+    // Expands the frame's recorded draws not expanded yet.
+    void dispatch_compute(erhe::graphics::Compute_command_encoder& command_encoder, uint64_t frame_index);
+    // Draws the view spans recorded for frame_slot of the frame; the other
+    // slots' draws stay for their own render() call.
     void render(
         erhe::graphics::Render_command_encoder& render_encoder,
         const erhe::graphics::Render_pass&      render_pass,
         bool                                    draw_hidden,
         bool                                    draw_visible,
-        bool                                    multiview = false
+        bool                                    multiview,
+        uint64_t                                frame_index,
+        std::size_t                             frame_slot
     );
-    void release_buffers ();
-    auto make_draw       (std::size_t vertex_byte_count, std::size_t primitive_count) -> std::span<std::byte>;
-    // Single-view start_view: pushes a 1-camera view span. Multiview
-    // overload pushes an N-camera span (N must equal view_count
-    // from construction).
-    void start_view      (const View& view);
-    void start_view      (std::span<const View> views);
+    // Releases every range the frame's draws hold and clears them.
+    void release_buffers (uint64_t frame_index);
+    // Records into the draw of the view span start_view() opened last in the
+    // frame frame_index.
+    auto make_draw       (uint64_t frame_index, std::size_t vertex_byte_count, std::size_t primitive_count) -> std::span<std::byte>;
+    // Pushes a view span of the views (1 for single view, N = view_count
+    // from construction for multiview) for frame_slot of the frame. The
+    // first start_view() of a device frame claims the frame's entry,
+    // verifying the frame that used it before released it.
+    void start_view      (std::span<const View> views, uint64_t frame_index, std::size_t frame_slot);
 
 private:
     enum class Pass_kind : unsigned int { visible, hidden };
@@ -151,7 +166,20 @@ private:
         std::span<const View> views,
         std::size_t           primitive_count
     ) -> erhe::graphics::Ring_buffer_range;
-    [[nodiscard]] auto get_span_views(const Debug_draw_view_span& view_span) const -> std::span<const View>;
+    // The draws of one device frame in flight.
+    class Frame
+    {
+    public:
+        uint64_t                          frame_index   {std::numeric_limits<uint64_t>::max()};
+        std::vector<Debug_draw_entry>     draws         {};
+        std::vector<Debug_draw_view_span> view_spans    {};
+        std::vector<View>                 span_views    {};
+        bool                              start_new_draw{true};
+    };
+    // The frame's entry when frame_index recorded into it, else nullptr
+    // (nothing of this bucket was recorded in that frame).
+    [[nodiscard]] auto find_frame(uint64_t frame_index) -> Frame*;
+    [[nodiscard]] static auto get_span_views(const Frame& frame, const Debug_draw_view_span& view_span) -> std::span<const View>;
 
     // Tier helper derived from m_shader_key. uses_compute() == false means
     // the bucket takes the direct (vertex-buffer) draw path -- the case for
@@ -178,10 +206,9 @@ private:
     // earlier fringe of this bucket claimed.
     erhe::graphics::Base_render_pipeline m_pipeline_visible_fringe;
     erhe::graphics::Base_render_pipeline m_pipeline_hidden_fringe;
-    std::vector<Debug_draw_entry>        m_draws;
-    std::vector<Debug_draw_view_span>    m_view_spans;
-    std::vector<View>                    m_span_views;
-    bool                                 m_start_new_draw{true};
+    // One entry per device frame in flight, indexed by frame index % size;
+    // sized at construction, never resized.
+    std::vector<Frame>                   m_frames;
 };
 
 } // namespace erhe::renderer

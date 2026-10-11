@@ -7,7 +7,9 @@
 #include "scene/scene_commit_queue.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_property/dependency_property.hpp"
@@ -67,6 +69,14 @@ auto App_context::get_async_in_flight_count() const -> std::size_t
         ((operation_stack    != nullptr) ? operation_stack->get_queued_count()     : 0u) +
         ((scene_commit_queue != nullptr) ? scene_commit_queue->get_pending_count() : 0u) +
         ((asset_manager      != nullptr) ? asset_manager->get_load_task_count()    : 0u);
+}
+
+auto App_context::get_results_frame_index() const -> std::optional<uint64_t>
+{
+    if (erhe::utility::Thread_roles::get_frame_phase() == erhe::utility::Frame_phase::r_render) {
+        return graphics_device->get_frame_index();
+    }
+    return last_rendered_frame_index;
 }
 
 auto App_context::is_scene_load_in_flight() const -> bool

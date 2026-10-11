@@ -49,12 +49,19 @@ suite (`erhe_frame_pacing_tests`) green.
   dependencies.
 - `Frame_time_recorder` - the bounded ring of per-frame event timestamps
   (one monotonic clock domain) that feeds both the pacer's estimators and the
-  profiling UI. There is no second instrumentation path.
+  profiling UI. There is no second instrumentation path. Thread-safe: one
+  mutex guards every access, because the editor's main thread begins a
+  frame's record and runs the pacer while its render thread stamps the
+  previous frame. Writers name the field by member pointer (`set`,
+  `set_once`, `add`, and a two-field `set` for begin / end pairs); readers
+  take copies (`get`). No reference to a record leaves the lock. The display
+  refresh duration the swapchain reports is kept here too, under the same
+  lock.
 
 ## Input fidelity contract (important)
 
 - `cpu_duration` / `gpu_duration` fed to `on_cpu_done` / `on_gpu_done` are
-  stage SERVICE times: involuntary waits (pacer wait, fence, acquire) and GPU
+  stage SERVICE times: involuntary waits (pacer wait, present wait, join wait, fence, acquire) and GPU
   idle bubbles are excluded. Feeding raw spans causes spurious downshifts.
 - `on_gpu_done` should be driven by per-frame polling of the GPU frame
   timestamp bracket; the lazy fence-read path is a verified graceful

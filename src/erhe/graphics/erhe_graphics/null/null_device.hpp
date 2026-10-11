@@ -4,7 +4,9 @@
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
+#include <array>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -24,6 +26,15 @@ class Ring_buffer_client;
 class Surface;
 class Swapchain;
 
+// The state of one frame-in-flight slot (see the Vulkan Device_frame_slot):
+// open between acquire_frame_slot() and end_frame() of frame_id.
+class Device_frame_slot
+{
+public:
+    bool     open    {false};
+    uint64_t frame_id{0};
+};
+
 class Device;
 class Device_impl final
 {
@@ -35,14 +46,17 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl() noexcept;
 
-    [[nodiscard]] auto wait_frame () -> bool;
+                  void wait_for_frame_start(uint64_t frame_id);
+    [[nodiscard]] auto acquire_frame_slot  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame() -> bool;
     [[nodiscard]] auto end_frame  () -> bool;
+    [[nodiscard]] auto end_frame  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
     void               wait_idle            ();
-    void               run_completion_handlers();
+    // Runs the completion handlers stamped with a frame <= last_frame.
+    void               run_completion_handlers(uint64_t last_frame = std::numeric_limits<uint64_t>::max());
     void               clear_render_pipeline_cache();
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
@@ -98,6 +112,7 @@ public:
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
+    // The frame of the calling role (Device::get_frame_index()).
     [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
     [[nodiscard]] auto get_number_of_frames_in_flight     () const -> std::size_t;
     // Conservative: see Device::is_frame_completed().
@@ -131,10 +146,27 @@ private:
     Shader_monitor           m_shader_monitor;
     Device_info              m_info;
     static constexpr std::size_t s_number_of_frames_in_flight = 2;
-    uint64_t                 m_frame_index{1};
+    [[nodiscard]] auto get_frame_slot_index(uint64_t frame_id) const -> std::size_t;
+    // The oldest open frame (end_frame() ends it), or the next frame to be
+    // acquired when none is open. Frame ids start at 1.
+    uint64_t                 m_render_frame_id{1};
+    // The newest acquired frame (0: none yet).
+    uint64_t                 m_prepare_frame_id{0};
+    std::array<Device_frame_slot, s_number_of_frames_in_flight> m_frame_slots{};
+    // Command_buffer wrappers per frame slot, kept until that slot's next
+    // acquire_frame_slot() (the recording methods are no-ops).
+    std::array<std::vector<std::unique_ptr<Command_buffer>>, s_number_of_frames_in_flight> m_command_buffers;
     // Frame-completion handlers: nothing executes on a GPU, so a frame is
-    // complete as soon as it is recorded - handlers fire in end_frame().
-    std::vector<std::function<void(Device_impl&)>> m_completion_handlers;
+    // complete as soon as it is ended - handlers fire in that frame's
+    // end_frame().
+    class Completion_handler
+    {
+    public:
+        uint64_t                          frame_number;
+        std::function<void(Device_impl&)> callback;
+    };
+    std::vector<Completion_handler> m_completion_handlers;
+    std::vector<Completion_handler> m_due_completion_handlers; // run_completion_handlers scratch
 };
 
 } // namespace erhe::graphics

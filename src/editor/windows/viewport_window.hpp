@@ -100,15 +100,6 @@ private:
 
     // Scene name currently shown in the window title; see update_title_from_scene().
     std::string                                        m_shown_scene_name;
-
-#if !defined(NDEBUG)
-    // Regression guard state for imgui_viewport(): detects the output
-    // texture size drifting from the image quad size on stable frames.
-    int                                                m_last_viewport_width    {0};
-    int                                                m_last_viewport_height   {0};
-    int                                                m_reported_mismatch_width {0};
-    int                                                m_reported_mismatch_height{0};
-#endif
 };
 
 }

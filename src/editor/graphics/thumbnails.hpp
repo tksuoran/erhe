@@ -45,7 +45,7 @@ public:
     std::shared_ptr<erhe::graphics::Texture> texture_view{};
     unsigned int                             texture_layer{0};
     std::optional<
-        std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, unsigned int, int64_t)>
+        std::function<void(erhe::graphics::Command_buffer&, const std::shared_ptr<erhe::graphics::Texture>&, unsigned int, int64_t)>
     >                                        callback{};
 
     // Property observer on the item this slot shows (D21): a change marks
@@ -66,8 +66,10 @@ public:
     );
     ~Thumbnails() noexcept;
 
-    // This should be called once per frame, outside command encoder
-    void update();
+    // Called once per frame by the render phase (R), outside any command
+    // encoder: runs the pending render callbacks, which record into
+    // command_buffer (the frame command buffer).
+    void update(erhe::graphics::Command_buffer& command_buffer);
 
     // Frees every slot: pending render callbacks are dropped unrendered
     // (they own the item they would render), property observers are
@@ -95,6 +97,7 @@ public:
     auto draw(
         const std::shared_ptr<erhe::Item_base>& item,
         std::function<void(
+            erhe::graphics::Command_buffer&,
             const std::shared_ptr<erhe::graphics::Texture>&,
             unsigned int,
             int64_t

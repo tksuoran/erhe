@@ -387,7 +387,17 @@ public:
             m_imgui_windows .process_events(dt_s, timestamp_ns);
             m_commands.tick(timestamp_ns, input_events);
 
-            m_imgui_windows .begin_frame();
+            // The window ImGui host's swapchain render pass follows the
+            // window size (the application's job since the host no longer
+            // sizes it in begin_imgui_frame); one thread here, so the device
+            // frame index is read directly.
+            {
+                const std::shared_ptr<erhe::imgui::Window_imgui_host>& window_imgui_host = m_imgui_windows.get_window_imgui_host();
+                if (window_imgui_host) {
+                    window_imgui_host->update_render_pass(m_window.get_width(), m_window.get_height());
+                }
+            }
+            m_imgui_windows .begin_frame(m_graphics_device.get_frame_index());
             viewport_menu();
             m_imgui_windows .draw_imgui_windows();
             m_imgui_windows .end_frame();
@@ -395,6 +405,9 @@ public:
             if (m_map_window.is_window_visible()) {
                 m_map_window.render(command_buffer);
             }
+            // Single thread: the frame copies its node enabled flags, then
+            // renders them.
+            m_rendergraph   .prepare_frame();
             m_rendergraph   .execute(command_buffer);
             m_imgui_renderer.next_frame();
 

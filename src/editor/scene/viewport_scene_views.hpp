@@ -177,6 +177,10 @@ public:
 
     void update_transforms();
 
+    // M2: every view copies its render state and records its tools for the
+    // render phase (Viewport_scene_view::prepare_render).
+    void prepare_render(erhe::graphics::Command_buffer& upload_command_buffer);
+
     void debug_imgui();
 
     // Returns the Viewport_scene_view instance which is currently under pointer (mouse cursor).

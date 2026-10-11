@@ -67,35 +67,36 @@ public:
         int                     view_count = 1
     );
 
-    // Single-view begin_frame: cameras[0] is populated, view_count = 1.
-    void begin_frame(
-        erhe::math::Viewport                      viewport,
-        const erhe::scene::Camera&                camera,
-        const erhe::math::Coordinate_conventions& conventions = {}
-    );
-
-    // Multiview begin_frame: cameras[0..N-1] populated, view_count = N.
-    // views.size() must equal view_count from construction.
-    void begin_frame(
-        erhe::math::Viewport                      viewport,
-        std::span<const View>                     views,
-        const erhe::math::Coordinate_conventions& conventions = {}
-    );
+    // Opens a frame slot for one view set and returns its id. Single
+    // view: a 1-element span (view_from_camera() builds it), cameras[0]
+    // is populated, view_count = 1. Multiview: cameras[0..N-1] populated,
+    // view_count = N. views.size() must equal view_count from
+    // construction.
+    [[nodiscard]] auto begin_frame(
+        erhe::math::Viewport  viewport,
+        std::span<const View> views
+    ) -> std::size_t;
 
     void compute(erhe::graphics::Compute_command_encoder& encoder);
     void render (
         erhe::graphics::Render_command_encoder& encoder,
         const erhe::graphics::Render_pass&      render_pass,
         erhe::math::Viewport                    viewport,
-        bool                                    multiview = false
+        bool                                    multiview,
+        std::size_t                             frame_slot
     );
-    void end_frame();
+    void release_frames(); // once per device frame, after the last render()
 };
+// Every entry point works on the recording state of the calling role's
+// device frame (Device::get_frame_index(), one copy per frame in flight;
+// doc/erhe/renderer.md "Public API").
 ```
 
-`render(..., multiview = true)` requires the surrounding render pass
-to be a multiview pass (`view_mask != 0`) and the current frame to
-have been opened with the multi-camera `begin_frame` overload.
+`render(..., multiview = true, slot)` requires the surrounding render
+pass to be a multiview pass (`view_mask != 0`) and the slot to have
+been opened with a multi-camera view span. The slot model
+(`doc/erhe/renderer.md` "Public API") lets the desktop viewports record
+their lines on the main thread before the render phase draws them.
 
 ## Compute / graphics pipelines
 
@@ -189,13 +190,19 @@ read-only at binding 1 and the per-draw view UBO bound at binding
 
 `begin_frame` is called from:
 
-- `src/editor/scene/viewport_scene_view.cpp` -- desktop viewport,
-  single-camera overload.
-- `src/editor/xr/headset_view.cpp` per-eye fallback -- single-camera
-  overload, used on graphics APIs that do not enable multiview.
-- `src/editor/xr/headset_view.cpp` multiview_callback -- multi-camera
-  overload, used on Quest (Vulkan + `XR_KHR_vulkan_enable2` with
-  multiview enabled).
+- `src/editor/scene/viewport_scene_view.cpp` -- desktop viewport, one
+  view per slot, on the main thread in M2
+  (`Viewport_scene_view::prepare_render`, into the frame being
+  prepared); the render phase draws the slot of the frame it renders.
+- `src/editor/xr/headset_view.cpp` per-eye fallback -- one view per
+  slot, in the render phase, used on graphics APIs that do not enable
+  multiview.
+- `src/editor/xr/headset_view.cpp` multiview_callback -- N views per
+  slot, in the render phase, used on Quest (Vulkan +
+  `XR_KHR_vulkan_enable2` with multiview enabled).
+
+`release_frames` is called once per frame by the editor at the end of
+the render phase and releases the frame being rendered.
 
 The multiview caller builds one `View` per eye from the existing
 `view_inputs` vector by composing

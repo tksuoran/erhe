@@ -13,14 +13,19 @@ such as shadow maps, viewport rendering, post-processing, and GUI compositing.
 
 ## Key Types
 
-- `Rendergraph` -- Owns the node list, performs topological sort via an
-  internal `erhe::graph::Graph`, and executes the graph. Provides
-  `connect(key, source, sink)` and `disconnect()` for wiring nodes.
+- `Rendergraph` -- Owns the live node list, performs topological sort via
+  an internal `erhe::graph::Graph`, prepares each frame (`prepare_frame()`:
+  one node list slot per frame in flight) and executes the frame's slot.
+  Provides `connect(key, source, sink)` and `disconnect()` for wiring
+  nodes, and decides when a released node is destroyed ("Node lifetime").
 
 - `Rendergraph_node` -- Abstract base class for graph nodes. Inherits from
   `erhe::graph::Node` (which provides pins, links, and Item identity) and
-  `Texture_reference`. Has an enable flag and a pure virtual
-  `execute_rendergraph_node()`.
+  `Texture_reference`. Has an enable flag and connections (live, plus one
+  record per frame in flight; "Per-frame copies" below), a pure virtual
+  `execute_rendergraph_node()`, a virtual `prepare_rendergraph_node()`
+  hook and a virtual `on_released()` hook. Created only through
+  `make_rendergraph_node<T>(...)`.
 
 - `Render_target` -- Composable helper that manages a color texture (possibly
   multisampled), depth/stencil texture, and `Render_pass` lifecycle. Nodes
@@ -70,17 +75,20 @@ because connection keys guarantee the source node type.
 // Create the rendergraph
 Rendergraph rendergraph{graphics_device};
 
-// Nodes register themselves in their constructor
-Shadow_render_node  shadow_node{rendergraph, ...};
-Viewport_scene_view viewport{rendergraph, ...};
-Post_processing_node post_processing{rendergraph, ...};
+// Nodes register themselves in their constructor; make_rendergraph_node()
+// gives the shared_ptr the deleter that lets the rendergraph decide when the
+// node is destroyed ("Node lifetime")
+std::shared_ptr<Shadow_render_node>   shadow_node     = make_rendergraph_node<Shadow_render_node>  (rendergraph, ...);
+std::shared_ptr<Viewport_scene_view>  viewport        = make_rendergraph_node<Viewport_scene_view> (rendergraph, ...);
+std::shared_ptr<Post_processing_node> post_processing = make_rendergraph_node<Post_processing_node>(rendergraph, ...);
 
 // Wire nodes together by key
-rendergraph.connect(Rendergraph_node_key::shadow_maps,      &shadow_node, &viewport);
-rendergraph.connect(Rendergraph_node_key::viewport_texture,  &viewport,   &post_processing);
+rendergraph.connect(Rendergraph_node_key::shadow_maps,      shadow_node.get(), viewport.get());
+rendergraph.connect(Rendergraph_node_key::viewport_texture, viewport.get(),    post_processing.get());
 
 // Each frame
-rendergraph.execute(); // sorts if needed, then executes nodes in order
+rendergraph.prepare_frame(); // sorts if needed, copies the node list, enabled flags, connections (and node parameters) into the frame
+rendergraph.execute();       // executes the frame's enabled nodes in order
 ```
 
 ### Implementing a Node
@@ -180,6 +188,96 @@ void My_node::update_size()
 ```
 
 Deferred resources are cleared at the end of `Rendergraph::execute()`.
+`defer_resource()` is render phase only (verified with
+`erhe::utility::Thread_roles`): a resource deferred from another thread
+would race with that release.
+
+### Per-frame copies
+
+The node list, the enable flags, the connections and anything a node reads
+from state other threads edit reach the render phase as copies made for
+its frame, so the prepare phase of a later frame, or the editor's ImGui
+phase, never writes what an earlier frame's render phase reads:
+
+- `Rendergraph_node::set_enabled()` / `is_enabled()` are the live flag
+  (main thread); `register_node()` (from the node constructor),
+  `connect()` and `disconnect()` edit the live list and graph (main
+  thread, under the graph mutex). `Rendergraph::prepare_frame()` (main
+  thread, prepare phase, after every edit of the frame) sorts the live
+  list, calls `prepare_rendergraph_node(frame_index)` on every enabled
+  node, then copies the live list, in execution order, into the
+  rendergraph's slot of the frame and every node's live flag and the
+  first link of each of its pins into the node's record of the frame
+  (one slot and one record per device frame in flight, keyed by the
+  role-keyed `Device::get_frame_index()`; sized once, refilled in place).
+  A hook may change live flags, its own or another node's (the editor's
+  scene image capture disables its chain once the readback was
+  recorded): the copy follows every hook.
+- `Rendergraph::execute()` runs exactly the nodes of its frame's slot
+  that are enabled in their record (`is_enabled_in_frame(frame_index)`),
+  and verifies that the slot was filled for the frame it renders. A node
+  registered, or a connection made, after the frame's copy takes part from
+  the next frame. A program without a separate prepare phase calls
+  `prepare_frame()` right before `execute()`.
+- In the render phase (`Frame_phase::r_render`),
+  `get_consumer_input_node()` / `get_producer_output_node()` (and the
+  texture lookups built on them) answer from the node's record of the
+  frame being rendered: a node that frame does not name has no
+  connections in it (nullptr). In every other phase they read the live
+  graph.
+- The graph mutex guards the live list, the graph, the slots while
+  `prepare_frame()` fills them and the retired list. `execute()` never
+  takes it, so the prepare phase of the next frame (and any register,
+  connect or release) runs while a frame renders.
+- A node's `prepare_rendergraph_node()` copies the live parameters its
+  execute reads into its own slot of the frame (the editor's
+  `Post_processing_node` parameters and BRDF slice angles), and its
+  execute reads that slot.
+
+### Resizing from the Prepare Phase
+
+A `Texture_rendergraph_node` whose size the main thread decides takes the
+size as a request: `request_size(width, height)` (main thread, prepare
+phase) stores it in the slot of the frame being prepared, one slot per
+frame in flight, and `apply_requested_size()` at the start of the node's
+`execute_rendergraph_node()` sizes the render target to the request of the
+frame it renders (a frame without a request keeps the current size). The
+render target's textures and render pass are then created, replaced and
+dropped by the render phase only, so the prepare phase of a later frame
+never replaces an object an earlier frame's render phase is reading.
+`Render_target::get_sample_count()` reports the sample count the render
+target builds for (`reconfigure()` changes it).
+
+### Node lifetime
+
+A frame the render phase is still rendering may name a node whose owner
+has already released it. Every node is therefore created by
+`make_rendergraph_node<T>(args...)`, a `std::shared_ptr<T>` whose deleter
+(`Rendergraph_node_deleter`) hands the node back to the rendergraph
+(`prepare_frame()` verifies every registered node was made this way):
+
+- When the last owner releases the node, the rendergraph unregisters it at
+  once (it leaves the live list, its links are disconnected, later frames
+  do not name it). If no slot of a frame not yet rendered names it, it is
+  destroyed right there; otherwise it is retired with the latest frame
+  that names it.
+- `execute()` records the frame it finished (under a mutex of its own).
+  The next `prepare_frame()` destroys the retired nodes whose frame has
+  been rendered, outside the graph mutex (a destroyed node may release the
+  nodes it owns). Its execute never runs after the release: the frames
+  prepared later do not name it.
+- `end_rendering()` (shutdown, after the last render phase) destroys every
+  retired node and makes later releases destroy at once.
+  `~Rendergraph()` clears the nodes' registered flag, so a node released
+  after the rendergraph is gone is destroyed directly.
+- The deleter first calls the node's release hook,
+  `Rendergraph_node::on_released()` (virtual, default nothing), on the
+  releasing thread, before the rendergraph unregisters it. A node that
+  registered itself with a registry outside the rendergraph that a prepare
+  or ImGui phase iterates deregisters there (an `Imgui_host` from the
+  `Imgui_renderer`, the editor's `Scene_image_view` from `App_rendering`),
+  so no later phase reaches a retired node; its destructor runs when the
+  node is destroyed.
 
 ### Dynamic Connections
 
@@ -208,14 +306,14 @@ current frame.
 ### Destruction Order
 
 **Problem:** `Rendergraph_node` stores a reference to its `Rendergraph`. If
-the `Rendergraph` is destroyed first, the node's destructor will try to call
-`unregister_node()` on a freed object.
+the `Rendergraph` is destroyed first, the node's release must not call into
+a freed object.
 
 **Rule:** `Rendergraph::~Rendergraph()` sets `m_is_registered = false` on
-all nodes before destroying its members. `Rendergraph_node::~Rendergraph_node()`
-checks `m_is_registered` before calling `unregister_node()`. This sentinel
-check makes destruction order safe regardless of which object is destroyed
-first.
+all live nodes and destroys the retired ones. `Rendergraph_node_deleter`
+destroys a node whose flag is cleared directly; otherwise the rendergraph
+unregisters it ("Node lifetime"). `Rendergraph_node::~Rendergraph_node()`
+verifies the node is no longer registered.
 
 ### Pin Registration Timing
 
@@ -266,9 +364,9 @@ guards and log an error if violated.
 ### Sort Caching
 
 The sort is cached via the `m_is_sorted` flag and only recalculated when the
-topology changes. All of `register_node()`, `unregister_node()`, `connect()`,
-and `disconnect()` invalidate the cache. Manual calls to `sort()` are
-unnecessary -- `execute()` calls it internally.
+topology changes. Registering, releasing, `connect()` and `disconnect()`
+invalidate the cache; `prepare_frame()` sorts (under the graph mutex)
+before it copies the list.
 
 ### Traversal Depth Limit
 

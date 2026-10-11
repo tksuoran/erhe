@@ -50,7 +50,7 @@
 #include "windows/item_tree_window.hpp"
 #include "windows/properties.hpp"
 
-#include "renderers/ray_trace_renderer.hpp"
+#include "app_scenes.hpp"
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -337,9 +337,11 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
         };
     }
 
-    // Acceleration structures pin their primitives, so this must drop too.
-    result["blas_count"] = (m_context.ray_trace_renderer != nullptr)
-        ? m_context.ray_trace_renderer->get_blas_count()
+    // Acceleration structures pin their primitives, so this must drop too:
+    // one bottom level structure per traced geometry of every scene root
+    // (Ray_trace_scene), shared by the ray trace, DDGI and RC consumers.
+    result["blas_count"] = (m_context.app_scenes != nullptr)
+        ? m_context.app_scenes->get_ray_trace_geometry_count()
         : 0;
 
     // Undo/redo entries, and which container records still hold a parse.

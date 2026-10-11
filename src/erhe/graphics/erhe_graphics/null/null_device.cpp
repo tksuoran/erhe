@@ -1,5 +1,7 @@
 #include "erhe_graphics/null/null_device.hpp"
+#include "erhe_graphics/null/null_command_buffer.hpp"
 #include "erhe_graphics/null/null_surface.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
@@ -10,6 +12,13 @@
 #include "erhe_graphics/texture.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_utility/thread_roles.hpp"
+#include "erhe_verify/verify.hpp"
+
+#include <fmt/format.h>
+
+#include <algorithm>
+#include <iterator>
 
 namespace erhe::graphics {
 
@@ -78,8 +87,30 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
 Device_impl::~Device_impl() noexcept = default;
 
-auto Device_impl::wait_frame() -> bool
+void Device_impl::wait_for_frame_start(const uint64_t frame_id)
 {
+    static_cast<void>(frame_id);
+}
+
+auto Device_impl::get_frame_slot_index(const uint64_t frame_id) const -> std::size_t
+{
+    return static_cast<std::size_t>(frame_id % s_number_of_frames_in_flight);
+}
+
+auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
+{
+    // Order rule (doc/erhe/graphics.md "Frame lifecycle"): frames are
+    // acquired strictly in id order, at most N open.
+    ERHE_VERIFY(frame_id == m_prepare_frame_id + 1);
+    ERHE_VERIFY(frame_id >= m_render_frame_id);
+    ERHE_VERIFY(frame_id - m_render_frame_id < s_number_of_frames_in_flight);
+    const std::size_t  slot_index = get_frame_slot_index(frame_id);
+    Device_frame_slot& slot       = m_frame_slots[slot_index];
+    ERHE_VERIFY(!slot.open);
+    m_command_buffers[slot_index].clear();
+    m_prepare_frame_id = frame_id;
+    slot.frame_id      = frame_id;
+    slot.open          = true;
     return true;
 }
 
@@ -96,12 +127,21 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 
 auto Device_impl::end_frame() -> bool
 {
-    // Contract: end_frame only advances the frame index. See
+    return end_frame(m_render_frame_id);
+}
+
+auto Device_impl::end_frame(const uint64_t frame_id) -> bool
+{
+    // Contract: end_frame only ends the oldest open frame. See
     // doc/erhe/graphics.md ("Frame lifecycle") and the matching
     // Vulkan implementation for the rationale.
-    ++m_frame_index;
-    // Nothing executes on a GPU: the frame just recorded is complete.
-    run_completion_handlers();
+    ERHE_VERIFY(frame_id == m_render_frame_id);
+    Device_frame_slot& slot = m_frame_slots[get_frame_slot_index(frame_id)];
+    ERHE_VERIFY(slot.open && (slot.frame_id == frame_id));
+    slot.open = false;
+    ++m_render_frame_id;
+    // Nothing executes on a GPU: the frame just ended is complete.
+    run_completion_handlers(frame_id);
     return true;
 }
 
@@ -224,10 +264,22 @@ void Device_impl::cmd_texture_barrier(uint64_t usage_before, uint64_t usage_afte
 
 auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
 {
-    static_cast<void>(thread_slot);
-    // Stub for null backend; iteration target.
-    static Command_buffer* dummy{nullptr};
-    return *dummy;
+    // A recording handle whose recording methods are no-ops, kept in the
+    // vector of the calling role's frame slot until that slot's next
+    // acquire_frame_slot().
+    const uint64_t    frame_id   = get_frame_index();
+    const std::size_t slot_index = get_frame_slot_index(frame_id);
+    std::vector<std::unique_ptr<Command_buffer>>& command_buffers = m_command_buffers[slot_index];
+    auto command_buffer = std::make_unique<Command_buffer>(
+        m_device,
+        erhe::utility::Debug_label{
+            fmt::format("Null cb (frame_slot={}, thread_slot={}, allocation_index={})", slot_index, thread_slot, command_buffers.size())
+        }
+    );
+    command_buffer->get_impl().set_frame_id(frame_id);
+    Command_buffer& reference = *command_buffer;
+    command_buffers.push_back(std::move(command_buffer));
+    return reference;
 }
 
 void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
@@ -255,16 +307,24 @@ void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callb
 {
     // Not dropped: the handler releases resources (staging buffers, ring
     // buffer ranges, Mesh_memory retired pool ranges) that would otherwise
-    // leak. Fired by end_frame() / wait_idle().
-    m_completion_handlers.push_back(std::move(callback));
+    // leak. Fired by end_frame() of the stamped frame / wait_idle().
+    m_completion_handlers.push_back(Completion_handler{.frame_number = get_frame_index(), .callback = std::move(callback)});
 }
 
-void Device_impl::run_completion_handlers()
+void Device_impl::run_completion_handlers(const uint64_t last_frame)
 {
-    std::vector<std::function<void(Device_impl&)>> handlers;
-    handlers.swap(m_completion_handlers);
-    for (const std::function<void(Device_impl&)>& handler : handlers) {
-        handler(*this);
+    // Handlers may add handlers; collect the due ones first. The scratch
+    // vector keeps its capacity across frames.
+    m_due_completion_handlers.clear();
+    const std::vector<Completion_handler>::iterator keep_end = std::stable_partition(
+        m_completion_handlers.begin(),
+        m_completion_handlers.end(),
+        [last_frame](const Completion_handler& entry) { return entry.frame_number > last_frame; }
+    );
+    std::move(keep_end, m_completion_handlers.end(), std::back_inserter(m_due_completion_handlers));
+    m_completion_handlers.erase(keep_end, m_completion_handlers.end());
+    for (const Completion_handler& entry : m_due_completion_handlers) {
+        entry.callback(*this);
     }
 }
 
@@ -314,9 +374,15 @@ auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_
     }
 }
 
+// The render role (a dedicated render thread) gets the oldest open frame;
+// every other caller the newest acquired frame while it is open, otherwise
+// the next frame to be acquired.
 auto Device_impl::get_frame_index() const -> uint64_t
 {
-    return m_frame_index;
+    if (erhe::utility::Thread_roles::is_render_role()) {
+        return m_render_frame_id;
+    }
+    return std::max(m_prepare_frame_id, m_render_frame_id);
 }
 
 auto Device_impl::get_number_of_frames_in_flight() const -> std::size_t
@@ -332,7 +398,7 @@ auto Device_impl::get_number_of_frames_in_flight() const -> std::size_t
 // recording will read.
 auto Device_impl::is_frame_completed(const uint64_t frame) const -> bool
 {
-    return frame < m_frame_index;
+    return frame < m_render_frame_id;
 }
 
 auto Device_impl::allocate_ring_buffer_entry(

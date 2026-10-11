@@ -82,13 +82,18 @@ namespace {
 // Reads a byte range out of a mesh pool buffer. The pools are device-local, so
 // the bytes have to come back through a host-visible staging buffer: record one
 // buffer-to-buffer copy on the readback thread slot, submit, wait, map. Same
-// shape as Ray_trace_renderer::read_output_rgba8, minus the layout transitions
-// only a texture needs. No pool usage bit has to be widened for this - every
-// Vulkan buffer is created with TRANSFER_SRC (vulkan_buffer.cpp).
+// shape as Texture_renderer::render_and_read_rgba8, minus the layout
+// transitions only a texture needs. No pool usage bit has to be widened for
+// this - every Vulkan buffer is created with TRANSFER_SRC (vulkan_buffer.cpp).
 //
 // This runs on the main thread inside the MCP request tick and wait_idle()
 // stalls the device, which is why the caller caps how much it reads. It is a
-// debugging surface, not a per-frame one.
+// debugging surface, not a per-frame one. A self-contained submit + wait
+// beside a render phase that may be recording (frame pipelining): it touches
+// nothing that phase's open frame writes - the pools are written only by the
+// upload command buffers the prepare phases record and the render phases
+// submit, so the copy sees the uploads submitted before it, and the queue
+// submit is serialized with the render phase's under the device queue mutex.
 [[nodiscard]] auto read_gpu_buffer_bytes(
     erhe::graphics::Device&       graphics_device,
     const erhe::graphics::Buffer& source_buffer,

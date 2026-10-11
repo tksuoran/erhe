@@ -55,9 +55,9 @@ Multiple viewports can exist simultaneously, each with their own shadow node, sc
 
 `Viewport_scene_view` extends `erhe::rendergraph::Texture_rendergraph_node` and manages an MSAA render target. Its `execute_rendergraph_node()` runs these steps:
 
-1. **ID rendering** -- If the viewport is hovered and ID picking is enabled, `Id_renderer::render()` renders a unique 32-bit ID per mesh primitive into a separate FBO. GPU readback with a ring buffer (4 entries for pipeline latency) returns the mesh, primitive index, triangle ID, and depth at the mouse position.
+1. **ID rendering** -- If the viewport is hovered (or a region scan or pick probe is pending), `Id_renderer::render()` draws the id pass the prepare phase prepared for the view (`Id_renderer::prepare`), a unique 32-bit ID per mesh primitive, into a separate FBO. GPU readback with a ring buffer (4 entries for pipeline latency) returns the mesh, primitive index, triangle ID, and depth at the mouse position.
 
-2. **Tool pre-rendering** -- `Debug_renderer::begin_frame()` starts a new frame of debug line/point data. `Tools::render_viewport_tools()` submits tool geometry (gizmos, manipulators) using the 6-pass stencil protocol described below. `Renderable::render()` is called without an encoder for first-pass setup.
+2. **Tool pre-rendering** -- recorded before the node runs, on the main thread in M2 (`Viewport_scene_view::prepare_render`, into the frame slot named by the view's `Viewport_render_state` of the frame): `Debug_renderer::begin_frame()` opens the view's frame slot in the debug renderer's copy of the frame being prepared (one copy per frame in flight, so the render phase of the previous frame keeps drawing its own), `Tools::render_viewport_tools()` submits tool geometry (gizmos, manipulators) using the 6-pass stencil protocol described below, and `Renderable::render()` is called without an encoder for first-pass setup. The node then runs `Debug_renderer::compute()`, which expands the lines recorded for the frame it renders.
 
 3. **Render pass begins** -- A `Render_command_encoder` is created and an MSAA render pass starts, clearing color, depth, and stencil.
 
@@ -71,7 +71,7 @@ Multiple viewports can exist simultaneously, each with their own shadow node, sc
 
 ## Shadow rendering
 
-`Shadow_render_node` owns a depth texture array (one layer per light) and a `Light_projections` object. During execution it calls `erhe::scene_renderer::Shadow_renderer::render()` which:
+`Shadow_render_node` owns a depth texture array (one layer per light) and a `Light_projections` object. With the draw-list gate on, the casters come from the scene's shadow draw lists; with it off (the bucket path), `Shadow_render_node::prepare_casters()` buckets the content layer's casters in the last M2 step into the node's slot for the frame (`Shadow_renderer::prepare`, a `Render_bucket_snapshot` without the pass variant bits). Both paths take the frustum fit bounds from the scene's `Draw_list_scene` slot (`get_shadow_bounds`), so the render phase reads no mesh or node. During execution it calls `erhe::scene_renderer::Shadow_renderer::render()` which:
 
 - Renders each light into its own array layer via a separate render pass
 - Uses a depth-only shader with `Color_writes_disabled`
@@ -80,13 +80,18 @@ Multiple viewports can exist simultaneously, each with their own shadow node, sc
   front side. Mirrored (negative-determinant) casters draw with the front-face-flipped
   pipeline variant per bucket (see "Mirrored (negative-determinant) geometry" below)
 - Supports reverse depth (clear to 0.0) and forward depth (clear to 1.0)
-- Shadow resolution, light count, and depth bits are configurable at runtime via `reconfigure()`
+- Shadow resolution, light count, and depth bits are configurable at runtime: the main thread requests a configuration (`request_configuration()`, the shadow technique from the render settings in `prepare()`), and the render phase applies it with `reconfigure()` at the start of the node's execute
 
 The main scene rendering accesses shadow maps through the rendergraph connection and passes `Light_projections` to the forward renderer.
 
 ## Composer and composition passes
 
-The `Composer` holds an ordered list of `Composition_pass` instances. `render_composer()` iterates them in order; each pass calls `Forward_renderer::render()` with its specific configuration.
+The `Composer` holds an ordered list of `Composition_pass` instances. `render_composer()` iterates them in order. Each pass runs in two halves:
+
+- `Composition_pass::prepare()` (main thread, the last M2 step; `doc/editor/editor.md` "Frame phases and the render thread") evaluates the pass's gating for one scene view - `enabled`, the `is_enabled` predicate, the view's render style, whether edge lines go to `Content_wide_line_renderer`, whether the pass is draw-list eligible, its primitive settings - and, for a pass on the bucket path, has `Forward_renderer::prepare()` bucket its meshes into a `Render_bucket_snapshot` (complete primitive records and draw commands). `Composer::prepare()` fills one `Composition_pass_prepared` per pass into the view's `Composer_frame_slots` slot for the frame.
+- `Composition_pass::render(context, prepared)` (render phase) draws what was prepared: the fullscreen draw, the wide-line draw, the draw-list draw or the snapshot (`Forward_renderer::render(Draw_parameters, Render_bucket_snapshot)`), and records the outcome for `get_composition_passes`.
+
+The edge-line passes that `Content_wide_line_renderer` draws are fed in M2 too: `Viewport_scene_view::prepare_wide_line_feed` puts the records of their meshes into the same slot (`Composer_prepared::wide_line_feed`), and the render phase queues them (`add_feed`) before the compute pre-pass. Viewports and scene image captures prepare in M2 and pass the slot as `Render_context::composer_prepared`; the previews and the headset call `Composition_pass::render_immediate()`, which prepares where it renders.
 
 A `Composition_pass` specifies:
 

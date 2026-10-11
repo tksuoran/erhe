@@ -465,7 +465,7 @@ auto Texture_heap_impl::bind_descriptor_set(Command_buffer& command_buffer_wrapp
         nullptr
     );
 
-    ++m_device_impl.m_desc_heap_bind_count;
+    ++command_buffer_wrapper.get_impl().get_descriptor_counters().heap_bind_count;
     ERHE_VULKAN_DESC_TRACE("[HEAP_BIND] set=1 slots={}", m_used_slot_count);
 
     // Phase B: the dual-path push-descriptor branch is gone. Named sampler

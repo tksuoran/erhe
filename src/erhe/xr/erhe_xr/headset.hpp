@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_xr/frame_timing.hpp"
 #include "erhe_xr/xr.hpp"
 #include "erhe_xr/xr_instance.hpp"
 
@@ -21,15 +22,6 @@ class Render_view;
 class Render_views_frame;
 class Xr_session;
 
-class Frame_timing
-{
-public:
-    uint64_t predicted_display_time  {0};
-    uint64_t predicted_display_pediod{0};
-    bool     begin_ok                {false};
-    bool     should_render           {false};
-};
-
 class Headset final
 {
 public:
@@ -46,7 +38,15 @@ public:
     auto is_active     () const -> bool;
     auto poll_events   () const -> bool;
     auto update_actions() const -> bool;
-    auto begin_frame_  () -> Frame_timing;
+    // xrWaitFrame. Fills the timing fields and wait_ok; begin_ok is left
+    // false for the caller to set from begin_frame(). Wait and begin are
+    // separate so that a render thread can run xrBeginFrame..xrEndFrame
+    // while the main thread waits for the next frame
+    // (doc/editor/render_thread.md).
+    auto wait_frame    () -> Frame_timing;
+    // xrBeginFrame (only when timing.wait_ok) and the per-frame
+    // XR_FB_performance_metrics refresh. Returns true when the frame began.
+    auto begin_frame   (const Frame_timing& timing) -> bool;
     auto render        (erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool;
     // Multiview render entry. Forwards to Xr_session::render_frame_multiview().
     // Only valid when Xr_session::is_multiview_enabled() returns true; the
@@ -54,7 +54,7 @@ public:
     auto render_multiview(erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     auto end_frame     (bool rendered) -> bool;
     // Locate the current frame's per-view poses + fovs without rendering (see
-    // Xr_session::locate_views). Safe after begin_frame_(); used by the headset
+    // Xr_session::locate_views). Safe after wait_frame(); used by the headset
     // shadow fit to build a combined culling frustum before the rendergraph.
     auto locate_views  (std::vector<Render_view>& out_views) -> bool;
     // Create a quad composition layer backed by its own color swapchain.

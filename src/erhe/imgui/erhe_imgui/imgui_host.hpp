@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <string_view>
+#include <vector>
 
 namespace erhe::window {
     class Key_event;
@@ -33,6 +34,41 @@ class Window;
 // (Mouse_button_none when erhe has none).
 [[nodiscard]] auto to_erhe_keycode     (ImGuiKey key) -> erhe::window::Keycode;
 [[nodiscard]] auto to_erhe_mouse_button(int imgui_mouse_button) -> erhe::window::Mouse_button;
+
+// One draw list of an Imgui_draw_data_copy: its ranges in the copy's flat
+// vertex, index and command vectors.
+class Imgui_draw_list_range
+{
+public:
+    std::size_t vertex_offset {0};
+    std::size_t vertex_count  {0};
+    std::size_t index_offset  {0};
+    std::size_t index_count   {0};
+    std::size_t command_offset{0};
+    std::size_t command_count {0};
+};
+
+// What the render thread draws of one ImGui context in one frame: a deep
+// copy of the context's ImDrawData, made by the ImGui phase right after
+// ImGui::Render() (Imgui_renderer::copy_draw_data), so the next frame's
+// NewFrame() .. Render() can rewrite the live draw data while this frame
+// renders. The commands carry their resolved texture ids (no ImTextureData
+// pointer) and no callbacks. Each Imgui_host keeps one per device frame in
+// flight; the vectors are cleared and refilled with their capacity kept.
+class Imgui_draw_data_copy
+{
+public:
+    uint64_t                           frame_index      {0};     // device frame the copy was made for
+    bool                               is_frame_stamped {false}; // false until the first copy
+    bool                               valid            {false}; // false when the context rendered no draw data this frame
+    ImVec2                             display_pos      {};
+    ImVec2                             display_size     {};
+    ImVec2                             framebuffer_scale{};
+    std::vector<ImDrawVert>            vertices;
+    std::vector<ImDrawIdx>             indices;
+    std::vector<ImDrawCmd>             commands;
+    std::vector<Imgui_draw_list_range> draw_lists;
+};
 
 // Base class for derived Imgui_host classes - where ImGui windows can be hosted.
 //
@@ -118,11 +154,26 @@ public:
     // measurement of that.
     void request_item_recording();
 
+    // Draw data handoff (doc/erhe/imgui.md "Threading"). The ImGui phase
+    // calls copy_draw_data() for every host after its ImGui::Render() (or
+    // its skipped frame), with this host's context current; it fills the
+    // slot of the frame the ImGui phase draws (Imgui_renderer::begin_frame).
+    // The render thread's host node reads the slot of the frame it records
+    // with get_draw_data(), which verifies the slot was filled for that
+    // frame.
+    void copy_draw_data();
+    [[nodiscard]] auto get_draw_data() const -> const Imgui_draw_data_copy&;
+
     [[nodiscard]] auto get_item_recorder          () -> Imgui_item_recorder&;
     [[nodiscard]] auto get_item_recorder          () const -> const Imgui_item_recorder&;
     [[nodiscard]] auto is_item_recording_requested() const -> bool;
 
 protected:
+    // Rendergraph_node: a released host leaves Imgui_renderer's host list at
+    // once, so no ImGui phase draws it while the rendergraph keeps it retired
+    // for a frame still to be rendered.
+    void on_released() override;
+
     // Called by the derived host around its ImGui::NewFrame() ..
     // ImGui::Render() pair.
     void begin_item_recording();
@@ -144,6 +195,8 @@ protected:
     ImGuiContext*   m_imgui_context{nullptr};
     ImGuiID         m_root_dock_id {0};
 
+    std::vector<Imgui_draw_data_copy> m_draw_data_frames; // one per device frame in flight
+
     Imgui_item_recorder m_item_recorder;
     bool                m_item_recording_requested{false};
     bool                m_item_recording_active   {false};
@@ -153,6 +206,12 @@ protected:
 
 private:
     void apply_imgui_ini_path();
+    // Removes the host from Imgui_renderer's list, once (on_released() or
+    // the destructor of a host that was never released through the
+    // rendergraph deleter).
+    void unregister_from_renderer();
+
+    bool m_registered_with_renderer{false};
 };
 
 } // namespace erhe::imgui

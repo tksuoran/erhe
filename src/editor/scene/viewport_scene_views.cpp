@@ -9,6 +9,7 @@
 #include "erhe_graphics/device.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
+#include "renderers/id_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/viewport_overlay_node.hpp"
@@ -215,9 +216,10 @@ void Scene_views::handle_graphics_settings_changed(Graphics_preset_entry* graphi
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
     const int msaa_sample_count = (graphics_preset != nullptr) ? graphics_preset->msaa_sample_count : 0;
     // Reverse-Z is static (Device::get_reverse_depth()); the render target reads
-    // it directly when (re)building its render pass, so only MSAA is applied here.
+    // it directly when (re)building its render pass, so only MSAA is applied
+    // here, as a request: the render phase reconfigures the render target.
     for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_viewport_scene_views) {
-        viewport_scene_view->get_render_target().reconfigure(msaa_sample_count);
+        viewport_scene_view->set_msaa_sample_count(msaa_sample_count);
     }
 }
 
@@ -366,7 +368,7 @@ auto Scene_views::create_viewport_scene_view(
     // Scene_builder path passes and the callers that default to enabled.
     enable_post_processing = enable_post_processing && !m_app_context.force_post_processing_off;
 
-    const auto new_viewport = std::make_shared<Viewport_scene_view>(
+    const std::shared_ptr<Viewport_scene_view> new_viewport = erhe::rendergraph::make_rendergraph_node<Viewport_scene_view>(
         &app_settings.settings_store(),
         viewport_config_data,
         m_app_context,
@@ -404,7 +406,7 @@ auto Scene_views::create_viewport_scene_view(
 
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> viewport_producer;
     if (enable_post_processing) {
-        auto post_processing_node = std::make_shared<Post_processing_node>(
+        std::shared_ptr<Post_processing_node> post_processing_node = erhe::rendergraph::make_rendergraph_node<Post_processing_node>(
             graphics_device,
             rendergraph,
             post_processing,
@@ -416,7 +418,7 @@ auto Scene_views::create_viewport_scene_view(
         // Overlay node draws the tool gizmo / hotbar rendertarget meshes on top
         // of the post-processed image, depth-testing against the content depth.
         // It becomes the viewport's output node. See issue #230.
-        auto overlay_node = std::make_shared<Viewport_overlay_node>(
+        std::shared_ptr<Viewport_overlay_node> overlay_node = erhe::rendergraph::make_rendergraph_node<Viewport_overlay_node>(
             rendergraph,
             new_viewport,
             erhe::utility::Debug_label{fmt::format("Overlay for {}", name)}
@@ -1036,6 +1038,19 @@ void Scene_views::update_transforms()
 {
     for (auto& view : m_viewport_scene_views) {
         view->update_transforms();
+    }
+}
+
+void Scene_views::prepare_render(erhe::graphics::Command_buffer& upload_command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+    for (const std::shared_ptr<Viewport_scene_view>& view : m_viewport_scene_views) {
+        view->prepare_render(upload_command_buffer);
+    }
+    // The region scan the tools above requested belongs to this frame's ID
+    // render.
+    if (m_app_context.id_renderer != nullptr) {
+        m_app_context.id_renderer->begin_frame();
     }
 }
 

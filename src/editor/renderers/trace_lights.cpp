@@ -1,6 +1,7 @@
 #include "renderers/trace_lights.hpp"
 
 #include "app_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "app_settings.hpp"
 #include "scene/scene_root.hpp"
 
@@ -9,6 +10,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <memory>
 #include <vector>
@@ -22,20 +24,24 @@ auto fit_trace_light_projections(
     erhe::scene_renderer::Light_projections& light_projections
 ) -> bool
 {
-    const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = scene_root.get_scene().get_cameras();
-    if (cameras.empty()) {
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    // The scene's first camera as the copy the prepare phase of this frame
+    // made (Scene_root::snapshot_render_settings).
+    const uint64_t               frame_index           = graphics_device.get_frame_index();
+    const Scene_render_settings& scene_render_settings = scene_root.get_render_settings(frame_index);
+    if (!scene_render_settings.has_trace_camera) {
         return false;
     }
-    const erhe::scene_renderer::Light_count_limits light_count_limits = (context.app_settings != nullptr)
-        ? get_light_count_limits(context.app_settings->graphics.current_graphics_preset)
-        : erhe::scene_renderer::Light_count_limits{};
-    erhe::scene_renderer::Light_set& light_set = scene_root.get_light_set();
-    light_set.resolve(scene_root.layers().light()->lights, light_count_limits);
+    // The light set as the same snapshot resolved it.
+    static_cast<void>(context);
+    const erhe::scene_renderer::Light_set& light_set = scene_root.get_light_set(frame_index);
 
     const erhe::graphics::Device_info& info = graphics_device.get_info();
     light_projections.apply(
         light_set,
-        cameras.front().get(),
+        &scene_render_settings.trace_camera,
         erhe::math::Viewport{},
         erhe::math::Viewport{},
         {},     // no shadow map -> "no shadow map" sentinel in the light UBO

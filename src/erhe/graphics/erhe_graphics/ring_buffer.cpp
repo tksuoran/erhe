@@ -87,6 +87,7 @@ Ring_buffer::~Ring_buffer() noexcept
 {
     ERHE_PROFILE_FUNCTION();
 
+    const std::lock_guard<std::mutex> lock{m_mutex};
     m_algorithm.assert_invariants();
 }
 
@@ -97,6 +98,7 @@ void Ring_buffer::get_size_available_for_write(
     std::size_t& out_available_byte_count_with_wrap
 ) const
 {
+    const std::lock_guard<std::mutex> lock{m_mutex};
     m_algorithm.get_size_available_for_write(
         required_alignment,
         out_alignment_byte_count_without_wrap,
@@ -109,6 +111,40 @@ auto Ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage ring
 {
     ERHE_PROFILE_FUNCTION();
 
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    return acquire_locked(required_alignment, ring_buffer_usage, byte_count);
+}
+
+auto Ring_buffer::try_acquire(
+    const std::size_t       required_alignment,
+    const Ring_buffer_usage ring_buffer_usage,
+    const std::size_t       byte_count,
+    const Ring_buffer_wrap  wrap
+) -> Ring_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    std::size_t alignment_byte_count_without_wrap{0};
+    std::size_t available_byte_count_without_wrap{0};
+    std::size_t available_byte_count_with_wrap{0};
+    m_algorithm.get_size_available_for_write(
+        required_alignment,
+        alignment_byte_count_without_wrap,
+        available_byte_count_without_wrap,
+        available_byte_count_with_wrap
+    );
+    const std::size_t available_byte_count = (wrap == Ring_buffer_wrap::allowed)
+        ? available_byte_count_with_wrap
+        : available_byte_count_without_wrap;
+    if (available_byte_count < byte_count) {
+        return {};
+    }
+    return acquire_locked(required_alignment, ring_buffer_usage, byte_count);
+}
+
+auto Ring_buffer::acquire_locked(std::size_t required_alignment, Ring_buffer_usage ring_buffer_usage, std::size_t byte_count) -> Ring_buffer_range
+{
     ERHE_VERIFY(ring_buffer_usage == m_ring_buffer_usage); // TODO Cleanup this API
 
     m_last_used_frame = m_device.get_frame_index();
@@ -176,17 +212,20 @@ void Ring_buffer::complete_all_syncs()
     // Pending CPU_read downloads would reference frames that will never be
     // walked through frame_completed() here; the only current caller is the
     // CPU_write staging flush, which has no pending reads.
+    const std::lock_guard<std::mutex> lock{m_mutex};
     ERHE_VERIFY(m_pending_reads.empty());
     m_algorithm.complete_all();
 }
 
 auto Ring_buffer::is_idle() const -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_mutex};
     return m_pending_reads.empty() && m_algorithm.is_empty();
 }
 
 auto Ring_buffer::get_last_used_frame() const -> uint64_t
 {
+    const std::lock_guard<std::mutex> lock{m_mutex};
     return m_last_used_frame;
 }
 
@@ -194,7 +233,10 @@ void Ring_buffer::flush(const std::size_t byte_offset, const std::size_t byte_co
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_algorithm.assert_invariants();
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        m_algorithm.assert_invariants();
+    }
 
     ERHE_VERIFY(m_ring_buffer_usage == Ring_buffer_usage::CPU_write);
     if (!m_device.get_info().use_persistent_buffers) {
@@ -212,7 +254,10 @@ void Ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_count)
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_algorithm.assert_invariants();
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        m_algorithm.assert_invariants();
+    }
 
     if (m_ring_buffer_usage == Ring_buffer_usage::CPU_write) {
         if (!m_device.get_info().use_persistent_buffers) {
@@ -230,7 +275,9 @@ void Ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_offse
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_algorithm.make_sync_entry(m_device.get_frame_index(), wrap_count, byte_offset, byte_count);
+    const uint64_t frame_index = m_device.get_frame_index();
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    m_algorithm.make_sync_entry(frame_index, wrap_count, byte_offset, byte_count);
 }
 
 auto Ring_buffer::get_buffer() -> Buffer*
@@ -241,6 +288,8 @@ auto Ring_buffer::get_buffer() -> Buffer*
 void Ring_buffer::frame_completed(const uint64_t completed_frame)
 {
     ERHE_PROFILE_FUNCTION();
+
+    const std::lock_guard<std::mutex> lock{m_mutex};
 
     // Non-persistent CPU_read: now that this frame's GPU work (including the
     // texture/buffer copies that filled the read buffer) has completed, map

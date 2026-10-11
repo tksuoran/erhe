@@ -12,9 +12,10 @@
 namespace erhe::renderer {
 
 // Note that this relies on bucket being stable, as in etl::vector<> when elements are never removed.
-Primitive_renderer::Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket)
+Primitive_renderer::Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket, const uint64_t frame_index)
     : m_debug_renderer    {&debug_renderer}
     , m_bucket            {&bucket}
+    , m_frame_index       {frame_index}
     , m_line_vertex_stride{m_debug_renderer->get_program_interface().line_vertex_struct->get_size_bytes()}
 {
 }
@@ -23,6 +24,7 @@ Primitive_renderer::Primitive_renderer(Primitive_renderer&& old) noexcept
     : m_debug_renderer              {std::exchange(old.m_debug_renderer, nullptr)}
     , m_bucket                      {std::exchange(old.m_bucket,         nullptr)}
     , m_minor_bucket                {std::exchange(old.m_minor_bucket,   nullptr)}
+    , m_frame_index                 {old.m_frame_index}
     , m_line_vertex_stride          {m_debug_renderer->get_program_interface().line_vertex_struct->get_size_bytes()}
     , m_last_allocate_gpu_float_data{nullptr}
     , m_last_allocate_word_offset   {0}
@@ -42,6 +44,7 @@ auto Primitive_renderer::operator=(Primitive_renderer&& old) noexcept -> Primiti
     m_debug_renderer = std::exchange(old.m_debug_renderer, nullptr);
     m_bucket         = std::exchange(old.m_bucket, nullptr);
     m_minor_bucket   = std::exchange(old.m_minor_bucket, nullptr);
+    m_frame_index    = old.m_frame_index;
     m_line_color     = old.m_line_color;
     m_half_line_thickness = old.m_half_line_thickness;
     m_minor_lines    = old.m_minor_lines;
@@ -60,7 +63,7 @@ void Primitive_renderer::reserve_lines(std::size_t line_count)
 {
     std::size_t byte_count     = line_count * 2 * m_line_vertex_stride;
     m_last_allocate_word_count = byte_count / sizeof(float);
-    m_last_allocate_gpu_data   = m_bucket->make_draw(byte_count, 0);
+    m_last_allocate_gpu_data   = m_bucket->make_draw(m_frame_index, byte_count, 0);
 
     if (m_last_allocate_gpu_data.size_bytes() < byte_count) {
         m_last_allocate_gpu_float_data = nullptr;
@@ -76,7 +79,7 @@ void Primitive_renderer::make_primitives(std::size_t primitive_count, std::size_
 {
     std::size_t byte_count     = primitive_count * vertices_per_primitive * m_line_vertex_stride;
     m_last_allocate_word_count = byte_count / sizeof(float);
-    m_last_allocate_gpu_data   = m_bucket->make_draw(byte_count, primitive_count);
+    m_last_allocate_gpu_data   = m_bucket->make_draw(m_frame_index, byte_count, primitive_count);
 
     if (m_last_allocate_gpu_data.size_bytes() < byte_count) {
         m_last_allocate_gpu_float_data = nullptr;
@@ -121,12 +124,13 @@ void Primitive_renderer::set_minor_lines(const Minor_lines minor_lines)
 void Primitive_renderer::set_minor_line_renderer(const Primitive_renderer& minor_line_renderer)
 {
     ERHE_VERIFY(minor_line_renderer.m_bucket != nullptr);
+    ERHE_VERIFY(minor_line_renderer.m_frame_index == m_frame_index);
     m_minor_bucket = minor_line_renderer.m_bucket;
 }
 
 auto Primitive_renderer::make_minor_line_renderer() -> Primitive_renderer
 {
-    return Primitive_renderer{*m_debug_renderer, (m_minor_bucket != nullptr) ? *m_minor_bucket : *m_bucket};
+    return Primitive_renderer{*m_debug_renderer, (m_minor_bucket != nullptr) ? *m_minor_bucket : *m_bucket, m_frame_index};
 }
 
 #pragma region add

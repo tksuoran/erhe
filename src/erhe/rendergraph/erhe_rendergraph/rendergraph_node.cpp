@@ -5,28 +5,52 @@
 #include "erhe_rendergraph/rendergraph_log.hpp"
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::rendergraph {
+
+void Rendergraph_node_deleter::operator()(Rendergraph_node* node) const
+{
+    if (node == nullptr) {
+        return;
+    }
+    node->on_released();
+    // m_is_registered is false here only when the rendergraph was destroyed
+    // first (Rendergraph::~Rendergraph()): no frame can render the node.
+    if (!node->m_is_registered) {
+        delete node;
+        return;
+    }
+    node->m_rendergraph.release_node(node);
+}
+
+void Rendergraph_node_deleter::adopt(Rendergraph_node& node)
+{
+    node.m_has_deleter = true;
+}
 
 Rendergraph_node::Rendergraph_node(Rendergraph& rendergraph, const erhe::utility::Debug_label debug_label)
     : erhe::graph::Node{debug_label.string_view()}
     , m_rendergraph    {rendergraph}
     , m_debug_label    {debug_label}
 {
+    const std::size_t frames_in_flight = m_rendergraph.get_graphics_device().get_number_of_frames_in_flight();
+    ERHE_VERIFY(frames_in_flight > 0);
+    m_frame_records.resize(frames_in_flight);
     m_rendergraph.register_node(this);
 }
 
 Rendergraph_node::~Rendergraph_node() noexcept
 {
     log_tail->trace("~Rendergraph_node() {}", get_debug_label().string_view());
-    // m_is_registered is set to false by Rendergraph::~Rendergraph() when the
-    // rendergraph is destroyed before this node. In that case, skip unregister
-    // since the rendergraph no longer exists.
-    if (m_is_registered) {
-        m_rendergraph.unregister_node(this);
-    }
+    // Destroyed only through Rendergraph_node_deleter: after its rendergraph
+    // unregistered it (Rendergraph::release_node()), or after the rendergraph
+    // itself was destroyed (Rendergraph::~Rendergraph() clears the flag). A
+    // registered node here was not created by make_rendergraph_node().
+    ERHE_VERIFY(!m_is_registered);
 }
 
 auto Rendergraph_node::get_referenced_texture() const -> const erhe::graphics::Texture*
@@ -42,6 +66,20 @@ auto Rendergraph_node::get_consumer_input_node(const int key, const int depth) c
     }
 
     ERHE_VERIFY(depth < rendergraph_max_depth);
+
+    if (erhe::utility::Thread_roles::get_frame_phase() == erhe::utility::Frame_phase::r_render) {
+        const Frame_record* record = get_render_frame_record();
+        if (record == nullptr) {
+            return nullptr;
+        }
+        for (std::size_t i = 0; i < record->input_count; ++i) {
+            if (record->inputs[i].key == static_cast<std::size_t>(key)) {
+                return record->inputs[i].node;
+            }
+        }
+        log_tail->error("Node '{}' input for key '{}' is not registered", get_debug_label().string_view(), key);
+        return nullptr;
+    }
 
     // Find input pin with matching key
     for (const erhe::graph::Pin& pin : get_input_pins()) {
@@ -79,6 +117,20 @@ auto Rendergraph_node::get_producer_output_node(const int key, const int depth) 
     }
 
     ERHE_VERIFY(depth < rendergraph_max_depth);
+
+    if (erhe::utility::Thread_roles::get_frame_phase() == erhe::utility::Frame_phase::r_render) {
+        const Frame_record* record = get_render_frame_record();
+        if (record == nullptr) {
+            return nullptr;
+        }
+        for (std::size_t i = 0; i < record->output_count; ++i) {
+            if (record->outputs[i].key == static_cast<std::size_t>(key)) {
+                return record->outputs[i].node;
+            }
+        }
+        log_tail->error("Node '{}' output for key '{}' is not registered", get_debug_label().string_view(), key);
+        return nullptr;
+    }
 
     // Find output pin with matching key
     for (const erhe::graph::Pin& pin : get_output_pins()) {
@@ -131,6 +183,69 @@ auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
 auto Rendergraph_node::is_enabled() const -> bool
 {
     return m_enabled;
+}
+
+auto Rendergraph_node::is_enabled_in_frame(const uint64_t frame_index) const -> bool
+{
+    const Frame_record& record = m_frame_records[frame_index % m_frame_records.size()];
+    return (record.frame_index == frame_index) && record.enabled;
+}
+
+namespace {
+
+// Which end of a pin's first link names the connected node.
+enum class Link_end : unsigned int {
+    source, // of an input pin: the producer
+    sink    // of an output pin: the consumer
+};
+
+[[nodiscard]] auto first_linked_node(const erhe::graph::Pin& pin, const Link_end link_end) -> Rendergraph_node*
+{
+    const std::vector<erhe::graph::Link*>& links = pin.get_links();
+    if (links.empty()) {
+        return nullptr;
+    }
+    erhe::graph::Pin* other_pin = (link_end == Link_end::source) ? links.front()->get_source() : links.front()->get_sink();
+    return (other_pin != nullptr) ? static_cast<Rendergraph_node*>(other_pin->get_owner_node()) : nullptr;
+}
+
+}
+
+void Rendergraph_node::record_frame(const uint64_t frame_index)
+{
+    Frame_record& record = m_frame_records[frame_index % m_frame_records.size()];
+    record.frame_index  = frame_index;
+    record.enabled      = m_enabled;
+    record.input_count  = 0;
+    record.output_count = 0;
+    for (const erhe::graph::Pin& pin : get_input_pins()) {
+        record.inputs[record.input_count++] = Frame_link{
+            .key  = pin.get_key(),
+            .node = first_linked_node(pin, Link_end::source)
+        };
+    }
+    for (const erhe::graph::Pin& pin : get_output_pins()) {
+        record.outputs[record.output_count++] = Frame_link{
+            .key  = pin.get_key(),
+            .node = first_linked_node(pin, Link_end::sink)
+        };
+    }
+}
+
+auto Rendergraph_node::get_render_frame_record() const -> const Frame_record*
+{
+    const uint64_t      frame_index = m_rendergraph.get_graphics_device().get_frame_index();
+    const Frame_record& record      = m_frame_records[frame_index % m_frame_records.size()];
+    return (record.frame_index == frame_index) ? &record : nullptr;
+}
+
+void Rendergraph_node::prepare_rendergraph_node(const uint64_t frame_index)
+{
+    static_cast<void>(frame_index);
+}
+
+void Rendergraph_node::on_released()
+{
 }
 
 auto Rendergraph_node::get_rendergraph() -> Rendergraph&

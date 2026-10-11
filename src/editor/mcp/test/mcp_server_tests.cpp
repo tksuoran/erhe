@@ -4099,8 +4099,8 @@ public:
 }
 
 // Assign, then let a frame render before returning: the asymmetry only shows
-// up because Draw_list_scene::sync_gpu_slots() repairs the first mesh during a
-// draw BETWEEN the two assignments. With both assignments inside one
+// up because a slot rewrite of the first mesh (originally the draw-time GPU
+// slot sync) lands BETWEEN the two assignments. With both assignments inside one
 // flush_draw_lists() both records are written wrong identically and an
 // equality assertion would pass with the bug present.
 void assign_and_render(

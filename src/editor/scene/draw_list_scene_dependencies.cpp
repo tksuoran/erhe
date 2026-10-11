@@ -1,6 +1,7 @@
 #include "scene/draw_list_scene_dependencies.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "renderers/material_set_factory.hpp"
 
 #include "erhe_scene_renderer/program_interface.hpp"
@@ -17,8 +18,11 @@ auto make_draw_list_scene_dependencies(App_context& context) -> Draw_list_scene_
 {
     Draw_list_scene_dependencies dependencies{};
     dependencies.mesh_memory          = context.mesh_memory;
+    dependencies.graphics_device      = context.graphics_device;
     dependencies.shader_variant_cache = context.shader_variant_cache;
     dependencies.primitive_interface  = (context.program_interface != nullptr) ? &context.program_interface->primitive_interface : nullptr;
+    dependencies.exclude_unlit_from_shadows =
+        (context.editor_settings != nullptr) && context.editor_settings->exclude_unlit_primitives;
     // The draw-list set holds the materials of a root that renders content,
     // so it gets the full texture heap limit.
     if (context.material_set_factory != nullptr) {

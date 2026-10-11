@@ -27,6 +27,7 @@ namespace editor {
 
 class App_context;
 class Render_context;
+class Scene_render_settings;
 class Scene_root;
 
 // Physically-based procedural sky (Sebastien Hillaire, EGSR 2020) rendered as
@@ -68,17 +69,22 @@ public:
     void render_atmosphere(const Render_context& context);
 
     // LUT access for the lightmap baker's sky term (Lightmap_baker::
-    // set_sky_lighting): valid only when atmosphere is supported AND
-    // are_luts_ready() (ensure_luts ran).
+    // set_sky_lighting): valid only when atmosphere is supported and the
+    // LUTs were generated. The textures are created by the constructor and
+    // never replaced; ensure_luts() (render phase) records their contents.
     [[nodiscard]] auto get_transmittance_lut() const -> erhe::graphics::Texture* { return m_transmittance_lut.get(); }
     [[nodiscard]] auto get_multiscatter_lut () const -> erhe::graphics::Texture* { return m_multiscatter_lut.get(); }
-    [[nodiscard]] auto are_luts_ready       () const -> bool                     { return m_luts_ready; }
+    // Render phase only: ensure_luts() ran. The main thread reads the value
+    // the last rendered frame reported (Frame_result::sky_luts_ready).
+    [[nodiscard]] auto are_luts_ready       () const -> bool;
 
-    // Toward-sun direction for a scene: the scene's first directional
-    // light when present, else the config's elevation / azimuth. The same
-    // resolution render_atmosphere() uses, shared with the lightmap baker
-    // so the baked sky and the rendered sky always agree on the sun.
-    [[nodiscard]] static auto resolve_sun_direction(const Sky_config& sky_config, Scene_root* scene_root) -> glm::vec3;
+    // Toward-sun direction for a scene: the scene's last directional light
+    // when present (scene_render_settings, the frame's copy from
+    // Scene_root::get_render_settings(); null without a scene), else the
+    // config's elevation / azimuth. The same resolution render_atmosphere()
+    // uses, shared with the lightmap baker so the baked sky and the rendered
+    // sky always agree on the sun.
+    [[nodiscard]] static auto resolve_sun_direction(const Sky_config& sky_config, const Scene_render_settings* scene_render_settings) -> glm::vec3;
 
 private:
     App_context&                             m_context;

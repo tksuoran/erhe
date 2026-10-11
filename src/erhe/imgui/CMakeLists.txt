@@ -77,6 +77,7 @@ target_link_libraries(${_target}
         erhe::profile
         erhe::renderer
         erhe::time
+        erhe::utility
 )
 
 target_link_libraries(${_target} PUBLIC mango)

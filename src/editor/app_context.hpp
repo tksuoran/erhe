@@ -1,6 +1,11 @@
 #pragma once
 
+#include "renderers/render_settings_access.hpp"
+
 #include <atomic>
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -67,6 +72,7 @@ class Material_set_factory;
 class App_scenes;
 class App_settings;
 class App_windows;
+class Render_settings;
 class Editor_windows;
 class Fly_camera_tool;
 class Frame_pacing_window;
@@ -169,6 +175,11 @@ public:
     // Owned by App_settings (settings_store().get_settings()); exposed
     // directly because the config data is read pervasively.
     Editor_settings_config* editor_settings      {nullptr};
+    // The copies of the settings the render phase reads (Editor::m_render_settings,
+    // one per frame in flight; renderers/render_settings.hpp), filled at the
+    // end of M2; render_settings->x reads the calling role's copy
+    // (renderers/render_settings_access.hpp).
+    Render_settings_access  render_settings      {};
 
     tf::Executor*                           executor              {nullptr};
     std::atomic_int                         pending_async_ops     {};
@@ -205,17 +216,56 @@ public:
     // Main-thread-only parts (e.g. Operation_stack) verify their callers
     // against this instead of pretending to be thread-safe with a lock.
     std::thread::id                         main_thread_id        {};
+    // The thread that runs the render phase (doc/editor/render_thread.md
+    // section 2.1). Equal to main_thread_id while the render phase runs inline
+    // on the main thread.
+    std::thread::id                         render_thread_id      {};
 
     erhe::commands::Commands*               commands              {nullptr};
     // Hover sources without scene meshes (the transform gizmo), consulted by
     // Scene_view::update_hover_with_analytic_tools(). Filled once, after all
     // parts are constructed; see scene/analytic_hover_provider.hpp.
     std::vector<Analytic_hover_provider*>   analytic_hover_providers{};
-    // Set by Editor::tick() to the cb being recorded for the current frame.
-    // Runtime-triggered code paths (e.g. Scene_commands::create_new_rendertarget,
-    // Hotbar / Hud rendertarget construction) read this to record GPU work into
-    // the same cb. Null outside of tick().
+    // The main thread's cb (doc/editor/render_thread.md section 2.3): the
+    // upload cb during the prepare phase (M2), null during the overlap phase
+    // (M1) and between frames, and the init cb during startup. The render
+    // phase (R) runs while M1 of the next frame does, so it neither writes
+    // nor reads this: it passes its frame cb to its recorders explicitly
+    // (Thumbnails::update, the preview renders, the DDGI / radiance cascades
+    // ticks, the rendergraph). Runtime-triggered main-thread code paths (e.g.
+    // Scene_commands::create_new_rendertarget, Hotbar / Hud rendertarget
+    // construction) read this to record GPU work into the same cb.
     erhe::graphics::Command_buffer*         current_command_buffer{nullptr};
+    // Render phase (R) state, written by the thread running R at its start
+    // from its Frame_packet copy and read only by R: Time's host system
+    // time of the frame being rendered (the selection outline pulse). Time
+    // itself advances in M1 of the next frame while R runs.
+    int64_t                                 render_phase_host_system_time_ns{0};
+    // Main thread, prepare phase (or outside the frame loop): joins the
+    // render phase still in flight, as the next kick would, so a standalone
+    // submit (record + submit + Device::wait_idle on the main thread) that
+    // writes or reads resources the render phase records with is ordered
+    // after that render phase's recording and submits. A no-op without frame
+    // pipelining (the end of M1 joined already) and when no frame is
+    // outstanding; set by Editor (null in programs without one). The
+    // lightmap baker and streamer call it before their standalone submits.
+    std::function<void()>                   join_render_phase;
+    // Main thread: the device frame of the newest render phase the main
+    // thread joined (Frame_result::device_frame_id, set by
+    // Editor::on_frame_joined); empty before the first join. What the
+    // render phase writes for the main thread (Render_frame_results: the
+    // shadow light projections, the composition pass statistics, the DDGI
+    // and radiance cascades probe readbacks) the main thread reads as the
+    // result of this frame, one frame late
+    // (doc/editor/editor.md "Frame phases and the render thread").
+    std::optional<uint64_t>                 last_rendered_frame_index{};
+    // The frame whose render phase results the calling phase reads: the
+    // render phase (R) its own frame (Device::get_frame_index() on the render
+    // role; the results its producers wrote earlier in the frame, e.g. the
+    // headset recording its tools in R), every main-thread phase
+    // last_rendered_frame_index. For the code that runs in both (the
+    // renderables and the debug visualizations).
+    [[nodiscard]] auto get_results_frame_index() const -> std::optional<uint64_t>;
     // Set on the main thread to end the run loop after the current frame -
     // the programmatic counterpart of the window close event. The MCP
     // request_exit tool sets it (ctest stops the editor it started as the

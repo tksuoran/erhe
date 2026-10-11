@@ -53,9 +53,18 @@
 #   endif
 #
 
-//#   define ERHE_PROFILE_FUNCTION() ZoneScoped
-#   define ERHE_PROFILE_FUNCTION() ZoneScopedS(32)
-//#   define ERHE_PROFILE_FUNCTION()
+// ERHE_TRACY_CALLSTACK_DEPTH (CMake option) > 0 captures a callstack of
+// that depth with every function zone, which costs about 0.6 us per zone
+// (~1.6 ms on a 2600-zone frame) and distorts frame-time captures; 0 records
+// the zone alone.
+#   if !defined(ERHE_TRACY_CALLSTACK_DEPTH)
+#       define ERHE_TRACY_CALLSTACK_DEPTH 32
+#   endif
+#   if ERHE_TRACY_CALLSTACK_DEPTH > 0
+#       define ERHE_PROFILE_FUNCTION() ZoneScopedS(ERHE_TRACY_CALLSTACK_DEPTH)
+#   else
+#       define ERHE_PROFILE_FUNCTION() ZoneScoped
+#   endif
 
 #   define ERHE_PROFILE_SCOPE(erhe_profile_id) ZoneScopedN(erhe_profile_id)
 //#   define ERHE_PROFILE_SCOPE(erhe_profile_id)
@@ -66,6 +75,7 @@
 #   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) TracyMessageL(erhe_profile_message)
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) TracyGpuZone(erhe_profile_id.data())
 #   define ERHE_PROFILE_GPU_CONTEXT TracyGpuContext
+#   define ERHE_PROFILE_THREAD_NAME(erhe_profile_thread_name) tracy::SetThreadName(erhe_profile_thread_name)
 
 #   if defined(ERHE_GRAPHICS_API_OPENGL)
 #       define ERHE_PROFILE_FRAME_END FrameMark; TracyGpuCollect
@@ -100,6 +110,7 @@
 #   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message)
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id)
 #   define ERHE_PROFILE_GPU_CONTEXT
+#   define ERHE_PROFILE_THREAD_NAME(erhe_profile_thread_name) static_cast<void>(erhe_profile_thread_name)
 #   define ERHE_PROFILE_FRAME_END
 
 #elif defined(ERHE_PROFILE_LIBRARY_NVTX)
@@ -120,6 +131,7 @@
 #   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) nvtx3::mark(erhe_profile_message)
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_GPU_CONTEXT
+#   define ERHE_PROFILE_THREAD_NAME(erhe_profile_thread_name) static_cast<void>(erhe_profile_thread_name)
 #   define ERHE_PROFILE_FRAME_END
 
 #else
@@ -131,6 +143,7 @@
 #   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) static_cast<void>(erhe_profile_message);
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_GPU_CONTEXT
+#   define ERHE_PROFILE_THREAD_NAME(erhe_profile_thread_name) static_cast<void>(erhe_profile_thread_name)
 #   define ERHE_PROFILE_FRAME_END
 #   define ERHE_PROFILE_MEM_ALLOC(ptr, size)
 #   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size)

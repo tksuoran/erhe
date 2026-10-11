@@ -8,7 +8,7 @@
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
-#include "erhe_scene/camera.hpp"
+#include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -87,7 +87,6 @@ void Texel_renderer::render(const Render_parameters& parameters)
     std::optional<Ring_buffer_range> camera_buffer_range{};
     ERHE_VERIFY(camera != nullptr);
     camera_buffer_range = m_camera_buffer.update(
-        *camera->projection(),
         *camera,
         viewport,
         camera->get_exposure(),

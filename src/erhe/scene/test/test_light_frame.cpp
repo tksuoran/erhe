@@ -47,8 +47,10 @@ public:
 
     [[nodiscard]] auto make_parameters(const erhe::scene::Shadow_frustum_fit_settings* fit_settings) const -> erhe::scene::Light_projection_parameters
     {
+        // The fit reads the camera through its render copy.
+        camera_snapshot.capture(*camera);
         erhe::scene::Light_projection_parameters parameters{};
-        parameters.view_camera          = camera.get();
+        parameters.view_camera          = &camera_snapshot;
         parameters.main_camera_viewport = erhe::math::Viewport{0, 0, 1920, 1080};
         parameters.shadow_map_viewport  = erhe::math::Viewport{0, 0, 2048, 2048};
         parameters.reverse_depth        = true;
@@ -58,6 +60,7 @@ public:
     }
 
     std::shared_ptr<erhe::scene::Camera> camera;
+    mutable erhe::scene::Camera_snapshot camera_snapshot{};
     std::shared_ptr<erhe::scene::Light>  light;
 };
 

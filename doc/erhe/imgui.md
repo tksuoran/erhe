@@ -22,7 +22,7 @@ management system that tracks, registers, and dispatches input events to ImGui w
 ## Public API
 - Create an `Imgui_renderer`, then create `Imgui_host` subclasses (each gets its own ImGuiContext).
 - Derive from `Imgui_window` and register with `Imgui_windows` to add UI panels.
-- Per frame: `begin_frame()` -> draw windows -> `render_draw_data()` -> `next_frame()`.
+- Per frame: `Imgui_windows::begin_frame(frame_index)` -> draw windows -> `Imgui_windows::end_frame()` (copies each host's draw data) -> per host `update_draw_data_textures()` and `render_draw_data(encoder, pass, host.get_draw_data())` -> `next_frame()`.
 - `image()` / `image_button()` for rendering GPU textures in ImGui.
 
 ## Dependencies
@@ -194,9 +194,55 @@ what Dear ImGui submitted in one frame, which is what the editor's
   list - keeps its entries' own labels. `is_item_recording()` guards building the text. Item
   tree rows and property rows use these.
 - **Threading.** Every ImGui context erhe creates is driven from the main
-  (tick) thread - `Imgui_windows::begin_frame` / `draw_imgui_windows` /
-  `end_frame` for the desktop host and for every `Rendertarget_imgui_host`
-  alike - so the registry and the records need no synchronization.
+  thread in the editor's M2 phase (`doc/editor/editor.md` "Frame phases and
+  the render thread") - `Imgui_windows::begin_frame` / `draw_imgui_windows` /
+  `end_frame`, `ImGui::NewFrame` .. `ImGui::Render`, for the desktop host and
+  for every `Rendertarget_imgui_host` alike - so the registry and the records
+  need no synchronization. The draw data is consumed on the render thread in
+  R: each host's `execute_rendergraph_node` calls
+  `Imgui_renderer::update_draw_data_textures` (recording into the frame
+  command buffer) and `render_draw_data`, which asserts the render thread and
+  the `r_render` phase. Work a window or menu must not do inside the ImGui
+  iteration (creating windows or rendergraph nodes, recording GPU work,
+  blocking loads) goes through `Imgui_windows::queue()`; `draw_imgui_windows`
+  does not run the queue, the application calls `Imgui_windows::flush_queue()`
+  where that work is safe (the editor: the start of M2, so an operation
+  queued in frame N runs in frame N+1 before anything is prepared or
+  rendered).
+- **The draw data R renders is a copy.** `Imgui_windows::end_frame` calls
+  `Imgui_host::copy_draw_data()` for every host right after its
+  `ImGui::Render()`: `Imgui_renderer::copy_draw_data` first turns the
+  context's texture requests (`ImTextureData` create / update / destroy,
+  the font atlas pages) into `Imgui_texture_request` entries - the
+  `Imgui_texture` object exists at once, so ImGui gets its id and status OK
+  in the ImGui phase, the pixel rows are copied into the request, and the
+  render thread creates the GPU texture and uploads - then deep-copies the
+  `ImDrawData` (display position, size and framebuffer scale, every draw
+  list's vertices, indices and commands, flattened into owned vectors with
+  per-list ranges, `Imgui_draw_data_copy`) into the host's slot for the
+  ImGui phase's device frame (`Imgui_renderer::begin_frame(frame_index)`).
+  The vectors are cleared and refilled, so the copies reach a high-water
+  mark and stop allocating. Copied commands carry the resolved texture id
+  and no `ImTextureData` pointer; callbacks are not supported (the hosts
+  install none; `copy_draw_data` verifies it). A host that rendered nothing
+  leaves its slot stamped and not valid.
+- **R reads only the copy of its frame.** A host node calls
+  `Imgui_renderer::wait_for_draw_data()`, then
+  `update_draw_data_textures()` (runs, in order, the queued texture
+  requests of the frame it records and earlier; the first host node of the
+  frame runs them) and `render_draw_data(encoder, pass,
+  get_draw_data())`. `Imgui_host::get_draw_data()` picks the slot of the
+  role-keyed `Device::get_frame_index()` and verifies it was filled for
+  that frame. No ImGui context is made current and the `Imgui_renderer`
+  mutex is not taken in R, so the next frame's `NewFrame` .. `Render` may
+  run while this frame renders.
+- **Texture references are per frame.** `image()` / `image_button()` push
+  the reference into the slot of the ImGui phase's frame; the first
+  `render_draw_data()` of that frame moves them into the retained set (the
+  references of the frame drawn last), and the displaced ones are released
+  in `next_frame()`, outside `Rendergraph::execute()`. A texture R creates
+  or replaces is passed as a reference R resolves (a `Rendergraph_node`
+  resolves its output), never read in the ImGui phase.
 
 The tool vocabulary the MCP server exposes over this
 (`get_imgui_items`, `get_imgui_item_rect`, `imgui_click`, `imgui_hover`,

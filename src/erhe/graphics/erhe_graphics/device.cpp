@@ -14,6 +14,7 @@
 
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
@@ -67,6 +68,7 @@ Device::Device(
     // (the GL default vertex input state) can exist. No-op on backends
     // with no per-context objects.
     m_impl->create_per_context_resources();
+    m_next_frame_start_id = m_impl->get_frame_index();
 }
 
 Device::~Device() noexcept = default;
@@ -119,6 +121,9 @@ auto Device::create_dummy_texture(Command_buffer& init_command_buffer, const erh
 }
 auto Device::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
 {
+    // The main thread records nothing during M1 (doc/editor/render_thread.md
+    // section 2.3).
+    erhe::utility::Thread_roles::assert_command_recording_allowed();
     return m_impl->get_command_buffer(thread_slot);
 }
 void Device::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
@@ -153,9 +158,35 @@ auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t
 {
     return m_impl->get_buffer_alignment(target);
 }
+auto Device::wait_for_frame_start() -> uint64_t
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(!m_frame_start_pending);
+    const uint64_t frame_id = m_next_frame_start_id;
+    ++m_next_frame_start_id;
+    m_frame_start_pending = true;
+
+    // CPU slot begin (frame pacing data requirements): the frame start is
+    // the first per-frame device call on the app's frame path.
+    m_frame_time_recorder->begin_frame(static_cast<std::int64_t>(frame_id), erhe::frame_pacing::Frame_time_recorder::now());
+    m_impl->wait_for_frame_start(frame_id);
+    return frame_id;
+}
+auto Device::acquire_frame_slot(const uint64_t frame_id) -> bool
+{
+    ERHE_VERIFY(m_frame_start_pending);
+    // The started frame is the frame the slot is acquired for; the backend
+    // verifies the order rule (frame_id follows the newest acquired frame,
+    // at most get_number_of_frames_in_flight() frames open).
+    ERHE_VERIFY(frame_id + 1 == m_next_frame_start_id);
+    m_frame_start_pending = false;
+    return m_impl->acquire_frame_slot(frame_id);
+}
 auto Device::wait_frame() -> bool
 {
-    return m_impl->wait_frame();
+    const uint64_t frame_id = wait_for_frame_start();
+    return acquire_frame_slot(frame_id);
 }
 auto Device::begin_frame() -> bool
 {
@@ -164,6 +195,10 @@ auto Device::begin_frame() -> bool
 auto Device::end_frame() -> bool
 {
     return m_impl->end_frame();
+}
+auto Device::end_frame(const uint64_t frame_id) -> bool
+{
+    return m_impl->end_frame(frame_id);
 }
 auto Device::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
@@ -337,15 +372,6 @@ void Device::trace(const std::string& message)
         m_trace_callback(message);
     }
 }
-auto Device::get_active_render_pass() const -> Render_pass*
-{
-    return m_active_render_pass;
-}
-void Device::set_active_render_pass(Render_pass* render_pass)
-{
-    m_active_render_pass = render_pass;
-}
-
 auto Device::get_frame_time_recorder() -> erhe::frame_pacing::Frame_time_recorder&
 {
     return *m_frame_time_recorder;
@@ -353,12 +379,12 @@ auto Device::get_frame_time_recorder() -> erhe::frame_pacing::Frame_time_recorde
 
 void Device::set_display_refresh_duration_seconds(const double seconds)
 {
-    m_display_refresh_duration_seconds = seconds;
+    m_frame_time_recorder->set_display_refresh_duration(seconds);
 }
 
 auto Device::get_display_refresh_duration_seconds() const -> double
 {
-    return m_display_refresh_duration_seconds;
+    return m_frame_time_recorder->get_display_refresh_duration();
 }
 
 auto Device::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result

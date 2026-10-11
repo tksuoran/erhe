@@ -226,9 +226,9 @@ protected:
         erhe::graphics::Color_blend_state color_blend = erhe::graphics::Color_blend_state::color_blend_premultiplied;
 
         const erhe::math::Viewport viewport{0, 0, width, height};
+        const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
         const Camera_view_input view_input{
-            .projection  = m_camera->projection(),
-            .node        = m_camera.get(),
+            .camera      = &camera_snapshot,
             .viewport    = viewport,
             .pixel_scale = edge_case.pixel_scale
         };
@@ -240,6 +240,7 @@ protected:
                 m_renderer->begin_frame();
                 m_renderer->set_view_params(
                     std::span<const Camera_view_input>{&view_input, 1},
+                    Content_wide_line_tent_settings{},
                     reverse_depth,
                     graphics_device.get_info().coordinate_conventions.native_depth_range,
                     graphics_device.get_info().coordinate_conventions

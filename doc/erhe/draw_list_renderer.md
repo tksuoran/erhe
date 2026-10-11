@@ -167,9 +167,12 @@ registered object is reported and asserts in debug (R10b).
 Requirements following from this:
 
 - R17: Each draw list caches its fully resolved shader stages
-  (`Shader_variant_cache` result) per resolution config, resolved at
-  registration time and on configuration change (plus the one-off lazy paths of
-  R19 / R4a) - not per frame, not per draw, and never per entry. The *render
+  (`Shader_variant_cache` result) per resolution config, resolved at the
+  list's first draw and on configuration change (plus the one-off lazy paths of
+  R19 / R4a) - not per frame, not per draw, and never per entry. The cache
+  (`Draw_list_resolutions`) belongs to the render phase, keyed by list index
+  and `Draw_list::identity`, because the color environment it combines with
+  is the render phase's (section 9.3). The *render
   pipeline* additionally depends on inputs known only at draw time
   (`Base_render_pipeline`, render-pass descriptor, color blend);
   `Base_render_pipeline::get_pipeline_for` is a hash-cached lookup keyed on
@@ -190,9 +193,9 @@ Requirements following from this:
   ({single-view, multiview-N}), not a rebuild trigger: a desktop viewport and an
   XR view of the same scene render in the same frame. The set of view configs is
   enumerated up front from the same source prewarm uses (the
-  `multiview_view_counts` list) and resolved at registration; a config not in
-  that set encountered at draw time resolves lazily once and is added to the
-  set. This lazy path and R4a's first-use shadow sub-variant resolution are the
+  `multiview_view_counts` list) and resolved together at a list's first color
+  draw; a config not in that set encountered at draw time resolves lazily once
+  and is added to the set. This lazy path and R4a's first-use shadow sub-variant resolution are the
   only two exceptions to R20; both are by construction one-offs, not steady
   state.
 - R20: Steady state (no configuration change, no new view config, no first-use
@@ -222,12 +225,10 @@ Requirements following from this:
   Consequently, wherever draw list identity intentionally differs from bucket
   identity, the corresponding prewarm warms the draw-list key too (concretely:
   shadow prewarm warms the coarsened shadow key of R4). On a cache miss (an
-  unwarmed variant appears via registration or a config change), compilation
-  happens at registration / invalidation time - off the per-frame hot path.
-  `draw()` itself never triggers compilation (except the one-off lazy paths of
-  R19 and R4a); a list whose variant is not yet resolved is skipped with a
-  warning, exactly like the "No shader variant for bucket" behavior of the
-  fallback.
+  unwarmed variant appears via a new list or a config change), compilation
+  happens at that list's first draw after it - a one-off, not steady state.
+  A list whose variant cannot be resolved is skipped with a warning, exactly
+  like the "No shader variant for bucket" behavior of the fallback.
 
 ## 5. Components and requirements
 
@@ -387,10 +388,12 @@ Drawing:
   entry-based overloads alongside the `Render_bucket` ones. The pass binds and
   unbinds the material set it is handed, but never creates, updates or resets
   one: that happens once per frame, before any pass.
-  Consequence for R15, **joint slots only**: `joint_buffer_index` is assigned
-  per `Joint_buffer::update` call and therefore cannot be baked into entries -
-  an entry stores a stable reference to the skin and the slot is read at upload
-  time. **Material slots are the opposite**, and deliberately so: a material's
+  Consequence for R15, **joint slots**: `joint_buffer_index` is assigned
+  per `Joint_poses::capture` call, so the cached record's `base_joint_index`
+  follows it: `Draw_list_scene::publish()` runs after the frame's capture, in
+  the prepare phase, rewrites the records of every skinned object whose skin
+  moved to another slot, and only then copies the lists for the render
+  phase, which reads no `Mesh::skin`. **Material slots are stable**, and deliberately so: a material's
   slot is a property of the `Material_set` that issued it, stable for as long
   as anything references the material in that set, so it *is* baked into the
   cached record and read from there. A slot assigned per renderer call would
@@ -500,8 +503,9 @@ Drawing:
   `Draw_list`: what is needed to (a) cull the entry (world-space AABB) and (b)
   emit its indirect draw command and per-primitive GPU data (index range,
   vertex offsets, transform source, stable material / skin reference - the
-  material *slot* is baked into the cached record, the joint slot is not; see
-  R8a - and per-entry flags).
+  material *slot* is baked into the cached record, the joint slot is
+  rewritten into it by the per-frame publish when it moves; see R8a - and
+  per-entry flags).
 - R16: Layout is value-type and cache friendly: fixed size, no per-entry heap
   indirection on the hot path. References to cold / owning data (the
   `Draw_list_object`) go through indices, not pointers that the hot path must
@@ -607,14 +611,25 @@ Drawing:
   multiview passes are never culled. Culled entries are counted in
   `Draw_statistics::culled_count`: per composition pass in MCP
   `get_composition_passes` (`last_draw_list_culled_count`), per shadow pass
-  in `Shadow_draw_statistics` (`Shadow_render_node::get_last_draw_statistics()`,
+  in `Shadow_draw_statistics` (`Shadow_frame_result::draw_statistics` of the last rendered frame,
   MCP `get_scene_lights` `shadow_draw_list_entry_count` /
   `shadow_draw_list_culled_count`). The shadow frustum fit reads its caster
-  and receiver bounds from the same objects
-  (`Draw_list_scene::gather_shadow_bounds()`: the entries' AABB, the posed
-  joint bounds for a skinned object) instead of transforming every content
-  mesh's box per shadow render; a caster is an object with at least one
-  shadow entry.
+  and receiver bounds from the same objects instead of transforming every
+  content mesh's box per shadow render; a caster is an object with at least
+  one shadow entry passing `shadow_caster_filter`. The prepare phase
+  gathers them (`Draw_list_scene::prepare_shadow_bounds(selection,
+  frame_index, frames_in_flight)`: the entries' AABB, the posed joint
+  bounds for a skinned object, the node's world transform and node-space
+  extent per caster as `Caster_vertex_extent`) into one `Shadow_bounds`
+  slot per frame in flight, and the render phase reads the slot of its
+  frame (`get_shadow_bounds(frame_index)`, which verifies the slot was
+  prepared for that frame), so the render phase dereferences no mesh or
+  node. Every change the gather reads (registration and unregistration,
+  entries, flags, the transform and bounds hooks) bumps a serial; a slot
+  is gathered again only when its serial or selection is stale, and
+  otherwise only its skinned objects' posed bounds are rewritten (a skinned
+  object whose bounds turn valid or invalid takes a full gather).
+  `get_shadow_bounds_gather_count()` counts the full gathers.
 - Q7: An invalidation hook rebuilds the draw lists. R1a keeps registration
   records complete enough to recreate all draw lists from scratch.
   `Mesh_memory` never moves allocations at runtime, so the hook's clients are
@@ -676,8 +691,13 @@ a hit and G3 hold.
   (culling, Q6).
 - `Draw_list` (R13 / R14): its key, a contiguous vector of entries, the
   contiguous `primitive_records` block that parallels it
-  (`doc/erhe/draw_list_performance_improvements.md`), and the resolved-stages cache
-  (per view config for color, per sub-variant for shadow).
+  (`doc/erhe/draw_list_performance_improvements.md`), its `identity` (unique
+  per list creation) and its change `serial`. The same type is the prepare
+  phase's working copy and a frame slot's published copy (section 9.3).
+- `Draw_list_resolutions` (R17): the resolved-stages cache of one list (per
+  view config for color, per sub-variant for shadow), owned by the render
+  phase, one per list index, reset when the list at that index has another
+  `identity` (after a rebuild).
 - `Draw_list_object` (R10 / R11): the create-info-level inputs kept verbatim for
   rebuild (R1a), the (draw list, entry) locations of its entries, the last
   mirrored flag word, the sampled `negative_determinant`, and its
@@ -714,20 +734,53 @@ registration and unregistration, primitives changed (from
 **Threading contract (mandatory).** `Mesh::update_rt_primitives()` and
 `Mesh::handle_node_transform_update()` - and thus the hooks above - run on
 `tf::Executor` worker threads (deferred finalize of
-`Async_raytrace_kickoff_operation`, under `item_host_mutex`), while the render
-thread never takes that mutex and `Shader_variant_cache::get` is an unlocked
-map plus a compile. Therefore **no `Scene_host` hook reads or mutates
+`Async_raytrace_kickoff_operation`, under `item_host_mutex`), while the draws
+run on the editor's render thread (R, `doc/editor/editor.md` "Frame phases and
+the render thread"), which never takes that mutex, and
+`Shader_variant_cache::get` is an unlocked map plus a compile. Therefore **no `Scene_host` hook reads or mutates
 draw-list state or resolves variants directly.** Every hook only enqueues an
 operation (mesh plus kind: register, unregister, reregister, flags, transform,
 refresh) into a mutex-protected pending queue on `Draw_list_scene`;
-`Draw_list_scene::flush_pending()` runs on the main thread once per frame and
-performs unregister / register / resolve there. Rules:
+`Draw_list_scene::flush_pending()` runs on the main thread once per frame in
+M2 and performs unregister / register there.
 
-- Flush site: `Editor::tick`, after transform propagation (so registration
+**Published copies.** The lists `flush_pending()` maintains are the prepare
+phase's working copy, which the render phase never reads. Once per frame, in
+M2, `Draw_list_scene::publish(frame_index, frames_in_flight)` copies them into
+the frame-in-flight slot `frame_index % frames_in_flight`, and the render
+phase of that frame reads only that slot (`draw_color`, `draw_shadow` and
+`has_drawable_entries` take the frame index; the slot verifies it was
+published for that frame). So the prepare phase of one frame never writes
+what the render phase of another frame reads, and the copies need no lock.
+Every mutation of a list's key, entries or records goes through
+`edit_draw_list()`, which sets the list's `serial` from a counter shared by
+all lists of the scene (never reused, so a list recreated by a rebuild never
+matches a stale copy); the slot keeps, per list, the serial it copied, and
+`publish()` copies a list only when the serials differ. A frame in which
+nothing changed copies nothing, and a change is copied into each slot once
+(`get_published_list_copy_count()`, MCP `get_draw_lists`
+`published_list_copy_count`). Before the copy, `publish()` rewrites the
+joint slot fields of the skinned objects whose skin moved to another joint
+slot: the caller captures the frame's joint poses first
+(`Joint_poses::capture` assigns the slots), so the published records carry
+the frame's `base_joint_index`. The frustum cull reads the list key's
+mobility (all entries of a list share it), and `Primitive_buffer::update`
+copies the published records, so the render phase reads no `Mesh`, `Node`,
+`Skin` or `Draw_list_object` on this path. The shader resolution cache and
+the color environment (R17 / R18) are the render phase's own state.
+
+Rules:
+
+- Flush site: the editor's M2, after transform propagation (so registration
   samples current world transforms, R10b) and before the rendergraph; one flush
   per registered scene root per frame covers viewports, shadow nodes and the
   headset node. `App_scenes::flush_draw_lists()` is that loop, and the
   material-set update (`doc/erhe/draw_list_material_set.md` D6) runs right after it.
+- Publish site: the editor's M2, after the flush and after the frame's joint
+  poses are captured: `App_scenes::snapshot_render_settings()` runs, per scene
+  root, `Scene_root::snapshot_render_settings` (joint pose capture),
+  `prepare_shadow_bounds` and `publish_draw_lists`, the last under
+  `item_host_mutex` (the joint slot rewrite reads the meshes).
 - `flush_pending()` takes the scene root's `item_host_mutex` (lock order:
   item_host_mutex, then pending mutex; swap the queue out under the pending
   mutex, then process under item_host_mutex only) so registration never reads a
@@ -741,14 +794,23 @@ performs unregister / register / resolve there. Rules:
   object's registered value.
 - Flag updates coalesce (last value wins). `register_object`,
   `unregister_object` and `flush_pending` are main-thread-only and assert the
-  thread id in debug.
-- Anything reachable from inside the rendergraph enqueues rather than acting:
-  `set_exclude_unlit_from_shadows` enqueues its rebuild for the next frame's
-  flush, so no rebuild rewrites cached records mid-frame after some passes have
-  consumed them (`doc/erhe/draw_list_material_set.md` D1d).
+  owner thread id; `flush_pending` also asserts the prepare phase (or no
+  frame), and so do `prepare_shadow_bounds` and `publish`. `draw_color`,
+  `draw_shadow`, `has_drawable_entries` and `get_shadow_bounds` assert the
+  render thread and the render phase (`r_render`) through
+  `erhe::utility::Thread_roles` (`doc/erhe/utility.md`); both asserts are
+  no-ops in a program that never sets the thread roles.
+- `set_exclude_unlit_from_shadows` is main-thread-only (owner thread). The
+  editor calls it on the main thread from the change sites of its
+  `exclude_unlit_primitives` setting (the Settings window edit in M2, scene
+  root registration); a new instance
+  takes the initial value from `Draw_list_scene_create_info::exclude_unlit_from_shadows`.
+  A change enqueues its rebuild, which the next `flush_pending` performs ahead
+  of its queued ops (`doc/erhe/draw_list_material_set.md` D1d).
 
-This satisfies R17 / R20 / R22: resolution is off the per-frame draw hot path
-and never inside `draw()`.
+This satisfies R17 / R20 / R22: resolution is off the per-frame draw hot path;
+inside `draw()` it happens only at a list's first draw and after a
+configuration change.
 
 ### 9.4 Editor routing
 

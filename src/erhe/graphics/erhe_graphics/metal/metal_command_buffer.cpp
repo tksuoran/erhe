@@ -52,6 +52,7 @@ Command_buffer_impl::~Command_buffer_impl() noexcept
 Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     : m_device                          {other.m_device}
     , m_debug_label                     {std::move(other.m_debug_label)}
+    , m_frame_id                        {other.m_frame_id}
     , m_mtl_command_buffer              {other.m_mtl_command_buffer}
     , m_inter_encoder_fence             {other.m_inter_encoder_fence}
     , m_implicit_gpu_event              {other.m_implicit_gpu_event}
@@ -92,6 +93,7 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
 
     m_device                          = other.m_device;
     m_debug_label                     = std::move(other.m_debug_label);
+    m_frame_id                        = other.m_frame_id;
     m_mtl_command_buffer              = other.m_mtl_command_buffer;
     m_inter_encoder_fence             = other.m_inter_encoder_fence;
     m_implicit_gpu_event              = other.m_implicit_gpu_event;
@@ -116,6 +118,16 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
 auto Command_buffer_impl::get_debug_label() const noexcept -> erhe::utility::Debug_label
 {
     return m_debug_label;
+}
+
+auto Command_buffer_impl::get_frame_id() const noexcept -> std::uint64_t
+{
+    return m_frame_id;
+}
+
+void Command_buffer_impl::set_frame_id(const std::uint64_t frame_id) noexcept
+{
+    m_frame_id = frame_id;
 }
 
 void Command_buffer_impl::begin()

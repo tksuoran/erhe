@@ -565,8 +565,8 @@ table, see D2a), and references to other objects (D28).
     preview keeps its per-frame render: it must follow the window size.
   - `Shadow_render_node`. The `cast_shadow` consequence already arrives
     through the D19 changed callback: `Scene_host::on_light_changed`
-    invalidates the scene's `Light_set` and `Light_set::resolve` recomputes
-    lazily. The node has no per-light state of its own; a direct observer
+    invalidates the scene's light sets (one per frame in flight) and
+    `Light_set::resolve` recomputes lazily. The node has no per-light state of its own; a direct observer
     would have to follow light registration to know which lights to
     subscribe to, which is what the `Scene_host` register / unregister
     hooks and the light set already do. No change.
@@ -1689,7 +1689,7 @@ Gradient and curve parameters have no `Property_value` form and stay in
   `erhe::property::initialize_logging()` first; the first library log
   call otherwise dereferences a null logger (bit the editor, the example
   and the test mains).
-- `Material_preview::render_preview(texture, material)` generates the
+- `Material_preview::render_preview(command_buffer, texture, material)` generates the
   mipmap levels below the rendered one after the render; without that a
   thumbnail sampled at a fraction of its size reads uninitialized memory
   (was solid magenta on Metal).

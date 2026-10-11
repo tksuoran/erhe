@@ -26,6 +26,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <imgui/imgui.h>
 
@@ -609,7 +610,8 @@ void Lightmap_window::apply_tile_overrides(std::vector<Lightmap_tile_key>&& over
     for (const Lightmap_tile_key& key : overrides) {
         after.push_back(Lightmap_tile_override{.level = key.level, .ix = key.ix, .iz = key.iz});
     }
-    m_context.operation_stack->execute_now(
+    // Queued, not executed now: the callers sit in the ImGui iteration.
+    m_context.operation_stack->queue(
         std::make_shared<Lightmap_tile_overrides_operation>(
             Lightmap_tile_overrides_operation::Parameters{
                 .scene_root = scene_root,
@@ -663,6 +665,31 @@ auto Lightmap_window::launch_prepare(std::shared_ptr<const Lightmap_partitioner:
 
 void Lightmap_window::update()
 {
+    // Deferred requests (offline tile bake, save / restore drains, auto
+    // re-prepare, reorder): standalone submits and scene-side commits,
+    // prepare phase (or outside a frame).
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    // The buttons' requests, in the order the buttons sit in the window.
+    if (m_revert_tiling_requested) {
+        m_revert_tiling_requested = false;
+        if (m_context.lightmap_partitioner != nullptr) {
+            m_context.lightmap_partitioner->revert();
+        }
+    }
+    if (m_bake_to_disk_requested) {
+        m_bake_to_disk_requested = false;
+        static_cast<void>(start_bake_to_disk());
+    }
+    if (m_save_all_requested) {
+        m_save_all_requested = false;
+        static_cast<void>(save_all_tiles());
+    }
+    if (m_clear_all_requested) {
+        m_clear_all_requested = false;
+        static_cast<void>(clear_all_tiles());
+    }
+
     // Offline bake-to-disk: one tile per frame; each call blocks for that
     // tile's full bake (standalone submits), the UI stays live between
     // tiles.
@@ -981,7 +1008,7 @@ void Lightmap_window::imgui()
         if (partitioner.is_prepared()) {
             ImGui::SameLine();
             if (ImGui::Button("Revert Tiling")) {
-                partitioner.revert();
+                m_revert_tiling_requested = true; // served by update() (M2)
             }
             if (partitioner.is_prepared()) {
                 std::size_t piece_count = 0;
@@ -1317,7 +1344,7 @@ void Lightmap_window::imgui()
                 ImGui::SetTooltip("Accumulation sweeps gathered per tile before it is written to disk.");
             }
             if (ImGui::Button("Batch Process All Tiles")) {
-                start_bake_to_disk();
+                m_bake_to_disk_requested = true; // served by update() (M2)
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip(
@@ -1329,7 +1356,7 @@ void Lightmap_window::imgui()
             }
             ImGui::SameLine();
             if (ImGui::Button("Save All Tiles")) {
-                save_all_tiles();
+                m_save_all_requested = true; // served by update() (M2)
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip(
@@ -1341,7 +1368,7 @@ void Lightmap_window::imgui()
             }
             ImGui::SameLine();
             if (ImGui::Button("Clear All Tiles")) {
-                clear_all_tiles();
+                m_clear_all_requested = true; // served by update() (M2)
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip(
@@ -1437,10 +1464,9 @@ void Lightmap_window::imgui()
 
 void apply_lightmap_settings(App_context& context)
 {
+    // bicubic_sampling reaches the forward renderer through the frame's
+    // Render_settings copy (the render phase hands it over).
     const Lightmap_config& config = context.editor_settings->lightmap;
-    if (context.forward_renderer != nullptr) {
-        context.forward_renderer->set_lightmap_bicubic(config.bicubic_sampling);
-    }
     if (context.lightmap_baker != nullptr) {
         context.lightmap_baker->set_tile_config(config.tile_texture_size, config.resident_tile_budget);
         context.lightmap_baker->set_cell_size(config.cell_size_m);

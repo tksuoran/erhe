@@ -529,11 +529,20 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
         return;
     }
 
+    // The light projections of the last rendered frame (the viewports record
+    // their tools in M2, before this frame's render phase), or of this frame
+    // for the headset, which records its tools in the render phase after its
+    // shadow node executed.
+    const Shadow_frame_result* const shadow_result = shadow_render_node->get_frame_result(context.render_context.app_context.get_results_frame_index());
+    if (shadow_result == nullptr) {
+        return;
+    }
+
     auto&                              render_context = context.render_context;
     erhe::renderer::Primitive_renderer line_renderer  = render_context.get({erhe::graphics::Primitive_type::line, 3, true, true});
-    const auto& light_projections           = shadow_render_node->get_light_projections();
+    const erhe::scene_renderer::Light_projections& light_projections = shadow_result->light_projections;
     const auto* light                       = context.light;
-    const auto  light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light);
+    const auto  light_projection_transforms = light_projections.get_light_projection_transforms_for_light_id(light->get_id());
 
     if (light_projection_transforms == nullptr) {
         return;
@@ -613,8 +622,15 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
         return;
     }
 
+    // The fit of the last rendered frame, or of this frame in the render
+    // phase (see directional_light_visualization).
+    const Shadow_frame_result* const shadow_result = shadow_render_node->get_frame_result(context.app_context.get_results_frame_index());
+    if (shadow_result == nullptr) {
+        return;
+    }
+
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 3, true, true});
-    const auto& light_projections = shadow_render_node->get_light_projections();
+    const erhe::scene_renderer::Light_projections& light_projections = shadow_result->light_projections;
 
     // One-shot dump of the whole fit debug geometry (all lights) to the log,
     // triggered by the imgui() button. Consumed here so it fires once.
@@ -632,13 +648,13 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
     // the selection has no valid fit this frame).
     const std::shared_ptr<erhe::scene::Light> selected_light = m_shadow_fit_light.lock();
     const erhe::scene::Shadow_frustum_fit_debug_data* fit_debug_ptr = nullptr;
-    const erhe::scene::Light*                         resolved_light = nullptr;
+    const erhe::scene::Light_snapshot*                resolved_light = nullptr;
     const std::size_t light_count = (transforms.size() < fit_debug_data.size()) ? transforms.size() : fit_debug_data.size();
     for (std::size_t i = 0; i < light_count; ++i) {
         if (!fit_debug_data[i].valid) {
             continue;
         }
-        if (selected_light && (transforms[i].light == selected_light.get())) {
+        if (selected_light && (transforms[i].light != nullptr) && (transforms[i].light->get_id() == selected_light->get_id())) {
             fit_debug_ptr  = &fit_debug_data[i];
             resolved_light = transforms[i].light;
             break;
@@ -869,7 +885,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
             const glm::vec4 color = style.shadow_fit_volume_planes_color;
             const float     width = style.shadow_fit_volume_planes_width;
 
-            const glm::vec3 light_direction = glm::normalize(glm::vec3{resolved_light->direction_in_world()});
+            const glm::vec3 light_direction = resolved_light->get_light_frame().direction;
             const float     shadow_range    = light_projections.parameters.view_camera->get_shadow_range();
             float s_max = glm::dot(fit_debug.view_frustum_corners[0], light_direction);
             for (const glm::vec3& corner : fit_debug.view_frustum_corners) {
@@ -1690,6 +1706,10 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
     );
     const glm::mat4 clip_from_world = projection_transforms.clip_from_world.get_matrix();
 
+    // Render phase: the body state read below is written by the next
+    // frame's overlap phase (physics steps) while this runs.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> physics_step_lock{scene_root->get_physics_step_mutex()};
+
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
             if (!should_visualize(m_settings.physics, mesh)) {
@@ -2066,7 +2086,7 @@ void Debug_visualizations::shadow_debug(const Render_context& render_context)
         .render_encoder    = *render_context.encoder,
         .shader_stages     = &render_context.app_context.programs->shadow_debug.shader_stages,
         .render_pass       = *render_context.render_pass,
-        .camera            = render_context.camera,
+        .camera            = render_context.camera_snapshot,
         .light_projections = render_context.scene_view.get_light_projections(),
         .viewport          = render_context.viewport
     };
@@ -2095,8 +2115,9 @@ void Debug_visualizations::render(const Render_context& context)
     ERHE_PROFILE_FUNCTION();
 
     // render_viewport_renderables() runs twice per viewport: first the CPU
-    // phase (no encoder) where debug lines / labels are generated, then the
-    // encoder phase for renderables that issue draw calls. Everything below
+    // phase (no encoder; M2, Viewport_scene_view::record_view_tools) where
+    // debug lines / labels are generated, then the encoder phase (render
+    // phase) for renderables that issue draw calls. Everything below
     // generates lines / labels and must run only in the CPU phase.
     if (context.encoder != nullptr) {
         if (m_settings.shadow_debug) {

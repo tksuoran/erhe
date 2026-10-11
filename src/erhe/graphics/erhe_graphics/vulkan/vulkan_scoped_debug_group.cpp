@@ -83,6 +83,7 @@ Scoped_queue_debug_group_impl::Scoped_queue_debug_group_impl(Device& device, con
     };
 
     m_queue = vk_queue;
+    const std::lock_guard<std::mutex> queue_lock{device.get_impl().get_queue_mutex()};
     vkQueueBeginDebugUtilsLabelEXT(m_queue, &label_info);
 }
 
@@ -92,6 +93,7 @@ Scoped_queue_debug_group_impl::~Scoped_queue_debug_group_impl() noexcept
         // Debug utils disabled or no device; nothing was opened.
         return;
     }
+    const std::lock_guard<std::mutex> queue_lock{Device_impl::get_device_impl()->get_queue_mutex()};
     vkQueueEndDebugUtilsLabelEXT(m_queue);
 }
 

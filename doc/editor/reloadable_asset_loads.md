@@ -150,39 +150,33 @@ The index rule lives in its own dependency-free
 `operations/operation_stack_selection.{hpp,cpp}` so it is unit-testable
 without building the editor.
 
-## Evictable BLAS caches
+## Releasing traced geometry
 
-`Scene_tlas::m_blas_cache` and `Lightmap_baker::m_blas_cache` each hold a
-`shared_ptr<Primitive>` per traced mesh expressly to pin the GPU ranges. With
-ray query enabled - the default - nothing would be reclaimed for traced
-geometry without eviction, and once a lightmap has been baked, every baked
-mesh would stay pinned: `Lightmap_baker::set_baking_enabled` deliberately
-keeps the working set on disable so re-enabling continues where it paused, so
-`release_working_set()` has to be called from a definite end of the bake
-(scene close) rather than implied by a disable.
+Each scene root's `Ray_trace_scene` holds one `Ray_trace_geometry` per traced
+`Buffer_mesh`, pinning its `Primitive` and render shape and with them the GPU
+ranges (doc/editor/raytrace.md "Ray_trace_scene"). Retirement is
+change-driven: an unregister (the detach of an undone import) or a hide marks
+the structure dirty, the next prepare rebuilds it, and every geometry the new
+structure does not name leaves the working set. The frame-in-flight slots
+still holding one keep it until they are republished (one prepare each), and
+`~Acceleration_structure_impl` defers `vkDestroyAccelerationStructureKHR` to
+frame completion, so reclaiming takes a few frames.
 
-Both sweep on `entry.primitive->render_shape.use_count() == 1`, not on
+`Lightmap_baker::m_blas_cache` holds a `shared_ptr<Primitive>` per baked mesh
+and sweeps on `entry.primitive->render_shape.use_count() == 1`, not on
 `entry.primitive.use_count()`: `Primitive`'s copy constructor is defaulted and
 `render_shape` is a `shared_ptr`, so two distinct `Primitive` objects can
 yield the same `Buffer_mesh*` key and a live mesh may hold an aliasing
-`Primitive`.
-
-A plain erase is enough - no frame-indexed retirement. `Tlas_slot` holds an
-`Acceleration_structure` and a capacity but no BLAS pointer; the
-`.bottom_level = blas` binding lives in `m_instances`, per-frame scratch
-cleared at the top of `update()`; each slot's TLAS is built and consumed
-inside one `update()`; and `~Acceleration_structure_impl` defers
-`vkDestroyAccelerationStructureKHR` to the completion of the frame current at
-destruction, which implies every earlier frame has completed. The cache key
-cannot dangle under an erase sweep either: it is
-`&render_shape->m_renderable_mesh`, a by-value member of the shape the cached
-`shared_ptr` keeps alive.
-
-Eviction does not fix the recycled-range staleness of the cache key: a
-`Primitive_render_shape::commit_geometry_buffer_mesh()` move-assigns in place,
-so the key stays valid and the refcount stays at two or more while the pool
-ranges underneath are freed and recycled. That is a separate defect, recorded
-in doc/editor/raytrace.md.
+`Primitive`. Once a lightmap has been baked, every baked mesh would stay
+pinned without it: `Lightmap_baker::set_baking_enabled` deliberately keeps the
+working set on disable so re-enabling continues where it paused, so
+`release_working_set()` has to be called from a definite end of the bake
+(scene close) rather than implied by a disable. Its sweep does not cover a
+`Primitive_render_shape::commit_geometry_buffer_mesh()`, which move-assigns
+the `Buffer_mesh` in place: the key stays valid and the refcount stays at two
+or more while the pool ranges underneath are freed and recycled
+(`Ray_trace_scene` drops the geometry on the `on_mesh_primitives_changed` hook
+that follows the commit).
 
 ## Failure semantics for a rebuild
 
@@ -204,11 +198,14 @@ measurement advances several frames before sampling.
 The MCP `get_memory_usage` tool reports per-pool mesh bytes (used, capacity,
 blocks), texture bytes and count, `Device::get_memory_budget()` (Vulkan only;
 the other backends return `{}`), container records and which retain a parse,
-undo/redo entry counts, and the BLAS cache entry count. It is backed by
+undo/redo entry counts, and the bottom level structure count. It is backed by
 `Buffer_pool::get_statistics()` / `Mesh_memory::get_pool_statistics()`, a
 process-wide texture byte counter in `erhe::graphics::Texture` (estimated from
 the create info, excluding views and wrapped images) and
-`Scene_tlas::get_blas_count()`.
+`App_scenes::get_ray_trace_geometry_count()` (the valid traced geometries of
+every registered scene root, one bottom level structure each, shared by the
+ray trace, DDGI and radiance cascades consumers; counted whether or not a
+consumer has traced yet).
 
 ## Verification
 
@@ -249,8 +246,8 @@ default configuration.
   restrictions").
 - `Prefab_library` templates are never released, so an import that pulled in
   prefabs keeps those regardless.
-- The BLAS cache key can go stale over recycled buffer ranges
-  (doc/editor/raytrace.md).
+- The `Lightmap_baker` BLAS cache key can go stale over recycled buffer
+  ranges (see "Releasing traced geometry").
 
 ## Future work
 

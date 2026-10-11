@@ -426,8 +426,8 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
     static constexpr bool   use_robust_traversal = false;
 
     auto  prim_id = invalid_id;
-    float u;
-    float v;
+    float u{0.0f};
+    float v{0.0f};
 
     // Traverse the BVH and get the u, v coordinates of the closest intersection.
     bvh::v2::SmallStack<Bvh::Index, stack_size> stack;

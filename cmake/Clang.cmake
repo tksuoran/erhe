@@ -54,6 +54,18 @@ if (ERHE_USE_UBSAN)
     add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer -g)
     add_link_options(-fsanitize=undefined)
 endif ()
+# ERHE_USE_TSAN: ThreadSanitizer for every target (the render thread plan's
+# race gate, doc/editor/render_thread.md section 3.4); exclusive with ASan.
+if (ERHE_USE_TSAN)
+    if (ERHE_USE_ASAN)
+        message(FATAL_ERROR "ERHE_USE_TSAN and ERHE_USE_ASAN are exclusive")
+    endif ()
+    # The runtime is linked dynamically: Clang's default static runtime
+    # leaves the instrumentation symbols of a shared library (geogram,
+    # linked with --no-undefined) unresolved until the executable loads.
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=thread -shared-libsan)
+endif ()
 
 if (WIN32)
     set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")

@@ -65,15 +65,23 @@ void Radiance_cascades_window::imgui()
         return;
     }
 
-    const Radiance_cascades_layout& layout = renderer->get_layout();
+    // The layout, field, memory, cost and preview size as the last rendered
+    // frame's tick left them: the render phase owns the cascades and may
+    // tick while this window draws.
+    const Radiance_cascades_renderer::Rendered_state* const state = renderer->get_rendered_state(m_context.last_rendered_frame_index);
+    if (state == nullptr) {
+        ImGui::TextUnformatted("No frame rendered with radiance cascades yet.");
+        return;
+    }
+    const Radiance_cascades_layout& layout = state->layout;
     if (!layout.is_valid()) {
         ImGui::TextUnformatted("No visible content to fit the cascades to.");
         return;
     }
-    if (renderer->has_field()) {
+    if (state->has_field) {
         // The field the forward pass samples (doc/editor/radiance_cascades.md
         // "Reduce"): cascade 0's grid in the DDGI atlas format.
-        const erhe::scene_renderer::Ddgi_parameters field = renderer->get_forward_parameters();
+        const erhe::scene_renderer::Ddgi_parameters& field = state->field_parameters;
         ImGui::Text(
             "Probe field: %d x %d x %d probes, irradiance %d / distance %d texels, %d tiles per row",
             field.grid_counts.x, field.grid_counts.y, field.grid_counts.z,
@@ -111,21 +119,21 @@ void Radiance_cascades_window::imgui()
             ImGui::TableSetColumnIndex(7); ImGui::Text(
                 "%d x %d / %.2f",
                 cascade.get_atlas_width(), cascade.get_atlas_height(),
-                to_mib(static_cast<double>(renderer->get_cascade_texture_byte_count(i)))
+                to_mib(static_cast<double>(state->cascade_texture_bytes[static_cast<std::size_t>(i)]))
             );
         }
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted("total");
         ImGui::TableSetColumnIndex(2); ImGui::Text("%lld", static_cast<long long>(layout.get_total_probes()));
         ImGui::TableSetColumnIndex(6); ImGui::Text("%lld", static_cast<long long>(layout.get_total_texels()));
-        ImGui::TableSetColumnIndex(7); ImGui::Text("%.2f", to_mib(static_cast<double>(renderer->get_texture_byte_count())));
+        ImGui::TableSetColumnIndex(7); ImGui::Text("%.2f", to_mib(static_cast<double>(state->texture_bytes)));
         ImGui::EndTable();
     }
     ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade (cascade 0 merged at 2 x 2 per texel, plus the 2 x 1 neighbour atlas in the per_neighbour_trace merge mode), plus the cascade 0 RGBA32F distance statistics; the total includes the probe field atlases.");
 
     // GPU cost of the trace, merge and reduce
     // (doc/editor/radiance_cascades.md "Trace", "Merge", "Reduce").
-    const Radiance_cascades_renderer::Stats stats = renderer->get_stats();
+    const Radiance_cascades_renderer::Stats& stats = state->stats;
     if (ImGui::CollapsingHeader("GPU time", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginTable("radiance_cascades_gpu_time", 3, ImGuiTableFlags_SizingFixedFit)) {
             ImGui::TableSetupColumn("Pass");
@@ -162,12 +170,12 @@ void Radiance_cascades_window::imgui()
     }
 
     // Merge mode (doc/editor/radiance_cascades.md "Merge"): the combo is
-    // the change site; it stores the setting and tells the renderer.
+    // the change site; it stores the setting, and the render phase applies
+    // the frame's copy (Radiance_cascades_renderer::apply_frame_settings()).
     {
         Radiance_cascades_merge_mode mode = m_context.editor_settings->radiance_cascades.merge_mode;
         if (imgui_enum_combo("Merge mode", mode)) {
             m_context.editor_settings->radiance_cascades.merge_mode = mode;
-            renderer->set_merge_mode(mode);
         }
     }
 
@@ -205,7 +213,8 @@ void Radiance_cascades_window::imgui()
         ImGui::SliderInt("Overlay cascade", &config.debug_draw_cascade, 0, std::max(0, layout.cascade_count - 1));
         ImGui::TextUnformatted("Green active, red inside geometry (cascade 0: field classification; visibility_masked: inside bit), grey unclassified.");
         ImGui::TextUnformatted("Irradiance: the line toward +Y, normalized by the brightest probe.");
-        const Radiance_cascades_renderer::Probe_overlay_summary& overlay = renderer->get_probe_overlay_summary();
+        // The newest retired overlay copy as of the last rendered frame.
+        const Radiance_cascades_renderer::Probe_overlay_summary& overlay = state->summary;
         if (overlay.cascade >= 0) {
             ImGui::Text(
                 "Cascade %d: %d probes, %d active, %d inside, %d unclassified (copied at update %llu)",
@@ -243,15 +252,17 @@ void Radiance_cascades_window::imgui()
         const int preview_cascade = (m_preview_channel == Rc_preview_channel::distance) ? 0 : m_preview_cascade;
         renderer->request_preview(preview_cascade, m_preview_source, m_preview_channel, m_preview_radiance_scale);
 
-        const std::shared_ptr<erhe::graphics::Texture>& texture = renderer->get_preview_texture();
-        if (texture) {
+        // The copy the render phase made last (its size as of the last
+        // rendered frame), drawn through a reference the render thread
+        // resolves: the tick replaces the texture when the cascade changes.
+        if ((state->preview_width > 0) && (state->preview_height > 0)) {
             const float avail_width    = std::max(64.0f, ImGui::GetContentRegionAvail().x);
-            const float aspect         = static_cast<float>(texture->get_height()) / static_cast<float>(texture->get_width());
+            const float aspect         = static_cast<float>(state->preview_height) / static_cast<float>(state->preview_width);
             const int   display_width  = static_cast<int>(avail_width);
             const int   display_height = std::max(1, static_cast<int>(avail_width * aspect));
             m_context.imgui_renderer->image(
                 erhe::imgui::Draw_texture_parameters{
-                    .texture_reference = texture,
+                    .texture_reference = renderer->get_preview_texture_reference(),
                     .width             = display_width,
                     .height            = display_height,
                     .uv0               = glm::vec2{0.0f, 0.0f},

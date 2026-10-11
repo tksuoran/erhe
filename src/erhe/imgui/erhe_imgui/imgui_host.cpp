@@ -5,6 +5,7 @@
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
 #include "erhe_codegen/config_persistence.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui_internal.h>
 
@@ -187,13 +188,45 @@ Imgui_host::Imgui_host(
 
     m_item_recorder.set_context(m_imgui_context);
 
+    m_draw_data_frames.resize(imgui_renderer.get_number_of_frames_in_flight());
+
     imgui_renderer.register_imgui_host(this);
+    m_registered_with_renderer = true;
+}
+
+void Imgui_host::unregister_from_renderer()
+{
+    if (!m_registered_with_renderer) {
+        return;
+    }
+    m_imgui_renderer.unregister_imgui_host(this);
+    m_registered_with_renderer = false;
+}
+
+void Imgui_host::on_released()
+{
+    unregister_from_renderer();
+}
+
+void Imgui_host::copy_draw_data()
+{
+    const uint64_t        frame_index = m_imgui_renderer.get_imgui_frame_index();
+    Imgui_draw_data_copy& copy        = m_draw_data_frames[frame_index % m_draw_data_frames.size()];
+    m_imgui_renderer.copy_draw_data(copy);
+}
+
+auto Imgui_host::get_draw_data() const -> const Imgui_draw_data_copy&
+{
+    const uint64_t              frame_index = m_imgui_renderer.get_render_frame_index();
+    const Imgui_draw_data_copy& copy        = m_draw_data_frames[frame_index % m_draw_data_frames.size()];
+    ERHE_VERIFY(copy.is_frame_stamped && (copy.frame_index == frame_index));
+    return copy;
 }
 
 Imgui_host::~Imgui_host() noexcept
 {
     m_item_recorder.set_context(nullptr);
-    m_imgui_renderer.unregister_imgui_host(this);
+    unregister_from_renderer();
 
     Scoped_imgui_context imgui_context{*this}; // Needed for DestroyPlatformWindows()
 

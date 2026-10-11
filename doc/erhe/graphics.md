@@ -67,7 +67,7 @@ headless)` job builds the editor and the test targets with
 on every push.
 
 ## Key Types
-- `Device` -- Central graphics device. Creates command encoders, manages ring buffers, queries capabilities, handles frame lifecycle (`wait_frame`/`begin_frame`/`end_frame`).
+- `Device` -- Central graphics device. Creates command encoders, manages ring buffers, queries capabilities, handles frame lifecycle (`wait_for_frame_start`/`acquire_frame_slot`/`wait_frame`/`end_frame`).
 - `Device_info` -- GPU capability queries: GLSL version, limits, feature flags (bindless textures, sparse textures, persistent buffers, compute shaders, multi-draw indirect). `texture_heap_path` selects which of the four sampler-binding strategies the backend uses (see below).
 - `Buffer` -- GPU buffer (vertex, index, uniform, storage, etc.) with mapping and flush operations. Uses pimpl for backend. Pure GPU resource wrapper - allocation is handled externally by `Free_list_allocator` (in `erhe::buffer`).
 - `Texture` -- GPU texture (1D/2D/3D/cube) with mipmap, MSAA, sparse, and array layer support. It is a typed prim (`erhe::Typed`, `doc/erhe/item.md` "Prim classes") with the fixed `typeName` token `Texture`, so a texture a loader registers as scene content can be parented in a prim tree; a render target, shadow map or other device-internal texture is the same class and is never placed in one.
@@ -106,24 +106,67 @@ on every push.
 
 ## Frame lifecycle
 
-A device frame is bracketed by `Device::wait_frame()` and
-`Device::end_frame()`. In between, callers obtain one or more
+A device frame is bracketed by its frame start and `Device::end_frame()`.
+The frame start has two halves, `Device::wait_for_frame_start()` and
+`Device::acquire_frame_slot(frame_id)`; `Device::wait_frame()` calls both,
+for callers that run the whole frame on one thread (`src/example`,
+`src/hello_swap`, `src/hextiles`, the GPU tests, the editor's init pump).
+In between, callers obtain one or more
 `Command_buffer` instances from `Device::get_command_buffer(thread_slot)`,
 optionally engage the window swapchain via
 `Command_buffer::wait_for_swapchain` + `Command_buffer::begin_swapchain`,
 record into them, and submit through `Device::submit_command_buffers`.
 
+Frames carry ids (starting at 1) and frame F uses the frame-in-flight slot
+`F % N`, N = `get_number_of_frames_in_flight()` (2 on Vulkan and the null
+backend, 3 on OpenGL and Metal). A frame is open from its
+`acquire_frame_slot()` to its `end_frame()`, and up to N frames may be open
+at once: frame F+1 may be acquired while F is still recording. The order
+rule: frames are acquired and ended strictly in id order, so the open
+frames are always a consecutive run from the oldest open frame (the render
+frame, the one `end_frame()` ends next) to the newest acquired frame (the
+prepare frame). Each slot keeps its own state (idle, waited, recording), so
+slot A may be recording on one thread while slot B is waited on another.
+
+`Device::get_frame_index()` returns the frame of the CALLING ROLE
+(`erhe::utility::Thread_roles`, `doc/erhe/utility.md`): the render role (a
+dedicated render thread) gets the render frame; every other caller - the
+main thread, worker threads, programs that never set the roles - gets the
+prepare frame while it is open, otherwise the next frame to be acquired.
+With one frame open the two are the same frame. Everything keyed on the
+frame index - ring-buffer entries, completion handlers, deferred
+destruction, the frame time records and command buffers - therefore lands
+in the frame the calling role works on: the main thread touches only the
+slot of the frame it prepares, the render thread only the slot of the frame
+it renders. `get_command_buffer` verifies this at the allocation site.
+
 The contract for each entry point:
 
-- `wait_frame()` -- pace the per-(frame_in_flight, thread_slot) command
-  pools on the device's timeline semaphore. For frames that re-enter
-  a slot (frame index `> N`) we wait until the timeline reports value
-  `frame_index - N`, then `vkResetCommandPool` every per-thread pool
-  for that slot. Each freed `Command_buffer` recycles its implicit
-  fence + binary semaphore back into `Device_sync_pool`.
+- `wait_for_frame_start() -> uint64_t` -- the pacing half: advance the
+  device's started-frame counter and return the id of the frame it starts,
+  open that frame's time record (CPU slot begin, `doc/erhe/frame_pacing.md`),
+  and on Vulkan refresh the GPU clock calibration and harvest completed GPU
+  frame brackets. It reads no state `end_frame()` writes, so it may run while
+  another thread is still submitting and ending the previous frame. Only the
+  thread that starts frames advances the counter.
+- `acquire_frame_slot(frame_id)` -- the resource half. Verifies that
+  `frame_id` was started, that it follows the newest acquired frame, and
+  that at most N frames are then open (its slot is idle). It then paces
+  the per-(frame_in_flight, thread_slot) command pools of the slot on the
+  device's timeline semaphore: for a frame that re-enters a slot
+  (`frame_id > N`) it waits until the timeline reports value
+  `frame_id - N`, then `vkResetCommandPool`s every per-thread pool for that
+  slot. Each freed `Command_buffer` recycles its implicit fence + binary
+  semaphore back into `Device_sync_pool`. Only that slot is touched: the
+  command buffers of an older frame that is still open stay valid.
+- `wait_frame()` -- `wait_for_frame_start()` then `acquire_frame_slot()`.
 - `get_command_buffer(thread_slot)` -- allocate a fresh primary cb
-  from the slot's per-thread pool. The wrapper carries an implicit
-  fence + binary semaphore, never exposed, used by the four
+  from the per-thread pool of the calling role's frame slot. Vulkan
+  verifies (fatal otherwise) that the calling role's frame is open:
+  its slot is waited or recording and held by that frame. The cb carries
+  the frame id (`Command_buffer::get_frame_id()`); its timestamps, GPU
+  timer queries and submit are keyed on it. The wrapper carries an
+  implicit fence + binary semaphore, never exposed, used by the four
   synchronization methods. A GPU-to-GPU edge is
   `producer.signal_gpu_completion_to(consumer)` (when the producer's
   GPU work completes, signal the consumer's semaphore) paired with
@@ -135,16 +178,26 @@ The contract for each entry point:
   `consumer.wait_for_cpu_completion_of(producer)` (block the CPU
   before the consumer's submit until the producer's fence is
   signaled). Lifetime is tied to the next pool reset for this slot.
+  It first calls `erhe::utility::Thread_roles::assert_command_recording_allowed()`,
+  which is fatal when the main thread obtains a command buffer while its
+  frame phase is `m1_overlap` (`doc/erhe/utility.md`).
 - `Command_buffer::wait_for_swapchain(out_frame_state)` /
   `begin_swapchain(info, out_frame_state)` -- wait on the next
   swapchain image to be acquirable, then acquire it and bind the
-  per-slot acquire / present semaphores to this cb. The cb tracks
+  per-slot acquire / present semaphores to this cb. The swapchain's
+  per-slot state is the slot of this cb's frame id. The cb tracks
   the swapchain it engaged so the submit can attach the right
-  semaphores and drive the implicit present.
+  semaphores and drive the implicit present. The swapchain has one
+  state machine and one acquired image, and `VkSwapchainKHR` is
+  host-synchronized, so one thread drives it: the swapchain wait, the
+  acquire, the submit that presents and the present wait
+  (`Device::wait_for_displayed_frame`).
 - `Command_buffer::begin()` / `end()` -- bracket recording
   (`vkBeginCommandBuffer` / `vkEndCommandBuffer` on Vulkan). One cb
   per render pass is the recommended pattern.
-- `submit_command_buffers(span)` -- submit. Walks each cb,
+- `submit_command_buffers(span)` -- submit. Every cb of one submit belongs
+  to the same frame (verified on Vulkan); that frame keys the submit's
+  frame time record and present target. Walks each cb,
   performs CPU-side `vkWaitForFences` for any
   `wait_for_cpu_completion_of(producer)` registered, splices the wait/signal
   semaphores into a single `VkSubmitInfo2`, runs `vkQueueSubmit2`,
@@ -152,17 +205,102 @@ The contract for each entry point:
   `presentDrawable` on every swapchain whose cb engaged it via
   `begin_swapchain`. Implicit present is the rule: there is no
   separate `Device::present` call.
-- `end_frame()` -- **advance the frame index. That is the entire
-  contract.** Does not submit, does not present. Mechanically it
-  signals the device timeline semaphore at the current frame index
-  via an empty `vkQueueSubmit2` (so `wait_frame` on the next visit
-  to a slot can consume that value) and increments
-  `m_frame_index`. The legacy `end_frame(Frame_end_info)` overload
-  is identical -- the argument is ignored, kept only for migration.
+- `end_frame(frame_id)` -- **end the oldest open frame. That is the entire
+  contract.** Verifies that `frame_id` is the oldest open frame. Does not
+  submit, does not present. Mechanically it signals the device timeline
+  semaphore at `frame_id` in a `vkQueueSubmit2` that carries only the
+  device-owned frame-end command buffer (`doc/erhe/vulkan_backend.md` "Frame
+  lifecycle and command buffers"), so `acquire_frame_slot` of frame
+  `frame_id + N` can consume that value, and makes the next frame the
+  oldest open one. `end_frame()` without an argument ends the oldest open
+  frame, for callers that run the whole frame on one thread. The legacy
+  `end_frame(Frame_end_info)` overload is identical to `end_frame()` -- the
+  argument is ignored, kept only for migration.
 
 There is no `Device::present()`. Present is implicit in
 `submit_command_buffers`; if you didn't run `begin_swapchain` on a
 cb, no swapchain was engaged and nothing is presented.
+
+A frame's bracket may span two threads: the frame start and the first
+command buffers on one thread (the main role), the remaining recording, the
+submits and `end_frame()` on another (the render role), and with two frames
+open the main role prepares frame N+1 while the render role renders frame N.
+The device entry points both roles reach are safe under that overlap; the
+next section lists them. `set_present_target_time()` is called by the thread
+that submits the frame. Each thread records from its own thread slot, so no
+per-thread command pool is used from two threads.
+
+The editor (`doc/editor/editor.md` "Frame phases and the render thread")
+calls `wait_for_frame_start()` on the main thread at the start of M1, while
+the render thread may still run R of the previous frame,
+`acquire_frame_slot(frame_id)` on the main thread in M2, and
+`end_frame(frame_id)` of the packet's frame on the render thread in R; it
+opens one frame at a time. The swapchain belongs to the render thread: the
+present wait, `wait_for_swapchain`, `begin_swapchain` and the presenting
+submit all run in R. It uses the thread slots this way:
+
+| Slot | Thread and use |
+|---|---|
+| 0 | Main thread: the init pump and loading screen, `erhe::gltf` image transfers (`Image_transfer`) |
+| 1 | Main thread, M2: the upload command buffer |
+| 2 | Render thread, R: the frame command buffer (allocated, swapchain-engaged, recorded and submitted in R) and the XR view command buffers |
+| 6 | Lightmap bake and lightmap streamer helper command buffers |
+| 7 | Synchronous readback and export command buffers (ray trace readback, mesh component readback, texture graph export) |
+
+`src/example`, `src/hello_swap` and `src/hextiles` run the whole bracket on
+one thread.
+
+## Thread safety
+
+With frame pipelining (`doc/editor/render_thread.md` section 2.1) the main role
+runs M2 of frame N+1 - uploads into the upload command buffer, texture and
+buffer creation and destruction, ring buffer ranges, standalone submits with
+`wait_idle()` - while the render role records, submits, presents and ends
+frame N. Every Vulkan `Device_impl` member both roles reach has one of three
+guards: a mutex, held only for the bookkeeping (the queue mutex is the one
+lock held across a Vulkan call, because Vulkan requires the queue to be
+externally synchronized for the whole submit, present or wait idle); a split
+per frame-in-flight slot, where each role touches only the slot of its own
+frame and a slot changes hands only through `acquire_frame_slot()` after the
+frame that held it ended (ordered by the caller's handoff); or one owning
+role. The roles are `erhe::utility::Thread_roles` (`doc/erhe/utility.md`);
+the role asserts are no-ops while the roles are unset (init, tests,
+examples). The table is the Vulkan backend's; the OpenGL and null backends
+render inline (one thread), and the Metal backend has not been audited.
+
+| Entry point | Members touched | Guard |
+|---|---|---|
+| `wait_for_frame_start` (main, M1) | frame time records; GPU clock calibration; frame bracket query pools and frame ids | recorder lock; `m_time_calibration_mutex`; main role only |
+| `acquire_frame_slot` (main, M2) | `m_prepare_frame_id` (write), `m_render_frame_id` (read); the slot's state, command pools, frame-end pool, frame bracket flag, fallback descriptor pool; GPU timer fired flags, reset flags, results | `m_frame_id_mutex`; per slot; `m_descriptor_pool_mutex` for the pool reset; `m_gpu_timer_mutex` (results stored with it held). Asserts the main thread |
+| `begin_frame`, `end_frame` (render, R) | the render frame's slot state, frame-end command buffer, frame bracket flag; `m_render_frame_id` (write); the graphics queue | asserts the render thread; per slot; `m_frame_id_mutex` for the write (the render role reads its own id unlocked); `m_queue_mutex` for the timeline submit |
+| frame completion (`end_frame`, `wait_idle`) | `m_latest_completed_frame`; the ring buffer pool; the completion handler list | `m_completion_run_mutex` (one completing thread at a time); `m_frame_id_mutex`; the pool's mutex; `m_completion_handler_mutex`, released while the handlers run |
+| `get_frame_index` (any) | render role: `m_render_frame_id`; others: both frame ids | render role: its own member, unlocked; others: `m_frame_id_mutex` |
+| `is_frame_completed` (any) | `m_latest_completed_frame` | `m_frame_id_mutex` |
+| `add_completion_handler` (any: texture, buffer, sampler, pipeline, ring buffer destruction) | `m_completion_handlers` | `m_completion_handler_mutex`; the handler runs when the calling role's current frame completes |
+| `get_command_buffer` (both) | the calling role's slot state (read) and command pool of the thread slot; the implicit semaphore and fence | per slot and per thread slot (one recording thread per thread slot of a frame: the caller's contract); `Device_sync_pool::m_mutex` |
+| command buffer destruction (the slot's pool reset in `acquire_frame_slot`; the render role's swapchain) | `Device_sync_pool` free lists | `Device_sync_pool::m_mutex` |
+| `submit_command_buffers`, `submit_command_buffer_and_wait` (both) | the graphics queue; the present target and holdback (presenting submits only); frame time records | `m_queue_mutex` around `vkQueueSubmit2`, not across the fence wait; render role only for the presenting branch; recorder lock |
+| `wait_idle` (main in M2 for standalone readbacks, shutdown) | every queue; the ended frames' completion | `m_queue_mutex` across `vkDeviceWaitIdle`; completes only frames that ended before the wait; drains the remaining handlers only when no frame is open |
+| `allocate_ring_buffer_entry`, `Ring_buffer_client::acquire` (any) | `Ring_buffer_pool` buffer lists; each `Ring_buffer`'s allocation state | the pool's mutex and a buffer list per role (`doc/erhe/ring_buffer_memory.md` "Roles and threads"); `Ring_buffer::m_mutex` |
+| `Ring_buffer_range` release (any, including completion handlers) | the buffer's sync entries | `Ring_buffer::m_mutex` |
+| texture, buffer, sampler creation | VMA allocation; debug label of the new handle | VMA is internally synchronized; the handle is not shared yet |
+| `make_render_command_encoder` and recording | the active render pass; descriptor counters | per command buffer (`Command_buffer::get_active_render_pass`, `Command_buffer_impl`); one thread records a command buffer |
+| fallback descriptor sets (no push descriptors) | the descriptor pool of the command buffer's frame | per slot; `m_descriptor_pool_mutex` |
+| pipeline and compatible render pass caches | `m_pipeline_map`, `m_compatible_render_pass_map` | `m_pipeline_map_mutex`, `m_compatible_render_pass_mutex` |
+| `Gpu_timer` create, record, read, destroy | slot free list, timer pointers, fired and reset flags; the timer's result | `m_gpu_timer_mutex`; the query slice is the recording command buffer's frame slot; `Gpu_timer_impl::m_result_mutex`; the destructor unhooks the timer at once and releases the slot when the frame current at the destruction completes |
+| swapchain (`wait_for_swapchain`, `begin_swapchain`, present, present wait, recreation) and `m_device_submit_history` | `Swapchain_impl` state; the slot's submit fence | render role only ("Frame lifecycle"); `m_queue_mutex` around `vkQueuePresentKHR` and the recreation's `vkDeviceWaitIdle` |
+| `set_present_target_time` | `m_present_target_*` | render role only (asserted) |
+| `capture_last_frame` (MCP, main) | the emulated swapchain image and its readback submit | `m_queue_mutex` for the submit and the device wait; the image content is ordered only by the caller's handoff |
+| queue debug labels (`Scoped_queue_debug_group`) | the graphics queue | `m_queue_mutex` per call |
+| shader monitor, shader source cache, SPIR-V cache | watch list; source cache; cache files | `Shader_monitor::m_mutex`; `Shader_source_cache::m_mutex`; the SPIR-V cache keeps no in-memory state |
+| `get_info`, `get_buffer_alignment`, format queries, capabilities | device properties | written during construction only |
+| `get_memory_budget` | VMA heap budgets | VMA is internally synchronized |
+
+Lock order, outermost first: `m_completion_run_mutex`, the ring buffer pool's
+mutex, a ring buffer's mutex, then the leaves (`m_completion_handler_mutex`,
+`m_frame_id_mutex`, `Device_sync_pool::m_mutex`, `m_descriptor_pool_mutex`,
+`m_gpu_timer_mutex` before `Gpu_timer_impl::m_result_mutex`). No bookkeeping
+mutex is held across a GPU wait or a queue call.
 
 ## Bind group layout
 

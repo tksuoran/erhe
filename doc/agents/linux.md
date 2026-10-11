@@ -59,6 +59,34 @@ libclang_rt.asan-x86_64.a` says it is missing). Run with
 feed them to `addr2line -C -f -i -e <tree>/bin/<exe>` to get the symbolized
 stacks.
 
+## ThreadSanitizer
+
+`-DERHE_USE_TSAN=ON` (Clang or GCC; exclusive with ASan) is the race gate of
+the editor's render thread (`doc/editor/render_thread.md` section 3.4). Configure
+a separate Clang tree the way the ASan tree is configured, without the tests
+and OpenXR, and run the windowed editor with the overlap and the frame
+pipelining on:
+
+```bash
+TSAN_OPTIONS="suppressions=scripts/tsan_suppressions.txt log_path=logs/tsan history_size=4" \
+ERHE_AI_DRIVER=1 ERHE_RENDER_THREAD=1 ERHE_IMGUI_OVERLAP=1 ERHE_FRAME_PIPELINING=1 <tree>/bin/editor
+```
+
+`scripts/tsan_suppressions.txt` silences the GPU driver, the Vulkan loader
+and layers and the windowing libraries, which are not instrumented. Without
+an `llvm-symbolizer` TSan prints no function names, so only `called_from_lib`
+(module) suppressions take effect; function-name entries (`race:`, `mutex:`)
+never match, and reports are symbolized afterwards with `addr2line -f -C -i
+-e <tree>/bin/editor <offsets>` (the `editor+0x...` offsets; one batched
+call, it takes minutes on a Debug binary). Two startup / shutdown reports
+remain by design: "unlock of an unlocked mutex" in `SDL_SystemTheme_Init`
+(a libdbus mutex) and in `Device_impl::~Device_impl` (the Vulkan loader's
+mutex, reached through a tail call in `vkDestroyDevice`). Reports
+land in `logs/tsan.<pid>`; a report names the two accesses and the threads,
+with erhe's frame phases visible in the stacks (`frame_render_phase`,
+`frame_imgui_phase`, `frame_prepare_phase`). A TSan tree runs several times
+slower; the MCP-driven scripts wait for readiness and need no change.
+
 ## Memory growth diagnostics
 
 Two zero-install tools. Both launch the editor in an isolated working
@@ -88,3 +116,29 @@ frame and only ever reset by `vkResetCommandPool` (which resets but never
 frees pool-owned handles) grew the host heap and GTT without bound until
 `Per_thread_command_pool` started reusing handles across frame-in-flight
 cycles.
+
+## Frame-time measurement, Tracy and Perfetto
+
+`python3 scripts/render_thread_bench.py --build-dir <tree> --scene draws`
+runs a benchmark scene in the editor's threading configurations with
+vsync off and no MCP polling and averages the phase log
+(`doc/editor/render_thread.md` section 3.4 has the options; `--tracy`
+records a capture per run, which needs a tree configured with
+`ERHE_PROFILE_LIBRARY=tracy` and, for undistorted frame times,
+`ERHE_TRACY_CALLSTACK_DEPTH=0`). `tracy-capture` and `tracy-csvexport`
+build from the Tracy checkout's `capture/` and `csvexport/` directories
+with cmake; the version must match the one `CMakeLists.txt` pins.
+`python3 scripts/tracy_zone_summary.py <capture>` reports the hot CPU and
+GPU zones and the main/render thread overlap; `scripts/tracy_to_perfetto.py`
+writes the capture as a Chrome JSON trace for the Perfetto UI.
+
+`python3 scripts/perfetto_system_trace.py -o run.pftrace -- <command>`
+records a Perfetto system trace around a command with the prebuilt
+`tracebox` and summarizes it with `trace_processor` (both launcher scripts
+from https://get.perfetto.dev/, in `$HOME/perfetto` or
+`ERHE_PERFETTO_DIR`). Without root it holds per-CPU frequency and busy
+time and the process list; `--ftrace` adds the scheduling timeline and
+needs `/sys/kernel/tracing` (root). The editor picks the first Vulkan
+device; `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/<driver>_icd.json`
+selects another (`--gpu <driver>` in the bench script).
+

@@ -18,7 +18,7 @@ Editor-level graphics utilities: icon management, thumbnail generation, and grad
 
 - `Icon_set::draw_icon()` -- draw an icon at current ImGui cursor position
 - `Icon_set::add_icons()` -- add type-appropriate icons before an ImGui item
-- `Thumbnails::update()` -- called once per frame to generate pending thumbnails
+- `Thumbnails::update()` -- called once per frame in M2, after the ImGui windows, to render the pending thumbnails into the upload command buffer (`doc/editor/editor.md` "Frame phases and the render thread")
 
 ## Dependencies
 

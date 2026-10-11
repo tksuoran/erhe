@@ -178,7 +178,7 @@ Every entry point (`queue`, `execute_now`, `undo`, `redo`, `update`,
 App_context::main_thread_id` with an `ERHE_VERIFY` kept in every build
 configuration, so an off-thread caller fails loudly instead of racing
 silently. Every operation source runs on the main thread: ImGui windows,
-tools and context menus (drawn inside `Editor::tick`), command handlers,
+tools and context menus (drawn inside `Editor::frame_prepare_phase()`), command handlers,
 MCP handlers (dispatched by `Mcp_server::process_queued_requests()` once
 per frame), the startup script and message-bus subscription callbacks.
 
@@ -211,13 +211,13 @@ the kept `Scene_root`, so redo re-registers it without re-importing.
 
 - `Operation_stack::queue()` -- queue an operation for execution
 - `Operation_stack::undo()` / `redo()` -- manual undo/redo
-- `Operation_stack::update()` -- called once per frame from `Editor::tick()`
+- `Operation_stack::update()` -- called once per frame from `Editor::frame_prepare_phase()` (M2; it asserts that phase)
 
 ## Async Execution
 
 Geometry operations run asynchronously via `async_for_nodes_with_mesh()` (in `items.cpp`), which creates `tf::AsyncTask` handles chained to any pending tasks for the same items. The operation callback runs on a worker thread, creates the `Mesh_operation`, and queues it to the operation stack. `Operation_stack::update()` executes queued operations on the main thread. `App_context::pending_async_ops` and `running_async_ops` (atomic counters) track in-flight operations.
 
-`Async_raytrace_kickoff_operation` (the last sub-op of every glTF import compound, and open-scene / prefab-instantiate flows) launches one such task per mesh node. Each task is the deferred load finalize (doc/editor/async_asset_loading.md): it prepares the Geometry, the real triangle raytrace (replacing the load-time AABB proxy) and, when the load path deferred it, the full edge-lines buffer mesh on the worker without touching the live scene, then enqueues the swap on `App_context::scene_commit_queue` (`Scene_commit_queue`, scene/scene_commit_queue.hpp). `Editor::tick()` flushes that queue first thing every frame, so the commit (`Primitive_shape::commit_real_raytrace`, `Primitive_render_shape::commit_geometry_buffer_mesh`, `Mesh::update_rt_primitives`, raytrace instance detach / re-attach) runs on the main thread before anything else in the tick reads the scene - workers never mutate raytrace scenes or mesh primitives. Every step no-ops fast when the result already exists, so re-kickoffs and eager-load configurations are safe. `Operations::make_raytrace` uses the same two phases. `get_async_status.pending_scene_commits` (and `App_context::get_async_in_flight_count()`) counts commits not yet flushed. The swap is shape-level and shapes are shared (glTF instances, brush instances and prefab clones hold the same `Primitive`), so the commit refreshes every mesh naming a committed primitive, not only the task's own mesh; it reads them from the scene's shape-to-meshes index (`Scene_root::collect_meshes_sharing_primitives`, which fills a caller-owned buffer), so a commit costs the sharers of the committed shapes rather than a walk of every mesh of every layer.
+`Async_raytrace_kickoff_operation` (the last sub-op of every glTF import compound, and open-scene / prefab-instantiate flows) launches one such task per mesh node. Each task is the deferred load finalize (doc/editor/async_asset_loading.md): it prepares the Geometry, the real triangle raytrace (replacing the load-time AABB proxy) and, when the load path deferred it, the full edge-lines buffer mesh on the worker without touching the live scene, then enqueues the swap on `App_context::scene_commit_queue` (`Scene_commit_queue`, scene/scene_commit_queue.hpp). `Editor::frame_prepare_phase()` (M2) flushes that queue before any other M2 step reads or edits scenes, so the commit (`Primitive_shape::commit_real_raytrace`, `Primitive_render_shape::commit_geometry_buffer_mesh`, `Mesh::update_rt_primitives`, raytrace instance detach / re-attach) runs on the main thread before the rest of the frame reads the scene - workers never mutate raytrace scenes or mesh primitives. Every step no-ops fast when the result already exists, so re-kickoffs and eager-load configurations are safe. `Operations::make_raytrace` uses the same two phases. `get_async_status.pending_scene_commits` (and `App_context::get_async_in_flight_count()`) counts commits not yet flushed. The swap is shape-level and shapes are shared (glTF instances, brush instances and prefab clones hold the same `Primitive`), so the commit refreshes every mesh naming a committed primitive, not only the task's own mesh; it reads them from the scene's shape-to-meshes index (`Scene_root::collect_meshes_sharing_primitives`, which fills a caller-owned buffer), so a commit costs the sharers of the committed shapes rather than a walk of every mesh of every layer.
 
 ## Dependencies
 

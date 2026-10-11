@@ -137,7 +137,13 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
                     erhe::commands::Command* command = menu_binding.get_command();
                     if (command != nullptr) {
                         if (command->is_enabled()) {
-                            command->try_call();
+                            // Deferred out of the ImGui iteration: a command
+                            // may create windows, nodes or GPU work.
+                            m_context.imgui_windows->queue(
+                                [command]() {
+                                    static_cast<void>(command->try_call());
+                                }
+                            );
                         }
                     }
                 }

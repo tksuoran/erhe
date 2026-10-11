@@ -20,6 +20,7 @@
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
@@ -212,7 +213,8 @@ public:
         // The whole membership of this set, established once: the glTF
         // material list is by construction every material the loaded meshes
         // use. Nothing here ever changes it, so this one update is the only
-        // material buffer write the example performs.
+        // material buffer write the example performs; the per-frame update in
+        // tick() is clean and only publishes the copy each frame binds.
         m_material_set.sync_library(
             std::span<const std::shared_ptr<erhe::primitive::Material>>{m_gltf_data.materials}
         );
@@ -424,6 +426,11 @@ public:
         };
 
         m_scene.update_node_transforms();
+        m_joint_poses.capture(m_gltf_data.skins);
+
+        // Once per frame, before the frame's first bind: publishes the copy
+        // and heap this frame binds.
+        m_material_set.update(command_buffer);
 
         std::vector<std::shared_ptr<erhe::scene::Light>> lights;
         for (const auto& light : m_gltf_data.lights) {
@@ -435,9 +442,11 @@ public:
         // No scene host hooks here: re-resolve the light set every frame.
         m_light_set.invalidate();
         m_light_set.resolve(lights, erhe::scene_renderer::Light_count_limits::uniform(0, 8)); // no shadow map -> no light is shadow-mapped
+        // The renderers read the camera through its render copy.
+        const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
         m_light_projections.apply(
             m_light_set,
-            m_camera.get(),
+            &camera_snapshot,
             viewport,
             erhe::math::Viewport{},
             std::shared_ptr<erhe::graphics::Texture>{},
@@ -460,8 +469,7 @@ public:
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
 
         const erhe::scene_renderer::Camera_view_input single_view_input{
-            .projection = m_camera->projection(),
-            .node       = m_camera.get(),
+            .camera     = &camera_snapshot,
             .viewport   = viewport
         };
         m_forward_renderer.render(
@@ -474,7 +482,7 @@ public:
                     .exposure          = m_camera->get_exposure(),
                     .ambient_light     = glm::vec3{0.1f, 0.1f, 0.1f},
                     .light_projections = &m_light_projections,
-                    .skins             = m_gltf_data.skins,
+                    .joint_poses       = m_joint_poses.get_poses(),
                     .material_source   = &m_material_set,
                     .debug_label       = "example main render"
                 },
@@ -647,6 +655,7 @@ private:
 
     erhe::scene_renderer::Light_projections m_light_projections;
     erhe::scene_renderer::Light_set         m_light_set;
+    erhe::scene_renderer::Joint_poses       m_joint_poses;
 
     erhe::gltf::Gltf_data                   m_gltf_data;
 

@@ -213,6 +213,8 @@ erhe_target_sources_grouped(
     editor_default_layout.hpp
     editor_log.cpp
     editor_log.hpp
+    render_thread.cpp
+    render_thread.hpp
     editor_settings_store.cpp
     editor_settings_store.hpp
     experiments/gradient_editor.cpp
@@ -489,19 +491,27 @@ erhe_target_sources_grouped(
     renderers/frustum_tiler.cpp
     renderers/frustum_tiler.hpp
     renderers/id_renderer.cpp
+    renderers/id_pass_prepared.hpp
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp
     renderers/light_mesh.hpp
     renderers/material_set_factory.cpp
     renderers/material_set_factory.hpp
+    renderers/prepared_frame_values.hpp
     renderers/prewarm.cpp
     renderers/prewarm.hpp
     renderers/programs.cpp
     renderers/programs.hpp
     renderers/render_context.cpp
     renderers/render_context.hpp
+    renderers/render_frame_results.hpp
+    renderers/render_settings.cpp
+    renderers/render_settings.hpp
+    renderers/render_settings_access.hpp
     renderers/render_style.cpp
     renderers/render_style.hpp
+    renderers/render_texture_reference.cpp
+    renderers/render_texture_reference.hpp
     renderers/lightmap_baker.cpp
     renderers/lightmap_baker.hpp
     renderers/lightmap_partitioner.cpp
@@ -526,6 +536,8 @@ erhe_target_sources_grouped(
     renderers/radiance_cascades_renderer.hpp
     renderers/ray_trace_renderer.cpp
     renderers/ray_trace_renderer.hpp
+    renderers/ray_trace_scene.cpp
+    renderers/ray_trace_scene.hpp
     renderers/scene_tlas.cpp
     renderers/scene_tlas.hpp
     renderers/sky_renderer.cpp
@@ -631,6 +643,7 @@ erhe_target_sources_grouped(
     scene/scene_view.hpp
     scene/shadow_fit_debug.cpp
     scene/shadow_fit_debug.hpp
+    scene/viewport_render_state.hpp
     scene/viewport_scene_view.cpp
     scene/viewport_scene_view.hpp
     scene/viewport_scene_views.cpp
@@ -991,6 +1004,8 @@ set(_config_sources
     ${_config_out}/threading_config.hpp
     ${_config_out}/threading_config_serialization.hpp
     ${_config_out}/threading_config.cpp
+    ${_config_out}/render_thread_mode.hpp
+    ${_config_out}/render_thread_mode.cpp
     ${_config_out}/thumbnails_config.hpp
     ${_config_out}/thumbnails_config_serialization.hpp
     ${_config_out}/thumbnails_config.cpp

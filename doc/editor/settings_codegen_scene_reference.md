@@ -66,7 +66,7 @@ global.
 | `graphics_preset_name` | string | active graphics quality preset name | Global |
 | `imgui` | Imgui_settings_config | UI font paths + sizes | Global |
 | `icons` | Icon_settings_config | UI icon sizes | Global |
-| `threading` | Threading_config | async worker thread count | Global |
+| `threading` | Threading_config | async worker thread count; render thread mode (`render_thread`: `inline_main_thread` / `dedicated_thread`); `imgui_overlap`; `frame_pipelining` (`doc/editor/editor.md` "Frame phases and the render thread") | Global |
 | `post_processing` | bool | enable post-processing | Scene |
 | `geometry_edit_mode` | Geometry_edit_mode (enum) | edit shared geometry vs fork-on-edit | Global |
 | `transform_mode` | Mesh_transform_mode (enum) | move vs extrude component transform | Global |
@@ -211,7 +211,13 @@ setting otherwise: `get_effective_sky`, `get_effective_grid`,
 `get_effective_camera_controls`, `get_effective_clear_color`,
 `get_effective_post_processing`. A consumer that reads its setting once at init
 time has to be refactored to ask per scene before the corresponding override
-can take effect.
+can take effect. The render phase does not call these helpers: it reads
+`Scene_root::get_render_settings(frame_index)`, the per-scene copy (sky,
+shadow frustum fit, clear color; one per frame in flight) that
+`Scene_root::snapshot_render_settings` resolves in M2
+(`doc/editor/editor.md` "Frame phases and the render thread"), beside the
+editor-global `Render_settings` copy of `App_context::render_settings` (also
+one per frame in flight).
 
 ---
 

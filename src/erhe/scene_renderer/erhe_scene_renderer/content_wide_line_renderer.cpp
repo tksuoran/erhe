@@ -63,6 +63,7 @@ void Content_wide_line_renderer::begin_frame()
 
 void Content_wide_line_renderer::set_view_params(
     std::span<const Camera_view_input>        views,
+    const Content_wide_line_tent_settings&    tent_settings,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
     const erhe::math::Coordinate_conventions& conventions
@@ -78,10 +79,9 @@ void Content_wide_line_renderer::set_view_params(
     m_per_view_cameras.clear();
     m_per_view_cameras.reserve(static_cast<std::size_t>(m_interface.view_count));
     for (const Camera_view_input& view : views) {
-        ERHE_VERIFY(view.projection != nullptr);
-        ERHE_VERIFY(view.node       != nullptr);
+        ERHE_VERIFY(view.camera != nullptr);
         m_per_view_cameras.push_back(build_per_view_camera(
-            *view.projection, *view.node, view.viewport, view.pixel_scale, reverse_depth, depth_range, conventions
+            *view.camera, view.viewport, view.pixel_scale, reverse_depth, depth_range, conventions
         ));
     }
     while (m_per_view_cameras.size() < static_cast<std::size_t>(m_interface.view_count)) {
@@ -100,10 +100,10 @@ void Content_wide_line_renderer::set_view_params(
         .view_count_runtime   = static_cast<uint32_t>(views.size()),
         .vp_y_sign            = vp_y_sign,
         .clip_depth_direction = reverse_depth ? -1.0f : 1.0f,
-        .line_bias_margin     = m_line_bias_margin,
+        .line_bias_margin     = tent_settings.line_bias_margin,
         .window_to_ndc_scale  = reverse_depth ? 1.0f : 2.0f,
-        .use_tent             = m_use_tent ? 1u : 0u,
-        .line_bias_clamp      = m_line_bias_clamp,
+        .use_tent             = tent_settings.use_tent ? 1u : 0u,
+        .line_bias_clamp      = tent_settings.line_bias_clamp,
     };
     m_view_params_set = true;
 }
@@ -119,20 +119,18 @@ void Content_wide_line_renderer::set_joint_buffer(
     m_joint_buffer_set    = true;
 }
 
-void Content_wide_line_renderer::add_mesh(
+void Content_wide_line_renderer::prepare_mesh(
     Mesh_memory&             mesh_memory,
     const erhe::scene::Mesh& mesh,
     const glm::vec4&         color,
     const float              line_width,
-    const uint32_t           group
+    const uint32_t           group,
+    Content_wide_line_feed&  out
 )
 {
-    const erhe::scene::Node* node = &mesh;
-    if (node == nullptr) {
-        return;
-    }
+    ++out.mesh_count;
 
-    const glm::mat4                           world_from_node  = node->world_from_node();
+    const glm::mat4                           world_from_node  = mesh.world_from_node();
     const std::shared_ptr<erhe::scene::Skin>& skin             = mesh.skin;
     const bool                                mesh_is_skinned  = (skin != nullptr);
     const uint32_t                            base_joint_index = mesh_is_skinned ? skin->skin_data.joint_buffer_index : 0u;
@@ -150,17 +148,59 @@ void Content_wide_line_renderer::add_mesh(
         if (buffer_mesh == nullptr) {
             continue;
         }
-        add_primitive(
-            mesh_memory,
-            *buffer_mesh,
-            world_from_node,
-            color,
-            line_width,
-            group,
-            mesh_is_skinned,
-            base_joint_index
-        );
+        const erhe::primitive::Buffer_range& edge_range = buffer_mesh->edge_line_vertex_buffer_range;
+        if (edge_range.count == 0) {
+            continue;
+        }
+        erhe::graphics::Buffer* edge_buffer = mesh_memory.get_vertex_buffer(edge_range);
+        if (edge_buffer == nullptr) {
+            continue;
+        }
+        Content_wide_line_record record{
+            .edge_buffer             = edge_buffer,
+            .edge_buffer_byte_offset = edge_range.byte_offset,
+            .edge_count              = edge_range.count / 2,
+            .world_from_node         = world_from_node,
+            .color                   = color,
+            .line_width              = line_width,
+            .group                   = group,
+            .mesh_is_skinned         = mesh_is_skinned,
+            .base_joint_index        = base_joint_index
+        };
+        const erhe::primitive::Buffer_range& joint_range = buffer_mesh->edge_line_joint_buffer_range;
+        if (mesh_is_skinned && (joint_range.count > 0)) {
+            erhe::graphics::Buffer* joint_buffer = mesh_memory.get_vertex_buffer(joint_range);
+            if (joint_buffer != nullptr) {
+                record.joint_buffer             = joint_buffer;
+                record.joint_buffer_byte_offset = joint_range.byte_offset;
+                record.joint_buffer_byte_size   = joint_range.count * joint_range.element_size;
+            }
+        }
+        out.records.push_back(record);
     }
+}
+
+void Content_wide_line_renderer::add_feed(const Content_wide_line_feed& feed)
+{
+    for (const Content_wide_line_record& record : feed.records) {
+        add_record(record);
+    }
+}
+
+void Content_wide_line_renderer::add_mesh(
+    Mesh_memory&             mesh_memory,
+    const erhe::scene::Mesh& mesh,
+    const glm::vec4&         color,
+    const float              line_width,
+    const uint32_t           group
+)
+{
+    // Leaf scratch (AGENTS.md): add_feed() does not re-enter add_mesh().
+    static thread_local Content_wide_line_feed s_feed;
+    s_feed.clear();
+    prepare_mesh(mesh_memory, mesh, color, line_width, group, s_feed);
+    add_feed(s_feed);
+    s_feed.clear();
 }
 
 void Content_wide_line_renderer::end_frame()

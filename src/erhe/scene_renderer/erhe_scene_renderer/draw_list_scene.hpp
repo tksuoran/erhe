@@ -91,6 +91,9 @@ public:
     // Empty: no culling (multiview passes).
     std::span<const glm::vec4>              view_frustum_planes {};
     std::string_view                        debug_label         {};
+    // The frame being drawn: the published slot frame_index %
+    // frames_in_flight is read (Draw_list_scene::publish).
+    uint64_t                                frame_index         {0};
 };
 
 class Draw_shadow_parameters
@@ -112,26 +115,46 @@ public:
     // depth-clamped directional pass). Empty: no culling.
     std::span<const glm::vec4>              light_frustum_planes{};
     std::string_view                        debug_label         {};
+    // The frame being drawn (Draw_color_parameters::frame_index).
+    uint64_t                                frame_index         {0};
 };
 
-// What Shadow_renderer's frustum fit reads from the registered objects
-// (Draw_list_scene::gather_shadow_bounds): one world AABB per caster and,
-// when asked, per receiver, plus the caster vertex rounding inputs. The
-// vectors are the caller's scratch, cleared here and filled (capacity kept).
-class Shadow_bounds_gather_parameters
+// The shadow pass filter: the objects that cast shadows. Shadow_renderer
+// draws casters through it and the frustum fit gathers caster bounds
+// through it (Shadow_bounds_selection::caster_filter).
+inline constexpr erhe::Item_filter shadow_caster_filter{
+    .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast,
+    .require_at_least_one_bit_set   = 0u,
+    // proxy_hidden: visually replaced by a render_proxy that casts the
+    // shadows instead (lightmap piece meshes).
+    .require_all_bits_clear         = erhe::Item_flags::proxy_hidden,
+    .require_at_least_one_bit_clear = 0u
+};
+
+// Which registered objects the shadow frustum fit reads
+// (Draw_list_scene::prepare_shadow_bounds).
+class Shadow_bounds_selection
 {
 public:
-    std::span<const erhe::scene::Layer_id>  layers              {};
+    // Layers to gather from; an EMPTY span selects every layer.
+    std::span<const erhe::scene::Layer_id> layers       {};
     // Casters: objects passing this filter (the shadow pass filter) that
-    // hold at least one shadow entry.
-    erhe::Item_filter                       caster_filter       {};
-    // Receivers: every visible, active object; gathered only when set.
-    bool                                    gather_receivers    {false};
-    std::vector<erhe::math::Aabb>&          caster_world_aabbs;
-    std::vector<erhe::math::Aabb>&          receiver_world_aabbs;
-    std::vector<Caster_vertex_extent>&      caster_vertex_extents;
+    // hold at least one shadow entry. Receivers: every visible, active
+    // object of the layers.
+    erhe::Item_filter                      caster_filter{shadow_caster_filter};
 };
 
+// What Shadow_renderer's frustum fit reads from the registered objects for
+// one frame (Draw_list_scene::get_shadow_bounds): one world AABB per caster
+// and per receiver, in object order, and the caster vertex rounding inputs,
+// one per caster.
+class Shadow_bounds
+{
+public:
+    std::vector<erhe::math::Aabb>     caster_world_aabbs;
+    std::vector<erhe::math::Aabb>     receiver_world_aabbs;
+    std::vector<Caster_vertex_extent> caster_vertex_extents;
+};
 
 // What one Draw_list_scene is built from.
 class Draw_list_scene_create_info
@@ -144,7 +167,8 @@ public:
     // the drawing Primitive_buffers were built with.
     const Primitive_interface* primitive_interface {nullptr};
     // 0 for single view passes, plus the XR view count when a multiview
-    // headset session is active (R19).
+    // headset session is active (R19): the view configurations the first
+    // color draw of a list resolves together.
     std::span<const uint32_t>  multiview_view_counts{};
     // This draw list's own material slot space
     // (doc/erhe/draw_list_material_set.md D0, D3). Separate from the forward
@@ -152,6 +176,9 @@ public:
     // consumed on later frames, so their slots must be stable in a way the
     // bucket path's per-pass records never need.
     Material_set_create_info   material_set_create_info{};
+    // Initial value of set_exclude_unlit_from_shadows(), so a new instance
+    // classifies its first registrations with the caller's setting.
+    bool                       exclude_unlit_from_shadows{false};
 };
 
 // Persistent, incrementally maintained rendering-side representation of a
@@ -160,8 +187,17 @@ public:
 // One instance per Scene_root, owned like m_physics_world / m_raytrace_scene.
 //
 // Threading (doc/erhe/draw_list_renderer.md section 9.3): register / unregister /
-// flush_pending / draw are main-thread only. Scene-side hooks that may run on
-// worker threads use the enqueue_* API; flush_pending() applies the queue.
+// flush_pending / prepare_shadow_bounds / publish are main-thread only
+// (flush_pending, prepare_shadow_bounds and publish in the prepare phase);
+// draw_color / draw_shadow / has_drawable_entries / get_shadow_bounds run on
+// the render thread in the render phase (erhe::utility::Thread_roles).
+// Scene-side hooks that may run on worker threads use the enqueue_* API;
+// flush_pending() applies the queue.
+//
+// The draw lists the prepare phase maintains are its own working copy; the
+// render phase reads only the copy publish() made for its frame, one per
+// frame in flight, so the prepare phase of one frame never writes what the
+// render phase of another frame reads.
 //
 // Empty draw lists are kept (a list whose last entry was unregistered stays
 // in place with zero entries and is reused when a matching primitive
@@ -204,8 +240,10 @@ public:
     void rebuild_all      ();
     // Whether unlit (KHR_materials_unlit) primitives are kept out of the
     // shadow draw lists. Shadow membership is baked into the cached entries,
-    // so changing this rebuilds every list; setting the current value is a
-    // no-op. Default: unlit primitives DO cast (the historical behavior).
+    // so changing this rebuilds every list at the next flush_pending();
+    // setting the current value is a no-op. Main thread (owner thread),
+    // called from the change sites of the application setting. Initial
+    // value: Draw_list_scene_create_info::exclude_unlit_from_shadows.
     void set_exclude_unlit_from_shadows(bool value);
     [[nodiscard]] auto get_exclude_unlit_from_shadows() const -> bool { return m_exclude_unlit_from_shadows; }
 
@@ -234,40 +272,66 @@ public:
     // mesh-component drag; Scene_host::on_mesh_bounds_changed): rewrite the
     // object's entry AABBs and node extent in flush_pending(), nothing else.
     void enqueue_bounds_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
-    // Main thread, once per frame before any draw. The caller (Scene_root)
+    // Main thread, prepare phase, once per frame before any draw. The caller (Scene_root)
     // holds its item_host_mutex around this call so registration never reads
     // a Buffer_mesh that a worker is replacing.
     void flush_pending     ();
+    // Main thread, prepare phase, once per frame after flush_pending() and
+    // after the frame's joint poses were captured (Joint_poses::capture
+    // assigns each skin's Skin_data::joint_buffer_index): first rewrites the
+    // joint slot fields of the skinned objects whose skin moved to another
+    // slot, then copies every draw list whose change serial moved since the
+    // slot frame_index % frames_in_flight last published it into that slot.
+    // A frame in which nothing changed copies nothing; a change is copied
+    // into each slot once. The caller holds item_host_mutex, as for
+    // flush_pending() (the joint slot rewrite reads the meshes).
+    void publish           (uint64_t frame_index, std::size_t frames_in_flight);
     [[nodiscard]] auto get_pending_count() const -> std::size_t;
 
     // Number of registered-vs-observed negative-determinant mismatches seen
     // in flush_pending() (R10b diagnostics).
     [[nodiscard]] auto get_determinant_flip_count() const -> std::size_t { return m_determinant_flip_count; }
 
-    // --- Drawing (main thread, inside the owning renderer's pass) ------------
+    // --- Drawing (render thread, render phase, inside the owning renderer's pass)
     // Draws every list matching layers / blending, filtering entries by
     // parameters.filter against their mirrored flag bits (R7a). Cached
     // resolutions are used (R20); a not-yet-resolved (view config,
     // sub-variant) resolves once, lazily. Returns what was drawn.
+    // Both read the lists publish() published for parameters.frame_index and
+    // verify that slot was published for that frame.
     auto draw_color (const Draw_color_parameters&  parameters) -> Draw_statistics;
     auto draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics;
-    // The shadow frustum fit's inputs from the registered objects (main
-    // thread): the entries' world AABB per object, the posed bounds for a
-    // skinned object (its entries carry none), the node-space extent kept on
-    // the object. Objects whose bounds are invalid contribute nothing.
-    void gather_shadow_bounds(const Shadow_bounds_gather_parameters& parameters) const;
+    // The shadow frustum fit's inputs from the registered objects, prepared
+    // once per frame in the prepare phase (main thread, after
+    // flush_pending()) into the frame-in-flight slot frame_index %
+    // frames_in_flight, so the prepare phase of one frame never writes the
+    // slot the render phase of another frame reads. Per object: the entries'
+    // world AABB, or the posed bounds for a skinned object (its entries
+    // carry none); per caster, the node's world transform and the node-space
+    // extent kept on the object. Objects whose bounds are invalid contribute
+    // nothing. The slot is gathered again only when the records changed since
+    // it was last gathered (registration, flags, transform and bounds hooks)
+    // or the selection differs; otherwise only the skinned objects' posed
+    // bounds are rewritten.
+    void prepare_shadow_bounds(const Shadow_bounds_selection& selection, uint64_t frame_index, std::size_t frames_in_flight);
+    // The slot prepare_shadow_bounds() filled for frame_index (render
+    // thread, render phase). Verifies that the slot was prepared for that
+    // frame.
+    [[nodiscard]] auto get_shadow_bounds(uint64_t frame_index) const -> const Shadow_bounds&;
+    // Diagnostics: full gathers prepare_shadow_bounds() ran (a frame in
+    // which nothing changed runs none).
+    [[nodiscard]] auto get_shadow_bounds_gather_count() const -> std::size_t { return m_shadow_bounds_gather_count; }
     // True when at least one entry would be drawn for the selection: lets a
     // caller skip its per-pass prologue (buffer uploads / binds) entirely,
     // the way Forward_renderer::render() early-outs on empty mesh spans.
     [[nodiscard]] auto has_drawable_entries(
+        uint64_t                               frame_index,
         Draw_purpose                           purpose,
         std::span<const erhe::scene::Layer_id> layers,
         Draw_blending_selection                blending,
         const erhe::Item_filter&               filter
     ) const -> bool;
 
-    // Object mesh lookup for per-entry upload (Primitive_buffer slow path).
-    [[nodiscard]] auto get_object_mesh(uint32_t object_index) const -> erhe::scene::Mesh*;
     // Byte stride of one record in Draw_list::primitive_records
     // (Primitive_interface::primitive_struct size).
     [[nodiscard]] auto get_primitive_record_stride() const -> std::size_t { return m_primitive_record_stride; }
@@ -287,10 +351,13 @@ public:
     [[nodiscard]] auto get_lazy_resolution_count         () const -> std::size_t { return m_lazy_resolution_count; }
     [[nodiscard]] auto get_material_change_count         () const -> std::size_t { return m_material_change_count; }
     // Record maintenance counters: objects whose records were rewritten by
-    // the transform hook / refresh hook / GPU-slot sync.
+    // the transform hook / refresh hook / joint slot sync (publish).
     [[nodiscard]] auto get_transform_update_count        () const -> std::size_t { return m_transform_update_count; }
     [[nodiscard]] auto get_refresh_count                 () const -> std::size_t { return m_refresh_count; }
     [[nodiscard]] auto get_slot_sync_count               () const -> std::size_t { return m_slot_sync_count; }
+    // Draw lists publish() copied into a frame slot, summed over all calls
+    // (a frame in which nothing changed adds none).
+    [[nodiscard]] auto get_published_list_copy_count     () const -> std::size_t { return m_published_list_copy_count; }
 
 private:
     class Pending_op
@@ -314,12 +381,12 @@ private:
         uint64_t serial{0};
     };
 
-    // D1d: set_exclude_unlit_from_shadows() is reached from inside the
-    // rendergraph, after this frame's Material_set::update(), so its rebuild
-    // is deferred to the next flush.
+    // Defers a full rebuild to the next flush_pending(), ahead of that
+    // flush's queued ops (D1d).
     void enqueue_rebuild_all();
 
     void assert_main_thread() const;
+    static void assert_render_phase();
     auto allocate_object   () -> uint32_t;
     void release_object    (uint32_t object_index);
     // Classify all primitives of object into lists; fills object.locations.
@@ -328,7 +395,12 @@ private:
     void remove_entries    (uint32_t object_index);
     auto get_or_create_draw_list(const Draw_list_key& key) -> uint32_t;
     void remove_entry      (const Draw_list_entry_location& location);
+    // The working copy of one list for writing: bumps its change serial, so
+    // the next publish() copies it. Every mutation of a list's key, entries
+    // or records goes through here.
+    [[nodiscard]] auto edit_draw_list(uint32_t draw_list_index) -> Draw_list&;
     // --- Primitive records (doc/erhe/draw_list_performance_improvements.md) ---
+    // For writing (through edit_draw_list()).
     [[nodiscard]] auto get_record(const Draw_list_entry_location& location) -> std::byte*;
     // Full record from the live mesh / node / primitive for one entry.
     void write_entry_record      (const Draw_list_object& object, const Draw_list_entry& entry, std::byte* record) const;
@@ -336,15 +408,16 @@ private:
     // its node; records object.transform_serial.
     void write_object_transform  (uint32_t object_index);
     // material_index / skinning_factor / base_joint_index of every record of
-    // the object from the live GPU slots; records object.joint_slot.
+    // the object from its material slots and its skin's joint slot; records
+    // object.joint_slot.
     void write_object_gpu_slots  (uint32_t object_index);
     // Rewrite every record of the object (refresh hook).
     void refresh_object_records  (uint32_t object_index);
     // Transform hook application (dedup by node transform serial).
     void update_object_transform (uint32_t object_index);
-    // Draw-time: material / joint GPU slots changed since the records were
-    // written -> rewrite the affected objects' slot fields.
-    void sync_gpu_slots          ();
+    // publish(): the joint slot of a skinned object's skin changed since its
+    // records were written -> rewrite that object's slot fields.
+    void sync_joint_slots        ();
     // Resolution (R17): compile / look up the shader stages for a list.
     // R12 material-content edits: identity hash = Shader_key{}.derive(material,
     // nullptr, false).get_hash(), i.e. exactly the material-derived key
@@ -371,13 +444,20 @@ private:
     // cost to compare those three fields anyway.
     [[nodiscard]] auto try_material_slot_update(uint32_t object_index) -> bool;
     void check_material_changes  ();
-    void resolve_color_list  (Draw_list& draw_list);                    // all enumerated view configs
-    auto resolve_color_stages(Draw_list& draw_list, uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*;
-    auto resolve_shadow_stages(Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
+    // --- Render phase (render thread) ---
+    // The lists publish() published for frame_index; verifies the slot was
+    // published for that frame.
+    [[nodiscard]] auto get_published_draw_lists(uint64_t frame_index) const -> const std::vector<Draw_list>&;
+    // The render phase's resolution cache entry of a list, reset when the
+    // list at that index is a different list (identity) than last time.
+    [[nodiscard]] auto get_resolutions(std::size_t draw_list_index, const Draw_list& draw_list) -> Draw_list_resolutions&;
+    void resolve_color_list   (Draw_list_resolutions& resolutions, const Draw_list& draw_list); // all enumerated view configs
+    auto resolve_color_stages (Draw_list_resolutions& resolutions, const Draw_list& draw_list, uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*;
+    auto resolve_shadow_stages(Draw_list_resolutions& resolutions, const Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     void set_color_environment(const Color_environment& environment);
     // Draw one list in chunks of <= max primitives per multi-draw (P3a).
     void draw_list_chunks(
-        Draw_list&                               draw_list,
+        const Draw_list&                         draw_list,
         erhe::graphics::Render_command_encoder&  render_encoder,
         erhe::graphics::Render_pipeline&         render_pipeline,
         Primitive_buffer&                        primitive_buffer,
@@ -394,6 +474,55 @@ private:
     // move with the node.
     void write_object_bounds(uint32_t object_index);
 
+    // A skinned object in a shadow bounds slot: where its posed bounds sit
+    // in the slot's vectors, rewritten by every prepare_shadow_bounds().
+    class Shadow_bounds_skinned_object
+    {
+    public:
+        static constexpr uint32_t none = UINT32_MAX;
+        uint32_t object_index     {0};
+        uint32_t caster_position  {none};
+        uint32_t receiver_position{none};
+        // Whether the posed bounds were valid at the gather: a change drops
+        // or adds the object, which takes a full gather.
+        bool     valid            {false};
+    };
+    class Shadow_bounds_slot
+    {
+    public:
+        Shadow_bounds                            bounds;
+        std::vector<Shadow_bounds_skinned_object> skinned_objects;
+        // The selection and m_shadow_bounds_serial of the last full gather.
+        std::vector<erhe::scene::Layer_id>       layers;
+        erhe::Item_filter                        caster_filter{};
+        uint64_t                                 serial       {0};
+        // The frame the slot was last prepared for.
+        uint64_t                                 frame_index  {0};
+        bool                                     prepared     {false};
+    };
+    // Something the shadow bounds gather reads changed: object membership,
+    // entries, flags, world AABBs, node extents or node transforms.
+    void mark_shadow_bounds_changed() { ++m_shadow_bounds_serial; }
+    void gather_shadow_bounds        (const Shadow_bounds_selection& selection, Shadow_bounds_slot& slot);
+    // Rewrites the skinned objects' posed bounds in the slot; false when an
+    // object's bounds became valid or invalid (the caller gathers again).
+    [[nodiscard]] auto update_skinned_shadow_bounds(Shadow_bounds_slot& slot) const -> bool;
+
+    // The draw lists published for one frame in flight: parallel to
+    // m_draw_lists (same indices), each the copy of the working list as of
+    // its serial.
+    class Draw_list_slot
+    {
+    public:
+        std::vector<Draw_list> lists;
+        // m_draw_list_serial as of the slot's last publish: equal means no
+        // list changed since, and the publish compares nothing.
+        uint64_t               serial     {0};
+        // The frame the slot was last published for.
+        uint64_t               frame_index{0};
+        bool                   published  {false};
+    };
+
     // Declared BEFORE m_objects: a Draw_list_object holds Material_slot_ids
     // into this set, so the set must outlive the objects that name its slots.
     Material_set                                                     m_material_set;
@@ -405,7 +534,11 @@ private:
     std::thread::id                                                  m_owner_thread_id;
     bool                                                             m_exclude_unlit_from_shadows{false};
 
+    // The working copy (main thread, prepare phase).
     std::vector<Draw_list>                                           m_draw_lists;
+    // Last value handed out as a Draw_list::serial / Draw_list::identity.
+    uint64_t                                                         m_draw_list_serial  {0};
+    uint64_t                                                         m_draw_list_identity{0};
     std::unordered_map<Draw_list_key, uint32_t, Draw_list_key_hash>  m_draw_list_index_by_key;
     std::vector<Draw_list_object>                                    m_objects;
     std::vector<uint32_t>                                            m_free_object_indices;
@@ -428,6 +561,7 @@ private:
     std::size_t                                                      m_transform_update_count{0};
     std::size_t                                                      m_refresh_count{0};
     std::size_t                                                      m_slot_sync_count{0};
+    std::size_t                                                      m_published_list_copy_count{0};
     // Material reassignments that took the cheap path (D11).
     std::size_t                                                      m_material_slot_update_count{0};
 
@@ -441,10 +575,20 @@ private:
 
     std::size_t                                                      m_material_change_count{0};
 
+    // Render phase (render thread) state: the resolution cache, one per list
+    // index, and the color environment it was resolved against.
+    std::vector<Draw_list_resolutions>                               m_resolutions;
     Color_environment                                                m_color_environment{};
     bool                                                             m_color_environment_set{false};
     std::size_t                                                      m_color_environment_change_count{0};
     std::size_t                                                      m_lazy_resolution_count{0};
+
+    // One per frame in flight (sized by the first prepare_shadow_bounds()).
+    std::vector<Shadow_bounds_slot>                                  m_shadow_bounds_slots;
+    // One per frame in flight (sized by the first publish()).
+    std::vector<Draw_list_slot>                                      m_draw_list_slots;
+    uint64_t                                                         m_shadow_bounds_serial{1};
+    std::size_t                                                      m_shadow_bounds_gather_count{0};
 };
 
 } // namespace erhe::scene_renderer

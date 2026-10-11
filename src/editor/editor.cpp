@@ -35,6 +35,7 @@
 #include "items.hpp"
 #include "editor_default_layout.hpp"
 #include "editor_log.hpp"
+#include "render_thread.hpp"
 #include "editor_settings_store.hpp"
 #include "input_bindings_store.hpp"
 #include "app_message_bus.hpp"
@@ -93,6 +94,7 @@
 #include "erhe_scene_renderer/draw_list_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/prewarm.hpp"
+#include "renderers/render_settings.hpp"
 #include "renderers/material_set_factory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/lightmap_baker.hpp"
@@ -227,6 +229,7 @@
 #include "erhe_usd/usd_log.hpp"
 #endif
 #include "erhe_window/clipboard.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
 #   include <SDL3/SDL.h>
@@ -252,6 +255,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdlib>
 #include <fstream>
@@ -307,275 +311,895 @@ void apply_graphics_config_environment_overrides(Graphics_config& graphics_confi
     graphics_config.force_disable_reverse_depth = force_disable;
 }
 
+// Command buffer thread slots of the frame phases (doc/editor/render_thread.md
+// section 2.3). The main thread records the prepare phase (M2) uploads from
+// its own slot, the render phase (R) records the frame from another, so the
+// two never share a per-thread command pool once R runs on its own thread.
+// Slots 6 (lightmap bake) and 7 (readback / export) are taken by the
+// synchronous helper command buffers; slot 0 is the default the init path,
+// image transfers and the OpenXR view command buffers use.
+static constexpr unsigned int s_main_upload_thread_slot = 1;
+static constexpr unsigned int s_render_thread_slot      = 2;
+
+// The render thread mode of the session (doc/editor/editor.md "Frame phases
+// and the render thread"): threading.render_thread from the editor
+// settings, overridden by ERHE_RENDER_THREAD=0|1 (0 = inline on the main
+// thread, 1 = dedicated thread) so scripts can pick a mode without
+// rewriting the config file. The OpenGL and null backends always run
+// inline: OpenGL records on the thread its context is current on (the main
+// thread; doc/editor/render_thread.md section 4), and the null backend
+// has no frame work worth a thread. Logged once.
+[[nodiscard]] auto select_render_thread_mode(const Render_thread_mode configured_mode) -> Render_thread_mode
+{
+    Render_thread_mode mode   = configured_mode;
+    const char*        source = "editor settings threading.render_thread";
+    const char* const  value  = std::getenv("ERHE_RENDER_THREAD");
+    if (value != nullptr) {
+        const std::string_view text{value};
+        if (text == "0") {
+            mode   = Render_thread_mode::inline_main_thread;
+            source = "ERHE_RENDER_THREAD=0";
+        } else if (text == "1") {
+            mode   = Render_thread_mode::dedicated_thread;
+            source = "ERHE_RENDER_THREAD=1";
+        } else {
+            log_startup->warn("ERHE_RENDER_THREAD = '{}' ignored (expected 0 or 1)", text);
+        }
+    }
+#if defined(ERHE_GRAPHICS_API_OPENGL) || defined(ERHE_GRAPHICS_API_NONE)
+    if (mode != Render_thread_mode::inline_main_thread) {
+# if defined(ERHE_GRAPHICS_API_OPENGL)
+        const char* const backend = "OpenGL";
+# else
+        const char* const backend = "null";
+# endif
+        log_startup->info("Render thread mode: {} from {} overridden to inline_main_thread ({} graphics backend)", to_string(mode), source, backend);
+        mode   = Render_thread_mode::inline_main_thread;
+        source = "graphics backend";
+    }
+#endif
+    log_startup->info("Render thread mode: {} (from {})", to_string(mode), source);
+    return mode;
+}
+
+// The ImGui overlap of the session (doc/editor/render_thread.md section 2.5):
+// threading.imgui_overlap from the editor settings, overridden by
+// ERHE_IMGUI_OVERLAP=0|1; only a dedicated render thread can overlap.
+[[nodiscard]] auto select_imgui_overlap(const Render_thread_mode render_thread_mode, const bool configured_overlap) -> bool
+{
+    bool        overlap = configured_overlap;
+    const char* source  = "editor settings threading.imgui_overlap";
+    const char* const value = std::getenv("ERHE_IMGUI_OVERLAP");
+    if (value != nullptr) {
+        const std::string_view text{value};
+        if (text == "0") {
+            overlap = false;
+            source  = "ERHE_IMGUI_OVERLAP=0";
+        } else if (text == "1") {
+            overlap = true;
+            source  = "ERHE_IMGUI_OVERLAP=1";
+        } else {
+            log_startup->warn("ERHE_IMGUI_OVERLAP = '{}' ignored (expected 0 or 1)", text);
+        }
+    }
+    if (overlap && (render_thread_mode != Render_thread_mode::dedicated_thread)) {
+        log_startup->info("ImGui overlap: on from {} overridden to off (render thread mode {})", source, to_string(render_thread_mode));
+        overlap = false;
+        source  = "render thread mode";
+    }
+    log_startup->info("ImGui overlap: {} (from {})", overlap ? "on" : "off", source);
+    return overlap;
+}
+
+// The frame pipelining of the session (doc/editor/editor.md "Frame phases
+// and the render thread"): threading.frame_pipelining from the editor
+// settings, overridden by ERHE_FRAME_PIPELINING=0|1. Only a dedicated render
+// thread can render a frame while the main thread prepares the next one,
+// and the OpenXR headset path still prepares and renders its views in the
+// render phase from live state (doc/editor/render_thread.md section 2.2), so it
+// keeps the serial schedule. Logged once.
+[[nodiscard]] auto select_frame_pipelining(const Render_thread_mode render_thread_mode, const bool openxr, const bool configured_pipelining) -> bool
+{
+    bool        pipelining = configured_pipelining;
+    const char* source     = "editor settings threading.frame_pipelining";
+    const char* const value = std::getenv("ERHE_FRAME_PIPELINING");
+    if (value != nullptr) {
+        const std::string_view text{value};
+        if (text == "0") {
+            pipelining = false;
+            source     = "ERHE_FRAME_PIPELINING=0";
+        } else if (text == "1") {
+            pipelining = true;
+            source     = "ERHE_FRAME_PIPELINING=1";
+        } else {
+            log_startup->warn("ERHE_FRAME_PIPELINING = '{}' ignored (expected 0 or 1)", text);
+        }
+    }
+    if (pipelining && (render_thread_mode != Render_thread_mode::dedicated_thread)) {
+        log_startup->info("Frame pipelining: on from {} overridden to off (render thread mode {})", source, to_string(render_thread_mode));
+        pipelining = false;
+        source     = "render thread mode";
+    }
+    if (pipelining && openxr) {
+        log_startup->info("Frame pipelining: on from {} overridden to off (OpenXR headset)", source);
+        pipelining = false;
+        source     = "OpenXR headset";
+    }
+    log_startup->info("Frame pipelining: {} (from {})", pipelining ? "on" : "off", source);
+    return pipelining;
+}
+
 } // anonymous namespace
 
 class Editor : public erhe::window::Input_event_handler
 {
 public:
     std::mutex m_mutex;
-    // Coarse wall-clock accumulators for the tick phases. Printed at info
+    // Coarse wall-clock accumulators for the frame phases. Printed at info
     // every 60 frames so a long-running frame time regression is visible
     // without enabling per-frame trace logs.
+    //
+    // m1_us / m2_us / render_us bracket frame_overlap_phase(),
+    // frame_prepare_phase() and frame_render_phase()
+    // (doc/editor/render_thread.md section 2.1); run()'s poll_events wait is
+    // outside frame() entirely.
     struct Phase_timing {
-        double wait_frame_us       {0.0};
-        double imgui_us            {0.0};
-        double begin_device_us     {0.0};
-        double begin_swap_us       {0.0};
-        double rendergraph_us      {0.0};
-        double end_frame_us        {0.0};
+        double frame_start_wait_us {0.0}; // Device::wait_for_frame_start + frame pacing waits (part of M1)
+        double slot_acquire_us     {0.0}; // Device::acquire_frame_slot alone (part of M2)
+        double m1_us               {0.0}; // M1 overlap (includes frame_start_wait_us)
+        double m2_us               {0.0}; // M2 prepare (includes slot_acquire_us); the sum of the m2_*_us terms below
+        double m2_start_us         {0.0}; // input dispatch, acquire_frame_slot
+        double m2_upload_us        {0.0}; // scene commit flush, asset and texture file load ticks
+        double m2_sim_us           {0.0}; // animations, pointer, OpenXR poll + actions, node fixed steps, physics write-back
+        double m2_imgui_us         {0.0}; // ImGui events, commands, MCP, network
+        double m3_us               {0.0}; // M3 ImGui phase: the ImGui windows and the settings autosave (main thread; after the kick with the ImGui overlap)
+        double draw_data_wait_us   {0.0}; // R: the ImGui host nodes' wait for M3's draw data (part of R)
+        double kick_latency_us     {0.0}; // handoff: kick() to R's first instruction (dedicated thread)
+        double join_latency_us     {0.0}; // handoff: R's end to join()'s return (dedicated thread)
+        double m2_update_us        {0.0}; // hover, operations, graphs, message bus, lightmap commit
+        double m2_scene_us         {0.0}; // mesh memory flush, layout, transforms, hotbar, draw list flush, material sets, lightmap prepare
+        double render_us           {0.0}; // R render
+        double swapchain_us        {0.0}; // wait_for_swapchain + begin_swapchain (both part of R)
+        double join_wait_us        {0.0}; // main thread blocked joining the previous frame's R (Render_thread::join() in M1, or in Render_thread::kick() with frame pipelining); R minus join_wait = overlapped R
         double full_tick_us        {0.0};
         unsigned int frame_count   {0};
     };
     Phase_timing m_phase_timing{};
 
-    void tick()
+    [[nodiscard]] static auto elapsed_us(
+        const std::chrono::steady_clock::time_point begin,
+        const std::chrono::steady_clock::time_point end
+    ) -> double
+    {
+        return std::chrono::duration<double, std::micro>{end - begin}.count();
+    }
+
+    void log_phase_timing(const std::chrono::steady_clock::time_point tick_begin)
+    {
+        const std::chrono::steady_clock::time_point tick_end = std::chrono::steady_clock::now();
+        m_phase_timing.full_tick_us += elapsed_us(tick_begin, tick_end);
+        ++m_phase_timing.frame_count;
+        constexpr unsigned int phase_timing_log_interval = 60;
+        if (m_phase_timing.frame_count < phase_timing_log_interval) {
+            return;
+        }
+        const double frame_count = static_cast<double>(m_phase_timing.frame_count);
+        const double m1_us       = m_phase_timing.m1_us        / frame_count;
+        const double m2_us       = m_phase_timing.m2_us        / frame_count;
+        const double render_us   = m_phase_timing.render_us    / frame_count;
+        const double full_us     = m_phase_timing.full_tick_us / frame_count;
+        log_frame->info(
+            "Phase timing (us/frame, avg of {} frames): M1 {:.1f} (frame_start_wait {:.1f}) M2 {:.1f} (slot_acquire {:.1f}; start {:.1f} upload {:.1f} sim {:.1f} imgui {:.1f} update {:.1f} scene {:.1f}) M3 {:.1f} R {:.1f} (swapchain {:.1f} draw_data_wait {:.1f}) join_wait {:.1f} handoff (kick {:.1f} join {:.1f}) full tick {:.1f}",
+            m_phase_timing.frame_count,
+            m1_us,
+            m_phase_timing.frame_start_wait_us / frame_count,
+            m2_us,
+            m_phase_timing.slot_acquire_us / frame_count,
+            m_phase_timing.m2_start_us  / frame_count,
+            m_phase_timing.m2_upload_us / frame_count,
+            m_phase_timing.m2_sim_us    / frame_count,
+            m_phase_timing.m2_imgui_us  / frame_count,
+            m_phase_timing.m2_update_us / frame_count,
+            m_phase_timing.m2_scene_us  / frame_count,
+            m_phase_timing.m3_us        / frame_count,
+            render_us,
+            m_phase_timing.swapchain_us / frame_count,
+            m_phase_timing.draw_data_wait_us / frame_count,
+            m_phase_timing.join_wait_us / frame_count,
+            m_phase_timing.kick_latency_us / frame_count,
+            m_phase_timing.join_latency_us / frame_count,
+            full_us
+        );
+        m_phase_timing = Phase_timing{};
+    }
+
+    // One frame is three phases (doc/editor/render_thread.md section 2.1):
+    // frame_overlap_phase() (M1) and frame_prepare_phase() (M2) on the main
+    // thread, then frame_render_phase() (R) through Render_thread::kick(),
+    // inline on this thread or on the dedicated render thread, and the
+    // ImGui phase (M3) before or, with the ImGui overlap, after the kick.
+    // Where R of the previous frame is joined depends on the schedule
+    // (doc/editor/editor.md "Frame phases and the render thread"):
+    //
+    // - serial (threading.frame_pipelining off, or no dedicated thread):
+    //   at the end of M1. R(N) runs while run() polls window events and
+    //   M1(N+1) advances the clock, waits for the OpenXR frame and steps
+    //   physics; M2 and R never overlap.
+    // - pipelined: in Render_thread::kick() of the next frame. M1, M2 (and
+    //   M3) of frame N+1 run while R(N) renders; kick(N+1) waits for R(N),
+    //   then hands over N+1. What the join publishes (the last rendered
+    //   frame, the sky LUT readiness, the frame log entries, the phase
+    //   timings) reaches the main thread one frame later than in the
+    //   serial schedule.
+    //
+    // m_frame_packet carries the per-frame data from M1 / M2 to R; R works
+    // from Render_thread's copy, so the next frame rewrites it while R(N)
+    // runs.
+    //
+    // m_in_tick is true while this function runs: from M1 start to the kick
+    // (and M3 after it).
+    void frame()
     {
         m_in_tick.store(true);
         std::lock_guard<std::mutex> lock{m_mutex};
+        Frame_packet& packet = m_frame_packet;
+        const std::chrono::steady_clock::time_point frame_begin = std::chrono::steady_clock::now();
 
         ERHE_PROFILE_FUNCTION();
-        m_frame_log_window->on_frame_begin();
 
-        // Record which thread runs tick() so the watchdog can attribute the
-        // stuck breadcrumb to this thread (worker threads also set breadcrumbs
-        // during init). Set once; the lock is taken only on the first tick.
-        if (m_tick_thread_hash == 0) {
-            const std::size_t tick_thread_hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
+        // Record which threads run the frame phases so the watchdog can
+        // attribute the newest breadcrumb of each (worker threads also set
+        // breadcrumbs). The roles are published before the first frame
+        // (run(), Render_thread); set once, the lock is taken only on the
+        // first frame.
+        if (!m_watchdog_threads_known) {
+            const std::size_t main_thread_hash   = std::hash<std::thread::id>{}(erhe::utility::Thread_roles::get_main_thread());
+            const std::size_t render_thread_hash = std::hash<std::thread::id>{}(erhe::utility::Thread_roles::get_render_thread());
             std::lock_guard<std::mutex> watchdog_lock{m_watchdog_mutex};
-            m_tick_thread_hash = tick_thread_hash;
+            m_main_thread_hash       = main_thread_hash;
+            m_render_thread_hash     = render_thread_hash;
+            m_watchdog_threads_known = true;
+        }
+
+        frame_overlap_phase(packet);
+
+        // Serial schedule: M2 writes what R reads, so R of the previous
+        // frame ends first. The join wait lies inside this frame's CPU slot
+        // (opened by wait_for_frame_start in M1) and is involuntary: it is
+        // stamped as the record's join_wait pair, which cpu_service_time()
+        // subtracts (doc/frame_pacing/inputs.md section 3.2).
+        if (!m_frame_pipelining && m_frame_outstanding) {
+            erhe::log::set_breadcrumb("tick: join previous frame");
+            const Frame_result joined_result = join_outstanding_frame();
+            record_join_wait(packet.device_frame_id, joined_result);
+            if (joined_result.no_swapchain) {
+                sleep_after_no_swapchain();
+            }
+        }
+
+        frame_prepare_phase(packet);
+
+        // The main thread leaves M2 before the kick; frame_render_phase()
+        // sets the render role's phase itself, on whichever thread runs it
+        // (erhe::utility::Thread_roles: in inline mode the main thread
+        // holds both roles). With the ImGui overlap (dedicated render
+        // thread, threading.imgui_overlap) the ImGui phase (M3) draws the
+        // editor windows after the kick, while R renders this frame's
+        // scene; R's ImGui host nodes wait for the draw data it publishes.
+        // Without it M3 runs before the kick (doc/editor/render_thread.md
+        // section 2.5).
+        set_frame_phase(erhe::utility::Frame_phase::none);
+        if (m_imgui_overlap) {
+            kick_frame(packet);
+            frame_imgui_phase(packet);
+            m_render_thread->publish_draw_data(packet.frame_number);
+        } else {
+            frame_imgui_phase(packet);
+            m_render_thread->publish_draw_data(packet.frame_number);
+            kick_frame(packet);
+        }
+
+        log_phase_timing(frame_begin);
+        m_in_tick.store(false);
+    }
+
+    // Main thread: hands the packet to the render phase. With frame
+    // pipelining the kick first joins the frame kicked by the previous
+    // frame() (Render_thread::kick() waits for its R), so that frame's
+    // result is accounted here, one frame later than the serial schedule's
+    // join at the end of M1; the wait lies inside this frame's CPU slot and
+    // is stamped as its join_wait pair.
+    void kick_frame(const Frame_packet& packet)
+    {
+        erhe::log::set_breadcrumb("tick: kick");
+        const std::optional<Frame_result> joined = m_render_thread->kick(packet);
+        if (joined.has_value()) {
+            // The serial schedule joined in M1 (nothing left to join here).
+            ERHE_VERIFY(m_frame_pipelining);
+            ERHE_VERIFY(m_frame_outstanding);
+            m_frame_outstanding = false;
+            on_frame_joined(joined.value());
+            record_join_wait(packet.device_frame_id, joined.value());
+        }
+        ERHE_VERIFY(!m_frame_outstanding);
+        m_frame_outstanding = true;
+        if (joined.has_value() && joined.value().no_swapchain) {
+            sleep_after_no_swapchain();
+        }
+    }
+
+    // Main thread: the join wait of a frame as the join_wait record pair of
+    // the frame whose CPU slot it lies in (frame_id: the frame being
+    // prepared).
+    void record_join_wait(const uint64_t frame_id, const Frame_result& joined_result)
+    {
+        const auto to_recorder_time = [](const std::chrono::steady_clock::time_point time_point) -> double {
+            // Frame_time_recorder::now() is steady_clock seconds since its epoch.
+            return std::chrono::duration<double>{time_point.time_since_epoch()}.count();
+        };
+        erhe::frame_pacing::Frame_time_recorder& recorder = m_graphics_device->get_frame_time_recorder();
+        recorder.set(static_cast<std::int64_t>(frame_id), &erhe::frame_pacing::Frame_time_record::join_wait_begin, to_recorder_time(joined_result.join_wait_begin));
+        recorder.set(static_cast<std::int64_t>(frame_id), &erhe::frame_pacing::Frame_time_record::join_wait_end,   to_recorder_time(joined_result.join_wait_end));
+    }
+
+    // The joined frame found no swapchain image -- typical on Android while
+    // the surface is between background and foreground. Its render phase
+    // ended the device frame without presenting; sleep a short interval so
+    // the loop does not burn CPU spinning on a not-yet-ready surface
+    // (doc/editor/render_thread.md section 2.4).
+    void sleep_after_no_swapchain()
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+
+    // M3, the ImGui phase (main thread, Frame_phase::m3_imgui): the ImGui
+    // windows of every host draw, then the editor settings autosave. It
+    // reads the live editor state the windows own and the render settings
+    // copies, records no GPU work (current_command_buffer is null;
+    // Thread_roles::assert_command_recording_allowed refuses the main
+    // thread in this phase) and defers its render-side work
+    // (doc/editor/coding_rules.md "ImGui-time work"). The draw data it
+    // leaves behind is published to R by the caller.
+    void frame_imgui_phase(const Frame_packet& packet)
+    {
+        ERHE_PROFILE_FUNCTION();
+        const std::chrono::steady_clock::time_point m3_begin = std::chrono::steady_clock::now();
+        set_frame_phase(erhe::utility::Frame_phase::m3_imgui);
+        ERHE_VERIFY(m_app_context.current_command_buffer == nullptr);
+
+        m_hover_tool->reset_item_tree_hover();
+
+        erhe::log::set_breadcrumb("tick: draw_imgui_windows");
+        m_imgui_windows->begin_frame(packet.device_frame_id);
+        m_imgui_windows->draw_imgui_windows();
+        m_imgui_windows->end_frame();
+
+        // Autosave editor settings when an edit site marked them dirty
+        // (Editor_settings_store::touch() / Graphics_settings::
+        // mark_presets_dirty()); a bool test per file otherwise. Defer while
+        // a mouse button is held so dragging a slider results in a single
+        // write when the drag ends.
+        {
+            bool any_mouse_button_down = false;
+            for (const bool button_down : m_input_state->mouse_button) {
+                any_mouse_button_down = any_mouse_button_down || button_down;
+            }
+            m_app_settings.update(!any_mouse_button_down);
+        }
+
+        set_frame_phase(erhe::utility::Frame_phase::none);
+        m_phase_timing.m3_us += elapsed_us(m3_begin, std::chrono::steady_clock::now());
+    }
+
+    // Main thread: waits for the render phase kicked by the previous frame
+    // (nothing when that frame kicked none: the first frame) and accounts
+    // its Frame_result (on_frame_joined()). Returns the joined result (a
+    // default one when nothing was outstanding). Called at the end of M1 in
+    // the serial schedule, after the frame loop ends (run()) and by ~Editor
+    // before the render thread is stopped.
+    auto join_outstanding_frame() -> Frame_result
+    {
+        if (!m_frame_outstanding) {
+            return Frame_result{};
+        }
+        const Frame_result result = m_render_thread->join();
+        m_frame_outstanding = false;
+        on_frame_joined(result);
+        return result;
+    }
+
+    // App_context::join_render_phase: with frame pipelining, joins the frame
+    // still in flight from the prepare phase (or outside a frame), for the
+    // standalone submits that must follow its recording and submits. Not
+    // from the ImGui phase: with the ImGui overlap it runs after the kick,
+    // and the frame in flight waits for its draw data.
+    void join_render_phase()
+    {
+        if (!m_frame_pipelining || !m_frame_outstanding) {
+            return;
+        }
+        erhe::utility::Thread_roles::assert_main_thread();
+        const erhe::utility::Frame_phase phase = erhe::utility::Thread_roles::get_frame_phase();
+        ERHE_VERIFY((phase == erhe::utility::Frame_phase::m2_prepare) || (phase == erhe::utility::Frame_phase::none));
+        erhe::log::set_breadcrumb("join render phase (standalone submit)");
+        static_cast<void>(join_outstanding_frame());
+    }
+
+    // Main thread, at the join of a frame (join_outstanding_frame(), or the
+    // kick that joined it with frame pipelining): adds its Frame_result
+    // into the phase timing and publishes what its render phase left for
+    // the main thread.
+    void on_frame_joined(const Frame_result& result)
+    {
+        m_phase_timing.join_wait_us += elapsed_us(result.join_wait_begin, result.join_wait_end);
+
+        // What the joined render phase wrote for the main thread is read as
+        // the result of its frame from here on (Render_frame_results), and
+        // the sky LUT readiness it saw gates the lightmap bake's sky term.
+        m_app_context.last_rendered_frame_index = result.device_frame_id;
+        m_sky_luts_ready                        = result.sky_luts_ready;
+
+        m_phase_timing.render_us         += result.render_us;
+        m_phase_timing.swapchain_us      += result.wait_for_swapchain_us + result.begin_swapchain_us;
+        m_phase_timing.draw_data_wait_us += result.draw_data_wait_us;
+        m_phase_timing.kick_latency_us   += result.kick_latency_us;
+        m_phase_timing.join_latency_us   += result.join_latency_us;
+
+        // The frame's log entries (both threads logged into the frame store)
+        // become the Frame log window's entries here, on the main thread,
+        // once the render phase that logged last has ended; the window
+        // reads them in its imgui() (doc/editor/render_thread.md section 2.6).
+        m_frame_log_window->on_frame_end();
+    }
+
+    // Main thread: writes the main role's frame phase to
+    // erhe::utility::Thread_roles and mirrors it for the watchdog thread
+    // under m_watchdog_mutex, since Thread_roles is unsynchronized by
+    // design. In inline mode the main thread holds the render role too and
+    // Thread_roles writes both phases, so both mirrors follow.
+    void set_frame_phase(const erhe::utility::Frame_phase phase)
+    {
+        erhe::utility::Thread_roles::set_frame_phase(phase);
+        std::lock_guard<std::mutex> watchdog_lock{m_watchdog_mutex};
+        m_watchdog_main_frame_phase = phase;
+        if (m_render_thread_mode == Render_thread_mode::inline_main_thread) {
+            m_watchdog_render_frame_phase = phase;
+        }
+    }
+
+    // The thread running frame_render_phase() (the render thread, or the
+    // main thread in inline mode): writes the render role's frame phase
+    // and mirrors it for the watchdog, as set_frame_phase() does for the
+    // main role.
+    void set_render_frame_phase(const erhe::utility::Frame_phase phase)
+    {
+        erhe::utility::Thread_roles::set_frame_phase(phase);
+        std::lock_guard<std::mutex> watchdog_lock{m_watchdog_mutex};
+        m_watchdog_render_frame_phase = phase;
+        if (m_render_thread_mode == Render_thread_mode::inline_main_thread) {
+            m_watchdog_main_frame_phase = phase;
+        }
+    }
+
+    // Whether this frame enforces the pacer decision of the given tier:
+    // graphics config frame_pacing_enforce=false falls back to pure
+    // observer mode (the kill switch); skipped when nothing is being
+    // presented (hidden window, OpenXR without desktop swapchain): presents
+    // stop, so the waits could only time out.
+    [[nodiscard]] auto is_frame_pacing_enforced(const erhe::graphics::Frame_pacing_tier tier) const -> bool
+    {
+        return
+            m_graphics_device->get_graphics_config().frame_pacing_enforce &&
+            !m_app_context.OpenXR &&
+            (m_frame_activity != Frame_activity::hidden) &&
+            (m_graphics_device->get_frame_pacing_tier() == tier);
+    }
+
+    // M1: the pacing half of the device frame start, the analogue of
+    // xrWaitFrame (doc/editor/render_thread.md section 2.3). Runs right after
+    // Device::wait_for_frame_start() opened this frame's time record and
+    // before Time::prepare_update, while the render phase of the previous
+    // frame may still submit and present: the frame time recorder is
+    // locked, and what R needs from the decision (the target present time,
+    // the holdback deadline and the present-wait id) travels in the packet.
+    // Returns the FR4 display
+    // advance for this frame's prepare_update; < 0 = wall-clock fallback.
+    [[nodiscard]] auto frame_start_pacing(Frame_packet& packet) -> int64_t
+    {
+        ERHE_PROFILE_SCOPE("frame pacing");
+
+        packet.present_target_time = 0.0;
+        packet.present_hold_until  = 0.0;
+        packet.present_wait_id     = -1;
+        int64_t display_advance_ns = -1;
+
+        // Frame pacing observer (P2.1): feed the pacer with the frame time
+        // records and log its decisions. The decision is for the frame just
+        // started (the recorder's latest frame id).
+        erhe::frame_pacing::Frame_time_recorder& recorder = m_graphics_device->get_frame_time_recorder();
+        m_frame_pacing_observer.tick(
+            recorder,
+            erhe::frame_pacing::Frame_time_recorder::now(),
+            m_graphics_device->get_display_refresh_duration_seconds()
+        );
+        if (log_frame_pacing->level() <= spdlog::level::debug) {
+            std::string pacing_log_line;
+            while (m_frame_pacing_observer.consume_log_line(pacing_log_line)) {
+                log_frame_pacing->debug("{}", pacing_log_line);
+            }
+        }
+
+        const std::int64_t frame_id = static_cast<std::int64_t>(packet.device_frame_id);
+        if (is_frame_pacing_enforced(erhe::graphics::Frame_pacing_tier::full)) {
+            // Frame pacing actuation (steps P2.2 + P2.3), before per-frame work:
+            // 1. release gating (FR2): high-resolution timer wait until the
+            //    pacer's release time (P0.5: the waitable timer is the only wait
+            //    mode with usable wake error; its p99 0.59 ms sits inside the
+            //    pacer's 1 ms guard), stamped as the pacer_wait record pair (an
+            //    involuntary wait, subtracted from cpu_service_time);
+            // 2. target present time (FR3) and holdback deadline: carried in
+            //    the packet to the render phase, which hands them to the
+            //    backend right before its submits;
+            // 3. FR4 display advance (below);
+            // 4. present-wait clamp (FR5): the frame id to wait for travels
+            //    in the packet; the render phase waits before its swapchain
+            //    wait (present_wait_clamp).
+            // m_frame_activity, which decides the enforcement, is
+            // main-thread state, so the render phase reads only the packet.
+            const erhe::frame_pacing::Schedule_decision& pacing_decision = m_frame_pacing_observer.get_last_decision();
+            double release_wait_s = pacing_decision.release_time - erhe::frame_pacing::Frame_time_recorder::now();
+            if (release_wait_s > 0.0) {
+                // A sane release sits at most one latency budget ahead (C14
+                // measured max ~15 ms); a wait this long means the schedule
+                // lost contact with reality - cap it so the app never stalls
+                // on a broken schedule (mirrors the clamp's 100 ms bound).
+                constexpr double s_max_release_wait_s = 0.1;
+                if (release_wait_s > s_max_release_wait_s) {
+                    log_frame_pacing->warn(
+                        "release gate capped: frame {} release {:.1f} ms ahead",
+                        pacing_decision.frame_id, release_wait_s * 1000.0
+                    );
+                    release_wait_s = s_max_release_wait_s;
+                }
+                recorder.set(pacing_decision.frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_begin, erhe::frame_pacing::Frame_time_recorder::now());
+                m_pacer_release_timer.wait_for(release_wait_s);
+                recorder.set(pacing_decision.frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_end, erhe::frame_pacing::Frame_time_recorder::now());
+            }
+            if ((pacing_decision.target_time > 0.0) && (pacing_decision.frame_id == frame_id)) {
+                packet.present_target_time = pacing_decision.target_time;
+                packet.present_hold_until  = pacing_decision.hold_until;
+            }
+            if ((pacing_decision.wait_id >= 0) && (pacing_decision.frame_id == frame_id)) {
+                packet.present_wait_id = pacing_decision.wait_id;
+            }
+            // FR4 routing (P2.4): advance the simulation clock by the delta
+            // between successive predicted display times, so the state
+            // rendered into this frame is sampled at the time the frame will
+            // be SHOWN, not the (jittery) time it is produced. The decision
+            // is for this frame, so the advance applies to the frame it was
+            // computed for. Predicted display slots are strictly increasing;
+            // a delta outside (0, 0.25 s) means the schedule re-anchored
+            // across a gap (cadence change, swapchain recreation) - fall back
+            // to wall clock for that frame. FR4 prediction accuracy is
+            // tracked by the observer summary (achieved vs predicted, median
+            // 23 us steady state).
+            if ((pacing_decision.predicted_display > 0.0) && (pacing_decision.frame_id == frame_id)) {
+                if (m_last_predicted_display_time > 0.0) {
+                    const double display_delta_s = pacing_decision.predicted_display - m_last_predicted_display_time;
+                    if ((display_delta_s > 0.0) && (display_delta_s < 0.25)) {
+                        display_advance_ns = static_cast<int64_t>(std::llround(display_delta_s * 1e9));
+                    }
+                }
+                m_last_predicted_display_time = pacing_decision.predicted_display;
+            } else {
+                m_last_predicted_display_time = 0.0;
+            }
+        } else if (is_frame_pacing_enforced(erhe::graphics::Frame_pacing_tier::slop_servo)) {
+            // Tier S (P4.1/P4.2): slop-servo fallback. No display-time
+            // sensing, no grid, no cadence - measure the involuntary
+            // blocking ("slop") the loop experienced since the previous
+            // tick, servo a sleep before the simulation, and let the
+            // plain-FIFO queue do the rest. Plain FIFO backpressure blocks
+            // inside vkQueuePresentKHR / vkAcquireNextImageKHR. The previous
+            // frame's render phase may still run here, so the slop comes
+            // from records the main thread has seen complete: the previous
+            // frame's slot fence wait (its M2) and the swapchain acquire and
+            // present-call blocking of the frame before it (joined). The
+            // Frame_pacer observer still ticks above for records/telemetry,
+            // but its decisions are not enforced in this tier.
+            const double now_seconds = erhe::frame_pacing::Frame_time_recorder::now();
+            const double refresh_period = m_graphics_device->get_display_refresh_duration_seconds();
+            if (refresh_period > 0.0) {
+                m_slop_servo.set_refresh_period(refresh_period);
+            }
+            erhe::frame_pacing::Frame_time_record previous_record{};
+            erhe::frame_pacing::Frame_time_record joined_record{};
+            double slop = 0.0;
+            if (recorder.get(frame_id - 1, previous_record)) {
+                slop += previous_record.fence_wait_duration;
+            }
+            if (recorder.get(frame_id - 2, joined_record)) {
+                slop += std::max(0.0, joined_record.acquire_end - joined_record.acquire_begin);
+                slop += std::max(0.0, joined_record.present_return_time - joined_record.present_request_time);
+            }
+            if (m_slop_servo_last_tick_time > 0.0) {
+                m_slop_servo.update(slop, now_seconds - m_slop_servo_last_tick_time);
+            }
+            m_slop_servo_last_tick_time = now_seconds;
+            const double sleep_seconds = m_slop_servo.get_sleep();
+            if (sleep_seconds > 0.0) {
+                recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_begin, erhe::frame_pacing::Frame_time_recorder::now());
+                m_pacer_release_timer.wait_for(sleep_seconds);
+                recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_end, erhe::frame_pacing::Frame_time_recorder::now());
+            }
+            m_last_predicted_display_time = 0.0;
+        } else {
+            m_slop_servo_last_tick_time   = 0.0;
+            m_last_predicted_display_time = 0.0;
+        }
+        if (m_frame_pacing_observer.get_pacer() != nullptr) {
+            // With a pacer the observer decided for the frame just started:
+            // the decision's frame id is the frame this advance applies to.
+            log_frame_pacing->debug(
+                "FR4 display advance {} ns computed for frame {}, applied to prepare_update of frame {}",
+                display_advance_ns, m_frame_pacing_observer.get_last_decision().frame_id, frame_id
+            );
+        }
+        return display_advance_ns;
+    }
+
+    // M1, after the pacing waits: frame pacing verification UI
+    // (doc/frame_pacing/user_interface.md). Collects this frame's decision
+    // and records into the window's history, then runs the simulated
+    // workload knob. The workload runs here so it lands inside the measured
+    // CPU slot after the pacer waits - the records count it as CPU service
+    // time and the pacer sees it as real load (U2).
+    void frame_pacing_window_update()
+    {
+        m_frame_pacing_window->collect(
+            m_graphics_device->get_frame_time_recorder(),
+            m_frame_pacing_observer,
+            m_graphics_device->get_display_refresh_duration_seconds(),
+            erhe::frame_pacing::Frame_time_recorder::now()
+        );
+        m_frame_pacing_window->run_simulated_workload();
+    }
+
+    // R: the FR5 present-wait clamp (step P2.2) with the decision M1 made
+    // for this frame (packet.present_wait_id, -1 when frame pacing is not
+    // enforced or the decision has no wait): block until that frame has been
+    // displayed, bounding pending presented images to Q* + F. Stamped as the
+    // present_wait record pair (an involuntary wait; the recorder is
+    // thread-safe). Runs in R, before the swapchain wait, because
+    // vkWaitForPresentKHR is externally synchronized on the swapchain R
+    // acquires and presents (doc/editor/render_thread.md section 2.4).
+    void present_wait_clamp(const Frame_packet& packet)
+    {
+        if (packet.present_wait_id < 0) {
+            return;
+        }
+        ERHE_PROFILE_SCOPE("present-wait clamp");
+        const std::int64_t frame_id = static_cast<std::int64_t>(packet.device_frame_id);
+        erhe::frame_pacing::Frame_time_recorder& recorder = m_graphics_device->get_frame_time_recorder();
+        recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::present_wait_begin, erhe::frame_pacing::Frame_time_recorder::now());
+        const erhe::graphics::Present_wait_result wait_result = m_graphics_device->wait_for_displayed_frame(
+            packet.present_wait_id,
+            100'000'000 // 100 ms bound; a timeout is a logged no-op, not an error
+        );
+        recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::present_wait_end, erhe::frame_pacing::Frame_time_recorder::now());
+        if (wait_result == erhe::graphics::Present_wait_result::timeout) {
+            log_frame_pacing->warn(
+                "present-wait clamp timed out: frame {} wait_id {}",
+                frame_id, packet.present_wait_id
+            );
+        }
+    }
+
+    // M1 overlap: the device frame start and frame pacing, the simulation
+    // clock, xrWaitFrame, and the physics
+    // simulation fixed steps. Runs while R of the previous frame may still
+    // run on the render thread, so it writes nothing R reads: what R needs
+    // from here travels in the packet (frame number, host time, the
+    // Frame_timing R begins the OpenXR frame with), and the node flag edits
+    // of the body activation callbacks are queued for M2. M2 iterates the
+    // same per-frame step list again for the node-writing fixed-step
+    // updates.
+    void frame_overlap_phase(Frame_packet& packet)
+    {
+        ERHE_PROFILE_FUNCTION();
+        set_frame_phase(erhe::utility::Frame_phase::m1_overlap);
+        const std::chrono::steady_clock::time_point m1_begin = std::chrono::steady_clock::now();
+
+        // No command buffer is published during M1: recording here would
+        // race the render phase once it runs on its own thread
+        // (doc/editor/render_thread.md section 2.3).
+        ERHE_VERIFY(m_app_context.current_command_buffer == nullptr);
+
+        // The device frame start, in the position of xrWaitFrame
+        // (doc/editor/render_thread.md section 2.3): opens this frame's time
+        // record and returns its device frame id, then the frame pacer
+        // decides this frame's schedule and waits for its release time. The
+        // FR4 display advance it computes feeds this frame's
+        // Time::prepare_update. The resource half (acquire_frame_slot) is in
+        // M2, after the join.
+        erhe::log::set_breadcrumb("tick: wait_for_frame_start");
+        const std::chrono::steady_clock::time_point frame_start_begin = std::chrono::steady_clock::now();
+        packet.device_frame_id    = m_graphics_device->wait_for_frame_start();
+        packet.display_advance_ns = frame_start_pacing(packet);
+        m_phase_timing.frame_start_wait_us += elapsed_us(frame_start_begin, std::chrono::steady_clock::now());
+        frame_pacing_window_update();
+
+        // The simulation clock advances next, so the fixed step count is
+        // known here; < 0 display advance = wall-clock fallback.
+        m_time->prepare_update(m_frame_activity != Frame_activity::hidden, packet.display_advance_ns);
+        packet.frame_number              = m_time->get_frame_number();
+        packet.frame_host_system_time_ns = m_time->get_host_system_time_ns();
+
+        packet.headset_frame_timing = erhe::xr::Frame_timing{};
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_app_context.OpenXR) {
+            ERHE_PROFILE_SCOPE("OpenXR wait frame");
+            // xrPollEvent is M2 (doc/editor/render_thread.md section 2.2):
+            // the session state it applies is read by R's frame functions.
+            // wait_frame() does not wait when the previous M2's poll failed.
+            erhe::log::set_breadcrumb("tick: xr wait_frame");
+            packet.headset_frame_timing = m_headset_view->wait_frame();
+            if (!packet.headset_frame_timing.wait_ok) {
+                ERHE_PROFILE_SCOPE("OpenXR sleep");
+                // Throttle loop since xrWaitFrame won't be called.
+                std::this_thread::sleep_for(std::chrono::milliseconds{250});
+            }
+        }
+#endif
+
+        erhe::log::set_breadcrumb("tick: fixed_step (physics)");
+        m_app_scenes->before_physics_simulation_steps();
+
+        packet.host_system_dt_s    = 0.0f;
+        packet.host_system_time_ns = 0;
+        m_time->for_each_fixed_step(
+            [this, &packet](const Time_context& time_context) {
+                ERHE_PROFILE_SCOPE("fixed step physics simulation");
+                packet.host_system_dt_s += time_context.host_system_dt_s;
+                packet.host_system_time_ns = time_context.host_system_time_ns;
+                m_app_scenes->update_physics_simulation_fixed_step(time_context);
+            }
+        );
+
+        m_phase_timing.m1_us += elapsed_us(m1_begin, std::chrono::steady_clock::now());
+    }
+
+    // M2 prepare: everything that precedes the rendergraph and writes state
+    // the render phase reads.
+    void frame_prepare_phase(Frame_packet& packet)
+    {
+        ERHE_PROFILE_FUNCTION();
+        set_frame_phase(erhe::utility::Frame_phase::m2_prepare);
+        const std::chrono::steady_clock::time_point m2_begin = std::chrono::steady_clock::now();
+        // The M2 sub-terms of the phase timing log: each call closes the
+        // term that began at the previous call (or at m2_begin).
+        std::chrono::steady_clock::time_point m2_mark = m2_begin;
+        auto take_m2_term = [&m2_mark](double& accumulator) {
+            const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+            accumulator += elapsed_us(m2_mark, now);
+            m2_mark = now;
+        };
+
+        // Input event dispatch: the events run()'s last poll_events queued.
+        // Once per poll: a live-resize redraw frame, run from inside
+        // poll_events, finds the previous poll's events, which were
+        // dispatched already. Before Device::acquire_frame_slot, as when
+        // run() dispatched them before the frame.
+        erhe::log::set_breadcrumb("tick: dispatch input events");
+        if (m_input_events_pending) {
+            ERHE_PROFILE_SCOPE("dispatch events");
+            m_input_events_pending = false;
+            std::vector<erhe::window::Input_event>& input_events = m_window->get_input_events();
+            for (erhe::window::Input_event& input_event : input_events) {
+                dispatch_input_event(input_event);
+            }
+            if (m_window_resize_event.has_value()) {
+                m_request_resize_pending.store(true);
+                m_window_resize_event.reset();
+                m_last_window_width  = m_window->get_width();
+                m_last_window_height = m_window->get_height();
+            }
+#if defined(ERHE_OS_ANDROID)
+            // Foreground / device-reset arrived while we were
+            // suspended. The previous VkSurfaceKHR is bound to a
+            // now-detached ANativeWindow; rebuild the surface and
+            // swapchain over the freshly-bound ANativeWindow that
+            // SDL has wired into Context_window. Surface_impl::
+            // recreate_for_new_window keeps the Swapchain C++
+            // object identity stable so cached raw Swapchain*
+            // pointers in Render_pass_impl (and therefore in
+            // Window_imgui_host::m_render_pass) stay valid; the
+            // pipeline cache and bindless texture heap are keyed
+            // on format / hold no swapchain-derived handles, so
+            // they survive the rebuild without an explicit
+            // invalidation pass. m_request_resize_pending is also
+            // set so update_swapchain re-queries the new surface
+            // extent and rebuilds the underlying VkSwapchainKHR
+            // on the next frame.
+            if (m_window->consume_swapchain_dirty()) {
+                // The swapchain belongs to the render phase: with frame
+                // pipelining the previous frame's may still present into
+                // it, so it is joined first (a rare event; the kick of this
+                // frame then finds nothing outstanding).
+                join_render_phase();
+                if (!m_graphics_device->recreate_surface_for_new_window()) {
+                    log_startup->warn("Surface recreate failed; retrying next frame");
+                }
+                m_request_resize_pending.store(true);
+                m_last_window_width  = m_window->get_width();
+                m_last_window_height = m_window->get_height();
+            }
+#endif
         }
 
         // Breadcrumbs mark the current main-loop phase so the watchdog can
         // report where a spinning tick is stuck. See
         // doc/erhe/geogram.md.
-        erhe::log::set_breadcrumb("tick: wait_frame");
+        //
+        // The resource half of the device frame start (doc/editor/
+        // render_thread.md section 2.3): the timeline wait for the slot of
+        // this frame and its command pool resets. The slot's previous user,
+        // two frames back, was joined by the previous kick (with frame
+        // pipelining the previous frame's render phase may still be
+        // running, in the other slot); from here on the main role's device
+        // frame index is the frame M1 started.
+        erhe::log::set_breadcrumb("tick: acquire_frame_slot");
+        const std::chrono::steady_clock::time_point slot_acquire_begin = std::chrono::steady_clock::now();
+        const bool acquire_ok = m_graphics_device->acquire_frame_slot(packet.device_frame_id);
+        ERHE_VERIFY(acquire_ok);
+        m_phase_timing.slot_acquire_us += elapsed_us(slot_acquire_begin, std::chrono::steady_clock::now());
 
-        // log_frame->trace("tick() begin");
-        const bool wait_ok = m_graphics_device->wait_frame();
-        ERHE_VERIFY(wait_ok);
+        packet.upload_command_buffer = nullptr;
 
-        int64_t display_advance_ns = -1; // FR4 routing (P2.4); < 0 = wall-clock fallback
-        {
-            // Frame pacing observer (P2.1): feed the pacer with the frame time
-            // records and log its would-be decisions. Enforces nothing.
-            ERHE_PROFILE_SCOPE("frame pacing")
-            m_frame_pacing_observer.tick(
-                m_graphics_device->get_frame_time_recorder(),
-                erhe::frame_pacing::Frame_time_recorder::now(),
-                m_graphics_device->get_display_refresh_duration_seconds()
-            );
-            if (log_frame_pacing->level() <= spdlog::level::debug) {
-                std::string pacing_log_line;
-                while (m_frame_pacing_observer.consume_log_line(pacing_log_line)) {
-                    log_frame_pacing->debug("{}", pacing_log_line);
-                }
-            }
-
-            // Frame pacing actuation (steps P2.2 + P2.3): before per-frame work,
-            // 1. present-wait clamp (FR5): block until frame (frame_id - 1 - Q*)
-            //    has been displayed, bounding pending presented images to Q* + F;
-            // 2. release gating (FR2): high-resolution timer wait until the
-            //    pacer's release time (P0.5: the waitable timer is the only wait
-            //    mode with usable wake error; its p99 0.59 ms sits inside the
-            //    pacer's 1 ms guard);
-            // 3. target present time (FR3): hand the pacer's target to the
-            //    backend for this frame's vkQueuePresentKHR timing chain.
-            // One pacer_wait record pair spans clamp + timer: both are
-            // involuntary waits, and cpu_service_time subtracts the span.
-            // Graphics config frame_pacing_enforce=false falls back to pure
-            // observer mode (the kill switch). Skipped when nothing is being
-            // presented (hidden window, OpenXR without desktop swapchain):
-            // presents stop, so the waits could only time out.
-            const erhe::graphics::Frame_pacing_tier frame_pacing_tier = m_graphics_device->get_frame_pacing_tier();
-            if (m_graphics_device->get_graphics_config().frame_pacing_enforce &&
-                !m_app_context.OpenXR &&
-                (m_frame_activity != Frame_activity::hidden) &&
-                (frame_pacing_tier == erhe::graphics::Frame_pacing_tier::full))
-            {
-                const erhe::frame_pacing::Schedule_decision& pacing_decision = m_frame_pacing_observer.get_last_decision();
-                const double release_lead_s =
-                    pacing_decision.release_time - erhe::frame_pacing::Frame_time_recorder::now();
-                if ((pacing_decision.wait_id >= 0) || (release_lead_s > 0.0)) {
-                    erhe::frame_pacing::Frame_time_record* const pacing_record =
-                        m_graphics_device->get_frame_time_recorder().find(pacing_decision.frame_id);
-                    if (pacing_record != nullptr) {
-                        pacing_record->pacer_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
-                    }
-                    if (pacing_decision.wait_id >= 0) {
-                        const erhe::graphics::Present_wait_result wait_result = m_graphics_device->wait_for_displayed_frame(
-                            pacing_decision.wait_id,
-                            100'000'000 // 100 ms bound; a timeout is a logged no-op, not an error
-                        );
-                        if (wait_result == erhe::graphics::Present_wait_result::timeout) {
-                            log_frame_pacing->warn(
-                                "present-wait clamp timed out: frame {} wait_id {}",
-                                pacing_decision.frame_id, pacing_decision.wait_id
-                            );
-                        }
-                    }
-                    double release_wait_s =
-                        pacing_decision.release_time - erhe::frame_pacing::Frame_time_recorder::now();
-                    // A sane release sits at most one latency budget ahead (C14
-                    // measured max ~15 ms); a wait this long means the schedule
-                    // lost contact with reality - cap it so the app never stalls
-                    // on a broken schedule (mirrors the clamp's 100 ms bound).
-                    constexpr double s_max_release_wait_s = 0.1;
-                    if (release_wait_s > s_max_release_wait_s) {
-                        log_frame_pacing->warn(
-                            "release gate capped: frame {} release {:.1f} ms ahead",
-                            pacing_decision.frame_id, release_wait_s * 1000.0
-                        );
-                        release_wait_s = s_max_release_wait_s;
-                    }
-                    m_pacer_release_timer.wait_for(release_wait_s);
-                    if (pacing_record != nullptr) {
-                        pacing_record->pacer_wait_end = erhe::frame_pacing::Frame_time_recorder::now();
-                    }
-                }
-                if (pacing_decision.target_time > 0.0) {
-                    m_graphics_device->set_present_target_time(
-                        pacing_decision.frame_id,
-                        pacing_decision.target_time,
-                        pacing_decision.hold_until
-                    );
-                }
-                // FR4 routing (P2.4): advance the simulation clock by the delta
-                // between successive predicted display times, so the state
-                // rendered into this frame is sampled at the time the frame will
-                // be SHOWN, not the (jittery) time it is produced. Predicted
-                // display slots are strictly increasing; a delta outside
-                // (0, 0.25 s) means the schedule re-anchored across a gap
-                // (cadence change, swapchain recreation) - fall back to wall
-                // clock for that frame. FR4 prediction accuracy is tracked by
-                // the observer summary (achieved vs predicted, median 23 us
-                // steady state).
-                if (pacing_decision.predicted_display > 0.0) {
-                    if (m_last_predicted_display_time > 0.0) {
-                        const double display_delta_s = pacing_decision.predicted_display - m_last_predicted_display_time;
-                        if ((display_delta_s > 0.0) && (display_delta_s < 0.25)) {
-                            display_advance_ns = static_cast<int64_t>(std::llround(display_delta_s * 1e9));
-                        }
-                    }
-                    m_last_predicted_display_time = pacing_decision.predicted_display;
-                } else {
-                    m_last_predicted_display_time = 0.0;
-                }
-            } else if (
-                m_graphics_device->get_graphics_config().frame_pacing_enforce &&
-                !m_app_context.OpenXR &&
-                (m_frame_activity != Frame_activity::hidden) &&
-                (frame_pacing_tier == erhe::graphics::Frame_pacing_tier::slop_servo))
-            {
-                // Tier S (P4.1/P4.2): slop-servo fallback. No display-time
-                // sensing, no grid, no cadence - measure the involuntary
-                // blocking ("slop") the loop experienced since the previous
-                // tick (this frame's device-fence wait, plus the previous
-                // frame's swapchain acquire and present-call blocking - plain
-                // FIFO backpressure blocks inside vkQueuePresentKHR /
-                // vkAcquireNextImageKHR), servo a sleep before input polling,
-                // and let the plain-FIFO queue do the rest. The Frame_pacer
-                // observer still ticks above for records/telemetry, but its
-                // decisions are not enforced in this tier.
-                const double now_seconds = erhe::frame_pacing::Frame_time_recorder::now();
-                const double refresh_period = m_graphics_device->get_display_refresh_duration_seconds();
-                if (refresh_period > 0.0) {
-                    m_slop_servo.set_refresh_period(refresh_period);
-                }
-                erhe::frame_pacing::Frame_time_recorder& recorder = m_graphics_device->get_frame_time_recorder();
-                const std::int64_t current_frame_id = recorder.get_latest_frame_id();
-                erhe::frame_pacing::Frame_time_record* const current_record  = recorder.find(current_frame_id);
-                erhe::frame_pacing::Frame_time_record* const previous_record = recorder.find(current_frame_id - 1);
-                double slop = 0.0;
-                if (current_record != nullptr) {
-                    slop += current_record->fence_wait_duration;
-                }
-                if (previous_record != nullptr) {
-                    slop += std::max(0.0, previous_record->acquire_end - previous_record->acquire_begin);
-                    slop += std::max(0.0, previous_record->present_return_time - previous_record->present_request_time);
-                }
-                if (m_slop_servo_last_tick_time > 0.0) {
-                    m_slop_servo.update(slop, now_seconds - m_slop_servo_last_tick_time);
-                }
-                m_slop_servo_last_tick_time = now_seconds;
-                const double sleep_seconds = m_slop_servo.get_sleep();
-                if (sleep_seconds > 0.0) {
-                    if (current_record != nullptr) {
-                        current_record->pacer_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
-                    }
-                    m_pacer_release_timer.wait_for(sleep_seconds);
-                    if (current_record != nullptr) {
-                        current_record->pacer_wait_end = erhe::frame_pacing::Frame_time_recorder::now();
-                    }
-                }
-                m_last_predicted_display_time = 0.0;
-            } else {
-                m_slop_servo_last_tick_time   = 0.0;
-                m_last_predicted_display_time = 0.0;
-            }
-
-            // Frame pacing verification UI (doc/frame_pacing/user_interface.md):
-            // collect this frame's decision and records into the window's
-            // history, then run the simulated workload knob. The workload runs
-            // here so it lands inside the measured CPU slot after the pacer
-            // waits - the records count it as CPU service time and the pacer
-            // sees it as real load (U2).
-            m_frame_pacing_window->collect(
-                m_graphics_device->get_frame_time_recorder(),
-                m_frame_pacing_observer,
-                m_graphics_device->get_display_refresh_duration_seconds(),
-                erhe::frame_pacing::Frame_time_recorder::now()
-            );
-            m_frame_pacing_window->run_simulated_workload();
-        }
-
-        // Allocate this frame's command buffer.
-        erhe::graphics::Command_buffer& command_buffer = m_graphics_device->get_command_buffer(0);
-        m_app_context.current_command_buffer = &command_buffer;
-
-        erhe::graphics::Frame_state frame_state{};
         // Power saving: when the window is not visible (minimized/occluded/
         // hidden) skip all GPU rendering this frame -- do not acquire or present
         // the swapchain and do not execute the rendergraph. The device frame is
-        // still opened (wait_frame, above) and closed (end_frame, below)
-        // cleanly. Pacing is handled by the poll_events wait in run(), so no
-        // sleep is added here. The simulation is also paused via prepare_update
-        // below.
-        bool should_render = (m_frame_activity != Frame_activity::hidden);
+        // still opened (acquire_frame_slot, above) and closed (end_frame, in the render
+        // phase) cleanly. Pacing is handled by the poll_events wait in run(),
+        // so no sleep is added here. The simulation is also paused via
+        // prepare_update in the overlap phase. The swapchain and the frame
+        // command buffer belong to the render phase (doc/editor/render_thread.md
+        // section 2.4): M2 touches neither.
+        packet.should_render = (m_frame_activity != Frame_activity::hidden);
 
-        // Under OpenXR the headset owns display, so the desktop swapchain
-        // is not engaged. The cb is opened with cb.begin() but no swapchain
-        // is bound to it.
-        // Non-XR path drives the swapchain through cb.wait_for_swapchain
-        // and cb.begin_swapchain.
-        if (should_render && !m_app_context.OpenXR) {
-            ERHE_PROFILE_SCOPE("wait for swapchain")
-            const bool wait_swap_ok = command_buffer.wait_for_swapchain(frame_state);
-            should_render = wait_swap_ok;
-            if (!wait_swap_ok) {
-                // No swapchain image is available -- typical on Android
-                // while the surface is between background and foreground.
-                // Close the device-side frame cleanly so the next tick's
-                // wait_frame entry assertion (state == idle) holds, then
-                // sleep a short interval so the loop above does not burn
-                // CPU spinning on a not-yet-ready surface.
-                static_cast<void>(m_graphics_device->end_frame());
-                m_in_tick.store(false);
-                std::this_thread::sleep_for(std::chrono::milliseconds{50});
-                return;
-            }
+        // The main thread's upload command buffer, published as
+        // App_context::current_command_buffer for the rest of M2 (doc/editor/
+        // render_thread.md section 2.3). It is recording for the WHOLE
+        // prepare phase even when nothing is rendered this frame (hidden
+        // window / locked session): paths outside the rendergraph record GPU
+        // work - Hotbar's deferred init_hotbar (rendertarget mesh uploads),
+        // MCP-queued actions, operations - and recording into a never-begun
+        // cb is a driver crash (observed live: launch-while-locked, first
+        // hidden tick, Hotbar::init_hotbar -> Mesh_memory::flush -> null-deref
+        // inside vkCmdCopyBuffer). It ends at the end of M2; the render phase
+        // submits it first, device-only, with a GPU edge to the frame cb.
+        take_m2_term(m_phase_timing.m2_start_us);
+        packet.upload_command_buffer = &m_graphics_device->get_command_buffer(s_main_upload_thread_slot);
+        erhe::graphics::Command_buffer& command_buffer = *packet.upload_command_buffer;
+        command_buffer.begin();
+        m_app_context.current_command_buffer = &command_buffer;
+
+        // The shared empty material set first: passes that carry no material
+        // source bind it, the previews below among them, and a set is bound
+        // only in frames its update() published it for
+        // (doc/erhe/draw_list_material_set.md D9). It never changes, so this
+        // only publishes.
+        if (m_material_set_factory) {
+            m_material_set_factory->update_empty_material_set(command_buffer);
         }
 
-        // The cb must be recording for the WHOLE tick even when nothing is
-        // rendered this frame (hidden window / locked session): tick paths
-        // outside the rendergraph record GPU work - Hotbar's deferred
-        // init_hotbar (rendertarget mesh uploads), MCP-queued actions,
-        // operations - and recording into a never-begun cb is a driver
-        // crash (observed live: launch-while-locked, first hidden tick,
-        // Hotbar::init_hotbar -> Mesh_memory::flush -> null-deref inside
-        // vkCmdCopyBuffer). Mirrors the OpenXR path, which also begins the
-        // cb without engaging the swapchain; the matching end + device-only
-        // submit happens at the end of tick whenever the cb is recording.
-        command_buffer.begin();
+        // The operations the windows and menus deferred out of the ImGui
+        // iteration (Imgui_windows::queue: window and viewport creation,
+        // menu commands, imports, undo / redo buttons) run here, before
+        // anything of this frame is prepared or rendered, with the upload
+        // command buffer open (doc/editor/render_thread.md section 2.6).
+        erhe::log::set_breadcrumb("tick: flush imgui window queue");
+        m_imgui_windows->flush_queue();
 
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
@@ -618,13 +1242,13 @@ public:
         // against this tick's command buffer, before any render pass begins.
         erhe::log::set_breadcrumb("tick: texture file loads");
         m_texture_file_loader->tick(command_buffer);
+        take_m2_term(m_phase_timing.m2_upload_us);
 
-        m_time->prepare_update(m_frame_activity != Frame_activity::hidden, display_advance_ns);
         m_time->update_transform_animations(*m_app_message_bus.get());
         // Scene animations advance on the same clock as the simulation:
         // predicted display delta when pacing is active (P2.4), wall clock
         // otherwise.
-        const int64_t animation_advance_ns = (display_advance_ns >= 0) ? display_advance_ns : m_time->get_host_system_last_frame_duration_ns();
+        const int64_t animation_advance_ns = (packet.display_advance_ns >= 0) ? packet.display_advance_ns : m_time->get_host_system_last_frame_duration_ns();
         m_animation_player->update(static_cast<float>(animation_advance_ns) * 1.0e-9f);
         m_fly_camera_tool->on_frame_begin();
 
@@ -641,44 +1265,50 @@ public:
         // - updates pointer context for headset scene view from controller
         // - sends XR input events to Commands
         // - updates controller visualization nodes
+        // xrPollEvent first: the session state transitions it applies
+        // (begin / end session, boundary visibility) are read by R's frame
+        // functions, so they land here, where R is idle; M1 of the next
+        // frame waits (or not) on the outcome. xrSyncActions needs a
+        // waited frame, not a begun one: R runs xrBeginFrame
+        // (doc/editor/render_thread.md section 2.2).
         if (m_app_context.OpenXR) {
-            ERHE_PROFILE_SCOPE("OpenXR update events");
+            ERHE_PROFILE_SCOPE("OpenXR poll events");
             erhe::log::set_breadcrumb("tick: xr poll_events");
-            bool headset_poll_ok           = m_headset_view->poll_events();
-            erhe::log::set_breadcrumb("tick: xr begin_frame");
-            bool headset_begin_frame_ok    = headset_poll_ok        && m_headset_view->begin_frame();
+            static_cast<void>(m_headset_view->poll_events());
+        }
+        if (m_app_context.OpenXR && packet.headset_frame_timing.wait_ok) {
+            ERHE_PROFILE_SCOPE("OpenXR update events");
             erhe::log::set_breadcrumb("tick: xr update_actions");
-            bool headset_update_actions_ok = headset_begin_frame_ok && m_headset_view->update_actions();
+            const bool headset_update_actions_ok = m_headset_view->update_actions(packet.headset_frame_timing);
             if (headset_update_actions_ok) {
                 // TOOD m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
                 // TODO m_scene_view_config_window
-            } else{
+            } else {
                 ERHE_PROFILE_SCOPE("OpenXR sleep");
-                // Throttle loop since xrWaitFrame won't be called.
+                // Throttle loop when the frame was waited but cannot be
+                // used; the overlap phase throttles when xrWaitFrame
+                // failed.
                 std::this_thread::sleep_for(std::chrono::milliseconds{250});
             }
         }
 #endif
 
-        erhe::log::set_breadcrumb("tick: fixed_step (physics)");
-        m_app_scenes->before_physics_simulation_steps();
-
-        float host_system_dt_s = 0.0f;
-        int64_t host_system_time_ns = 0;
+        // The node-writing fixed-step updates for the steps the overlap
+        // phase simulated, then the physics write-back.
+        erhe::log::set_breadcrumb("tick: fixed_step (nodes)");
+        // This frame's step list, filled by Time::prepare_update in M1.
         m_time->for_each_fixed_step(
-            [this, &input_events, &host_system_dt_s, &host_system_time_ns](const Time_context& time_context) {
+            [this](const Time_context& time_context) {
                 ERHE_PROFILE_SCOPE("fixed step update");
-                host_system_dt_s += time_context.host_system_dt_s;
-                host_system_time_ns = time_context.host_system_time_ns;
                 m_headset_view   ->update_fixed_step();
                 m_fly_camera_tool->update_fixed_step(time_context);
-                m_app_scenes     ->update_physics_simulation_fixed_step(time_context);
             }
         );
         m_app_scenes   ->after_physics_simulation_steps();
+        take_m2_term(m_phase_timing.m2_sim_us);
         erhe::log::set_breadcrumb("tick: imgui process_events + commands");
-        m_imgui_windows->process_events(host_system_dt_s, host_system_time_ns);
-        m_commands     ->tick(host_system_time_ns, input_events);
+        m_imgui_windows->process_events(packet.host_system_dt_s, packet.host_system_time_ns);
+        m_commands     ->tick(packet.host_system_time_ns, input_events);
 
         // Process any requests queued by the MCP server
         if (m_mcp_server) {
@@ -689,28 +1319,37 @@ public:
         // Once per frame updates
         m_network_window->update_network();
 
-        // - Update all ImGui hosts. glfw window host processes input events, converting them to ImGui inputs events
-        //   This may consume some input events, so that they will not get processed by m_commands.tick() below
-        // - Call all ImGui code (Imgui_window)
-        m_hover_tool->reset_item_tree_hover();
+        // The hotbar slots the windows requested (Hotbar::set_slots) are
+        // rebuilt here; the ImGui windows themselves draw in the ImGui
+        // phase (frame_imgui_phase), after this prepare phase.
         m_hotbar->rebuild_if_needed();
+        take_m2_term(m_phase_timing.m2_imgui_us);
 
-        erhe::log::set_breadcrumb("tick: draw_imgui_windows");
-        m_imgui_windows->begin_frame();
-        m_imgui_windows->draw_imgui_windows();
-        m_imgui_windows->end_frame();
-
-        // Autosave editor settings when an edit site marked them dirty
-        // (Editor_settings_store::touch() / Graphics_settings::
-        // mark_presets_dirty()); a bool test per file otherwise. Defer while
-        // a mouse button is held so dragging a slider results in a single
-        // write when the drag ends.
-        {
-            bool any_mouse_button_down = false;
-            for (const bool button_down : m_input_state->mouse_button) {
-                any_mouse_button_down = any_mouse_button_down || button_down;
-            }
-            m_app_settings.update(!any_mouse_button_down);
+        // The thumbnails the windows above requested (Thumbnails::draw) render
+        // their previews here, into the upload command buffer, before the
+        // ImGui hosts sample them in the render phase (the upload command
+        // buffer is submitted first, with a GPU edge to the frame command
+        // buffer). The Material_preview and Brush_preview objects are then
+        // driven by the main thread only (doc/editor/render_thread.md
+        // section 2.6). Rendered frames only: a hidden frame samples nothing.
+        if (packet.should_render) {
+            ERHE_PROFILE_SCOPE("Thumbnails");
+            erhe::log::set_breadcrumb("tick: thumbnails update");
+            m_thumbnails->update(command_buffer);
+        }
+        // The requests the windows made at ImGui time for render-side objects
+        // (the Properties material preview and BRDF slice, the Depth
+        // Visualization window's node) are served here, on the main thread,
+        // before the kick (doc/editor/render_thread.md section 2.6).
+        if (m_material_preview && packet.should_render) {
+            erhe::log::set_breadcrumb("tick: material preview update");
+            m_material_preview->update(command_buffer);
+        }
+        if (m_brdf_slice) {
+            m_brdf_slice->update();
+        }
+        if (m_debug_view_window) {
+            m_debug_view_window->update();
         }
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
@@ -772,35 +1411,22 @@ public:
 
         m_fly_camera_tool->on_frame_end();
 
-        // Rendering
-        m_app_rendering->process_start_capture();
-        m_graphics_device->get_shader_monitor().update_once_per_frame();
+        lightmap_commit_phase();
+        take_m2_term(m_phase_timing.m2_update_us);
 
         // Unconditional: uploads enqueued during a hidden tick (deferred
         // hotbar init, MCP-driven edits while the session is locked) must
         // not sit in the queue until the next rendered frame.
         m_mesh_memory->flush(command_buffer);
 
-        const erhe::graphics::Frame_begin_info frame_begin_info{
+        packet.frame_begin_info = erhe::graphics::Frame_begin_info{
             .resize_width   = static_cast<uint32_t>(m_last_window_width),
             .resize_height  = static_cast<uint32_t>(m_last_window_height),
             .request_resize = m_request_resize_pending.load()
         };
         m_request_resize_pending.store(false);
-
-        // Under OpenXR the headset owns display: the desktop window swapchain
-        // is not rendered into, so do not acquire/present it (otherwise the
-        // Vulkan Swapchain_impl::end_frame assert would fire because no
-        // render pass ever ran against the acquired image).
-        if (should_render && !m_app_context.OpenXR) {
-            should_render = command_buffer.begin_swapchain(frame_begin_info, frame_state);
-        }
-
-        if (should_render) {
-            ERHE_PROFILE_SCOPE("Thumbnails");
-            erhe::log::set_breadcrumb("tick: thumbnails update");
-            m_thumbnails->update();
-        }
+        packet.window_width  = m_window->get_width();
+        packet.window_height = m_window->get_height();
 
         // Arrange layout-node children, then update scene transforms.
         erhe::log::set_breadcrumb("tick: update_layout_nodes");
@@ -828,7 +1454,7 @@ public:
         // this frame's edits and async loads) after transform propagation
         // (registration samples node world transforms, R10b) and before the
         // rendergraph renders any Draw_list_scene-owning root (viewports,
-        // shadow nodes, headset). Thumbnails above render preview roots,
+        // shadow nodes, headset). Thumbnails (render phase) render preview roots,
         // which have no Draw_list_scene. Main thread only.
         // Rebuild the primitives of meshes whose Gprim.display_color changed,
         // before the flush that re-registers them: the rebuild swaps
@@ -845,39 +1471,432 @@ public:
         erhe::log::set_breadcrumb("tick: flush_draw_lists");
         m_app_scenes->flush_draw_lists();
 
+        // The settings the render phase reads, copied after every window and
+        // operation of this frame edited the live ones (doc/editor/
+        // render_thread.md section 2.6): the editor-global copy and each
+        // scene's resolved overrides.
+        erhe::log::set_breadcrumb("tick: snapshot_render_settings");
+        m_render_settings.snapshot(m_graphics_device->get_frame_index(), m_editor_settings, m_app_settings);
+        m_app_scenes->snapshot_render_settings();
+
+        // The tools, renderables and debug visualizations of every viewport
+        // record their lines and labels here, after this frame's transforms,
+        // hover and selection are final, into one debug / text renderer
+        // frame slot per view; the render phase expands and draws the slots
+        // (doc/editor/render_thread.md section 2.2). Only for rendered frames:
+        // a hidden frame runs no rendergraph, so nothing would draw them.
+        if (packet.should_render) {
+            erhe::log::set_breadcrumb("tick: prepare_render");
+            m_viewport_scene_views->prepare_render(command_buffer);
+            // Every shadow node copies its requested configuration (with the
+            // preset's shadow technique) into this frame's slot; the render
+            // phase of the frame applies it before rendering into its maps.
+            m_app_rendering->prepare_shadow_render_nodes();
+        }
+
         // Material slot spaces, after the flush that settles membership and
-        // before the first pass that binds one - the DDGI tick below, and the
-        // rendergraph (which is also where XR renders) further down
-        // (doc/erhe/draw_list_material_set.md D6). The preview roots and the
-        // BRDF slice window are not in m_scene_roots and run their own
-        // sync + flush + update at their render entry points.
+        // before the first pass that binds one - the DDGI tick and the
+        // rendergraph (which is also where XR renders) in the render phase
+        // (doc/erhe/draw_list_material_set.md D6). Each update publishes the
+        // buffer copy and texture heap the render phase of this frame binds
+        // (D9). The preview roots and the BRDF slice window are not in
+        // m_scene_roots and run their own sync + flush + update at their
+        // render entry points; the empty set was published at the start of
+        // this phase.
         if (m_app_context.current_command_buffer != nullptr) {
             erhe::log::set_breadcrumb("tick: update_material_sets");
             m_app_scenes->update_material_sets(*m_app_context.current_command_buffer);
-            if (m_material_set_factory) {
-                m_material_set_factory->update_empty_material_set(*m_app_context.current_command_buffer);
+        }
+
+        if (packet.should_render) {
+            lightmap_prepare_phase();
+
+            // The bucket passes' draws, prepared per view into the frame's
+            // composer slot (doc/editor/editor.md "Frame phases and the
+            // render thread"). The LAST step of M2: after the material sets
+            // settled the forward set's slots and the lightmap prepare phase
+            // the per-primitive lightmap uv transforms, which the records
+            // carry, and after every tool and operation of the frame moved,
+            // flagged or created what the passes draw.
+            erhe::log::set_breadcrumb("tick: prepare_composition");
+            m_app_rendering->prepare_composition(
+                m_graphics_device->get_frame_index(),
+                m_graphics_device->get_number_of_frames_in_flight(),
+                packet.frame_host_system_time_ns
+            );
+
+            // The rendergraph nodes copy what their execute of this frame
+            // reads (the post-processing parameters, the BRDF slice angles)
+            // and the enabled flags, after every edit and prepare step of the
+            // frame; the render phase runs the nodes enabled in this copy
+            // (Rendergraph::prepare_frame()). An enable, disable or slider
+            // edit made in the ImGui phase reaches the next frame.
+            erhe::log::set_breadcrumb("tick: rendergraph prepare_frame");
+            m_rendergraph->prepare_frame();
+        }
+
+        // The lightmap atlas the forward passes of this frame sample, as the
+        // lightmap prepare phase or an MCP direct bake chose it; R binds it
+        // from the packet (App_rendering::set_lightmap_texture).
+        packet.lightmap_texture = m_app_rendering->get_lightmap_texture();
+        // The ray trace switch the Ray Trace window / MCP set last; R hands it
+        // to the renderer, which traces with this copy.
+        packet.ray_trace_enabled = m_ray_trace_renderer && m_ray_trace_renderer->is_enabled();
+        // The scene the indirect diffuse producers of this frame tick on;
+        // null with no scene or several.
+        packet.indirect_diffuse_scene_root = m_app_scenes->get_single_scene_root();
+
+        // The ray-query consumers' view of each scene, published into the
+        // frame's slot after the forward material sets settled their slots.
+        // Every frame, hidden ones included: the indirect diffuse ticks run in
+        // the render phase whether or not the frame renders.
+        if (m_graphics_device->get_info().use_ray_query) {
+            erhe::log::set_breadcrumb("tick: prepare_ray_trace_scenes");
+            m_app_scenes->prepare_ray_trace_scenes();
+        }
+
+        // The uploads of this frame are recorded; the render phase submits
+        // them. No command buffer is published between the phases.
+        command_buffer.end();
+        m_app_context.current_command_buffer = nullptr;
+
+        take_m2_term(m_phase_timing.m2_scene_us);
+        m_phase_timing.m2_us += elapsed_us(m2_begin, std::chrono::steady_clock::now());
+    }
+
+    // M2: the lightmap work that commits scene content
+    // (doc/editor/lightmap_baking.md section 3a "Frame phases"). Before
+    // Mesh_memory::flush, so the vertex uploads of a partition commit ride
+    // this frame's upload command buffer, which the render phase submits
+    // before the next prepare phase can raster a G-buffer from them (the
+    // baker's one-tick G-buffer defer relies on it). After the operation
+    // stack, so the commit-time validation sees this frame's edits. Runs on
+    // hidden frames too.
+    void lightmap_commit_phase()
+    {
+        if (m_lightmap_partitioner) {
+            // Commit or discard a finished async prepare job; the baker's
+            // piece-hash change then triggers the relayout + deferred
+            // G-buffer bake in lightmap_prepare_phase().
+            erhe::log::set_breadcrumb("tick: lightmap partition commit");
+            m_lightmap_partitioner->update();
+        }
+        if (m_lightmap_window) {
+            // Deferred window requests: offline tile bake, save-on-evict
+            // and restore-on-activate drains (standalone readback / upload
+            // submits), auto re-prepare, Reorder Charts By Bake. Outside
+            // ImGui iteration, before this frame's tick is planned.
+            erhe::log::set_breadcrumb("tick: lightmap window update");
+            m_lightmap_window->update();
+        }
+        // A finished offline bake left fresh tiles on disk; make the
+        // streamer reload them.
+        if (m_lightmap_baker && m_lightmap_streamer) {
+            const bool offline_active = m_lightmap_baker->is_offline_bake_active();
+            if (m_lightmap_offline_was_active && !offline_active) {
+                m_lightmap_streamer->invalidate();
+            }
+            m_lightmap_offline_was_active = offline_active;
+        }
+    }
+
+    // M2, rendered frames: plan this frame's lightmap work against the
+    // settled scene (after transforms, draw list flush and material sets):
+    // paused change detection, the baker's tick decisions and region
+    // mapping writes (Lightmap_baker::prepare_tick), or the disk streamer's
+    // residency, tile uploads and mapping writes, and the lightmap binding
+    // (App_rendering::set_lightmap_texture). The render phase records the
+    // baker's tick slot of its frame (Lightmap_baker::record_tick) and binds
+    // the atlas the frame packet carries.
+    void lightmap_prepare_phase()
+    {
+        // The lightmap settings reach the renderer / baker / streamer
+        // through apply_lightmap_settings() at their edit sites.
+        const Lightmap_config& lightmap_config = m_app_context.editor_settings->lightmap;
+        // Camera for tile residency ranking (both the interactive baker's
+        // clamp and the disk streamer): the last-used viewport camera,
+        // falling back to the scene's first camera; no camera at all = keep
+        // current residency / bake all tiles.
+        const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
+        glm::vec3  lightmap_camera_position{0.0f};
+        glm::vec3* lightmap_camera_position_ptr{nullptr};
+        if (lightmap_scene_root) {
+            std::shared_ptr<erhe::scene::Camera> camera{};
+            if (m_viewport_scene_views) {
+                const std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_views->last_scene_view();
+                camera = scene_view ? scene_view->get_camera() : nullptr;
+            }
+            if (!camera) {
+                const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = lightmap_scene_root->get_scene().get_cameras();
+                if (!cameras.empty()) {
+                    camera = cameras.front();
+                }
+            }
+            const erhe::scene::Node* const camera_node = camera ? camera.get() : nullptr;
+            if (camera_node != nullptr) {
+                lightmap_camera_position     = glm::vec3{camera_node->world_from_node()[3]};
+                lightmap_camera_position_ptr = &lightmap_camera_position;
             }
         }
+        // Paused change detection: scene edits made while NOT baking must
+        // not keep showing pre-edit lighting (the tick's hash checks only
+        // run while baking); on a change the baker white-outs its display
+        // and takes the binding below.
+        if (m_lightmap_baker && !m_lightmap_baker->is_baking_enabled() && lightmap_scene_root) {
+            m_lightmap_baker->monitor_paused_scene(*lightmap_scene_root.get());
+        }
+        if (m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
+            m_lightmap_baker_owned_binding = true;
+            if (lightmap_scene_root) {
+                // Procedural sky lighting for the bake: same per-scene sky
+                // resolution + sun direction the viewport uses, so the baked
+                // environment matches the rendered background. Only
+                // atmosphere mode (mode == 1) contributes; the LUTs exist
+                // once a viewport has rendered the atmosphere at least once
+                // (ensure_luts), and the baker's lighting hash resets
+                // accumulation when this state changes.
+                {
+                    const Sky_config& sky_config = get_effective_sky(*m_app_context.editor_settings, *lightmap_scene_root);
+                    Lightmap_baker::Sky_lighting sky{};
+                    sky.enabled =
+                        sky_config.enabled &&
+                        (sky_config.mode == 1) &&
+                        m_sky_renderer &&
+                        m_sky_renderer->is_atmosphere_supported() &&
+                        m_sky_luts_ready; // as of the last rendered frame (Frame_result::sky_luts_ready)
+                    if (sky.enabled) {
+                        sky.transmittance_lut = m_sky_renderer->get_transmittance_lut();
+                        sky.multiscatter_lut  = m_sky_renderer->get_multiscatter_lut();
+                        sky.sun_direction_and_intensity = glm::vec4{
+                            Sky_renderer::resolve_sun_direction(sky_config, &lightmap_scene_root->get_render_settings(m_graphics_device->get_frame_index())),
+                            sky_config.sun_intensity
+                        };
+                        sky.sky_params = glm::vec4{
+                            static_cast<float>(sky_config.march_steps),
+                            sky_config.observer_altitude_km,
+                            0.0f,
+                            0.0f
+                        };
+                    }
+                    m_lightmap_baker->set_sky_lighting(sky);
+                }
+                erhe::log::set_breadcrumb("tick: lightmap bake prepare");
+                m_lightmap_baker->prepare_tick(
+                    *lightmap_scene_root.get(),
+                    lightmap_config.uv_min_chart_texels,
+                    lightmap_camera_position_ptr,
+                    lightmap_config.active_tile_budget
+                );
+                m_app_rendering->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
+            }
+        } else if (
+            m_lightmap_streamer &&
+            lightmap_scene_root &&
+            (!m_lightmap_baker ||
+             (!m_lightmap_baker->is_offline_bake_active() &&
+              !m_lightmap_baker->has_unsaved_published_display() &&
+              !m_lightmap_baker->is_display_content_stale()))
+        ) {
+            // Baked-tile streaming from <scene>.lightmap/: whenever the
+            // interactive / offline baker does not own the lightmap binding,
+            // the streamer keeps the N nearest tiles resident and binds its
+            // atlas. A PAUSED baker with UNSAVED published content keeps the
+            // binding (Stop = Pause: the viewport must keep showing the
+            // in-progress bake, not swap to the disk set); once everything
+            // published is saved the streamer owns again (same pixels) and
+            // disk tile streaming resumes.
+            erhe::log::set_breadcrumb("tick: lightmap stream");
+            if (m_lightmap_baker_owned_binding) {
+                // Ownership handoff baker -> streamer: the baker's
+                // publish_regions overwrote the primitives' uv mappings with
+                // baker display slots; re-push the streamer's (residency is
+                // untouched, so this is cheap and covers the no-autosave
+                // pause where no invalidate() ran).
+                m_lightmap_baker_owned_binding = false;
+                m_lightmap_streamer->reapply_regions(*lightmap_scene_root.get());
+            }
+            m_lightmap_streamer->update(*lightmap_scene_root.get(), lightmap_camera_position_ptr);
+            if (m_lightmap_streamer->has_resident_tiles()) {
+                m_app_rendering->set_lightmap_texture(m_lightmap_streamer->get_texture());
+            }
+        } else if (
+            m_lightmap_baker &&
+            m_lightmap_baker->is_display_content_stale() &&
+            m_lightmap_baker->get_lightmap_texture()
+        ) {
+            // Paused-and-stale: the monitor white-cleared the baker display
+            // and re-published its mappings; actively rebind it (the
+            // streamer may have held the binding since the pause autosave).
+            // The baker owns the binding until Start.
+            m_lightmap_baker_owned_binding = true;
+            m_app_rendering->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
+        }
+    }
+
+    // R render: the present-wait clamp, the swapchain wait and acquire, the
+    // rendering work, the rendergraph, submit and Device::end_frame. Runs on the render role thread (the
+    // main thread in inline mode) through Render_thread::kick(), which
+    // sets the render role's phase to r_render for its duration. Reports
+    // through out_result; writes no main-thread-only state (Phase_timing is
+    // added by frame() after the join).
+    void frame_render_phase(const Frame_packet& packet, Frame_result& out_result)
+    {
+        ERHE_PROFILE_FUNCTION();
+        set_render_frame_phase(erhe::utility::Frame_phase::r_render);
+        const std::chrono::steady_clock::time_point render_begin = std::chrono::steady_clock::now();
+        m_render_phase_draw_data_wait_us = 0.0;
+        out_result.device_frame_id = packet.device_frame_id;
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        // xrBeginFrame (doc/editor/render_thread.md section 2.2) with the
+        // Frame_timing M1's xrWaitFrame produced. Headset_view keeps the
+        // timing as render-phase state for render_headset() and end_frame;
+        // a frame whose wait failed stores the failed timing and does not
+        // begin.
+        if (m_app_context.OpenXR) {
+            erhe::log::set_breadcrumb("tick: xr begin_frame");
+            m_headset_view->begin_frame(packet.headset_frame_timing);
+        }
+#endif
+
+        erhe::graphics::Command_buffer& upload_command_buffer = *packet.upload_command_buffer;
+
+        // The lightmap atlas M2 chose for this frame, and its filtering from
+        // the frame's Render_settings copy: the forward passes of this render
+        // phase sample it.
+        m_forward_renderer->set_lightmap_texture(packet.lightmap_texture);
+        m_forward_renderer->set_lightmap_bicubic(m_app_context.render_settings->lightmap_bicubic_sampling);
+        if (m_ray_trace_renderer) {
+            m_ray_trace_renderer->set_render_enabled(packet.ray_trace_enabled);
+        }
+
+        // This frame's command buffer, from the render thread slot. The
+        // render role's device frame (Device::get_frame_index() is
+        // role-keyed) is the packet's frame.
+        erhe::graphics::Command_buffer& command_buffer = m_graphics_device->get_command_buffer(s_render_thread_slot);
+        ERHE_VERIFY(command_buffer.get_frame_id() == packet.device_frame_id);
+        erhe::graphics::Frame_state frame_state{};
+        bool                        should_render = packet.should_render;
+
+        // The swapchain belongs to R (doc/editor/render_thread.md section
+        // 2.4): VkSwapchainKHR is host-synchronized in vkWaitForPresentKHR,
+        // vkAcquireNextImageKHR and vkQueuePresentKHR. First the FR5
+        // present-wait clamp with the frame id M1's pacer decision chose,
+        // then the swapchain wait, before the frame command buffer begins
+        // (Vulkan: the slot fence wait and the device-frame command pool
+        // reset of Swapchain_impl::setup_frame / the emulated swapchain's
+        // wait_frame). Under OpenXR the headset owns display and the
+        // desktop swapchain is not engaged; the frame cb is begun with no
+        // swapchain bound to it.
+        erhe::log::set_breadcrumb("tick: present-wait clamp");
+        present_wait_clamp(packet);
+        if (should_render && !m_app_context.OpenXR) {
+            ERHE_PROFILE_SCOPE("wait for swapchain");
+            erhe::log::set_breadcrumb("tick: wait_for_swapchain");
+            const std::chrono::steady_clock::time_point wait_swapchain_begin = std::chrono::steady_clock::now();
+            const bool wait_swap_ok = command_buffer.wait_for_swapchain(frame_state);
+            out_result.wait_for_swapchain_us = elapsed_us(wait_swapchain_begin, std::chrono::steady_clock::now());
+            if (!wait_swap_ok) {
+                // No swapchain image (doc/editor/render_thread.md section
+                // 2.4): the frame continues like a hidden one -- the uploads
+                // M2 recorded and the frame command buffer are submitted
+                // device-only, the frame slots M2 filled are released, and
+                // nothing is presented. The main thread sleeps after the
+                // join that reports it.
+                should_render           = false;
+                out_result.no_swapchain = true;
+            }
+        }
+
+        // FR3 target present time and C15 holdback deadline of this frame,
+        // from the pacer decision M1 made (0 = none). Handed to the device
+        // here, on the thread that submits and presents, so M1 of the next
+        // frame never writes device state this phase reads.
+        m_graphics_device->set_present_target_time(
+            static_cast<std::int64_t>(packet.device_frame_id),
+            packet.present_target_time,
+            packet.present_hold_until
+        );
+
+        // Rendering
+        m_app_rendering->process_start_capture();
+
+        // Submit the prepare phase uploads first, device-only (no swapchain
+        // engaged), with a GPU edge to the frame command buffer: the frame
+        // cb's GPU work starts only after the uploads completed. Under
+        // OpenXR the frame cb is the setup cb Xr_session::render_frame*()
+        // fans its view cbs out from, so the edge covers them too
+        // (doc/editor/render_thread.md section 2.3). The consumer-side wait
+        // registers after begin() (Metal encodes it at that point).
+        command_buffer.begin();
+        upload_command_buffer.signal_gpu_completion_to(command_buffer);
+        command_buffer.wait_for_gpu_completion_signal();
+        {
+            ERHE_PROFILE_SCOPE("submit upload command buffer");
+            erhe::graphics::Command_buffer* upload_cbs[] = { &upload_command_buffer };
+            m_graphics_device->submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{upload_cbs});
+        }
+        // R records into the frame command buffer, which it hands to its
+        // recorders explicitly. App_context::current_command_buffer is the
+        // main thread's (the upload command buffer during M2, null
+        // otherwise): M1 of the next frame runs while R does, so R neither
+        // writes nor reads it (doc/editor/render_thread.md section 2.3).
+        // The render-phase time comes from the packet for the same reason:
+        // M1 advances Time while R runs.
+        m_app_context.render_phase_host_system_time_ns = packet.frame_host_system_time_ns;
+
+        m_graphics_device->get_shader_monitor().update_once_per_frame();
+
+        // Under OpenXR the headset owns display: the desktop window swapchain
+        // is not rendered into, so do not acquire/present it (otherwise the
+        // Vulkan Swapchain_impl::end_frame assert would fire because no
+        // render pass ever ran against the acquired image).
+        if (should_render && !m_app_context.OpenXR) {
+            const std::chrono::steady_clock::time_point begin_swapchain_begin = std::chrono::steady_clock::now();
+            should_render = command_buffer.begin_swapchain(packet.frame_begin_info, frame_state);
+            out_result.begin_swapchain_us = elapsed_us(begin_swapchain_begin, std::chrono::steady_clock::now());
+            // The window ImGui host's swapchain render pass follows the
+            // window size M2 saw, here on the thread that owns the
+            // swapchain (the ImGui phase runs concurrently and reads
+            // nothing of the swapchain).
+            const std::shared_ptr<erhe::imgui::Window_imgui_host>& window_imgui_host = m_imgui_windows->get_window_imgui_host();
+            if (window_imgui_host && should_render) {
+                window_imgui_host->update_render_pass(packet.window_width, packet.window_height);
+            }
+        }
+        m_render_phase_frame_number = packet.frame_number;
 
         // Indirect diffuse field producers (doc/editor/ddgi.md,
         // doc/editor/radiance_cascades.md): only the selected producer
         // (set_indirect_diffuse_source()) updates its field. DDGI ticks
         // whatever the source for pending reference irradiance queries, and
         // its tick skips the probe update unless it is selected.
-        if (m_app_context.current_command_buffer != nullptr) {
-            const std::shared_ptr<Scene_root> field_scene_root = m_app_scenes->get_single_scene_root();
+        {
+            // The frame's source selection (and the radiance cascades merge
+            // mode) from its Render_settings copy: a producer deselected since
+            // the previous frame releases its textures here, before anything
+            // of this frame reads them.
+            if (m_ddgi_renderer) {
+                m_ddgi_renderer->apply_frame_settings();
+            }
+            if (m_radiance_cascades_renderer) {
+                m_radiance_cascades_renderer->apply_frame_settings();
+            }
+            // The scene M2 chose for the frame (the packet's copy): the live
+            // scene list changes in M2 of the next frame while this runs.
+            const std::shared_ptr<Scene_root>& field_scene_root = packet.indirect_diffuse_scene_root;
             // Radiance cascades: refit the cascades, trace this frame's
             // budget of raw intervals, merge, and reduce merged cascade 0
             // into the probe field atlases.
             if (m_radiance_cascades_renderer && m_radiance_cascades_renderer->is_selected() && field_scene_root) {
                 erhe::log::set_breadcrumb("tick: radiance_cascades");
-                m_radiance_cascades_renderer->tick(*m_app_context.current_command_buffer, *field_scene_root.get());
+                m_radiance_cascades_renderer->tick(command_buffer, *field_scene_root.get());
             }
             // DDGI: refit the probe volume and record this frame's probe
             // update, before the rendergraph samples the probe atlases.
             if (m_ddgi_renderer && field_scene_root) {
                 erhe::log::set_breadcrumb("tick: ddgi");
-                m_ddgi_renderer->tick(*m_app_context.current_command_buffer, *field_scene_root.get());
+                m_ddgi_renderer->tick(command_buffer, *field_scene_root.get());
             }
 
             // Publish (or clear) the selected producer's field for this
@@ -892,168 +1911,42 @@ public:
                 m_forward_renderer->clear_ddgi();
             }
             if (m_ddgi_renderer && field_scene_root) {
-                m_ddgi_renderer->record_irradiance_query(*m_app_context.current_command_buffer, *field_scene_root.get(), field);
+                m_ddgi_renderer->record_irradiance_query(command_buffer, *field_scene_root.get(), field);
             }
         }
 
         // Interactive lightmap bake (doc/editor/lightmap_baking.md section
-        // 3a): record this frame's budgeted gather slice + publish into the
-        // frame command buffer before the rendergraph samples the published
-        // atlas.
-        {
-            // The lightmap settings reach the renderer / baker / streamer
-            // through apply_lightmap_settings() at their edit sites.
-            const Lightmap_config& lightmap_config = m_app_context.editor_settings->lightmap;
-            if (m_lightmap_partitioner) {
-                // Commit or discard a finished async prepare job. After the
-                // operation stack update and transform updates, so the
-                // commit-time staleness validation sees this frame's scene
-                // mutations; before the baker tick, whose piece-hash change
-                // then triggers the relayout + deferred G-buffer bake.
-                m_lightmap_partitioner->update();
-            }
-            if (m_lightmap_window) {
-                // Deferred Reorder-Charts-By-Bake requests: the atlas
-                // readback must run here, before any lightmap commands are
-                // recorded into the frame, never mid-ImGui.
-                m_lightmap_window->update();
-            }
-            // A finished offline bake left fresh tiles on disk; make the
-            // streamer reload them.
-            if (m_lightmap_baker && m_lightmap_streamer) {
-                const bool offline_active = m_lightmap_baker->is_offline_bake_active();
-                if (m_lightmap_offline_was_active && !offline_active) {
-                    m_lightmap_streamer->invalidate();
-                }
-                m_lightmap_offline_was_active = offline_active;
-            }
-            // Camera for tile residency ranking (both the interactive
-            // baker's clamp and the disk streamer): the last-used viewport
-            // camera, falling back to the scene's first camera; no camera
-            // at all = keep current residency / bake all tiles.
-            const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
-            glm::vec3  lightmap_camera_position{0.0f};
-            glm::vec3* lightmap_camera_position_ptr{nullptr};
-            if (lightmap_scene_root) {
-                std::shared_ptr<erhe::scene::Camera> camera{};
-                if (m_viewport_scene_views) {
-                    const std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_views->last_scene_view();
-                    camera = scene_view ? scene_view->get_camera() : nullptr;
-                }
-                if (!camera) {
-                    const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = lightmap_scene_root->get_scene().get_cameras();
-                    if (!cameras.empty()) {
-                        camera = cameras.front();
-                    }
-                }
-                const erhe::scene::Node* const camera_node = camera ? camera.get() : nullptr;
-                if (camera_node != nullptr) {
-                    lightmap_camera_position     = glm::vec3{camera_node->world_from_node()[3]};
-                    lightmap_camera_position_ptr = &lightmap_camera_position;
-                }
-            }
-            // Paused change detection: scene edits made while NOT baking
-            // must not keep showing pre-edit lighting (the tick's hash
-            // checks only run while baking); on a change the baker white-
-            // outs its display and takes the binding below.
-            if (should_render && m_lightmap_baker && !m_lightmap_baker->is_baking_enabled() && lightmap_scene_root) {
-                m_lightmap_baker->monitor_paused_scene(*lightmap_scene_root.get());
-            }
-            if (should_render && m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
-                m_lightmap_baker_owned_binding = true;
-                if (lightmap_scene_root) {
-                    // Procedural sky lighting for the bake: same per-scene
-                    // sky resolution + sun direction the viewport uses, so
-                    // the baked environment matches the rendered background.
-                    // Only atmosphere mode (mode == 1) contributes; the LUTs
-                    // exist once a viewport has rendered the atmosphere at
-                    // least once (ensure_luts), and the baker's lighting
-                    // hash resets accumulation when this state changes.
-                    {
-                        const Sky_config& sky_config = get_effective_sky(*m_app_context.editor_settings, *lightmap_scene_root);
-                        Lightmap_baker::Sky_lighting sky{};
-                        sky.enabled =
-                            sky_config.enabled &&
-                            (sky_config.mode == 1) &&
-                            m_sky_renderer &&
-                            m_sky_renderer->is_atmosphere_supported() &&
-                            m_sky_renderer->are_luts_ready();
-                        if (sky.enabled) {
-                            sky.transmittance_lut = m_sky_renderer->get_transmittance_lut();
-                            sky.multiscatter_lut  = m_sky_renderer->get_multiscatter_lut();
-                            sky.sun_direction_and_intensity = glm::vec4{
-                                Sky_renderer::resolve_sun_direction(sky_config, lightmap_scene_root.get()),
-                                sky_config.sun_intensity
-                            };
-                            sky.sky_params = glm::vec4{
-                                static_cast<float>(sky_config.march_steps),
-                                sky_config.observer_altitude_km,
-                                0.0f,
-                                0.0f
-                            };
-                        }
-                        m_lightmap_baker->set_sky_lighting(sky);
-                    }
-                    erhe::log::set_breadcrumb("tick: lightmap bake");
-                    m_lightmap_baker->tick(
-                        command_buffer,
-                        *lightmap_scene_root.get(),
-                        lightmap_config.uv_min_chart_texels,
-                        lightmap_camera_position_ptr,
-                        lightmap_config.active_tile_budget
-                    );
-                    m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
-                }
-            } else if (
-                should_render &&
-                m_lightmap_streamer &&
-                lightmap_scene_root &&
-                (!m_lightmap_baker ||
-                 (!m_lightmap_baker->is_offline_bake_active() &&
-                  !m_lightmap_baker->has_unsaved_published_display() &&
-                  !m_lightmap_baker->is_display_content_stale()))
-            ) {
-                // Baked-tile streaming from <scene>.lightmap/: whenever the
-                // interactive / offline baker does not own the lightmap
-                // binding, the streamer keeps the N nearest tiles resident
-                // and binds its atlas. A PAUSED baker with UNSAVED published
-                // content keeps the binding (Stop = Pause: the viewport must
-                // keep showing the in-progress bake, not swap to the disk
-                // set); once everything published is saved the streamer owns
-                // again (same pixels) and disk tile streaming resumes.
-                erhe::log::set_breadcrumb("tick: lightmap stream");
-                if (m_lightmap_baker_owned_binding) {
-                    // Ownership handoff baker -> streamer: the baker's
-                    // publish_regions overwrote the primitives' uv mappings
-                    // with baker display slots; re-push the streamer's
-                    // (residency is untouched, so this is cheap and covers
-                    // the no-autosave pause where no invalidate() ran).
-                    m_lightmap_baker_owned_binding = false;
-                    m_lightmap_streamer->reapply_regions(*lightmap_scene_root.get());
-                }
-                m_lightmap_streamer->update(*lightmap_scene_root.get(), lightmap_camera_position_ptr);
-                if (m_lightmap_streamer->has_resident_tiles()) {
-                    m_forward_renderer->set_lightmap_texture(m_lightmap_streamer->get_texture());
-                }
-            } else if (
-                should_render &&
-                m_lightmap_baker &&
-                m_lightmap_baker->is_display_content_stale() &&
-                m_lightmap_baker->get_lightmap_texture()
-            ) {
-                // Paused-and-stale: the monitor white-cleared the baker
-                // display and re-published its mappings; actively rebind it
-                // (the streamer may have held the binding since the pause
-                // autosave). The baker owns the binding until Start.
-                m_lightmap_baker_owned_binding = true;
-                m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
-            }
+        // 3a): record the gather slice + publish lightmap_prepare_phase()
+        // planned in M2 into the frame command buffer, before the
+        // rendergraph samples the published atlas. Recorded even when
+        // begin_swapchain refused the frame: the bake is offscreen work and
+        // the frame command buffer is still submitted, device-only.
+        if (m_lightmap_baker) {
+            erhe::log::set_breadcrumb("tick: lightmap record");
+            m_lightmap_baker->record_tick(command_buffer);
         }
 
         // Execute rendergraph
         if (should_render) {
             erhe::log::set_breadcrumb("tick: rendergraph execute");
             m_rendergraph->execute(command_buffer);
+        }
+
+        // A ray trace output readback the main thread requested (MCP
+        // set_ray_trace save_path): copied after every pass that writes or
+        // samples the output texture this frame.
+        if (m_ray_trace_renderer) {
+            m_ray_trace_renderer->record_output_readback(command_buffer);
+        }
+
+        // Every debug / text renderer frame slot of this frame (recorded in
+        // M2 by the viewports, in R by the headset) has been drawn, or is
+        // dropped unrendered: release their ring buffer ranges.
+        if (m_debug_renderer) {
+            m_debug_renderer->release_frames();
+        }
+        if (m_text_renderer) {
+            m_text_renderer->release_frames();
         }
 
         if (should_render) {
@@ -1094,10 +1987,11 @@ public:
             erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
             m_graphics_device->submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
         }
-        m_app_context.current_command_buffer = nullptr;
 
-        // Advance the frame index.
-        const bool end_frame_ok = m_graphics_device->end_frame();
+        // End the device frame of the packet. A failure aborts here, on the
+        // thread that runs R, before the main thread goes on with the next
+        // frame.
+        const bool end_frame_ok = m_graphics_device->end_frame(packet.device_frame_id);
         ERHE_VERIFY(end_frame_ok);
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
@@ -1123,32 +2017,35 @@ public:
         //}
         // TODO move this logic to m_graphics_device->end_of_frame();
 #endif // TODO
-        // log_frame->trace("tick() end");
-        m_frame_log_window->on_frame_end();
-
         m_app_rendering->process_end_capture();
 
         // Soak / hang-detection signal: log the first main-loop frames so a
         // batch run can positively confirm the editor reached steady-state
-        // content rendering. get_frame_number() advances only via
-        // Time::prepare_update() at the top of tick(); init drives the loading
+        // content rendering. The frame number advances only via
+        // Time::prepare_update() in the overlap phase, which records it in the
+        // packet; init drives the loading
         // screen through pump(), not tick(), so this counts main-loop frames
         // only. Bounded to the first frames so it never floods the log. A run
         // that hangs during the early thumbnail builds stops emitting these
         // before reaching the target, and the watchdog then names the stuck
         // phase. See doc/erhe/geogram.md.
         {
-            const uint64_t main_loop_frame = m_time->get_frame_number();
+            const uint64_t main_loop_frame = packet.frame_number;
             if (main_loop_frame <= 12) {
                 log_startup->info("Main loop: completed frame {}", main_loop_frame);
             }
         }
 
-        m_in_tick.store(false);
+        // The LUTs, if generated, were recorded into this frame's command
+        // buffer or an earlier one (Sky_renderer::ensure_luts, R only).
+        out_result.sky_luts_ready    = m_sky_renderer && m_sky_renderer->are_luts_ready();
+        out_result.render_us         = elapsed_us(render_begin, std::chrono::steady_clock::now());
+        out_result.draw_data_wait_us = m_render_phase_draw_data_wait_us;
+        set_render_frame_phase(erhe::utility::Frame_phase::none);
     }
 
     // Start the main-loop stall watchdog. Call once, after init completes and
-    // before the redraw callback begins driving tick().
+    // before the redraw callback begins driving frame().
     void start_main_loop_watchdog()
     {
         m_watchdog_thread = std::thread([this]() {
@@ -1177,28 +2074,45 @@ public:
                     continue;
                 }
 
-                std::size_t tick_thread_hash = 0;
+                std::size_t                main_thread_hash   = 0;
+                std::size_t                render_thread_hash = 0;
+                erhe::utility::Frame_phase main_frame_phase   = erhe::utility::Frame_phase::none;
+                erhe::utility::Frame_phase render_frame_phase = erhe::utility::Frame_phase::none;
                 {
                     std::lock_guard<std::mutex> lock{m_watchdog_mutex};
-                    tick_thread_hash = m_tick_thread_hash;
+                    main_thread_hash   = m_main_thread_hash;
+                    render_thread_hash = m_render_thread_hash;
+                    main_frame_phase   = m_watchdog_main_frame_phase;
+                    render_frame_phase = m_watchdog_render_frame_phase;
                 }
 
-                // Find the newest breadcrumb set by the tick thread; that is
-                // the phase the spinning tick is stuck in. Worker-thread
-                // breadcrumbs (e.g. background geometry processing) are ignored.
+                // Find the newest breadcrumb set by each of the two frame
+                // phase threads (the same thread in inline mode); the frame
+                // is stuck when neither has progressed. Worker-thread
+                // breadcrumbs (e.g. background geometry processing) are
+                // ignored.
                 const std::vector<erhe::log::Breadcrumb> recent = erhe::log::get_recent_breadcrumbs();
-                const erhe::log::Breadcrumb* stuck = nullptr;
+                const erhe::log::Breadcrumb* main_newest   = nullptr;
+                const erhe::log::Breadcrumb* render_newest = nullptr;
                 for (const erhe::log::Breadcrumb& b : recent) {
-                    if ((tick_thread_hash == 0) || (b.thread_hash == tick_thread_hash)) {
-                        stuck = &b; // recent is oldest -> newest, so this keeps the newest match
+                    // recent is oldest -> newest, so these keep the newest match
+                    if ((main_thread_hash == 0) || (b.thread_hash == main_thread_hash)) {
+                        main_newest = &b;
+                    }
+                    if ((render_thread_hash != 0) && (b.thread_hash == render_thread_hash)) {
+                        render_newest = &b;
                     }
                 }
-                if (stuck == nullptr) {
-                    continue; // no breadcrumb from the tick thread yet
+                const erhe::log::Breadcrumb* newest = main_newest;
+                if ((render_newest != nullptr) && ((newest == nullptr) || (render_newest->monotonic_ns > newest->monotonic_ns))) {
+                    newest = render_newest;
+                }
+                if (newest == nullptr) {
+                    continue; // no breadcrumb from the frame threads yet
                 }
 
                 const std::int64_t now_ns   = erhe::log::breadcrumb_now_ns();
-                const std::int64_t stuck_ns = now_ns - stuck->monotonic_ns;
+                const std::int64_t stuck_ns = now_ns - newest->monotonic_ns;
                 if (stuck_ns < stall_threshold_ns) {
                     continue;
                 }
@@ -1208,9 +2122,25 @@ public:
                 last_reported_ns = now_ns;
 
                 log_watchdog->error(
-                    "Main loop STALLED: tick has not progressed for {:.1f} s. Stuck in phase: '{}' (tick thread {:#x}).",
-                    static_cast<double>(stuck_ns) / 1e9, stuck->text, stuck->thread_hash
+                    "Main loop STALLED: frame has not progressed for {:.1f} s. Frame phase: main {}, render {}.",
+                    static_cast<double>(stuck_ns) / 1e9,
+                    erhe::utility::c_str(main_frame_phase),
+                    erhe::utility::c_str(render_frame_phase)
                 );
+                const erhe::log::Breadcrumb* thread_newest[2] = { main_newest, render_newest };
+                const char*                  thread_label [2] = { "main",      "render"      };
+                const std::size_t            thread_hash  [2] = { main_thread_hash, render_thread_hash };
+                for (std::size_t i = 0; i < 2; ++i) {
+                    if (thread_newest[i] == nullptr) {
+                        log_watchdog->error("  {} thread {:#x}: no breadcrumb", thread_label[i], thread_hash[i]);
+                        continue;
+                    }
+                    log_watchdog->error(
+                        "  {} thread {:#x}: stuck in phase '{}' ({:.1f} s ago)",
+                        thread_label[i], thread_newest[i]->thread_hash, thread_newest[i]->text,
+                        static_cast<double>(now_ns - thread_newest[i]->monotonic_ns) / 1e9
+                    );
+                }
                 // Dump the recent breadcrumb ring (oldest -> newest) so the
                 // phase sequence leading into the stall is visible in the log.
                 for (const erhe::log::Breadcrumb& b : recent) {
@@ -1402,6 +2332,15 @@ public:
         // Editor is constructed on the main thread; anything capturing an
         // owner thread id must record this one, not a worker's.
         m_app_context.main_thread_id = std::this_thread::get_id();
+        // The render role is published to erhe::utility::Thread_roles only
+        // after init: until then the init pump renders on the main thread
+        // outside any frame phase, which the render-side asserts must not
+        // see as a render phase violation. In inline mode run() publishes
+        // the main thread; in dedicated mode the render thread publishes
+        // itself when Render_thread is constructed at the end of this
+        // constructor, which then also updates render_thread_id.
+        m_app_context.render_thread_id = m_app_context.main_thread_id;
+        erhe::utility::Thread_roles::set_main_thread(m_app_context.main_thread_id);
 
         // thread_count <= 0 means one worker per hardware thread.
         const int configured_thread_count = m_editor_settings.threading.thread_count;
@@ -2025,8 +2964,7 @@ public:
                     *m_app_context.current_command_buffer,
                     m_app_context,
                     *m_program_interface.get(),
-                    *m_mesh_memory.get(),
-                    m_editor_settings.ray_trace
+                    *m_mesh_memory.get()
                 );
                 m_ddgi_renderer = std::make_unique<Ddgi_renderer>(
                     *m_graphics_device.get(),
@@ -2035,7 +2973,6 @@ public:
                     *m_app_message_bus.get(),
                     *m_program_interface.get(),
                     *m_mesh_memory.get(),
-                    m_editor_settings.ddgi,
                     get_producer_selection(m_editor_settings.indirect_diffuse_source, Indirect_diffuse_source::ddgi)
                 );
                 m_radiance_cascades_renderer = std::make_unique<Radiance_cascades_renderer>(
@@ -2045,11 +2982,11 @@ public:
                     *m_app_message_bus.get(),
                     *m_program_interface.get(),
                     *m_mesh_memory.get(),
-                    m_editor_settings.radiance_cascades,
-                    m_editor_settings.ddgi,
+                    m_editor_settings.radiance_cascades.merge_mode,
                     get_producer_selection(m_editor_settings.indirect_diffuse_source, Indirect_diffuse_source::radiance_cascades)
                 );
                 m_lightmap_baker  = std::make_unique<Lightmap_baker>(*m_graphics_device.get(), *m_mesh_memory.get());
+                m_lightmap_baker->set_join_render_phase([this]() { join_render_phase(); });
                 m_lightmap_report = std::make_unique<Lightmap_report>();
                 m_lightmap_baker->set_report(m_lightmap_report.get());
                 m_lightmap_streamer    = std::make_unique<Lightmap_streamer>(*m_graphics_device.get(), m_app_context);
@@ -2463,7 +3400,6 @@ public:
         // Lightmap settings from editor_settings.json; later edits apply
         // themselves at their edit site.
         apply_lightmap_settings(m_app_context);
-        apply_content_edge_lines_settings(m_app_context);
 
         // Every part has registered its commands and declared its default
         // bindings; apply the user's overrides on top.
@@ -2809,16 +3745,70 @@ public:
                 }
                 // TODO throttle redraws - if last redraw was less than live resize redraw threshold limit ago, don't redraw
                 if ((m_last_window_width != 0) && (m_last_window_height != 0)) {
-                    tick();
+                    frame();
                 }
             }
         );
+
+        // The render phase handoff (doc/editor/editor.md "Frame phases and
+        // the render thread"). In dedicated mode the constructor returns
+        // once the render thread has published itself as the render role;
+        // in inline mode run() publishes the main thread.
+        m_render_thread_mode = select_render_thread_mode(m_editor_settings.threading.render_thread);
+        m_render_thread = std::make_unique<Render_thread>(
+            m_render_thread_mode,
+            [this](const Frame_packet& packet, Frame_result& out_result) {
+                frame_render_phase(packet, out_result);
+            }
+        );
+        if (m_render_thread_mode == Render_thread_mode::dedicated_thread) {
+            m_app_context.render_thread_id = erhe::utility::Thread_roles::get_render_thread();
+        }
+        m_imgui_overlap    = select_imgui_overlap(m_render_thread_mode, m_editor_settings.threading.imgui_overlap);
+        m_frame_pipelining = select_frame_pipelining(m_render_thread_mode, m_app_context.OpenXR, m_editor_settings.threading.frame_pipelining);
+        m_app_context.join_render_phase = [this]() {
+            join_render_phase();
+        };
+        // The ImGui host rendergraph nodes wait for the frame's draw data
+        // (published by frame_imgui_phase's caller); the wait is R time,
+        // reported through Frame_result::draw_data_wait_us.
+        m_imgui_renderer->set_draw_data_wait(
+            [this]() {
+                const std::chrono::steady_clock::time_point wait_begin = std::chrono::steady_clock::now();
+                m_render_thread->wait_for_draw_data(m_render_phase_frame_number);
+                m_render_phase_draw_data_wait_us += elapsed_us(wait_begin, std::chrono::steady_clock::now());
+            }
+        );
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        // The XR view command buffers are recorded in the render phase, so
+        // they come from the render slot, not from slot 0 (which M2's
+        // glTF image uploads use). The init pump above recorded them from
+        // slot 0 on the main thread.
+        if (m_headset && (m_headset->get_xr_session() != nullptr)) {
+            m_headset->get_xr_session()->set_command_buffer_thread_slot(s_render_thread_slot);
+        }
+#endif
     }
 
     ~Editor() noexcept
     {
         // Stop the watchdog first so it cannot touch members during teardown.
         stop_main_loop_watchdog();
+
+        // Then the render thread: run() joins the last frame it kicked
+        // when the loop ends; a frame still outstanding (run() left by an
+        // exception) is joined here. Then the dedicated thread ends; no
+        // render phase may run while the GPU is quiesced and the parts are
+        // torn down below.
+        if (m_render_thread) {
+            join_outstanding_frame();
+            m_render_thread->stop();
+        }
+        // The packet holds strong references (the indirect diffuse scene
+        // root, the lightmap atlas): released now, before the parts their
+        // destructors reach (the mesh memory a scene's meshes allocate from)
+        // are torn down below, not when the member itself is destroyed.
+        m_frame_packet = Frame_packet{};
 
         // Quiesce the GPU before tearing any part down. wait_idle() drives
         // frame_completed() for every submitted frame and then drains any
@@ -2832,6 +3822,13 @@ public:
         // same handlers after their owning parts were gone.
         if (m_graphics_device) {
             m_graphics_device->wait_idle();
+        }
+
+        // No frame renders any more: the rendergraph destroys the nodes it
+        // retired for frames in flight now, while every part they reference
+        // is alive, and every node released from here on at once.
+        if (m_rendergraph) {
+            m_rendergraph->end_rendering();
         }
 
         // The imgui renderer retains a Texture_reference for every image drawn
@@ -2916,6 +3913,12 @@ public:
         m_app_context.text_renderer_config     = &m_text_renderer_config;
         m_app_context.window_config            = &m_window_config;
         m_app_context.editor_settings          = &m_editor_settings;
+        m_app_context.render_settings.frames   = &m_render_settings;
+        // The main thread reads the latest copy from here on; the init
+        // pump's renders use this one, the render phase of each frame the
+        // copy its prepare phase made.
+        m_render_settings.initialize(*m_graphics_device.get());
+        m_render_settings.snapshot(m_graphics_device->get_frame_index(), m_editor_settings, m_app_settings);
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.editor_windows           = m_editor_windows        .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
@@ -3860,6 +4863,15 @@ public:
         ERHE_PROFILE_FUNCTION();
 
         m_run_started = true;
+        // The frame loop starts: from here on the render-side asserts and
+        // the frame phase asserts are live (see the constructor). In
+        // dedicated mode the render thread published itself when
+        // Render_thread was constructed (end of the constructor; nothing
+        // renders between that and here); in inline mode the main thread is
+        // the render role.
+        if (m_render_thread_mode == Render_thread_mode::inline_main_thread) {
+            erhe::utility::Thread_roles::set_render_thread(m_app_context.render_thread_id);
+        }
         // TODO: https://registry.khronos.org/OpenGL/extensions/NV/GLX_NV_delay_before_swap.txt
         // Also:
         //  - Measure time since first swapbuffers
@@ -3919,46 +4931,13 @@ public:
                 continue;
             }
 #endif
-            {
-                ERHE_PROFILE_SCOPE("dispatch events");
-                auto& input_events = m_window->get_input_events();
-                for (erhe::window::Input_event& input_event : input_events) {
-                    dispatch_input_event(input_event);
-                }
-                if (m_window_resize_event.has_value()) {
-                    m_request_resize_pending.store(true);
-                    m_window_resize_event.reset();
-                    m_last_window_width  = m_window->get_width();
-                    m_last_window_height = m_window->get_height();
-                }
-#if defined(ERHE_OS_ANDROID)
-                // Foreground / device-reset arrived while we were
-                // suspended. The previous VkSurfaceKHR is bound to a
-                // now-detached ANativeWindow; rebuild the surface and
-                // swapchain over the freshly-bound ANativeWindow that
-                // SDL has wired into Context_window. Surface_impl::
-                // recreate_for_new_window keeps the Swapchain C++
-                // object identity stable so cached raw Swapchain*
-                // pointers in Render_pass_impl (and therefore in
-                // Window_imgui_host::m_render_pass) stay valid; the
-                // pipeline cache and bindless texture heap are keyed
-                // on format / hold no swapchain-derived handles, so
-                // they survive the rebuild without an explicit
-                // invalidation pass. m_request_resize_pending is also
-                // set so update_swapchain re-queries the new surface
-                // extent and rebuilds the underlying VkSwapchainKHR
-                // on the next frame.
-                if (m_window->consume_swapchain_dirty()) {
-                    if (!m_graphics_device->recreate_surface_for_new_window()) {
-                        log_startup->warn("Surface recreate failed; retrying next frame");
-                    }
-                    m_request_resize_pending.store(true);
-                    m_last_window_width  = m_window->get_width();
-                    m_last_window_height = m_window->get_height();
-                }
-#endif
-            }
-            tick();
+            // The events this poll queued are dispatched at the start of the
+            // next prepare phase (M2): dispatch reaches the input state,
+            // tools, ImGui font config and the swapchain resize fields, which
+            // the render phase reads only through what M2 copies for its
+            // frame.
+            m_input_events_pending = true;
+            frame();
 
             if ((m_editor_settings.quit_after_frames > 0) &&
                 (m_time->get_frame_number() >= static_cast<uint64_t>(m_editor_settings.quit_after_frames))) {
@@ -3967,6 +4946,9 @@ public:
 
             ERHE_PROFILE_FRAME_END
         }
+        // The last kicked frame is joined here, so its result (a device
+        // error) is accounted and no render phase runs past the loop.
+        join_outstanding_frame();
         // Settings are autosaved from edit sites (touch()); this final flush
         // compares and writes regardless of the dirty marks, catching an edit
         // still deferred by a held mouse button and any change site that
@@ -3976,12 +4958,18 @@ public:
     }
 
     bool m_close_requested{false};
+    // Main thread: run() queued input events that the next prepare phase
+    // dispatches (see frame_prepare_phase()).
+    bool m_input_events_pending{false};
+    // Main thread: a kicked render phase has not been joined yet (see
+    // join_outstanding_frame()).
+    bool m_frame_outstanding{false};
     bool                                    m_run_started{false};
     std::atomic<bool>                       m_in_tick    {false};
     bool m_run_stopped    {false};
 
     // Window-activity classification for power saving (see run()). Computed
-    // once per loop iteration and read by tick() to pause the simulation and
+    // once per loop iteration and read by frame() to pause the simulation and
     // skip rendering while the window is not visible.
     enum class Frame_activity {
         active,    // focused and visible    -> full rate
@@ -3990,17 +4978,31 @@ public:
     };
     Frame_activity m_frame_activity{Frame_activity::active};
 
-    // Main-loop stall watchdog. The render thread executes tick() under
-    // m_mutex with m_in_tick == true; if a single tick spins (CPU-bound loop)
-    // it never returns, so it cannot log where it is stuck. This background
-    // thread watches the diagnostic breadcrumb (erhe::log::set_breadcrumb) and
-    // reports the last phase when a tick fails to progress past a threshold.
+    // Main-loop stall watchdog. The main thread executes frame() with
+    // m_in_tick == true from the start of M1 (which joins the previous
+    // frame's render phase) until the kick,
+    // holding m_mutex for that span (M1 and M2); R runs outside it, on the
+    // render thread or inside the kick. If a frame spins (CPU-bound loop) or deadlocks on either
+    // thread it never returns, so it cannot log where it is stuck. A render
+    // phase that stalls is reported once the next frame() blocks in its
+    // join.
+    // This background thread watches the diagnostic breadcrumbs
+    // (erhe::log::set_breadcrumb) of the main and render threads and reports
+    // the newest of each, with the frame phase, when the frame fails to
+    // progress past a threshold.
     // See doc/erhe/geogram.md.
     std::thread             m_watchdog_thread;
     std::mutex              m_watchdog_mutex;
     std::condition_variable m_watchdog_cv;
     bool                    m_watchdog_stop{false};
-    std::size_t             m_tick_thread_hash{0}; // guarded by m_watchdog_mutex; set once in tick()
+    // Guarded by m_watchdog_mutex. The thread hashes are set once, on the
+    // first frame; the phases mirror Thread_roles' per-role phases (see
+    // set_frame_phase() and set_render_frame_phase()).
+    bool                       m_watchdog_threads_known{false}; // read and written by the main thread only
+    std::size_t                m_main_thread_hash      {0};
+    std::size_t                m_render_thread_hash    {0};
+    erhe::utility::Frame_phase m_watchdog_main_frame_phase  {erhe::utility::Frame_phase::none};
+    erhe::utility::Frame_phase m_watchdog_render_frame_phase{erhe::utility::Frame_phase::none};
 
 
     std::string                         m_startup_commands_path; // startup script path (--commands); declared first so it initializes before run_startup_script() runs
@@ -4016,6 +5018,7 @@ public:
     // it outlives every collect-callback client (e.g. Scene_view dtors
     // unregister against the store).
     App_settings                        m_app_settings;
+    Render_settings_frames              m_render_settings; // the render phase's copies of the settings, one per frame in flight (renderers/render_settings.hpp)
     // Convenience alias for the loaded config; same object as
     // m_app_settings.config().
     Editor_settings_config&             m_editor_settings{m_app_settings.config()};
@@ -4087,6 +5090,17 @@ public:
     // to the current prediction advances the simulation clock. 0 = invalid
     // (pacing inactive last frame; next valid prediction re-seeds).
     double                                                   m_last_predicted_display_time{0.0};
+    // Per-frame data crossing the frame phases (see Frame_packet).
+    Frame_packet                                             m_frame_packet{};
+    // The handoff to the render phase; created at the end of the
+    // constructor, stopped first thing in ~Editor after the watchdog.
+    Render_thread_mode                                       m_render_thread_mode{Render_thread_mode::inline_main_thread};
+    bool                                                     m_imgui_overlap{false}; // the ImGui phase runs after the kick (select_imgui_overlap)
+    bool                                                     m_frame_pipelining{false}; // the kick joins the previous frame; M1 does not (select_frame_pipelining)
+    std::unique_ptr<Render_thread>                           m_render_thread;
+    uint64_t                                                 m_render_phase_frame_number{0};   // R: the frame being rendered (the draw data wait)
+    double                                                   m_render_phase_draw_data_wait_us{0.0}; // R: this frame's draw data wait, into Frame_result
+    bool                                                     m_sky_luts_ready{false}; // main: Frame_result::sky_luts_ready of the last joined frame
     // Tier S slop-servo fallback (P4.1/P4.2): pre-input sleep servoed from
     // measured backpressure blocking. Period corrected each tick from the
     // swapchain timing query.

@@ -25,9 +25,9 @@ Per frame, for each scene view:
    `Shadow_frustum_fit_settings` from the live editor settings, resolves the
    fit target camera (the view camera, or the per-scene-view override), and
    calls `Shadow_renderer::render()`.
-2. `Shadow_renderer::render()` (erhe::scene_renderer) gathers one world-space
-   AABB per shadow caster when `fit_to_casters` or `depth_clamp` is
-   enabled, then calls `Light_projections::apply()`, which invokes
+2. `Shadow_renderer::render()` (erhe::scene_renderer) takes one world-space
+   AABB per shadow caster (from the prepare phase's slot, or gathered from
+   `mesh_spans`; see fit_to_casters), then calls `Light_projections::apply()`, which invokes
    `Light::projection_transforms()` per light to compute the light camera
    pose, projection, `clip_from_world` and `texture_from_world`, and derives
    each light's bias limits (`Light_shadow_limits`: the raster vertex depth
@@ -117,11 +117,17 @@ Pipeline order, with the box recorded per step for debugging
 (`Shadow_fit_step`): fit points -> frustum constraint -> shadow range cap ->
 stabilization.
 
-**fit_to_casters.** `Shadow_renderer::render()` gathers one world-space AABB
-per visible shadow-casting mesh: from the registered draw-list objects on the
-draw-list path (`Draw_list_scene::gather_shadow_bounds()`, the entries' AABB
-that the transform and refresh hooks keep current; `doc/erhe/draw_list_renderer.md`
-Q6), from `Mesh::get_aabb_world()` of every content mesh on the bucket path.
+**fit_to_casters.** `Shadow_renderer::render()` reads one world-space AABB
+per visible shadow-casting mesh: on the draw-list path the ones the prepare
+phase gathered from the registered draw-list objects into the frame's slot
+(`Draw_list_scene::prepare_shadow_bounds()` / `get_shadow_bounds()`, the
+entries' AABB that the transform and refresh hooks keep current;
+`doc/erhe/draw_list_renderer.md` Q6). The editor passes that slot on the
+bucket path too (`Render_parameters::shadow_bounds`: every editor scene root
+keeps a `Draw_list_scene`, whatever the draw-list gate). A caller that passes
+neither (`shadow_bounds` nor `draw_list_scene`; the GPU test fixture) gets
+`Mesh::get_aabb_world()` of every mesh of `mesh_spans`, gathered in
+`render()`.
 The fit then, per light:
 
 1. Builds the shadow caster volume F_shadow: the main camera view frustum,
@@ -388,8 +394,7 @@ with the distance from the world origin.
   caster vertex rounding bound (`Light_shadow_limits::caster_vertex_rounding`,
   "Minimum bias"), the largest `get_vertex_position_rounding()` any caster
   vertex of the light's passes can have: per caster mesh
-  (`Caster_vertex_extent`, gathered by `Shadow_renderer::render()` with the
-  caster bounds) the length of `4u |M| |x_max| + 5u |t - view_origin|` per
+  (`Caster_vertex_extent`, gathered with the caster bounds) the length of `4u |M| |x_max| + 5u |t - view_origin|` per
   component, `|x_max|` the largest `|coordinate|` per axis over the mesh's
   node-space bounds, in double, rounded up to float. `texture_from_world` and
   `world_from_texture` remain for the other consumers (the shadow texel debug

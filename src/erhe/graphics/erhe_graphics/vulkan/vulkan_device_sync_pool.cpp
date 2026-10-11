@@ -29,10 +29,15 @@ Device_sync_pool::~Device_sync_pool() noexcept
 
 auto Device_sync_pool::get_semaphore() -> VkSemaphore
 {
-    if (!m_semaphore_pool.empty()) {
-        const VkSemaphore semaphore = m_semaphore_pool.back();
-        m_semaphore_pool.pop_back();
-        return semaphore;
+    std::size_t serial = 0;
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        if (!m_semaphore_pool.empty()) {
+            const VkSemaphore semaphore = m_semaphore_pool.back();
+            m_semaphore_pool.pop_back();
+            return semaphore;
+        }
+        serial = m_semaphore_serial++;
     }
 
     const VkSemaphoreCreateInfo create_info{
@@ -49,7 +54,7 @@ auto Device_sync_pool::get_semaphore() -> VkSemaphore
     m_device_impl.set_debug_label(
         VK_OBJECT_TYPE_SEMAPHORE,
         reinterpret_cast<uint64_t>(vulkan_semaphore),
-        fmt::format("Sync pool semaphore {}", m_semaphore_serial++).c_str()
+        fmt::format("Sync pool semaphore {}", serial).c_str()
     );
 
     return vulkan_semaphore;
@@ -57,10 +62,15 @@ auto Device_sync_pool::get_semaphore() -> VkSemaphore
 
 auto Device_sync_pool::get_fence() -> VkFence
 {
-    if (!m_fence_pool.empty()) {
-        const VkFence fence = m_fence_pool.back();
-        m_fence_pool.pop_back();
-        return fence;
+    std::size_t serial = 0;
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        if (!m_fence_pool.empty()) {
+            const VkFence fence = m_fence_pool.back();
+            m_fence_pool.pop_back();
+            return fence;
+        }
+        serial = m_fence_serial++;
     }
 
     const VkFenceCreateInfo create_info{
@@ -77,7 +87,7 @@ auto Device_sync_pool::get_fence() -> VkFence
     m_device_impl.set_debug_label(
         VK_OBJECT_TYPE_FENCE,
         reinterpret_cast<uint64_t>(vulkan_fence),
-        fmt::format("Sync pool fence {}", m_fence_serial++).c_str()
+        fmt::format("Sync pool fence {}", serial).c_str()
     );
 
     return vulkan_fence;
@@ -86,19 +96,21 @@ auto Device_sync_pool::get_fence() -> VkFence
 void Device_sync_pool::recycle_semaphore(const VkSemaphore semaphore)
 {
     ERHE_VERIFY(semaphore != VK_NULL_HANDLE);
+    const std::lock_guard<std::mutex> lock{m_mutex};
     m_semaphore_pool.push_back(semaphore);
 }
 
 void Device_sync_pool::recycle_fence(const VkFence fence)
 {
     ERHE_VERIFY(fence != VK_NULL_HANDLE);
-    m_fence_pool.push_back(fence);
-
+    // Reset before the fence becomes visible to other threads in the list.
     const VkResult result = vkResetFences(m_vulkan_device, 1, &fence);
     if (result != VK_SUCCESS) {
         log_swapchain->critical("vkResetFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    m_fence_pool.push_back(fence);
 }
 
 } // namespace erhe::graphics

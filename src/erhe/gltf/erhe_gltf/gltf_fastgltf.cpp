@@ -4649,9 +4649,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
                             .min = glm::vec3{bounds_component(*accessor.min, 0), bounds_component(*accessor.min, 1), bounds_component(*accessor.min, 2)},
                             .max = glm::vec3{bounds_component(*accessor.max, 0), bounds_component(*accessor.max, 1), bounds_component(*accessor.max, 2)}
                         };
-                        glm::mat4 world_from_node{1.0f};
-                        static_assert(sizeof(world_from_node) == sizeof(matrix));
-                        std::memcpy(&world_from_node, &matrix, sizeof(world_from_node)); // both column-major float 4x4
+                        const glm::mat4 world_from_node = glm::make_mat4x4(matrix.data()); // both column-major float 4x4
                         aabb.include(local_aabb.transformed_by(world_from_node));
                     }
                 }

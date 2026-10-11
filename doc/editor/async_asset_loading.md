@@ -14,8 +14,8 @@ identity, ownership and the registry are
 [`asset_manager.md`](asset_manager.md).
 
 A load is an `Asset_load_task` owned by `Asset_manager` and advanced a bounded
-amount from `Asset_manager::tick()`, called from `Editor::tick()` immediately
-after `Scene_commit_queue::flush()`. The editor keeps ticking, stays
+amount from `Asset_manager::tick()`, called from `Editor::frame_prepare_phase()`
+(M2) immediately after `Scene_commit_queue::flush()`. The editor keeps ticking, stays
 interactive and keeps presenting while a scene streams in.
 
 ## Entry points

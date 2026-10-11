@@ -1064,16 +1064,16 @@ void Properties::material_properties(const std::vector<std::shared_ptr<erhe::Ite
     const auto  available_size = ImGui::GetContentRegionAvail();
     const float area_size_0    = std::min(available_size.x, available_size.y);
     const int   area_size      = std::max(1, static_cast<int>(area_size_0));
-    m_context.material_preview->resize(area_size, area_size);
-    m_context.material_preview->update_rendertarget(*m_context.graphics_device);
-    m_context.material_preview->render_preview(selected_material);
+    // ImGui time: request the preview and the slice; Material_preview::update
+    // and Brdf_slice::update render / apply them in the prepare phase, and
+    // the draws below show the previous render (doc/editor/render_thread.md
+    // section 2.6).
+    m_context.material_preview->request_preview(selected_material, area_size);
     m_context.material_preview->show_preview();
 
-    auto* node = m_context.brdf_slice->get_node();
-    if (node != nullptr) {
-        node->set_material(selected_material);
+    if ((m_context.brdf_slice != nullptr) && (m_context.brdf_slice->get_node() != nullptr)) {
         if (ImGui::TreeNodeEx("BRDF Slice", ImGuiTreeNodeFlags_None)) {
-            m_context.brdf_slice->show_brdf_slice(area_size);
+            m_context.brdf_slice->show_brdf_slice(selected_material, area_size);
             ImGui::TreePop();
         }
     }

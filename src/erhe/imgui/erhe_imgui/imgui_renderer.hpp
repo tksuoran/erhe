@@ -11,6 +11,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/texture_reference.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <imgui/imgui.h>
@@ -51,7 +52,51 @@ public:
     float       icon_font_size           {0.0f};
 };
 
+class Imgui_draw_data_copy;
 class Imgui_host;
+
+// A texture ImGui manages (the font atlas pages). The ImGui phase creates it
+// and gives ImGui its id at once (Imgui_renderer::copy_draw_data); the render
+// thread creates the GPU texture when it runs the create request. Only the
+// render thread reads or writes `texture`.
+class Imgui_texture : public erhe::graphics::Texture_reference
+{
+public:
+    ~Imgui_texture() noexcept override;
+
+    [[nodiscard]] auto get_referenced_texture() const -> const erhe::graphics::Texture* override;
+
+    std::shared_ptr<erhe::graphics::Texture> texture;
+};
+
+enum class Imgui_texture_request_kind : unsigned int {
+    create = 0,
+    update,
+    destroy
+};
+
+// One ImGui texture request, copied by the ImGui phase of frame_index and run
+// by the render thread when it records that frame (or the first frame it
+// records after it). pixels holds whole rows of the ImTextureData:
+// rows y .. y + height of a pitch of `pitch` bytes; the upload starts at
+// column x.
+class Imgui_texture_request
+{
+public:
+    Imgui_texture_request_kind     kind           {Imgui_texture_request_kind::create};
+    uint64_t                       frame_index    {0};
+    std::shared_ptr<Imgui_texture> texture        {};
+    erhe::dataformat::Format       format         {erhe::dataformat::Format::format_undefined};
+    int                            texture_width  {0};
+    int                            texture_height {0};
+    int                            x              {0};
+    int                            y              {0};
+    int                            width          {0};
+    int                            height         {0};
+    int                            bytes_per_pixel{0};
+    int                            pitch          {0};
+    std::vector<std::uint8_t>      pixels         {};
+};
 
 class Imgui_draw_parameter_block_offsets
 {
@@ -134,26 +179,61 @@ public:
     auto image       (Draw_texture_parameters&& parameters) -> bool;
     auto image_button(Draw_texture_parameters&& parameters) -> bool;
 
-    // Process ImGui texture create/update/destroy commands for the current
-    // frame's draw data. Must be called while the calling ImGui context is
-    // current (Scoped_imgui_context), AFTER ImGui::Render(), and BEFORE any
-    // render pass begins - uploads use Blit_command_encoder which Vulkan
-    // does not permit inside a render pass.
+    // The ImGui phase (main thread), right after ImGui::Render() of the
+    // current context, through Imgui_host::copy_draw_data(): turns the
+    // context's texture requests (ImTextureData create / update / destroy)
+    // into Imgui_texture_request entries for the render thread, so every
+    // command's texture id is known, then deep-copies the context's
+    // ImDrawData into `out` (cleared and refilled, capacity kept) stamped
+    // with the ImGui phase's frame index. A context that rendered nothing
+    // this frame leaves `out` stamped and not valid.
+    void copy_draw_data(Imgui_draw_data_copy& out);
+
+    // Render thread: runs the texture requests the ImGui phase queued for
+    // the frame being recorded and earlier, in order. Before any render pass
+    // begins - uploads use Blit_command_encoder which Vulkan does not permit
+    // inside a render pass. The first ImGui host node of a frame runs them;
+    // the others find the queue empty.
     void update_draw_data_textures(erhe::graphics::Command_buffer& command_buffer);
 
     // transform applies the presentation pre-rotation (Android landscape on a
     // portrait-native panel) to the final swapchain pass: it rotates clip space
     // and swaps the framebuffer viewport for 90/270. Defaults to identity, which
     // every offscreen / render-to-texture host (and all desktop platforms) uses.
+    // Render thread: draws a host's draw data copy of the frame being
+    // recorded (Imgui_host::get_draw_data()).
     void render_draw_data(
         erhe::graphics::Render_command_encoder& encoder,
         const erhe::graphics::Render_pass&      render_pass,
+        const Imgui_draw_data_copy&             draw_data,
         erhe::graphics::Surface_transform       transform = erhe::graphics::Surface_transform::identity
     );
 
-    void begin_frame    ();
-    void at_end_of_frame(std::function<void()>&& func);
+    // Main thread, the start of the ImGui phase: frame_index is the device
+    // frame index of the frame being drawn (the application passes it, so
+    // the ImGui phase reads no device state another thread advances). The
+    // draw data copies and the texture references image() / image_button()
+    // keep alive are filed under it.
+    void begin_frame    (uint64_t frame_index);
+
+    // The ImGui phase's frame index (begin_frame); main thread.
+    [[nodiscard]] auto get_imgui_frame_index() const -> uint64_t;
+    // The device frame the calling render thread records
+    // (Device::get_frame_index(), role-keyed).
+    [[nodiscard]] auto get_render_frame_index() const -> uint64_t;
+    [[nodiscard]] auto get_number_of_frames_in_flight() const -> std::size_t;
+    // Render thread, after the frame's ImGui hosts drew: releases the texture
+    // references render_draw_data() displaced.
     void next_frame     ();
+
+    // The ImGui host rendergraph nodes call wait_for_draw_data() before they
+    // read the frame's draw data (update_draw_data_textures /
+    // render_draw_data); it runs the function the application set, which
+    // blocks until the main thread's ImGui phase has published the draw
+    // data of the frame being rendered (doc/editor/render_thread.md
+    // section 2.5). Without a function set it returns at once.
+    void set_draw_data_wait(std::function<void()> wait);
+    void wait_for_draw_data();
 
     // Drops every texture reference held for drawing (see
     // m_retained_texture_references). A reference can be a Rendergraph_node
@@ -182,7 +262,20 @@ public:
     void unlock_mutex();
 
 private:
-    void update_texture(ImTextureData* tex, erhe::graphics::Command_buffer& command_buffer);
+    // One device frame in flight: the texture references image() /
+    // image_button() pushed while the ImGui phase drew that frame. The ImGui
+    // phase appends; the render thread moves them into
+    // m_retained_texture_references when it draws the frame.
+    class Frame_slot
+    {
+    public:
+        std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> draw_texture_references;
+    };
+
+    void queue_texture_request  (ImTextureData* tex);
+    void push_texture_rect      (Imgui_texture_request_kind kind, const std::shared_ptr<Imgui_texture>& texture, ImTextureData* tex, const ImTextureRect& rect);
+    void run_texture_request    (Imgui_texture_request& request, erhe::graphics::Command_buffer& command_buffer);
+    void push_draw_texture_reference(const std::shared_ptr<erhe::graphics::Texture_reference>& texture_reference);
 
     [[nodiscard]] auto get_sampler(const Erhe_ImTextureID& texture_id) const -> const erhe::graphics::Sampler&;
     [[nodiscard]] auto get_sampler(
@@ -243,10 +336,21 @@ private:
     std::vector<Imgui_host*>                 m_imgui_hosts;
     const Imgui_host*                        m_current_host{nullptr}; // current context
 
-    std::vector<std::function<void()>> m_at_end_of_frame;
+    std::function<void()>              m_draw_data_wait;
 
-    std::vector<std::shared_ptr<erhe::graphics::Texture>> m_imgui_textures;
-    std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_draw_texture_references;
+    // ImGui phase (main thread): the frame it draws, and the live ImGui
+    // textures (ImTextureData with an id).
+    uint64_t                                    m_imgui_frame_index{0};
+    std::vector<std::shared_ptr<Imgui_texture>> m_imgui_textures;
+
+    // Texture requests from the ImGui phase, oldest first; the render thread
+    // runs and removes those of the frame it records and earlier.
+    std::mutex                         m_texture_request_mutex;
+    std::vector<Imgui_texture_request> m_texture_requests;
+
+    std::vector<Frame_slot> m_frame_slots; // one per device frame in flight
+
+    // Render thread: the references of the frame drawn last.
     std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_retained_texture_references;
     // Texture references displaced from m_retained_texture_references during
     // render_draw_data(); released in next_frame(). render_draw_data() runs

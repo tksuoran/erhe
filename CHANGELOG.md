@@ -9,6 +9,173 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Command_buffer::get_active_render_pass()` /
+  `set_active_render_pass()` (set by `Render_pass::start_render_pass()` /
+  `end_render_pass()`); `Ring_buffer::try_acquire()` and `Ring_buffer_wrap`
+  (check the space and acquire under one lock).
+
+- `erhe::rendergraph`: virtual `Rendergraph_node::on_released()`, called by
+  `Rendergraph_node_deleter` when the last owner releases the node, before
+  the rendergraph unregisters and retires it. `erhe::imgui`: `Imgui_host`
+  overrides it and leaves the `Imgui_renderer`'s host list at the release
+  instead of at its destruction.
+
+- `erhe::rendergraph`: `make_rendergraph_node<T>(args...)` and
+  `Rendergraph_node_deleter`: every node is created as a `std::shared_ptr`
+  whose deleter hands it back to the rendergraph, which unregisters it at
+  once and destroys it once no frame still to be rendered names it;
+  `Rendergraph::end_rendering()` (shutdown, after the last render phase)
+  destroys the retired nodes.
+
+- `erhe::rendergraph`: `Rendergraph::prepare_frame()` (main thread, prepare
+  phase) calls each enabled node's new virtual
+  `Rendergraph_node::prepare_rendergraph_node(frame_index)` hook, then copies
+  every node's enabled flag into the frame (one copy per frame in flight);
+  `Rendergraph_node::is_enabled_in_frame(frame_index)`. Programs without a
+  separate prepare phase call `prepare_frame()` before `execute()`.
+
+- `erhe::scene_renderer`: `Content_wide_line_tent_settings` (`use_tent`,
+  `line_bias_margin`, `line_bias_clamp`), passed per frame to
+  `Content_wide_line_renderer::set_view_params()`.
+
+- `erhe::imgui`: per-frame draw data copies. `Imgui_draw_data_copy` /
+  `Imgui_draw_list_range` (one context's `ImDrawData` deep-copied into owned
+  vectors), `Imgui_host::copy_draw_data()` (ImGui phase, called by
+  `Imgui_windows::end_frame()`) and `Imgui_host::get_draw_data()` (render
+  thread, the slot of its device frame), `Imgui_renderer::copy_draw_data()`,
+  `get_imgui_frame_index()`, `get_render_frame_index()`,
+  `get_number_of_frames_in_flight()`; `Imgui_texture` and
+  `Imgui_texture_request` (ImGui texture requests queued by the ImGui phase,
+  run by `update_draw_data_textures()` on the render thread).
+
+- `erhe::graphics`: `Multi_copy_buffer::publish()` names the current copy as
+  the copy the caller's device frame (the role-keyed
+  `Device::get_frame_index()`) binds and stamps it as used by that frame;
+  `commit()` publishes the copy it commits.
+
+- `erhe::rendergraph`: `Texture_rendergraph_node::request_size(width,
+  height)` (main thread, prepare phase; one request per frame in flight) and
+  `apply_requested_size()` (render phase, at the start of the node's
+  execute), so the render target is resized by the render phase only;
+  `Render_target::get_sample_count()`.
+
+- `erhe::scene_renderer`: `Content_wide_line_record` and
+  `Content_wide_line_feed` (`content_wide_line_feed.hpp`), one view's
+  prepared edge lines; `Content_wide_line_renderer::prepare_mesh(...,
+  Content_wide_line_feed&)` (static, reads the mesh) and `add_feed(feed)`
+  (queues the dispatches, reads no mesh). `add_mesh()` does both.
+
+- `erhe::scene_renderer`: `Shadow_renderer::prepare(Prepare_parameters,
+  Render_bucket_snapshot&)`, the bucket path's casters prepared without the
+  pass variant bits; `Shadow_renderer::Render_parameters::casters` (draw a
+  prepared snapshot, ORing the depth-only / distance / cube bits per pass)
+  and `shadow_bounds` (the frustum fit bounds, e.g. a
+  `Draw_list_scene::get_shadow_bounds` slot, on either path).
+
+- `erhe::scene_renderer`: `Primitive_buffer::append_records(bucket,
+  material_source, mode, settings, io_id_offset, id_ranges, out)`, the id
+  pass's prepared records with their `Id_range` table;
+  `Primitive_buffer::first_id_offset` and `get_record_size()`.
+
+- `erhe::scene_renderer`: `Render_bucket_snapshot` and `Prepared_bucket`
+  (`render_bucket_snapshot.hpp`), one pass's prepared bucket-path draws
+  (buckets, complete primitive records, draw commands).
+  `Forward_renderer::prepare(Prepare_parameters, Render_bucket_snapshot&)`
+  buckets and writes them; `Forward_renderer::render(Draw_parameters, const
+  Render_bucket_snapshot&)` draws them without reading any mesh, applying
+  only the render-phase environment shader-key axes.
+  `Primitive_buffer::append_records(...)` / `update(std::span<const
+  std::byte>)` and `Draw_indirect_buffer::append_commands(...)` /
+  `update(std::span<const Draw_indexed_primitives_indirect_command>)`, the
+  prepare and draw halves of the record and command writes.
+
+- `erhe::scene_renderer`: `Draw_list_scene::publish(frame_index,
+  frames_in_flight)` (main thread, prepare phase, after `flush_pending()` and
+  after the frame's `Joint_poses::capture`) rewrites the joint slot fields of
+  the skinned objects whose skin moved to another slot and copies every draw
+  list that changed since the frame-in-flight slot's last publish into that
+  slot; `get_published_list_copy_count()` counts the copies.
+  `Draw_list::identity` and `Draw_list::serial`; `Draw_list_resolutions`, the
+  render phase's resolved-stages cache of one list.
+- `erhe::scene_renderer`: `Draw_list_scene::prepare_shadow_bounds(
+  Shadow_bounds_selection, frame_index, frames_in_flight)` (main thread,
+  prepare phase) gathers the shadow frustum fit's caster and receiver bounds
+  and caster vertex extents into one `Shadow_bounds` slot per frame in
+  flight, again only when the records changed (the skinned objects' posed
+  bounds are rewritten every call); `get_shadow_bounds(frame_index)`
+  (render phase) returns the frame's slot; `get_shadow_bounds_gather_count()`
+  counts the full gathers. `shadow_caster_filter`, the shadow pass filter.
+- `erhe::graphics`: `Device::end_frame(uint64_t frame_id)` ends the oldest
+  open device frame and verifies `frame_id` is that frame (`end_frame()`
+  ends the oldest open frame); `Command_buffer::get_frame_id()`, the device
+  frame a command buffer was obtained for.
+- `erhe::utility`: `Thread_roles::is_render_role()`, true on a dedicated
+  render thread.
+- `erhe::utility`: `Frame_phase::m3_imgui` (the main thread's ImGui phase,
+  which may run while the render thread renders the same frame) and
+  `Thread_roles::assert_main_thread_in_phase(Frame_phase, Frame_phase)`,
+  the either-of-two-phases assert; `assert_command_recording_allowed` now
+  refuses the main thread in `m3_imgui` too.
+- `erhe::imgui`: `Imgui_renderer::set_draw_data_wait(std::function<void()>)`
+  and `wait_for_draw_data()`: the ImGui host rendergraph nodes call the
+  latter before they read the frame's draw data, so an application whose
+  ImGui phase runs concurrently with its render phase can block them until
+  the draw data is published. `Window_imgui_host::update_render_pass(int,
+  int)` is public: the application (re)creates the host's swapchain render
+  pass on the thread that owns the swapchain.
+- `erhe::scene`: `Light_snapshot` (`erhe_scene/light_snapshot.hpp`), the
+  shading parameters of a `Light` copied for a render phase: the effective
+  property values, the light frame, id and name, with `is_active()`,
+  `casts_shadow()`, `projection()` and `projection_transforms()` (the
+  projection fits now compute on the copy). `Light_projection_transforms::light`
+  points at the snapshot.
+- `erhe::scene_renderer`: `Joint_pose` and `Joint_poses`
+  (`erhe_scene_renderer/joint_poses.hpp`): the posed joints of a scene's skins
+  copied for a render phase (`capture(skins)` on the owning thread writes
+  `Skin_data::joint_buffer_index` and computes `world_from_bind` and the
+  normal transform per joint slot).
+- `erhe::scene_renderer`: `Light_set::find_slot(std::size_t light_id)` and
+  `Light_projections::get_light_projection_transforms_for_light_id(std::size_t)`,
+  the lookups by light id.
+- `erhe::scene`: `Camera_snapshot` (`erhe_scene/camera_snapshot.hpp`), the view
+  parameters of a `Camera` copied for a render phase: projection, world
+  transform, exposure, shadow range, with `projection_transforms()` and the
+  transform accessors of the node. The renderers read the copy, so the camera
+  may be edited on another thread while a frame renders.
+- `erhe::graphics`: `Ring_buffer_range::is_released()`.
+- `erhe::graphics`: `Device::wait_for_frame_start() -> uint64_t` and
+  `Device::acquire_frame_slot(uint64_t frame_id) -> bool`, the two halves of
+  `Device::wait_frame()` (which now calls both). `wait_for_frame_start` opens
+  the frame time record and refreshes the GPU calibration and frame bracket
+  results without reading the frame index, so it may run while another
+  thread ends the previous frame; `acquire_frame_slot` verifies the started
+  id is the current frame index and does the timeline wait and pool resets.
+- `erhe::frame_pacing`: `Frame_time_record::present_wait_begin` /
+  `present_wait_end` (the FR5 present-wait clamp span) and
+  `join_wait_begin` / `join_wait_end` (an application's wait for its
+  previous frame's render phase inside the CPU slot), both subtracted from
+  `cpu_service_time()` like the pacer wait.
+- `erhe::xr`: `Xr_session::set_command_buffer_thread_slot(unsigned int)`, the
+  device thread slot `render_frame()` / `render_frame_multiview()` take their
+  view command buffers from (default 0, the previous fixed slot).
+- `erhe::scene_renderer`: `Draw_list_scene_create_info::exclude_unlit_from_shadows`,
+  the initial value of `Draw_list_scene::set_exclude_unlit_from_shadows()`.
+- `erhe::profile`: `ERHE_PROFILE_THREAD_NAME(name)` names the calling thread
+  in the profiler (Tracy `tracy::SetThreadName`; no-op for the other back
+  ends).
+- `erhe::utility`: `Thread_roles` (`erhe_utility/thread_roles.hpp`) and
+  `Frame_phase`: process-wide main / render thread ids and the current frame
+  phase, with `assert_main_thread()`, `assert_render_thread()`,
+  `assert_frame_phase()`, `assert_main_thread_in_phase()` and
+  `assert_command_recording_allowed()`; every assert is a no-op until the
+  application sets the roles. `Rendergraph::execute`,
+  `Draw_list_scene::draw_color` / `draw_shadow` / `gather_shadow_bounds`
+  (previously main-thread asserts), `Imgui_renderer::render_draw_data` and
+  `Xr_session::render_frame*` / `end_frame` assert the render role and phase;
+  `Draw_list_scene::flush_pending`, `Imgui_windows::begin_frame` and
+  `Xr_session::begin_frame` / `wait_frame` assert the main role;
+  `Device::get_command_buffer` refuses the main thread during `m1_overlap`.
+  `erhe_utility` now links `erhe::verify`.
 - `erhe::graphics`: `Graphics_config::vulkan.vulkan_gpu_assisted_validation`
   (config version 2), GPU-assisted validation in place of synchronization
   validation; debug-level resource and address traces (`erhe.graphics.texture`,
@@ -58,6 +225,210 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: the Vulkan device is safe for the main role preparing
+  frame N+1 while the render role renders frame N (`doc/erhe/graphics.md`
+  "Thread safety"): `Device::get_frame_index()`, `is_frame_completed()`,
+  `add_completion_handler()`, `allocate_ring_buffer_entry()`,
+  `get_command_buffer()` and `submit_command_buffers()` may be called from
+  either role; `acquire_frame_slot()` asserts the main thread and
+  `begin_frame()` / `end_frame()` / `set_present_target_time()` the render
+  thread (`erhe::utility::Thread_roles`, no-ops while the roles are unset).
+  `Device::wait_idle()` completes the frames that ended before its device
+  wait and keeps the completion handlers of a frame that is still open
+  (they ran at once before); with no frame open it still drains every
+  handler. The fallback descriptor pool (no push descriptors) is one pool
+  per frame in flight, reset by `acquire_frame_slot()`.
+
+- `erhe::graphics`: `Ring_buffer_pool` and `Ring_buffer` are thread-safe
+  (a mutex in each), and `Ring_buffer_pool` keeps its ring buffers per
+  thread role, so the main role's and the render role's ranges never
+  interleave in one buffer (`doc/erhe/ring_buffer_memory.md` "Roles and
+  threads").
+
+- `erhe::graphics`: destroying a Vulkan `Gpu_timer` releases its query slot
+  only when the frame current at the destruction completes; no result is
+  stored into the timer after its destructor started.
+
+- `erhe::rendergraph`: `Rendergraph::prepare_frame()` sorts the graph and
+  copies the node list into the frame's slot and each node's connections
+  into its record of the frame; `execute()` runs the frame's slot without
+  the graph mutex (and verifies the slot's frame). In the render phase
+  `Rendergraph_node::get_consumer_input_node()` /
+  `get_producer_output_node()` answer from the frame's record. `connect()` /
+  `disconnect()` / `register_node()` are main thread only and take the graph
+  mutex. `~Rendergraph_node()` verifies the node is unregistered.
+
+- `erhe::rendergraph`: `Rendergraph::execute()` runs the nodes enabled in
+  the copy `prepare_frame()` made for the frame it renders
+  (`is_enabled_in_frame`), no longer the live `is_enabled()` flag; a node
+  registered after that copy takes part from the next frame.
+
+- `erhe::scene_renderer`: `Content_wide_line_renderer::set_view_params()`
+  takes the frame's `Content_wide_line_tent_settings` as its second
+  argument.
+
+- `erhe::renderer`: `Debug_renderer::get_line_bias_margin()` /
+  `get_anti_aliasing()` return the calling role's device frame copy, taken
+  from the live values (`set_line_bias_margin` / `set_anti_aliasing`) at the
+  frame's first `begin_frame()`; a setting change applies from the next
+  device frame recorded after it.
+
+- `erhe::imgui`: `Imgui_renderer::render_draw_data(encoder, render_pass,
+  draw_data, transform)` takes the host's `Imgui_draw_data_copy`
+  (`Imgui_host::get_draw_data()`) instead of reading the current context's
+  `ImGui::GetDrawData()`; `update_draw_data_textures()` runs the queued
+  texture requests and needs no current ImGui context; `image()` /
+  `image_button()` keep their texture references per frame in flight;
+  `Imgui_renderer::begin_frame()` asserts the ImGui phase.
+
+- `erhe::graphics`: `Multi_copy_buffer::bind()` binds the copy published for
+  the caller's device frame and writes nothing (it verifies the frame was
+  published); copies are stamped as used at `publish()` / `commit()` instead
+  of at `bind()`. An owner calls `publish()` (or `commit()`) once per frame
+  before the frame's first `bind()`, so the thread recording frame F may
+  bind while the thread preparing frame F + 1 writes.
+
+- `erhe::scene_renderer`: `Material_set::update()` runs once per frame before
+  the frame's first `bind()`: every call, written or clean, publishes the
+  buffer copy and texture heap that frame binds, and each write goes to a
+  texture heap no unretired frame was published with (the set keeps a pool
+  of heaps). `bind()` / `unbind()` read only what was published for the
+  caller's frame.
+
+- `erhe::rendergraph`: `Rendergraph::defer_resource()` is render phase only
+  (verified with `erhe::utility::Thread_roles`).
+
+- `erhe::renderer`: `Debug_renderer` and `Text_renderer` keep their
+  recording state (frame slots, view stack, bucket draws, prints) once per
+  device frame in flight and key every entry point by the role-keyed
+  `Device::get_frame_index()`; slot ids count from 0 within each device
+  frame, and `compute()`, `render()` and `release_frames()` touch only the
+  calling role's frame (they assert the render role and phase).
+  `push_view`, `pop_view`, `get_view`, `get_frame_slot`,
+  `is_multiview_active` and `get_multiview_views` are no longer inline.
+  `Primitive_renderer`'s constructor takes the device frame index
+  (`Debug_renderer::get()` passes it); `Debug_renderer_bucket::start_view`,
+  `make_draw`, `dispatch_compute`, `render` and `release_buffers` take it,
+  the single-`View` `start_view` overload and `clear()` are removed.
+
+- `erhe::scene_renderer`: the debug joint colors are read-only views:
+  `Joint_buffer::update`, `Scene_pass_resources::begin_pass`,
+  `Forward_renderer::Render_parameters` / `Draw_parameters` and
+  `Draw_list_renderer::Render_parameters` take `debug_joint_colors` as
+  `std::span<const glm::vec4>` (was `std::span<glm::vec4>`).
+
+- `erhe::scene_renderer`: `Content_wide_line_renderer`'s subclass hook is
+  `add_record(const Content_wide_line_record&)` instead of
+  `add_primitive(mesh_memory, buffer_mesh, ...)`; the base resolves the
+  edge-line and joint buffers when it prepares the record.
+
+- `erhe::scene_renderer`: `Draw_list_scene::draw_color()`, `draw_shadow()` and
+  `has_drawable_entries()` read the lists `publish()` published for the frame
+  (`Draw_color_parameters::frame_index`, `Draw_shadow_parameters::frame_index`,
+  `has_drawable_entries(frame_index, ...)`) and verify the slot was published
+  for it, so an application calls `publish()` in its prepare phase for every
+  frame it draws. `has_drawable_entries()` asserts the render phase. Shader
+  stages resolve at a list's first draw (all `multiview_view_counts` at
+  once) instead of at registration; the frustum cull reads the list key's
+  mobility. `Draw_list_renderer::render()` and the `Draw_list` overload of
+  `Primitive_buffer::update()` verify that the settings need no per-mesh
+  evaluation (no `id_offset` color source, constant size); that overload no
+  longer takes a `Draw_list_scene`.
+- `erhe::scene_renderer`: `Shadow_renderer::render()` on the draw-list path
+  reads the bounds of `Draw_list_scene::get_shadow_bounds()` for the
+  device's frame index, so the application calls `prepare_shadow_bounds()`
+  for that frame in its prepare phase; it no longer reads `mesh_spans` on
+  that path.
+- `erhe::graphics`: up to `Device::get_number_of_frames_in_flight()` device
+  frames may be open at once. `Device::acquire_frame_slot(frame_id)` no
+  longer requires the previous frame to have ended; it verifies frames are
+  acquired in id order with at most N open, and each frame-in-flight slot
+  has its own state. `Device::get_frame_index()` returns the frame of the
+  calling role: the oldest open frame on a dedicated render thread, the
+  newest acquired frame (or the next one while none is open) on every other
+  thread. Vulkan `Device::get_command_buffer()` is fatal when the calling
+  role's frame is not open.
+- `erhe::scene`: `Node_transforms::get_next_serial()` / `get_current_serial()`
+  are thread-safe (a mutex-protected counter); the geometry workers that
+  build brush previews write node transforms beside the main thread.
+- `erhe::imgui`: `Imgui_renderer::begin_frame` and `Imgui_windows::begin_frame`
+  take the device frame index (`uint64_t`) instead of reading
+  `Device::get_frame_index()`; `Window_imgui_host::begin_imgui_frame` no
+  longer sizes the host's swapchain render pass (`update_render_pass`,
+  above); `Imgui_windows::begin_frame` accepts the main thread in
+  `m2_prepare` or `m3_imgui`.
+- `erhe::imgui`: `Imgui_windows::draw_imgui_windows()` no longer runs the
+  operations handed to `Imgui_windows::queue()`; the application calls
+  `Imgui_windows::flush_queue()` where the deferred work is safe (the editor
+  runs it at the start of its prepare phase).
+- `erhe::scene_renderer`: `Light_set` holds `erhe::scene::Light_snapshot`
+  copies: `get_lights()` returns `const std::vector<Light_snapshot>&` (was the
+  `shared_ptr<Light>` vector), and `resolve()` refreshes every slot's copy on
+  each call (the slot layout still recomputes only when invalidated or the
+  limits changed), so the owner calls it once per frame on the thread that
+  owns the lights. `Light_projections::apply`, `Light_buffer::update` and
+  `Shadow_renderer::render` read the copies; `Shadow_renderer` indexes the
+  projections by slot.
+- `erhe::scene`: `Light::projection()` and `Light::projection_transforms()`
+  are cold wrappers that capture a `Light_snapshot` and compute on it; the
+  returned `Light_projection_transforms::light` is null.
+- `erhe::scene_renderer`: `Joint_buffer::update` takes
+  `std::span<const Joint_pose>` (was the skins span) and reads no joint node;
+  `Base_render_parameters::joint_poses` and
+  `Shadow_renderer::Render_parameters::joint_poses` replace the `skins`
+  fields; `Forward_renderer::draw_primitives` takes
+  `const erhe::scene::Light_snapshot*`.
+- `erhe::scene`: `Light_projection_parameters::view_camera` is a
+  `const Camera_snapshot*` (was `const Camera*`); the directional fits read
+  the copy.
+- `erhe::scene_renderer`: `Camera_view_input` holds `const Camera_snapshot*
+  camera` (was `projection` + `node` pointers); `Camera_buffer::update` takes
+  a `Camera_snapshot` (the `Projection` + `Node` overload is gone; the
+  `Trs_transform` overload stays); `Light_projections::apply`,
+  `Shadow_renderer::Render_parameters::view_camera`,
+  `Texel_renderer::Render_parameters::camera`,
+  `Cube_renderer::Render_parameters::camera` and `build_per_view_camera` take
+  the snapshot.
+- `erhe::renderer`: frame slots. `Debug_renderer::begin_frame()` returns the
+  slot id it opened (`[[nodiscard]]`), `render()` takes `multiview` and the
+  slot (no defaults), `end_frame()` is replaced by `release_frames()` (once
+  per device frame, after the last `render()`, releases every slot).
+  `Text_renderer::set_frame_slot()` tags prints, `render()` takes `multiview`
+  and the slot and releases that slot's prints, `release_frames()` drops the
+  rest. `Debug_renderer_bucket::start_view()` and `render()` take the slot.
+  Several views may be recorded before any is drawn, on a thread other than
+  the one that draws them.
+- `erhe::frame_pacing`: `Frame_time_recorder` is thread-safe (one mutex).
+  `find()` is removed: writers use `set(frame_id, &Frame_time_record::field,
+  value)` (and a two-field overload), `set_once()` and `add()`, readers copy
+  a record with `get(frame_id, out_record)` and test with `contains()`.
+  `begin_frame(frame_id, cpu_slot_begin)` returns nothing. The display
+  refresh duration is kept in the recorder
+  (`set_display_refresh_duration()` / `get_display_refresh_duration()`),
+  which `Device::set_display_refresh_duration_seconds()` /
+  `get_display_refresh_duration_seconds()` forward to.
+- `erhe::xr`: `Xr_session::begin_frame()` takes the `Frame_timing` of the
+  frame it begins (`begin_frame(const Frame_timing&)`) and keeps its
+  predicted display time for `render_frame()`, `render_frame_multiview()`
+  and `end_frame()`, so a `wait_frame()` of the next frame on another thread
+  does not change the display time of the frame being rendered.
+  `Headset::begin_frame(timing)` passes its timing through.
+- `erhe::utility`: `Thread_roles` keeps one frame phase per role.
+  `set_frame_phase()` / `get_frame_phase()` / `assert_frame_phase()` act on
+  the calling role's phase (the render phase on a dedicated render thread,
+  the main phase otherwise; in inline mode the main thread writes both);
+  `assert_main_thread_in_phase()` and `assert_command_recording_allowed()`
+  check the main phase.
+- `erhe::xr`: `Headset::begin_frame_()` is replaced by `Headset::wait_frame()
+  -> Frame_timing` (`xrWaitFrame`, sets the new `Frame_timing::wait_ok`) and
+  `Headset::begin_frame(const Frame_timing&) -> bool` (`xrBeginFrame` and the
+  performance metrics refresh); the caller stores the result in
+  `Frame_timing::begin_ok`. `Frame_timing` moved to its own header
+  `erhe_xr/frame_timing.hpp` (included by `headset.hpp`), available in every
+  `ERHE_XR_LIBRARY` configuration. `Xr_session::begin_frame` asserts the
+  render role and `r_render` instead of the main thread in `m2_prepare`,
+  and treats `XR_FRAME_DISCARDED` as a begun frame.
+
 - `erhe::graphics`: `Command_buffer` synchronization methods renamed to
   state the edge direction and drop the self-argument: `signal_gpu(c)` is
   `signal_gpu_completion_to(c)`, `wait_for_gpu(self)` is
@@ -89,6 +460,39 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::graphics`: `Device::get_active_render_pass()` /
+  `set_active_render_pass()`; the active render pass is per command buffer
+  (`Command_buffer::get_active_render_pass()`).
+
+- `erhe::rendergraph`: `Rendergraph::unregister_node()` and the public
+  `Rendergraph::sort()` (releasing the node's last `shared_ptr` unregisters
+  it; `prepare_frame()` sorts).
+
+- `erhe::scene_renderer`: `Content_wide_line_renderer::set_use_tent()`,
+  `get_use_tent()`, `set_line_bias_margin()`, `get_line_bias_margin()`,
+  `set_line_bias_clamp()`, `get_line_bias_clamp()` (the settings are a
+  `set_view_params()` argument).
+
+- `erhe::imgui`: `Imgui_renderer::at_end_of_frame()` (unused).
+
+- `erhe::scene_renderer`: `Primitive_buffer::reset_id_ranges()`,
+  `id_offset()`, `id_ranges()` and the `use_id_ranges` argument of
+  `Primitive_buffer::update(const Render_bucket&, ...)`: the buffer keeps no
+  id state; an id pass prepares its id ranges with `append_records(...,
+  io_id_offset, id_ranges, out)`.
+
+- `erhe::scene_renderer`: `Draw_list_scene::get_object_mesh()`,
+  `Draw_list::color_resolutions` / `shadow_resolutions` /
+  `color_resolution_failed` / `shadow_resolution_failed` (now
+  `Draw_list_resolutions`), and the draw-time joint slot sync (done by
+  `publish()`).
+- `erhe::scene_renderer`: `Draw_list_scene::gather_shadow_bounds()` and
+  `Shadow_bounds_gather_parameters` (the render-phase gather; replaced by
+  `prepare_shadow_bounds()` / `get_shadow_bounds()`).
+- `erhe::scene_renderer`: `Light_set::find_slot(const Light*)` and
+  `Light_projections::get_light_projection_transforms_for_light(const Light*)`
+  (the lookups by live light pointer; use the `_id` forms).
+- `erhe::imgui`: `Frame_log_window::on_frame_begin()` (it was empty).
 - `erhe::item`: `Item_host::hosted_selection` (the editor's `Selection`
   keeps its per-host buckets), `Item_base::is_hovered()`,
   `is_lock_viewport_selection()`, `is_lock_viewport_transform()` and the

@@ -4,8 +4,10 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 
 #include <cstddef>
+#include <array>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace erhe::graphics {
@@ -22,6 +24,18 @@ class Ring_buffer;
 // and reclaims spills that sat idle for idle_frame_threshold frames, keeping
 // one warm buffer per usage class, so a load spike does not grow the pool for
 // the rest of the process.
+//
+// Thread safety and roles: every method may be called from any thread;
+// m_mutex guards the buffer lists (lock order: m_mutex, then a buffer's own
+// mutex, then the device's completion handler list, which ~Ring_buffer
+// reaches). The buffers are kept per thread role
+// (erhe::utility::Thread_roles::is_render_role()): with frame pipelining the
+// main role acquires ranges for frame N+1 while the render role acquires
+// ranges for frame N, and a ring buffer retires its space in acquisition
+// order on the assumption that ranges of an older frame never follow ranges
+// of a newer one. Each role's frames are in order, so each role allocates
+// from its own buffers (worker threads share the main role's). In inline
+// mode, and while the roles are unset, every allocation is the main role's.
 class Ring_buffer_pool
 {
 public:
@@ -43,9 +57,15 @@ public:
     [[nodiscard]] auto get_total_byte_count() const -> std::size_t;
 
 private:
-    Device&                                   m_device;
-    std::size_t                               m_min_buffer_size;
-    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
+    static constexpr std::size_t s_role_count = 2; // main, render
+
+    [[nodiscard]] static auto get_calling_role_index() -> std::size_t;
+    void frame_completed_in_role(std::vector<std::unique_ptr<Ring_buffer>>& ring_buffers, uint64_t completed_frame);
+
+    Device&                                                             m_device;
+    std::size_t                                                         m_min_buffer_size;
+    mutable std::mutex                                                  m_mutex;
+    std::array<std::vector<std::unique_ptr<Ring_buffer>>, s_role_count> m_ring_buffers;
 };
 
 } // namespace erhe::graphics

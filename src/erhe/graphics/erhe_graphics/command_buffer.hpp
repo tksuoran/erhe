@@ -19,6 +19,7 @@ class Device;
 class Frame_begin_info;
 class Frame_end_info;
 class Frame_state;
+class Render_pass;
 class Texture;
 enum class Image_layout : unsigned int;
 enum class Memory_barrier_mask : unsigned int;
@@ -38,6 +39,11 @@ public:
     Command_buffer& operator=(Command_buffer&& other) noexcept;
 
     [[nodiscard]] auto get_debug_label() const noexcept -> erhe::utility::Debug_label;
+
+    // The device frame this cb was obtained for (Device::get_frame_index()
+    // of the calling role at Device::get_command_buffer()). The cb belongs
+    // to that frame's frame-in-flight slot and is submitted in that frame.
+    [[nodiscard]] auto get_frame_id() const noexcept -> std::uint64_t;
 
     void begin();
     void end  ();
@@ -121,12 +127,22 @@ public:
     // cb. Must be called outside of a render pass.
     void memory_barrier           (Memory_barrier_mask barriers);
 
+    // The render pass started on this command buffer and not yet ended
+    // (Render_pass::start_render_pass / end_render_pass set it); nullptr
+    // outside a pass. Kept per command buffer, so passes that two threads
+    // record into their own command buffers at the same time (the render
+    // thread's frame and the main thread's prepare-phase standalone work)
+    // do not see each other (doc/erhe/graphics.md "Thread safety").
+    [[nodiscard]] auto get_active_render_pass() const noexcept -> Render_pass*;
+    void               set_active_render_pass(Render_pass* render_pass) noexcept;
+
     [[nodiscard]] auto get_impl()       -> Command_buffer_impl&;
     [[nodiscard]] auto get_impl() const -> const Command_buffer_impl&;
 
 private:
     std::unique_ptr<Command_buffer_impl> m_impl;
-    bool                                 m_recording{false};
+    bool                                 m_recording         {false};
+    Render_pass*                         m_active_render_pass{nullptr};
 };
 
 } // namespace erhe::graphics

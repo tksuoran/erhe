@@ -15,8 +15,41 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 
 ## Public API
 - `Debug_renderer::get(config)` returns a `Primitive_renderer` for a given config.
-- Call `begin_frame()`, draw with `Primitive_renderer`, then `compute()` and `render()`, finally `end_frame()`.
-- `Text_renderer::print(position, color, text)` queues text; `render(encoder, viewport)` draws it.
+- Frame slots: one device frame draws several views, and a view's lines may
+  be recorded on one thread before another draws them. `begin_frame(viewport,
+  views)` opens a slot for one view set and returns its id; `get()` records
+  into the open slot; `compute()` expands every recorded draw not expanded
+  yet (whichever slot it belongs to; a draw is expanded once); `render(encoder,
+  render_pass, viewport, multiview, frame_slot)` draws one slot;
+  `release_frames()` releases every slot's ring buffer ranges once per device
+  frame, after the last `render()`, and resets the slot ids to 0. A slot that
+  was recorded but never rendered is released all the same.
+- Frames in flight: the recording state (the slots and their views, the view
+  stack, every bucket's draws, the text prints and the current text slot) is
+  kept once per device frame in flight
+  (`Device::get_number_of_frames_in_flight()`, sized at construction), and
+  every entry point works on the frame of the role-keyed
+  `Device::get_frame_index()`. The main thread records into the frame it
+  prepares while the render thread expands, draws and releases the frame it
+  renders, and slot ids count from 0 within each device frame. The first
+  recording of a device frame claims its entry, verifies that the frame
+  which used it before released it, and copies the live line settings
+  (`set_line_bias_margin`, `set_anti_aliasing`, written by the main thread)
+  into it; `get_line_bias_margin()` / `get_anti_aliasing()` return the
+  calling role's frame copy, which the buckets write to the view UBO, so a
+  setting change applies from the next device frame recorded after it; `render()` verifies that the slot was
+  opened in the calling role's frame. `compute()`, `render()` and
+  `release_frames()` assert the render thread and the `r_render` phase
+  (no-ops in programs that set no roles). A bucket that `get()` creates
+  while the render role iterates the buckets is guarded by a mutex; the
+  render role iterates the buckets that existed when it started.
+- `Text_renderer::set_frame_slot(slot)` tags the prints that follow (the
+  caller passes the debug renderer's slot, so a view's text and lines travel
+  together); `print(position, color, text)` queues text; `render(encoder,
+  render_pass, viewport, multiview, frame_slot)` draws and releases one
+  slot's prints; `release_frames()` drops the prints never drawn. The slot
+  restarts at 0 in each device frame. A program
+  with one view (the init pump, hextiles) prints into slot 0 and renders it.
 
 ## Dependencies
 - erhe::graphics (Device, Ring_buffer_client, Shader_stages, Pipeline, Texture)
@@ -73,7 +106,9 @@ anti-aliased edge profiles below.
 `Debug_renderer::set_anti_aliasing(Anti_aliasing)` selects the edge treatment
 of the wide lines (default `on`; the editor exposes it as "Anti-aliased
 Lines" in the Debug Visualizations Style section of the Settings window and
-applies it at startup and on the edit).
+applies it at startup and on the edit). It takes effect from the next
+device frame whose recording starts after the call (frames in flight,
+above).
 
 - **On**: analytic coverage. In framebuffer pixels, with `h` the half width
   and `d` the distance of the fragment centre from the segment (round caps),

@@ -6,25 +6,28 @@ Stability: stable
 Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Provides forward rendering, shadow map generation, and GPU buffer management for uploading camera, light, material, primitive, joint, and cube instance data via ring buffers. Defines the standard shader interface (uniform/SSBO block layouts) shared between C++ and GLSL.
 
 ## Key Types
-- `Forward_renderer` -- Renders meshes with full lighting, materials, and shadows. Takes `Render_parameters` specifying camera, lights, skins, materials, mesh spans, pipeline states, and viewport.
-- `Shadow_renderer` -- Generates shadow maps by rendering meshes from each light's perspective into a texture array.
-- `Draw_indirect_buffer` -- Builds GPU draw-indirect command buffers from a span of meshes filtered by `Item_filter` (`update(meshes, mode, filter)`).
+- `Forward_renderer` -- Renders meshes with full lighting, materials, and shadows, in two halves. `prepare(Prepare_parameters, Render_bucket_snapshot&)` (const, any thread that owns the meshes; the editor's prepare phase) buckets the mesh spans with the pass's filter, primitive mode, blending policy, forced shader bits and shader debug mode and writes each bucket's complete primitive records (`Primitive_buffer::append_records`) and draw commands (`Draw_indirect_buffer::append_commands`). `render(Draw_parameters, const Render_bucket_snapshot&)` (render phase) draws a snapshot without reading any mesh: it copies the records and commands into the ring buffers and applies only the environment shader-key axes the draw owns (light counts, shadow filter / bias / technique / depth bits, multiview count, `USE_DDGI`), which `Shader_key::derive` copies from the environment and never sets itself, so the keys equal a single derive with the full environment. `render(Render_parameters)` does both in one call through a snapshot the renderer keeps.
+- `Render_bucket_snapshot` / `Prepared_bucket` -- One pass's prepared draws: buckets (buffer set, shader key without the render-phase axes, winding and culling partition, primitive mode, entry range), the primitive records and the draw commands, plus the pass's forced-off shader bits. `clear()` keeps every capacity, so a caller that keeps one per pass, view and frame in flight allocates nothing in the steady state.
+- `Shadow_renderer` -- Generates shadow maps by rendering meshes from each light's perspective into a texture array. With a `Draw_list_scene` it draws the shadow draw lists published for the frame (`Draw_list_scene::publish`) and fits the shadow frusta to the caster and receiver bounds the prepare phase gathered into the frame's slot (`Draw_list_scene::prepare_shadow_bounds` / `get_shadow_bounds`, `doc/erhe/draw_list_renderer.md` Q6); without one it draws the casters `prepare(Prepare_parameters, Render_bucket_snapshot&)` bucketed (const; shadow_caster_filter, opaque, optimized variant, unlit left out when asked, no pass variant bits) - the snapshot in `Render_parameters::casters`, or one it prepares from `mesh_spans` itself when handed none - ORing the depth-only / distance / cube bits into the prepared keys per pass. The fit bounds come from `Render_parameters::shadow_bounds` when set, else from the `Draw_list_scene`, else from `mesh_spans`. `shadow_caster_filter` is the shadow pass filter both paths use.
+- `Draw_indirect_buffer` -- Builds GPU draw-indirect command buffers from a span of meshes filtered by `Item_filter` (`update(meshes, mode, filter)`), from a `Render_bucket` or a draw list, or by copying prepared commands (`update(std::span<const Draw_indexed_primitives_indirect_command>)`, which also applies the debug index count clamp; `append_commands(bucket, mode, out)` prepares them).
 - `Program_interface` -- Defines the shader resource layout (vertex format, camera/light/material/primitive/joint/cube blocks). Creates shader prototypes with all blocks pre-configured.
 - `Camera_buffer` -- Ring buffer client uploading camera matrices, viewport, exposure, and grid settings, plus the pass's view origin and `clip_from_view_relative` (`get_view_origin()`, `get_clip_from_view_relative()`; doc/erhe/shadows.md "View-relative positions").
 - `Light_buffer` -- Ring buffer client uploading light data (position, direction, color, shadow transforms) and shadow map texture handles.
 - `Material_buffer` -- Ring buffer client uploading PBR material properties and texture handles.
-- `Primitive_buffer` -- Ring buffer client uploading per-primitive world transforms, normal transforms, color, material index, and skinning data. Also manages ID ranges for GPU picking.
-- `Joint_buffer` -- Ring buffer client uploading skeletal joint transforms for skinned meshes.
+- `Primitive_buffer` -- Ring buffer client uploading per-primitive world transforms, normal transforms, color, material index, and skinning data. `append_records(bucket, material_source, mode, settings, out)` writes a bucket's records into a CPU byte vector (the bytes `update(bucket, ...)` writes, id offset 0, no id ranges); the id pass overload `append_records(..., io_id_offset, id_ranges, out)` carries the id offset across buckets (start at `first_id_offset`, 1: id 0 is the background) and appends each record's `Id_range` (offset, length, the mesh held weakly, primitive index), the table an id readback resolves against. `update(std::span<const std::byte>)` copies prepared records into a ring buffer range; `get_record_size()` is one record's size.
+- `Joint_poses` -- The posed joints of a scene's skins copied for a render phase: `capture(skins)` on the thread that owns the skins (after the frame's node transforms) assigns each skin's `Skin_data::joint_buffer_index` and computes one `Joint_pose` (`world_from_bind`, normal transform, joint node as an identity key) per joint slot, in skin order.
+- `Joint_buffer` -- Ring buffer client uploading the `Joint_poses` entries for skinned meshes; reads no joint node.
+- `Light_set` -- The resolved set of lights a scene is shaded with (which lights get a light UBO slot, in slot order, which are shadow-mapped), as `erhe::scene::Light_snapshot` copies: `resolve(lights, limits)` recomputes the slot layout when invalidated or the limits changed and refreshes every slot's copy, once per frame on the thread that owns the lights (an owner whose render phase overlaps the next frame's prepare keeps one `Light_set` per frame in flight, as the editor's `Scene_root` does); `Light_projections`, `Light_buffer` and `Shadow_renderer` read the copies and index by slot.
 - `Cube_renderer` / `Cube_instance_buffer` / `Cube_control_buffer` -- Instanced voxel cube rendering system with packed 11-11-10 bit positions.
 - `Glyph_interface` / `Glyph_buffer` -- Static SSBO holding quadratic bezier glyph curve data (from `erhe::ui::extract_glyph_outlines()`) for GPU curve-based text rendering, e.g. grid axis labels in the editor's grid shader. Fixed slot convention: 0..9 = digits '0'..'9', 10 = '-', 11 = '.'. `ERHE_GRID_LABELS` is always defined for shaders (SSBOs are a hard device requirement). Bound unconditionally by `Forward_renderer` (binding point 8) so the shared bind group stays complete.
 - `Texel_renderer` -- Simplified renderer for texel-space operations.
 - `Light_projections` -- Computes and stores shadow projection transforms for all lights in a frame.
-- `Content_wide_line_renderer` -- Draws mesh edge lines as wide lines: a compute pre-pass expands each edge into screen-space triangles (`compute_before_content_line.comp`) that the graphics stages draw.
+- `Content_wide_line_renderer` -- Draws mesh edge lines as wide lines: a compute pre-pass expands each edge into screen-space triangles (`compute_before_content_line.comp`) that the graphics stages draw. The feed has two halves: the static `prepare_mesh(mesh_memory, mesh, color, line_width, group, Content_wide_line_feed&)` (on the thread that owns the mesh; the editor's prepare phase) appends one `Content_wide_line_record` per primitive with edge lines - the original variant's edge-line and joint buffer ranges, `world_from_node`, color, width, group, whether the mesh is skinned and its joint slot - and counts the mesh; `add_feed(feed)` (render phase) queues the records' dispatches without reading any mesh, the backend deciding whether a skinned record takes the skinned compute path. `add_mesh()` is both on one thread. The tent method controls (`Content_wide_line_tent_settings`: `use_tent`, `line_bias_margin`, `line_bias_clamp`) are passed per frame to `set_view_params()` with the views; the renderer keeps no settings of its own, so the editor passes the render phase's copy of its `content_edge_lines` setting.
 
 ## Public API
 - Create `Program_interface` with a vertex format and config.
 - Create `Forward_renderer` / `Shadow_renderer` with the program interface.
-- Each frame, call `forward_renderer.render(params)` or `shadow_renderer.render(params)`.
+- Each frame, call `forward_renderer.render(params)` or `shadow_renderer.render(params)`; a renderer that prepares on one thread and draws on another calls `forward_renderer.prepare(...)` into a `Render_bucket_snapshot` it keeps per frame in flight and `forward_renderer.render(draw_parameters, snapshot)` later.
 - Buffer classes (`Camera_buffer`, etc.) have `update()` methods that return `Ring_buffer_range` for binding.
 
 ## Dependencies
@@ -45,7 +48,7 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 
 ### Content edge line widths
 
-The line width passed to `Content_wide_line_renderer::add_mesh()` is a full
+The line width passed to `Content_wide_line_renderer::prepare_mesh()` / `add_mesh()` is a full
 line width:
 - **Negative** `w`: a constant screen-space line `-w` logical pixels wide,
   multiplied by `Camera_view_input::pixel_scale` (physical pixels per logical
@@ -68,6 +71,15 @@ repopulates the texture heap from it, when membership changed, when
 about), or when any live slot's material reports a change serial other than
 the one recorded at that slot's last record write. Otherwise it returns and
 the copy bound this frame is the one already there.
+
+Every call, written or clean, publishes the buffer copy and the texture heap
+the caller's device frame (the role-keyed `Device::get_frame_index()`) binds,
+so `update()` runs once per frame on the thread that prepares the frame,
+before the frame's first `bind()`; `bind()` / `unbind()` read only what was
+published for their frame and verify it was. A write goes to a copy and a
+heap no unretired frame was published with, so the render thread may record
+frame F while the main thread updates for frame F + 1
+(`doc/erhe/draw_list_material_set.md` D9).
 
 Every input a record is built from is a property of
 `erhe::primitive::Material`, and `Material::get_change_serial()` advances on

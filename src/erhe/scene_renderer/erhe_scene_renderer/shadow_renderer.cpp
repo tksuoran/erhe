@@ -178,71 +178,117 @@ Shadow_renderer::Shadow_renderer(
 
 Shadow_renderer::~Shadow_renderer() noexcept = default;
 
-void Shadow_renderer::draw_shadow_casters(
-    erhe::graphics::Command_buffer&                                                         command_buffer,
-    erhe::graphics::Render_command_encoder&                                                 encoder,
-    erhe::graphics::Base_render_pipeline&                                                    base_pipeline,
-    const erhe::graphics::Render_pass&                                                       render_pass,
-    const erhe::graphics::Color_blend_state*                                                 color_blend,
-    const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& mesh_spans,
-    const erhe::Item_filter&                                                                 shadow_filter,
-    const uint32_t                                                                           boolean_mask_force_enable,
-    const bool                                                                               exclude_unlit_primitives,
-    const Material_set*                                                                      material_source
-)
+void Shadow_renderer::prepare(const Prepare_parameters& parameters, Render_bucket_snapshot& out) const
 {
-    using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
-    using Draw_indirect_buffer_range = erhe::scene_renderer::Draw_indirect_buffer_range;
+    ERHE_PROFILE_FUNCTION();
+
+    out.clear();
+    for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : parameters.mesh_spans) {
+        if (!meshes.empty()) {
+            out.has_meshes = true;
+            break;
+        }
+    }
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    const Shader_key environment_key{};
+    // The pass variant bits (depth-only / distance / cube) are ORed into the
+    // prepared keys per pass by draw_shadow_casters(); ORing one mask into
+    // every key does not change how bucket_primitives() partitions.
+    const uint32_t boolean_mask_force_enable  = 0;
+    const uint32_t boolean_mask_force_disable = 0; // TODO
 
-    Shader_key          environment_key{};
-    Render_bucket_list& buckets                    = m_buckets;
-    const uint32_t      boolean_mask_force_disable = 0; // TODO
-    buckets.clear();
-
-    for (const auto& meshes : mesh_spans) {
+    // Leaf-function scratch (AGENTS.md): the entries hold raw Mesh pointers
+    // only while this call runs.
+    static thread_local Render_bucket_list s_buckets;
+    s_buckets.clear();
+    for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : parameters.mesh_spans) {
         bucket_primitives(
-            buckets,
+            s_buckets,
             boolean_mask_force_enable,
             boolean_mask_force_disable,
             m_mesh_memory,
             environment_key,
             meshes,
-            shadow_filter,
+            shadow_caster_filter,
             primitive_mode,
             Blending_mode_policy::opaque_primitives_only, // TODO Think about what would be correct
             erhe::primitive::Mesh_variant::optimized,
             {}, // no shader debug filter
-            exclude_unlit_primitives
+            parameters.exclude_unlit_casters
         );
     }
 
+    for (const Render_bucket& bucket : s_buckets.get_buckets()) {
+        ERHE_VERIFY(!bucket.entries.empty());
+        Prepared_bucket& prepared = out.add_bucket();
+        prepared.buffer_set.vertex_input_key = bucket.buffer_set.vertex_input_key;
+        prepared.buffer_set.index_buffer     = bucket.buffer_set.index_buffer;
+        prepared.buffer_set.vertex_buffers.insert(
+            prepared.buffer_set.vertex_buffers.end(),
+            bucket.buffer_set.vertex_buffers.begin(),
+            bucket.buffer_set.vertex_buffers.end()
+        );
+        prepared.shader_key           = bucket.shader_key;
+        prepared.negative_determinant = bucket.negative_determinant;
+        prepared.double_sided         = bucket.double_sided;
+        prepared.primitive_mode       = primitive_mode;
+        prepared.first_entry          = out.draw_commands.size();
+        prepared.entry_count          = bucket.entries.size();
+        // The records name slots in the set the shadow pass binds (D5).
+        m_primitive_buffer.append_records(bucket, parameters.material_source, primitive_mode, Primitive_interface_settings{}, out.primitive_records);
+        m_draw_indirect_buffer.append_commands(bucket, primitive_mode, out.draw_commands);
+        ERHE_VERIFY(out.draw_commands.size() == prepared.first_entry + prepared.entry_count);
+    }
+    s_buckets.clear();
+}
+
+void Shadow_renderer::draw_shadow_casters(
+    erhe::graphics::Command_buffer&          command_buffer,
+    erhe::graphics::Render_command_encoder&  encoder,
+    erhe::graphics::Base_render_pipeline&    base_pipeline,
+    const erhe::graphics::Render_pass&       render_pass,
+    const erhe::graphics::Color_blend_state* color_blend,
+    const Render_bucket_snapshot&            casters,
+    const uint32_t                           boolean_mask_force_enable
+)
+{
+    using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
+    using Draw_indirect_buffer_range = erhe::scene_renderer::Draw_indirect_buffer_range;
+
+    const std::span<const Prepared_bucket> buckets     = casters.get_buckets();
+    const std::size_t                      record_size = m_primitive_buffer.get_record_size();
+
     for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-        const Render_bucket& bucket = buckets.get_buckets()[bucket_index];
+        const Prepared_bucket& bucket = buckets[bucket_index];
         m_bucket_label.clear();
         fmt::format_to(
             std::back_inserter(m_bucket_label),
             "shadow bucket {}/{} entries={} streams={}",
             bucket_index + 1,
             buckets.size(),
-            bucket.entries.size(),
+            bucket.entry_count,
             bucket.buffer_set.vertex_buffers.size()
         );
         erhe::graphics::Scoped_debug_group bucket_scope{command_buffer, std::string_view{m_bucket_label}};
 
+        // The pass's variant bits, applied as bucket_primitives() applied
+        // forced bits after deriving the key.
+        Shader_key shader_key = bucket.shader_key;
+        shader_key.bool_mask |= boolean_mask_force_enable;
+
         const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
         const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
-            bucket.shader_key,
+            shader_key,
             &vertex_input.vertex_format
         );
         if (reloadable_shader_stages == nullptr) {
             log_draw->warn(
                 "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
                 bucket_index,
-                bucket.entries.size(),
+                bucket.entry_count,
                 bucket.buffer_set.vertex_buffers.size(),
-                bucket.shader_key.describe()
+                shader_key.describe()
             );
             continue;
         }
@@ -277,15 +323,10 @@ void Shadow_renderer::draw_shadow_casters(
             );
         }
 
-        Ring_buffer_range primitive_range = m_primitive_buffer.update(
-            bucket,
-            material_source,
-            primitive_mode,
-            Primitive_interface_settings{}
-        );
-        ERHE_VERIFY(!bucket.entries.empty());
-        Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, primitive_mode);
-        ERHE_VERIFY(bucket.entries.size() == draw_indirect_buffer_range.draw_indirect_count);
+        ERHE_VERIFY(bucket.entry_count > 0);
+        Ring_buffer_range          primitive_range            = m_primitive_buffer.update(casters.get_records(bucket, record_size));
+        Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(casters.get_draw_commands(bucket));
+        ERHE_VERIFY(bucket.entry_count == draw_indirect_buffer_range.draw_indirect_count);
 
         m_primitive_buffer.bind(encoder, primitive_range);
         m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
@@ -312,56 +353,47 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     const auto& mesh_spans = parameters.mesh_spans;
 
-    erhe::Item_filter shadow_filter{
-        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast,
-        .require_at_least_one_bit_set   = 0u,
-        // proxy_hidden: visually replaced by a render_proxy that casts the
-        // shadows instead (lightmap piece meshes).
-        .require_all_bits_clear         = erhe::Item_flags::proxy_hidden,
-        .require_at_least_one_bit_clear = 0u
-    };
+    const erhe::Item_filter& shadow_filter = shadow_caster_filter;
 
-    // Gather one world-space AABB per shadow caster for the tight directional
+    // One world-space AABB per shadow caster for the tight directional
     // shadow frustum fit. The per-light contribution filter - culling casters
     // whose bounds cannot shadow a visible receiver - needs each caster's
     // bounds individually and depends on the light direction, so it runs per
     // light inside the fit (Light::tight_directional_light_projection_transforms);
-    // here we only collect the candidates. Light_projections::apply() borrows
-    // these vectors as spans for the duration of the call; no copy is made.
-    std::vector<erhe::math::Aabb>&     caster_world_aabbs    = m_caster_world_aabbs;
-    std::vector<erhe::math::Aabb>&     receiver_world_aabbs  = m_receiver_world_aabbs;
-    std::vector<Caster_vertex_extent>& caster_vertex_extents = m_caster_vertex_extents;
-    caster_world_aabbs.clear();
-    receiver_world_aabbs.clear();
-    caster_vertex_extents.clear();
-    // Every caster is gathered, whatever the fit settings: its node
-    // transform and node-space bounds bound the caster vertex rounding of
-    // every light's minimum bias (Light_shadow_limits::
-    // caster_vertex_rounding), and its world bounds fit the directional
-    // frustum and bound the vertex depths of the depth-clamped directional
-    // passes (Light_shadow_limits::raster_vertex_depth).
-    // Receiver bounds refine the caster cull (Shadow_frustum_fit_settings::
-    // fit_to_receivers) and are only consumed when casters are also fitted.
+    // here we only collect the candidates. Every caster is gathered, whatever
+    // the fit settings: its node transform and node-space bounds bound the
+    // caster vertex rounding of every light's minimum bias
+    // (Light_shadow_limits::caster_vertex_rounding), and its world bounds fit
+    // the directional frustum and bound the vertex depths of the
+    // depth-clamped directional passes (Light_shadow_limits::
+    // raster_vertex_depth). Receiver bounds refine the caster cull
+    // (Shadow_frustum_fit_settings::fit_to_receivers) and are only consumed
+    // when casters are also fitted. Light_projections::apply() borrows the
+    // vectors as spans for the duration of the call; no copy is made.
     const bool gather_receivers =
         (parameters.fit_settings != nullptr) &&
         parameters.fit_settings->fit_to_casters &&
         parameters.fit_settings->fit_to_receivers;
-    if (parameters.draw_list_scene != nullptr) {
-        // The registered objects carry the bounds already (the entries' world
-        // AABB, kept current by the transform / refresh hooks, Q6); no
-        // per-mesh box transform here.
-        parameters.draw_list_scene->gather_shadow_bounds(
-            Shadow_bounds_gather_parameters{
-                .layers                = parameters.draw_list_layers,
-                .caster_filter         = shadow_filter,
-                .gather_receivers      = gather_receivers,
-                .caster_world_aabbs    = caster_world_aabbs,
-                .receiver_world_aabbs  = receiver_world_aabbs,
-                .caster_vertex_extents = caster_vertex_extents
-            }
-        );
+    std::span<const erhe::math::Aabb>     caster_world_aabbs{};
+    std::span<const erhe::math::Aabb>     receiver_world_aabbs{};
+    std::span<const Caster_vertex_extent> caster_vertex_extents{};
+    if ((parameters.shadow_bounds != nullptr) || (parameters.draw_list_scene != nullptr)) {
+        // The prepare phase gathered the bounds from the registered objects
+        // into this frame's slot (Draw_list_scene::prepare_shadow_bounds);
+        // the render phase reads no mesh or node.
+        const Shadow_bounds& shadow_bounds = (parameters.shadow_bounds != nullptr)
+            ? *parameters.shadow_bounds
+            : parameters.draw_list_scene->get_shadow_bounds(m_graphics_device.get_frame_index());
+        caster_world_aabbs    = shadow_bounds.caster_world_aabbs;
+        caster_vertex_extents = shadow_bounds.caster_vertex_extents;
+        if (gather_receivers) {
+            receiver_world_aabbs = shadow_bounds.receiver_world_aabbs;
+        }
     } else {
         ERHE_PROFILE_SCOPE("shadow: gather caster/receiver bounds");
+        m_caster_world_aabbs.clear();
+        m_receiver_world_aabbs.clear();
+        m_caster_vertex_extents.clear();
         for (const auto& meshes : mesh_spans) {
             for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
                 if (!mesh) {
@@ -385,10 +417,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     continue;
                 }
                 if (gather_receivers) {
-                    receiver_world_aabbs.push_back(aabb);
+                    m_receiver_world_aabbs.push_back(aabb);
                 }
                 if (is_caster) {
-                    caster_world_aabbs.push_back(aabb);
+                    m_caster_world_aabbs.push_back(aabb);
                     // The vertex shader's inputs: the mesh node's world
                     // transform and the node-space bounds of its primitives
                     // (a skinned mesh blends absolute joint matrices instead,
@@ -403,7 +435,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                         }
                         node_abs_extent = glm::max(node_abs_extent, glm::max(glm::abs(node_aabb.min), glm::abs(node_aabb.max)));
                     }
-                    caster_vertex_extents.push_back(
+                    m_caster_vertex_extents.push_back(
                         Caster_vertex_extent{
                             .world_from_node_linear = glm::mat3{world_from_node},
                             .world_translation      = glm::vec3{world_from_node[3]},
@@ -413,6 +445,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 }
             }
         }
+        caster_world_aabbs    = m_caster_world_aabbs;
+        receiver_world_aabbs  = m_receiver_world_aabbs;
+        caster_vertex_extents = m_caster_vertex_extents;
     }
 
     // Light count limits: how many lights of each type are shadow-mapped this
@@ -491,7 +526,26 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // nothing.
     ERHE_VERIFY(parameters.material_source != nullptr);
     Material_set& material_set = *parameters.material_source;
-    Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, parameters.skins);
+    // The bucket path's casters: prepared in the prepare phase, or prepared
+    // here from mesh_spans by a caller that renders where it prepares.
+    const Render_bucket_snapshot* casters = nullptr;
+    if (parameters.draw_list_scene == nullptr) {
+        if (parameters.casters != nullptr) {
+            casters = parameters.casters;
+        } else {
+            prepare(
+                Prepare_parameters{
+                    .mesh_spans            = std::span<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>{mesh_spans.begin(), mesh_spans.size()},
+                    .material_source       = parameters.material_source,
+                    .exclude_unlit_casters = parameters.exclude_unlit_casters
+                },
+                m_immediate_casters
+            );
+            casters = &m_immediate_casters;
+        }
+    }
+
+    Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, parameters.joint_poses);
     Ring_buffer_range light_range    = m_light_buffer.update(&parameters.light_projections, glm::vec3{0.0f}, 0);
 
     // The rasterizer depth bias parameters are signed toward the light:
@@ -532,30 +586,30 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
-        const auto& light = parameters.light_set.get_lights()[light_slot];
+        const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
         if (
-            !light->casts_shadow() ||
+            !light.casts_shadow() ||
             (
-                (light->get_light_type() != erhe::scene::Light_type::directional) &&
-                (light->get_light_type() != erhe::scene::Light_type::spot)
+                (light.get_light_type() != erhe::scene::Light_type::directional) &&
+                (light.get_light_type() != erhe::scene::Light_type::spot)
             )
         ) {
             continue;
         }
-        
 
-        auto* light_projection_transform = parameters.light_projections.get_light_projection_transforms_for_light(light.get());
-        if (light_projection_transform == nullptr) {
-            //// log_render->warn("Light {} has no light projection transforms", light->name());
+        // Slot i of the set is entry i of the projections (Light_projections::apply).
+        if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
             continue;
         }
+        const erhe::scene::Light_projection_transforms* light_projection_transform = &parameters.light_projections.light_projection_transforms[light_slot];
+        ERHE_VERIFY(light_projection_transform->index == light_slot);
         const std::size_t light_index  = light_projection_transform->index;
         const std::size_t shadow_index = light_projection_transform->shadow_index;
         if (shadow_index >= parameters.render_passes.size()) {
             continue;
         }
         erhe::graphics::Base_render_pipeline& base_pipeline =
-            (use_depth_clamp && (light->get_light_type() == erhe::scene::Light_type::directional))
+            (use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional))
                 ? m_pipelines_depth_clamp[cull_index]
                 : m_pipelines[cull_index];
 
@@ -647,7 +701,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             : &erhe::graphics::Color_blend_state::color_writes_disabled; // depth-only
 
         if (parameters.draw_list_scene != nullptr) {
-            const bool depth_clamped = use_depth_clamp && (light->get_light_type() == erhe::scene::Light_type::directional);
+            const bool depth_clamped = use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional);
             light_frustum_planes = erhe::math::extract_frustum_planes(light_projection_transform->clip_from_world.get_matrix(), clip_z_min, 1.0f);
             const std::span<const glm::vec4> cull_planes = depth_clamped
                 ? std::span<const glm::vec4>{light_frustum_planes}.first(erhe::math::plane_near)
@@ -664,7 +718,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     .layers               = parameters.draw_list_layers,
                     .sub_variant          = parameters.use_distance ? Shadow_sub_variant::depth_only_distance : Shadow_sub_variant::depth_only,
                     .light_frustum_planes = cull_planes,
-                    .debug_label          = "shadow draw lists"
+                    .debug_label          = "shadow draw lists",
+                    .frame_index          = m_graphics_device.get_frame_index()
                 }
             );
             if (parameters.draw_statistics != nullptr) {
@@ -677,11 +732,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 base_pipeline,
                 *parameters.render_passes[shadow_index].get(),
                 color_blend,
-                mesh_spans,
-                shadow_filter,
-                boolean_mask_force_enable,
-                parameters.exclude_unlit_casters,
-                parameters.material_source
+                *casters,
+                boolean_mask_force_enable
             );
         }
 
@@ -745,14 +797,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         erhe::graphics::Render_pass* previous_cube_render_pass = nullptr;
         for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
-            const auto& light = parameters.light_set.get_lights()[light_slot];
-            if (!light->casts_shadow() || (light->get_light_type() != erhe::scene::Light_type::point)) {
+            const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
+            if (!light.casts_shadow() || (light.get_light_type() != erhe::scene::Light_type::point)) {
                 continue;
             }
-            auto* lpt = parameters.light_projections.get_light_projection_transforms_for_light(light.get());
-            if (lpt == nullptr) {
+            if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
                 continue;
             }
+            const erhe::scene::Light_projection_transforms* lpt = &parameters.light_projections.light_projection_transforms[light_slot];
+            ERHE_VERIFY(lpt->index == light_slot);
             const std::size_t point_shadow_index = lpt->point_shadow_index;
             if (point_shadow_index >= cube_count) {
                 continue;
@@ -843,7 +896,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                             .layers               = parameters.draw_list_layers,
                             .sub_variant          = Shadow_sub_variant::cube,
                             .light_frustum_planes = std::span<const glm::vec4>{light_frustum_planes},
-                            .debug_label          = "shadow cube draw lists"
+                            .debug_label          = "shadow cube draw lists",
+                            .frame_index          = m_graphics_device.get_frame_index()
                         }
                     );
                     if (parameters.draw_statistics != nullptr) {
@@ -856,11 +910,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                         cube_base_pipeline,
                         *cube_passes[pass_index].get(),
                         &erhe::graphics::Color_blend_state::color_blend_disabled,
-                        mesh_spans,
-                        shadow_filter,
-                        cube_force_enable,
-                        parameters.exclude_unlit_casters,
-                        parameters.material_source
+                        *casters,
+                        cube_force_enable
                     );
                 }
 
@@ -894,14 +945,7 @@ void Shadow_renderer::prewarm_pipelines(
     const uint32_t boolean_mask_force_enable  = make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY);
     const uint32_t boolean_mask_force_disable = 0;
 
-    erhe::Item_filter shadow_filter{
-        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast,
-        .require_at_least_one_bit_set   = 0u,
-        // proxy_hidden: visually replaced by a render_proxy that casts the
-        // shadows instead (lightmap piece meshes).
-        .require_all_bits_clear         = erhe::Item_flags::proxy_hidden,
-        .require_at_least_one_bit_clear = 0u
-    };
+    const erhe::Item_filter& shadow_filter = shadow_caster_filter;
 
     Render_bucket_list buckets;
     for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : mesh_spans) {

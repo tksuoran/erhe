@@ -179,7 +179,7 @@ void Thumbnails::on_items_removed(const Removed_items& removed)
 auto Thumbnails::draw(
     const std::shared_ptr<erhe::Item_base>& item,
     std::function<
-        void(const std::shared_ptr<erhe::graphics::Texture>&, unsigned int, int64_t)
+        void(erhe::graphics::Command_buffer&, const std::shared_ptr<erhe::graphics::Texture>&, unsigned int, int64_t)
     >                                       callback,
     float                                   display_size
 ) -> bool
@@ -264,13 +264,12 @@ auto Thumbnails::draw(
     return false;
 }
 
-void Thumbnails::update()
+void Thumbnails::update(erhe::graphics::Command_buffer& command_buffer)
 {
     // log_frame->trace("Thumbnails::update()");
 
-    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     erhe::graphics::Scoped_debug_group render_graph_scope{
-        *m_context.current_command_buffer,
+        command_buffer,
         "Thumbnails::update()"
     };
 
@@ -278,7 +277,7 @@ void Thumbnails::update()
         Thumbnail& thumbnail = m_thumbnails[i];
         if (thumbnail.callback) {
             //log_render->trace("Updating thumbnail slot {}", i);
-            thumbnail.callback.value()(thumbnail.texture_view, thumbnail.texture_layer, thumbnail.time);
+            thumbnail.callback.value()(command_buffer, thumbnail.texture_view, thumbnail.texture_layer, thumbnail.time);
             thumbnail.callback.reset();
         }
     }

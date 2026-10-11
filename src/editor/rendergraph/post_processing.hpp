@@ -1,5 +1,7 @@
 #pragma once
 
+#include "renderers/prepared_frame_values.hpp"
+
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
@@ -15,8 +17,10 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_utility/debug_label.hpp"
 
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace erhe::graphics       { class Command_buffer; class Gpu_timer; class Render_command_encoder; class Render_pass; class Texture; class Texture_heap; }
 namespace erhe::scene_renderer { class Program_interface; }
@@ -28,22 +32,75 @@ class Post_processing;
 class Post_processing_node;
 class Programs;
 
+enum class Post_processing_texture_role : unsigned int {
+    input = 0,  // the node's input (the viewport's resolved color)
+    downsample, // downsample_textures[level]
+    upsample    // upsample_textures[level]
+};
+
+// One texture of a Post_processing_node, resolved when the render thread
+// draws it: the pyramid and its input are created and replaced by the
+// render phase, so an ImGui window passes this reference instead of the
+// texture (doc/editor/editor.md "Frame phases").
 class Post_processing_node_texture_reference : public erhe::graphics::Texture_reference
 {
 public:
-    Post_processing_node_texture_reference(const std::shared_ptr<Post_processing_node>& node, int direction, size_t level);
+    Post_processing_node_texture_reference(const std::shared_ptr<Post_processing_node>& node, Post_processing_texture_role role, size_t level);
     ~Post_processing_node_texture_reference() noexcept override;
 
     auto get_referenced_texture() const -> const erhe::graphics::Texture* override;
 
 private:
-    // Weak, to break the owning cycle: Post_processing_node owns
-    // texture_references, whose entries would otherwise own back the node
-    // and keep its GPU textures alive across shutdown.
+    // Weak: the reference may outlive the node (the ImGui renderer keeps
+    // the references of the frame it drew last).
     std::weak_ptr<Post_processing_node> m_node;
-    int                                 m_direction;
+    Post_processing_texture_role        m_role;
     size_t                              m_level;
 };
+
+// The pyramid layout the render phase built last (Post_processing_node::
+// update_size), copied for the ImGui phase: a one-frame-late copy.
+class Post_processing_pyramid_info
+{
+public:
+    int              level0_width    {0};
+    int              level0_height   {0};
+    std::vector<int> level_widths    {};
+    std::vector<int> level_heights   {};
+    std::size_t      downsample_count{0};
+    std::size_t      upsample_count  {0};
+    std::string      input_label     {};
+};
+
+// The parameters of a Post_processing_node the Post Processing window edits
+// (main thread, the live copy Post_processing_node::parameters). The node
+// copies them into the frame being prepared
+// (Post_processing_node::prepare_rendergraph_node()); the render phase
+// uploads the frame's copy (update_parameters()).
+class Post_processing_parameters
+{
+public:
+    float              upsample_radius      {1.0f};
+    float              tonemap_luminance_max{1.5f};
+    float              tonemap_alpha        {1.0f / 1.5f};
+    int                lowpass_count        {2};
+    // The mix weight curve over the pyramid levels
+    // (compute_post_processing_weights()).
+    float              weight_c0            { 0.12f};
+    float              weight_c1            { 0.05f};
+    float              weight_c2            {-1.0f};
+    float              weight_c3            { 2.0f};
+    // Per-level mix weights the window edits, one per level of the pyramid
+    // the window last saw (sized there from the published pyramid layout).
+    // When the count does not match the pyramid the render phase built (empty,
+    // or the pyramid was resized since), the render phase derives the weights
+    // from the curve.
+    std::vector<float> weights              {};
+};
+
+// The mix weight of each of level_count pyramid levels from the curve of
+// parameters; out is assigned (capacity kept).
+void compute_post_processing_weights(const Post_processing_parameters& parameters, std::size_t level_count, std::vector<float>& out);
 
 class Post_processing_node : public erhe::rendergraph::Rendergraph_node
 {
@@ -66,11 +123,29 @@ public:
     // Public API
     void viewport_toolbar();
 
+    // Render phase, at the start of execute_rendergraph_node(), after the
+    // producer of the input texture sized it for this frame: (re)builds the
+    // pyramid when the input size changed, so the pyramid's textures, render
+    // passes and timers are created, replaced and dropped by the render
+    // phase only. Returns true when the pyramid matches a non-empty input.
     auto update_size() -> bool;
+    // The pyramid matches the input texture's current size.
+    [[nodiscard]] auto is_sized_for_input() const -> bool;
 
+    // Render phase: uploads the parameters of the frame's copy
+    // (get_render_parameters()) for the pyramid as built.
     void update_parameters();
 
-    float                                                     upsample_radius{1.0f};
+    // Render phase: the copy of the parameters the prepare phase of the
+    // rendered frame made (verified).
+    [[nodiscard]] auto get_render_parameters() const -> const Post_processing_parameters&;
+
+    // Any thread: copies the pyramid layout the render phase built last into
+    // `out` (assign, capacity kept).
+    void get_pyramid_info(Post_processing_pyramid_info& out) const;
+
+    // The live parameters: main thread (the Post Processing window).
+    Post_processing_parameters                                parameters;
     // Per-level non-mipmapped textures. downsample_textures[k] stores pyramid
     // level k+1 (pyramid starts at half resolution = level 1). upsample_textures[k]
     // stores pyramid level k. The deepest pyramid level (only written by
@@ -87,18 +162,24 @@ public:
     std::vector<int>                                          level_heights;
     std::vector<size_t>                                       downsample_source_levels;
     std::vector<size_t>                                       upsample_source_levels;
-    std::vector<float>                                        weights;
-    std::vector<std::shared_ptr<Post_processing_node_texture_reference>> texture_references;
     int                                                       level0_width  {0};
     int                                                       level0_height {0};
     erhe::graphics::Ring_buffer_range                         parameter_buffer_range;
-    float                                                     tonemap_luminance_max{1.5f};
-    float                                                     tonemap_alpha{1.0f / 1.5f};
-    int                                                       lowpass_count{2};
+
+protected:
+    // Rendergraph::prepare_frame(): copies the live parameters into the
+    // frame being prepared.
+    void prepare_rendergraph_node(uint64_t frame_index) override;
 
 private:
-    erhe::graphics::Device& m_graphics_device;
-    Post_processing&        m_post_processing;
+    void publish_pyramid_info(const erhe::graphics::Texture& input_texture);
+
+    erhe::graphics::Device&                               m_graphics_device;
+    Post_processing&                                      m_post_processing;
+    mutable std::mutex                                    m_pyramid_info_mutex;
+    Post_processing_pyramid_info                          m_pyramid_info; // written by update_size (render phase), read by get_pyramid_info
+    Prepared_frame_values<Post_processing_parameters>     m_frame_parameters; // M2 copies of `parameters`, read by the render phase
+    std::vector<float>                                    m_render_weights;   // render phase: the uploaded mix weights
 };
 
 class Post_processing

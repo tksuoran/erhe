@@ -1,6 +1,7 @@
 #include "renderers/indirect_diffuse.hpp"
 
 #include "app_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "app_message_bus.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
@@ -8,6 +9,7 @@
 #include "renderers/radiance_cascades_renderer.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -29,23 +31,16 @@ auto get_producer_selection(const Indirect_diffuse_source current, const Indirec
 
 void set_indirect_diffuse_source(App_context& context, const Indirect_diffuse_source source)
 {
+    erhe::utility::Thread_roles::assert_main_thread();
     if (context.editor_settings != nullptr) {
         context.editor_settings->indirect_diffuse_source = source;
-    }
-    if (context.ddgi_renderer != nullptr) {
-        context.ddgi_renderer->set_selection(get_producer_selection(source, Indirect_diffuse_source::ddgi));
-    }
-    if (context.radiance_cascades_renderer != nullptr) {
-        context.radiance_cascades_renderer->set_selection(get_producer_selection(source, Indirect_diffuse_source::radiance_cascades));
     }
 }
 
 auto get_indirect_diffuse_field(const App_context& context) -> Probe_field
 {
-    if (context.editor_settings == nullptr) {
-        return Probe_field{};
-    }
-    switch (context.editor_settings->indirect_diffuse_source) {
+    // The render phase's copy of the setting (M2 snapshot).
+    switch (context.render_settings->indirect_diffuse_source) {
         case Indirect_diffuse_source::ddgi: {
             return (context.ddgi_renderer != nullptr) ? context.ddgi_renderer->get_field() : Probe_field{};
         }
@@ -54,6 +49,29 @@ auto get_indirect_diffuse_field(const App_context& context) -> Probe_field
         }
         default: {
             return Probe_field{};
+        }
+    }
+}
+
+auto has_rendered_indirect_diffuse_field(const App_context& context) -> bool
+{
+    switch (context.render_settings->indirect_diffuse_source) {
+        case Indirect_diffuse_source::ddgi: {
+            if (context.ddgi_renderer == nullptr) {
+                return false;
+            }
+            const Ddgi_renderer::Rendered_state* const state = context.ddgi_renderer->get_rendered_state(context.last_rendered_frame_index);
+            return (state != nullptr) && state->active;
+        }
+        case Indirect_diffuse_source::radiance_cascades: {
+            if (context.radiance_cascades_renderer == nullptr) {
+                return false;
+            }
+            const Radiance_cascades_renderer::Rendered_state* const state = context.radiance_cascades_renderer->get_rendered_state(context.last_rendered_frame_index);
+            return (state != nullptr) && state->has_field;
+        }
+        default: {
+            return false;
         }
     }
 }

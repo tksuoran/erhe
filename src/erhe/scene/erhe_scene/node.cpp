@@ -7,6 +7,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <mutex>
 #include <cmath>
 
 namespace erhe::scene {
@@ -208,15 +209,24 @@ const Property<bool> Xformable::bone_property = erhe::Item_base::register_flag_b
     Property_ui{.group = "Rig", .tooltip = "The node is a skeleton bone: listed with the Rig and IK rows, drawn as a bone and posed by the bone verbs. Saved with the scene; a skin sets it on its joints", .label = "Bone"}
 );
 
+// The transform update serial is handed out on every thread that writes a
+// node transform (the main thread and the geometry workers that build brush
+// previews), so it is a mutex-protected counter (erhe prefers a mutex over
+// an atomic; doc/erhe/scene.md "Transform observers").
+namespace {
+    std::mutex s_global_update_serial_mutex;
+}
 uint64_t Node_transforms::s_global_update_serial = 0;
 
 auto Node_transforms::get_current_serial() -> uint64_t
 {
+    const std::lock_guard<std::mutex> lock{s_global_update_serial_mutex};
     return s_global_update_serial;
 }
 
 auto Node_transforms::get_next_serial() -> uint64_t
 {
+    const std::lock_guard<std::mutex> lock{s_global_update_serial_mutex};
     return ++s_global_update_serial;
 }
 

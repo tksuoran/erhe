@@ -2,6 +2,8 @@
 
 #include "erhe_scene_renderer/shader_key.hpp"
 
+#include "erhe_scene/light_snapshot.hpp"
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -27,6 +29,15 @@ namespace erhe::scene_renderer {
 // forward pass light layer partition) indexes this by slot and never walks
 // the raw light layer again.
 //
+// The slots hold erhe::scene::Light_snapshot copies, not the lights: every
+// resolve() refreshes them from the lights (a light's world transform changes
+// without a hook), so the owner calls resolve() once per frame on the thread
+// that owns the lights (the editor's main thread, M2), and a render phase on
+// another thread reads the copies while the lights are edited. An owner whose
+// render phase of one frame overlaps the prepare phase of the next keeps one
+// Light_set per frame in flight (the editor's Scene_root), so a resolve never
+// touches the set a render phase is reading.
+//
 // Slot order is type-major (directional, spot, point, other), shadow-mapped
 // lights first within each type - the layout the standard shader's per-type
 // shadow-prefix / non-shadow-suffix light loops assume; partition holds the
@@ -41,26 +52,36 @@ public:
     // changed). Applied by the next resolve() on the main thread.
     void invalidate();
 
-    // Main thread. Recomputes from lights (the scene's light layer, in its
-    // order = priority within a type) when invalidated or when
-    // light_count_limits differ from the last resolve. Returns true when the
-    // resolution changed.
+    // Main thread, once per frame before the frame's render phase. Recomputes
+    // the slot layout from lights (the scene's light layer, in its order =
+    // priority within a type) when invalidated or when light_count_limits
+    // differ from the last resolve, then captures every slot's snapshot from
+    // its light. Returns true when the slot layout changed.
     auto resolve(std::span<const std::shared_ptr<erhe::scene::Light>> lights, const Light_count_limits& light_count_limits) -> bool;
 
-    [[nodiscard]] auto get_lights             () const -> const std::vector<std::shared_ptr<erhe::scene::Light>>& { return m_lights; }
+    // Slot i of the light UBO = get_lights()[i], the render phase's copy of
+    // the light; pointers into the vector stay valid until the next resolve().
+    [[nodiscard]] auto get_lights             () const -> const std::vector<erhe::scene::Light_snapshot>&          { return m_lights; }
     [[nodiscard]] auto get_partition          () const -> const Light_layer_partition&                            { return m_partition; }
     [[nodiscard]] auto get_shadow_map_2d_slots() const -> const std::vector<std::size_t>&                         { return m_shadow_map_2d_slots; }
     [[nodiscard]] auto get_point_shadow_slots () const -> const std::vector<std::size_t>&                         { return m_point_shadow_slots; }
     [[nodiscard]] auto get_light_count_limits () const -> const Light_count_limits&                               { return m_light_count_limits; }
     // Bumped by every resolve() that changed the resolution.
     [[nodiscard]] auto get_generation         () const -> uint64_t                                                { return m_generation; }
-    // Slot of light, or SIZE_MAX when the light is not shaded.
-    [[nodiscard]] auto find_slot              (const erhe::scene::Light* light) const -> std::size_t;
+    // Slot of the light with this id (erhe::Item_base::get_id()), or SIZE_MAX
+    // when the light is not shaded.
+    [[nodiscard]] auto find_slot              (std::size_t light_id) const -> std::size_t;
 
 private:
+    // Refreshes every slot's snapshot from its light.
+    void capture();
+
     std::atomic<bool>                                m_dirty{true};
     Light_count_limits                               m_light_count_limits{};
-    std::vector<std::shared_ptr<erhe::scene::Light>> m_lights;
+    // The lights of the slots (main thread only: read by resolve() to refresh
+    // m_lights, never by a render phase).
+    std::vector<std::shared_ptr<erhe::scene::Light>> m_slot_lights;
+    std::vector<erhe::scene::Light_snapshot>         m_lights;
     Light_layer_partition                            m_partition{};
     std::vector<std::size_t>                         m_shadow_map_2d_slots;
     std::vector<std::size_t>                         m_point_shadow_slots;

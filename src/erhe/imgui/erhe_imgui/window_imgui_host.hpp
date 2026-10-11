@@ -54,6 +54,12 @@ public:
 
     // Implements Imgui_host
     void begin_imgui_frame  ()                            override;
+
+    // Render phase, before the rendergraph executes: (re)creates the
+    // swapchain render pass this host renders into when the window size
+    // changed (the application passes the size its prepare phase saw; the
+    // swapchain itself follows the same size through begin_swapchain).
+    void update_render_pass(int width, int height);
     void process_events     (float dt_s, int64_t time_ns) override;
     void end_imgui_frame    ()                            override;
     auto is_visible         () const -> bool              override;
@@ -62,7 +68,6 @@ public:
     void stop_text_input    ()                            override;
 
 private:
-    void update_render_pass(int width, int height);
 
     erhe::window::Context_window&                m_context_window;
     erhe::graphics::Device&                      m_graphics_device;

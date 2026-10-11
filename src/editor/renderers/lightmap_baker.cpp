@@ -40,6 +40,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -55,6 +56,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <unordered_set>
+#include <utility>
 
 namespace editor {
 
@@ -1346,6 +1348,7 @@ const erhe::graphics::Color_blend_state c_seam_blend_state{
 Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::scene_renderer::Mesh_memory& mesh_memory)
     : m_graphics_device{graphics_device}
     , m_mesh_memory    {mesh_memory}
+    , m_tick_slots     (graphics_device.get_number_of_frames_in_flight())
 {
     using namespace erhe::graphics;
 
@@ -2220,6 +2223,18 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     m_seam_vertex_ring = std::make_unique<Ring_buffer_client>(graphics_device, Buffer_target::vertex, "Lightmap_baker::seam_vertices", 0u);
 }
 
+void Lightmap_baker::set_join_render_phase(std::function<void()> join_render_phase)
+{
+    m_join_render_phase = std::move(join_render_phase);
+}
+
+void Lightmap_baker::join_render_phase()
+{
+    if (m_join_render_phase) {
+        m_join_render_phase();
+    }
+}
+
 Lightmap_baker::~Lightmap_baker() noexcept = default;
 
 auto Lightmap_baker::is_supported() const -> bool
@@ -2325,7 +2340,7 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float min_face_
     // removed).
     if ((m_partitioner == nullptr) || !m_partitioner->is_prepared() || (m_partitioner->get_scene_root() != &scene_root)) {
         log_render->info("Lightmap_baker::update_layout: no prepared world-space partition for this scene - run Prepare World-Space Tiles");
-        m_seam_vertices.clear();
+        m_seam_vertices.reset();
         return false;
     }
     return update_layout_partitioned(scene_root, min_face_texels);
@@ -2921,7 +2936,7 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
         if (m_report != nullptr) {
             m_report->add_error(Lightmap_report::Stage::layout, "partitioned layout", "partition tile metadata is inconsistent - re-prepare");
         }
-        m_seam_vertices.clear();
+        m_seam_vertices.reset();
         return false;
     }
     for (Tile& tile : tiles) {
@@ -2975,7 +2990,7 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
         if (m_report != nullptr) {
             m_report->add_error(Lightmap_report::Stage::layout, "partitioned layout", "no piece regions to pack");
         }
-        m_seam_vertices.clear();
+        m_seam_vertices.reset();
         return false;
     }
 
@@ -3015,7 +3030,7 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
         if (m_report != nullptr) {
             m_report->add_error(Lightmap_report::Stage::layout, "partitioned layout", "no piece regions could be packed");
         }
-        m_seam_vertices.clear();
+        m_seam_vertices.reset();
         return false;
     }
 
@@ -3025,14 +3040,17 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
 
 void Lightmap_baker::build_seam_vertices()
 {
-    m_seam_vertices.clear();
+    // Built aside and published whole: the record inputs of a frame in
+    // flight keep the previous vertices.
+    std::shared_ptr<std::vector<Seam_vertex>> seam_vertices_shared = std::make_shared<std::vector<Seam_vertex>>();
+    std::vector<Seam_vertex>& seam_vertices = *seam_vertices_shared;
     m_tile_seam_ranges.assign(static_cast<std::size_t>(m_layout.get_tile_count()), {0u, 0u});
     std::size_t seam_count = 0;
     // Grouped by tile (the seam pass rasters into the tile-sized working
     // atlas, one tile per publish): both sides of a seam always live in the
     // same region, hence the same tile.
     for (int tile = 0; tile < m_layout.get_tile_count(); ++tile) {
-    const uint32_t  tile_first_vertex = static_cast<uint32_t>(m_seam_vertices.size());
+    const uint32_t  tile_first_vertex = static_cast<uint32_t>(seam_vertices.size());
     for (const Instance_region& region : m_layout.regions) {
         if (!region.mesh || (region.tile != tile)) {
             continue;
@@ -3128,19 +3146,20 @@ void Lightmap_baker::build_seam_vertices()
                 ++seam_count;
                 // Two lines: each side rasterized at its own UVs, sampling
                 // the opposite side.
-                m_seam_vertices.push_back(Seam_vertex{atlas_uv(uv0),       atlas_uv(other.uv0)});
-                m_seam_vertices.push_back(Seam_vertex{atlas_uv(uv1),       atlas_uv(other.uv1)});
-                m_seam_vertices.push_back(Seam_vertex{atlas_uv(other.uv0), atlas_uv(uv0)});
-                m_seam_vertices.push_back(Seam_vertex{atlas_uv(other.uv1), atlas_uv(uv1)});
+                seam_vertices.push_back(Seam_vertex{atlas_uv(uv0),       atlas_uv(other.uv0)});
+                seam_vertices.push_back(Seam_vertex{atlas_uv(uv1),       atlas_uv(other.uv1)});
+                seam_vertices.push_back(Seam_vertex{atlas_uv(other.uv0), atlas_uv(uv0)});
+                seam_vertices.push_back(Seam_vertex{atlas_uv(other.uv1), atlas_uv(uv1)});
             }
         }
     }
     m_tile_seam_ranges[static_cast<std::size_t>(tile)] = {
         tile_first_vertex,
-        static_cast<uint32_t>(m_seam_vertices.size()) - tile_first_vertex
+        static_cast<uint32_t>(seam_vertices.size()) - tile_first_vertex
     };
     } // for tile
-    log_render->info("Lightmap_baker: {} seam edges ({} line vertices)", seam_count, m_seam_vertices.size());
+    log_render->info("Lightmap_baker: {} seam edges ({} line vertices)", seam_count, seam_vertices.size());
+    m_seam_vertices = std::move(seam_vertices_shared);
 }
 
 void Lightmap_baker::ensure_gbuffer_targets()
@@ -3259,6 +3278,7 @@ auto Lightmap_baker::bake_gbuffer(const int tile) -> bool
     if ((tile < 0) || (tile >= m_layout.get_tile_count())) {
         return false;
     }
+    join_render_phase();
 
     const std::size_t not_skinned_key = m_mesh_memory.get_vertex_input_from_vertex_format(m_mesh_memory.vertex_format_not_skinned).key;
 
@@ -3557,6 +3577,7 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
     if (!m_gbuffer_valid || !m_position_texture || !m_normal_texture) {
         return false;
     }
+    join_render_phase();
     const int         width       = m_position_texture->get_width();
     const int         height      = m_position_texture->get_height();
     const std::size_t texel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
@@ -3689,10 +3710,24 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
 
 void Lightmap_baker::evict_unreferenced_blas()
 {
+    // Destroy the retired structures no frame in flight can reference any
+    // more: the tick slot of their eviction frame came around again, so the
+    // render phase of every frame that could hold them has recorded.
+    const uint64_t frame_index       = m_graphics_device.get_frame_index();
+    const uint64_t frames_in_flight  = static_cast<uint64_t>(m_tick_slots.size());
+    std::erase_if(
+        m_retired_blas,
+        [frame_index, frames_in_flight](const Retired_blas& retired) -> bool {
+            return (retired.frame_index + frames_in_flight) <= frame_index;
+        }
+    );
     for (auto i = m_blas_cache.begin(); i != m_blas_cache.end(); ) {
         const std::shared_ptr<erhe::primitive::Primitive>& primitive = i->second.primitive;
         const bool unreferenced = !primitive || !primitive->render_shape || (primitive->render_shape.use_count() == 1);
         if (unreferenced) {
+            // A tick slot of a frame still in flight may hold this BLAS
+            // (instances, pending build); retire it instead of destroying.
+            m_retired_blas.push_back(Retired_blas{.frame_index = frame_index, .entry = std::move(i->second)});
             i = m_blas_cache.erase(i);
         } else {
             ++i;
@@ -3701,7 +3736,6 @@ void Lightmap_baker::evict_unreferenced_blas()
 }
 
 auto Lightmap_baker::get_or_create_blas(
-    erhe::graphics::Command_buffer&                    command_buffer,
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
     const erhe::primitive::Buffer_mesh&                buffer_mesh
 ) -> erhe::graphics::Acceleration_structure*
@@ -3779,11 +3813,35 @@ auto Lightmap_baker::get_or_create_blas(
             .debug_label = erhe::utility::Debug_label{"Lightmap BLAS"}
         }
     );
-    entry.acceleration_structure->build(command_buffer);
+    // The build is recorded by record_pending_blas_builds(): the render
+    // phase for the interactive tick, at once for the standalone bakes.
+    m_blas_pending_build.push_back(entry.acceleration_structure.get());
     return entry.acceleration_structure.get();
 }
 
+void Lightmap_baker::record_pending_blas_builds(erhe::graphics::Command_buffer& command_buffer)
+{
+    record_blas_builds(command_buffer, m_blas_pending_build);
+    m_blas_pending_build.clear();
+}
+
+void Lightmap_baker::record_blas_builds(
+    erhe::graphics::Command_buffer&                                command_buffer,
+    const std::span<erhe::graphics::Acceleration_structure* const> blas_list
+)
+{
+    for (erhe::graphics::Acceleration_structure* const blas : blas_list) {
+        blas->build(command_buffer);
+    }
+}
+
 void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command_buffer)
+{
+    create_bake_targets();
+    record_bake_target_clears(command_buffer);
+}
+
+void Lightmap_baker::create_bake_targets()
 {
     using namespace erhe::graphics;
     const auto texture_matches = [this](const std::shared_ptr<Texture>& texture) {
@@ -3836,8 +3894,7 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
             Image_usage_flag_bit_mask::transfer_src | // white source for fresh-slot clears
             Image_usage_flag_bit_mask::transfer_dst
         );
-        command_buffer.clear_texture(*m_lightmap_texture, {0.0, 0.0, 0.0, 0.0});
-        command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+        m_working_clear_pending = true;
     }
     // Renderer-facing double buffer: only complete publishes are copied
     // in, so accumulation resets never black out the sampled atlas. It
@@ -3860,12 +3917,10 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
         // m_display_cleared: regions moved, so the previous publish no
         // longer matches the uv_scale_offsets pushed to the meshes).
         // Lighting/transform resets keep the display showing the last
-        // publish while accumulation rebuilds. White = the unbaked look
-        // (matches the piece white-fallback sentinel); alpha 0 keeps "no
-        // coverage" for the atlas readback consumers.
-        command_buffer.clear_texture(*m_display_texture, {1.0, 1.0, 1.0, 0.0});
-        command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
-        m_display_cleared = true;
+        // publish while accumulation rebuilds. The clear itself is
+        // recorded by record_bake_target_clears().
+        m_display_clear_pending = true;
+        m_display_cleared       = true;
         m_slots_pending_white_clear.clear(); // the full-page clear covers them
         for (Tile_state& tile : m_tiles) {
             tile.published = false;
@@ -3873,12 +3928,51 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
     }
 }
 
-void Lightmap_baker::record_pending_slot_white_clears(erhe::graphics::Command_buffer& command_buffer)
+void Lightmap_baker::record_bake_target_clears(erhe::graphics::Command_buffer& command_buffer)
+{
+    Record_inputs inputs;
+    fill_record_inputs(inputs, -1);
+    if (m_working_clear_pending) {
+        record_working_atlas_clear(command_buffer, inputs);
+        m_working_clear_pending = false;
+    }
+    if (m_display_clear_pending) {
+        record_display_atlas_clear(command_buffer, inputs);
+        m_display_clear_pending = false;
+    }
+}
+
+void Lightmap_baker::record_working_atlas_clear(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs)
 {
     using namespace erhe::graphics;
-    if (m_slots_pending_white_clear.empty() || !m_display_texture || !m_dilate_texture) {
+    ERHE_VERIFY(inputs.working);
+    command_buffer.clear_texture(*inputs.working, {0.0, 0.0, 0.0, 0.0});
+    command_buffer.transition_texture_layout(*inputs.working, Image_layout::shader_read_only_optimal);
+}
+
+void Lightmap_baker::record_display_atlas_clear(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs)
+{
+    using namespace erhe::graphics;
+    ERHE_VERIFY(inputs.display);
+    // White = the unbaked look (matches the piece white-fallback sentinel);
+    // alpha 0 keeps "no coverage" for the atlas readback consumers.
+    command_buffer.clear_texture(*inputs.display, {1.0, 1.0, 1.0, 0.0});
+    command_buffer.transition_texture_layout(*inputs.display, Image_layout::shader_read_only_optimal);
+}
+
+void Lightmap_baker::record_slot_white_clears(
+    erhe::graphics::Command_buffer&   command_buffer,
+    const Record_inputs&              inputs,
+    const std::span<const glm::ivec2> slot_origins
+)
+{
+    using namespace erhe::graphics;
+    if (slot_origins.empty()) {
         return;
     }
+    // prepare_tick() takes the origins right after create_bake_targets().
+    ERHE_VERIFY(inputs.display && inputs.dilate);
+    const int tile_size = inputs.tile_size;
     // A freshly assigned display slot still holds the PREVIOUS occupant
     // tile's published texels, and the new occupant's regions map into it
     // immediately (publish_regions on the residency change) - stale
@@ -3886,27 +3980,54 @@ void Lightmap_baker::record_pending_slot_white_clears(erhe::graphics::Command_bu
     // white (the unbaked look) using the tile-sized dilate scratch as the
     // source (it is re-filled by every dilate/seam pass, so clobbering it
     // here is safe).
-    const int tile_size = m_layout.get_tile_size();
-    command_buffer.clear_texture(*m_dilate_texture, {1.0, 1.0, 1.0, 0.0});
-    command_buffer.transition_texture_layout(*m_dilate_texture,  Image_layout::transfer_src_optimal);
-    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::transfer_dst_optimal);
+    command_buffer.clear_texture(*inputs.dilate, {1.0, 1.0, 1.0, 0.0});
+    command_buffer.transition_texture_layout(*inputs.dilate,  Image_layout::transfer_src_optimal);
+    command_buffer.transition_texture_layout(*inputs.display, Image_layout::transfer_dst_optimal);
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-        for (const int slot : m_slots_pending_white_clear) {
-            const glm::ivec2 slot_origin = m_layout.get_slot_origin(slot);
+        for (const glm::ivec2 slot_origin : slot_origins) {
             blit.copy_from_texture(
-                erhe::graphics::Texture_location{.texture = m_dilate_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+                erhe::graphics::Texture_location{.texture = inputs.dilate.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
                 glm::ivec3{tile_size, tile_size, 1},
-                erhe::graphics::Texture_location{.texture = m_display_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
+                erhe::graphics::Texture_location{.texture = inputs.display.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
             );
         }
     }
-    command_buffer.transition_texture_layout(*m_dilate_texture,  Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
-    m_slots_pending_white_clear.clear();
+    command_buffer.transition_texture_layout(*inputs.dilate,  Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*inputs.display, Image_layout::shader_read_only_optimal);
 }
 
 auto Lightmap_baker::ensure_tile_accum(erhe::graphics::Command_buffer& command_buffer, const int tile) -> erhe::graphics::Texture*
+{
+    erhe::graphics::Texture* const accum = prepare_tile_accum(tile);
+    if (accum != nullptr) {
+        record_tile_accum_clear(command_buffer, tile);
+    }
+    return accum;
+}
+
+void Lightmap_baker::record_tile_accum_clear(erhe::graphics::Command_buffer& command_buffer, const int tile)
+{
+    using namespace erhe::graphics;
+    if ((tile < 0) || (tile >= static_cast<int>(m_tiles.size()))) {
+        return;
+    }
+    Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+    if (!state.accum_clear_pending || !state.accum) {
+        return;
+    }
+    record_accum_clear(command_buffer, *state.accum);
+    state.accum_clear_pending = false;
+}
+
+void Lightmap_baker::record_accum_clear(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Texture& accum)
+{
+    using namespace erhe::graphics;
+    command_buffer.clear_texture(accum, {0.0, 0.0, 0.0, 0.0});
+    command_buffer.transition_texture_layout(accum, Image_layout::general);
+}
+
+auto Lightmap_baker::prepare_tile_accum(const int tile) -> erhe::graphics::Texture*
 {
     using namespace erhe::graphics;
     if ((tile < 0) || (tile >= static_cast<int>(m_tiles.size()))) {
@@ -3936,16 +4057,17 @@ auto Lightmap_baker::ensure_tile_accum(erhe::graphics::Command_buffer& command_b
         state.accum_dirty = true;
     }
     if (state.accum_dirty) {
-        command_buffer.clear_texture(*state.accum, {0.0, 0.0, 0.0, 0.0});
-        command_buffer.transition_texture_layout(*state.accum, Image_layout::general);
-        state.accum_dirty = false;
-        state.sweeps      = 0;
+        state.accum_clear_pending = true;
+        state.accum_dirty         = false;
+        state.sweeps              = 0;
     }
     return state.accum.get();
 }
 
 void Lightmap_baker::publish_regions()
 {
+    // Writes the scene's mesh primitives: prepare phase (or outside a frame).
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     // Per-primitive atlas regions so the forward renderer samples the bake
     // (Primitive_buffer uploads the value per draw; zero = no lightmap).
     // The display mapping goes through the region's tile's current slot:
@@ -3961,9 +4083,9 @@ void Lightmap_baker::publish_regions()
     m_regions_published = true;
 }
 
-auto Lightmap_baker::collect_lights(Scene_root& scene_root) const -> std::vector<Light_record>
+void Lightmap_baker::collect_lights(Scene_root& scene_root, std::vector<Light_record>& lights) const
 {
-    std::vector<Light_record> lights;
+    lights.clear();
     for (const std::shared_ptr<erhe::scene::Light>& light : scene_root.layers().light()->lights) {
         if (!light || !light->is_visible() || !light->is_active() || (lights.size() >= c_max_gather_lights)) {
             continue;
@@ -3993,7 +4115,6 @@ auto Lightmap_baker::collect_lights(Scene_root& scene_root) const -> std::vector
             }
         );
     }
-    return lights;
 }
 
 void Lightmap_baker::write_gather_ubo(
@@ -4030,13 +4151,17 @@ void Lightmap_baker::write_gather_ubo(
 }
 
 void Lightmap_baker::collect_instances(
-    erhe::graphics::Command_buffer&                                command_buffer,
     Scene_root&                                                    scene_root,
     std::vector<erhe::graphics::Acceleration_structure_instance>&  out_instances,
     std::vector<Lm_instance_record>&                               out_records
 )
 {
     using namespace erhe::graphics;
+
+    // Every earlier collection had its builds recorded (record_tick for the
+    // tick, the standalone bakes at once); the eviction below may destroy
+    // cache entries, which a pending build would still point at.
+    ERHE_VERIFY(m_blas_pending_build.empty());
 
     // Give back structures whose geometry left the scene before gathering
     // this pass's set.
@@ -4076,7 +4201,7 @@ void Lightmap_baker::collect_instances(
             if (buffer_mesh == nullptr) {
                 continue;
             }
-            Acceleration_structure* blas = get_or_create_blas(command_buffer, mesh_primitive.primitive, *buffer_mesh);
+            Acceleration_structure* blas = get_or_create_blas(mesh_primitive.primitive, *buffer_mesh);
             if (blas == nullptr) {
                 continue;
             }
@@ -4169,8 +4294,10 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
     if (!m_gather_pipeline || !m_resolve_pipeline || (m_layout.width == 0) || m_tiles.empty()) {
         return false;
     }
+    join_render_phase();
 
-    const std::vector<Light_record> lights = collect_lights(scene_root);
+    std::vector<Light_record> lights;
+    collect_lights(scene_root, lights);
 
     m_direct_gather_ubo = std::make_unique<Buffer>(
         m_graphics_device,
@@ -4225,12 +4352,13 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
             continue;
         }
 
-        collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
-        if (m_tick_instances.empty()) {
+        collect_instances(scene_root, m_standalone_instances, m_standalone_records);
+        record_pending_blas_builds(command_buffer);
+        if (m_standalone_instances.empty()) {
             command_buffer.end();
             return false;
         }
-        const std::size_t record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
+        const std::size_t record_byte_count = m_standalone_records.size() * sizeof(Lm_instance_record);
         m_direct_instance_ssbo = std::make_unique<Buffer>(
             m_graphics_device,
             Buffer_create_info{
@@ -4248,11 +4376,11 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
         );
         {
             const std::span<std::byte> mapped = m_direct_instance_ssbo->map_bytes(0, record_byte_count);
-            std::memcpy(mapped.data(), m_tick_records.data(), record_byte_count);
+            std::memcpy(mapped.data(), m_standalone_records.data(), record_byte_count);
             m_direct_instance_ssbo->unmap();
         }
 
-        const uint32_t required_capacity = static_cast<uint32_t>(m_tick_instances.size());
+        const uint32_t required_capacity = static_cast<uint32_t>(m_standalone_instances.size());
         if (!m_tlas || (m_tlas_capacity < required_capacity)) {
             const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
             m_tlas = std::make_unique<Acceleration_structure>(
@@ -4265,11 +4393,17 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
             );
             m_tlas_capacity = new_capacity;
         }
-        m_tlas->build(command_buffer, m_tick_instances);
+        m_tlas->build(command_buffer, m_standalone_instances);
+
+        // Single phase: the record inputs come straight from the members.
+        Record_inputs inputs;
+        fill_record_inputs(inputs, tile);
+        take_adjust(inputs);
 
         // Virtual offset (one-shot per G-buffer): needs the TLAS just built.
         record_adjust(
             command_buffer,
+            inputs,
             *m_tlas,
             [&](Compute_command_encoder& encoder) {
                 encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count, 1);
@@ -4306,8 +4440,8 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
             );
         }
 
-        record_resolve_and_dilate(command_buffer, tile, false);
-        record_display_publish(command_buffer, tile);
+        record_resolve_and_dilate(command_buffer, inputs, Publish_kind::raw);
+        record_display_publish(command_buffer, inputs);
         command_buffer.end();
         Command_buffer* command_buffers[] = { &command_buffer };
         m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
@@ -4393,6 +4527,7 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
     if (!offline.progress.active) {
         return false;
     }
+    join_render_phase();
     const int tile = offline.next_tile;
     if (tile >= m_layout.get_tile_count()) {
         offline.progress.active = false;
@@ -4415,7 +4550,8 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
         return fail("G-buffer raster failed");
     }
 
-    const std::vector<Light_record> lights    = collect_lights(scene_root);
+    std::vector<Light_record> lights;
+    collect_lights(scene_root, lights);
     const int                       tile_size = m_layout.get_tile_size();
     constexpr unsigned int          bake_thread_slot = 6;
 
@@ -4438,8 +4574,9 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
             .debug_label = erhe::utility::Debug_label{"lightmap offline gather ubo"}
         }
     );
-    std::size_t record_byte_count = 0;
-    Texture*    accum             = nullptr;
+    std::size_t   record_byte_count = 0;
+    Texture*      accum             = nullptr;
+    Record_inputs offline_inputs;
     for (uint32_t sweep = 0; sweep < offline.progress.target_sweeps; ++sweep) {
         {
             const std::span<std::byte> mapped = m_direct_gather_ubo->map_bytes(0, m_gather_block_size);
@@ -4456,12 +4593,13 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
                 command_buffer.end();
                 return fail("accumulation target unavailable");
             }
-            collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
-            if (m_tick_instances.empty()) {
+            collect_instances(scene_root, m_standalone_instances, m_standalone_records);
+            record_pending_blas_builds(command_buffer);
+            if (m_standalone_instances.empty()) {
                 command_buffer.end();
                 return fail("no occluder instances (empty scene?)");
             }
-            record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
+            record_byte_count = m_standalone_records.size() * sizeof(Lm_instance_record);
             m_direct_instance_ssbo = std::make_unique<Buffer>(
                 m_graphics_device,
                 Buffer_create_info{
@@ -4479,10 +4617,10 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
             );
             {
                 const std::span<std::byte> mapped = m_direct_instance_ssbo->map_bytes(0, record_byte_count);
-                std::memcpy(mapped.data(), m_tick_records.data(), record_byte_count);
+                std::memcpy(mapped.data(), m_standalone_records.data(), record_byte_count);
                 m_direct_instance_ssbo->unmap();
             }
-            const uint32_t required_capacity = static_cast<uint32_t>(m_tick_instances.size());
+            const uint32_t required_capacity = static_cast<uint32_t>(m_standalone_instances.size());
             if (!m_tlas || (m_tlas_capacity < required_capacity)) {
                 const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
                 m_tlas = std::make_unique<Acceleration_structure>(
@@ -4495,9 +4633,13 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
                 );
                 m_tlas_capacity = new_capacity;
             }
-            m_tlas->build(command_buffer, m_tick_instances);
+            m_tlas->build(command_buffer, m_standalone_instances);
+            // Single phase: the record inputs come straight from the members.
+            fill_record_inputs(offline_inputs, tile);
+            take_adjust(offline_inputs);
             record_adjust(
                 command_buffer,
+                offline_inputs,
                 *m_tlas,
                 [&](Compute_command_encoder& encoder) {
                     encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count, 1);
@@ -4535,8 +4677,8 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
             // 3. Resolve + optional denoise + dilate + seam blend into the
             // tile-sized working atlas, and (when this tile happens to hold
             // a display slot) publish so the viewport reflects the bake.
-            record_resolve_and_dilate(command_buffer, tile, m_options.denoise);
-            record_display_publish(command_buffer, tile);
+            record_resolve_and_dilate(command_buffer, offline_inputs, m_options.denoise ? Publish_kind::denoised : Publish_kind::raw);
+            record_display_publish(command_buffer, offline_inputs);
         }
         command_buffer.end();
         Command_buffer* command_buffers[] = { &command_buffer };
@@ -4586,46 +4728,100 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
     return true;
 }
 
+void Lightmap_baker::fill_record_inputs(Record_inputs& inputs, const int tile) const
+{
+    const bool tile_valid = (tile >= 0) && (tile < static_cast<int>(m_tiles.size()));
+    inputs.working         = m_lightmap_texture;
+    inputs.dilate          = m_dilate_texture;
+    inputs.display         = m_display_texture;
+    inputs.position        = m_position_texture;
+    inputs.normal          = m_normal_texture;
+    inputs.albedo          = m_albedo_texture;
+    inputs.origin          = m_origin_valid ? m_origin_texture : std::shared_ptr<erhe::graphics::Texture>{};
+    inputs.origin_factor   = m_origin_factor;
+    inputs.accum           = tile_valid ? m_tiles[static_cast<std::size_t>(tile)].accum : std::shared_ptr<erhe::graphics::Texture>{};
+    inputs.smooth_position.reset();
+    inputs.adjust_pipeline = nullptr;
+    inputs.tile_size       = m_layout.get_tile_size();
+
+    const int slot = ((tile >= 0) && (tile < m_layout.get_tile_count()))
+        ? m_layout.tiles[static_cast<std::size_t>(tile)].slot
+        : -1;
+    inputs.has_publish_slot    = (slot >= 0);
+    inputs.publish_slot_origin = (slot >= 0) ? m_layout.get_slot_origin(slot) : glm::ivec2{0, 0};
+
+    inputs.seam_vertices     = m_seam_vertices;
+    inputs.seam_first_vertex = 0;
+    inputs.seam_vertex_count = 0;
+    if (m_seam_vertices && (tile >= 0) && (tile < static_cast<int>(m_tile_seam_ranges.size()))) {
+        const auto [first_vertex, vertex_count] = m_tile_seam_ranges[static_cast<std::size_t>(tile)];
+        ERHE_VERIFY(static_cast<std::size_t>(first_vertex) + static_cast<std::size_t>(vertex_count) <= m_seam_vertices->size());
+        inputs.seam_first_vertex = first_vertex;
+        inputs.seam_vertex_count = vertex_count;
+    }
+
+    inputs.dilation      = m_options.dilation;
+    inputs.seam_blend    = m_options.seam_blend;
+    inputs.gutter_texels = m_options.gutter_texels;
+}
+
+void Lightmap_baker::take_adjust(Record_inputs& inputs)
+{
+    erhe::graphics::Compute_pipeline* const adjust_pipeline =
+        m_options.terminator_fix ? m_adjust_pipeline.get() : m_adjust_no_smooth_pipeline.get();
+    if (m_gbuffer_adjusted || (adjust_pipeline == nullptr) || !m_position_texture) {
+        return;
+    }
+    // ensure_gbuffer_targets() recreates the smooth position target with
+    // every G-buffer that needs the pass.
+    ERHE_VERIFY(m_smooth_position_texture);
+    inputs.adjust_pipeline = adjust_pipeline;
+    // The smooth position is folded into the position G-buffer by the pass
+    // and nothing else reads it: the inputs hold the page-sized fp32 target
+    // until the pass is recorded and their frame retires (destruction is
+    // deferred behind the in-flight frames), and the next G-buffer
+    // re-raster (ensure_gbuffer_targets) recreates it.
+    inputs.smooth_position = std::move(m_smooth_position_texture);
+    m_gbuffer_adjusted = true;
+}
+
 void Lightmap_baker::record_adjust(
     erhe::graphics::Command_buffer&                                       command_buffer,
+    const Record_inputs&                                                  inputs,
     erhe::graphics::Acceleration_structure&                               tlas,
     const std::function<void(erhe::graphics::Compute_command_encoder&)>&  bind_instance_records
 )
 {
     using namespace erhe::graphics;
-    Compute_pipeline* const adjust_pipeline = m_options.terminator_fix ? m_adjust_pipeline.get() : m_adjust_no_smooth_pipeline.get();
-    if (m_gbuffer_adjusted || (adjust_pipeline == nullptr) || !m_position_texture) {
+    if (!inputs.smooth_position) {
         return;
     }
-    command_buffer.transition_texture_layout(*m_position_texture,        Image_layout::general);
-    command_buffer.transition_texture_layout(*m_normal_texture,          Image_layout::general);
-    command_buffer.transition_texture_layout(*m_smooth_position_texture, Image_layout::general);
+    ERHE_VERIFY((inputs.adjust_pipeline != nullptr) && inputs.position && inputs.normal);
+    Texture& position_texture        = *inputs.position;
+    Texture& normal_texture          = *inputs.normal;
+    Texture& smooth_position_texture = *inputs.smooth_position;
+    command_buffer.transition_texture_layout(position_texture,        Image_layout::general);
+    command_buffer.transition_texture_layout(normal_texture,          Image_layout::general);
+    command_buffer.transition_texture_layout(smooth_position_texture, Image_layout::general);
     {
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_adjust_layout.get());
-        encoder.set_compute_pipeline(*adjust_pipeline);
+        encoder.set_compute_pipeline(*inputs.adjust_pipeline);
         encoder.set_acceleration_structure(0u, tlas);
         bind_instance_records(encoder);
-        encoder.set_storage_image(2u, *m_position_texture);
-        encoder.set_storage_image(3u, *m_normal_texture);
-        encoder.set_storage_image(4u, *m_smooth_position_texture);
+        encoder.set_storage_image(2u, position_texture);
+        encoder.set_storage_image(3u, normal_texture);
+        encoder.set_storage_image(4u, smooth_position_texture);
         encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(m_position_texture->get_width())  + 7) / 8,
-            (static_cast<std::uintptr_t>(m_position_texture->get_height()) + 7) / 8,
+            (static_cast<std::uintptr_t>(position_texture.get_width())  + 7) / 8,
+            (static_cast<std::uintptr_t>(position_texture.get_height()) + 7) / 8,
             1
         );
     }
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
-    command_buffer.transition_texture_layout(*m_position_texture,        Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_normal_texture,          Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_smooth_position_texture, Image_layout::shader_read_only_optimal);
-    m_gbuffer_adjusted = true;
-    // The smooth position is now folded into the position G-buffer and
-    // nothing else reads it; release the page-sized fp32 target until the
-    // next G-buffer re-raster (ensure_gbuffer_targets recreates it).
-    // Destruction is deferred behind the in-flight frames, so the commands
-    // recorded above stay valid.
-    m_smooth_position_texture.reset();
+    command_buffer.transition_texture_layout(position_texture,        Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(normal_texture,          Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(smooth_position_texture, Image_layout::shader_read_only_optimal);
 }
 
 void Lightmap_baker::set_baking_enabled(const bool enabled)
@@ -4721,6 +4917,7 @@ void Lightmap_baker::clear_display_to_white()
         // page already cleared white on first use.
         return;
     }
+    join_render_phase();
     // Standalone submit (same pattern as restore_tile): the fresh layout's
     // mappings must not sample the previous bake's texels at the previous
     // packing. White = the unbaked look (matches the piece white-fallback
@@ -4744,6 +4941,10 @@ void Lightmap_baker::clear_display_to_white()
 
 void Lightmap_baker::clear_tiles()
 {
+    // Prepare phase before this frame's tick is planned, or outside a
+    // frame: the tick slot of the frame being prepared holds no plan and
+    // no BLAS build is pending outside a tick slot.
+    ERHE_VERIFY(m_blas_pending_build.empty() && (get_tick_slot().plan.stage == Tick_stage::none));
     // Forget all baked content (Clear All Tiles): white display, restart
     // accumulation, drop the pending save/restore queues. Filesystem
     // cleanup (Lightmap_tile_io::delete_tile_set) is the caller's job.
@@ -4772,6 +4973,13 @@ void Lightmap_baker::clear_tiles()
 
 void Lightmap_baker::release_working_set()
 {
+    // No tick plan or BLAS build may be outstanding in any frame in
+    // flight: the render phase would record into the released targets and
+    // structures. Callable only while no render phase runs.
+    ERHE_VERIFY(m_blas_pending_build.empty());
+    for (const Tick_slot& tick_slot : m_tick_slots) {
+        ERHE_VERIFY(tick_slot.plan.stage == Tick_stage::none);
+    }
     // Everything here is rebuilt on demand by the next enabled tick
     // (bake_gbuffer / ensure_bake_targets / collect_instances); only the
     // display atlas the forward renderer samples stays resident, so the
@@ -4795,12 +5003,14 @@ void Lightmap_baker::release_working_set()
     m_cursor_y         = 0;
     for (Tile_state& tile : m_tiles) {
         tile.accum.reset();
+        tile.accum_clear_pending = false;
         tile.accum_dirty      = true;
         tile.sweeps           = 0;
         tile.dirty_since_save = false;
         // tile.published stays: the display atlas keeps its last publish.
     }
     m_blas_cache.clear();
+    m_retired_blas.clear();
     m_tlas.reset();
     m_tlas_capacity = 0;
     for (Tlas_slot& slot : m_tlas_slots) {
@@ -4842,31 +5052,33 @@ void Lightmap_baker::set_options(const Bake_options& options)
     m_options = options;
 }
 
-void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const int tile, const bool with_denoise)
+void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs, const Publish_kind kind)
 {
     using namespace erhe::graphics;
+    const bool with_denoise = (kind == Publish_kind::denoised);
 
-    erhe::graphics::Texture* const accum =
-        ((tile >= 0) && (tile < static_cast<int>(m_tiles.size()))) ? m_tiles[static_cast<std::size_t>(tile)].accum.get() : nullptr;
-    if ((accum == nullptr) || !m_lightmap_texture) {
+    Texture* const accum = inputs.accum.get();
+    if ((accum == nullptr) || !inputs.working) {
         return;
     }
-    const int tile_size = m_layout.get_tile_size();
+    const int      tile_size = inputs.tile_size;
+    Texture* const working   = inputs.working.get();
+    Texture* const dilate    = inputs.dilate.get();
 
     // Resolve the tile's running average into the working atlas, optionally
     // JNLM denoise it, then dilate; never touches the accumulation buffer.
     // The dilation ping-pong iteration count is chosen so the final pass
-    // lands back in m_lightmap_texture: without denoise it starts there
+    // lands back in the working atlas: without denoise it starts there
     // (even count), with denoise it starts in the scratch the denoiser
     // wrote (odd count).
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::general);
+    command_buffer.transition_texture_layout(*working, Image_layout::general);
     {
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_resolve_layout.get());
         encoder.set_compute_pipeline(*m_resolve_pipeline);
         encoder.set_storage_image(0u, *accum);
-        encoder.set_storage_image(1u, *m_lightmap_texture);
+        encoder.set_storage_image(1u, *working);
         encoder.dispatch_compute(
             (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
             (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
@@ -4875,18 +5087,18 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
     }
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
     bool denoised = false;
-    if (with_denoise && m_denoise_pipeline && m_dilate_texture) {
-        command_buffer.transition_texture_layout(*m_dilate_texture, Image_layout::general);
-        command_buffer.transition_texture_layout(*m_normal_texture, Image_layout::general);
-        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::general);
+    if (with_denoise && m_denoise_pipeline && (dilate != nullptr)) {
+        command_buffer.transition_texture_layout(*dilate, Image_layout::general);
+        command_buffer.transition_texture_layout(*inputs.normal, Image_layout::general);
+        command_buffer.transition_texture_layout(*inputs.albedo, Image_layout::general);
         {
             Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
             encoder.set_bind_group_layout(m_denoise_layout.get());
             encoder.set_compute_pipeline(*m_denoise_pipeline);
-            encoder.set_storage_image(0u, *m_lightmap_texture);
-            encoder.set_storage_image(1u, *m_dilate_texture);
-            encoder.set_storage_image(2u, *m_normal_texture);
-            encoder.set_storage_image(3u, *m_albedo_texture);
+            encoder.set_storage_image(0u, *working);
+            encoder.set_storage_image(1u, *dilate);
+            encoder.set_storage_image(2u, *inputs.normal);
+            encoder.set_storage_image(3u, *inputs.albedo);
             encoder.dispatch_compute(
                 (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
                 (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
@@ -4894,23 +5106,23 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
             );
         }
         command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
-        command_buffer.transition_texture_layout(*m_normal_texture, Image_layout::shader_read_only_optimal);
-        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::shader_read_only_optimal);
+        command_buffer.transition_texture_layout(*inputs.normal, Image_layout::shader_read_only_optimal);
+        command_buffer.transition_texture_layout(*inputs.albedo, Image_layout::shader_read_only_optimal);
         denoised = true;
     }
-    if (m_options.dilation && m_dilate_pipeline && m_dilate_texture) {
-        command_buffer.transition_texture_layout(*m_dilate_texture, Image_layout::general);
+    if (inputs.dilation && m_dilate_pipeline && (dilate != nullptr)) {
+        command_buffer.transition_texture_layout(*dilate, Image_layout::general);
         // Gutter-aware clamp: each dilation iteration grows charts one
         // texel; more than half the chart gutter would fill texels the
         // neighboring chart's sampling footprint owns (opposing fronts
         // never overwrite each other, but the FILL itself is what filter
         // taps read - a chart edge sampled bicubically reaches 2 texels
         // out, so the gutter must both be wide enough AND stay half-owned).
-        const int gutter_limit     = std::max(1, static_cast<int>(std::floor(0.5f * m_options.gutter_texels)));
+        const int gutter_limit     = std::max(1, static_cast<int>(std::floor(0.5f * inputs.gutter_texels)));
         const int dilate_iterations = std::min(s_padding, gutter_limit);
         Texture* const ping[2] = {
-            denoised ? m_dilate_texture.get()   : m_lightmap_texture.get(),
-            denoised ? m_lightmap_texture.get() : m_dilate_texture.get()
+            denoised ? dilate   : working,
+            denoised ? working : dilate
         };
         for (int i = 0; i < dilate_iterations; ++i) {
             {
@@ -4929,97 +5141,95 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
         }
         // The iteration count is now driven by the gutter, not by ping-pong
         // parity; copy back when the final write landed in the scratch.
-        if (ping[dilate_iterations & 1] != m_lightmap_texture.get()) {
-            command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::transfer_src_optimal);
-            command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_dst_optimal);
+        if (ping[dilate_iterations & 1] != working) {
+            command_buffer.transition_texture_layout(*dilate,   Image_layout::transfer_src_optimal);
+            command_buffer.transition_texture_layout(*working, Image_layout::transfer_dst_optimal);
             {
                 Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-                blit.copy_from_texture(m_dilate_texture.get(), m_lightmap_texture.get());
+                blit.copy_from_texture(dilate, working);
             }
         }
     } else if (denoised) {
         // Dilation is off but the denoiser wrote into the scratch; copy it
         // back so the published atlas holds the denoised result.
-        command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::transfer_src_optimal);
-        command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_dst_optimal);
+        command_buffer.transition_texture_layout(*dilate,   Image_layout::transfer_src_optimal);
+        command_buffer.transition_texture_layout(*working, Image_layout::transfer_dst_optimal);
         {
             Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-            blit.copy_from_texture(m_dilate_texture.get(), m_lightmap_texture.get());
+            blit.copy_from_texture(dilate, working);
         }
     }
-    if (m_options.seam_blend) {
-        record_seam_blend(command_buffer, tile);
+    if (inputs.seam_blend) {
+        record_seam_blend(command_buffer, inputs);
     }
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*working, Image_layout::shader_read_only_optimal);
 }
 
-void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& command_buffer, const int tile)
+void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs)
 {
     using namespace erhe::graphics;
-    if (!m_lightmap_texture || !m_display_texture) {
+    if (!inputs.working || !inputs.display) {
         return;
     }
     // Publishing goes through the tile's display slot; non-resident tiles
     // have nowhere to publish (their regions render unlit anyway).
-    const int slot = ((tile >= 0) && (tile < m_layout.get_tile_count()))
-        ? m_layout.tiles[static_cast<std::size_t>(tile)].slot
-        : -1;
-    if (slot < 0) {
+    if (!inputs.has_publish_slot) {
         return;
     }
-    const int        tile_size   = m_layout.get_tile_size();
-    const glm::ivec2 slot_origin = m_layout.get_slot_origin(slot);
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
-    command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::transfer_dst_optimal);
+    const int        tile_size   = inputs.tile_size;
+    const glm::ivec2 slot_origin = inputs.publish_slot_origin;
+    command_buffer.transition_texture_layout(*inputs.working, Image_layout::transfer_src_optimal);
+    command_buffer.transition_texture_layout(*inputs.display, Image_layout::transfer_dst_optimal);
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            erhe::graphics::Texture_location{.texture = m_lightmap_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+            erhe::graphics::Texture_location{.texture = inputs.working.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
             glm::ivec3{tile_size, tile_size, 1},
-            erhe::graphics::Texture_location{.texture = m_display_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
+            erhe::graphics::Texture_location{.texture = inputs.display.get(), .slice = 0, .level = 0, .origin = glm::ivec3{slot_origin.x, slot_origin.y, 0}}
         );
     }
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*inputs.working, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*inputs.display, Image_layout::shader_read_only_optimal);
 }
 
-void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer, const int tile)
+void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer, const Record_inputs& inputs)
 {
     using namespace erhe::graphics;
-    if (!m_seam_pipeline || !m_dilate_texture) {
+    if (!m_seam_pipeline || !inputs.dilate) {
         return;
     }
-    if ((tile < 0) || (tile >= static_cast<int>(m_tile_seam_ranges.size()))) {
-        return;
-    }
-    const auto [first_vertex, vertex_count] = m_tile_seam_ranges[static_cast<std::size_t>(tile)];
+    const uint32_t first_vertex = inputs.seam_first_vertex;
+    const uint32_t vertex_count = inputs.seam_vertex_count;
     if (vertex_count == 0) {
         return;
     }
-    const int tile_size = m_layout.get_tile_size();
+    ERHE_VERIFY(inputs.seam_vertices);
+    const int      tile_size = inputs.tile_size;
+    Texture* const working   = inputs.working.get();
+    Texture* const dilate    = inputs.dilate.get();
     // Sample source: a copy of the working atlas in the dilate scratch
     // (rendering into the atlas while sampling it would be a hazard).
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
-    command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::transfer_dst_optimal);
+    command_buffer.transition_texture_layout(*working, Image_layout::transfer_src_optimal);
+    command_buffer.transition_texture_layout(*dilate,   Image_layout::transfer_dst_optimal);
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-        blit.copy_from_texture(m_lightmap_texture.get(), m_dilate_texture.get());
+        blit.copy_from_texture(working, dilate);
     }
-    command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::color_attachment_optimal);
+    command_buffer.transition_texture_layout(*dilate,   Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*working, Image_layout::color_attachment_optimal);
 
     const std::size_t byte_count = static_cast<std::size_t>(vertex_count) * sizeof(Seam_vertex);
     Ring_buffer_range vertex_range = m_seam_vertex_ring->acquire(Ring_buffer_usage::CPU_write, byte_count);
     {
         std::span<std::byte> gpu_data = vertex_range.get_span();
-        std::memcpy(gpu_data.data(), m_seam_vertices.data() + first_vertex, byte_count);
+        std::memcpy(gpu_data.data(), inputs.seam_vertices->data() + first_vertex, byte_count);
         vertex_range.bytes_written(byte_count);
         vertex_range.close();
     }
 
     Render_pass_descriptor descriptor{};
     Render_pass_attachment_descriptor& attachment = descriptor.color_attachments[0];
-    attachment.texture       = m_lightmap_texture.get();
+    attachment.texture       = working;
     attachment.load_action   = Load_action::Load;
     attachment.store_action  = Store_action::Store;
     attachment.usage_before  = Image_usage_flag_bit_mask::storage;
@@ -5037,7 +5247,7 @@ void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_b
         encoder.set_scissor_rect (0, 0, tile_size, tile_size);
         encoder.set_bind_group_layout(m_seam_layout.get());
         encoder.set_render_pipeline(*m_seam_pipeline);
-        encoder.set_sampled_image(0u, *m_dilate_texture, *m_linear_sampler);
+        encoder.set_sampled_image(0u, *dilate, *m_linear_sampler);
         encoder.set_vertex_buffer(vertex_range.get_buffer()->get_buffer(), vertex_range.get_byte_start_offset_in_buffer(), 0);
         encoder.draw_primitives(Primitive_type::line, 0, vertex_count);
     }
@@ -5168,6 +5378,7 @@ auto Lightmap_baker::compute_scene_hashes(Scene_root& scene_root) const -> Scene
 
 void Lightmap_baker::monitor_paused_scene(Scene_root& scene_root)
 {
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     // Paused change detection: the tick's hash checks only run while
     // baking, so without this a paused lightmap keeps showing pre-edit
     // lighting until Start. On any change: white-out the display, block
@@ -5201,15 +5412,35 @@ void Lightmap_baker::monitor_paused_scene(Scene_root& scene_root)
     log_render->info("Lightmap_baker: scene changed while paused - display cleared to white until the next bake");
 }
 
-void Lightmap_baker::tick(
-    erhe::graphics::Command_buffer& command_buffer,
-    Scene_root&                     scene_root,
-    const float                     min_face_texels,
-    const glm::vec3*                camera_position,
-    const int                       max_active_tiles
+void Lightmap_baker::prepare_tick(
+    Scene_root&      scene_root,
+    const float      min_face_texels,
+    const glm::vec3* camera_position,
+    const int        max_active_tiles
 )
 {
     using namespace erhe::graphics;
+
+    // Prepare phase: the decisions, the scene writes (region mappings) and
+    // the CPU-side resource creation; record_tick() records the plan.
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    // The tick slot of the frame being prepared: the render phase of the
+    // frame that used it before recorded and consumed it.
+    Tick_slot& tick_slot = get_tick_slot();
+    ERHE_VERIFY(tick_slot.plan.stage == Tick_stage::none);
+    tick_slot.plan          = Tick_plan{};
+    tick_slot.working_clear = false;
+    tick_slot.display_clear = false;
+    tick_slot.white_clear_origins.clear();
+    // Drops the previous frame's references (the objects it recorded with
+    // may be released now that its render phase recorded them).
+    tick_slot.inputs        = Record_inputs{};
+    tick_slot.accum_clear   = false;
+    tick_slot.instances.clear();
+    tick_slot.records.clear();
+    tick_slot.blas_pending_build.clear();
+    tick_slot.transmittance_lut = nullptr;
+    tick_slot.multiscatter_lut  = nullptr;
 
     if (!m_gather_pipeline || !m_resolve_pipeline) {
         return;
@@ -5359,6 +5590,7 @@ void Lightmap_baker::tick(
                         // Destruction is deferred behind the in-flight frames.
                         state.accum.reset();
                     }
+                    state.accum_clear_pending = false;
                     state.accum_dirty         = true;
                     state.sweeps              = 0;
                     state.dirty_since_save    = false;
@@ -5501,12 +5733,14 @@ void Lightmap_baker::tick(
 
     if (!m_gbuffer_valid || (m_gbuffer_tile != m_cursor_tile)) {
         // A layout change this tick means the swapped meshes' vertex uploads
-        // are still queued in the frame command buffer, which is submitted
-        // AFTER this standalone bake would run - the raster would read
-        // not-yet-copied buffers and the affected regions would stay black
-        // forever (the hashes match afterwards, so nothing re-rasters).
-        // Skip one tick; the next tick runs after the upload-carrying frame
-        // was submitted ahead of us on the same queue.
+        // ride this M2's upload command buffer, which the render phase
+        // submits AFTER this standalone bake would run - the raster would
+        // read not-yet-copied buffers and the affected regions would stay
+        // black forever (the hashes match afterwards, so nothing
+        // re-rasters). Skip one tick; the next prepare_tick runs in the next
+        // M2, after the render phase submitted the uploads on the same queue
+        // (with frame pipelining, bake_gbuffer() joins the render phase in
+        // flight before its submit).
         if (m_gbuffer_upload_defer) {
             m_gbuffer_upload_defer = false;
             return;
@@ -5520,105 +5754,57 @@ void Lightmap_baker::tick(
         m_hash_gbuffer = compute_region_transform_hash();
     }
 
-    ensure_bake_targets(command_buffer);
-    record_pending_slot_white_clears(command_buffer);
-    Texture* const accum = ensure_tile_accum(command_buffer, m_cursor_tile);
+    // From here on the render phase records what this tick set up, even
+    // when it returns early: the target clears, the pending slot white
+    // clears and the cursor tile's accumulation clear.
+    const int tile_size = m_layout.get_tile_size();
+    create_bake_targets();
+    tick_slot.plan.stage     = Tick_stage::targets;
+    tick_slot.plan.tile      = m_cursor_tile;
+    tick_slot.plan.tile_size = tile_size;
+    tick_slot.working_clear  = std::exchange(m_working_clear_pending, false);
+    tick_slot.display_clear  = std::exchange(m_display_clear_pending, false);
+    // Everything the render phase records with, as of now: the targets just
+    // created, the G-buffer baked above, the residency decided above (the
+    // publish slot), the seam vertices and the options.
+    fill_record_inputs(tick_slot.inputs, m_cursor_tile);
+    for (const int slot : m_slots_pending_white_clear) {
+        tick_slot.white_clear_origins.push_back(m_layout.get_slot_origin(slot));
+    }
+    m_slots_pending_white_clear.clear();
+    Texture* const accum = prepare_tile_accum(m_cursor_tile);
     if (accum == nullptr) {
         return;
     }
     Tile_state& cursor_state = m_tiles[static_cast<std::size_t>(m_cursor_tile)];
+    tick_slot.inputs.accum = cursor_state.accum;
+    tick_slot.accum_clear  = std::exchange(cursor_state.accum_clear_pending, false);
 
-    const std::vector<Light_record> lights = collect_lights(scene_root);
-    collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
-    if (m_tick_instances.empty()) {
+    collect_lights(scene_root, m_tick_lights);
+    collect_instances(scene_root, tick_slot.instances, tick_slot.records);
+    tick_slot.blas_pending_build.insert(tick_slot.blas_pending_build.end(), m_blas_pending_build.begin(), m_blas_pending_build.end());
+    m_blas_pending_build.clear();
+    tick_slot.plan.stage = Tick_stage::occluders;
+    if (tick_slot.instances.empty()) {
         return;
     }
 
-    // Per-frame-in-flight TLAS slot (occluders may move every frame).
-    const std::size_t slot_index = static_cast<std::size_t>(m_graphics_device.get_frame_index() % s_tlas_slot_count);
-    Tlas_slot& slot = m_tlas_slots[slot_index];
-    const uint32_t required_capacity = static_cast<uint32_t>(m_tick_instances.size());
-    if (!slot.acceleration_structure || (slot.capacity < required_capacity)) {
-        const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
-        slot.acceleration_structure = std::make_unique<Acceleration_structure>(
-            m_graphics_device,
-            Acceleration_structure_create_info{
-                .type               = Acceleration_structure_type::top_level,
-                .max_instance_count = new_capacity,
-                .debug_label        = erhe::utility::Debug_label{"Lightmap tick TLAS"}
-            }
-        );
-        slot.capacity = new_capacity;
-    }
-    slot.acceleration_structure->build(command_buffer, m_tick_instances);
-
-    // Instance records before the adjust pass: its committed_face_normal
-    // position-fetch fallback reads them (the gather encoder below binds
-    // the same range again).
-    const std::size_t record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
-    Ring_buffer_range ssbo_range = m_tick_instance_ssbo->acquire(Ring_buffer_usage::CPU_write, record_byte_count);
-    {
-        std::span<std::byte> gpu_data = ssbo_range.get_span();
-        std::memcpy(gpu_data.data(), m_tick_records.data(), record_byte_count);
-        ssbo_range.bytes_written(record_byte_count);
-        ssbo_range.close();
-    }
-
-    // Virtual offset (one-shot per G-buffer): needs a built TLAS.
-    record_adjust(
-        command_buffer,
-        *slot.acceleration_structure,
-        [&](Compute_command_encoder& encoder) {
-            m_tick_instance_ssbo->bind(encoder, ssbo_range);
-        }
-    );
-
     // Budgeted band (plan section 3a step 2): the cursor walks the current
     // TILE top to bottom; small tiles sweep whole-tile every frame.
-    const int tile_size   = m_layout.get_tile_size();
     const int rows_budget = std::clamp(c_texels_per_tick / std::max(tile_size, 1), 8, tile_size);
     const int band_rows   = std::min(rows_budget, tile_size - m_cursor_y);
-    const uint32_t base_y = static_cast<uint32_t>(m_cursor_y);
-
-    Ring_buffer_range ubo_range = m_tick_gather_ubo->acquire(Ring_buffer_usage::CPU_write, m_gather_block_size);
-    {
-        std::span<std::byte> gpu_data = ubo_range.get_span();
-        write_gather_ubo(gpu_data.data(), lights, m_frame_counter, base_y);
-        ubo_range.bytes_written(m_gather_block_size);
-        ubo_range.close();
-    }
-
-    // Bounce rays sample the display atlas (instance records carry the
-    // display slot mapping); one publish of feedback latency. Hits on
-    // non-resident tiles contribute nothing (their mapping is zero).
-    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
-    {
-        Compute_pipeline* const ss_pipeline =
-            (m_origin_factor == 8) ? m_gather_ss8_pipeline.get() :
-            (m_origin_factor == 4) ? m_gather_ss4_pipeline.get() : nullptr;
-        const bool supersample = m_origin_valid && m_origin_texture && (ss_pipeline != nullptr);
-        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
-        encoder.set_bind_group_layout(m_gather_layout.get());
-        encoder.set_compute_pipeline(supersample ? *ss_pipeline : *m_gather_pipeline);
-        m_tick_gather_ubo->bind(encoder, ubo_range);
-        m_tick_instance_ssbo->bind(encoder, ssbo_range);
-        encoder.set_acceleration_structure(2u, *slot.acceleration_structure);
-        encoder.set_sampled_image(3u, *m_position_texture, *m_nearest_sampler);
-        encoder.set_sampled_image(4u, *m_normal_texture,   *m_nearest_sampler);
-        encoder.set_sampled_image(5u, *m_albedo_texture,   *m_linear_sampler);
-        encoder.set_sampled_image(6u, *m_display_texture,  *m_linear_sampler);
-        encoder.set_sampled_image(7u, (m_sky.transmittance_lut != nullptr) ? *m_sky.transmittance_lut : *m_albedo_texture, *m_linear_sampler);
-        encoder.set_sampled_image(8u, (m_sky.multiscatter_lut  != nullptr) ? *m_sky.multiscatter_lut  : *m_albedo_texture, *m_linear_sampler);
-        encoder.set_sampled_image(9u, supersample ? *m_origin_texture : *m_position_texture, *m_nearest_sampler);
-        encoder.set_storage_image(12u, *accum);
-        encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
-            (static_cast<std::uintptr_t>(band_rows) + 7) / 8,
-            1
-        );
-    }
-    ubo_range.release();
-    ssbo_range.release();
+    tick_slot.plan.stage     = Tick_stage::gather;
+    tick_slot.plan.band_rows = band_rows;
+    // The one-shot virtual-offset pass rides the first gather after a
+    // G-buffer bake.
+    take_adjust(tick_slot.inputs);
+    // The gather block carries this tick's lights, sky and options, the RNG
+    // decorrelation index and the band start; the sky LUTs it enables are
+    // bound from the slot.
+    tick_slot.gather_block.resize(m_gather_block_size);
+    write_gather_ubo(tick_slot.gather_block.data(), m_tick_lights, m_frame_counter, static_cast<uint32_t>(m_cursor_y));
+    tick_slot.transmittance_lut = m_sky.transmittance_lut;
+    tick_slot.multiscatter_lut  = m_sky.multiscatter_lut;
 
     m_cursor_y += band_rows;
     const bool tile_sweep_completed = m_cursor_y >= tile_size;
@@ -5638,8 +5824,7 @@ void Lightmap_baker::tick(
     // actual publishes: while the hold is in effect the display still
     // matches the disk payload, so an eviction need not re-save it.
     if (!cursor_state.published) {
-        record_resolve_and_dilate(command_buffer, m_cursor_tile, false);
-        record_display_publish(command_buffer, m_cursor_tile);
+        tick_slot.plan.publish = Publish_kind::raw;
         if (tile_sweep_completed) {
             cursor_state.published        = true;
             cursor_state.dirty_since_save = true;
@@ -5648,8 +5833,7 @@ void Lightmap_baker::tick(
         // The hold also beats an explicit republish request (set_options
         // stage toggles): resolving a 1-sweep accumulation over restored
         // N-sweep content is exactly the regression the hold prevents.
-        record_resolve_and_dilate(command_buffer, m_cursor_tile, m_options.denoise);
-        record_display_publish(command_buffer, m_cursor_tile);
+        tick_slot.plan.publish = m_options.denoise ? Publish_kind::denoised : Publish_kind::raw;
         cursor_state.published           = true;
         cursor_state.dirty_since_save    = true;
         cursor_state.restore_hold_sweeps = 0;
@@ -5680,6 +5864,151 @@ void Lightmap_baker::tick(
         set_baking_enabled(false);
         log_render->info("Lightmap_baker: single iteration complete at sweep {} - paused", get_sweep_count());
     }
+}
+
+void Lightmap_baker::record_tick(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    // Render phase: records the tick slot prepare_tick() filled for the
+    // frame this phase renders, then marks it consumed. It reads nothing
+    // else the prepare phase writes (Tick_slot::inputs carries every
+    // texture, layout fact and option), and its only other write is the
+    // frame's TLAS slot.
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    Tick_slot& tick_slot = get_tick_slot();
+    record_tick_slot(command_buffer, tick_slot);
+    tick_slot.plan.stage = Tick_stage::none;
+}
+
+void Lightmap_baker::record_tick_slot(erhe::graphics::Command_buffer& command_buffer, const Tick_slot& tick_slot)
+{
+    using namespace erhe::graphics;
+
+    const Tick_plan&     plan   = tick_slot.plan;
+    const Record_inputs& inputs = tick_slot.inputs;
+    if (plan.stage < Tick_stage::targets) {
+        return;
+    }
+    if (tick_slot.working_clear) {
+        record_working_atlas_clear(command_buffer, inputs);
+    }
+    if (tick_slot.display_clear) {
+        record_display_atlas_clear(command_buffer, inputs);
+    }
+    record_slot_white_clears(command_buffer, inputs, tick_slot.white_clear_origins);
+    if (tick_slot.accum_clear) {
+        record_accum_clear(command_buffer, *inputs.accum);
+    }
+    if (plan.stage < Tick_stage::occluders) {
+        return;
+    }
+    record_blas_builds(command_buffer, tick_slot.blas_pending_build);
+    if (plan.stage < Tick_stage::gather) {
+        return;
+    }
+    Texture* const accum = inputs.accum.get();
+    ERHE_VERIFY(accum != nullptr);
+    const int tile_size = plan.tile_size;
+    const int band_rows = plan.band_rows;
+
+    // Per-frame-in-flight TLAS slot (occluders may move every frame).
+    const std::size_t slot_index = static_cast<std::size_t>(m_graphics_device.get_frame_index() % s_tlas_slot_count);
+    Tlas_slot& slot = m_tlas_slots[slot_index];
+    const uint32_t required_capacity = static_cast<uint32_t>(tick_slot.instances.size());
+    if (!slot.acceleration_structure || (slot.capacity < required_capacity)) {
+        const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
+        slot.acceleration_structure = std::make_unique<Acceleration_structure>(
+            m_graphics_device,
+            Acceleration_structure_create_info{
+                .type               = Acceleration_structure_type::top_level,
+                .max_instance_count = new_capacity,
+                .debug_label        = erhe::utility::Debug_label{"Lightmap tick TLAS"}
+            }
+        );
+        slot.capacity = new_capacity;
+    }
+    slot.acceleration_structure->build(command_buffer, tick_slot.instances);
+
+    // Instance records before the adjust pass: its committed_face_normal
+    // position-fetch fallback reads them (the gather encoder below binds
+    // the same range again).
+    const std::size_t record_byte_count = tick_slot.records.size() * sizeof(Lm_instance_record);
+    Ring_buffer_range ssbo_range = m_tick_instance_ssbo->acquire(Ring_buffer_usage::CPU_write, record_byte_count);
+    {
+        std::span<std::byte> gpu_data = ssbo_range.get_span();
+        std::memcpy(gpu_data.data(), tick_slot.records.data(), record_byte_count);
+        ssbo_range.bytes_written(record_byte_count);
+        ssbo_range.close();
+    }
+
+    // Virtual offset (one-shot per G-buffer, when prepare_tick() took it):
+    // needs a built TLAS.
+    record_adjust(
+        command_buffer,
+        inputs,
+        *slot.acceleration_structure,
+        [&](Compute_command_encoder& encoder) {
+            m_tick_instance_ssbo->bind(encoder, ssbo_range);
+        }
+    );
+
+    Ring_buffer_range ubo_range = m_tick_gather_ubo->acquire(Ring_buffer_usage::CPU_write, m_gather_block_size);
+    {
+        std::span<std::byte> gpu_data = ubo_range.get_span();
+        ERHE_VERIFY(tick_slot.gather_block.size() == m_gather_block_size);
+        std::memcpy(gpu_data.data(), tick_slot.gather_block.data(), m_gather_block_size);
+        ubo_range.bytes_written(m_gather_block_size);
+        ubo_range.close();
+    }
+
+    // Bounce rays sample the display atlas (instance records carry the
+    // display slot mapping); one publish of feedback latency. Hits on
+    // non-resident tiles contribute nothing (their mapping is zero).
+    ERHE_VERIFY(inputs.display && inputs.position && inputs.normal && inputs.albedo);
+    command_buffer.transition_texture_layout(*inputs.display, Image_layout::shader_read_only_optimal);
+    {
+        Compute_pipeline* const ss_pipeline =
+            (inputs.origin_factor == 8) ? m_gather_ss8_pipeline.get() :
+            (inputs.origin_factor == 4) ? m_gather_ss4_pipeline.get() : nullptr;
+        const bool supersample = inputs.origin && (ss_pipeline != nullptr);
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        encoder.set_bind_group_layout(m_gather_layout.get());
+        encoder.set_compute_pipeline(supersample ? *ss_pipeline : *m_gather_pipeline);
+        m_tick_gather_ubo->bind(encoder, ubo_range);
+        m_tick_instance_ssbo->bind(encoder, ssbo_range);
+        encoder.set_acceleration_structure(2u, *slot.acceleration_structure);
+        encoder.set_sampled_image(3u, *inputs.position, *m_nearest_sampler);
+        encoder.set_sampled_image(4u, *inputs.normal,   *m_nearest_sampler);
+        encoder.set_sampled_image(5u, *inputs.albedo,   *m_linear_sampler);
+        encoder.set_sampled_image(6u, *inputs.display,  *m_linear_sampler);
+        encoder.set_sampled_image(7u, (tick_slot.transmittance_lut != nullptr) ? *tick_slot.transmittance_lut : *inputs.albedo, *m_linear_sampler);
+        encoder.set_sampled_image(8u, (tick_slot.multiscatter_lut  != nullptr) ? *tick_slot.multiscatter_lut  : *inputs.albedo, *m_linear_sampler);
+        encoder.set_sampled_image(9u, supersample ? *inputs.origin : *inputs.position, *m_nearest_sampler);
+        encoder.set_storage_image(12u, *accum);
+        encoder.dispatch_compute(
+            (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
+            (static_cast<std::uintptr_t>(band_rows) + 7) / 8,
+            1
+        );
+    }
+    ubo_range.release();
+    ssbo_range.release();
+
+    if (plan.publish != Publish_kind::none) {
+        record_resolve_and_dilate(command_buffer, inputs, plan.publish);
+        record_display_publish(command_buffer, inputs);
+    }
+}
+
+auto Lightmap_baker::get_tick_slot() -> Tick_slot&
+{
+    // Role-keyed: the main thread gets the frame it prepares, the render
+    // thread the frame it renders.
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    return m_tick_slots[static_cast<std::size_t>(frame_index % static_cast<uint64_t>(m_tick_slots.size()))];
 }
 
 auto Lightmap_baker::take_tile_pending_save() -> int
@@ -5739,6 +6068,7 @@ auto Lightmap_baker::restore_tile(
     if ((tile < 0) || (tile >= m_layout.get_tile_count()) || (tile >= static_cast<int>(m_tiles.size())) || (m_layout.width == 0)) {
         return false;
     }
+    join_render_phase();
     const int tile_size = m_layout.get_tile_size();
     if ((width != tile_size) || (height != tile_size)) {
         return false;
@@ -5866,6 +6196,7 @@ auto Lightmap_baker::read_back_tile(const int tile, std::vector<uint16_t>& out_r
     if ((tile < 0) || (tile >= m_layout.get_tile_count()) || !m_display_texture) {
         return false;
     }
+    join_render_phase();
     if (m_display_texture->get_pixelformat() != erhe::dataformat::Format::format_16_vec4_float) {
         return false;
     }
@@ -5928,6 +6259,7 @@ auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool
     if (!m_lightmap_valid || (source == nullptr)) {
         return false;
     }
+    join_render_phase();
     return read_rgba_texture_to_float(m_graphics_device, *source, out_rgba);
 }
 

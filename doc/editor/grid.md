@@ -36,10 +36,16 @@ no scene, so MCP addresses it by its name or item id (`get_item_properties`,
 
 The grid is one fullscreen composition pass ("Grid", `app_rendering.cpp`)
 whose shaders (`res/editor/shaders/grid.vert`, `grid.frag`) read everything
-from the camera UBO. `Grid::render()` runs once per rendered view, before
-that view's composition passes, and pushes the appearance and the view's
-`Grid_frame` into the pass's `erhe::scene_renderer::Grid_parameters`
-(`world_from_grid`, `grid_flags`). `write_camera_entry()` derives
+from the camera UBO. `Grid::render()` runs once per rendered view, when the
+grid tool records the view's tools in M2, and builds a `Grid_pass_state`
+(`scene/viewport_render_state.hpp`: the enable flag and the
+`erhe::scene_renderer::Grid_parameters` with the appearance and the view's
+`Grid_frame` in `world_from_grid`, `grid_flags`). A viewport records it into
+its render state copy of the frame (`Viewport_scene_view::record_grid`), and
+the grid pass (`Composition_pass_data::grid_from_view`) takes enable and
+parameters from the view's render state when it prepares that view, so every
+viewport draws its own grid; the headset, which has no viewport render
+state, sets the pass's own fields (`App_rendering::set_grid`). `write_camera_entry()` derives
 `grid_from_world` and the precision wrap offset (grid space, snapped to the
 level 0 cell) from it. `grid.frag` intersects the view ray with the plane in
 wrapped world space and takes line and label coordinates from

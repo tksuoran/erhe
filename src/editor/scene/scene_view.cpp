@@ -279,14 +279,108 @@ auto Scene_view::get_config() -> Viewport_config&
     return m_viewport_config;
 }
 
+void Scene_view::capture_render_view(const erhe::scene::Camera* camera, Render_view& out) const
+{
+    out.scene_root   = get_scene_root();
+    out.camera_valid = (camera != nullptr);
+    if (camera != nullptr) {
+        out.camera.capture(*camera);
+    }
+    out.shadow_fit_camera_valid = false;
+    const std::shared_ptr<erhe::scene::Camera> override_camera = m_shadow_fit_override_camera.lock();
+    if (override_camera) {
+        const erhe::scene::Node* const override_camera_node = override_camera.get();
+        if (out.scene_root && (override_camera_node->get_scene() == out.scene_root->get_hosted_scene())) {
+            out.shadow_fit_camera.capture(*override_camera);
+            out.shadow_fit_camera_valid = true;
+        }
+    }
+    out.viewport_config = m_viewport_config;
+    out.camera_viewport = get_camera_viewport();
+}
+
+void Scene_view::snapshot_render_view(const erhe::scene::Camera* camera)
+{
+    const erhe::graphics::Device& device           = *m_context.graphics_device;
+    const uint64_t                frame_index      = device.get_frame_index();
+    const std::size_t             frames_in_flight = device.get_number_of_frames_in_flight();
+    ERHE_VERIFY(frames_in_flight > 0);
+    if (m_render_views.size() != frames_in_flight) {
+        m_render_views.resize(frames_in_flight);
+    }
+    Render_view& slot = m_render_views[frame_index % frames_in_flight];
+    capture_render_view(camera, slot);
+    slot.frame_index = frame_index;
+}
+
+void Scene_view::publish_render_view(const Render_view& view)
+{
+    const erhe::graphics::Device& device           = *m_context.graphics_device;
+    const uint64_t                frame_index      = device.get_frame_index();
+    const std::size_t             frames_in_flight = device.get_number_of_frames_in_flight();
+    ERHE_VERIFY(frames_in_flight > 0);
+    if (m_render_views.size() != frames_in_flight) {
+        m_render_views.resize(frames_in_flight);
+    }
+    Render_view& slot = m_render_views[frame_index % frames_in_flight];
+    slot             = view;
+    slot.frame_index = frame_index;
+}
+
+auto Scene_view::get_render_view() const -> const Render_view&
+{
+    ERHE_VERIFY(!m_render_views.empty());
+    const uint64_t     frame_index = m_context.graphics_device->get_frame_index();
+    const Render_view& slot        = m_render_views[frame_index % m_render_views.size()];
+    // The calling role's frame copied this view, and no later frame has
+    // reused the slot yet.
+    ERHE_VERIFY(slot.frame_index == frame_index);
+    return slot;
+}
+
+auto Scene_view::get_render_view() -> Render_view&
+{
+    ERHE_VERIFY(!m_render_views.empty());
+    const uint64_t frame_index = m_context.graphics_device->get_frame_index();
+    Render_view&   slot        = m_render_views[frame_index % m_render_views.size()];
+    ERHE_VERIFY(slot.frame_index == frame_index);
+    return slot;
+}
+
+auto Scene_view::get_render_scene_root() const -> std::shared_ptr<Scene_root>
+{
+    return get_render_view().scene_root;
+}
+
+auto Scene_view::get_render_camera() const -> const erhe::scene::Camera_snapshot*
+{
+    const Render_view& view = get_render_view();
+    return view.camera_valid ? &view.camera : nullptr;
+}
+
+auto Scene_view::get_render_shadow_fit_camera() const -> const erhe::scene::Camera_snapshot*
+{
+    const Render_view& view = get_render_view();
+    return view.shadow_fit_camera_valid ? &view.shadow_fit_camera : nullptr;
+}
+
+auto Scene_view::get_render_config() const -> const Viewport_config&
+{
+    return get_render_view().viewport_config;
+}
+
+auto Scene_view::get_render_camera_viewport() const -> erhe::math::Viewport
+{
+    return get_render_view().camera_viewport;
+}
+
 auto Scene_view::get_light_projections() const -> const erhe::scene_renderer::Light_projections*
 {
     auto* shadow_render_node = get_shadow_render_node();
     if (shadow_render_node == nullptr) {
         return nullptr;
     }
-    erhe::scene_renderer::Light_projections& light_projections = shadow_render_node->get_light_projections();
-    return &light_projections;
+    return &shadow_render_node->get_light_projections(m_context.graphics_device->get_frame_index());
 }
 
 auto Scene_view::get_shadow_texture() const -> erhe::graphics::Texture*

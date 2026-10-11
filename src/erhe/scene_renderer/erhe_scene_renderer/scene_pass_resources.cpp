@@ -36,10 +36,10 @@ auto Scene_pass_resources::resolve_material_source(Material_set* material_source
 }
 
 auto Scene_pass_resources::begin_pass(
-    const Base_render_parameters& base,
-    const glm::uvec4&             debug_joint_indices,
-    const std::span<glm::vec4>&   debug_joint_colors,
-    const erhe::scene::Node*      debug_target_joint
+    const Base_render_parameters&     base,
+    const glm::uvec4&                 debug_joint_indices,
+    const std::span<const glm::vec4>& debug_joint_colors,
+    const erhe::scene::Node*          debug_target_joint
 ) -> Pass_state
 {
     Pass_state state{};
@@ -70,11 +70,9 @@ auto Scene_pass_resources::begin_pass(
         );
     } else {
         const Camera_view_input& view = base.views[0];
-        ERHE_VERIFY(view.projection != nullptr);
-        ERHE_VERIFY(view.node       != nullptr);
+        ERHE_VERIFY(view.camera != nullptr);
         state.camera_range = m_camera_buffer.update(
-            *view.projection,
-            *view.node,
+            *view.camera,
             view.viewport,
             base.exposure,
             base.grid_parameters,
@@ -91,7 +89,7 @@ auto Scene_pass_resources::begin_pass(
     // so the shared bind group is always complete.
     m_glyph_buffer.bind(render_encoder);
 
-    state.joint_range = m_joint_buffer.update(debug_joint_indices, debug_joint_colors, base.skins, debug_target_joint);
+    state.joint_range = m_joint_buffer.update(debug_joint_indices, debug_joint_colors, base.joint_poses, debug_target_joint);
     m_joint_buffer.bind(render_encoder, state.joint_range);
 
     // This must be done even if lights is empty.

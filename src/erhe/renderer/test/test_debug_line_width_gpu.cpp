@@ -286,7 +286,7 @@ protected:
         debug_renderer.set_anti_aliasing(line_case.anti_aliasing);
         submit_and_wait(
             [&](erhe::graphics::Command_buffer& command_buffer) {
-                debug_renderer.begin_frame(viewport, std::span<const View>{&view, 1});
+                const std::size_t frame_slot = debug_renderer.begin_frame(viewport, std::span<const View>{&view, 1});
                 {
                     // Stencil reference 1 passes the debug pipeline's
                     // stencil test against the cleared 0. The minor line
@@ -366,9 +366,9 @@ protected:
                     erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
                     const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
                     encoder.set_scissor_rect(0, 0, width, height);
-                    debug_renderer.render(encoder, render_pass, viewport);
+                    debug_renderer.render(encoder, render_pass, viewport, false, frame_slot);
                 }
-                debug_renderer.end_frame();
+                debug_renderer.release_frames();
             }
         );
 
@@ -483,7 +483,7 @@ protected:
         for (int frame = 0; frame < frame_count; ++frame) {
             submit_and_wait(
                 [&](erhe::graphics::Command_buffer& command_buffer) {
-                    debug_renderer.begin_frame(viewport, std::span<const View>{&view, 1});
+                    const std::size_t frame_slot = debug_renderer.begin_frame(viewport, std::span<const View>{&view, 1});
                     {
                         Primitive_renderer line_renderer = debug_renderer.get(
                             Debug_renderer_config{
@@ -514,9 +514,9 @@ protected:
                         erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
                         const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
                         encoder.set_scissor_rect(0, 0, width, height);
-                        debug_renderer.render(encoder, render_pass, viewport);
+                        debug_renderer.render(encoder, render_pass, viewport, false, frame_slot);
                     }
-                    debug_renderer.end_frame();
+                    debug_renderer.release_frames();
                 }
             );
             const uint64_t ns = timer.last_result();

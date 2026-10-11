@@ -202,7 +202,9 @@ public:
 // pass's view origin (standard.vert, doc/erhe/shadows.md "View-relative
 // positions"), so the rounding scales with the products' magnitudes - the
 // vertex's distance from its node origin - and with the translation's.
-// Gathered per caster mesh by Shadow_renderer::render().
+// Gathered per caster mesh: by Draw_list_scene::prepare_shadow_bounds() in
+// the prepare phase on the draw-list path, by Shadow_renderer::render() on
+// the bucket path.
 class Caster_vertex_extent
 {
 public:
@@ -272,7 +274,7 @@ public:
     // rounding (Light_shadow_limits::caster_vertex_rounding).
     void apply(
         const Light_set&                                light_set,
-        const erhe::scene::Camera*                      main_camera,
+        const erhe::scene::Camera_snapshot*             main_camera,
         const erhe::math::Viewport&                     main_camera_viewport,
         const erhe::math::Viewport&                     light_texture_viewport,
         const std::shared_ptr<erhe::graphics::Texture>& in_shadow_map_texture,
@@ -286,13 +288,13 @@ public:
         std::span<const Caster_vertex_extent>           in_caster_vertex_extents = {}
     );
 
-    // Forget the resolution of the previous apply(). The slot entries name
-    // their lights by raw pointer (Light_projection_transforms::light), so a
+    // Forget the resolution of the previous apply(). The slot entries point
+    // at the Light_set's snapshots (Light_projection_transforms::light), so a
     // resolution must never outlive the frame that produced it: a producer
     // that can return without applying (Shadow_render_node has several such
     // exits) clears first, and a consumer then reads an empty set instead of
-    // pointers into lights that have since been destroyed. Buffers keep their
-    // capacity.
+    // pointers into snapshots the next resolve() may have replaced. Buffers
+    // keep their capacity.
     void clear();
 
     // Shadow_renderer::render() calls one of these after apply():
@@ -303,13 +305,13 @@ public:
     void report_distance_fallbacks();
     void reset_distance_fallbacks();
 
-    // Debug / tooling lookup by light (linear). Hot paths index
-    // light_projection_transforms by slot instead.
+    // Debug / tooling lookup by light id (erhe::Item_base::get_id(); linear).
+    // Hot paths index light_projection_transforms by slot instead.
     // Warning: Returns pointer to element of member vector. That pointer
     //          should remain stable as long as Light_projections stays
     //          alive.
-    [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) -> erhe::scene::Light_projection_transforms*;
-    [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) const -> const erhe::scene::Light_projection_transforms*;
+    [[nodiscard]] auto get_light_projection_transforms_for_light_id(std::size_t light_id) -> erhe::scene::Light_projection_transforms*;
+    [[nodiscard]] auto get_light_projection_transforms_for_light_id(std::size_t light_id) const -> const erhe::scene::Light_projection_transforms*;
 
     erhe::scene::Light_projection_parameters              parameters;
     // Slot-ordered (== light UBO slot); copied layout from the Light_set the

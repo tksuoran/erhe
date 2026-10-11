@@ -8,6 +8,7 @@
 
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
+#include "erhe_scene/camera_snapshot.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -15,10 +16,12 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace erhe::rendergraph { class Rendergraph_node; }
 namespace erhe::geometry    { class Geometry; }
@@ -142,6 +145,10 @@ public:
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
     [[nodiscard]] virtual auto get_shadow_texture    () const -> erhe::graphics::Texture*;
     [[nodiscard]] virtual auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node* = 0;
+    // The light projections the view's forward passes shade with. Render
+    // phase: the shadow render node's result of the frame being rendered
+    // (written by its execute earlier in the same frame); null without a
+    // shadow render node. The previews (main thread, M2) own theirs.
     [[nodiscard]] virtual auto get_light_projections () const -> const erhe::scene_renderer::Light_projections*;
     [[nodiscard]] virtual auto as_viewport_scene_view() -> Viewport_scene_view*;
     [[nodiscard]] virtual auto as_viewport_scene_view() const -> const Viewport_scene_view*;
@@ -149,6 +156,24 @@ public:
     // ratio shapes the view frustum the shadow fit covers). Empty for a view
     // without one - the headset, whose perspective_xr camera ignores it.
     [[nodiscard]] virtual auto get_camera_viewport() const -> erhe::math::Viewport;
+
+    // The render phase's copies of this view's scene root, camera, shadow
+    // fit override camera, viewport configuration and camera viewport, one
+    // Render_view per frame in flight. snapshot_render_view() fills the copy
+    // of the calling role's frame (Device::get_frame_index(): the prepare
+    // frame on the main thread in M2 for a viewport, the render frame for
+    // the headset in its render phase update); the getters read the copy of
+    // the calling role's frame, so the render phase of frame N reads what
+    // the prepare phase of frame N copied while the prepare phase of frame
+    // N+1 fills another copy. The render phase reads these, never the live
+    // scene root, camera or config. Each getter verifies that the calling
+    // role's frame copied the view; the camera getters return null when
+    // the copy has no such camera.
+    [[nodiscard]] auto get_render_scene_root       () const -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_render_camera           () const -> const erhe::scene::Camera_snapshot*;
+    [[nodiscard]] auto get_render_shadow_fit_camera() const -> const erhe::scene::Camera_snapshot*;
+    [[nodiscard]] auto get_render_config           () const -> const Viewport_config&;
+    [[nodiscard]] auto get_render_camera_viewport  () const -> erhe::math::Viewport;
 
     // The stable name this view persists its settings under ("Default Viewport",
     // "Headset", ...); empty for views that do not persist (previews). Used to
@@ -246,6 +271,35 @@ public:
     [[nodiscard]] auto get_pickable_slot_mask                   (uint32_t slot_mask) const -> uint32_t;
 
 protected:
+    // One frame's copy of what the render phase reads of a view (see
+    // get_render_camera()).
+    class Render_view
+    {
+    public:
+        uint64_t                     frame_index            {std::numeric_limits<uint64_t>::max()};
+        std::shared_ptr<Scene_root>  scene_root             {};
+        erhe::scene::Camera_snapshot camera                 {};
+        bool                         camera_valid           {false};
+        erhe::scene::Camera_snapshot shadow_fit_camera      {};
+        bool                         shadow_fit_camera_valid{false};
+        Viewport_config              viewport_config        {};
+        erhe::math::Viewport         camera_viewport        {0, 0, 0, 0};
+    };
+
+    // Captures the scene root, camera (none when null), the shadow fit
+    // override camera when it belongs to the view's scene, the viewport
+    // configuration and get_camera_viewport() into out.
+    void capture_render_view(const erhe::scene::Camera* camera, Render_view& out) const;
+    // capture_render_view() into the copy of the calling role's frame.
+    void snapshot_render_view(const erhe::scene::Camera* camera);
+    // Stores view as the copy of the calling role's frame (a view that
+    // captured once and renders that capture on later frames).
+    void publish_render_view(const Render_view& view);
+    // The copy of the calling role's frame; verifies the frame copied the
+    // view.
+    [[nodiscard]] auto get_render_view() const -> const Render_view&;
+    [[nodiscard]] auto get_render_view() -> Render_view&;
+
     // Schedules the settings autosave for a persisted view (no-op otherwise).
     // Call from every site that changes state written by this view's collect
     // callback: scene / camera / renderer selection setters and the toolbar
@@ -293,6 +347,10 @@ protected:
     bool                               m_hover_gated_by_load {false};
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_shadow_fit_override_camera;
+
+    // One Render_view per frame in flight, indexed by frame index modulo
+    // their count; sized at the first snapshot.
+    std::vector<Render_view>           m_render_views                   {};
 
     // Persisted "Scene and Camera" selection, staged at construction and
     // applied (by name) on a later frame once the scene is available; see

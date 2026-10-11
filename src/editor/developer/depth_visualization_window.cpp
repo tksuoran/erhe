@@ -12,6 +12,7 @@
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/scene_root.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -70,6 +71,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
 {
     SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node()");
 
+    // The size Depth_visualization_window::update() requested for this frame.
+    apply_requested_size();
     if (m_render_target.get_render_pass() == nullptr) {
         // Likely because output ImGui window has no viewport size yet.
         return;
@@ -99,13 +102,17 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
     }
 
     const auto& scene_view = shadow_render_node->get_scene_view();
-    const auto& scene_root = scene_view.get_scene_root();
+    // The render phase's copy of this frame's scene root.
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    const std::shared_ptr<Scene_root> scene_root = scene_view.get_render_scene_root();
     if (!scene_root) {
         SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow scene root");
         return;
     }
 
-    const auto& light_projections = shadow_render_node->get_light_projections();
+    // The shadow node's result of this frame (it executed earlier in it).
+    const erhe::scene_renderer::Light_projections& light_projections = shadow_render_node->get_light_projections(m_rendergraph.get_graphics_device().get_frame_index());
     if (light_projections.light_projection_transforms.empty()) {
         return;
     }
@@ -163,10 +170,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
     SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::render() - done");
 }
 
-auto Depth_to_color_rendergraph_node::get_light_index() -> int&
-{
-    return m_light_index;
-}
 
 Depth_visualization_window::Depth_visualization_window(
     erhe::imgui::Imgui_renderer&            imgui_renderer,
@@ -187,7 +190,7 @@ Depth_visualization_window::Depth_visualization_window(
         return;
     }
 
-    m_depth_to_color_node = std::make_unique<Depth_to_color_rendergraph_node>(rendergraph, forward_renderer, mesh_memory, programs);
+    m_depth_to_color_node = erhe::rendergraph::make_rendergraph_node<Depth_to_color_rendergraph_node>(rendergraph, forward_renderer, mesh_memory, programs);
     m_depth_to_color_node->set_enabled(false);
 
     // Connect depth-to-color output to the Window_imgui_host so
@@ -217,15 +220,38 @@ void Depth_visualization_window::on_close_scene(const std::shared_ptr<Scene_root
     if (!scene_root || (m_scene_root.lock() != scene_root)) {
         return;
     }
-    // The closed scene's views are unbound but their shadow nodes stay; their
-    // Light_projections still name the closed scene's lights by raw pointer
-    // and the depth-to-color texture still holds its last image. Drop the
-    // scene and the input so neither is shown.
+    // The closed scene's views are unbound but their shadow nodes stay, and
+    // the depth-to-color texture still holds its last image. Drop the scene
+    // and the input so neither is shown.
     m_scene_root.reset();
     set_shadow_renderer_node({});
 }
 
 void Depth_visualization_window::set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node)
+{
+    // ImGui time (and scene close): requested; update() connects it.
+    m_requested_shadow_node       = shadow_node;
+    m_shadow_node_request_pending = true;
+}
+
+void Depth_visualization_window::update()
+{
+    if (!m_depth_to_color_node) {
+        return;
+    }
+    if (m_shadow_node_request_pending) {
+        m_shadow_node_request_pending = false;
+        apply_shadow_renderer_node(m_requested_shadow_node.lock());
+    }
+    const std::shared_ptr<Shadow_render_node> shadow_node = m_shadow_renderer_node.lock();
+    m_depth_to_color_node->set_enabled(m_requested_enabled && static_cast<bool>(shadow_node));
+    m_depth_to_color_node->set_light_index(m_light_index);
+    if (m_requested_area_size > 0) {
+        m_depth_to_color_node->request_size(m_requested_area_size, m_requested_area_size);
+    }
+}
+
+void Depth_visualization_window::apply_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node)
 {
     if (!m_depth_to_color_node) {
         return;
@@ -245,7 +271,6 @@ void Depth_visualization_window::set_shadow_renderer_node(const std::shared_ptr<
     if (shadow_node) {
         rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, shadow_node.get(), m_depth_to_color_node.get());
     }
-    m_depth_to_color_node->set_enabled(static_cast<bool>(shadow_node));
 }
 
 auto Depth_visualization_window::find_first_shadow_node(const Scene_root* const scene_root) const -> std::shared_ptr<Shadow_render_node>
@@ -305,9 +330,7 @@ template <typename T>
 
 void Depth_visualization_window::hidden()
 {
-    if (m_depth_to_color_node) {
-        m_depth_to_color_node->set_enabled(false);
-    }
+    m_requested_enabled = false; // applied by update()
 }
 
 void Depth_visualization_window::imgui()
@@ -345,27 +368,28 @@ void Depth_visualization_window::imgui()
         return;
     }
 
-    erhe::scene_renderer::Light_projections& light_projections = shadow_render_node->get_light_projections();
-    const auto& light_projection_transforms = light_projections.light_projection_transforms;
+    // The view's light slots as the scene's light set resolved them in the
+    // prepare phase of this frame (slot i of the set is light projection i;
+    // the main thread reads the prepare frame's set, which no render phase
+    // writes). A view lit by the shadow node's headlight has an empty scene
+    // set and shows no light here.
+    const std::vector<erhe::scene::Light_snapshot>& lights = scene_root->get_light_set(m_context.graphics_device->get_frame_index()).get_lights();
 
     // Depth_to_color_rendergraph_node skips rendering without a valid light,
     // leaving its texture holding the image of the previous view / scene.
-    const int count = static_cast<int>(light_projection_transforms.size());
+    const int count = static_cast<int>(lights.size());
     if (count == 0) {
         ImGui::TextUnformatted("The view has no lights");
         return;
     }
-    int& light_index = m_depth_to_color_node->get_light_index();
+    int& light_index = m_light_index; // applied to the node by update()
     if ((light_index < 0) || (light_index >= count)) {
         light_index = 0;
     }
     ImGui::Text("Light");
     ImGui::SameLine();
     for (int i = 0; i < count; ++i) {
-        const auto& light_projection_transform = light_projection_transforms.at(i);
-        if (light_projection_transform.light == nullptr) {
-            continue;
-        }
+        const erhe::scene::Light_snapshot& light = lights.at(static_cast<std::size_t>(i));
 
         if (i > 0) {
             ImGui::SameLine();
@@ -375,13 +399,11 @@ void Depth_visualization_window::imgui()
             light_index = i;
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s", light_projection_transform.light->get_name().c_str());
+            ImGui::SetTooltip("%s", light.get_name().c_str());
         }
     }
 
-    m_depth_to_color_node->set_enabled(true);
-
-    const auto& texture = m_depth_to_color_node->get_producer_output_texture(erhe::rendergraph::Rendergraph_node_key::depth_visualization);
+    m_requested_enabled = true; // applied by update()
 
     const auto  available_size = ImGui::GetContentRegionAvail();
     const float image_size     = std::min(available_size.x, available_size.y);
@@ -389,17 +411,12 @@ void Depth_visualization_window::imgui()
     if (area_size <= 0) {
         return; // Not visible
     }
-    m_depth_to_color_node->get_render_target().update(area_size, area_size, nullptr);
+    m_requested_area_size = area_size; // applied by update()
 
-    if (!texture) {
-        log_render->warn("Depth_visualization_window has no input render graph node");
-        return;
-    }
-
-    const int texture_width  = texture->get_width();
-    const int texture_height = texture->get_height();
-
-    if ((texture_width > 0) && (texture_height > 0)) {
+    // The node itself is the texture reference: the ImGui renderer resolves
+    // it to the node's output texture when it renders, in the render phase,
+    // which is the phase that sizes (and replaces) that texture.
+    {
         auto cursor_position = ImGui::GetCursorPos();
         cursor_position.x += (available_size.x - image_size) / 2.0f;
         cursor_position.y += (available_size.y - image_size) / 2.0f;
@@ -407,14 +424,12 @@ void Depth_visualization_window::imgui()
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
         SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - drawing image using texture {}", m_texture->gl_name());
         draw_image(
-            std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
+            std::static_pointer_cast<erhe::graphics::Texture_reference>(m_depth_to_color_node),
             area_size,
             area_size
         );
         // bool is_hovered = ImGui::IsItemHovered();
         ImGui::PopStyleVar();
-    } else {
-        SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - skipped - no texture or empty size");
     }
     SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - done");
 }

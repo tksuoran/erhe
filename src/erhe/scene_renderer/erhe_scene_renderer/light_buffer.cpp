@@ -454,7 +454,7 @@ void Light_projections::clear()
 
 void Light_projections::apply(
     const Light_set&                                light_set,
-    const erhe::scene::Camera*                      view_camera,
+    const erhe::scene::Camera_snapshot*             view_camera,
     const erhe::math::Viewport&                     view_camera_viewport,
     const erhe::math::Viewport&                     light_texture_viewport,
     const std::shared_ptr<erhe::graphics::Texture>& in_shadow_map_texture,
@@ -498,7 +498,7 @@ void Light_projections::apply(
     // Light_projections stays self-contained for the frame (Light_buffer::
     // update and the forward pass partition read it), then compute the
     // projection transforms per slot.
-    const std::vector<std::shared_ptr<erhe::scene::Light>>& lights = light_set.get_lights();
+    const std::vector<erhe::scene::Light_snapshot>& lights = light_set.get_lights();
     light_partition     = light_set.get_partition();
     shadow_map_2d_slots = light_set.get_shadow_map_2d_slots();
     point_shadow_slots  = light_set.get_point_shadow_slots();
@@ -525,9 +525,18 @@ void Light_projections::apply(
     // light loops cover [type base, type base + partition counts) with the
     // shadow-mapped lights first (see Light_set).
     for (std::size_t slot = 0, end = lights.size(); slot < end; ++slot) {
-        const std::shared_ptr<erhe::scene::Light>& light = lights[slot];
+        const erhe::scene::Light_snapshot& light = lights[slot];
         parameters.fit_debug_out = collect_fit_debug ? &fit_debug_data[slot] : nullptr;
-        light_projection_transforms.push_back(light->projection_transforms(parameters));
+        // The slot layout already says which lights get a shadow map this
+        // frame (the loops below assign the indices); only those pay for the
+        // content-fitted projection.
+        const bool slot_is_shadow_mapped =
+            (std::find(shadow_map_2d_slots.begin(), shadow_map_2d_slots.end(), slot) != shadow_map_2d_slots.end()) ||
+            (std::find(point_shadow_slots.begin(),  point_shadow_slots.end(),  slot) != point_shadow_slots.end());
+        const erhe::scene::Light_shadow_use shadow_use = slot_is_shadow_mapped
+            ? erhe::scene::Light_shadow_use::shadow_mapped
+            : erhe::scene::Light_shadow_use::none;
+        light_projection_transforms.push_back(light.projection_transforms(parameters, shadow_use));
         erhe::scene::Light_projection_transforms& transforms = light_projection_transforms.back();
         transforms.index              = slot;
         transforms.shadow_index       = std::numeric_limits<std::size_t>::max();
@@ -541,7 +550,7 @@ void Light_projections::apply(
         view_relative.view_origin = get_view_origin(world_from_light_camera);
         Light_shadow_limits& limits = light_shadow_limits.emplace_back();
         limits.caster_vertex_rounding = get_max_caster_vertex_rounding(view_relative.view_origin, in_caster_vertex_extents);
-        const erhe::scene::Light_type light_type = light->get_light_type();
+        const erhe::scene::Light_type light_type = light.get_light_type();
         if (light_type != erhe::scene::Light_type::point) {
             const glm::dmat4 texture_from_view_relative = texture_from_clip * get_clip_from_view_relative(
                 transforms.clip_from_light_camera.get_matrix(), world_from_light_camera, view_relative.view_origin
@@ -553,7 +562,7 @@ void Light_projections::apply(
             }
         }
         if (light_type == erhe::scene::Light_type::spot) {
-            limits.distance_rays_valid = (map_resolution >= get_spot_distance_min_resolution(light->get_outer_spot_angle(), shadow_map_footprint));
+            limits.distance_rays_valid = (map_resolution >= get_spot_distance_min_resolution(light.get_outer_spot_angle(), shadow_map_footprint));
         }
     }
     parameters.fit_debug_out        = nullptr;
@@ -580,20 +589,20 @@ void Light_projections::apply(
     );
 }
 
-auto Light_projections::get_light_projection_transforms_for_light(const erhe::scene::Light* light) -> erhe::scene::Light_projection_transforms*
+auto Light_projections::get_light_projection_transforms_for_light_id(const std::size_t light_id) -> erhe::scene::Light_projection_transforms*
 {
-    for (auto& i : light_projection_transforms) {
-        if (i.light == light) {
+    for (erhe::scene::Light_projection_transforms& i : light_projection_transforms) {
+        if ((i.light != nullptr) && (i.light->get_id() == light_id)) {
             return &i;
         }
     }
     return nullptr;
 }
 
-auto Light_projections::get_light_projection_transforms_for_light(const erhe::scene::Light* light) const -> const erhe::scene::Light_projection_transforms*
+auto Light_projections::get_light_projection_transforms_for_light_id(const std::size_t light_id) const -> const erhe::scene::Light_projection_transforms*
 {
-    for (auto& i : light_projection_transforms) {
-        if (i.light == light) {
+    for (const erhe::scene::Light_projection_transforms& i : light_projection_transforms) {
+        if ((i.light != nullptr) && (i.light->get_id() == light_id)) {
             return &i;
         }
     }
@@ -684,7 +693,7 @@ auto Light_buffer::update(
     ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_shadow_limits.size() == light_projections->light_projection_transforms.size()));
     for (std::size_t light_index = 0; light_index < light_count; ++light_index) {
         const erhe::scene::Light_projection_transforms& light_projection_transforms = light_projections->light_projection_transforms[light_index];
-        const erhe::scene::Light* const light = light_projection_transforms.light;
+        const erhe::scene::Light_snapshot* const light = light_projection_transforms.light;
         ERHE_VERIFY(light != nullptr);
         ERHE_VERIFY(light_projection_transforms.index == light_index);
 

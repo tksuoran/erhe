@@ -3,7 +3,7 @@
 // unchanged on every frame in between.
 //
 // These need a Device - the copy choice is driven by the backend's
-// frame-completion predicate and by bind() stamping the current frame - so
+// frame-completion predicate and by publish() stamping the current frame - so
 // they live in the device-backed target rather than the deviceless one. They
 // run against whatever backend the build was configured with, the null one
 // included.
@@ -140,9 +140,10 @@ protected:
         m_ssbo = make_host_buffer(sizeof(uint32_t), erhe::graphics::Buffer_usage::storage, "multi copy readback");
     }
 
-    // One frame: bind the buffer's current copy and dispatch the copy-out.
-    // record_extra runs inside the same frame, after the bind, so a test can
-    // observe what begin_write() picks while this frame is still open.
+    // One frame: publish the buffer's current copy for the frame (the owner's
+    // per-frame step), bind it and dispatch the copy-out. record_extra runs
+    // inside the same frame, after the bind, so a test can observe what
+    // begin_write() picks while this frame is still open.
     void bind_and_dispatch(
         erhe::graphics::Multi_copy_buffer&  buffer,
         const std::function<void()>&        record_extra = {}
@@ -153,6 +154,7 @@ protected:
                 erhe::graphics::Compute_command_encoder encoder = device().make_compute_command_encoder(command_buffer);
                 encoder.set_bind_group_layout(m_layout.get());
                 encoder.set_compute_pipeline(*m_pipeline);
+                buffer.publish();
                 const bool bound = buffer.bind(encoder);
                 EXPECT_TRUE(bound);
                 encoder.set_buffer(erhe::graphics::Buffer_target::storage, m_ssbo.get(), 0, sizeof(uint32_t), 1);
@@ -203,6 +205,7 @@ TEST_F(Multi_copy_test, bind_before_commit_returns_false)
             erhe::graphics::Compute_command_encoder encoder = device().make_compute_command_encoder(command_buffer);
             encoder.set_bind_group_layout(m_layout.get());
             encoder.set_compute_pipeline(*m_pipeline);
+            buffer.publish();
             EXPECT_FALSE(buffer.bind(encoder));
         }
     );
@@ -236,10 +239,11 @@ TEST_F(Multi_copy_test, begin_write_never_returns_the_current_copy)
     EXPECT_NE(first, second) << "a write landed in the copy that was current";
 }
 
-// The stamping rule: a copy is in use by every frame that BOUND it, not only
-// by the frame that wrote it. Bind two copies inside one still-open frame and
-// a third write must go somewhere else again - against a commit-time stamp the
-// first copy would look free and be overwritten while this frame reads it.
+// The stamping rule: a copy is in use by every frame it was PUBLISHED for, not
+// only by the frame that wrote it. Bind two copies inside one still-open frame
+// and a third write must go somewhere else again - against a stamp of the
+// committing frame only, the first copy (committed before this frame) would
+// look free and be overwritten while this frame reads it.
 TEST_F(Multi_copy_test, begin_write_refuses_a_copy_this_frame_bound)
 {
     build_pipeline();
@@ -254,6 +258,7 @@ TEST_F(Multi_copy_test, begin_write_refuses_a_copy_this_frame_bound)
             erhe::graphics::Compute_command_encoder encoder = device().make_compute_command_encoder(command_buffer);
             encoder.set_bind_group_layout(m_layout.get());
             encoder.set_compute_pipeline(*m_pipeline);
+            buffer.publish();
             EXPECT_TRUE(buffer.bind(encoder));          // this frame reads `first`
             write_value(buffer, 11u);
             second = buffer.get_current_byte_offset();
@@ -284,6 +289,7 @@ TEST_F(Multi_copy_test, exhausting_the_copies_allocates_rather_than_stalling)
             erhe::graphics::Compute_command_encoder encoder = device().make_compute_command_encoder(command_buffer);
             encoder.set_bind_group_layout(m_layout.get());
             encoder.set_compute_pipeline(*m_pipeline);
+            buffer.publish();
             EXPECT_TRUE(buffer.bind(encoder));
             write_value(buffer, 21u);   // takes the only other copy
             EXPECT_TRUE(buffer.bind(encoder));

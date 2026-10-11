@@ -5,11 +5,14 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/render_bucket_snapshot.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_utility/debug_label.hpp"
+#include "renderers/render_frame_results.hpp"
 
 #include <glm/glm.hpp>
 
@@ -17,6 +20,7 @@ namespace erhe::graphics { class Shader_stages; }
 
 #include <functional>
 #include <optional>
+#include <string>
 
 namespace erhe::graphics { class Base_render_pipeline; class Color_blend_state; }
 namespace erhe::scene    { using Layer_id = uint64_t; }
@@ -82,6 +86,12 @@ public:
     // Grid settings (cell sizes, line widths, per-level colors, axis
     // label settings) forwarded to the camera UBO; read by grid.frag.
     erhe::scene_renderer::Grid_parameters                                  grid_parameters{};
+    // The grid pass: with a viewport render state in the context
+    // (Render_context::render_state), enabled and grid_parameters come from
+    // the view's Grid_pass_state (Grid::render() records them per view and
+    // frame) instead of the two fields above, which serve the views without
+    // one (the headset).
+    bool                                                                   grid_from_view{false};
     // Sky settings (horizon / zenith / ground colors, checker pattern)
     // forwarded to the camera UBO; read by sky.frag.
     erhe::scene_renderer::Sky_parameters                                   sky_parameters{};
@@ -126,14 +136,64 @@ enum class Composition_pass_result : unsigned int {
 
 [[nodiscard]] auto c_str(Composition_pass_result result) -> const char*;
 
-// The selection outline settings at the current host time: color, active
-// item color and width pulse between the editor-global Selection_outline_style
-// low / high values. A per-frame animation, computed where it is used.
-[[nodiscard]] auto make_selection_outline_settings(const App_context& context) -> erhe::scene_renderer::Primitive_interface_settings;
+// The selection outline settings at the rendered frame's host time
+// (Frame_packet::frame_host_system_time_ns; the render phase reads it as
+// App_context::render_phase_host_system_time_ns): color, active item color
+// and width pulse between the editor-global Selection_outline_style low /
+// high values. A per-frame animation, computed where it is used.
+[[nodiscard]] auto make_selection_outline_settings(const App_context& context, int64_t host_system_time_ns) -> erhe::scene_renderer::Primitive_interface_settings;
 
 // The primitive settings a pass draws with: the selection outline pulse, the
 // pass's explicit primitive_settings, or its editor-global appearance.
-[[nodiscard]] auto get_pass_primitive_settings(const Composition_pass_data& data, const Render_context& context) -> erhe::scene_renderer::Primitive_interface_settings;
+[[nodiscard]] auto get_pass_primitive_settings(const Composition_pass_data& data, const Render_context& context, int64_t host_system_time_ns) -> erhe::scene_renderer::Primitive_interface_settings;
+
+// What Composition_pass::prepare() decided for one pass, one scene view and
+// one frame: the gating outcome, the inputs of the path the pass takes and,
+// for the bucket path, the prepared draws. Filled in the prepare phase (the
+// last M2 step, App_rendering::prepare_composition) and read by
+// Composition_pass::render() in the render phase, which then reads none of
+// the pass's live gating state (is_enabled, render style, appearance) and no
+// Mesh (doc/editor/editor.md "Frame phases and the render thread").
+class Composition_pass_prepared
+{
+public:
+    // never_rendered: not prepared (the composer filtered the pass out for
+    // the view's Render_content). submitted: the pass draws, through the
+    // path the fields below select; anything else is the early-out reason.
+    Composition_pass_result                            result            {Composition_pass_result::never_rendered};
+    std::size_t                                        mesh_count        {0};
+    bool                                               use_wide_lines    {false};
+    bool                                               use_draw_lists    {false};
+    erhe::scene_renderer::Primitive_interface_settings primitive_settings{};
+    // The fullscreen passes' camera UBO inputs: the grid's from the view's
+    // render state (Grid::render(), per view), the sky's from the pass data
+    // (App_rendering::update_sky_parameters), both on the main thread.
+    erhe::scene_renderer::Grid_parameters              grid_parameters   {};
+    erhe::scene_renderer::Sky_parameters               sky_parameters    {};
+    // The bucket path's draws (Forward_renderer::prepare).
+    erhe::scene_renderer::Render_bucket_snapshot       buckets;
+};
+
+// What the render calls of one frame recorded for one Composition_pass
+// (Composition_pass::get_frame_stats()): the outcome of the frame's most
+// recent render() call and the scene view it was for, and the CPU time of
+// that call plus the running total and call count since construction up to
+// and including it.
+class Composition_pass_stats
+{
+public:
+    Composition_pass_result result                 {Composition_pass_result::never_rendered};
+    std::string             scene_view_name        {};
+    std::size_t             mesh_count             {0};
+    // Entries drawn by the draw-list path (0 when the pass went through
+    // Forward_renderer::render()), and the entries that passed the filter
+    // but were outside the view frustum.
+    std::size_t             draw_list_entry_count  {0};
+    std::size_t             draw_list_culled_count {0};
+    double                  cpu_time_us            {0.0};
+    double                  total_cpu_time_us      {0.0};
+    std::size_t             render_call_count      {0};
+};
 
 class Composition_pass : public erhe::Item<erhe::Item_base, erhe::Item_base, Composition_pass>
 {
@@ -142,9 +202,27 @@ public:
     Composition_pass& operator=(const Composition_pass&);
     ~Composition_pass() noexcept override;
 
+    // A pass without frame statistics (the previews' own passes, rendered
+    // on the main thread).
     explicit Composition_pass(std::string_view name);
+    // A pass of the editor's composer: its render phase calls record frame
+    // statistics, one Composition_pass_stats per frame in flight.
+    Composition_pass(std::string_view name, std::size_t frames_in_flight);
 
-    virtual void render(const Render_context& context);
+    // Prepare phase (main thread): evaluates the pass's gating for the view
+    // of context and, for the bucket path, buckets its meshes into
+    // out.buckets. host_system_time_ns is the prepared frame's host time (the
+    // selection outline pulse).
+    void prepare(const Render_context& context, int64_t host_system_time_ns, Composition_pass_prepared& out) const;
+
+    // Render phase: draws what prepare() decided for this view and frame.
+    virtual void render(const Render_context& context, const Composition_pass_prepared& prepared);
+
+    // prepare() and render() back to back on the calling thread, through
+    // this pass's own scratch: for the callers that render where they
+    // prepare - the previews (main thread, M2) and the headset (render
+    // phase; doc/editor/render_thread.md section 2.2 lists its live reads).
+    void render_immediate(const Render_context& context);
     void imgui();
 
     // Implements Item_base
@@ -153,35 +231,31 @@ public:
 
     Composition_pass_data data;
 
-    // Outcome of the most recent render() call, and the scene view it was for.
-    // Written once per render() (a plain store, not a per-frame sync).
-    [[nodiscard]] auto get_last_result          () const -> Composition_pass_result { return m_last_result; }
-    [[nodiscard]] auto get_last_scene_view_name () const -> const std::string&      { return m_last_scene_view_name; }
-    [[nodiscard]] auto get_last_mesh_count      () const -> std::size_t             { return m_last_mesh_count; }
-    // Entries drawn by the draw-list path in the most recent render() (0 when
-    // the pass went through Forward_renderer::render()).
-    [[nodiscard]] auto get_last_draw_list_entry_count() const -> std::size_t        { return m_last_draw_list_entry_count; }
-    // Entries of the last draw-list render that passed the filter but were
-    // outside the view frustum.
-    [[nodiscard]] auto get_last_draw_list_culled_count() const -> std::size_t       { return m_last_draw_list_culled_count; }
-    // CPU wall time spent inside render() for the most recent call, and the
-    // running total / call count since the last reset (P4 measurement:
+    // Main thread: the statistics the render calls of frame_index recorded
+    // (App_context::last_rendered_frame_index for the last rendered frame);
+    // null when the pass was not rendered in that frame, has no frame
+    // statistics, or nothing was rendered yet. Only render() calls in the
+    // render phase record statistics (P4 measurement:
     // doc/erhe/draw_list_renderer.md).
-    [[nodiscard]] auto get_last_cpu_time_us  () const -> double      { return m_last_cpu_time_us; }
-    [[nodiscard]] auto get_total_cpu_time_us () const -> double      { return m_total_cpu_time_us; }
-    [[nodiscard]] auto get_render_call_count () const -> std::size_t { return m_render_call_count; }
-    void reset_cpu_time_stats() { m_total_cpu_time_us = 0.0; m_render_call_count = 0; }
+    [[nodiscard]] auto get_frame_stats(std::optional<uint64_t> frame_index) const -> const Composition_pass_stats*;
+    // Main thread: the CPU time totals of a frame's statistics since the last
+    // reset_cpu_time_stats(), which takes the totals of the given frame (the
+    // last rendered one) as the new baseline; the running totals stay the
+    // render phase's.
+    [[nodiscard]] auto get_total_cpu_time_us(const Composition_pass_stats& stats) const -> double;
+    [[nodiscard]] auto get_render_call_count(const Composition_pass_stats& stats) const -> std::size_t;
+    void reset_cpu_time_stats(std::optional<uint64_t> frame_index);
 
 private:
-    std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> m_mesh_spans;
-    Composition_pass_result                                         m_last_result{Composition_pass_result::never_rendered};
-    std::string                                                     m_last_scene_view_name{};
-    std::size_t                                                     m_last_mesh_count{0};
-    std::size_t                                                     m_last_draw_list_entry_count{0};
-    std::size_t                                                     m_last_draw_list_culled_count{0};
-    double                                                          m_last_cpu_time_us{0.0};
+    Composition_pass_prepared                                       m_immediate_prepared;
+    // One per frame in flight, written by the render phase's render() calls.
+    Render_frame_results<Composition_pass_stats>                    m_frame_stats;
+    // Render phase owned: the running totals.
     double                                                          m_total_cpu_time_us{0.0};
     std::size_t                                                     m_render_call_count{0};
+    // Main thread owned: the totals reset_cpu_time_stats() took.
+    double                                                          m_total_cpu_time_baseline_us{0.0};
+    std::size_t                                                     m_render_call_count_baseline{0};
 };
 
 }

@@ -21,18 +21,25 @@ namespace erhe::scene_renderer {
 // together: a heap handle baked into a record is meaningless in any other
 // heap, and, with the record persisting, meaningless once this heap drops the
 // allocation.
+//
+// Frames in flight: update() runs on the thread that prepares a frame and
+// bind() / unbind() may run on the thread that records the previous one, so
+// every write produces a new buffer copy AND a heap of its own, and the pair
+// a frame binds is the pair update() published for that frame
+// (Multi_copy_buffer::publish() for the buffer, frame_heaps for the heap).
+// A heap is reset only when no unretired frame was published with it, the
+// same rule the buffer copies follow, so the heap a recording thread binds is
+// never the one being repopulated.
 class Material_set::Gpu
 {
 public:
     Gpu(const Material_set_create_info& create_info)
-        : material_buffer{*create_info.graphics_device, *create_info.material_interface}
-        , texture_heap{
-            *create_info.graphics_device,
-            *create_info.fallback_texture,
-            *create_info.fallback_sampler,
-            create_info.bind_group_layout,
-            create_info.max_textures
-        }
+        : device{*create_info.graphics_device}
+        , fallback_texture{*create_info.fallback_texture}
+        , fallback_sampler{*create_info.fallback_sampler}
+        , bind_group_layout{create_info.bind_group_layout}
+        , max_textures{create_info.max_textures}
+        , material_buffer{*create_info.graphics_device, *create_info.material_interface}
         , buffer{
             *create_info.graphics_device,
             erhe::graphics::Multi_copy_buffer_create_info{
@@ -45,13 +52,106 @@ public:
             }
         }
     {
+        const std::size_t frames_in_flight = device.get_number_of_frames_in_flight();
+        ERHE_VERIFY(frames_in_flight >= 1);
+        frame_heaps.resize(frames_in_flight);
     }
 
+    class Heap
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Texture_heap> texture_heap;
+        uint64_t                                      last_used_frame{0};
+        bool                                          used           {false};  // last_used_frame is meaningful
+    };
+
+    // What bind() / unbind() of one device frame use; written by publish()
+    // for that frame only.
+    class Frame_heap
+    {
+    public:
+        uint64_t                      frame       {0};
+        bool                          published   {false};
+        erhe::graphics::Texture_heap* texture_heap{nullptr};
+    };
+
+    // A heap no unretired frame was published with, other than the current
+    // one; a new heap when every other heap is still in flight. The heap
+    // count reaches a high-water mark (frames in flight + 1 for an owner that
+    // writes at most once per frame) and stays there.
+    [[nodiscard]] auto acquire_write_heap() -> std::size_t
+    {
+        for (std::size_t i = 0, end = heaps.size(); i < end; ++i) {
+            if (i == current_heap) {
+                continue;
+            }
+            const Heap& heap = heaps[i];
+            if (!heap.used || device.is_frame_completed(heap.last_used_frame)) {
+                return i;
+            }
+        }
+        heaps.push_back(
+            Heap{
+                .texture_heap = std::make_unique<erhe::graphics::Texture_heap>(
+                    device,
+                    fallback_texture,
+                    fallback_sampler,
+                    bind_group_layout,
+                    max_textures
+                )
+            }
+        );
+        return heaps.size() - 1;
+    }
+
+    // Names the current buffer copy and heap as the pair the caller's frame
+    // binds, and stamps both as used by that frame.
+    void publish()
+    {
+        buffer.publish();
+        const uint64_t frame = device.get_frame_index();
+        Frame_heap& frame_heap = frame_heaps[static_cast<std::size_t>(frame % frame_heaps.size())];
+        frame_heap.frame        = frame;
+        frame_heap.published    = true;
+        frame_heap.texture_heap = nullptr;
+        if (current_heap == invalid_heap) {
+            return;
+        }
+        Heap& heap = heaps[current_heap];
+        heap.last_used_frame    = frame;
+        heap.used               = true;
+        frame_heap.texture_heap = heap.texture_heap.get();
+    }
+
+    // The heap published for the caller's frame; ERHE_VERIFY it was
+    // published (update() runs once per frame before the frame's first
+    // bind) and that an update has written one.
+    [[nodiscard]] auto get_frame_heap() const -> erhe::graphics::Texture_heap&
+    {
+        const uint64_t    frame      = device.get_frame_index();
+        const Frame_heap& frame_heap = frame_heaps[static_cast<std::size_t>(frame % frame_heaps.size())];
+        ERHE_VERIFY(frame_heap.published && (frame_heap.frame == frame));
+        ERHE_VERIFY(frame_heap.texture_heap != nullptr);
+        return *frame_heap.texture_heap;
+    }
+
+    static constexpr std::size_t invalid_heap = static_cast<std::size_t>(-1);
+
+    erhe::graphics::Device&                           device;
+    const erhe::graphics::Texture&                    fallback_texture;
+    const erhe::graphics::Sampler&                    fallback_sampler;
+    const erhe::graphics::Bind_group_layout*          bind_group_layout;
+    std::size_t                                       max_textures;
     Material_buffer                                   material_buffer;
-    erhe::graphics::Texture_heap                      texture_heap;
     erhe::graphics::Multi_copy_buffer                 buffer;
+    // Grows on demand, never shrinks; the heap objects do not move when the
+    // vector reallocates, so frame_heaps may point at them.
+    std::vector<Heap>                                 heaps;
+    std::size_t                                       current_heap{invalid_heap};
+    // One entry per device frame in flight, indexed by frame % size.
+    std::vector<Frame_heap>                           frame_heaps;
     // Slot-ordered view of the table, holes null. A member so the per-write
-    // allocation is amortized.
+    // allocation is amortized. Read by update() only.
     std::vector<const erhe::primitive::Material*>     slot_materials;
     bool                                              force_dirty {true};
     std::size_t                                       write_count {0};
@@ -137,6 +237,8 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
         }
     }
     if (!dirty) {
+        // The copy and heap already current serve this frame too.
+        m_gpu->publish();
         return;
     }
 
@@ -162,24 +264,32 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
     }
 
     // The heap is repopulated by the record write that follows, and by nothing
-    // else, so it is reset here and only here.
-    m_gpu->texture_heap.reset_heap(command_buffer);
+    // else, so it is reset here and only here - and it is a heap no
+    // unretired frame binds (Gpu::acquire_write_heap).
+    const std::size_t heap_index = m_gpu->acquire_write_heap();
+    erhe::graphics::Texture_heap& texture_heap = *m_gpu->heaps[heap_index].texture_heap;
+    texture_heap.reset_heap(command_buffer);
 
     const std::size_t entry_byte_count = m_gpu->material_buffer.get_record_byte_count();
     const std::size_t byte_count       = slot_count * entry_byte_count;
 
     const std::span<std::byte> gpu_data = m_gpu->buffer.begin_write(byte_count);
-    m_gpu->material_buffer.write_records(gpu_data, m_gpu->texture_heap, m_gpu->slot_materials);
+    m_gpu->material_buffer.write_records(gpu_data, texture_heap, m_gpu->slot_materials);
     m_gpu->buffer.commit(byte_count);
+    m_gpu->current_heap = heap_index;
+    m_gpu->publish();
     ++m_gpu->write_count;
     m_gpu->written_byte_count += byte_count;
 }
 
+// bind() / unbind() read only what update() published for the caller's
+// frame (Gpu::publish), so they may run on the thread that records frame F
+// while the thread that prepares frame F + 1 runs update().
 auto Material_set::bind(erhe::graphics::Render_command_encoder& encoder) -> bool
 {
     ERHE_VERIFY(m_gpu);
     const bool buffer_bound = m_gpu->buffer.bind(encoder);
-    m_gpu->texture_heap.bind(encoder);
+    m_gpu->get_frame_heap().bind(encoder);
     return buffer_bound;
 }
 
@@ -187,14 +297,14 @@ auto Material_set::bind(erhe::graphics::Compute_command_encoder& encoder) -> boo
 {
     ERHE_VERIFY(m_gpu);
     const bool buffer_bound = m_gpu->buffer.bind(encoder);
-    m_gpu->texture_heap.bind(encoder);
+    m_gpu->get_frame_heap().bind(encoder);
     return buffer_bound;
 }
 
 void Material_set::unbind(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_VERIFY(m_gpu);
-    m_gpu->texture_heap.unbind(command_buffer);
+    m_gpu->get_frame_heap().unbind(command_buffer);
 }
 
 auto Material_set::allocate_slot(const std::shared_ptr<erhe::primitive::Material>& material) -> uint32_t

@@ -13,6 +13,7 @@
 # include "erhe_graphics/null/null_render_pass.hpp"
 #endif
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/scoped_container_access.hpp"
@@ -233,7 +234,7 @@ void Render_pass::unregister_gpu_timer(Gpu_timer* timer)
 
 void Render_pass::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
-    Render_pass* const active = m_device.get_active_render_pass();
+    Render_pass* const active = command_buffer.get_active_render_pass();
     if (active != nullptr) {
         m_device.device_message(Message_severity::error,
             fmt::format(
@@ -243,7 +244,7 @@ void Render_pass::start_render_pass(Command_buffer& command_buffer, Render_pass*
             )
         );
     }
-    m_device.set_active_render_pass(this);
+    command_buffer.set_active_render_pass(this);
     {
         // Adoption point (once per pass, GL only): ensure this pass's
         // framebuffer(s) exist on the calling thread's current context
@@ -269,7 +270,7 @@ void Render_pass::end_render_pass(Render_pass* const render_pass_after)
     }
     m_active_command_buffer = nullptr;
     m_impl->end_render_pass(command_buffer, render_pass_after);
-    m_device.set_active_render_pass(nullptr);
+    command_buffer.set_active_render_pass(nullptr);
 }
 
 

@@ -146,6 +146,11 @@ void Ring_buffer_range::release()
     );
 }
 
+auto Ring_buffer_range::is_released() const -> bool
+{
+    return m_is_released;
+}
+
 void Ring_buffer_range::cancel()
 {
     ERHE_PROFILE_FUNCTION();
