@@ -18,14 +18,14 @@
         },
         {
             "name":    "CMake Launch/Debug Target LLDB",
-            "type":    "lldb",
+            "type":    "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "cwd":     "${workspaceFolder}"
         },
         {
             "name":    "CMake Launch/Debug Target LLDB software GL",
-            "type":    "lldb",
+            "type":    "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "cwd":     "${workspaceFolder}",
@@ -65,7 +65,7 @@
         },
         {
             "name":    "Client LLDB",
-            "type":    "lldb",
+            "type":    "lldb-dap",
             "request": "launch",
             "console": "integratedTerminal",
             "program": "${workspaceFolder}/src/editor/net-test",
@@ -90,7 +90,7 @@
         },
         {
             "name":    "Server LLDB",
-            "type":    "lldb",
+            "type":    "lldb-dap",
             "request": "launch",
             "console": "integratedTerminal",
             "program": "${workspaceFolder}/src/editor/net-test",
