@@ -20,6 +20,14 @@ check_cxx_compiler_flag(-Wno-unqualified-std-cast-call ERHE_CXX_HAS_NO_UNQUALIFI
 if (ERHE_CXX_HAS_NO_UNQUALIFIED_STD_CAST_CALL_FLAG)
     list(APPEND ERHE_GNU_WARNING_FLAGS -Wno-deprecated-copy)
 endif ()
+# clang 19+ folds -Wmissing-designated-field-initializers into -Wextra; erhe
+# relies on omitted designated fields taking their default member initializer
+# (GCC and MSVC never warn about this), so the diagnostic is noise under
+# -Werror (first hit: the NDK r28 Quest release build).
+check_cxx_compiler_flag(-Wno-missing-designated-field-initializers ERHE_CXX_HAS_NO_MISSING_DESIGNATED_FIELD_INITIALIZERS_FLAG)
+if (ERHE_CXX_HAS_NO_MISSING_DESIGNATED_FIELD_INITIALIZERS_FLAG)
+    list(APPEND ERHE_GNU_WARNING_FLAGS -Wno-missing-designated-field-initializers)
+endif ()
 if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     # A single shared PCH (erhe_pch) cannot match every consumer's macro set:
     # dependency targets export PUBLIC compile definitions (JPH_*, TRACY_*,

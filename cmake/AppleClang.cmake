@@ -5,6 +5,11 @@ check_cxx_compiler_flag(-Wno-unqualified-std-cast-call ERHE_CXX_HAS_NO_UNQUALIFI
 if (ERHE_CXX_HAS_NO_UNQUALIFIED_STD_CAST_CALL_FLAG)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-copy>")
 endif ()
+# See cmake/Clang.cmake: omitted designated fields are intentional in erhe.
+check_cxx_compiler_flag(-Wno-missing-designated-field-initializers ERHE_CXX_HAS_NO_MISSING_DESIGNATED_FIELD_INITIALIZERS_FLAG)
+if (ERHE_CXX_HAS_NO_MISSING_DESIGNATED_FIELD_INITIALIZERS_FLAG)
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-missing-designated-field-initializers>")
+endif ()
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
