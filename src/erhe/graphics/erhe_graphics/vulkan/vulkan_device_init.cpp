@@ -2412,6 +2412,59 @@ Device_impl::Device_impl(
                 log_context->warn("Texture heap descriptor set layout creation failed with {} - textures may not work", static_cast<int32_t>(result));
                 m_texture_set_layout = VK_NULL_HANDLE;
             }
+
+            // Probe whether the driver honours small variable descriptor
+            // counts. Adreno (Quest 3) returns VK_ERROR_OUT_OF_POOL_MEMORY for
+            // any variable count below half the layout width, whatever the
+            // pool holds, so a heap capped at a few textures could never get a
+            // set; such a driver gets every heap set allocated at the full
+            // layout width instead (Texture_heap_impl::allocate_new_set).
+            if (m_texture_set_layout != VK_NULL_HANDLE) {
+                const VkDescriptorPoolSize probe_pool_size{
+                    .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1
+                };
+                const VkDescriptorPoolCreateInfo probe_pool_create_info{
+                    .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                    .pNext         = nullptr,
+                    .flags         = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+                    .maxSets       = 1,
+                    .poolSizeCount = 1,
+                    .pPoolSizes    = &probe_pool_size
+                };
+                VkDescriptorPool probe_pool = VK_NULL_HANDLE;
+                result = vkCreateDescriptorPool(m_vulkan_device, &probe_pool_create_info, nullptr, &probe_pool);
+                if (result == VK_SUCCESS) {
+                    uint32_t probe_count = 1;
+                    const VkDescriptorSetVariableDescriptorCountAllocateInfo probe_variable_info{
+                        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+                        .pNext              = nullptr,
+                        .descriptorSetCount = 1,
+                        .pDescriptorCounts  = &probe_count
+                    };
+                    const VkDescriptorSetAllocateInfo probe_allocate_info{
+                        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                        .pNext              = &probe_variable_info,
+                        .descriptorPool     = probe_pool,
+                        .descriptorSetCount = 1,
+                        .pSetLayouts        = &m_texture_set_layout
+                    };
+                    VkDescriptorSet probe_set = VK_NULL_HANDLE;
+                    result = vkAllocateDescriptorSets(m_vulkan_device, &probe_allocate_info, &probe_set);
+                    if (result == VK_SUCCESS) {
+                        m_texture_heap_variable_count_minimum = 1;
+                    } else {
+                        m_texture_heap_variable_count_minimum = max_texture_heap_size;
+                        log_context->warn(
+                            "Driver refused a texture heap set with variable descriptor count 1 ({}); every heap set is allocated {} wide",
+                            static_cast<int32_t>(result), max_texture_heap_size
+                        );
+                    }
+                    vkDestroyDescriptorPool(m_vulkan_device, probe_pool, nullptr);
+                } else {
+                    log_context->warn("Texture heap variable count probe: vkCreateDescriptorPool() failed with {}", static_cast<int32_t>(result));
+                }
+            }
         }
 
         // Create per-frame descriptor pool for fallback binding (when push descriptors unavailable)

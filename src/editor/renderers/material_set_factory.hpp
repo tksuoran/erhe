@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 
 #include <cstddef>
@@ -47,7 +48,7 @@ public:
     // how much the buffer reserves up front; it grows past it on demand.
     [[nodiscard]] auto make_create_info(
         const char* debug_label,
-        std::size_t max_textures           = 4096,
+        std::size_t max_textures           = erhe::graphics::max_texture_heap_size,
         std::size_t initial_material_count = 256
     ) const -> erhe::scene_renderer::Material_set_create_info;
 

@@ -440,6 +440,11 @@ auto Device_impl::get_texture_set_layout() const -> VkDescriptorSetLayout
     return m_texture_set_layout;
 }
 
+auto Device_impl::get_texture_heap_variable_count_minimum() const -> uint32_t
+{
+    return m_texture_heap_variable_count_minimum;
+}
+
 auto Device_impl::allocate_descriptor_set(const uint64_t frame_id) -> VkDescriptorSet
 {
     const std::size_t      in_flight_slot = get_frame_slot_index(frame_id);

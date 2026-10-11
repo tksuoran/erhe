@@ -319,11 +319,18 @@ MoltenVK requires for comparison samplers
 
 `Texture_heap_impl` (`vulkan_texture_heap.cpp`) is a descriptor-indexing array
 at set 1. The device creates `m_texture_set_layout` as a single binding of
-`max_texture_heap_size` (4096, `vulkan_texture_heap.hpp`) combined image
-samplers with `PARTIALLY_BOUND | UPDATE_AFTER_BIND |
-VARIABLE_DESCRIPTOR_COUNT`. `allocate(texture, sampler)` writes the descriptor
-and returns its array index as an opaque handle; `bind()` binds the set against
-the active bind group layout's pipeline layout. The heap is color-only:
+`max_texture_heap_size` (`texture_heap.hpp`: 4096, 1024 on Android) combined
+image samplers with `PARTIALLY_BOUND | UPDATE_AFTER_BIND |
+VARIABLE_DESCRIPTOR_COUNT`. Each heap allocates its sets with a variable
+count of its own `max_textures`, raised to the device's
+`get_texture_heap_variable_count_minimum()`: at device init a probe allocates
+one set with variable count 1, and a driver that refuses it (Adreno on Quest 3
+returns `VK_ERROR_OUT_OF_POOL_MEMORY` for every variable count below half the
+layout width, whatever the pool holds) gets every heap set allocated at the
+full layout width. Pools hold `s_sets_per_pool` sets of that variable count.
+`allocate(texture, sampler)` writes the descriptor and returns its array index
+as an opaque handle; `bind()` binds the set against the active bind group
+layout's pipeline layout. The heap is color-only:
 depth/stencil samplers go through the dedicated `set_sampled_image` path. The
 descriptor pool and set layout are destroyed via deferred completion handlers.
 
