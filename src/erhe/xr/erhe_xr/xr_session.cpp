@@ -208,7 +208,6 @@ auto Xr_session::create_session() -> bool
         .systemId    = m_instance.get_xr_system_id()
     };
 
-    check_gl_context_in_current_in_this_thread();
     ERHE_XR_CHECK(xrCreateSession(xr_instance, &session_create_info, &m_xr_session));
 # endif
 #elif defined(XR_USE_PLATFORM_LINUX)
@@ -226,7 +225,6 @@ auto Xr_session::create_session() -> bool
         .systemId    = m_instance.get_xr_system_id()
     };
 
-    check_gl_context_in_current_in_this_thread();
     ERHE_XR_CHECK(xrCreateSession(xr_instance, &session_create_info, &m_xr_session));
 # endif
 #else
@@ -501,7 +499,6 @@ Xr_session::~Xr_session() noexcept
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    check_gl_context_in_current_in_this_thread();
     check(xrDestroySession(m_xr_session));
 }
 
@@ -880,7 +877,6 @@ auto Xr_session::create_swapchains() -> bool
             .mipCount    = 1
         };
         XrSwapchain color_xr_swapchain{XR_NULL_HANDLE};
-        check_gl_context_in_current_in_this_thread();
         const XrResult color_result = xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_xr_swapchain);
         if (color_result != XR_SUCCESS) {
             log_xr->error("xrCreateSwapchain() (multiview color) failed with error {}", c_str(color_result));
@@ -913,7 +909,6 @@ auto Xr_session::create_swapchains() -> bool
                 .arraySize   = view_count,
                 .mipCount    = 1
             };
-            check_gl_context_in_current_in_this_thread();
             const XrResult depth_stencil_result = xrCreateSwapchain(m_xr_session, &depth_stencil_swapchain_create_info, &depth_stencil_xr_swapchain);
             if (depth_stencil_result != XR_SUCCESS) {
                 // Non-fatal: some runtimes/drivers (e.g. Vulkan over Meta Link)
@@ -1003,7 +998,6 @@ auto Xr_session::create_swapchains() -> bool
         };
 
         XrSwapchain color_xr_swapchain{XR_NULL_HANDLE};
-        check_gl_context_in_current_in_this_thread();
         const XrResult color_result = xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_xr_swapchain);
         if (color_result != XR_SUCCESS) {
             log_xr->error("xrCreateSwapchain() failed with error {}", c_str(color_result));
@@ -1025,7 +1019,6 @@ auto Xr_session::create_swapchains() -> bool
                 .arraySize   = 1,
                 .mipCount    = 1
             };
-            check_gl_context_in_current_in_this_thread();
             const XrResult depth_stencil_result = xrCreateSwapchain(m_xr_session, &depth_stencil_swapchain_create_info, &depth_stencil_xr_swapchain);
             if (depth_stencil_result != XR_SUCCESS) {
                 log_xr->error("xrCreateSwapchain() failed with error {}", c_str(depth_stencil_result));
@@ -1629,7 +1622,6 @@ auto Xr_session::begin_frame(const Frame_timing& timing) -> bool
     };
 
     {
-        check_gl_context_in_current_in_this_thread();
         log_xr->trace("xrBeginFrame()");
         const XrResult result = xrBeginFrame(m_xr_session, &frame_begin_info);
         if (result == XR_SESSION_LOSS_PENDING) {
@@ -2285,7 +2277,6 @@ auto Xr_session::create_quad_layer(uint32_t width, uint32_t height, const std::s
     };
 
     XrSwapchain color_xr_swapchain{XR_NULL_HANDLE};
-    check_gl_context_in_current_in_this_thread();
     const XrResult color_result = xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_xr_swapchain);
     if (color_result != XR_SUCCESS) {
         log_xr->error("create_quad_layer(): xrCreateSwapchain() failed with error {}", c_str(color_result));
@@ -2525,7 +2516,6 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     };
 
     if (rendered) {
-        check_gl_context_in_current_in_this_thread();
     }
     log_xr->trace("xrEndFrame");
     const XrResult result = xrEndFrame(m_xr_session, &frame_end_info);

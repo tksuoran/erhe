@@ -94,8 +94,6 @@ auto check(XrResult result, spdlog::level::level_enum log_level = spdlog::level:
 
 #define ERHE_XR_CHECK(xr_result) if (!check(xr_result)) { return false; }
 
-void check_gl_context_in_current_in_this_thread();
-
 class Hand_tracking_joint
 {
 public:
