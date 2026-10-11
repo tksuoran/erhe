@@ -9,7 +9,7 @@
     "use_draw_list_renderer": false,
     "frame_pacing_enforce": true,
     "frame_pacing_present_holdback": true,
-    "frame_pacing_tier": "off",
+    "frame_pacing_tier": "auto",
     "opengl": {
         "_version": 2,
         "force_bindless_textures_off": false,
