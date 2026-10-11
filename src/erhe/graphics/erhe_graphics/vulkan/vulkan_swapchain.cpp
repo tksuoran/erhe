@@ -10,6 +10,7 @@
 #   include "erhe_graphics/vulkan/vulkan_metal_layer_mac.hpp"
 #endif
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -1640,7 +1641,11 @@ auto Swapchain_impl::acquire_next_image(const uint64_t frame_id, uint32_t* index
     erhe::frame_pacing::Frame_time_recorder& recorder  = m_device_impl.get_frame_time_recorder();
     const std::int64_t                       record_id = static_cast<std::int64_t>(frame_id);
     recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_begin, erhe::frame_pacing::Frame_time_recorder::now());
-    VkResult result = vkAcquireNextImageKHR(vulkan_device, m_vulkan_swapchain, UINT64_MAX, frame.acquire_semaphore, acquire_fence, index);
+    VkResult result = VK_SUCCESS;
+    {
+        ERHE_PROFILE_SCOPE("vkAcquireNextImageKHR");
+        result = vkAcquireNextImageKHR(vulkan_device, m_vulkan_swapchain, UINT64_MAX, frame.acquire_semaphore, acquire_fence, index);
+    }
     recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_end, erhe::frame_pacing::Frame_time_recorder::now());
 
     if (has_maintenance1() && ((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR))) {

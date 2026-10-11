@@ -1852,6 +1852,7 @@ public:
         // Vulkan Swapchain_impl::end_frame assert would fire because no
         // render pass ever ran against the acquired image).
         if (should_render && !m_app_context.OpenXR) {
+            ERHE_PROFILE_SCOPE("begin_swapchain");
             const std::chrono::steady_clock::time_point begin_swapchain_begin = std::chrono::steady_clock::now();
             should_render = command_buffer.begin_swapchain(packet.frame_begin_info, frame_state);
             out_result.begin_swapchain_us = elapsed_us(begin_swapchain_begin, std::chrono::steady_clock::now());
