@@ -8,14 +8,6 @@
 
 namespace erhe::graphics {
 
-// Descriptor count of the set-1 combined-image-sampler array every texture
-// heap binds into (built in vulkan_device_init.cpp). It is the upper bound on
-// any one heap's max_textures, because a heap allocates a variable descriptor
-// count out of that layout. Sized for texture-heavy scenes (niagara_bistro
-// references 343 material textures) and well below the update-after-bind
-// minimum limits (500k desktop).
-inline constexpr uint32_t max_texture_heap_size = 4096;
-
 class Device_impl;
 
 class Texture_heap_impl final
@@ -78,7 +70,7 @@ protected:
     VkImageView                        m_fallback_view{VK_NULL_HANDLE};
     VkSampler                          m_fallback_vk_sampler{VK_NULL_HANDLE};
     std::vector<VkDescriptorImageInfo> m_scratch_image_infos; // batched fallback writes; capacity kept
-    // Bounded by max_texture_heap_size (vulkan_device.hpp), the descriptor
+    // Bounded by max_texture_heap_size (texture_heap.hpp), the descriptor
     // count of the set-1 layout this heap allocates from; the constructor
     // verifies it.
     std::size_t                        m_max_textures{max_texture_heap_size};

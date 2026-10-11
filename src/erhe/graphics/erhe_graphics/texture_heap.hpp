@@ -17,6 +17,19 @@ class Sampler;
 class Shader_resource;
 class Texture;
 
+// Descriptor count of the combined-image-sampler array every texture heap
+// binds into (Vulkan: set 1, built in vulkan_device_init.cpp). It is the upper
+// bound on any one heap's max_textures, because a heap allocates a variable
+// descriptor count out of that layout. Desktop: sized for texture-heavy scenes
+// (niagara_bistro references 343 material textures) and well below the
+// update-after-bind minimum limits (500k). Android: smaller, for the mobile
+// drivers' per-set descriptor memory.
+#if defined(ERHE_OS_ANDROID)
+inline constexpr uint32_t max_texture_heap_size = 1024;
+#else
+inline constexpr uint32_t max_texture_heap_size = 4096;
+#endif
+
 // Unified API for bindless textures and texture unit cache emulating bindless textures
 // using sampler arrays. Also candidate for future metal argument buffer / vulkan
 // descriptor indexing based implementations
@@ -39,7 +52,7 @@ public:
         // per-stage sampler limit and the bindless path grows on demand, so
         // there, as on Metal and null, it is accepted and ignored. Defaulted so
         // heaps that do not care keep their current calls.
-        std::size_t              max_textures = 4096
+        std::size_t              max_textures = max_texture_heap_size
     );
     ~Texture_heap() noexcept;
 

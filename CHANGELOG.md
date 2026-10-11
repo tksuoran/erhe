@@ -225,6 +225,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `max_texture_heap_size` moved from the Vulkan backend
+  header to `texture_heap.hpp` (public, 4096; 1024 on Android) and is the
+  default `Texture_heap` `max_textures`.
+
 - `erhe::graphics`: the Vulkan device is safe for the main role preparing
   frame N+1 while the render role renders frame N (`doc/erhe/graphics.md`
   "Thread safety"): `Device::get_frame_index()`, `is_frame_completed()`,

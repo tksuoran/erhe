@@ -190,7 +190,12 @@ auto Texture_heap_impl::allocate_new_set() -> VkDescriptorSet
 
     VkDevice vulkan_device = m_device_impl.get_vulkan_device();
 
-    uint32_t variable_count = static_cast<uint32_t>(m_max_textures);
+    // The driver's minimum wins over this heap's cap (the start-up probe in
+    // vulkan_device_init.cpp; Adreno refuses small variable counts).
+    uint32_t variable_count = std::max(
+        static_cast<uint32_t>(m_max_textures),
+        m_device_impl.get_texture_heap_variable_count_minimum()
+    );
     const VkDescriptorSetVariableDescriptorCountAllocateInfo variable_info{
         .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
         .pNext              = nullptr,
@@ -216,7 +221,10 @@ auto Texture_heap_impl::allocate_new_set() -> VkDescriptorSet
         allocate_info.descriptorPool = m_descriptor_pools.back();
         const VkResult result = vkAllocateDescriptorSets(vulkan_device, &allocate_info, &set);
         if (result != VK_SUCCESS) {
-            log_texture_heap->warn("vkAllocateDescriptorSets() failed with {} - creating a new pool", static_cast<int32_t>(result));
+            log_texture_heap->warn(
+                "vkAllocateDescriptorSets() failed with {} - creating a new pool (heap max_textures {}, pools {}, sets {}, sets in last pool {})",
+                static_cast<int32_t>(result), m_max_textures, m_descriptor_pools.size(), m_set_entries.size(), m_sets_in_last_pool
+            );
             m_sets_in_last_pool = s_sets_per_pool; // treat the pool as full (fragmented or otherwise unusable)
             set = VK_NULL_HANDLE;
         } else {
@@ -227,7 +235,7 @@ auto Texture_heap_impl::allocate_new_set() -> VkDescriptorSet
     if (set == VK_NULL_HANDLE) {
         const VkDescriptorPoolSize pool_size{
             .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = s_sets_per_pool * static_cast<uint32_t>(m_max_textures)
+            .descriptorCount = s_sets_per_pool * variable_count
         };
         const VkDescriptorPoolCreateInfo pool_create_info{
             .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -249,7 +257,10 @@ auto Texture_heap_impl::allocate_new_set() -> VkDescriptorSet
         allocate_info.descriptorPool = descriptor_pool;
         result = vkAllocateDescriptorSets(vulkan_device, &allocate_info, &set);
         if (result != VK_SUCCESS) {
-            log_texture_heap->error("vkAllocateDescriptorSets() failed with {}", static_cast<int32_t>(result));
+            log_texture_heap->error(
+                "vkAllocateDescriptorSets() failed with {} on a fresh pool (heap max_textures {}, variable count {}, pool descriptors {}, pools {}, sets {})",
+                static_cast<int32_t>(result), m_max_textures, variable_count, pool_size.descriptorCount, m_descriptor_pools.size(), m_set_entries.size()
+            );
             return VK_NULL_HANDLE;
         }
         ++m_sets_in_last_pool;
