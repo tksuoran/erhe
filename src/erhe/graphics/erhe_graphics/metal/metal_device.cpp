@@ -548,8 +548,8 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         return;
     }
 
-    // CPU-side wait phase: any wait_for_cpu(other) registered on the
-    // cbs in this batch translates into MTL::SharedEvent::waitUntilSignaledValue
+    // CPU-side wait phase: any wait_for_cpu_completion_of(producer)
+    // registered on the cbs in this batch translates into MTL::SharedEvent::waitUntilSignaledValue
     // before the cb is committed (Step 7).
     for (Command_buffer* const command_buffer : command_buffers) {
         ERHE_VERIFY(command_buffer != nullptr);

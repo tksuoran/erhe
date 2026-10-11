@@ -42,8 +42,8 @@ Xr_session::render_frame_multiview(setup_cb, callback)
   +-- xrLocateViews -> m_xr_views[0..1]
   +-- shared_color_swapchain.acquire() / wait()
   +-- shared_depth_stencil_swapchain.acquire() / wait()
-  +-- allocate views_cb; setup_cb.signal_gpu(views_cb); submit setup_cb
-  +-- views_cb.begin(); views_cb.wait_for_gpu(views_cb)
+  +-- allocate views_cb; setup_cb.signal_gpu_completion_to(views_cb); submit setup_cb
+  +-- views_cb.begin(); views_cb.wait_for_gpu_completion_signal()
   +-- callback(Render_views_frame { views,
   |                                  shared_color_texture,
   |                                  shared_depth_stencil_texture,

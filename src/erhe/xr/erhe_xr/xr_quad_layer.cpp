@@ -23,6 +23,7 @@ Quad_layer::Quad_layer(Xr_session& session, Swapchain&& swapchain, uint32_t widt
 
 Quad_layer::~Quad_layer() noexcept
 {
+    release_image();
     m_session.unregister_quad_layer(this);
 }
 
@@ -50,19 +51,20 @@ auto Quad_layer::acquire() -> erhe::graphics::Texture*
     }
 
     if (m_acquired_image.has_value()) {
-        // acquire() called twice without an intervening release(); reuse the
-        // already-acquired image rather than acquiring a second one.
+        // acquire() called twice in one frame; reuse the already-acquired
+        // image rather than acquiring a second one.
         log_xr->warn("Quad_layer::acquire() called while an image is already acquired");
         return m_acquired_image->get_texture();
     }
 
     std::optional<Swapchain_image> image = m_swapchain.acquire();
-    if (!image.has_value() || !m_swapchain.wait()) {
-        log_xr->warn("Quad_layer::acquire(): failed to acquire/wait swapchain image");
+    if (!image.has_value()) {
+        log_xr->warn("Quad_layer::acquire(): failed to acquire swapchain image");
         return nullptr;
     }
 
     m_acquired_image = std::move(image);
+    m_image_waited   = false;
     return m_acquired_image->get_texture();
 }
 
@@ -71,9 +73,36 @@ void Quad_layer::release()
     if (!m_acquired_image.has_value()) {
         return;
     }
+    // The image stays acquired: Xr_session waits on it right before the
+    // submit that writes it (wait_image()) and releases it in end_frame()
+    // (release_image()).
+    m_rendered_this_frame = true;
+}
+
+auto Quad_layer::wait_image() -> bool
+{
+    if (!m_acquired_image.has_value() || m_image_waited) {
+        return true;
+    }
+    ERHE_PROFILE_FUNCTION();
+    if (!m_swapchain.wait()) {
+        log_xr->warn("Quad_layer::wait_image(): xrWaitSwapchainImage failed");
+        return false;
+    }
+    m_image_waited = true;
+    return true;
+}
+
+void Quad_layer::release_image()
+{
+    if (!m_acquired_image.has_value()) {
+        return;
+    }
+    // xrReleaseSwapchainImage requires the image to have been waited on.
+    static_cast<void>(wait_image());
     // Swapchain_image's destructor calls Swapchain::release().
     m_acquired_image.reset();
-    m_rendered_this_frame = true;
+    m_image_waited = false;
 }
 
 void Quad_layer::set_visible(bool visible)

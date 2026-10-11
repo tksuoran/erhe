@@ -1820,26 +1820,37 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
     // is a fan-out from setup -- no inter-view chain.
     //
     // Order:
-    //   1. Allocate per-view cbs and register signal_gpu on setup cb
-    //      for each one. After setup_cb's submit fires, every per-view
-    //      cb's implicit GPU primitive is signaled.
+    //   1. Allocate per-view cbs and register signal_gpu_completion_to
+    //      on setup cb for each one. After setup_cb's submit fires,
+    //      every per-view cb's implicit GPU primitive is signaled.
     //   2. End + submit setup_cb. The GPU starts consuming the pre-view
     //      work immediately.
-    //   3. Per-view loop: wait on the swapchain image (CPU-blocking, but
-    //      now overlapped with setup-cb GPU execution), begin the per-view
-    //      cb, register wait_for_gpu on its own GPU primitive, run the
+    //   3. Per-view loop: acquire the swapchain images (this yields the
+    //      image index, so the textures are known), begin the per-view
+    //      cb, register wait_for_gpu_completion_signal, run the
     //      callback (which records the view's render passes into this cb),
-    //      end + submit. View 0's submit kicks GPU view rendering ASAP --
-    //      the CPU then records view 1 while GPU is consuming view 0, etc.
+    //      end, then xrWaitSwapchainImage on the color and depth images
+    //      and submit. The wait is deferred to the last possible moment:
+    //      recording only references the images, the GPU writes them
+    //      only once the cb is submitted, so the CPU-blocking wait
+    //      overlaps with recording the view as well as with the GPU
+    //      consuming setup / earlier views. View 0's submit kicks GPU
+    //      view rendering ASAP -- the CPU then records view 1 while GPU
+    //      is consuming view 0, etc.
     std::vector<erhe::graphics::Command_buffer*> view_cbs(view_count_output, nullptr);
     for (uint32_t i = 0; i < view_count_output; ++i) {
         view_cbs[i] = &m_graphics_device.get_command_buffer(/*thread_slot*/ 0);
-        // Make setup_cb's submit signal view_cbs[i]'s implicit GPU primitive.
-        // Each view gets its own signal -- binary semaphores can only be
+        // Producer side of the setup -> view GPU edge: when setup_cb's
+        // GPU work completes, signal view_cbs[i]'s GPU primitive. Each
+        // view gets its own signal -- binary semaphores can only be
         // waited on once, so a single-signal/N-wait scheme would not work.
-        command_buffer.signal_gpu(*view_cbs[i]);
+        command_buffer.signal_gpu_completion_to(*view_cbs[i]);
     }
     command_buffer.end();
+    // The setup cb may write quad layer swapchain images (UI recorded by
+    // rendergraph nodes that ran before the headset node); wait on them
+    // only now, right before the submit.
+    wait_quad_layer_images();
     {
         erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
         m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
@@ -1850,13 +1861,13 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
 
         auto& swapchains = m_view_swapchains[i];
         acquired_color_imgs[i] = swapchains.color_swapchain.acquire();
-        if (!acquired_color_imgs[i].has_value() || !swapchains.color_swapchain.wait()) {
+        if (!acquired_color_imgs[i].has_value()) {
             log_xr->warn("no swapchain color image for view {}", i);
             return false;
         }
 
         acquired_depth_imgs[i] = swapchains.depth_stencil_swapchain.acquire();
-        bool use_depth_image = acquired_depth_imgs[i].has_value() && swapchains.depth_stencil_swapchain.wait();
+        bool use_depth_image = acquired_depth_imgs[i].has_value();
         if (!use_depth_image) {
             log_xr->debug("no swapchain depth stencil image for view {}", i);
         }
@@ -1878,11 +1889,9 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
 
         erhe::graphics::Command_buffer& view_cb = *view_cbs[i];
         view_cb.begin();
-        // Wait on own GPU primitive (signaled by setup's submit registration
-        // above). Pairing: the matching signal target was view_cb itself,
-        // so the wait target is also view_cb -- "wait on the GPU primitive
-        // setup arranged for me".
-        view_cb.wait_for_gpu(view_cb);
+        // Consumer side of the same edge: before view_cb's GPU work
+        // starts, wait for the signal setup_cb registered on it above.
+        view_cb.wait_for_gpu_completion_signal();
 
         Render_view render_view{
             .slot      = i,
@@ -1960,10 +1969,24 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             }
         };
 
-        // End + submit this view's cb immediately. vkQueueSubmit2 returns
-        // synchronously; the GPU starts consuming view i while the CPU
-        // proceeds to record view i+1.
+        // End this view's cb, then wait for the swapchain images only now,
+        // right before the submit that makes the GPU write them. Nothing
+        // above touched the image contents; recording merely referenced
+        // the textures.
         view_cb.end();
+        if (!swapchains.color_swapchain.wait()) {
+            log_xr->warn("wait for swapchain color image failed for view {}", i);
+            return false;
+        }
+        if (use_depth_image && !swapchains.depth_stencil_swapchain.wait()) {
+            log_xr->warn("wait for swapchain depth stencil image failed for view {}", i);
+            return false;
+        }
+        // Quad layer images acquired inside the view callback.
+        wait_quad_layer_images();
+
+        // Submit immediately. vkQueueSubmit2 returns synchronously; the GPU
+        // starts consuming view i while the CPU proceeds to record view i+1.
         erhe::graphics::Command_buffer* cbs[] = { &view_cb };
         m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
     }
@@ -2034,11 +2057,15 @@ auto Xr_session::render_frame_multiview(
     m_xr_composition_layer_projection_views.resize(view_count);
     m_xr_composition_layer_depth_infos     .resize(view_count);
 
-    // Acquire the single shared color and depth swapchain images.
+    // Acquire the single shared color and depth swapchain images. The
+    // xrWaitSwapchainImage calls are deferred to just before the submit
+    // below (matches render_frame()): acquire yields the image index and
+    // thus the textures, recording only references them, and the GPU
+    // writes them only once views_cb is submitted.
     // Acquired-image optionals live at function scope so their destructors
     // run after submit (matches the per-view path's reasoning).
     std::optional<Swapchain_image> acquired_color = m_shared_color_swapchain->acquire();
-    if (!acquired_color.has_value() || !m_shared_color_swapchain->wait()) {
+    if (!acquired_color.has_value()) {
         log_xr->warn("multiview: no shared color swapchain image");
         return false;
     }
@@ -2046,7 +2073,7 @@ auto Xr_session::render_frame_multiview(
     bool use_depth_image = false;
     if (m_shared_depth_stencil_swapchain.has_value()) {
         acquired_depth = m_shared_depth_stencil_swapchain->acquire();
-        use_depth_image = acquired_depth.has_value() && m_shared_depth_stencil_swapchain->wait();
+        use_depth_image = acquired_depth.has_value();
         if (!use_depth_image) {
             log_xr->debug("multiview: no shared depth swapchain image");
         }
@@ -2071,19 +2098,24 @@ auto Xr_session::render_frame_multiview(
         }
     }
 
-    // Single per-frame view command buffer: setup_cb signals views_cb's
-    // implicit GPU primitive; views_cb wait_for_gpu's it. Same fan-out
-    // pattern as render_frame() but with one fanout instead of N.
+    // Single per-frame view command buffer. Same setup -> view GPU edge
+    // as render_frame() but with one consumer instead of N.
     erhe::graphics::Command_buffer& views_cb = m_graphics_device.get_command_buffer(/*thread_slot*/ 0);
-    command_buffer.signal_gpu(views_cb);
+    // Producer side: when setup_cb's GPU work completes, signal
+    // views_cb's GPU primitive.
+    command_buffer.signal_gpu_completion_to(views_cb);
     command_buffer.end();
+    // Quad layer images written by the setup cb (see render_frame()).
+    wait_quad_layer_images();
     {
         erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
         m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
     }
 
     views_cb.begin();
-    views_cb.wait_for_gpu(views_cb);
+    // Consumer side: before views_cb's GPU work starts, wait for the
+    // signal setup_cb registered on it above.
+    views_cb.wait_for_gpu_completion_signal();
 
     Render_views_frame frame;
     frame.shared_color_texture         = color_texture;
@@ -2182,7 +2214,19 @@ auto Xr_session::render_frame_multiview(
         };
     }
 
+    // End the cb, then wait for the shared swapchain images only now,
+    // right before the submit that makes the GPU write them.
     views_cb.end();
+    if (!m_shared_color_swapchain->wait()) {
+        log_xr->warn("multiview: wait for shared color swapchain image failed");
+        return false;
+    }
+    if (use_depth_image && !m_shared_depth_stencil_swapchain->wait()) {
+        log_xr->warn("multiview: wait for shared depth swapchain image failed");
+        return false;
+    }
+    // Quad layer images acquired inside the views callback.
+    wait_quad_layer_images();
     {
         erhe::graphics::Command_buffer* cbs[] = { &views_cb };
         m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
@@ -2264,6 +2308,22 @@ void Xr_session::unregister_quad_layer(Quad_layer* quad_layer)
     );
 }
 
+void Xr_session::wait_quad_layer_images()
+{
+    for (Quad_layer* quad_layer : m_quad_layers) {
+        // A failed wait is logged by Quad_layer; the frame goes on, the
+        // layer's image is still released in end_frame().
+        static_cast<void>(quad_layer->wait_image());
+    }
+}
+
+void Xr_session::release_quad_layer_images()
+{
+    for (Quad_layer* quad_layer : m_quad_layers) {
+        quad_layer->release_image();
+    }
+}
+
 auto Xr_session::end_frame(const bool rendered) -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -2271,6 +2331,13 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
+
+    // Every command buffer of this frame has been submitted by now
+    // (render_frame() / render_frame_multiview() submit theirs; a frame
+    // that did not render submits nothing that writes these images), so
+    // release the quad layer swapchain images before xrEndFrame references
+    // them in the quad composition layers below.
+    release_quad_layer_images();
 
     if (m_xr_composition_layer_projection_views.empty()) {
         // This can happen

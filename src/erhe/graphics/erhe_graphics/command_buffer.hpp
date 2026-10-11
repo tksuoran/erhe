@@ -60,36 +60,44 @@ public:
     void               end_swapchain     (const Frame_end_info& frame_end_info);
 
     // Cross-Command_buffer synchronization. Each Command_buffer carries
-    // an implicit pair of GPU-side and CPU-side wait/signal primitives
-    // allocated by Device_impl when the cb is handed out by
-    // get_command_buffer(). The four methods below register dependency
-    // edges that the backend collects at submit time:
+    // an implicit GPU-side primitive (Vulkan: binary VkSemaphore;
+    // Metal: MTL::Event) and an implicit CPU-observable primitive
+    // (Vulkan: VkFence; Metal: MTL::SharedEvent), allocated by
+    // Device_impl when the cb is handed out by get_command_buffer().
+    // The primitives are never exposed; the four methods below register
+    // dependency edges that the backend collects at submit time.
     //
-    //   wait_for_gpu(other)  -- this cb's GPU work waits on other's
-    //                           GPU-completion (no CPU stall).
-    //                           Vulkan: VkSemaphore wait. Metal:
-    //                           encodeWaitForEvent on MTL::Event.
-    //   signal_gpu  (other)  -- this cb signals other's GPU-side
-    //                           primitive when its GPU work completes.
-    //                           Vulkan: VkSemaphore signal. Metal:
-    //                           encodeSignalEvent on MTL::Event.
-    //   wait_for_cpu(other)  -- CPU-side block before this cb's submit
-    //                           is enqueued, until other's GPU work has
-    //                           completed. Vulkan: vkWaitForFences.
-    //                           Metal: MTL::SharedEvent::waitUntilSignaledValue.
-    //   signal_cpu  (other)  -- this cb's submit signals other's
-    //                           CPU-observable primitive on completion
-    //                           (only one signal_cpu per cb on Vulkan).
-    //                           Vulkan: VkFence on vkQueueSubmit2.
-    //                           Metal: MTL::SharedEvent encodeSignalEvent.
+    // A GPU-to-GPU edge from a producer cb to a consumer cb is two
+    // calls, one on each side. The primitive involved is the
+    // consumer's, so one producer can fan out to N consumers (a binary
+    // semaphore can be waited on once per signal):
     //
-    // The underlying primitives themselves are deliberately not exposed
-    // through the public API; callers only ever name another
-    // Command_buffer as the wait/signal target.
-    void wait_for_cpu(Command_buffer& other);
-    void wait_for_gpu(Command_buffer& other);
-    void signal_gpu  (Command_buffer& other);
-    void signal_cpu  (Command_buffer& other);
+    //   producer.signal_gpu_completion_to(consumer)
+    //       When my GPU work completes, signal consumer's GPU primitive.
+    //       Vulkan: VkSemaphore signal on my submit. Metal:
+    //       encodeSignalEvent on consumer's MTL::Event.
+    //   consumer.wait_for_gpu_completion_signal()
+    //       Before my GPU work starts, wait for the signal a producer
+    //       registered on me (no CPU stall). Vulkan: VkSemaphore wait
+    //       on my submit. Metal: encodeWait on my MTL::Event; call it
+    //       after begin() and before recording any work.
+    //
+    // A GPU-to-CPU edge uses the producer's primitive, so the signal
+    // side names nobody and the wait side names the producer:
+    //
+    //   producer.signal_cpu_completion()
+    //       Make my submit signal my CPU-observable primitive when my
+    //       GPU work completes. Vulkan: VkFence on vkQueueSubmit2
+    //       (one fence per submit, so at most one cb per submit batch
+    //       may call this). Metal: MTL::SharedEvent encodeSignalEvent.
+    //   consumer.wait_for_cpu_completion_of(producer)
+    //       Block the CPU before my submit is enqueued, until producer's
+    //       GPU work has completed. Vulkan: vkWaitForFences. Metal:
+    //       MTL::SharedEvent::waitUntilSignaledValue.
+    void signal_gpu_completion_to    (Command_buffer& consumer);
+    void wait_for_gpu_completion_signal();
+    void signal_cpu_completion       ();
+    void wait_for_cpu_completion_of  (Command_buffer& producer);
 
     // GPU-work primitives. These record commands into the cb's
     // backend command buffer. Each one used to live on Device and

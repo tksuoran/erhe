@@ -145,7 +145,7 @@ backend; **Partial** = present with a stated restriction; **No** = absent.
 | Command buffers | `agfxCommandBuffer` per queue; reset/begin/end | `Command_buffer` per (frame, thread slot); 8 thread slots |
 | Multithreaded recording | Not addressed (no locks in any backend) | Yes, thread slots; GL via shared worker contexts |
 | Queues | Graphics, compute, transfer with GPU signal/wait | One graphics queue plus present |
-| Fences | Timeline `agfxFence`, CPU wait and GPU signal/wait, user-managed values | Hidden per-command-buffer fences and semaphores; `wait_for_gpu` / `signal_gpu` dependencies; frame timeline semaphore |
+| Fences | Timeline `agfxFence`, CPU wait and GPU signal/wait, user-managed values | Hidden per-command-buffer fences and semaphores; `signal_gpu_completion_to` / `wait_for_gpu_completion_signal` dependencies; frame timeline semaphore |
 | Render pass | Dynamic rendering (`vkCmdBeginRendering`); 8 color + depth; load/store ops; no MSAA | `VkRenderPass` via `vkCreateRenderPass2`; 4 color + depth + stencil; load/store/resolve actions; MSAA with resolve modes; multiview; FDM |
 | Render target object | `agfxRenderTarget` wrapper per (texture, mip, layer), created per frame | Attachment fields in `Render_pass_descriptor` |
 | Barriers | Explicit resource-state transitions, memory barriers, buffer barriers, aliasing barriers, UAV barriers | Implicit from `usage_before/after`; `transition_texture_layout`, `cmd_texture_barrier`, `memory_barrier` for the rest |

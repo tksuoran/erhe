@@ -45,8 +45,8 @@ public:
     // when a cb engaged a swapchain via begin_swapchain.
     std::vector<Swapchain_impl*>           swapchains_to_present;
     // Single fence the submit signals on completion, if any.
-    // Populated from a Command_buffer_impl whose signal_cpu(...) was
-    // called; Vulkan's vkQueueSubmit2 only takes one fence per submit
+    // Populated from a Command_buffer_impl whose signal_cpu_completion()
+    // was called; Vulkan's vkQueueSubmit2 only takes one fence per submit
     // so collect_synchronization() asserts no other cb already set it.
     VkFence                                fence{VK_NULL_HANDLE};
 };
@@ -74,10 +74,10 @@ public:
     [[nodiscard]] auto begin_swapchain   (const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool;
     void               end_swapchain     (const Frame_end_info& frame_end_info);
 
-    void wait_for_cpu(Command_buffer& other);
-    void wait_for_gpu(Command_buffer& other);
-    void signal_gpu  (Command_buffer& other);
-    void signal_cpu  (Command_buffer& other);
+    void signal_gpu_completion_to    (Command_buffer& consumer);
+    void wait_for_gpu_completion_signal();
+    void signal_cpu_completion       ();
+    void wait_for_cpu_completion_of  (Command_buffer& producer);
 
     // GPU-work primitives that record into m_vk_command_buffer.
     // upload_* allocate a staging buffer, vkCmdCopyBuffer[ToImage]
@@ -130,7 +130,7 @@ public:
     [[nodiscard]] auto get_implicit_fence    () const noexcept -> VkFence;
 
     // CPU-side wait phase of submit. Performs vkWaitForFences on every
-    // fence registered via wait_for_cpu(other) before the cb's submit
+    // fence registered via wait_for_cpu_completion_of(producer) before the cb's submit
     // is enqueued. Called by Device_impl::submit_command_buffers prior
     // to building VkSubmitInfo2.
     void pre_submit_wait();
@@ -138,12 +138,13 @@ public:
     // Append this cb's wait/signal/command-buffer submit-info entries to
     // the supplied aggregate. Adds:
     //  - this cb's VkCommandBufferSubmitInfo,
-    //  - other's implicit_semaphore for each wait_for_gpu(other),
-    //  - other's implicit_semaphore for each signal_gpu(other),
+    //  - this cb's own implicit_semaphore as a wait when
+    //    wait_for_gpu_completion_signal() was called,
+    //  - consumer's implicit_semaphore for each signal_gpu_completion_to(consumer),
     //  - the swapchain acquire-semaphore (wait) and present-semaphore
     //    (signal) when this cb engaged a swapchain via begin_swapchain,
-    //  - other's implicit_fence as submit_info.fence when
-    //    signal_cpu(other) was called (asserting no other cb already
+    //  - this cb's own implicit_fence as submit_info.fence when
+    //    signal_cpu_completion() was called (asserting no other cb already
     //    set it; vkQueueSubmit2 takes only one fence per submit).
     void collect_synchronization(Vulkan_submit_info& submit_info);
 
@@ -162,10 +163,18 @@ private:
     VkSemaphore                m_implicit_semaphore{VK_NULL_HANDLE};
     VkFence                    m_implicit_fence    {VK_NULL_HANDLE};
 
-    std::vector<Command_buffer*> m_wait_for_cpu_list;
-    std::vector<Command_buffer*> m_wait_for_gpu_list;
-    std::vector<Command_buffer*> m_signal_gpu_list;
-    std::vector<Command_buffer*> m_signal_cpu_list;
+    // Producers whose implicit fence this cb's submit blocks on
+    // (wait_for_cpu_completion_of).
+    std::vector<Command_buffer*> m_wait_for_cpu_producers;
+    // Consumers whose implicit semaphore this cb's submit signals
+    // (signal_gpu_completion_to).
+    std::vector<Command_buffer*> m_signal_gpu_consumers;
+    // This cb's submit waits on its own implicit semaphore
+    // (wait_for_gpu_completion_signal).
+    bool                         m_wait_for_own_gpu_signal{false};
+    // This cb's submit signals its own implicit fence
+    // (signal_cpu_completion).
+    bool                         m_signal_own_cpu_completion{false};
 
     // Set by begin_swapchain when the per-frame swapchain lookup
     // succeeds. Cleared after collect_synchronization spliced the

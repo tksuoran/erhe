@@ -206,7 +206,7 @@ is no `Device::present()`: present is implicit in submit.
   next swapchain image, acquire it, and bind the per-slot acquire/present
   semaphores to this command buffer.
 - **`submit_command_buffers(span)`** -- performs any CPU-side `vkWaitForFences`
-  for registered `wait_for_cpu` dependencies, splices all wait/signal semaphores
+  for registered `wait_for_cpu_completion_of` dependencies, splices all wait/signal semaphores
   into one `VkSubmitInfo2`, runs `vkQueueSubmit2`, then drives
   `vkQueuePresentKHR` for every swapchain a command buffer engaged via
   `begin_swapchain`.
@@ -218,8 +218,9 @@ is no `Device::present()`: present is implicit in submit.
 The backend keeps `s_number_of_frames_in_flight = 2` frames in flight across
 `s_number_of_thread_slots = 8` thread slots. Command pools are created with
 `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT` and reset wholesale (never per buffer).
-`Command_buffer_impl` synchronization is recorded as `wait_for_cpu` /
-`wait_for_gpu` / `signal_gpu` / `signal_cpu` and collected into a
+`Command_buffer_impl` synchronization is recorded as
+`signal_gpu_completion_to` / `wait_for_gpu_completion_signal` /
+`signal_cpu_completion` / `wait_for_cpu_completion_of` and collected into a
 `Vulkan_submit_info` at submit time.
 
 ## Descriptor and binding model

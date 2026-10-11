@@ -123,10 +123,18 @@ The contract for each entry point:
   fence + binary semaphore back into `Device_sync_pool`.
 - `get_command_buffer(thread_slot)` -- allocate a fresh primary cb
   from the slot's per-thread pool. The wrapper carries an implicit
-  fence + binary semaphore (used by `Command_buffer::wait_for_cpu` /
-  `wait_for_gpu` / `signal_cpu` / `signal_gpu`, which name another
-  `Command_buffer` as the target). Lifetime is tied to the next
-  pool reset for this slot.
+  fence + binary semaphore, never exposed, used by the four
+  synchronization methods. A GPU-to-GPU edge is
+  `producer.signal_gpu_completion_to(consumer)` (when the producer's
+  GPU work completes, signal the consumer's semaphore) paired with
+  `consumer.wait_for_gpu_completion_signal()` (before the consumer's
+  GPU work starts, wait on its own semaphore); the primitive is the
+  consumer's, so one producer fans out to N consumers. A GPU-to-CPU
+  edge is `producer.signal_cpu_completion()` (the producer's submit
+  signals its own fence) paired with
+  `consumer.wait_for_cpu_completion_of(producer)` (block the CPU
+  before the consumer's submit until the producer's fence is
+  signaled). Lifetime is tied to the next pool reset for this slot.
 - `Command_buffer::wait_for_swapchain(out_frame_state)` /
   `begin_swapchain(info, out_frame_state)` -- wait on the next
   swapchain image to be acquirable, then acquire it and bind the
@@ -138,7 +146,7 @@ The contract for each entry point:
   per render pass is the recommended pattern.
 - `submit_command_buffers(span)` -- submit. Walks each cb,
   performs CPU-side `vkWaitForFences` for any
-  `wait_for_cpu(other)` registered, splices the wait/signal
+  `wait_for_cpu_completion_of(producer)` registered, splices the wait/signal
   semaphores into a single `VkSubmitInfo2`, runs `vkQueueSubmit2`,
   and finally drives `vkQueuePresentKHR` / `swap_buffers` /
   `presentDrawable` on every swapchain whose cb engaged it via

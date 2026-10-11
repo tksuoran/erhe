@@ -54,7 +54,7 @@ sizes, MSAA, reverse-depth, etc.
 | `SDL_AcquireGPUCommandBuffer(device)` | `Device::get_command_buffer(thread_slot)`; `Command_buffer::begin()` |
 | record passes into the command buffer | encoders from `Device::make_render_command_encoder` / `make_blit_command_encoder` / `make_compute_command_encoder` |
 | `SDL_SubmitGPUCommandBuffer(cmd)` | `Command_buffer::end()` + `Device::submit_command_buffers({&cb})` |
-| `SDL_SubmitGPUCommandBufferAndAcquireFence` | `Command_buffer` GPU/CPU wait/signal helpers (`wait_for_gpu`, `signal_cpu`, ...) |
+| `SDL_SubmitGPUCommandBufferAndAcquireFence` | `Command_buffer` GPU/CPU wait/signal helpers (`signal_gpu_completion_to`, `signal_cpu_completion`, ...) |
 | `SDL_WaitForGPUIdle` | `Device::wait_idle()` |
 | `SDL_CancelGPUCommandBuffer` | drop the `Command_buffer` without submitting |
 

@@ -61,24 +61,24 @@ void Command_buffer::end_swapchain(const Frame_end_info& frame_end_info)
     m_impl->end_swapchain(frame_end_info);
 }
 
-void Command_buffer::wait_for_cpu(Command_buffer& other)
+void Command_buffer::signal_gpu_completion_to(Command_buffer& consumer)
 {
-    m_impl->wait_for_cpu(other);
+    m_impl->signal_gpu_completion_to(consumer);
 }
 
-void Command_buffer::wait_for_gpu(Command_buffer& other)
+void Command_buffer::wait_for_gpu_completion_signal()
 {
-    m_impl->wait_for_gpu(other);
+    m_impl->wait_for_gpu_completion_signal();
 }
 
-void Command_buffer::signal_gpu(Command_buffer& other)
+void Command_buffer::signal_cpu_completion()
 {
-    m_impl->signal_gpu(other);
+    m_impl->signal_cpu_completion();
 }
 
-void Command_buffer::signal_cpu(Command_buffer& other)
+void Command_buffer::wait_for_cpu_completion_of(Command_buffer& producer)
 {
-    m_impl->signal_cpu(other);
+    m_impl->wait_for_cpu_completion_of(producer);
 }
 
 void Command_buffer::upload_to_buffer(const Buffer& buffer, std::size_t offset, const void* data, std::size_t length)

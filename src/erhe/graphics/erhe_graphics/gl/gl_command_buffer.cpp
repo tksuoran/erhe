@@ -93,25 +93,25 @@ void Command_buffer_impl::end_swapchain(const Frame_end_info& /*frame_end_info*/
     // Swapchain_impl::end_frame.
 }
 
-void Command_buffer_impl::wait_for_cpu(Command_buffer& /*other*/)
+void Command_buffer_impl::signal_gpu_completion_to(Command_buffer& /*consumer*/)
+{
+    // GL has no equivalent of Vulkan binary semaphores in this layer.
+}
+
+void Command_buffer_impl::wait_for_gpu_completion_signal()
+{
+    // GL has no equivalent of Vulkan binary semaphores in this layer.
+}
+
+void Command_buffer_impl::signal_cpu_completion()
+{
+    // GL has no implicit per-cb fence; iteration target if needed.
+}
+
+void Command_buffer_impl::wait_for_cpu_completion_of(Command_buffer& /*producer*/)
 {
     // GL serializes through the driver-managed command stream; explicit
     // cross-cb CPU waits are a no-op for now.
-}
-
-void Command_buffer_impl::wait_for_gpu(Command_buffer& /*other*/)
-{
-    // GL has no equivalent of Vulkan binary semaphores in this layer.
-}
-
-void Command_buffer_impl::signal_gpu(Command_buffer& /*other*/)
-{
-    // GL has no equivalent of Vulkan binary semaphores in this layer.
-}
-
-void Command_buffer_impl::signal_cpu(Command_buffer& /*other*/)
-{
-    // GL has no implicit per-cb fence; iteration target if needed.
 }
 
 // GL has no native command buffer, so the recording state lives on
