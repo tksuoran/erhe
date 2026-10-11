@@ -44,17 +44,19 @@ Grouped by production site. "Consumer" names the pacer interface call ([algorith
 | Deadline offset initial | `delta_hat_pe` | Constant (2.5 ms), then refined from feedback (section 3.4) | `presentMargin` / `earliestPresentTime` from GOOGLE past timing | Pacer-internal | - |
 | Application minimum cadence | `N_min` | Application | Application | App layer (e.g. paused-screen state in the editor) -> `set_min_vsyncs()` | On change |
 
-### 3.2 Per-frame CPU events (reference clock, same thread, immediate)
+### 3.2 Per-frame CPU events (reference clock, immediate)
 
-All produced by instrumentation in the reference domain; consumed as frame-record entries and, where noted, by pacer calls.
+All produced by instrumentation in the reference domain; consumed as frame-record entries and, where noted, by pacer calls. In the editor they come from two threads: the main thread (M1 and M2) and the render thread (R), which write the frame time records concurrently (`Frame_time_recorder` locks every access); [requirements.md](requirements.md) "Frame phases" names the thread of each.
 
-**Normative - `c_k` is a service time.** The value fed to `on_cpu_done()` is the CPU slot span **minus** the involuntary waits recorded inside it (pacer wait, fence waits, acquire wait). The raw span and each wait are recorded separately in the frame records; the subtraction happens at the pacer boundary. Feeding the raw span would contaminate the outer-loop statistic `W` with wait time caused by pacing and GPU state - a cross-loop feedback coupling whose failure mode is spurious downshift. The verification simulation uses pure service times; this definition is a parity requirement for the C++ port.
+**Normative - `c_k` is a service time.** The value fed to `on_cpu_done()` is the CPU slot span **minus** the involuntary waits recorded inside it (pacer wait, present wait, join wait, fence waits, acquire wait). In the editor the slot spans M1 + M2 + R, so it contains the main thread's join wait for R of the previous frame, the longer the earlier the release gate lets M1 start. The raw span and each wait are recorded separately in the frame records; the subtraction happens at the pacer boundary. Feeding the raw span would contaminate the outer-loop statistic `W` with wait time caused by pacing and GPU state - a cross-loop feedback coupling whose failure mode is spurious downshift. The verification simulation uses pure service times; this definition is a parity requirement for the C++ port.
 
 | Input / record event | Source | erhe integration site | Consumer |
 |---|---|---|---|
-| `now` at schedule | QPC read | Pacer call site in the editor main loop | `schedule()` |
-| Pacer wait begin/end (= release `r_k` actual) | Around the pacer-mandated wait | Editor run loop (`src/editor/editor.cpp`), before per-frame work | `schedule()` return -> wait; wait-end timestamp feeds `L_k` |
-| CPU slot begin/end (`c_k`) | Tick bracket | `Device::begin_frame`/`end_frame` (`device.hpp:336-343`) bracket the graphics frame; CPU slot spans the app tick around them | `on_cpu_done()` |
+| `now` at schedule | QPC read | Pacer call site in `Editor::frame_start_pacing()` (M1, main thread), after `Device::wait_for_frame_start` | `schedule()` |
+| Pacer wait begin/end (= release `r_k` actual) | Around the FR2 release gate | `Editor::frame_start_pacing()` (`src/editor/editor.cpp`, M1, main thread), before `Time::prepare_update` | `schedule()` return -> wait; wait-end timestamp feeds `L_k` |
+| Present wait begin/end | Around the FR5 present-wait clamp | `Editor::present_wait_clamp()` (R, render thread), before the swapchain wait | Frame record; involuntary wait, excluded from CPU service time |
+| Join wait begin/end | Around the main thread's join of the previous frame's render phase | `Editor::frame()` (end of M1, main thread), around `join_outstanding_frame()` | Frame record; involuntary wait, excluded from CPU service time |
+| CPU slot begin/end (`c_k`) | Tick bracket | `Device::wait_for_frame_start` stamps CPU slot begin (main thread, M1), `Device::end_frame` stamps CPU slot end (render thread, R) | `on_cpu_done()` |
 | Fence wait begin/end | Around `vkWaitForFences` | `vulkan_command_buffer.cpp:228` (pre-submit wait), `vulkan_device.cpp:92` (frame-in-flight fence) | Frame record; part of measured `L_k` |
 | Acquire begin/end | Around `vkAcquireNextImageKHR` | Swapchain path in `Command_buffer::begin_swapchain` (`vulkan_command_buffer.cpp:714-754`) | Frame record |
 | Submit timestamp | At `vkQueueSubmit` | Submit path `vulkan_device.cpp:1174-1232` | Frame record |
@@ -65,7 +67,7 @@ All produced by instrumentation in the reference domain; consumed as frame-recor
 
 | Input | Symbol | Source | erhe integration site | Consumer | Latency |
 |---|---|---|---|---|---|
-| GPU frame begin/end | `g_k`, `gpu_end` | **Dedicated frame-spanning timestamp bracket**: `vkCmdWriteTimestamp` in the frame's first submitted command buffer and in the last one before present (the `Gpu_timer` objects are per-render-pass and span no frame; this bracket is separate); results via non-blocking `vkGetQueryPoolResults` (`WITH_AVAILABILITY`, no `WAIT`) **polled at every schedule point**; ticks -> reference clock via `timestampPeriod` + calibrated timestamps | Dedicated query-pool ring in the Vulkan device; per-pass timers stay on the lazy collect path, because they feed profiling, not control | `on_gpu_done()` | **Nominal: first schedule point after GPU finish (~= 1 frame) - what claims C1-C8 assume.** Lazy fence-read fallback (~= `F` frames) degrades gracefully: verified C9 (step disruption 7 vs. 6 frames, settle 227 ms vs. 193 ms, no oscillation) |
+| GPU frame begin/end | `g_k`, `gpu_end` | **Dedicated frame-spanning timestamp bracket**: `vkCmdWriteTimestamp` at the `vkBeginCommandBuffer` of the frame's first command buffer (begin) and in a device-owned frame-end command buffer that `Device::end_frame` submits with the frame's timeline signal, after every other submit of the frame on the queue (end) (the `Gpu_timer` objects are per-render-pass and span no frame; this bracket is separate); results via non-blocking `vkGetQueryPoolResults` (`WITH_AVAILABILITY`, no `WAIT`) **polled at every schedule point**; ticks -> reference clock via `timestampPeriod` + calibrated timestamps | Dedicated query-pool ring in the Vulkan device; per-pass timers stay on the lazy collect path, because they feed profiling, not control | `on_gpu_done()` | **Nominal: first schedule point after GPU finish (~= 1 frame) - what claims C1-C8 assume.** Lazy fence-read fallback (~= `F` frames) degrades gracefully: verified C9 (step disruption 7 vs. 6 frames, settle 227 ms vs. 193 ms, no oscillation) |
 | Chain latency | `L_k` | Derived: calibrated `gpu_end` - pacer-wait-end | Pacer-internal | `on_gpu_done()` | with `gpu_end` |
 | Believed slack | `s_k` | Derived: `d_k - gpu_end` | Pacer-internal | margin AIMD, miss taxonomy | with `gpu_end` |
 
@@ -86,10 +88,10 @@ Notes on `g_k` fidelity:
 
 | Output | Mechanism, Tier W | Mechanism, Tier A | erhe integration site |
 |---|---|---|---|
-| Release gating (FR2) | Wait until `release_time` on `erhe::time::Waitable_timer` (`CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`); measured wake error p99 0.59 ms, which is what sets `guard` = 1 ms. `std::this_thread::sleep_for` is unusable here (p99 wake error 15.3 ms) | `clock_nanosleep`-class wait | Editor run loop |
+| Release gating (FR2) | Wait until `release_time` on `erhe::time::Waitable_timer` (`CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`); measured wake error p99 0.59 ms, which is what sets `guard` = 1 ms. `std::this_thread::sleep_for` is unusable here (p99 wake error 15.3 ms) | `clock_nanosleep`-class wait | `Editor::frame_start_pacing()` (M1, main thread) |
 | Target present time (FR3) | Present-timing info chained to `vkQueuePresentKHR`: target = `V_hat(j_k)` at the chosen present stage, plus the C15 request holdback where the engine ignores the target | `VkPresentTimesInfoGOOGLE.desiredPresentTime = V_hat(j_k)` ("no earlier than" semantics) | Present drive in the Vulkan device |
-| Present-wait clamp (FR5) | `vkWaitForPresentKHR(swapchain, presentId = k - 1 - Q*, timeout)` before releasing frame k | same where available | Executed as part of the pacer wait, editor loop |
-| Predicted display time (FR4) | `schedule()` return `{predicted_display, predicted_duration}` | same | Editor tick: replaces wall-clock sampling for animation/simulation time |
+| Present-wait clamp (FR5) | `vkWaitForPresentKHR(swapchain, presentId = k - 1 - Q*, timeout)` before releasing frame k | same where available | Executed at the start of the render phase, `Editor::frame_render_phase()` (R, render thread), with the wait id M1's decision put into the frame packet |
+| Predicted display time (FR4) | `schedule()` return `{predicted_display, predicted_duration}` | same | Routed to `Time::prepare_update` of the next frame's M1 and to that frame's animation update ([requirements.md](requirements.md) "Frame phases") |
 | OFF mode | release = now, no target time, no waits | same | Pacer-internal degradation |
 
 ### 3.6 Validation signals (not control inputs)

@@ -201,8 +201,12 @@ auto resolve_material_asset_references(
                 );
                 continue;
             }
+            // The uid is optional: a missing or non-string uid leaves it empty.
             std::string_view uid;
-            static_cast<void>(extension_object.at_key("uid").get_string().get(uid));
+            const simdjson::error_code uid_error = extension_object.at_key("uid").get_string().get(uid);
+            if (uid_error != simdjson::SUCCESS) {
+                uid = std::string_view{};
+            }
 
             Asset_key key{
                 .scope = Asset_scope::file,

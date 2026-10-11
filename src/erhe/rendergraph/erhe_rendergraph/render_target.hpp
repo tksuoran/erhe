@@ -43,6 +43,7 @@ public:
     void update          (int width, int height, erhe::graphics::Swapchain* swapchain);
     void reconfigure     (int sample_count);
 
+    [[nodiscard]] auto get_sample_count         () const -> int;
     [[nodiscard]] auto get_color_texture        () const -> const std::shared_ptr<erhe::graphics::Texture>&;
     [[nodiscard]] auto get_depth_stencil_texture() const -> erhe::graphics::Texture*;
     [[nodiscard]] auto get_render_pass          () const -> erhe::graphics::Render_pass*;

@@ -26,7 +26,12 @@ public:
     );
     ~Brush_preview() noexcept;
 
+    // Both overloads record into command_buffer: the frame command buffer
+    // when called from a Thumbnails::update() callback (render phase), the
+    // upload command buffer (App_context::current_command_buffer) when
+    // called from the prepare phase.
     void render_preview(
+        erhe::graphics::Command_buffer&                 command_buffer,
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         unsigned int                                    texture_layer,
         const std::shared_ptr<Brush>&                   brush,
@@ -49,6 +54,7 @@ public:
     // the SOLID_WIREFRAME variant (Device_info::use_solid_wireframe) or
     // the primitive was built without the expanded fill stream.
     void render_preview(
+        erhe::graphics::Command_buffer&                    command_buffer,
         const std::shared_ptr<erhe::graphics::Texture>&    texture,
         unsigned int                                       texture_layer,
         const std::shared_ptr<erhe::primitive::Primitive>& primitive,

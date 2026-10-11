@@ -87,7 +87,6 @@ class Frame_log_window : public Imgui_window
 public:
     Frame_log_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows, Logs& logs);
     void imgui() override;
-    void on_frame_begin();
     void on_frame_end();
 
 private:

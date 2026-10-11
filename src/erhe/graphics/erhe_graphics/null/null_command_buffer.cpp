@@ -18,6 +18,16 @@ auto Command_buffer_impl::get_debug_label() const noexcept -> erhe::utility::Deb
     return m_debug_label;
 }
 
+auto Command_buffer_impl::get_frame_id() const noexcept -> std::uint64_t
+{
+    return m_frame_id;
+}
+
+void Command_buffer_impl::set_frame_id(const std::uint64_t frame_id) noexcept
+{
+    m_frame_id = frame_id;
+}
+
 void Command_buffer_impl::begin()
 {
     // Stub: iteration target.

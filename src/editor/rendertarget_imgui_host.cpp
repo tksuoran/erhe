@@ -13,7 +13,6 @@
 #endif
 
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/scoped_imgui_context.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -544,12 +543,13 @@ void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_b
 
     SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host::execute_rendergraph_node()");
 
-    if (!m_enabled) {
-        return;
-    }
+    // Runs only in frames whose prepare phase found the host enabled
+    // (Rendergraph::execute(), Quad_view::set_visible()).
 
-    erhe::imgui::Imgui_host& imgui_host = *this;
-    erhe::imgui::Scoped_imgui_context imgui_context{imgui_host};
+    // The frame's draw data copy: made by the main thread's ImGui phase,
+    // which may run while this frame renders. No ImGui context is touched
+    // here (Window_imgui_host::execute_rendergraph_node).
+    m_app_context.imgui_renderer->wait_for_draw_data();
 
     // Process pending ImGui texture create/update/destroy BEFORE opening
     // the render pass -- Blit_command_encoder (used for texture uploads)
@@ -563,7 +563,7 @@ void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_b
     if (render_pass != nullptr) {
         erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
-        m_app_context.imgui_renderer->render_draw_data(render_encoder, *render_pass);
+        m_app_context.imgui_renderer->render_draw_data(render_encoder, *render_pass, get_draw_data());
     }
     // finish_render() may issue a blit (generate_mipmaps), which cannot be
     // recorded inside an active Vulkan render pass -- must run after

@@ -170,11 +170,9 @@ void Frame_pacing_window::collect(
         if ((sample == nullptr) || sample->complete) {
             continue;
         }
-        const erhe::frame_pacing::Frame_time_record* const record = recorder.find(frame_id);
-        if (record != nullptr) {
-            sample->record = *record;
-            if (record->achieved_present_time > 0.0) {
-                m_grid_phase_time = std::max(m_grid_phase_time, record->achieved_present_time);
+        if (recorder.get(frame_id, sample->record)) {
+            if (sample->record.achieved_present_time > 0.0) {
+                m_grid_phase_time = std::max(m_grid_phase_time, sample->record.achieved_present_time);
             }
         }
         if (pacer != nullptr) {
@@ -581,6 +579,8 @@ void Frame_pacing_window::frame_tooltip(const Frame_sample& sample, const char* 
         ImGui::TextDisabled("cpu slot begin, ms (-1 = not recorded)");
         row("cpu slot",         "%.3f .. %.3f (service %.3f)", 0.0, rel_ms(r.cpu_slot_end), r.cpu_service_time() * 1000.0);
         row("pacer wait",       "%.3f .. %.3f", rel_ms(r.pacer_wait_begin), rel_ms(r.pacer_wait_end));
+        row("present wait",     "%.3f .. %.3f", rel_ms(r.present_wait_begin), rel_ms(r.present_wait_end));
+        row("join wait",        "%.3f .. %.3f", rel_ms(r.join_wait_begin), rel_ms(r.join_wait_end));
         row("fence waits",      "%.3f (accumulated)", r.fence_wait_duration * 1000.0);
         row("acquire",          "%.3f .. %.3f", rel_ms(r.acquire_begin), rel_ms(r.acquire_end));
         row("submit",           "%.3f", rel_ms(r.submit_time));
@@ -618,15 +618,22 @@ void Frame_pacing_window::draw_cpu_timeline(const Region& region)
         const float x0 = region.time_to_x(std::max(begin, region.t_begin));
         const float x1 = std::max(x0 + 1.0f, region.time_to_x(std::min(end, region.t_end)));
 
-        // Active work at full brightness; the pacer wait span dimmed (U4).
+        // Active work at full brightness; the wait spans (release gate,
+        // present-wait clamp, render phase join) dimmed (U4).
         draw_list->AddRectFilled(ImVec2{x0, y0}, ImVec2{x1, y1}, slot_color(sample.frame_id, 1.0f));
-        if (r.pacer_wait_end > r.pacer_wait_begin) {
-            const float wx0 = region.time_to_x(std::clamp(r.pacer_wait_begin, region.t_begin, region.t_end));
-            const float wx1 = region.time_to_x(std::clamp(r.pacer_wait_end,   region.t_begin, region.t_end));
+        const auto draw_wait_span = [&](const double wait_begin, const double wait_end) {
+            if (wait_end <= wait_begin) {
+                return;
+            }
+            const float wx0 = region.time_to_x(std::clamp(wait_begin, region.t_begin, region.t_end));
+            const float wx1 = region.time_to_x(std::clamp(wait_end,   region.t_begin, region.t_end));
             if (wx1 > wx0) {
                 draw_list->AddRectFilled(ImVec2{wx0, y0}, ImVec2{wx1, y1}, slot_color(sample.frame_id, 0.4f));
             }
-        }
+        };
+        draw_wait_span(r.pacer_wait_begin, r.pacer_wait_end);
+        draw_wait_span(r.present_wait_begin, r.present_wait_end);
+        draw_wait_span(r.join_wait_begin, r.join_wait_end);
         // Involuntary-wait sections marked with outline colors. The fence
         // wait is recorded as an accumulated duration only (no span) and is
         // therefore shown in the tooltip, not drawn.
@@ -649,10 +656,14 @@ void Frame_pacing_window::draw_cpu_timeline(const Region& region)
         }
         if (region.hovered && (mouse.x >= x0) && (mouse.x < x1) && (mouse.y >= y0) && (mouse.y < y1)) {
             const char* section = "section: active work";
-            if ((r.pacer_wait_end > r.pacer_wait_begin)) {
+            if ((r.pacer_wait_end > r.pacer_wait_begin) || (r.present_wait_end > r.present_wait_begin) || (r.join_wait_end > r.join_wait_begin)) {
                 const double t = region.t_begin + (region.t_end - region.t_begin) * static_cast<double>((mouse.x - region.x0) / (region.x1 - region.x0));
                 if ((t >= r.pacer_wait_begin) && (t < r.pacer_wait_end)) {
                     section = "section: pacer wait";
+                } else if ((t >= r.present_wait_begin) && (t < r.present_wait_end)) {
+                    section = "section: present wait";
+                } else if ((t >= r.join_wait_begin) && (t < r.join_wait_end)) {
+                    section = "section: join wait";
                 } else if ((t >= r.acquire_begin) && (t < r.acquire_end)) {
                     section = "section: acquire";
                 } else if ((t >= r.present_request_time) && (t < r.present_return_time)) {

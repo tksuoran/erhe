@@ -624,8 +624,12 @@ void Settings_window::imgui()
                 app_settings.use_draw_lists_session_override.reset();
             }
         }, "Render content fill and shadow maps through persistent per-scene draw lists (doc/erhe/draw_list_renderer.md). Off = classic per-pass bucketing.");
-        add_entry("Exclude Unlit Primitives", [&settings](){
-            ImGui::Checkbox("##", &settings.exclude_unlit_primitives);
+        add_entry("Exclude Unlit Primitives", [&settings, this](){
+            if (ImGui::Checkbox("##", &settings.exclude_unlit_primitives) && (m_context.app_scenes != nullptr)) {
+                // The draw lists bake shadow membership; push the edit to
+                // them here, at the change site.
+                m_context.app_scenes->set_exclude_unlit_from_shadows(settings.exclude_unlit_primitives);
+            }
         }, "Unlit (KHR_materials_unlit) primitives - sky domes, backdrops, emissive decals - do not cast shadows and are ignored when framing the camera on scene open. They still count toward the camera far plane.");
         add_config_section(settings.camera_controls);
         // Default Visual Style for new viewports - shown near the top since it
@@ -649,8 +653,9 @@ void Settings_window::imgui()
         push_group("Viewport", ImGuiTreeNodeFlags_Framed);
         add_entry("Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
         pop_group();
-        // Editor-global content edge-line (wide-line) method + bias tuning.
-        add_config_section(settings.content_edge_lines, nullptr, [this]() { apply_content_edge_lines_settings(m_context); });
+        // Editor-global content edge-line (wide-line) method + bias tuning;
+        // the render phase reads the frame's Render_settings copy.
+        add_config_section(settings.content_edge_lines);
         // Edge-line overlay for the preview thumbnails (same struct shown
         // twice; the label override gives each a distinct group header).
         add_config_section(settings.graph_node_preview_edge_lines, "Graph Node Preview Edge Lines");

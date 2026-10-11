@@ -162,6 +162,7 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
 }
 
 void Material_preview::render_preview(
+    erhe::graphics::Command_buffer&                   command_buffer,
     const std::shared_ptr<erhe::graphics::Texture>&   texture,
     const std::shared_ptr<erhe::primitive::Material>& material
 )
@@ -170,13 +171,13 @@ void Material_preview::render_preview(
     resize(texture->get_width(), texture->get_height());
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
     update_rendertarget(*m_context.graphics_device);
-    render_preview(material);
+    render_preview(command_buffer, material);
 
     // The thumbnail texture is mipmapped and sampled with mipmap filtering
     // at a fraction of its size; fill the levels below the rendered one
     // (as Brush_preview does), or the slot samples uninitialized memory.
     {
-        erhe::graphics::Blit_command_encoder blit_encoder = m_context.graphics_device->make_blit_command_encoder(*m_context.current_command_buffer);
+        erhe::graphics::Blit_command_encoder blit_encoder = m_context.graphics_device->make_blit_command_encoder(command_buffer);
         blit_encoder.generate_mipmaps(texture.get());
     }
 }
@@ -225,12 +226,10 @@ void Material_preview::on_close_scene(erhe::Item_host* const closing_host)
     m_last_material.reset();
 }
 
-void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Material>& material)
+void Material_preview::render_preview(erhe::graphics::Command_buffer& command_buffer, const std::shared_ptr<erhe::primitive::Material>& material)
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
     erhe::graphics::Scoped_debug_group outer_debug_scope{command_buffer, "Scene_preview::render_preview()"};
 
     // The inspected material is owned by its own scene's library; the
@@ -247,13 +246,20 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 
     const erhe::math::Viewport viewport{0, 0, m_width, m_height};
 
-    const auto& layers = m_scene_root_shared->layers();
-
-    erhe::scene_renderer::Light_set& light_set = m_scene_root_shared->get_light_set();
-    light_set.resolve(layers.light()->lights, get_light_count_limits());
+    // The preview root is not prepared by the frame loop: its render
+    // settings copy (read by the composition pass) and its light set for
+    // this frame are made here, on the main thread.
+    const erhe::scene_renderer::Light_set& light_set = m_scene_root_shared->snapshot_preview_render_settings(
+        *m_context.editor_settings,
+        get_light_count_limits(),
+        m_context.graphics_device->get_frame_index(),
+        m_context.graphics_device->get_number_of_frames_in_flight()
+    );
+    // The preview camera as the copy the renderers read (main thread).
+    const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
     m_light_projections.apply(
         light_set,
-        m_camera.get(),
+        &camera_snapshot,
         viewport,
         erhe::math::Viewport{},
         m_shadow_texture,
@@ -269,8 +275,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         .height = m_height
     };
     const erhe::scene_renderer::Camera_view_input single_view_input{
-        .projection = m_camera->projection(),
-        .node       = m_camera.get(),
+        .camera     = &camera_snapshot,
         .viewport   = context_viewport
     };
     const Render_context context{
@@ -281,7 +286,9 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         .scene_view          = *this,
         .viewport_config     = m_viewport_config,
         .camera              = m_camera.get(),
+        .camera_snapshot     = &camera_snapshot,
         .viewport_scene_view = nullptr,
+        .scene_root          = m_scene_root_shared,
         .viewport            = context_viewport,
         .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
     };
@@ -302,8 +309,32 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 ////    );
 ////}
 
+void Material_preview::request_preview(const std::shared_ptr<erhe::primitive::Material>& material, const int area_size)
+{
+    m_requested_material  = material;
+    m_requested_area_size = area_size;
+    m_request_pending     = true;
+}
+
+void Material_preview::update(erhe::graphics::Command_buffer& command_buffer)
+{
+    if (!m_request_pending) {
+        return;
+    }
+    m_request_pending = false;
+    if (!m_requested_material) {
+        return;
+    }
+    resize(m_requested_area_size, m_requested_area_size);
+    update_rendertarget(*m_context.graphics_device);
+    render_preview(command_buffer, m_requested_material);
+}
+
 void Material_preview::show_preview()
 {
+    if (!m_color_texture) {
+        return; // nothing rendered yet (the first frame of a request)
+    }
     m_context.imgui_renderer->image(
         erhe::imgui::Draw_texture_parameters{
             .texture_reference = m_color_texture,

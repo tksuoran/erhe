@@ -441,29 +441,56 @@ public:
     // committed via submit_command_buffers(). See doc/erhe/graphics.md
     // ("Frame lifecycle") for the full sequence.
     //
-    //   wait_frame  -- pace the ring on the device's timeline semaphore,
+    // Up to get_number_of_frames_in_flight() frames may be open at once
+    // (frame F+1 acquired while F is still recording, possibly on another
+    // thread). Frames are acquired and ended strictly in id order; frame F
+    // uses the frame-in-flight slot F % get_number_of_frames_in_flight().
+    //
+    //   wait_for_frame_start
+    //               -- the pacing half of the frame start: advance the
+    //                  started-frame counter and return the id of the
+    //                  frame it starts, open that frame's time record
+    //                  (CPU slot begin), refresh the GPU clock
+    //                  calibration and harvest GPU frame brackets. Reads
+    //                  no state end_frame() writes, so it may run while
+    //                  another thread is still between the previous
+    //                  frame's submits and end_frame() (the editor's M1).
+    //   acquire_frame_slot(frame_id)
+    //               -- the resource half: verify frame_id is the frame
+    //                  after the newest acquired one and that at most
+    //                  get_number_of_frames_in_flight() frames are then
+    //                  open, pace the slot on the device's timeline
+    //                  semaphore (wait for frame_id - N to retire) and
     //                  recycle the per-(frame_in_flight, thread_slot)
-    //                  command pool of the slot we are about to enter,
-    //                  fire completion handlers.
-    //   begin_frame -- (legacy single-cb shim) open the slot's legacy
-    //                  command buffer for recording. New code should not
-    //                  call this; record into the cb returned from
-    //                  get_command_buffer() instead.
-    //   end_frame   -- ADVANCE THE FRAME INDEX. THAT IS ALL.
+    //                  command pools of that slot. Frame frame_id is open
+    //                  from here until its end_frame().
+    //   wait_frame  -- wait_for_frame_start() then acquire_frame_slot(),
+    //                  for callers that run the whole frame on one thread.
+    //   begin_frame -- (legacy single-cb shim) open the oldest open
+    //                  frame's legacy command buffer for recording. New
+    //                  code should not call this; record into the cb
+    //                  returned from get_command_buffer() instead.
+    //   end_frame(frame_id)
+    //               -- END THE OLDEST OPEN FRAME. THAT IS ALL.
+    //                  Verifies frame_id is the oldest open frame.
     //                  Does NOT submit any command buffer.
     //                  Does NOT present any swapchain image.
     //                  Submission and presentation belong to
     //                  submit_command_buffers (which presents
     //                  implicitly when a cb engaged a swapchain via
     //                  Command_buffer::begin_swapchain). end_frame
-    //                  signals the device timeline at the current
-    //                  frame index, then increments it; the next
-    //                  wait_frame() consumes that timeline value to
-    //                  unblock pool reset.
-    [[nodiscard]] auto wait_frame () -> bool;
+    //                  signals the device timeline at frame_id; the
+    //                  acquire_frame_slot() of frame_id + N consumes
+    //                  that timeline value to unblock pool reset.
+    //   end_frame() -- end_frame(oldest open frame), for callers that
+    //                  run the whole frame on one thread.
+    [[nodiscard]] auto wait_for_frame_start() -> uint64_t;
+    [[nodiscard]] auto acquire_frame_slot  (uint64_t frame_id) -> bool;
+    [[nodiscard]] auto wait_frame          () -> bool;
 
     [[nodiscard]] auto begin_frame() -> bool;
     [[nodiscard]] auto end_frame  () -> bool;
+    [[nodiscard]] auto end_frame  (uint64_t frame_id) -> bool;
 
     // Legacy compat overloads. Frame_begin_info / Frame_end_info are
     // ignored (presentation moved to submit_command_buffers). Kept only
@@ -530,7 +557,9 @@ public:
     void end_frame_capture         ();
 
     // Allocate a fresh Command_buffer from the pool owned by
-    // (current frame-in-flight slot, thread_slot). The returned cb is
+    // (frame-in-flight slot of get_frame_index(), thread_slot); that frame
+    // must be open (acquired and not ended), and the cb carries its id
+    // (Command_buffer::get_frame_id()). The returned cb is
     // in the initial state; the caller must call begin() before
     // recording. Lifetime is owned by the per-(frame_in_flight,
     // thread_slot) pool inside the backend Device_impl: the cb stays
@@ -606,6 +635,16 @@ public:
     // the returned texture is sampled.
     [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
+    // The device frame of the CALLING ROLE (erhe::utility::Thread_roles).
+    // The render role (a dedicated render thread) gets the oldest open
+    // frame, the one its end_frame() ends. Every other caller - the main
+    // thread, worker threads, and programs that never set the roles - gets
+    // the newest acquired frame while it is open, otherwise the next frame
+    // to be acquired. With at most one frame open the two are the same
+    // frame. Ring-buffer entries, completion handlers, deferred
+    // destruction and command buffers are keyed on this id, so each role
+    // touches only the frame it records: the main thread the frame it
+    // prepares, the render thread the frame it renders.
     [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
 
     // How many device frames the backend keeps in flight. Sizes anything that
@@ -674,13 +713,10 @@ public:
     void               state_dump                         (const std::string& dump);
     void               trace                              (const std::string& message);
 
-    [[nodiscard]] auto get_active_render_pass             () const -> Render_pass*;
-    void               set_active_render_pass             (Render_pass* render_pass);
-
     // Frame time records (frame pacing step P0.2): per-frame event
     // timestamps for the frame pacer and profiling tools, backend-neutral
     // storage filled by the backend and read by the app (observer mode,
-    // step P2.1). Driven from the main/render thread only.
+    // step P2.1). Thread-safe (the recorder locks every access).
     [[nodiscard]] auto get_frame_time_recorder            () -> erhe::frame_pacing::Frame_time_recorder&;
     // Display refresh duration from the swapchain timing query (seconds);
     // 0.0 while unknown / unsupported. Set by the backend swapchain.
@@ -700,7 +736,8 @@ public:
     // present-request holdback deadline (claim C15 mitigation): the backend
     // delays vkQueuePresentKHR until this reference-clock time. Computed by
     // the pacer from the TRACKED grid (deviation 12: the queried
-    // refreshDuration can be grossly wrong); 0.0 = no holdback.
+    // refreshDuration can be grossly wrong); 0.0 = no holdback. Called by
+    // the thread that submits the frame (the present path reads it there).
     void               set_present_target_time              (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds = 0.0);
     // Resolved frame pacing tier (doc/frame_pacing/capability_tiers.md,
     // implementation plan P4.2). Resolved once at device init from the
@@ -724,7 +761,10 @@ private:
     // types: Frame_time_recorder brings <chrono>, the caches <filesystem>
     // and <map>, into every translation unit that includes device.hpp.
     std::unique_ptr<erhe::frame_pacing::Frame_time_recorder> m_frame_time_recorder;
-    double                       m_display_refresh_duration_seconds{0.0};
+    // Started-frame counter (wait_for_frame_start); touched only by the
+    // thread that starts frames, never by end_frame().
+    uint64_t                     m_next_frame_start_id{0};
+    bool                         m_frame_start_pending{false};
 #if defined(ERHE_SPIRV)
     std::unique_ptr<Spirv_cache> m_spirv_cache;
 #endif
@@ -732,7 +772,6 @@ private:
     Shader_error_callback        m_shader_error_callback  {};
     State_dump_callback          m_state_dump_callback    {};
     Trace_callback               m_trace_callback         {};
-    Render_pass*                 m_active_render_pass     {nullptr};
 };
 
 [[nodiscard]] auto get_depth_clear_value_pointer(bool reverse_depth = true) -> const float *; // reverse_depth ? 0.0f : 1.0f;

@@ -33,6 +33,7 @@
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -95,31 +96,57 @@ Id_renderer::Id_renderer(
     , m_scan_params_buffer {graphics_device, erhe::graphics::Buffer_target::uniform,      "Id_renderer::m_scan_params_buffer" }
     , m_scan_result_buffer {graphics_device, erhe::graphics::Buffer_target::transfer_dst, "Id_renderer::m_scan_result_buffer" }
 {
-    enabled = id_renderer_config.enabled;
+    m_covers_all_meshes = id_renderer_config.enabled;
 
 #if defined(ERHE_RAYTRACE_LIBRARY_NONE)
     // With no raytrace backend the hybrid picker has no BVH to pick static
     // meshes with; the ID renderer is the only remaining picker. Force it to
     // cover all meshes (Skinning_filter::all) regardless of the config knob so
     // hover / picking keeps working, and warn if the config had left it off.
-    if (!enabled) {
+    if (!m_covers_all_meshes) {
         log_id_render->warn(
             "ERHE_RAYTRACE_LIBRARY=none: forcing ID renderer to cover all meshes for picking "
             "(no raytrace backend). Set id_renderer.enabled = true in config to silence this warning."
         );
     }
-    enabled = true;
+    m_covers_all_meshes = true;
 #endif
+}
+
+auto Id_renderer::covers_all_meshes() const -> bool
+{
+    return m_covers_all_meshes;
 }
 
 void Id_renderer::request_scan(const Scan_request& request)
 {
+    erhe::utility::Thread_roles::assert_main_thread();
     m_pending_scan = request;
 }
 
-auto Id_renderer::has_pending_scan() const -> bool
+void Id_renderer::begin_frame()
 {
-    return m_pending_scan.has_value();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    // A request no view claimed (no view prepared an id pass) stays for the
+    // next prepare frame unless a newer request replaces it.
+    if (m_pending_scan.has_value()) {
+        m_frame_scan = m_pending_scan;
+        m_pending_scan.reset();
+    }
+}
+
+auto Id_renderer::has_frame_scan() const -> bool
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    return m_frame_scan.has_value();
+}
+
+auto Id_renderer::take_frame_scan() -> std::optional<Scan_request>
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    std::optional<Scan_request> scan = m_frame_scan;
+    m_frame_scan.reset();
+    return scan;
 }
 
 Id_renderer::~Id_renderer() noexcept
@@ -137,6 +164,7 @@ void Id_renderer::next_frame()
         return;
     }
 
+    const std::lock_guard<std::mutex> lock{m_transfer_mutex};
     m_current_transfer_entry_slot = (m_current_transfer_entry_slot + 1) % s_transfer_entry_count;
 }
 
@@ -217,20 +245,23 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
 
         const std::size_t color_image_size = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
         const std::size_t depth_image_size = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
+        const std::lock_guard<std::mutex> lock{m_transfer_mutex};
         for (Transfer_entry& entry : m_transfer_entries) {
             entry.data.resize(color_image_size + depth_image_size);
         }
     }
 }
 
-void Id_renderer::render_meshes(
-    const Render_parameters&                                   parameters,
-    erhe::graphics::Render_command_encoder&                    render_encoder,
-    erhe::graphics::Base_render_pipeline&                      pipeline,
-    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
-)
+void Id_renderer::prepare(const Prepare_parameters& parameters, Id_pass_prepared& out) const
 {
     ERHE_PROFILE_FUNCTION();
+
+    using namespace erhe::scene_renderer;
+
+    out.prepared = true;
+    out.buckets.clear();
+    out.id_ranges.clear();
+    out.scan = parameters.scan;
 
     const erhe::Item_filter id_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::id,
@@ -238,86 +269,110 @@ void Id_renderer::render_meshes(
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
     };
-
-    const erhe::scene_renderer::Primitive_interface_settings primitive_settings{
-        .color_source = erhe::scene_renderer::Primitive_color_source::id_offset
+    const Primitive_interface_settings primitive_settings{
+        .color_source = Primitive_color_source::id_offset
     };
+    const uint32_t                        force_enable_mask          = make_shader_bool_mask(Shader_bool::VARIANT_ID_RENDER);
+    const uint32_t                        boolean_mask_force_disable = 0; // TODO: Maybe disable some features for ID rendering?
+    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 
-    // Pre-filter the input mesh span when the caller asked for skinned-only
-    // (the hybrid picker delegates static meshes to the raytrace path).
-    // A pointer-vector copy into member scratch keeps the
-    // bucket_primitives() / Item_filter API surface unchanged.
-    std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes_to_render = meshes;
-    if (parameters.skinning_filter == Skinning_filter::skinned_only) {
-        m_filtered_meshes.clear();
-        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
-            if (mesh && mesh->skin) {
-                m_filtered_meshes.push_back(mesh);
+    // Leaf-function scratch (AGENTS.md): the buckets hold raw Mesh pointers
+    // and the skinned-only filter owning references only while this call
+    // runs; both are cleared before it returns (capacity kept), so a closed
+    // scene's meshes are not retained (doc/editor/coding_rules.md).
+    static thread_local Render_bucket_list                       s_buckets;
+    static thread_local std::vector<std::shared_ptr<erhe::scene::Mesh>> s_filtered_meshes;
+
+    // The ids of one pass run over all its spans; each span is bucketed on
+    // its own, so buckets never merge across spans.
+    uint32_t id_offset = Primitive_buffer::first_id_offset;
+    for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : parameters.mesh_spans) {
+        std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes_to_render = meshes;
+        if (parameters.skinning_filter == Skinning_filter::skinned_only) {
+            s_filtered_meshes.clear();
+            for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+                if (mesh && mesh->skin) {
+                    s_filtered_meshes.push_back(mesh);
+                }
             }
+            meshes_to_render = s_filtered_meshes;
         }
-        meshes_to_render = m_filtered_meshes;
+        if (!meshes_to_render.empty()) {
+            s_buckets.clear();
+            bucket_primitives(
+                s_buckets,
+                force_enable_mask,
+                boolean_mask_force_disable,
+                m_mesh_memory,
+                Shader_key{},
+                meshes_to_render,
+                id_filter,
+                primitive_mode,
+                Blending_mode_policy::override_with_base_render_pipeline, // TODO
+                // The ID pass MUST stay on the original variant: it is the only one
+                // with valid per-corner facet ids.
+                erhe::primitive::Mesh_variant::original
+            );
+            for (const Render_bucket& bucket : s_buckets.get_buckets()) {
+                ERHE_VERIFY(!bucket.entries.empty());
+                Prepared_bucket& prepared = out.buckets.add_bucket();
+                prepared.buffer_set.vertex_input_key = bucket.buffer_set.vertex_input_key;
+                prepared.buffer_set.index_buffer     = bucket.buffer_set.index_buffer;
+                prepared.buffer_set.vertex_buffers.insert(
+                    prepared.buffer_set.vertex_buffers.end(),
+                    bucket.buffer_set.vertex_buffers.begin(),
+                    bucket.buffer_set.vertex_buffers.end()
+                );
+                prepared.shader_key           = bucket.shader_key;
+                prepared.negative_determinant = bucket.negative_determinant;
+                prepared.double_sided         = bucket.double_sided;
+                prepared.primitive_mode       = primitive_mode;
+                prepared.first_entry          = out.buckets.draw_commands.size();
+                prepared.entry_count          = bucket.entries.size();
+                // The id range table Id_renderer::get() walks to turn the
+                // GPU-written id back into a (mesh, primitive, triangle) hit.
+                // No material set: the id shader reads only the id, and this
+                // renderer binds no material state at all. Primitive_buffer
+                // then writes a constant slot 0
+                // (doc/erhe/draw_list_material_set.md D5).
+                m_primitive_buffers.append_records(bucket, nullptr, primitive_mode, primitive_settings, id_offset, out.id_ranges, out.buckets.primitive_records);
+                m_draw_indirect_buffers.append_commands(bucket, primitive_mode, out.buckets.draw_commands);
+                ERHE_VERIFY(out.buckets.draw_commands.size() == prepared.first_entry + prepared.entry_count);
+            }
+            s_buckets.clear();
+        }
+        s_filtered_meshes.clear();
     }
-    if (!meshes_to_render.empty()) {
-        render_buckets(
-            render_encoder,
-            pipeline,
-            *m_render_pass.get(),
-            primitive_settings,
-            erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::VARIANT_ID_RENDER),
-            true, // use_id_ranges: record the id_offset->mesh table the readback walks
-            id_filter,
-            meshes_to_render
-        );
-    }
-    // The scratch holds owning references: release them now (capacity kept)
-    // so a closed scene's meshes are not retained until the next skinned-only
-    // render (doc/editor/coding_rules.md).
-    m_filtered_meshes.clear();
+    out.buckets.has_meshes = !out.buckets.get_buckets().empty();
 }
 
-void Id_renderer::render_buckets(
-    erhe::graphics::Render_command_encoder&                    render_encoder,
-    erhe::graphics::Base_render_pipeline&                      pipeline,
-    const erhe::graphics::Render_pass&                         render_pass,
-    const erhe::scene_renderer::Primitive_interface_settings&  primitive_settings,
-    const uint32_t                                             force_enable_mask,
-    const bool                                                 use_id_ranges,
-    const erhe::Item_filter&                                   filter,
-    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+void Id_renderer::render_immediate(const Prepare_parameters& prepare_parameters, const Render_parameters& parameters)
+{
+    prepare(prepare_parameters, m_immediate_prepared);
+    render(parameters, m_immediate_prepared);
+}
+
+void Id_renderer::draw_prepared(
+    erhe::graphics::Render_command_encoder& render_encoder,
+    const Id_pass_prepared&                 prepared
 )
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (meshes.empty()) {
-        return;
-    }
-
     using namespace erhe::scene_renderer;
-    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-    Render_bucket_list& buckets = m_buckets;
-    buckets.clear();
-    const uint32_t boolean_mask_force_disable = 0; // TODO: Maybe disable some features for ID rendering?
-    bucket_primitives(
-        buckets,
-        force_enable_mask,
-        boolean_mask_force_disable,
-        m_mesh_memory,
-        Shader_key{},
-        meshes,
-        filter,
-        primitive_mode,
-        Blending_mode_policy::override_with_base_render_pipeline, // TODO
-        // The ID pass MUST stay on the original variant: it is the only one
-        // with valid per-corner facet ids.
-        erhe::primitive::Mesh_variant::original
-    );
+
+    const std::span<const Prepared_bucket> buckets     = prepared.buckets.get_buckets();
+    const std::size_t                      record_size = m_primitive_buffers.get_record_size();
+    const erhe::graphics::Render_pass&     render_pass = *m_render_pass.get();
+    erhe::graphics::Base_render_pipeline&  pipeline    = m_pipeline;
 
     for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-        const Render_bucket&      bucket       = buckets.get_buckets()[bucket_index];
+        const Prepared_bucket&    bucket       = buckets[bucket_index];
         const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
 
-        ERHE_VERIFY(!bucket.entries.empty());
+        ERHE_VERIFY(bucket.entry_count > 0);
 
+        // The id pass key has no environment axes: it is complete as prepared.
         const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
             bucket.shader_key,
             &vertex_input.vertex_format
@@ -326,7 +381,7 @@ void Id_renderer::render_buckets(
             log_draw->warn(
                 "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
                 bucket_index,
-                bucket.entries.size(),
+                bucket.entry_count,
                 bucket.buffer_set.vertex_buffers.size(),
                 bucket.shader_key.describe()
             );
@@ -334,9 +389,7 @@ void Id_renderer::render_buckets(
         }
         const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
 
-        // The pipeline format must match the supplied render pass (the picking
-        // pass for render_meshes); the caller has no knowledge of the internal
-        // framebuffer. Mirrored
+        // The pipeline format must match the picking render pass. Mirrored
         // (negative determinant) buckets get the front-face-flipped variant so
         // back-face culling removes the same faces the forward pass culls.
         erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
@@ -351,7 +404,7 @@ void Id_renderer::render_buckets(
             log_draw->warn(
                 "No render pipeline for bucket {} ({} primitives, {} vertex streams): {}",
                 bucket_index,
-                bucket.entries.size(),
+                bucket.entry_count,
                 bucket.buffer_set.vertex_buffers.size(),
                 bucket.shader_key.describe()
             );
@@ -364,17 +417,14 @@ void Id_renderer::render_buckets(
             "bucket {}/{} prims={} streams={} shader key {:016x}",
             bucket_index,
             buckets.size(),
-            bucket.entries.size(),
+            bucket.entry_count,
             bucket.buffer_set.vertex_buffers.size(),
-            bucket.shader_key_hash
+            bucket.shader_key.get_hash()
         );
         erhe::graphics::Scoped_debug_group bucket_scope{render_encoder.get_command_buffer(), std::string_view{m_bucket_label}};
 
         // Bind the resolved pipeline and the bucket's geometry before the
-        // draw. Without these the encoder has no program / vertex input /
-        // index buffer bound and records no actual draw (the bucket shows
-        // up in a capture but produces zero draw calls). Mirrors
-        // Forward_renderer::render().
+        // draw. Mirrors Forward_renderer::render().
         render_encoder.set_render_pipeline(*render_pipeline);
 
         erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
@@ -388,15 +438,9 @@ void Id_renderer::render_buckets(
             );
         }
 
-        // use_id_ranges = true records the (id_offset .. id_offset+count,
-        // mesh, primitive) table that Id_renderer::get() walks to turn the
-        // GPU-written id back into a (mesh, primitive, triangle) hit (picking).
-        // No material set: the id shader reads only the id, and this renderer
-        // binds no material state at all. Primitive_buffer then writes a
-        // constant slot 0 (doc/erhe/draw_list_material_set.md D5).
-        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, nullptr, primitive_mode, primitive_settings, use_id_ranges);
-        erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(bucket, primitive_mode);
-        ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entries.size());
+        erhe::graphics::Ring_buffer_range                primitive_range            = m_primitive_buffers.update(prepared.buckets.get_records(bucket, record_size));
+        erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(prepared.buckets.get_draw_commands(bucket));
+        ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entry_count);
 
         m_primitive_buffers    .bind(render_encoder, primitive_range);
         m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
@@ -593,6 +637,7 @@ void Id_renderer::submit_scan_compute(
         region.max_output   = 0;
         region.frame_number = m_graphics_device.get_frame_index();
         region.compact_data.assign(sizeof(uint32_t), 0); // {count = 0}
+        const std::lock_guard<std::mutex> lock{m_transfer_mutex};
         region.state        = Transfer_entry::State::Read_complete;
     };
 
@@ -737,10 +782,11 @@ void Id_renderer::submit_scan_compute(
         blit.copy_from_buffer(output_buf, output_off, result_buf, result_off, output_bytes);
     }
 
-    region.state = Transfer_entry::State::Waiting_for_read;
+    // The region was claimed (Waiting_for_read) by render().
     m_graphics_device.add_completion_handler(
-        [&region]() {
+        [this, &region]() {
             std::span<std::byte> gpu_data = region.compact_range.get_span();
+            const std::lock_guard<std::mutex> lock{m_transfer_mutex};
             memcpy(region.compact_data.data(), gpu_data.data(), gpu_data.size_bytes());
             region.compact_range.bytes_gpu_used(gpu_data.size_bytes());
             region.compact_range.close();
@@ -758,19 +804,23 @@ void Id_renderer::submit_scan_compute(
     params_range.release();
 }
 
-void Id_renderer::render(const Render_parameters& parameters)
+void Id_renderer::render(const Render_parameters& parameters, const Id_pass_prepared& prepared)
 {
     using namespace erhe::graphics;
 
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
     if (!m_enabled) {
         return;
     }
 
+    // The prepare phase prepared this frame's pass (the view renders the
+    // id pass exactly when it prepared one).
+    ERHE_VERIFY(prepared.prepared);
+
     const auto& viewport           = parameters.viewport;
     const auto& camera             = parameters.camera;
-    const auto& content_mesh_spans = parameters.content_mesh_spans;
     const auto  x                  = parameters.x;
     const auto  y                  = parameters.y;
 
@@ -790,11 +840,22 @@ void Id_renderer::render(const Render_parameters& parameters)
     const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
-    Transfer_entry& entry = get_current_transfer_entry();
-    if (entry.state == Transfer_entry::State::Waiting_for_read) {
+    Transfer_entry* entry_claimed{nullptr};
+    {
+        const std::lock_guard<std::mutex> lock{m_transfer_mutex};
+        Transfer_entry& current = get_current_transfer_entry();
+        if (current.state != Transfer_entry::State::Waiting_for_read) {
+            // Claimed: get() reads only Read_complete entries, so the
+            // fields below are written outside the lock.
+            current.state = Transfer_entry::State::Waiting_for_read;
+            entry_claimed = &current;
+        }
+    }
+    if (entry_claimed == nullptr) {
         log_id_render->warn("Id_renderer::render(): Transfer_entry slot busy");
         return;
     }
+    Transfer_entry& entry = *entry_claimed;
     // Keep the s_extent readback rect fully inside the framebuffer. The low end is clamped to 0
     // (pointer left/above the viewport); the high end must be clamped too. Otherwise a pointer to
     // the right/below the viewport (e.g. a gizmo drag carried past the window edge) pushes the
@@ -814,8 +875,8 @@ void Id_renderer::render(const Render_parameters& parameters)
     const int read_height = std::min(static_cast<int>(s_extent), static_cast<int>(viewport.height) - entry.y_offset);
     entry.clip_from_world = clip_from_world;
 
-    // Region selection scan (box / paint): if a gesture requested a scan this
-    // frame, clamp its rectangle to the viewport (same discipline as the pointer
+    // Region selection scan (box / paint): if the prepared pass carries the
+    // frame's scan, clamp its rectangle to the viewport (same discipline as the pointer
     // rect above -- an unclamped rect yields a negative copy extent ->
     // VK_ERROR_DEVICE_LOST) and pick a free region slot. The scissor below then
     // covers the union of the pointer rect and the scan rect (so the per-frame
@@ -828,8 +889,8 @@ void Id_renderer::render(const Render_parameters& parameters)
     int  scan_h      = 0;
     int  region_slot = -1;
     bool do_scan     = false;
-    if (m_pending_scan.has_value()) {
-        const Scan_request& req = m_pending_scan.value();
+    if (prepared.scan.has_value()) {
+        const Scan_request& req = prepared.scan.value();
         const int rx0 = std::clamp(req.x,              0, static_cast<int>(viewport.width));
         const int ry0 = std::clamp(req.y,              0, static_cast<int>(viewport.height));
         const int rx1 = std::clamp(req.x + req.width,  0, static_cast<int>(viewport.width));
@@ -838,13 +899,19 @@ void Id_renderer::render(const Render_parameters& parameters)
         scan_y = ry0;
         scan_w = rx1 - rx0;
         scan_h = ry1 - ry0;
-        for (int i = 0; i < s_region_entry_count; ++i) {
-            if (m_region_entries[i].state == Transfer_entry::State::Unused) {
-                region_slot = i;
-                break;
+        if ((scan_w > 0) && (scan_h > 0)) {
+            const std::lock_guard<std::mutex> lock{m_transfer_mutex};
+            for (int i = 0; i < s_region_entry_count; ++i) {
+                if (m_region_entries[i].state == Transfer_entry::State::Unused) {
+                    // Claimed: take_scan_result() reads only Read_complete
+                    // entries, so the fields are written outside the lock.
+                    m_region_entries[i].state = Transfer_entry::State::Waiting_for_read;
+                    region_slot = i;
+                    break;
+                }
             }
         }
-        do_scan = (scan_w > 0) && (scan_h > 0) && (region_slot >= 0);
+        do_scan = (region_slot >= 0);
     }
 
     // log_id_render->info(
@@ -855,7 +922,6 @@ void Id_renderer::render(const Render_parameters& parameters)
     // );
 
     Ring_buffer_range camera_range = m_camera_buffers.update(
-        *camera.projection(),
         camera,
         viewport,
         1.0f,
@@ -879,7 +945,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         joint_range = parameters.joint_buffer->update(
             glm::uvec4{0xffffffffu, 0u, 0u, 0u},
             {},
-            parameters.skins
+            parameters.joint_poses
         );
     }
 
@@ -926,13 +992,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         }
 
         //// TODO Abstraction for partial clear
-        m_primitive_buffers.reset_id_ranges();
-
-        //const Render_pass_descriptor& render_pass_desc = m_render_pass->get_descriptor();
-
-        for (auto meshes : content_mesh_spans) {
-            render_meshes(parameters, encoder, m_pipeline, meshes);
-        }
+        draw_prepared(encoder, prepared);
     }
 
     // Transfer pixel data from GPU to CPU
@@ -965,13 +1025,16 @@ void Id_renderer::render(const Render_parameters& parameters)
             erhe::graphics::Buffer_texel_location{.buffer = destination_buffer, .offset = destination_offset, .bytes_per_row = destination_bytes_per_row, .bytes_per_image = destination_bytes_per_image}
         );
 
-        entry.state        = Transfer_entry::State::Waiting_for_read;
+        // The table this entry's ids resolve against (get()).
+        entry.id_ranges.clear();
+        entry.id_ranges.insert(entry.id_ranges.end(), prepared.id_ranges.begin(), prepared.id_ranges.end());
         entry.frame_number = m_graphics_device.get_frame_index();
-        entry.slot         = m_current_transfer_entry_slot;
+        entry.slot         = static_cast<int>(entry_claimed - m_transfer_entries.data());
         // log_id_render->info("submit draw & read: slot={} frame={}", entry.slot, entry.frame_number);
         m_graphics_device.add_completion_handler(
-            [&entry]() {
+            [this, &entry]() {
                 std::span<std::byte> gpu_data = entry.buffer_range.get_span();
+                const std::lock_guard<std::mutex> lock{m_transfer_mutex};
                 memcpy(&entry.data[0], gpu_data.data(), gpu_data.size_bytes());
                 entry.buffer_range.bytes_gpu_used(gpu_data.size_bytes());
                 entry.buffer_range.close();
@@ -1001,25 +1064,23 @@ void Id_renderer::render(const Render_parameters& parameters)
     // a few frames later.
     if (do_scan) {
         Region_entry& region = m_region_entries[region_slot];
-        region.brush_center = m_pending_scan->brush_center;
-        region.brush_radius = m_pending_scan->brush_radius;
-        region.is_brush     = m_pending_scan->is_brush;
+        region.brush_center = prepared.scan->brush_center;
+        region.brush_radius = prepared.scan->brush_radius;
+        region.is_brush     = prepared.scan->is_brush;
 
-        // Snapshot the id-range table built by the render_meshes loop above (this
-        // scan frame, Skinning_filter::all). take_scan_result() resolves against
-        // this snapshot, not the live table which a later frame may have rebuilt
-        // with a different mesh set. Clear-and-fill to keep the vector's capacity.
+        // The id-range table of the pass drawn above (this scan frame,
+        // Skinning_filter::all). take_scan_result() resolves against this
+        // copy, not a later frame's pass with a different mesh set.
+        // Clear-and-fill to keep the vector's capacity.
         region.id_ranges.clear();
-        const std::vector<erhe::scene_renderer::Primitive_buffer::Id_range>& live_ranges = m_primitive_buffers.id_ranges();
-        region.id_ranges.insert(region.id_ranges.end(), live_ranges.begin(), live_ranges.end());
+        region.id_ranges.insert(region.id_ranges.end(), prepared.id_ranges.begin(), prepared.id_ranges.end());
 
         // Build the compute resources lazily on first scan.
         ensure_scan_compute();
         submit_scan_compute(parameters.command_buffer, region, scan_x, scan_y, scan_w, scan_h);
     }
-    // Consume the request whether or not a slot was free; the gesture re-requests
-    // every frame it wants a scan.
-    m_pending_scan.reset();
+    // A scan skipped for want of a free region slot is not retried: the
+    // gesture re-requests every frame it wants a scan.
 
     camera_range.release();
     if (bind_joint_buffer) {
@@ -1038,6 +1099,12 @@ inline T read_as(uint8_t const* raw_memory)
 
 auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_transfer_mutex};
+    return read_pixel(x, y, out_id, out_depth, out_frame_number) >= 0;
+}
+
+auto Id_renderer::read_pixel(const int x, const int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) const -> int
+{
     int slot = static_cast<int>(m_current_transfer_entry_slot);
     int used_slot = -1;
 
@@ -1048,7 +1115,7 @@ auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_dep
             slot = s_transfer_entry_count - 1;
         }
 
-        Transfer_entry& entry = m_transfer_entries[slot];
+        const Transfer_entry& entry = m_transfer_entries[slot];
         if (entry.state == Transfer_entry::State::Read_complete) {
             // const int rel_x = x - entry.x_offset;
             // const int rel_y = y - entry.y_offset;
@@ -1090,14 +1157,15 @@ auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_dep
     //     "get() result: id={} depth={} used_slot={} frame={} ok={}",
     //     out_id, out_depth, used_slot, out_frame_number, out_frame_number > 0
     // );
-    return out_frame_number > 0;
+    return (out_frame_number > 0) ? used_slot : -1;
 }
 
 auto Id_renderer::get(const int x, const int y) -> Id_query_result
 {
+    const std::lock_guard<std::mutex> lock{m_transfer_mutex};
     Id_query_result result{};
-    const bool ok = get(x, y, result.id, result.depth, result.frame_number);
-    if (!ok) {
+    const int slot = read_pixel(x, y, result.id, result.depth, result.frame_number);
+    if (slot < 0) {
         return result;
     }
 
@@ -1108,7 +1176,9 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
         return result;
     }
 
-    for (const erhe::scene_renderer::Primitive_buffer::Id_range& r : m_primitive_buffers.id_ranges()) {
+    // Resolve against the table of the pass whose pixels were read, not a
+    // later frame's (the read-back frame is older than the newest render).
+    for (const erhe::scene_renderer::Primitive_buffer::Id_range& r : m_transfer_entries[slot].id_ranges) {
         // log_id_render->info(
         //     "  id_range: offset={} length={} mesh={}",
         //     r.offset, r.length, r.lock_mesh() ? r.lock_mesh()->get_name() : std::string{"(null)"}
@@ -1136,6 +1206,7 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
 
 auto Id_renderer::take_scan_result() -> const Scan_result&
 {
+    const std::lock_guard<std::mutex> lock{m_transfer_mutex};
     // Find the newest completed region readback we have not resolved yet.
     int      best_slot  = -1;
     uint64_t best_frame = m_scan_result.frame_number;

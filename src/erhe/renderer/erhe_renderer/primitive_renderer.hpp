@@ -49,7 +49,9 @@ enum class Minor_lines : unsigned int
 class Primitive_renderer
 {
 public:
-    Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket);
+    // Records into the bucket's draws of the device frame frame_index
+    // (Debug_renderer::get() passes the calling role's frame).
+    Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket, uint64_t frame_index);
     Primitive_renderer(Primitive_renderer& other) = delete;
     auto operator=    (Primitive_renderer& other) -> Primitive_renderer& = delete;
     Primitive_renderer(Primitive_renderer&& old) noexcept;
@@ -304,6 +306,7 @@ private:
     Debug_renderer*        m_debug_renderer{nullptr};
     Debug_renderer_bucket* m_bucket{nullptr};
     Debug_renderer_bucket* m_minor_bucket{nullptr}; // see set_minor_line_renderer()
+    uint64_t               m_frame_index{0};        // device frame the draws are recorded into
 
     // offset (in lines), relative to vertex buffer range in Line_renderer
     // initialized in Primitive_renderer constructor

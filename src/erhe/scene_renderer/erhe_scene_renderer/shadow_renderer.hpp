@@ -16,6 +16,7 @@
 #include "erhe_scene_renderer/material_set.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/render_bucket_snapshot.hpp"
 
 #include <array>
 #include <cstddef>
@@ -54,6 +55,7 @@ class Render_bucket;
 class Scene_root;
 class Scene_view;
 class Settings;
+class Shadow_bounds;
 class Shader_variant_cache;
 
 // Face culling used while rasterizing shadow casters into the shadow map.
@@ -115,7 +117,7 @@ public:
         // for each light, drawing shadow casters into the shadow map
         // attachments.
         erhe::graphics::Command_buffer&          command_buffer;
-        const erhe::scene::Camera*               view_camera{nullptr};
+        const erhe::scene::Camera_snapshot*      view_camera{nullptr}; // the render phase's copy of the view camera
         const erhe::math::Viewport               view_camera_viewport;
         const erhe::math::Viewport               light_camera_viewport;
         std::shared_ptr<erhe::graphics::Texture> texture{};
@@ -133,7 +135,7 @@ public:
         // exceed render_passes.size()) and one cube per point_shadow_slots
         // entry (6 passes each in point_cube_render_passes).
         const Light_set&                                                   light_set;
-        const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins{};
+        std::span<const Joint_pose>                                        joint_poses{}; // the frame's posed joints (Joint_poses::capture)
         // The material slot space this shadow pass resolves through, already
         // updated for this frame (D5): the scene root's FORWARD set when this
         // call takes the bucket path, the Draw_list_scene's own set when it
@@ -201,9 +203,12 @@ public:
         // when non-null, casters are drawn from the scene's persistent shadow
         // draw lists (restricted to draw_list_layers; an EMPTY span selects
         // every layer) instead of re-bucketing mesh_spans, the frustum-fit
-        // bounds are read from the registered objects
-        // (Draw_list_scene::gather_shadow_bounds) instead of mesh_spans, and
-        // each pass culls the entries against its light frustum (Q6).
+        // bounds are the ones the prepare phase gathered from the registered
+        // objects into this frame's slot (Draw_list_scene::
+        // prepare_shadow_bounds, read back by get_shadow_bounds with the
+        // device's frame index) instead of mesh_spans, and each pass culls
+        // the entries against its light frustum (Q6). mesh_spans is not read
+        // on this path.
         // Depth-only / distance / cube sub-variants are selected per pass
         // exactly as for the bucket path.
         Draw_list_scene*                                                   draw_list_scene{nullptr};
@@ -218,7 +223,38 @@ public:
         // Draw_list_scene::set_exclude_unlit_from_shadows(), which is what
         // makes its cached shadow lists match this flag.
         bool                                                               exclude_unlit_casters{false};
+        // Bucket path prepared in the prepare phase (prepare()): when
+        // non-null and draw_list_scene is null, the casters are drawn from
+        // this snapshot (the pass's depth / distance / cube variant bits are
+        // ORed into its keys per pass) and mesh_spans is not read for them.
+        // Null and no draw_list_scene: render() prepares mesh_spans itself
+        // (the one-call path of library callers on one thread).
+        const Render_bucket_snapshot*                                      casters{nullptr};
+        // The frustum fit's caster / receiver bounds and caster vertex
+        // extents gathered in the prepare phase (Draw_list_scene::
+        // get_shadow_bounds of the frame). When null they come from
+        // draw_list_scene when it is set, else from mesh_spans.
+        const Shadow_bounds*                                               shadow_bounds{nullptr};
     };
+
+    // The inputs of preparing the bucket path's casters.
+    class Prepare_parameters
+    {
+    public:
+        std::span<const std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
+        // The set the records' material slots resolve in; the shadow pass
+        // binds the same set (Render_parameters::material_source).
+        const Material_set*                                                material_source{nullptr};
+        // See Render_parameters::exclude_unlit_casters.
+        bool                                                               exclude_unlit_casters{false};
+    };
+
+    // Prepare phase (main thread): buckets the casters of mesh_spans
+    // (shadow_caster_filter, opaque primitives, optimized variant, unlit
+    // primitives left out when asked) with no pass variant bits and writes
+    // their records and draw commands into out. Mutates nothing of this
+    // renderer.
+    void prepare(const Prepare_parameters& parameters, Render_bucket_snapshot& out) const;
 
     auto render(const Render_parameters& parameters) -> bool;
 
@@ -244,26 +280,22 @@ public:
     );
 
 private:
-    // Shared shadow-caster bucket walk + draw used by both the 2D (directional /
-    // spot) per-light pass and the per-face point-light cube pass. The caller
-    // sets up the encoder (bind group, viewport / scissor, depth bias, material
-    // / joint / light / camera / control buffers, texture heap) and opens the
-    // render pass; this fills it with the shadow casters, selecting the variant
-    // via boolean_mask_force_enable (VARIANT_DEPTH_ONLY [+ VARIANT_SHADOW_DISTANCE],
-    // or VARIANT_SHADOW_CUBE) and the color attachment policy via color_blend.
+    // Draws prepared casters into the pass the caller opened, used by both
+    // the 2D (directional / spot) per-light pass and the per-face point-light
+    // cube pass. The caller sets up the encoder (bind group, viewport /
+    // scissor, depth bias, material / joint / light / camera / control
+    // buffers, texture heap) and opens the render pass; this selects the
+    // variant by ORing boolean_mask_force_enable (VARIANT_DEPTH_ONLY
+    // [+ VARIANT_SHADOW_DISTANCE], or VARIANT_SHADOW_CUBE) into each prepared
+    // key, and the color attachment policy via color_blend. Reads no Mesh.
     void draw_shadow_casters(
-        erhe::graphics::Command_buffer&                                                          command_buffer,
-        erhe::graphics::Render_command_encoder&                                                  encoder,
-        erhe::graphics::Base_render_pipeline&                                                     base_pipeline,
-        const erhe::graphics::Render_pass&                                                       render_pass,
-        const erhe::graphics::Color_blend_state*                                                  color_blend,
-        const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>&  mesh_spans,
-        const erhe::Item_filter&                                                                 shadow_filter,
-        uint32_t                                                                                 boolean_mask_force_enable,
-        bool                                                                                     exclude_unlit_primitives,
-        // The set the calling pass binds; the records written here are
-        // consumed by that same pass (doc/erhe/draw_list_material_set.md D5).
-        const Material_set*                                                                      material_source
+        erhe::graphics::Command_buffer&          command_buffer,
+        erhe::graphics::Render_command_encoder&  encoder,
+        erhe::graphics::Base_render_pipeline&    base_pipeline,
+        const erhe::graphics::Render_pass&       render_pass,
+        const erhe::graphics::Color_blend_state* color_blend,
+        const Render_bucket_snapshot&            casters,
+        uint32_t                                 boolean_mask_force_enable
     );
 
     erhe::graphics::Device&                       m_graphics_device;
@@ -288,14 +320,16 @@ private:
     Light_buffer                                  m_light_buffer;
     Camera_buffer                                 m_camera_buffer;
     Primitive_buffer                              m_primitive_buffer;
-    // Per-draw_shadow_casters() scratch, cleared at use so the capacity is
-    // kept: the buckets of one light pass and the debug label of one bucket.
-    Render_bucket_list                            m_buckets;
+    // The casters render() prepares when it is handed none (the one-call
+    // path) and the debug label of one bucket; cleared at use so the
+    // capacity is kept.
+    Render_bucket_snapshot                        m_immediate_casters;
     std::string                                   m_bucket_label;
     // TODO Re-add per-cascade GPU timers; the cascade Render_pass objects
     // are owned by Shadow_render_node, so the timers should live there.
-    // Per-render() caster / receiver world AABB gather for the tight frustum
-    // fit; members (cleared each call) so the vectors keep their capacity.
+    // Bucket path (no draw_list_scene) per-render() caster / receiver world
+    // AABB gather for the tight frustum fit; members (cleared each call) so
+    // the vectors keep their capacity.
     std::vector<erhe::math::Aabb>                 m_caster_world_aabbs;
     std::vector<erhe::math::Aabb>                 m_receiver_world_aabbs;
     // Per-render() caster vertex rounding inputs (Caster_vertex_extent, one

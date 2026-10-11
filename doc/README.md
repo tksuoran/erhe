@@ -289,7 +289,7 @@ flowchart TD
 - [erhe/usd_compatibility.md](erhe/usd_compatibility.md) (stable): erhe <-> OpenUSD concept and naming mapping tables
 - [erhe/usd_compatibility_design.md](erhe/usd_compatibility_design.md) (mostly stable): USD compatibility design record and current state (C/U/M/X labels cited from code)
 - [erhe/usd_node_graphs.md](erhe/usd_node_graphs.md) (mostly stable): Texture and geometry node graphs as UsdShade NodeGraph / Shader prims
-- [erhe/utility.md](erhe/utility.md) (stable): Small standalone utility classes and functions used across the erhe codebase: memory alignment helpers, bitwise test functions, a fixed-size pimpl smart pointer, and an interned debug label type backed by a thread-safe string pool
+- [erhe/utility.md](erhe/utility.md) (stable): Small standalone utility classes and functions used across the erhe codebase: memory alignment helpers, bitwise test functions, a fixed-size pimpl smart pointer, an interned debug label type backed by a thread-safe string pool, and the process-wide thread roles / frame phase asserts
 - [erhe/version.md](erhe/version.md) (stable): The build identity (`project(VERSION)` plus `git describe`), stamped into one translation unit at every build and logged at editor startup
 - [erhe/verify.md](erhe/verify.md) (stable): Provides two foundational assertion macros used throughout the entire erhe codebase: `ERHE_VERIFY(expression)` for runtime condition checks and `ERHE_FATAL(format, ...)` for unconditional abort with a formatted error message
 - [erhe/vertex_position_quantization.md](erhe/vertex_position_quantization.md) (experimental): Quantized vertex positions across backends
@@ -345,6 +345,7 @@ flowchart TD
 - [editor/raytrace.md](editor/raytrace.md) (experimental): GPU ray-query raytracing
 - [editor/raytrace_materials.md](editor/raytrace_materials.md) (mostly stable): Material-aware ray-traced rendering: textures, glass, light sampling
 - [editor/reloadable_asset_loads.md](editor/reloadable_asset_loads.md) (mostly stable): Undone glTF imports drop their payload and re-read on redo
+- [editor/render_thread.md](editor/render_thread.md) (mostly stable): Editor render thread: frame phases M1 / M2 / M3 / R, frame pipelining, the handoff, the per-frame copies the render phase reads, enforcement, verification and future work
 - [editor/renderers.md](editor/renderers.md) (stable): Low-level rendering infrastructure for the editor: shader programs, GPU memory management, ID-based picking, render pass composition, and viewport configuration
 - [editor/rendergraph.md](editor/rendergraph.md) (stable): Editor-specific render graph nodes that extend `erhe::rendergraph` for shadow mapping, scene rendering, and post-processing
 - [editor/rendering.md](editor/rendering.md) (stable): > This document was mostly written by Claude and may contain inaccuracies
@@ -499,4 +500,6 @@ flowchart TD
 - [reference/nvidia_texel_fetch_3d_driver_report.md](reference/nvidia_texel_fetch_3d_driver_report.md): NVIDIA OpenGL texelFetch sampler3D zeros driver report, with standalone reproduction
 - [reference/property_system_wpf_comparison.md](reference/property_system_wpf_comparison.md): erhe::property vs WPF dependency properties
 - [reference/quest_profiling_2026_05_01.md](reference/quest_profiling_2026_05_01.md): Quest 3 GPU profiling report (2026-05-01)
+- [reference/render_thread_audit_2026_10_09.md](reference/render_thread_audit_2026_10_09.md): Render phase audit at commit c06738609 (2026-10-09): what R read and wrote outside its own state before the ImGui overlap and frame pipelining; every site since resolved
+- [reference/render_thread_measurements_2026_10.md](reference/render_thread_measurements_2026_10.md): Render thread frame-time measurements (2026-10): display-paced, unpaced serial and pipelined runs on an Intel iGPU and an NVIDIA dGPU, Tracy phase picture
 - [reference/shadow_robustness_review_2026_09_29.md](reference/shadow_robustness_review_2026_09_29.md): Shadow robustness series change summary, correctness analysis, potential issues and improvements (2026-09-29)

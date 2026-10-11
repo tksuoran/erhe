@@ -5,9 +5,11 @@
 #include "erhe_graphics/native_format.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 
+#include "erhe_xr/frame_timing.hpp"
 #include "erhe_xr/xr.hpp"
 #include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr_log.hpp"
@@ -1602,13 +1604,24 @@ auto Xr_session::get_view_space_location() const -> const XrSpaceLocation&
     return m_view_location;
 }
 
-auto Xr_session::begin_frame() -> bool
+void Xr_session::set_command_buffer_thread_slot(const unsigned int thread_slot)
+{
+    m_command_buffer_thread_slot = thread_slot;
+}
+
+auto Xr_session::begin_frame(const Frame_timing& timing) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+    // xrBeginFrame .. xrEndFrame run on the render thread
+    // (doc/editor/render_thread.md section 2.2).
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
+
+    m_render_display_time = static_cast<XrTime>(timing.predicted_display_time);
 
     const XrFrameBeginInfo frame_begin_info{
         .type = XR_TYPE_FRAME_BEGIN_INFO,
@@ -1618,13 +1631,18 @@ auto Xr_session::begin_frame() -> bool
     {
         check_gl_context_in_current_in_this_thread();
         log_xr->trace("xrBeginFrame()");
-        const auto result = xrBeginFrame(m_xr_session, &frame_begin_info);
-        if (result == XR_SUCCESS) {
-            return true;
-        }
+        const XrResult result = xrBeginFrame(m_xr_session, &frame_begin_info);
         if (result == XR_SESSION_LOSS_PENDING) {
             log_xr->error("TODO Handle XR_SESSION_LOSS_PENDING");
             return false;
+        }
+        if (XR_SUCCEEDED(result)) {
+            // XR_FRAME_DISCARDED: the previous begun frame was never ended;
+            // the runtime discards it and this frame has begun.
+            if (result != XR_SUCCESS) {
+                log_xr->debug("xrBeginFrame() returned {}", c_str(result));
+            }
+            return true;
         }
         log_xr->error("xrBeginFrame() returned error {}", c_str(result));
         return false;
@@ -1634,6 +1652,7 @@ auto Xr_session::begin_frame() -> bool
 auto Xr_session::wait_frame() -> XrFrameState*
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m1_overlap);
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return nullptr;
@@ -1752,6 +1771,8 @@ auto Xr_session::locate_views(std::vector<Render_view>& out_views) -> bool
 auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
@@ -1772,7 +1793,7 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             .type                  = XR_TYPE_VIEW_LOCATE_INFO,
             .next                  = nullptr,
             .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
-            .displayTime           = m_xr_frame_state.predictedDisplayTime,
+            .displayTime           = m_render_display_time,
             //.space                 = m_xr_reference_space_local
             .space                 = m_xr_reference_space_stage
         };
@@ -1839,7 +1860,7 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
     //      is consuming view 0, etc.
     std::vector<erhe::graphics::Command_buffer*> view_cbs(view_count_output, nullptr);
     for (uint32_t i = 0; i < view_count_output; ++i) {
-        view_cbs[i] = &m_graphics_device.get_command_buffer(/*thread_slot*/ 0);
+        view_cbs[i] = &m_graphics_device.get_command_buffer(m_command_buffer_thread_slot);
         // Producer side of the setup -> view GPU edge: when setup_cb's
         // GPU work completes, signal view_cbs[i]'s GPU primitive. Each
         // view gets its own signal -- binary semaphores can only be
@@ -2010,6 +2031,8 @@ auto Xr_session::render_frame_multiview(
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
@@ -2034,7 +2057,7 @@ auto Xr_session::render_frame_multiview(
             .type                  = XR_TYPE_VIEW_LOCATE_INFO,
             .next                  = nullptr,
             .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
-            .displayTime           = m_xr_frame_state.predictedDisplayTime,
+            .displayTime           = m_render_display_time,
             .space                 = m_xr_reference_space_stage
         };
 
@@ -2100,7 +2123,7 @@ auto Xr_session::render_frame_multiview(
 
     // Single per-frame view command buffer. Same setup -> view GPU edge
     // as render_frame() but with one consumer instead of N.
-    erhe::graphics::Command_buffer& views_cb = m_graphics_device.get_command_buffer(/*thread_slot*/ 0);
+    erhe::graphics::Command_buffer& views_cb = m_graphics_device.get_command_buffer(m_command_buffer_thread_slot);
     // Producer side: when setup_cb's GPU work completes, signal
     // views_cb's GPU primitive.
     command_buffer.signal_gpu_completion_to(views_cb);
@@ -2327,6 +2350,8 @@ void Xr_session::release_quad_layer_images()
 auto Xr_session::end_frame(const bool rendered) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
@@ -2493,7 +2518,7 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     XrFrameEndInfo frame_end_info{
         .type                 = XR_TYPE_FRAME_END_INFO,
         .next                 = nullptr,
-        .displayTime          = m_xr_frame_state.predictedDisplayTime,
+        .displayTime          = m_render_display_time,
         .environmentBlendMode = m_instance.get_xr_environment_blend_mode(),
         .layerCount           = static_cast<uint32_t>(layers.size()),
         .layers               = layers.empty() ? nullptr : layers.data()

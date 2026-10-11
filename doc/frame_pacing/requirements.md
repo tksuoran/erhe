@@ -107,6 +107,53 @@ Every quantitative bound below is an adjustable parameter. These are the require
 | Target queued present images | 1 | FR5; independent of swapchain image count. |
 | Frame record history length | 120 frames | Bounded history for decisions and profiling (Data requirements). |
 
+## Frame phases
+
+In the editor each pacer step runs on the thread of the frame phase that
+performs it (`doc/editor/editor.md` "Frame phases and the render thread"):
+
+- Main thread, M1: `Device::wait_for_frame_start` (CPU slot begin, GPU clock
+  calibration, GPU frame bracket harvest; returns the frame id), the observer
+  tick (`Frame_pacing_observer::tick`, the schedule point), the FR2 release
+  gate, the tier S slop servo, and the FR4 display advance, which feeds
+  `Time::prepare_update` of the same frame. The FR3 target, the holdback
+  deadline and the FR5 present-wait id go into the `Frame_packet`.
+- Main thread, M2: `Device::acquire_frame_slot` (frame-in-flight wait). The
+  GPU frame begin timestamp is written into the first command buffer begun
+  in the frame, which is M2's upload command buffer.
+- Render thread, R: the FR5 present-wait clamp with the packet's
+  present-wait id and the swapchain wait
+  (`Command_buffer::wait_for_swapchain`), both here and not on the main
+  thread because `vkWaitForPresentKHR` is externally synchronized on the
+  swapchain R acquires and presents; the FR3 target handed to the device
+  (`Device::set_present_target_time`, from the packet), the swapchain
+  acquire (`Command_buffer::begin_swapchain`), the submits, the FR3 present
+  holdback and the present request, and `Device::end_frame`, which stamps
+  CPU slot end and submits the GPU frame end timestamp.
+
+The CPU slot of a frame spans its M1, M2 and R, so it contains the main
+thread's wait in the join for R of the previous frame; that wait is
+involuntary and recorded as the record's `join_wait` pair. M1 of frame N+1 runs on the
+main thread while R of frame N runs, so the two threads share the frame time
+records: `Frame_time_recorder` locks every access, writers set single fields
+and readers take copies. The decision M1 makes is for the frame it started,
+whose record is the recorder's latest; frame N's record may still be
+incomplete at that point, and the observer delivers each field once it is
+recorded.
+
+`Time::prepare_update` samples the host frame start after the release gate,
+so the wall-clock frame duration (the simulation advance when no FR4 advance
+is routed) is the interval between successive releases; the M2
+frame-in-flight wait and the R clamp, which the next frame's join waits
+for, fall inside it.
+
+The release gate wait is the record's `pacer_wait` pair, the clamp its
+`present_wait` pair and the render phase join its `join_wait` pair; all
+three are subtracted from the CPU service time where they overlap the slot.
+Counting the join wait as service would couple the loops: an earlier
+release lengthens the join wait, which would raise the service time and
+move the release earlier again.
+
 ## Future work
 
 - [../plans/frame_pacing.md](../plans/frame_pacing.md) - Android tier A, VRR, display-change handling, asynchronous present, driver verification, UI capture export.

@@ -27,6 +27,16 @@ auto Command_buffer_impl::get_debug_label() const noexcept -> erhe::utility::Deb
     return m_debug_label;
 }
 
+auto Command_buffer_impl::get_frame_id() const noexcept -> std::uint64_t
+{
+    return m_frame_id;
+}
+
+void Command_buffer_impl::set_frame_id(const std::uint64_t frame_id) noexcept
+{
+    m_frame_id = frame_id;
+}
+
 void Command_buffer_impl::begin()
 {
     // Stub: GL has no native command buffer; iteration target.
@@ -73,9 +83,6 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
     out_frame_state.should_render = ok;
     if (ok) {
         m_swapchain_used = &swapchain->get_impl();
-        // Friend access -- see Vulkan equivalent. Kept for now while
-        // the legacy single-cb path is being removed.
-        m_device->get_impl().m_had_swapchain_frame = true;
     }
     return ok;
 }

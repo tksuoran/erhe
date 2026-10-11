@@ -1080,7 +1080,7 @@ void Geometry_graph_window::update_node_previews()
             // Headlight shading: N.V-dimmed neutral look (reads curvature
             // better than the brush preview material). Orientation is the
             // node's persistent arcball / hover-spin orientation.
-            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, node->get_preview_orientation(), true, edge_lines);
+            m_app_context.brush_preview->render_preview(*m_app_context.current_command_buffer, node->get_preview_texture(), 0, node->get_preview_primitive(), {}, node->get_preview_orientation(), true, edge_lines);
             node->clear_preview_needs_render();
             --budget;
         }

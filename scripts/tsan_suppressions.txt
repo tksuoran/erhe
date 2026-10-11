@@ -1,0 +1,45 @@
+# ThreadSanitizer suppressions for the editor (ERHE_USE_TSAN,
+# doc/building.md, doc/agents/linux.md "ThreadSanitizer"): the GPU drivers,
+# the Vulkan loader, layers and ICDs and the windowing / desktop libraries are
+# not instrumented, so their internal threads report races TSan cannot see
+# into. Pass with
+#   TSAN_OPTIONS="suppressions=scripts/tsan_suppressions.txt ..."
+# A called_from_lib pattern must match exactly one loaded library (TSan
+# aborts at startup otherwise), so every entry is a full library name.
+called_from_lib:libnvidia-glcore.so
+called_from_lib:libnvidia-glsi.so
+called_from_lib:libnvidia-glvkspirv.so
+called_from_lib:libnvidia-gpucomp.so
+called_from_lib:libnvidia-tls.so
+called_from_lib:libGLX_nvidia.so
+called_from_lib:libvulkan.so.1
+called_from_lib:libVkLayer_MESA_device_select.so
+called_from_lib:libvulkan_asahi.so
+called_from_lib:libvulkan_gfxstream.so
+called_from_lib:libvulkan_intel.so
+called_from_lib:libvulkan_intel_hasvk.so
+called_from_lib:libvulkan_lvp.so
+called_from_lib:libvulkan_nouveau.so
+called_from_lib:libvulkan_radeon.so
+called_from_lib:libvulkan_virtio.so
+called_from_lib:libX11.so
+called_from_lib:libX11-xcb.so
+called_from_lib:libXext.so
+called_from_lib:libXcursor.so
+called_from_lib:libXfixes.so
+called_from_lib:libXi.so
+called_from_lib:libXrandr.so
+called_from_lib:libXrender.so
+called_from_lib:libXss.so
+called_from_lib:libXtst.so
+called_from_lib:libxcb.so
+called_from_lib:libxcb-dri3.so
+called_from_lib:libxcb-glx.so
+called_from_lib:libxcb-present.so
+called_from_lib:libxcb-randr.so
+called_from_lib:libxcb-shm.so
+called_from_lib:libxcb-sync.so
+called_from_lib:libxcb-xfixes.so
+called_from_lib:libwayland-client.so
+called_from_lib:libdbus-1.so
+called_from_lib:libsystemd.so

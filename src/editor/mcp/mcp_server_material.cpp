@@ -973,7 +973,7 @@ auto Mcp_server::action_assign_mesh_material(const json& args) -> std::string
         m_context.material_preview->set_color_texture({});
         m_context.material_preview->resize(64, 64);
         m_context.material_preview->update_rendertarget(*m_context.graphics_device);
-        m_context.material_preview->render_preview(material);
+        m_context.material_preview->render_preview(*m_context.current_command_buffer, material);
         preview_rendered = true;
     }
 

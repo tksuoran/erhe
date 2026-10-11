@@ -148,7 +148,7 @@ Image files the editor can decode (`.png` / `.jpg` / `.jpeg` / `.ktx2` / `.dds`,
 
 Both queue an undoable insert through `make_library_attach_operation` once the texture is resident. Every import creates a FRESH texture: an owned resource is a prim of its scene's tree and reports that scene as its `Item_host`, so two libraries must never own the same object - importing the same file into two scenes gives each its own GPU texture.
 
-Decoding and uploading go through `Texture_file_loader` (`graphics/texture_file_loader.hpp`): the decode runs on the executor, and `Editor::tick` creates the texture and records its upload against the frame's command buffer. The same loader keeps a bounded LRU cache of previews for the Asset Browser's file tooltip; the Hierarchy window's texture tooltip needs no cache, its texture is already resident. Both draw through `draw_texture_preview`.
+Decoding and uploading go through `Texture_file_loader` (`graphics/texture_file_loader.hpp`): the decode runs on the executor, and `Editor::frame_prepare_phase()` (M2, `doc/editor/editor.md` "Frame phases and the render thread") creates the texture and records its upload into the upload command buffer. The same loader keeps a bounded LRU cache of previews for the Asset Browser's file tooltip; the Hierarchy window's texture tooltip needs no cache, its texture is already resident. Both draw through `draw_texture_preview`.
 
 A standalone image file carries no usage information, so it is decoded as **sRGB**. A normal / ORM map imported this way is decoded as color data.
 

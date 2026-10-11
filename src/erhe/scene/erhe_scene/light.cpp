@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/light_snapshot.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene_host.hpp"
@@ -385,6 +386,18 @@ void Light::notify_changed()
 
 auto Light::projection(const Light_projection_parameters& parameters) const -> Projection
 {
+    return Light_snapshot{*this}.projection(parameters);
+}
+
+auto Light::projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
+{
+    Light_projection_transforms transforms = Light_snapshot{*this}.projection_transforms(parameters, Light_shadow_use::shadow_mapped);
+    transforms.light = nullptr; // the snapshot above does not outlive this call
+    return transforms;
+}
+
+auto Light_snapshot::projection(const Light_projection_parameters& parameters) const -> Projection
+{
     switch (get_light_type()) {
         case Light_type::directional: return stable_directional_light_projection(parameters);
         case Light_type::spot:        return spot_light_projection              (parameters);
@@ -392,7 +405,7 @@ auto Light::projection(const Light_projection_parameters& parameters) const -> P
     }
 }
 
-auto Light::stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection
+auto Light_snapshot::stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection
 {
     ERHE_VERIFY(parameters.view_camera != nullptr);
 
@@ -416,7 +429,7 @@ auto Light::stable_directional_light_projection(const Light_projection_parameter
     };
 }
 
-auto Light::spot_light_projection(const Light_projection_parameters& parameters) const -> Projection
+auto Light_snapshot::spot_light_projection(const Light_projection_parameters& parameters) const -> Projection
 {
     // The outer cone (full angle outer_spot_angle) is inscribed in the
     // covered texels: the frustum is widened so the cone's rim stays the
@@ -437,12 +450,12 @@ auto Light::spot_light_projection(const Light_projection_parameters& parameters)
     };
 }
 
-auto Light::projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
+auto Light_snapshot::projection_transforms(const Light_projection_parameters& parameters, const Light_shadow_use shadow_use) const -> Light_projection_transforms
 {
     ERHE_PROFILE_FUNCTION();
     switch (get_light_type()) {
         case Light_type::directional: {
-            return directional_light_projection_transforms(parameters);
+            return directional_light_projection_transforms(parameters, shadow_use);
         }
 
         case Light_type::point: {
@@ -459,10 +472,14 @@ auto Light::projection_transforms(const Light_projection_parameters& parameters)
     }
 }
 
-auto Light::directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
+auto Light_snapshot::directional_light_projection_transforms(const Light_projection_parameters& parameters, const Light_shadow_use shadow_use) const -> Light_projection_transforms
 {
     ERHE_PROFILE_FUNCTION();
+    // The tight fit is for the shadow map only (Light_shadow_use): a light
+    // without one takes the stable projection, whose transforms shading
+    // never reads for a directional light beyond the light frame direction.
     const bool use_tight_fit =
+        (shadow_use == Light_shadow_use::shadow_mapped) &&
         (parameters.fit_settings != nullptr) &&
         parameters.fit_settings->any_tightening_enabled();
     return use_tight_fit
@@ -470,7 +487,7 @@ auto Light::directional_light_projection_transforms(const Light_projection_param
         : stable_directional_light_projection_transforms(parameters);
 }
 
-auto Light::stable_directional_light_projection_transforms(
+auto Light_snapshot::stable_directional_light_projection_transforms(
     const Light_projection_parameters& parameters
 ) const -> Light_projection_transforms
 {
@@ -495,11 +512,11 @@ auto Light::stable_directional_light_projection_transforms(
     using mat3 = glm::mat3;
     using mat4 = glm::mat4;
 
-    const Node* const view_camera_node = parameters.view_camera;
+    const Camera_snapshot& view_camera = *parameters.view_camera;
 
     //// // View distance is used as radius of the view camera bounding volume
-    //// const float r = parameters.view_camera->projection()->get_z_far();
-    const float r = parameters.view_camera->get_shadow_range();
+    //// const float r = parameters.view_camera->projection().get_z_far();
+    const float r = view_camera.get_shadow_range();
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
     const Projection light_projection = projection(parameters);
@@ -510,7 +527,7 @@ auto Light::stable_directional_light_projection_transforms(
     const Light_frame light_frame       = get_light_frame();
     const vec3        light_direction   = light_frame.direction;
     const vec3        light_up_vector   = light_frame.up;
-    const vec3 view_camera_position     = vec3{view_camera_node->position_in_world()};
+    const vec3 view_camera_position     = vec3{view_camera.position_in_world()};
 
     // Rotation only transform
     const mat3 world_from_light{light_frame.world_from_light};
@@ -558,7 +575,7 @@ auto Light::stable_directional_light_projection_transforms(
     return assemble_directional_light_projection_transforms(parameters, light_projection, snapped_world_from_light, snapped_light_from_world);
 }
 
-auto Light::assemble_directional_light_projection_transforms(
+auto Light_snapshot::assemble_directional_light_projection_transforms(
     const Light_projection_parameters& parameters,
     const Projection&                  light_projection,
     const glm::mat4&                   world_from_light_camera,
@@ -580,8 +597,8 @@ auto Light::assemble_directional_light_projection_transforms(
         clip_from_light.get_matrix() * light_camera_from_world,
         world_from_light_camera * clip_from_light.get_inverse_matrix()
     };
-    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.depth_range, parameters.conventions);
-    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.depth_range, parameters.conventions);
+    const glm::mat4 tex_from_clip = Light::get_texture_from_clip(parameters.depth_range, parameters.conventions);
+    const glm::mat4 clip_from_tex = Light::get_clip_from_texture(parameters.depth_range, parameters.conventions);
     const Transform texture_from_world{
         tex_from_clip * clip_from_world.get_matrix(),
         clip_from_world.get_inverse_matrix() * clip_from_tex
@@ -597,7 +614,7 @@ auto Light::assemble_directional_light_projection_transforms(
     };
 }
 
-auto Light::spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
+auto Light_snapshot::spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
     ERHE_PROFILE_FUNCTION();
     const Projection light_projection = projection(parameters);
@@ -613,8 +630,8 @@ auto Light::spot_light_projection_transforms(const Light_projection_parameters& 
         clip_from_light_camera.get_matrix() * light_frame.light_from_world,
         light_frame.world_from_light * clip_from_light_camera.get_inverse_matrix()
     };
-    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.depth_range, parameters.conventions);
-    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.depth_range, parameters.conventions);
+    const glm::mat4 tex_from_clip = Light::get_texture_from_clip(parameters.depth_range, parameters.conventions);
+    const glm::mat4 clip_from_tex = Light::get_clip_from_texture(parameters.depth_range, parameters.conventions);
     const Transform texture_from_world{
         tex_from_clip * clip_from_world.get_matrix(),
         clip_from_world.get_inverse_matrix() * clip_from_tex
@@ -630,7 +647,7 @@ auto Light::spot_light_projection_transforms(const Light_projection_parameters& 
     };
 }
 
-auto Light::point_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
+auto Light_snapshot::point_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
     ERHE_PROFILE_FUNCTION();
     static_cast<void>(parameters);

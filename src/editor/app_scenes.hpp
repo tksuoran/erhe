@@ -82,6 +82,30 @@ public:
 
     [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
 
+    // M2, before the kick: every scene root resolves the per-scene settings
+    // the render phase reads and captures the frame's joint poses
+    // (Scene_root::snapshot_render_settings), gathers its shadow bounds into
+    // the frame's slot (Scene_root::prepare_shadow_bounds) and publishes its
+    // draw lists into the frame's slot (Scene_root::publish_draw_lists).
+    void snapshot_render_settings();
+
+    // M2, every frame (the indirect diffuse ticks run in R on hidden frames
+    // too), after update_material_sets() settled the forward sets' slots:
+    // every scene root brings its Ray_trace_scene up to date and publishes it
+    // into the frame's slot (Scene_root::prepare_ray_trace_scene).
+    void prepare_ray_trace_scenes();
+
+    // Unique traced geometries over every registered root, each with one
+    // bottom level structure (get_memory_usage blas_count).
+    [[nodiscard]] auto get_ray_trace_geometry_count() -> std::size_t;
+
+    // Main thread, from the change sites of the editor setting
+    // exclude_unlit_primitives (Settings window): pushes the value to the
+    // Draw_list_scene of every registered scene root. register_scene_root()
+    // pushes the current setting to a (re-)registered root; a new root gets
+    // it at creation (Draw_list_scene_dependencies).
+    void set_exclude_unlit_from_shadows(bool value);
+
     // True when the Item_host is one of the registered scene roots. Parts
     // that cache scene-hosted items across frames (window targets, tool
     // state) use this to self-heal when the hosting scene is closed: the

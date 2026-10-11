@@ -2,11 +2,13 @@
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <memory>
 #include <span>
+#include <vector>
 
 namespace erhe { class Item_filter; }
 namespace erhe::scene {
@@ -45,6 +47,20 @@ public:
         const Render_bucket&            bucket,
         erhe::primitive::Primitive_mode primitive_mode
     ) -> Draw_indirect_buffer_range;
+
+    // Prepare-phase half of the bucket path (render_bucket_snapshot.hpp):
+    // appends the draw commands update(bucket, primitive_mode) would write,
+    // without the debug index count clamp (applied by the span overload).
+    // Reads the bucket's Buffer_mesh variants; main thread.
+    void append_commands(
+        const Render_bucket&                                                  bucket,
+        erhe::primitive::Primitive_mode                                       primitive_mode,
+        std::vector<erhe::graphics::Draw_indexed_primitives_indirect_command>& out
+    ) const;
+
+    // Render-phase half: copies prepared draw commands into a ring buffer
+    // range, applying the debug index count clamp. Reads no Mesh.
+    auto update(std::span<const erhe::graphics::Draw_indexed_primitives_indirect_command> commands) -> Draw_indirect_buffer_range;
 
     // Draw-list overload: one draw command per entry in [begin, end) of
     // draw_list whose entry_passes value (indexed like draw_list.entries) is

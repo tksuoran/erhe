@@ -20,8 +20,13 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_utility/align.hpp"
+#include "erhe_utility/thread_roles.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
+
+#include <algorithm>
+#include <cmath>
 
 namespace editor {
 
@@ -41,12 +46,12 @@ Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
 
 Post_processing_node_texture_reference::Post_processing_node_texture_reference(
     const std::shared_ptr<Post_processing_node>& node,
-    const int                                    direction,
+    const Post_processing_texture_role           role,
     const size_t                                 level
 )
-    : m_node     {node}
-    , m_direction{direction}
-    , m_level    {level}
+    : m_node {node}
+    , m_role {role}
+    , m_level{level}
 {
 };
 
@@ -58,14 +63,23 @@ auto Post_processing_node_texture_reference::get_referenced_texture() const -> c
     if (!node) {
         return nullptr;
     }
-    if (m_direction > 0) {
-        return (m_level < node->upsample_textures.size())
-            ? node->upsample_textures.at(m_level).get()
-            : nullptr;
+    erhe::utility::Thread_roles::assert_render_thread();
+    switch (m_role) {
+        case Post_processing_texture_role::input: {
+            return node->get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture).get();
+        }
+        case Post_processing_texture_role::downsample: {
+            return (m_level < node->downsample_textures.size())
+                ? node->downsample_textures.at(m_level).get()
+                : nullptr;
+        }
+        case Post_processing_texture_role::upsample: {
+            return (m_level < node->upsample_textures.size())
+                ? node->upsample_textures.at(m_level).get()
+                : nullptr;
+        }
     }
-    return (m_level < node->downsample_textures.size())
-        ? node->downsample_textures.at(m_level).get()
-        : nullptr;
+    return nullptr;
 }
 
 // http://cdn2.gran-turismo.com/data/www/pdi_publications/PracticalHDRandWCGinGTS.pdf
@@ -80,16 +94,73 @@ Post_processing_node::Post_processing_node(
     , m_graphics_device{graphics_device}
     , m_post_processing{post_processing}
 {
+    m_frame_parameters.resize(graphics_device.get_number_of_frames_in_flight());
     register_input ("texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     register_output("texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+}
+
+void compute_post_processing_weights(const Post_processing_parameters& parameters, const std::size_t level_count, std::vector<float>& out)
+{
+    out.resize(level_count);
+    if (level_count < 2) {
+        if (level_count == 1) {
+            out[0] = parameters.weight_c0;
+        }
+        return;
+    }
+    const float c0 = parameters.weight_c0;
+    const float c1 = parameters.weight_c1;
+    const float c2 = parameters.weight_c2;
+    const float c3 = parameters.weight_c3;
+    out[0] = c0;
+    out[1] = c0;
+    float max_value = 0.0f;
+    for (std::size_t i = 2; i < level_count; ++i) {
+        const float l = static_cast<float>(1 + level_count - i);
+        const float w = c3 * std::pow(l, c2);
+        out[i] = 1.0f - w;
+        max_value = std::max(max_value, out[i]);
+    }
+    const float margin = max_value - 1.0f;
+    for (std::size_t i = 2; i < level_count; ++i) {
+        out[i] = out[i] - margin - c1;
+    }
+}
+
+void Post_processing_node::prepare_rendergraph_node(const uint64_t frame_index)
+{
+    // A plain copy of the live parameters (the window's sliders are their
+    // change sites); the weights vector keeps its capacity.
+    m_frame_parameters.prepare(frame_index) = parameters;
+}
+
+auto Post_processing_node::get_render_parameters() const -> const Post_processing_parameters&
+{
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    return m_frame_parameters.get(m_graphics_device.get_frame_index());
 }
 
 Post_processing_node::~Post_processing_node() noexcept
 {
 }
 
+auto Post_processing_node::is_sized_for_input() const -> bool
+{
+    const std::shared_ptr<erhe::graphics::Texture>& input_texture = get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    if (!input_texture) {
+        return false;
+    }
+    return
+        (level0_width  == input_texture->get_width ()) &&
+        (level0_height == input_texture->get_height()) &&
+        (level0_width > 0) && (level0_height > 0);
+}
+
 auto Post_processing_node::update_size() -> bool
 {
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
     // Input determines the size of intermediate nodes and size of the input node for the post processing render graph node.
     // Input should be multisample resolved.
 
@@ -104,9 +175,9 @@ auto Post_processing_node::update_size() -> bool
     }
 
     // Defer destruction of old resources until after Rendergraph::execute()
-    // completes. Nodes executing later in this frame (Window_imgui_host
-    // calling render_draw_data) may still reference these textures via
-    // Texture_reference::get_referenced_texture().
+    // completes (this is the render phase, the only phase that reads the
+    // pyramid). ImGui hosts executing in this frame may already have
+    // resolved these textures via Texture_reference::get_referenced_texture().
     class Old_resources
     {
     public:
@@ -138,6 +209,9 @@ auto Post_processing_node::update_size() -> bool
     level0_width  = width;
     level0_height = height;
     if (level0_width < 1 || level0_height < 1) {
+        level_widths .clear();
+        level_heights.clear();
+        publish_pyramid_info(*input_texture);
         return false;
     }
 
@@ -160,7 +234,6 @@ auto Post_processing_node::update_size() -> bool
     level_heights           .clear();
     downsample_source_levels.clear();
     upsample_source_levels  .clear();
-    weights                 .clear();
     while ((level_width >= 1) && (level_height >= 1)) {
         level_widths .push_back(level_width);
         level_heights.push_back(level_height);
@@ -272,29 +345,34 @@ auto Post_processing_node::update_size() -> bool
     for (size_t i = level_count - 1; i > 0; --i) {
         upsample_source_levels.push_back(i);
     }
-    weights.resize(level_count);
-    {
-        float c0 =  0.12f; //1.0 / 128.0f;
-        float c1 =  0.05f; //1.0 / 256.0f;
-        float c2 = -1.0f;  // -2.00f;
-        float c3 =  2.0f;  //  3.00f;
-        weights[0] = c0;
-        weights[1] = c0;
-        float max_value = 0.0f;
-        for (size_t i = 2, end = weights.size(); i < end; ++i) {
-            float l = static_cast<float>(1 + level_count - i);
-            float w = c3 * std::pow(l, c2);
-            weights[i] = 1.0f - w;
-            max_value = std::max(max_value, weights[i]);
-        }
-        float margin = max_value - 1.0f;
-        for (size_t i = 2, end = weights.size(); i < end; ++i) {
-            weights[i] = weights[i] - margin - c1;
-        }
-    }
-
+    publish_pyramid_info(*input_texture);
     update_parameters();
     return true;
+}
+
+void Post_processing_node::publish_pyramid_info(const erhe::graphics::Texture& input_texture)
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    std::lock_guard<std::mutex> lock{m_pyramid_info_mutex};
+    m_pyramid_info.level0_width     = level0_width;
+    m_pyramid_info.level0_height    = level0_height;
+    m_pyramid_info.level_widths     = level_widths;
+    m_pyramid_info.level_heights    = level_heights;
+    m_pyramid_info.downsample_count = downsample_textures.size();
+    m_pyramid_info.upsample_count   = upsample_textures.size();
+    m_pyramid_info.input_label      = input_texture.get_debug_label().string_view();
+}
+
+void Post_processing_node::get_pyramid_info(Post_processing_pyramid_info& out) const
+{
+    std::lock_guard<std::mutex> lock{m_pyramid_info_mutex};
+    out.level0_width     = m_pyramid_info.level0_width;
+    out.level0_height    = m_pyramid_info.level0_height;
+    out.level_widths     = m_pyramid_info.level_widths;
+    out.level_heights    = m_pyramid_info.level_heights;
+    out.downsample_count = m_pyramid_info.downsample_count;
+    out.upsample_count   = m_pyramid_info.upsample_count;
+    out.input_label      = m_pyramid_info.input_label;
 }
 
 void Post_processing_node::update_parameters()
@@ -346,6 +424,16 @@ void Post_processing_node::update_parameters()
     const size_t      level_count = level_widths.size();
     const std::size_t byte_count  = level_offset_size * level_count;
 
+    // The frame's copy of the parameters. Its per-level weights apply when
+    // they were edited for this pyramid; otherwise (never edited, or the
+    // pyramid was rebuilt for a new size since) the curve gives them.
+    const Post_processing_parameters& frame_parameters = get_render_parameters();
+    if (frame_parameters.weights.size() == level_count) {
+        m_render_weights.assign(frame_parameters.weights.begin(), frame_parameters.weights.end());
+    } else {
+        compute_post_processing_weights(frame_parameters, level_count, m_render_weights);
+    }
+
     // Any prior range is left in closed+released state by the previous
     // call, so the rvalue temporary that receives those fields via
     // move-assign exchange destructs safely.
@@ -371,10 +459,10 @@ void Post_processing_node::update_parameters()
         write<float   >(float_data, write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
         write<float   >(float_data, write_offset + offsets.source_lod,            static_cast<float>(source_level));
         write<float   >(float_data, write_offset + offsets.level_count,           static_cast<float>(level_count));
-        write<float   >(float_data, write_offset + offsets.upsample_radius,       upsample_radius);
-        write<float   >(float_data, write_offset + offsets.mix_weight,            weights.at(source_level));
-        write<float   >(float_data, write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
-        write<float   >(float_data, write_offset + offsets.tonemap_alpha,         tonemap_alpha);
+        write<float   >(float_data, write_offset + offsets.upsample_radius,       frame_parameters.upsample_radius);
+        write<float   >(float_data, write_offset + offsets.mix_weight,            m_render_weights.at(source_level));
+        write<float   >(float_data, write_offset + offsets.tonemap_luminance_max, frame_parameters.tonemap_luminance_max);
+        write<float   >(float_data, write_offset + offsets.tonemap_alpha,         frame_parameters.tonemap_alpha);
         write_offset += level_offset_size;
     }
     parameter_buffer_range.bytes_written(byte_count);
@@ -406,17 +494,15 @@ auto Post_processing_node::get_producer_output_texture(const int key, int) const
 
 void Post_processing_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
-    if (!m_enabled) {
-        return;
-    }
-
     ERHE_PROFILE_FUNCTION();
     erhe::graphics::Scoped_gpu_zone gpu_zone{command_buffer, "Post_processing"};
 
-    const bool can_post_process = update_size();
-    if (!can_post_process) {
-        return;
+    // The producer of the input texture executed before this node and sized
+    // it for this frame; the pyramid follows it here, in the render phase.
+    if (!update_size()) {
+        return; // not connected, or an empty input
     }
+    ERHE_VERIFY(is_sized_for_input());
 
     if (downsample_textures.empty() || upsample_textures.empty()) {
         return;
@@ -684,7 +770,7 @@ auto Post_processing::create_node(
     erhe::utility::Debug_label      debug_label
 ) -> std::shared_ptr<Post_processing_node>
 {
-    std::shared_ptr<Post_processing_node> new_node = std::make_shared<Post_processing_node>(graphics_device, rendergraph, *this, debug_label);
+    std::shared_ptr<Post_processing_node> new_node = erhe::rendergraph::make_rendergraph_node<Post_processing_node>(graphics_device, rendergraph, *this, debug_label);
     m_nodes.push_back(new_node);
     return new_node;
 }
@@ -756,7 +842,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
         );
         {
             const bool is_first_downsample_pass = (source_level == 0);
-            const bool use_lowpass = !is_first_downsample_pass && (source_level < node.lowpass_count);
+            const bool use_lowpass = !is_first_downsample_pass && (source_level < static_cast<std::size_t>(std::max(0, node.get_render_parameters().lowpass_count)));
             erhe::graphics::Base_render_pipeline& pipeline =
                 is_first_downsample_pass ? m_pipelines.downsample_with_lowpass_input :
                 use_lowpass              ? m_pipelines.downsample_with_lowpass :

@@ -278,10 +278,6 @@ void Frame_log_window::imgui()
     ImGui::PopFont();
 }
 
-void Frame_log_window::on_frame_begin()
-{
-}
-
 void Frame_log_window::on_frame_end()
 {
     auto& frame = erhe::log::get_frame_store_log();

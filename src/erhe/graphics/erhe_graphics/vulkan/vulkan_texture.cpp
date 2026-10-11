@@ -184,7 +184,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     const VkImageCreateInfo image_create_info{
         .sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext                 = nullptr,
-        .flags                 = is_cube ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : VkImageCreateFlags{0},
+        .flags                 = is_cube ? static_cast<VkImageCreateFlags>(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) : VkImageCreateFlags{0},
         .imageType             = (m_type == Texture_type::texture_3d) ? VK_IMAGE_TYPE_3D
                                : (m_type == Texture_type::texture_1d) ? VK_IMAGE_TYPE_1D
                                :                                        VK_IMAGE_TYPE_2D,

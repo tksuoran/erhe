@@ -367,11 +367,12 @@ macro). That is intended here rather than worked around: a lookup miss means R4
 was violated, and silently rendering the wrong material is precisely the class
 of bug this design exists to eliminate.
 
-The verify is the guard for the one lookup path that still runs mid-pass:
-`write_object_gpu_slots` is called from the joint half of `sync_gpu_slots()`
-(`draw_list_scene.cpp:635-644`) inside `draw_color()` / `draw_shadow()`. It
-rewrites slot fields from the *live* primitives while references came from a
-snapshot, so the verify is what makes such a case fail loudly.
+The verify is also the guard for the one lookup path that runs outside a
+registration: `write_object_gpu_slots` is called from the joint slot sync of
+`Draw_list_scene::publish()` (prepare phase, after the frame's joint pose
+capture). It rewrites slot fields from the *live* primitives while references
+came from the last membership sync, so the verify is what makes such a case
+fail loudly.
 
 ### D1b - Lifetime
 
@@ -511,10 +512,11 @@ public:
     explicit Material_set(const Material_set_create_info&);  // carries the Device (D3)
 
     // Called once per frame (D6), after sync_library() and flush_pending()
-    // have settled membership. Rehashes members (D10), then writes the GPU copy
-    // and resets + repopulates the texture heap ONLY if anything changed (R10);
-    // otherwise returns after the hashing. Library membership arrives through
-    // sync_library() (D1) and nowhere else.
+    // have settled membership, before the frame's first bind(). Rehashes
+    // members (D10), then writes the GPU copy and resets + repopulates a
+    // texture heap ONLY if anything changed (R10); either way it publishes
+    // the copy and heap the caller's frame binds (D9). Library membership
+    // arrives through sync_library() (D1) and nowhere else.
     void update(erhe::graphics::Command_buffer&);
     auto bind  (erhe::graphics::Render_command_encoder&) -> bool;
     auto bind  (erhe::graphics::Compute_command_encoder&) -> bool;
@@ -526,7 +528,8 @@ public:
 private:
     // ... membership half: slot table, free list, dirty edge (D1)
     Material_buffer                               m_material_buffer;  // record writer; its storage is m_gpu
-    std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
+    std::vector<Heap>                             m_heaps;            // one per written copy in flight (D9)
+    std::vector<Frame_heap>                       m_frame_heaps;      // the heap each frame in flight binds
     erhe::graphics::Multi_copy_buffer             m_gpu;              // D9
     bool                                          m_force_dirty{true};
 };
@@ -746,7 +749,7 @@ look slots up. Which set it gets follows the path its caller already chose:
 | `Forward_renderer::render` / `draw_primitives` | bucket | the root's **forward** set, from `Composition_pass`'s bucket branch (`composition_pass.cpp:354,365`; `:324` is the draw-list branch) and every other bucket caller; the shared empty set when null (D8) |
 | `Shadow_renderer::render` | both | whichever matches the path that light takes, filled by `Shadow_render_node` (`shadow_render_node.cpp:601`) |
 | `Ddgi_renderer`, `Ray_trace_renderer` | compute | the root's forward set (phase 5) |
-| `Id_renderer` | bucket | none, and it binds none: its shader reads only the id, and it is not a `Base_render_parameters` caller at all - it owns its `Primitive_buffer` and drives its own encoder (`id_renderer.cpp:76,394-398`). Its only material contact is the null `const Material_set*` it hands `Primitive_buffer`, which then writes a constant slot 0 (D1c) |
+| `Id_renderer` | bucket | none, and it binds none: its shader reads only the id, and it is not a `Base_render_parameters` caller at all - it owns its `Primitive_buffer` and drives its own encoder. Its only material contact is the null `const Material_set*` it hands `Primitive_buffer::append_records` when it prepares the pass, which then writes a constant slot 0 (D1c) |
 
 A frame over one root therefore binds *both* of that root's sets, in different
 passes (D0); every comparison of slots stays within one set.
@@ -760,7 +763,7 @@ state that cannot live there, because a slot assigned per renderer call is why
 the texture heap, while the camera, light and joint buffers stay with the
 renderer. Joint slots keep the R8a treatment - a stable skin reference in the
 entry and the slot read at upload time - because they genuinely are assigned
-per `Joint_buffer::update` call.
+per `Joint_poses::capture` call (once per frame, before the passes).
 
 **The scope of this decoupling.** No renderer has a *material* reason to name a
 draw-list type: the bucket path's parameters, buffers and bind sequence are
@@ -793,8 +796,8 @@ Slot readers:
   and `shadow_renderer.cpp:243` pass the forward set, the `Draw_list` overload
   sources the draw-list set from the `Draw_list_scene&` it already receives, and
   `id_renderer.cpp:394` passes null. Overload inventory: D1c.
-- `Scene_tlas` (`scene_tlas.cpp:295`) - the forward set of the scene root it is
-  given, which is what DDGI and the ray tracer bind (phase 5).
+- `Ray_trace_scene` (`ray_trace_scene.cpp`, `resolve_material`) - the forward
+  set of its scene root, which is what DDGI and the ray tracer bind (phase 5).
 - `Light_buffer` (`light_buffer.cpp:567`) - `Light_projections::brdf_material`
   becomes a pre-resolved `brdf_material_slot`. **This must land in phase 4**, not
   later: once Forward/Shadow stop calling the legacy `Material_buffer::update`,
@@ -806,11 +809,13 @@ Slot readers:
 Every set a pass can bind is flushed and updated, including the owners that are
 not in `App_scenes::m_scene_roots` - the two preview roots' forward sets, the
 BRDF slice window and the shared empty set - and a root with a draw list has two
-of them updated per frame. Per frame, in `Editor::tick()`, the material update
-runs **after** `flush_draw_lists()` (`editor.cpp:796`) and before the first pass
-that binds - i.e. before the DDGI tick (`editor.cpp:802`) and well before
-`m_rendergraph->execute` (`editor.cpp:1019`), which is also where XR renders
-(`headset_view.cpp:170-175`). Ordering after the flush is what satisfies R3: the
+of them updated per frame. Per frame, at the end of the editor's
+`frame_prepare_phase()` (M2), the material update runs **after**
+`flush_draw_lists()` and before the first pass that binds - the DDGI tick and
+`m_rendergraph->execute` of the render phase (R), which is also where XR
+renders (`Headset_view_node`); it records into the upload command buffer,
+whose GPU work completes before the frame command buffer's starts
+(`doc/editor/editor.md` "Frame phases and the render thread"). Ordering after the flush is what satisfies R3: the
 flush is where records are written and where object references are taken, so
 updating afterwards guarantees the bound copy covers every slot a record can name
 this frame.
@@ -876,11 +881,14 @@ independent of each other.
 Two more are outside the tick schedule entirely and follow the same pattern:
 
 - the BRDF slice window's one-material set:
-  `Brdf_slice_rendergraph_node::execute_rendergraph_node`
-  (`brdf_slice.cpp:80-125`) runs inside `m_rendergraph->execute`, after every
-  step above. Its membership is library-only and one material wide, so
-  `sync_library({material})` followed by `update()` is its whole step - and on
-  every frame but the first both are no-ops (D10);
+  `Brdf_slice_rendergraph_node::prepare_rendergraph_node` runs inside
+  `Rendergraph::prepare_frame`, late in the prepare phase, after every step
+  above. Its membership is library-only and one material wide, so
+  `sync_library({material})` followed by `update()` (into the prepare phase's
+  upload command buffer) is its whole step - and on every frame but the first
+  both are no-ops (D10); the hook also resolves the material's slot, and the
+  node's execute in the render phase only binds the copy `update()`
+  published for its frame;
 - the example application's set: `src/example/example.cpp` has its own loop and
   its own set, established with `sync_library(m_gltf_data.materials)` -
   the same list it passes today (`example.cpp:439`). It is the clearest
@@ -967,12 +975,18 @@ public:
     // the current copy size (see Growth); the copy count itself is what the
     // sizing rule below makes sufficient.
     [[nodiscard]] auto begin_write(std::size_t byte_count) -> std::span<std::byte>;
-    // The written copy becomes current; the previous current copy stays
-    // readable until the frames that bound it complete.
+    // The written copy becomes current and is published for the caller's
+    // frame; the previous current copy stays readable until the frames it
+    // was published for complete.
     void commit(std::size_t byte_count);
 
-    // Binds the current copy and stamps it as used by the current device
-    // frame. True once a copy has been committed.
+    // Names the current copy as the copy the caller's device frame binds and
+    // stamps it as used by that frame. Once per frame, before its first bind.
+    void publish();
+
+    // Binds the copy published for the caller's device frame; writes
+    // nothing. True once a copy had been committed when the frame was
+    // published.
     auto bind(Command_encoder&) -> bool;
 
     [[nodiscard]] auto has_current() const -> bool;
@@ -984,7 +998,7 @@ private:
     public:
         std::size_t byte_offset    {0};
         std::size_t byte_count     {0};
-        uint64_t    last_used_frame{0};   // refreshed by bind(), not by commit()
+        uint64_t    last_used_frame{0};   // refreshed by publish(), every frame
         bool        written        {false};
     };
     Device&                 m_device;
@@ -993,15 +1007,37 @@ private:
     // has completed (Growth).
     std::vector<std::pair<std::unique_ptr<Buffer>, uint64_t>> m_retired;
     std::vector<Copy>       m_copies;
+    std::vector<Frame_slot> m_frame_slots; // what bind() of each frame in flight binds
     std::size_t             m_current{invalid};
 };
 ```
 
-**Why `last_used_frame` is refreshed by `bind()`, not by `commit()`.** A copy
-that is committed once and then bound for two hundred frames is *in use* on
-every one of those frames. Stamping only at commit is the same mistake D2b
-describes for the Vulkan descriptor set, and has the same consequence: a later
-write would target a copy that in-flight frames are still reading.
+**Why `last_used_frame` is refreshed by `publish()` every frame, not only by
+`commit()`.** A copy that is committed once and then bound for two hundred
+frames is *in use* on every one of those frames. Stamping only at commit is
+the same mistake D2b describes for the Vulkan descriptor set, and has the same
+consequence: a later write would target a copy that in-flight frames are still
+reading.
+
+**Frames in flight on two threads.** The device frame index is role-keyed
+(`Device::get_frame_index()`): the main thread prepares frame F + 1 while the
+render thread records frame F (doc/editor/render_thread.md section 2.1). So the
+copy a frame binds is decided when the frame is prepared, not when it is
+recorded: `publish()` (and `commit()`) write the frame's entry of
+`m_frame_slots` (indexed by frame % frames in flight) and stamp the copy,
+and `bind()` reads that entry alone - never `m_current`, `m_copies` or the
+allocation, which only the preparing thread touches. `find_free_copy()`
+therefore reads stamps the same thread wrote, and a stamped frame retires
+through `Device::is_frame_completed()`, which follows the frame's final
+submit, after its binds.
+
+`Material_set` gives each written copy a texture heap of its own (a pool that
+grows to the same high-water mark as the copies): an update resets and
+repopulates a heap no unretired frame was published with, never the heap the
+current copy's records index, and publishes the pair. `bind()` / `unbind()`
+use the heap published for the caller's frame, so a heap a frame in flight
+binds is never reset under it. The slot-ordered material list the record
+writer walks is read by `update()` only.
 
 **Sizing.** `copy_count = Device::get_number_of_frames_in_flight() + 1`. With F
 frames in flight, the frames that have not completed are at most F, and each of

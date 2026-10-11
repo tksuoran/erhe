@@ -128,7 +128,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     VkSampleCountFlagBits sample_count_flags = VK_SAMPLE_COUNT_1_BIT;
     uint32_t color_attachment_count = 1;
     {
-        const Render_pass_impl* active_render_pass = Device_impl::get_device_impl()->get_active_render_pass_impl();
+        const Render_pass_impl* active_render_pass = m_command_buffer.get_impl().get_active_render_pass_impl();
         if (active_render_pass != nullptr) {
             sample_count_flags     = get_vulkan_sample_count(active_render_pass->get_sample_count());
             color_attachment_count = active_render_pass->get_color_attachment_count();
@@ -198,7 +198,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     hash_combine(hash, static_cast<std::size_t>(data.multisample.alpha_to_one_enable));
     hash_combine(hash, std::hash<float>{}(data.multisample.min_sample_shading));
     hash_combine(hash, static_cast<std::size_t>(sample_count_flags));
-    hash_combine(hash, reinterpret_cast<std::size_t>(Device_impl::get_device_impl()->get_active_render_pass()));
+    hash_combine(hash, reinterpret_cast<std::size_t>(m_command_buffer.get_impl().get_active_render_pass()));
     if (data.vertex_input != nullptr) {
         const Vertex_input_state_data& vis = data.vertex_input->get_data();
         hash_combine(hash, vis.attributes.size());
@@ -427,7 +427,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
             .pColorBlendState    = &color_blend_state,
             .pDynamicState       = &dynamic_state,
             .layout              = m_pipeline_layout,
-            .renderPass          = Device_impl::get_device_impl()->get_active_render_pass(),
+            .renderPass          = m_command_buffer.get_impl().get_active_render_pass(),
             .subpass             = 0,
             .basePipelineHandle  = VK_NULL_HANDLE,
             .basePipelineIndex   = -1
@@ -602,7 +602,7 @@ void Render_command_encoder_impl::set_buffer(
             1,
             &write
         );
-        ++device_impl.m_desc_push_buf_count;
+        ++m_command_buffer.get_impl().get_descriptor_counters().push_buf_count;
         ERHE_VULKAN_DESC_TRACE("[PUSH_BUF] binding={} offset={} size={}", index, offset, length);
     } else {
         // Traditional descriptor set fallback
@@ -611,10 +611,11 @@ void Render_command_encoder_impl::set_buffer(
             descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         }
 
-        VkDescriptorSet descriptor_set = device_impl.allocate_descriptor_set();
+        VkDescriptorSet descriptor_set = device_impl.allocate_descriptor_set(m_command_buffer.get_impl().get_frame_id());
         if (descriptor_set == VK_NULL_HANDLE) {
             return;
         }
+        ++m_command_buffer.get_impl().get_descriptor_counters().alloc_set_count;
 
         const VkDescriptorBufferInfo buffer_info{
             .buffer = buffer->get_impl().get_vk_buffer(),
@@ -743,7 +744,7 @@ void Render_command_encoder_impl::set_sampled_image(
         1,
         &write
     );
-    ++device_impl.m_desc_push_img_count;
+    ++m_command_buffer.get_impl().get_descriptor_counters().push_img_count;
     ERHE_VULKAN_DESC_TRACE("[PUSH_IMG] binding={} image=0x{:x}", vk_binding, reinterpret_cast<std::uintptr_t>(image_info.imageView));
 }
 
@@ -766,7 +767,7 @@ void Render_command_encoder_impl::draw_primitives(
         static_cast<uint32_t>(vertex_start),
         0 // firstInstance
     );
-    ++Device_impl::get_device_impl()->m_desc_draw_count;
+    ++m_command_buffer.get_impl().get_descriptor_counters().draw_count;
     ERHE_VULKAN_TRACE("[DRAW] type=direct vertices={} instances={}", vertex_count, instance_count);
 }
 
@@ -806,7 +807,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
         0, // vertexOffset
         0  // firstInstance
     );
-    ++Device_impl::get_device_impl()->m_desc_draw_count;
+    ++m_command_buffer.get_impl().get_descriptor_counters().draw_count;
     ERHE_VULKAN_TRACE("[DRAW] type=indexed indices={} instances={}", index_count, instance_count);
 }
 
@@ -856,7 +857,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
             static_cast<uint32_t>(drawcount),
             actual_stride
         );
-        ++Device_impl::get_device_impl()->m_desc_draw_count;
+        ++m_command_buffer.get_impl().get_descriptor_counters().draw_count;
         ERHE_VULKAN_TRACE("[DRAW] type=mdi drawcount={}", drawcount);
     } else {
         // Emulated multi-draw: loop with per-draw push constant
@@ -875,7 +876,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
             VkDeviceSize offset = static_cast<VkDeviceSize>(indirect_offset) + i * actual_stride;
             vkCmdDrawIndexedIndirect(command_buffer, m_indirect_buffer, offset, 1, actual_stride);
         }
-        Device_impl::get_device_impl()->m_desc_draw_count += static_cast<uint32_t>(drawcount);
+        m_command_buffer.get_impl().get_descriptor_counters().draw_count += static_cast<uint32_t>(drawcount);
         ERHE_VULKAN_TRACE("[DRAW] type=emulated_mdi drawcount={}", drawcount);
     }
 }

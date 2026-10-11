@@ -57,16 +57,7 @@ public:
     ) override;
 
 protected:
-    void add_primitive(
-        Mesh_memory&                        mesh_memory,
-        const erhe::primitive::Buffer_mesh& buffer_mesh,
-        const glm::mat4&                    world_from_node,
-        const glm::vec4&                    color,
-        float                               line_width,
-        uint32_t                            group,
-        bool                                mesh_is_skinned,
-        uint32_t                            base_joint_index
-    ) override;
+    void add_record(const Content_wide_line_record& record) override;
 
     void release_backend_state() override;
 
@@ -184,57 +175,28 @@ Content_wide_line_compute_renderer::Content_wide_line_compute_renderer(
     }
 }
 
-void Content_wide_line_compute_renderer::add_primitive(
-    Mesh_memory&                        mesh_memory,
-    const erhe::primitive::Buffer_mesh& buffer_mesh,
-    const glm::mat4&                    world_from_node,
-    const glm::vec4&                    color,
-    const float                         line_width,
-    const uint32_t                      group,
-    const bool                          mesh_is_skinned,
-    const uint32_t                      base_joint_index
-)
+void Content_wide_line_compute_renderer::add_record(const Content_wide_line_record& record)
 {
-    const erhe::primitive::Buffer_range& edge_range = buffer_mesh.edge_line_vertex_buffer_range;
-    if (edge_range.count == 0) {
-        return;
-    }
-
-    erhe::graphics::Buffer* edge_buffer = mesh_memory.get_vertex_buffer(edge_range);
-    if (edge_buffer == nullptr) {
-        return;
-    }
-
-    const bool skinned_path_available = m_compute_pipeline_skinned.has_value();
-    const bool use_skinned             = skinned_path_available && mesh_is_skinned;
-
-    const std::size_t       edge_count               = edge_range.count / 2;
-    erhe::graphics::Buffer* joint_buffer             = nullptr;
-    std::size_t             joint_buffer_byte_offset = 0;
-    std::size_t             joint_buffer_byte_size   = 0;
-    const erhe::primitive::Buffer_range& joint_range = buffer_mesh.edge_line_joint_buffer_range;
-    if (use_skinned && (joint_range.count > 0)) {
-        joint_buffer = mesh_memory.get_vertex_buffer(joint_range);
-        if (joint_buffer != nullptr) {
-            joint_buffer_byte_offset = joint_range.byte_offset;
-            joint_buffer_byte_size   = joint_range.count * joint_range.element_size;
-        }
-    }
-    const bool dispatch_is_skinned = (joint_buffer != nullptr);
+    // The skinned path needs the skinned compute pipeline and the
+    // primitive's per-endpoint joint data.
+    const bool dispatch_is_skinned =
+        m_compute_pipeline_skinned.has_value() &&
+        record.mesh_is_skinned &&
+        (record.joint_buffer != nullptr);
 
     m_dispatches.push_back(Dispatch_entry{
-        .edge_buffer              = edge_buffer,
-        .edge_buffer_byte_offset  = edge_range.byte_offset,
-        .edge_count               = edge_count,
-        .world_from_node          = world_from_node,
-        .color                    = color,
-        .line_width               = line_width,
-        .group                    = group,
+        .edge_buffer              = record.edge_buffer,
+        .edge_buffer_byte_offset  = record.edge_buffer_byte_offset,
+        .edge_count               = record.edge_count,
+        .world_from_node          = record.world_from_node,
+        .color                    = record.color,
+        .line_width               = record.line_width,
+        .group                    = record.group,
         .skinned                  = dispatch_is_skinned,
-        .joint_buffer             = joint_buffer,
-        .joint_buffer_byte_offset = joint_buffer_byte_offset,
-        .joint_buffer_byte_size   = joint_buffer_byte_size,
-        .base_joint_index         = dispatch_is_skinned ? base_joint_index : 0u
+        .joint_buffer             = dispatch_is_skinned ? record.joint_buffer : nullptr,
+        .joint_buffer_byte_offset = dispatch_is_skinned ? record.joint_buffer_byte_offset : 0u,
+        .joint_buffer_byte_size   = dispatch_is_skinned ? record.joint_buffer_byte_size : 0u,
+        .base_joint_index         = dispatch_is_skinned ? record.base_joint_index : 0u
     });
 }
 

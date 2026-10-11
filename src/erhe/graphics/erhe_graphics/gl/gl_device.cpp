@@ -36,6 +36,7 @@
 #include "erhe_window/window.hpp"
 #include "erhe_utility/align.hpp"
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window.hpp"
 
@@ -43,6 +44,7 @@
 #   include <csignal>
 #endif
 
+#include <algorithm>
 #include <sstream>
 #include <vector>
 
@@ -1134,7 +1136,7 @@ void Device_impl::upload_to_texture(
 
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
-    m_completion_handlers.emplace_back(m_frame_index, std::move(callback));
+    m_completion_handlers.emplace_back(get_frame_index(), std::move(callback));
     // The handler is released by frame_completed() for this frame, which
     // only runs when the frame got a fence sync in end_frame(). Ring buffer
     // acquires request one as a side effect; a frame whose only pending
@@ -1192,28 +1194,47 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
     }
 }
 
-auto Device_impl::wait_frame() -> bool
+void Device_impl::wait_for_frame_start(const uint64_t frame_id)
 {
-    ERHE_VERIFY(m_state == Device_frame_state::idle);
+    // No GPU clock calibration or frame bracket on OpenGL; the frame time
+    // record is opened by Device::wait_for_frame_start.
+    static_cast<void>(frame_id);
+}
+
+auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
+{
+    // Order rule (doc/erhe/graphics.md "Frame lifecycle"): frames are
+    // acquired strictly in id order, at most N open.
+    ERHE_VERIFY(frame_id == m_prepare_frame_id + 1);
+    ERHE_VERIFY(frame_id >= m_render_frame_id);
+    ERHE_VERIFY(frame_id - m_render_frame_id < s_number_of_frames_in_flight);
+    const std::size_t  slot_index = get_frame_slot_index(frame_id);
+    Device_frame_slot& slot       = m_frame_slots[slot_index];
+    ERHE_VERIFY(slot.state == Device_frame_state::idle);
     // The main context's drain point for per-context container-object
     // deletion and shared-object binding scrubs: it never becomes current
     // again, so "drain on next make-current" would never fire for it.
     drain_container_object_deletes_for_current_context();
     drain_shared_object_scrubs_for_current_context();
-    // Drop the previous frame's Command_buffer wrappers. GL serializes
-    // through the driver context and submit_command_buffers is a
-    // (mostly) no-op, so by the time we get back here the cbs from the
-    // last frame are no longer referenced by anything.
-    m_command_buffers.clear();
-    m_state = Device_frame_state::waited;
+    // Drop the Command_buffer wrappers of the frame that last used this
+    // slot (frame_id - N, ended). GL serializes through the driver context
+    // and submit_command_buffers is a (mostly) no-op, so they are no
+    // longer referenced by anything. Wrappers of a still open older frame
+    // live in another slot.
+    m_command_buffers[slot_index].clear();
+    m_prepare_frame_id = frame_id;
+    slot.frame_id      = frame_id;
+    slot.state         = Device_frame_state::waited;
     return true;
 }
 
 auto Device_impl::begin_frame() -> bool
 {
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-    m_had_swapchain_frame = false;
-    m_state = Device_frame_state::recording;
+    // The legacy shim acts on the oldest open frame.
+    Device_frame_slot& slot = m_frame_slots[get_frame_slot_index(m_render_frame_id)];
+    ERHE_VERIFY(slot.state == Device_frame_state::waited);
+    ERHE_VERIFY(slot.frame_id == m_render_frame_id);
+    slot.state = Device_frame_state::recording;
     return true;
 }
 
@@ -1226,24 +1247,30 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 
 auto Device_impl::end_frame() -> bool
 {
-    // CONTRACT: end_frame advances the frame index. That is its ONLY
+    return end_frame(m_render_frame_id);
+}
+
+auto Device_impl::end_frame(const uint64_t frame_id) -> bool
+{
+    // CONTRACT: end_frame ends the oldest open frame. That is its ONLY
     // job. It does not submit, it does not present (presentation is
     // implicit in Device::submit_command_buffers when a cb engaged a
     // swapchain via begin_swapchain). On GL the only extra work here
     // is the frame-sync bookkeeping that drives ring-buffer
     // completion notifications -- that's not a submit, just GL-fence
     // polling that pairs with m_need_sync from earlier in the frame.
+    ERHE_VERIFY(frame_id == m_render_frame_id);
+    Device_frame_slot& slot = m_frame_slots[get_frame_slot_index(frame_id)];
+    ERHE_VERIFY(slot.frame_id == frame_id);
     ERHE_VERIFY(
-        (m_state == Device_frame_state::in_swapchain_frame) ||
-        (m_state == Device_frame_state::recording) ||
-        (m_state == Device_frame_state::waited)
+        (slot.state == Device_frame_state::in_swapchain_frame) ||
+        (slot.state == Device_frame_state::recording) ||
+        (slot.state == Device_frame_state::waited)
     );
 
     // Poll any GPU timer query results that became available during this
     // frame, and advance the timer ring-buffer index for the next one.
     Gpu_timer_impl::end_frame();
-
-    m_had_swapchain_frame = false;
 
     // Check previous frame fences for completion
     m_completed_frames.clear();
@@ -1288,10 +1315,10 @@ auto Device_impl::end_frame() -> bool
     if (m_need_sync) {
         for (Frame_sync& frame_sync : m_frame_syncs) {
             if (frame_sync.fence_sync == nullptr) {
-                frame_sync.frame_number = m_frame_index,
+                frame_sync.frame_number = frame_id,
                 frame_sync.fence_sync   = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0),
                 frame_sync.result       = gl::Sync_status::timeout_expired;
-                m_pending_frames.push_back(m_frame_index);
+                m_pending_frames.push_back(frame_id);
                 m_need_sync = false;
                 break;
             }
@@ -1308,9 +1335,9 @@ auto Device_impl::end_frame() -> bool
         }
     }
 
-    ++m_frame_index;
+    ++m_render_frame_id;
 
-    m_state = Device_frame_state::idle;
+    slot.state = Device_frame_state::idle;
     return true;
 }
 
@@ -1363,8 +1390,8 @@ void Device_impl::wait_idle()
     // advance for fenced frames, and a consumer that asks
     // Device::is_frame_completed() would be told "no" indefinitely in a
     // workload that never requests a sync.
-    if (m_frame_index > m_latest_completed_frame) {
-        m_latest_completed_frame = m_frame_index;
+    if (m_render_frame_id > m_latest_completed_frame) {
+        m_latest_completed_frame = m_render_frame_id;
     }
 
     // Anything left in m_completion_handlers is for a frame that was
@@ -1377,12 +1404,23 @@ void Device_impl::wait_idle()
 
 auto Device_impl::is_in_swapchain_frame() const -> bool
 {
-    return m_state == Device_frame_state::in_swapchain_frame;
+    return m_frame_slots[get_frame_slot_index(m_render_frame_id)].state == Device_frame_state::in_swapchain_frame;
 }
 
+auto Device_impl::get_frame_slot_index(const uint64_t frame_id) const -> std::size_t
+{
+    return static_cast<std::size_t>(frame_id % s_number_of_frames_in_flight);
+}
+
+// The render role (a dedicated render thread) gets the oldest open frame;
+// every other caller the newest acquired frame while it is open, otherwise
+// the next frame to be acquired.
 auto Device_impl::get_frame_index() const -> uint64_t
 {
-    return m_frame_index;
+    if (erhe::utility::Thread_roles::is_render_role()) {
+        return m_render_frame_id;
+    }
+    return std::max(m_prepare_frame_id, m_render_frame_id);
 }
 
 // GL runs no fixed frame-in-flight ring: depth is bounded by the fences
@@ -1601,14 +1639,19 @@ auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer
 {
     // GL has no native command buffer object; a Command_buffer here
     // is a thin recording handle. Allocate a fresh wrapper, keep it
-    // alive in m_command_buffers until the next wait_frame(), and
-    // return a reference. Begin/end on the cb are no-ops on GL.
+    // alive in the vector of the calling role's frame slot until that
+    // slot's next acquire_frame_slot(), and return a reference.
+    // Begin/end on the cb are no-ops on GL.
+    const uint64_t    frame_id   = get_frame_index();
+    const std::size_t slot_index = get_frame_slot_index(frame_id);
+    std::vector<std::unique_ptr<Command_buffer>>& command_buffers = m_command_buffers[slot_index];
     auto label = erhe::utility::Debug_label{
-        fmt::format("GL cb (thread_slot={}, allocation_index={})", thread_slot, m_command_buffers.size())
+        fmt::format("GL cb (frame_slot={}, thread_slot={}, allocation_index={})", slot_index, thread_slot, command_buffers.size())
     };
     auto cb = std::make_unique<Command_buffer>(m_device, label);
+    cb->get_impl().set_frame_id(frame_id);
     Command_buffer& ref = *cb;
-    m_command_buffers.push_back(std::move(cb));
+    command_buffers.push_back(std::move(cb));
     return ref;
 }
 

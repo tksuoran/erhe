@@ -155,7 +155,13 @@ void Create::window_imgui()
         m_context.scene_commands->create_new_light(parent.get());
     }
     if (ImGui::Button("Rendertarget", button_size)) {
-        m_context.scene_commands->create_new_rendertarget(parent.get());
+        // Out of the ImGui iteration: records the texture and mesh uploads
+        // and creates a viewport.
+        m_context.imgui_windows->queue(
+            [this, parent]() {
+                static_cast<void>(m_context.scene_commands->create_new_rendertarget(parent.get()));
+            }
+        );
     }
 
     ImGui::Separator();

@@ -35,6 +35,13 @@ public:
     {
         registry().push_back(this);
     }
+    // Assignment copies the property state (expressions included) and keeps
+    // this object's own name and registry entry.
+    auto operator=(const Named_object& other) -> Named_object&
+    {
+        Test_object::operator=(other);
+        return *this;
+    }
     ~Named_object() noexcept override
     {
         std::erase(registry(), this);

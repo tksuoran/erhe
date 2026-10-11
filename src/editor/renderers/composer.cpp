@@ -4,6 +4,8 @@
 #include "renderers/render_context.hpp"
 
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 
@@ -44,30 +46,101 @@ Composer::Composer(const std::string_view name)
 {
 }
 
+namespace {
+
+[[nodiscard]] auto is_drawn_for_content(const Composition_pass& composition_pass, const Render_content content) -> bool
+{
+    if (
+        (content != Render_content::scene_and_editor_aids) &&
+        (composition_pass.data.kind == Composition_pass_kind::editor_aid)
+    ) {
+        return false;
+    }
+    if (
+        (content == Render_content::scene_surfaces) &&
+        (composition_pass.data.kind == Composition_pass_kind::background)
+    ) {
+        return false;
+    }
+    return true;
+}
+
+}
+
+auto Composer_frame_slots::begin_prepare(const uint64_t frame_index, const std::size_t frames_in_flight) -> Composer_prepared&
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    ERHE_VERIFY(frames_in_flight > 0);
+    if (m_slots.size() != frames_in_flight) {
+        m_slots.resize(frames_in_flight);
+    }
+    Composer_prepared& slot = m_slots[frame_index % frames_in_flight];
+    slot.frame_index      = frame_index;
+    slot.prepared         = false;
+    slot.id_pass.prepared = false;
+    slot.id_pass.scan.reset();
+    slot.wide_line_feed.clear();
+    return slot;
+}
+
+auto Composer_frame_slots::get_prepared(const uint64_t frame_index) const -> const Composer_prepared&
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    ERHE_VERIFY(!m_slots.empty());
+    const Composer_prepared& slot = m_slots[frame_index % m_slots.size()];
+    // The prepare phase of this frame filled the slot, and the prepare phase
+    // of no later frame has reused it yet.
+    ERHE_VERIFY(slot.prepared && (slot.frame_index == frame_index));
+    return slot;
+}
+
+void Composer::prepare(const Render_context& context, const int64_t host_system_time_ns, Composer_prepared& out)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
+
+    if (out.passes.size() != composition_passes.size()) {
+        out.passes.resize(composition_passes.size());
+    }
+    for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
+        const Composition_pass& composition_pass = *composition_passes[i].get();
+        Composition_pass_prepared& prepared = out.passes[i];
+        if (!is_drawn_for_content(composition_pass, context.content)) {
+            prepared.result = Composition_pass_result::never_rendered;
+            prepared.buckets.clear();
+            continue;
+        }
+        composition_pass.prepare(context, host_system_time_ns, prepared);
+    }
+    out.prepared = true;
+}
+
 void Composer::render(const Render_context& context, const bool include_content, const bool include_overlay)
 {
     //log_composer->trace("Composer::render()");
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
 
-    for (const auto& composition_pass : composition_passes) {
-        const bool is_overlay = composition_pass->data.overlay;
+    const Composer_prepared* const prepared = context.composer_prepared;
+    if (prepared != nullptr) {
+        ERHE_VERIFY(prepared->passes.size() == composition_passes.size());
+    }
+    for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
+        Composition_pass& composition_pass = *composition_passes[i].get();
+        const bool is_overlay = composition_pass.data.overlay;
         if (is_overlay ? !include_overlay : !include_content) {
             continue;
         }
-        if (
-            (context.content != Render_content::scene_and_editor_aids) &&
-            (composition_pass->data.kind == Composition_pass_kind::editor_aid)
-        ) {
-            continue;
-        }
-        if (
-            (context.content == Render_content::scene_surfaces) &&
-            (composition_pass->data.kind == Composition_pass_kind::background)
-        ) {
+        if (!is_drawn_for_content(composition_pass, context.content)) {
             continue;
         }
         // log_composer->trace("  rp: {}", composition_pass->describe());
-        composition_pass->render(context);
+        if (prepared != nullptr) {
+            composition_pass.render(context, prepared->passes[i]);
+        } else {
+            composition_pass.render_immediate(context);
+        }
     }
 }
 

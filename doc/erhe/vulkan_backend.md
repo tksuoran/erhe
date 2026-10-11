@@ -187,33 +187,77 @@ multi-draw-indirect emulation path because MSL has no `gl_DrawID` equivalent.
 
 ## Frame lifecycle and command buffers
 
-The device frame is bracketed by `Device::wait_frame()` and
-`Device::end_frame()`. Between them, callers obtain `Command_buffer` instances,
-record into them, and submit through `Device::submit_command_buffers()`. There
-is no `Device::present()`: present is implicit in submit.
+The device frame is bracketed by `Device::wait_frame()` (or its two halves,
+`wait_for_frame_start()` and `acquire_frame_slot(frame_id)`,
+`doc/erhe/graphics.md` "Frame lifecycle") and `Device::end_frame(frame_id)`.
+Between them, callers obtain `Command_buffer` instances, record into them,
+and submit through `Device::submit_command_buffers()`. There is no
+`Device::present()`: present is implicit in submit.
 
-- **`wait_frame()`** -- paces the per-(frame-in-flight, thread-slot) command
-  pools against the device timeline semaphore. For a frame that re-enters a slot
-  it waits until the timeline reports `frame_index - frames_in_flight`, then
-  resets every per-thread pool for that slot (freeing the `Command_buffer`s that
-  were allocated from it and recycling their implicit fence + semaphore back into
-  `Device_sync_pool`). GPU timer results for the completing slice are read here.
-- **`get_command_buffer(thread_slot)`** -- allocates a fresh primary
-  `VkCommandBuffer` from the slot's pool, wraps it in a `Command_buffer` owned by
-  the pool, and binds an implicit fence + binary semaphore from the sync pool.
-  The caller must `begin()` it before recording.
+`Device_impl` keeps two frame ids: `m_render_frame_id`, the oldest open
+frame (the next one `end_frame` ends; when no frame is open, the next one to
+be acquired), advanced only by `update_frame_completion`, and
+`m_prepare_frame_id`, the newest frame `acquire_frame_slot` acquired. While
+frames are open, `m_render_frame_id <= m_prepare_frame_id <
+m_render_frame_id + 2`. Each frame-in-flight slot has its own
+`Device_frame_slot` {state, frame id}; `set_state(frame_id, state, site)` is
+the single transition point. `get_frame_index()` is role-keyed (the render
+role gets `m_render_frame_id`, every other caller the prepare frame, or the
+next frame while none is open). The swapchains do not use it: they index
+their per-slot state by the frame id of the command buffer that drives them
+(`Device_impl::get_frame_slot_index(frame_id)`).
+
+- **`wait_for_frame_start()`** -- refreshes the GPU clock calibration and the
+  host time domain offsets (every 120 frames) and harvests completed GPU frame
+  brackets into the frame time records. It reads no frame id or slot state,
+  so it may run while another thread ends the previous frame; the calibration
+  state it writes is shared with the present-timing conversions under a mutex.
+- **`acquire_frame_slot(frame_id)`** -- verifies the order rule (`frame_id`
+  is `m_prepare_frame_id + 1`, at most two frames open, the slot is idle),
+  host-resets the frame's bracket query pair (keyed on `frame_id`) and paces
+  the slot's per-(frame-in-flight, thread-slot) command pools against the
+  device timeline semaphore. For a frame that re-enters a slot it waits
+  until the timeline reports `frame_id - frames_in_flight`, then resets
+  every per-thread pool for that slot (freeing the `Command_buffer`s that
+  were allocated from it and recycling their implicit fence + semaphore back
+  into `Device_sync_pool`) and the slot's frame-end pool. GPU timer results
+  for the slot's previous use are read here, the slot's GPU timer slice
+  is marked for reset and the slot's fallback descriptor pool (no push
+  descriptors) is reset.
+- **`get_command_buffer(thread_slot)`** -- takes the slot of the calling
+  role's frame, verifies (`ERHE_FATAL` otherwise) that the slot is waited or
+  recording and held by that frame, allocates a primary `VkCommandBuffer`
+  from the slot's pool, wraps it in a `Command_buffer` owned by the pool,
+  stamps the frame id into it (`Command_buffer_impl::get_frame_id()`), and
+  binds an implicit fence + binary semaphore from the sync pool. The caller
+  must `begin()` it before recording. `begin()` resets the GPU timer slice
+  and records the frame bracket begin of the cb's frame; GPU timer queries
+  and the `pre_submit_wait` fence-wait record also use the cb's frame.
 - **`Command_buffer::wait_for_swapchain` / `begin_swapchain`** -- wait for the
   next swapchain image, acquire it, and bind the per-slot acquire/present
-  semaphores to this command buffer.
-- **`submit_command_buffers(span)`** -- performs any CPU-side `vkWaitForFences`
-  for registered `wait_for_cpu_completion_of` dependencies, splices all wait/signal semaphores
-  into one `VkSubmitInfo2`, runs `vkQueueSubmit2`, then drives
-  `vkQueuePresentKHR` for every swapchain a command buffer engaged via
-  `begin_swapchain`.
-- **`end_frame()`** -- advances the frame index. Mechanically it signals the
-  device timeline semaphore at the current frame index via an empty
-  `vkQueueSubmit2` and increments the CPU frame counter. It does not submit or
-  present.
+  semaphores to this command buffer. Both pass the command buffer's frame id
+  to the swapchain.
+- **`submit_command_buffers(span)`** -- verifies every cb belongs to the same
+  frame and keys the frame time record, the present target / holdback and
+  the swapchain bridge fence slot on it; performs any CPU-side
+  `vkWaitForFences` for registered `wait_for_cpu_completion_of`
+  dependencies, splices all wait/signal semaphores into one
+  `VkSubmitInfo2`, runs `vkQueueSubmit2`, then drives `vkQueuePresentKHR`
+  for every swapchain a command buffer engaged via `begin_swapchain`.
+- **`end_frame(frame_id)`** -- verifies `frame_id == m_render_frame_id` and
+  that its slot is open, then signals the device timeline semaphore at
+  `frame_id` via a `vkQueueSubmit2` that carries only the device-owned
+  frame-end command buffer (the frame bracket end timestamp, when the
+  bracket is running; no command buffer otherwise), advances
+  `m_render_frame_id` and returns the slot to idle. It submits no caller
+  command buffer and does not present. `end_frame()` ends
+  `m_render_frame_id`.
+
+Where no command buffer is at hand (texture and buffer deferred
+destruction, completion handlers, ring buffer ranges), the code uses the
+role-keyed `get_frame_index()`. The state the main role and the render role
+share while two frames are open is listed in `doc/erhe/graphics.md`
+"Thread safety".
 
 The backend keeps `s_number_of_frames_in_flight = 2` frames in flight across
 `s_number_of_thread_slots = 8` thread slots. Command pools are created with
@@ -242,13 +286,16 @@ builds, from the program's `Bind_group_layout_create_info`:
 GLSL `layout(binding = N)` maps to set 0, binding N. The device also keeps a
 fixed-convention set-0 descriptor layout (uniform buffers at bindings 0..7,
 storage buffers 8..11, samplers 12..15) and, when `VK_KHR_push_descriptor` is
-not available, a per-frame descriptor pool for the fallback path.
+not available, one fallback descriptor pool per frame in flight: a set is
+allocated from the pool of the recording command buffer's frame, and
+`acquire_frame_slot` resets a slot's pool after the timeline wait retired its
+previous frame.
 
 Two ways a shader reads a texture, chosen per `combined_image_sampler` binding:
 
 - **Dedicated sampler** (`is_texture_heap = false`). Bound per draw via
   `Render_command_encoder::set_sampled_image(binding_point, texture, sampler)`,
-  which issues `vkCmdPushDescriptorSetKHR` (or allocates from the per-frame pool
+  which issues `vkCmdPushDescriptorSetKHR` (or allocates from the frame's pool
   in the fallback path). The binding's `Sampler_aspect` (color / depth / stencil)
   selects the image-view aspect, satisfying
   `VUID-VkDescriptorImageInfo-imageView-01976`. Used for shadow maps
@@ -548,10 +595,13 @@ issues `vkCmdDispatch`.
 
 **GPU timers** (`vulkan_gpu_timer.cpp`). A single device `VkQueryPool` sized for
 `s_max_gpu_timers (128) * 2 * frames_in_flight` timestamps. Each `Gpu_timer_impl`
-claims a slot; `write_begin_timestamp` / `write_end_timestamp` record
+claims a slot, and its destructor retires it: the timer is unhooked at once
+and the slot is released when the frame current at the destruction
+completes, so timestamps a frame in flight already recorded never reach a
+timer given the slot later; `write_begin_timestamp` / `write_end_timestamp` record
 `vkCmdWriteTimestamp` at `VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT`, from the render
 pass hooks or from `Gpu_timer::begin` / `end` for an explicit range. The per-slice reset is recorded by the first
-`Command_buffer::begin` of each frame, and results are read in `wait_frame` after
+`Command_buffer::begin` of each frame, and results are read in `acquire_frame_slot` after
 the timeline-semaphore wait guarantees the slice has completed. GPU timers are
 disabled when the queue reports `timestampValidBits == 0`.
 
@@ -580,6 +630,23 @@ swapchains. It supports `VK_EXT_swapchain_maintenance1` and FIFO-latest-ready
 present modes when available. Swapchain recreation on `VK_SUBOPTIMAL_KHR` /
 `VK_ERROR_OUT_OF_DATE_KHR` is handled in `present()`.
 
+Every frame entry point of `Swapchain_impl` takes the frame id of the
+command buffer that drives it (`Command_buffer_impl::get_frame_id()`), and
+the per-slot state (`m_submit_history`, the device's per-slot fence and
+command pool) is the slot of that id (`get_slot_index(frame_id)`):
+`wait_frame` (from `wait_for_swapchain`), `begin_frame` and the acquire
+(from `begin_swapchain`), the semaphores `collect_synchronization` splices
+into the submit, `acquire_swapchain_framebuffer` and `record_capture` (from
+the swapchain render pass), and `present` (from
+`Device_impl::submit_command_buffers`), with the present history entry, the
+present id (frame id + 1), the present target and the present timing
+calibration it keys. `wait_frame` records the frame id of the open
+swapchain frame and the later entry points verify it, so one frame drives
+the swapchain from its wait to its present. `read_back_capture`, called by
+the main thread, ages the capture against the main role's
+`get_frame_index()`. `Emulated_swapchain_impl::wait_frame` takes the frame
+id the same way.
+
 `Surface_impl::recreate_for_new_window()` tears down the `VkSwapchainKHR` and
 `VkSurfaceKHR` and rebuilds over a freshly bound native window while keeping the
 C++ `Swapchain` object alive, so cached `Swapchain*` pointers (in
@@ -597,7 +664,7 @@ the real WSI swapchain: it allocates a small ring of offscreen color images
 render pass leaves them in `TRANSFER_SRC_OPTIMAL`. There is no acquire/present:
 image reuse is made safe by single-queue submission order, the render pass
 EXTERNAL dependency and the CLEAR (discard) load op; frame pacing comes entirely
-from the device timeline semaphore (`Device_impl::wait_frame`), so no
+from the device timeline semaphore (`Device_impl::acquire_frame_slot`), so no
 acquire/present semaphores exist. `Render_pass_impl` and
 `vulkan_command_buffer.cpp` branch to it wherever they would touch the real
 swapchain.
@@ -636,7 +703,13 @@ owning C++ object is destroyed. Such objects (`Buffer`, `Texture`, `Sampler`,
 pipelines) capture their Vulkan handles by value into a lambda and defer
 destruction via `Device_impl::add_completion_handler()`. Handlers run from
 `frame_completed()` / `~Device_impl()` after the relevant GPU work has completed
-(`~Device_impl` calls `vkDeviceWaitIdle` first).
+(`~Device_impl` calls `vkDeviceWaitIdle` first). A handler is stamped with the
+calling role's frame and runs on the thread that completes that frame (the
+render role's `end_frame`, or `wait_idle`), outside the handler list's lock,
+so it may destroy objects that add handlers. `wait_idle()` completes the
+frames that ended before its device wait; the handlers of a frame still open
+stay queued (that frame may still be recording), and only with no frame open
+does it drain the rest.
 
 ```cpp
 Foo_impl::~Foo_impl() noexcept

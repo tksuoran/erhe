@@ -47,12 +47,17 @@ public:
     // Public API
     void lock_mutex             ();
     void unlock_mutex           ();
+    // Defers an operation out of the ImGui iteration (a window or menu
+    // that creates windows, rendergraph nodes or GPU work calls this). The
+    // application runs flush_queue() where the deferred work is safe (the
+    // editor: the start of its prepare phase, so the operations of frame N
+    // run in frame N+1 before anything renders).
     void queue                  (std::function<void()>&& operation);
     void flush_queue            ();
     void register_imgui_window  (Imgui_window* window);
     void unregister_imgui_window(Imgui_window* window);
 
-    void begin_frame            ();
+    void begin_frame            (uint64_t frame_index);
     void process_events         (float dt_s, int64_t time_ns);
     void end_frame              ();
     void draw_imgui_windows     ();

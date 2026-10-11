@@ -191,6 +191,73 @@ noticed it. The run-book, in order:
 Precedent: the point-light cube shadow fault of 2026-10-04
 (`doc/erhe/shadows.md` "Point-light cube-map shadows").
 
+## Main-loop stall watchdog
+
+The editor starts the watchdog thread when init completes ("entering main
+loop") and stops it first thing in `~Editor`. It wakes once per second and
+acts only while `frame()` runs (`m_in_tick`, from M1 start to the kick;
+`doc/editor/editor.md` "Frame phases and the render thread"). It takes the
+newest breadcrumb (`erhe::log::set_breadcrumb`, `doc/erhe/geogram.md`
+"Breadcrumbs") of the main thread and of the render thread (one thread in
+inline mode), ignoring worker threads, and reports a stall when the newer of
+the two is more than 5 s old, again every 5 s while it lasts, on
+`editor.watchdog`:
+
+```
+Main loop STALLED: frame has not progressed for N.N s. Frame phase: main <phase>, render <phase>.
+  main thread 0x...: stuck in phase '<breadcrumb>' (N.N s ago)
+  render thread 0x...: stuck in phase '<breadcrumb>' (N.N s ago)
+  breadcrumb t=...s thread=0x...: <breadcrumb>
+  ... (the recent ring, oldest -> newest)
+```
+
+Reading a stall (dedicated mode):
+
+- main `m1_overlap`, render `r_render`: the main thread is in M1 or blocked
+  in the join while R of the previous frame runs. The render thread's
+  breadcrumb (a `tick:` R step or a rendergraph node name) and its age say
+  whether R is stuck; when R's breadcrumb is fresh, M1 is (`tick:
+  wait_for_frame_start`, `tick: xr wait_frame`, `tick: fixed_step
+  (physics)`).
+- main `m1_overlap`, render `none`: M1 itself is stuck.
+- main `m2_prepare`, render `none`: M2 is stuck at the main thread's
+  breadcrumb.
+- A render-thread stall is reported once the next `frame()` has started,
+  because `m_in_tick` is clear while `run()` polls events; the poll waits at
+  most the window activity's frame interval.
+
+In inline mode both phases and both breadcrumbs belong to the main thread.
+`ERHE_RENDER_THREAD=0` runs R inline on the main thread with the same phase
+order; a hang, crash or wrong frame that disappears inline points at state
+shared between M1 and R of the previous frame, the one window where the two
+threads run concurrently.
+
+## Frame phase asserts
+
+`erhe::utility::Thread_roles` (`doc/erhe/utility.md`) aborts through
+`ERHE_FATAL` / `ERHE_VERIFY` when code runs in a frame phase or on a thread
+that does not own it (the list of asserting functions is in
+`doc/editor/editor.md` "Frame phases and the render thread"):
+
+- `main frame phase is <X>, expected r_render`: a render-side function
+  (rendergraph, draw list draws, `render_draw_data`, the OpenXR frame
+  functions) was called from M1 or M2 in inline mode. In dedicated mode the
+  same call from the main thread fails the `assert_render_thread`
+  `ERHE_VERIFY` (thread id) first.
+- `render frame phase is <X>, expected r_render`: the render thread called a
+  render-side function outside `frame_render_phase()`.
+- `main thread in frame phase <X>, expected <Y> or none`: a main-side
+  function ran in the wrong main phase - `Draw_list_scene::flush_pending`,
+  `Imgui_windows::begin_frame`, `Operation_stack::update`,
+  `App_message_bus::update` or the physics write-back outside M2, or
+  `Xr_session::wait_frame` outside M1.
+- `main thread obtains a command buffer during m1_overlap`: M1 code records
+  GPU work; record it in M2 (the upload command buffer) or in R.
+- A failing `ERHE_VERIFY` in `thread_roles.cpp` (a thread id comparison):
+  the calling thread does not hold the role the function requires (a main-side
+  function on the render thread or a worker, or a render-side function on
+  the main thread in dedicated mode).
+
 ## Profiling
 
 Startup and frame profiling with Tracy (`ERHE_TRACY_ON_DEMAND`,

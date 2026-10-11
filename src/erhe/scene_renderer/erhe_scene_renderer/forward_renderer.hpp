@@ -10,6 +10,7 @@
 #include "erhe_scene_renderer/material_set.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/render_bucket_snapshot.hpp"
 #include "erhe_scene_renderer/scene_pass_resources.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
@@ -44,6 +45,7 @@ namespace erhe::primitive {
 namespace erhe::scene {
     class Camera;
     class Light;
+    class Light_snapshot;
     class Mesh;
     class Mesh_layer;
     class Xformable; using Node = Xformable;
@@ -137,7 +139,7 @@ public:
         // marked per-slot in the joint buffer (see debug_target_joint).
         // .y: 1 = show zero-weight vertices as black.
         const glm::uvec4&                                      debug_joint_indices{0xffffffffu, 0, 0, 0};
-        const std::span<glm::vec4>&                            debug_joint_colors{};
+        const std::span<const glm::vec4>&                      debug_joint_colors{};
         // Active joint for the joint_weight_ramp debug mode, matched per
         // joint slot by Joint_buffer::update(). nullptr = none.
         const erhe::scene::Node*                               debug_target_joint{nullptr};
@@ -165,8 +167,65 @@ public:
         const erhe::graphics::Shader_stages*     shader_stages{nullptr};
     };
 
+    // The inputs of the bucketing, which reads the meshes: the prepare-phase
+    // half of render() (prepare()).
+    class Prepare_parameters
+    {
+    public:
+        const std::vector<
+            std::span<const std::shared_ptr<erhe::scene::Mesh>>
+        >&                                       mesh_spans;
+        // The set the records' material slots are resolved in; the draw binds
+        // the same set (Base_render_parameters::material_source).
+        const Material_set*                      material_source{nullptr};
+        uint32_t                                 shader_key_boolean_mask_force_enable {0};
+        uint32_t                                 shader_key_boolean_mask_force_disable{0};
+        Blending_mode_policy                     blending_mode_policy{Blending_mode_policy::not_set};
+        erhe::primitive::Primitive_mode          primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+        Primitive_interface_settings             primitive_settings{};
+        erhe::Item_filter                        filter{};
+        Shader_debug                             shader_debug{Shader_debug::none};
+        // See Render_parameters::shader_debug_filter.
+        erhe::Item_filter                        shader_debug_filter{};
+    };
+
+    // The inputs of drawing a prepared snapshot: the render-phase half of
+    // render(). Reads no Mesh; the environment shader-key axes come from
+    // here (light partition of base.light_projections, the shadow axes, the
+    // view count of base.views, the pass resources' DDGI state).
+    class Draw_parameters
+    {
+    public:
+        Base_render_parameters                   base;
+        std::span<erhe::graphics::Base_render_pipeline*> base_render_pipelines;
+        uint32_t                                 shadow_filter{0};
+        uint32_t                                 shadow_bias{1};
+        uint32_t                                 shadow_technique{0};
+        uint32_t                                 shadow_depth_bits{0};
+        glm::uvec4                               debug_joint_indices{0xffffffffu, 0, 0, 0};
+        std::span<const glm::vec4>               debug_joint_colors{};
+        const erhe::scene::Node*                 debug_target_joint{nullptr};
+        const erhe::graphics::Shader_stages*     shader_stages_override{nullptr};
+        const erhe::graphics::Color_blend_state* color_blend_override{nullptr};
+    };
+
+    // Prepare phase (main thread): buckets the meshes and writes each
+    // bucket's complete primitive records and draw commands into out
+    // (cleared first). Reads the meshes, their primitives and materials and
+    // the material set; mutates nothing of this renderer, so it may run
+    // while the render phase draws another snapshot.
+    void prepare(const Prepare_parameters& parameters, Render_bucket_snapshot& out) const;
+
+    // Render phase: draws a snapshot prepare() filled. The records and draw
+    // commands are copied as prepared; only the environment axes of the
+    // shader keys are applied here.
+    void render(const Draw_parameters& parameters, const Render_bucket_snapshot& snapshot);
+
+    // prepare() and render(snapshot) in one call, on one thread, through a
+    // snapshot this renderer keeps: for callers that prepare and draw at the
+    // same point (examples, tests).
     void render(const Render_parameters& parameters);
-    void draw_primitives(const Primitive_render_parameters& parameters, const erhe::scene::Light* light);
+    void draw_primitives(const Primitive_render_parameters& parameters, const erhe::scene::Light_snapshot* light);
 
     // The draw-list colour entry point lives in Draw_list_renderer, which
     // shares this renderer's Scene_pass_resources. Nothing here names a
@@ -242,9 +301,9 @@ private:
     Scene_pass_resources&                         m_pass_resources;
     erhe::scene_renderer::Draw_indirect_buffer    m_draw_indirect_buffer;
     Primitive_buffer                              m_primitive_buffer;
-    // Per-render() scratch, cleared at use so the capacity is kept: the
-    // buckets of one pipeline and the debug label of one bucket.
-    Render_bucket_list                            m_buckets;
+    // The snapshot render(const Render_parameters&) prepares and draws, and
+    // the debug label of one bucket; cleared at use so the capacity is kept.
+    Render_bucket_snapshot                        m_immediate_snapshot;
     std::string                                   m_bucket_label;
 };
 

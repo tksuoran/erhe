@@ -31,6 +31,9 @@ Multi_copy_buffer::Multi_copy_buffer(Device& device, const Multi_copy_buffer_cre
         : device.get_number_of_frames_in_flight() + 1;
     ERHE_VERIFY(copy_count >= 2);  // one current + one to write into
     m_copies.resize(copy_count);
+    const std::size_t frames_in_flight = device.get_number_of_frames_in_flight();
+    ERHE_VERIFY(frames_in_flight >= 1);
+    m_frame_slots.resize(frames_in_flight);
     m_alignment = std::max<std::size_t>(1, device.get_buffer_alignment(m_buffer_target));
     reallocate(std::max<std::size_t>(m_alignment, create_info.initial_copy_byte_count));
 }
@@ -41,8 +44,8 @@ void Multi_copy_buffer::reallocate(const std::size_t copy_byte_count)
 {
     const std::size_t aligned_copy_byte_count = align_up(std::max<std::size_t>(1, copy_byte_count), m_alignment);
     if (m_buffer) {
-        // The old allocation stays alive until every frame that bound one of
-        // its copies has been retired.
+        // The old allocation stays alive until every frame one of its copies
+        // was published for has been retired.
         uint64_t last_used_frame = 0;
         for (const Copy& copy : m_copies) {
             if (copy.used) {
@@ -154,28 +157,49 @@ void Multi_copy_buffer::commit(const std::size_t byte_count)
     m_current       = m_writing;
     m_writing       = invalid_index;
     ++m_commit_count;
+    publish();
+}
+
+void Multi_copy_buffer::publish()
+{
+    const uint64_t frame = m_device.get_frame_index();
+    Frame_slot& slot = m_frame_slots[static_cast<std::size_t>(frame % m_frame_slots.size())];
+    slot.frame     = frame;
+    slot.published = true;
+    if ((m_current == invalid_index) || (m_copies[m_current].byte_count == 0)) {
+        slot.buffer      = nullptr;
+        slot.byte_offset = 0;
+        slot.byte_count  = 0;
+        return;
+    }
+    // Stamped for every frame the copy is published for, not only for the
+    // frame that committed it: the copy is being read by this frame too.
+    Copy& copy = m_copies[m_current];
+    copy.last_used_frame = frame;
+    copy.used            = true;
+    slot.buffer      = m_buffer.get();
+    slot.byte_offset = copy.byte_offset;
+    slot.byte_count  = copy.byte_count;
 }
 
 auto Multi_copy_buffer::bind(Command_encoder& command_encoder) -> bool
 {
     ERHE_PROFILE_FUNCTION();
-    if (m_current == invalid_index) {
+    // Only the published entry of the caller's own frame: the copy table and
+    // the allocation belong to the thread that prepares the frames.
+    const uint64_t    frame = m_device.get_frame_index();
+    const Frame_slot& slot  = m_frame_slots[static_cast<std::size_t>(frame % m_frame_slots.size())];
+    ERHE_VERIFY(slot.published && (slot.frame == frame));
+    if (slot.buffer == nullptr) {
         return false;
     }
-    Copy& copy = m_copies[m_current];
-    if (copy.byte_count == 0) {
-        return false;
-    }
-    // Stamped on USE, not on commit: the copy is being read by this frame too.
-    copy.last_used_frame = m_device.get_frame_index();
-    copy.used            = true;
-    ERHE_VERIFY(copy.byte_offset + copy.byte_count <= m_buffer->get_capacity_byte_count());
+    ERHE_VERIFY(slot.byte_offset + slot.byte_count <= slot.buffer->get_capacity_byte_count());
     if (m_binding_point.has_value()) {
         ERHE_VERIFY(is_indexed(m_buffer_target));
-        command_encoder.set_buffer(m_buffer_target, m_buffer.get(), copy.byte_offset, copy.byte_count, m_binding_point.value());
+        command_encoder.set_buffer(m_buffer_target, slot.buffer, slot.byte_offset, slot.byte_count, m_binding_point.value());
     } else {
         ERHE_VERIFY(!is_indexed(m_buffer_target));
-        command_encoder.set_buffer(m_buffer_target, m_buffer.get());
+        command_encoder.set_buffer(m_buffer_target, slot.buffer);
     }
     return true;
 }

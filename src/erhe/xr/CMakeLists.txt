@@ -3,6 +3,7 @@ add_library(${_target})
 add_library(erhe::xr ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_xr/frame_timing.hpp
     erhe_xr/xr_action.cpp
     erhe_xr/xr_action.hpp
 )

@@ -58,10 +58,19 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
     // the same one (D5). The caller picks both, so pin them together here
     // rather than trusting the two fields to stay in step.
     ERHE_VERIFY(base.material_source == &parameters.draw_list_scene.get_material_set());
+    // The draws copy the lists' cached records (Primitive_buffer::update):
+    // no per-mesh color or size source.
+    ERHE_VERIFY(parameters.primitive_settings.color_source != Primitive_color_source::id_offset);
+    ERHE_VERIFY(parameters.primitive_settings.size_source  == Primitive_size_source::constant_size);
+
+    // The render phase draws the lists published for its frame
+    // (Draw_list_scene::publish); the device's frame index on the render
+    // thread is the frame being rendered.
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
 
     // Early out before any upload / bind, mirroring the bucket path's empty
     // mesh-span check: nothing passes the filter for these layers.
-    if (!parameters.draw_list_scene.has_drawable_entries(Draw_purpose::color, parameters.layers, parameters.blending, parameters.filter)) {
+    if (!parameters.draw_list_scene.has_drawable_entries(frame_index, Draw_purpose::color, parameters.layers, parameters.blending, parameters.filter)) {
         return Draw_statistics{};
     }
 
@@ -85,9 +94,9 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
     // unculled.
     std::array<glm::vec4, 6>   view_frustum_planes{};
     std::span<const glm::vec4> view_frustum_planes_span{};
-    if ((base.views.size() == 1) && (base.views.front().projection != nullptr) && (base.views.front().node != nullptr)) {
+    if ((base.views.size() == 1) && (base.views.front().camera != nullptr)) {
         const Camera_view_input& view            = base.views.front();
-        const glm::mat4          clip_from_world = view.projection->clip_from_node_transform(view.viewport, base.reverse_depth, base.depth_range, base.conventions).get_matrix() * view.node->node_from_world();
+        const glm::mat4          clip_from_world = view.camera->projection().clip_from_node_transform(view.viewport, base.reverse_depth, base.depth_range, base.conventions).get_matrix() * view.camera->node_from_world();
         const float              clip_z_min      = (base.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
         view_frustum_planes      = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
         view_frustum_planes_span = std::span<const glm::vec4>{view_frustum_planes};
@@ -114,7 +123,8 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
                 .environment          = environment,
                 .color_blend_override = parameters.color_blend_override,
                 .view_frustum_planes  = view_frustum_planes_span,
-                .debug_label          = base.debug_label
+                .debug_label          = base.debug_label,
+                .frame_index          = frame_index
             }
         );
         statistics.draw_list_count += pass_statistics.draw_list_count;

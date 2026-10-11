@@ -163,13 +163,14 @@ auto Headset::update_actions() const -> bool
     return true;
 }
 
-auto Headset::begin_frame_() -> Frame_timing
+auto Headset::wait_frame() -> Frame_timing
 {
     ERHE_PROFILE_FUNCTION();
 
     Frame_timing result{
         .predicted_display_time   = 0,
         .predicted_display_pediod = 0,
+        .wait_ok                  = false,
         .begin_ok                 = false,
         .should_render            = true
     };
@@ -179,21 +180,31 @@ auto Headset::begin_frame_() -> Frame_timing
         return result;
     }
 
-    if (!m_xr_session->begin_frame()) {
-        result.should_render = false;
-        return result;
+    result.predicted_display_time   = xr_frame_state->predictedDisplayTime;
+    result.predicted_display_pediod = xr_frame_state->predictedDisplayPeriod;
+    result.wait_ok                  = true;
+    result.should_render            = xr_frame_state->shouldRender;
+
+    return result;
+}
+
+auto Headset::begin_frame(const Frame_timing& timing) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!timing.wait_ok) {
+        return false;
+    }
+
+    if (!m_xr_session->begin_frame(timing)) {
+        return false;
     }
 
     // Refresh XR_FB_performance_metrics counters once per frame. No-op when
     // the extension is not enabled.
     m_xr_session->query_performance_metrics();
 
-    result.predicted_display_time   = xr_frame_state->predictedDisplayTime;
-    result.predicted_display_pediod = xr_frame_state->predictedDisplayPeriod;
-    result.begin_ok                 = true;
-    result.should_render            = xr_frame_state->shouldRender;
-
-    return result;
+    return true;
 }
 
 auto Headset::render(erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool

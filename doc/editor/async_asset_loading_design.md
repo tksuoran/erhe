@@ -22,7 +22,7 @@ Three mechanisms carry the load, rather than being replaced by it:
   finite and `make_renderable_mesh` can fail; it is the transfer queue that is
   unbounded, which is what 2.5 and 2.6 address.
 - `Scene_commit_queue` - the cross-thread inbox: workers prepare detached
-  results, the main thread applies them at the top of `Editor::tick()`.
+  results, the main thread applies them early in `Editor::frame_prepare_phase()` (M2).
 - `App_context::get_async_in_flight_count()` - the idle accounting (pending
   and running async operations, the operation-stack queue, the commit queue),
   exposed to MCP as `get_async_status`.
@@ -46,9 +46,10 @@ editor/assets/asset_load_task.hpp
   };
 ```
 
-`Asset_manager::tick(Asset_load_tick_context&)` runs from `Editor::tick()`
-immediately after `m_scene_commit_queue.flush()`, so worker results land
-first, and with `App_context::current_command_buffer` available.
+`Asset_manager::tick(Asset_load_tick_context&)` runs from
+`Editor::frame_prepare_phase()` (M2) immediately after
+`m_scene_commit_queue.flush()`, so worker results land first, and with
+`App_context::current_command_buffer` (the upload command buffer) available.
 
 `Asset_load_tick_context` carries the frame's shared budget (2.4), the command
 buffer, the executor and the device. Budget is handed out round-robin so N
@@ -168,7 +169,7 @@ to draw a mesh whose bytes are still queued. Two gates are required:
   reasons. Callers build a mesh and then draw it in the same command buffer
   with no ticket check (`rendertarget_mesh`, `brush_preview`, `scene_builder`,
   and `example`'s init command buffer, which is ended, submitted and waited on
-  before rendering). And `Editor::tick` drains the queue unconditionally once
+  before rendering). And `Editor::frame_prepare_phase()` drains the queue unconditionally once
   per tick - deliberately, so uploads enqueued during a hidden tick do not sit
   in the queue until the next rendered frame - at a point after the
   `Asset_manager::tick` slot, so a budgeted drain would be followed by a full
@@ -402,7 +403,7 @@ The order the pieces depend on each other: each step is usable only once the
 one before it exists. Source comments cite these step numbers.
 
 1. Tick skeleton. `Asset_load_tick_context`, `Frame_load_budget`,
-   `Asset_manager::tick()` wired into `Editor::tick()` after
+   `Asset_manager::tick()` wired into `Editor::frame_prepare_phase()` after
    `scene_commit_queue.flush()`. The ordering consequence: the message bus is
    pumped later in the tick, so a load queued by a message first advances on
    the following frame - which is what "a handle exists when the queueing call

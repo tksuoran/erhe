@@ -9,11 +9,16 @@
 //
 // All timestamps are seconds in one monotonic clock domain (QPC on
 // Windows); now() below provides that clock. Zero means "not recorded".
-// The recorder is intended to be driven from the render/main thread; it is
-// not thread-safe.
+//
+// Thread-safe: the editor's main thread begins a frame's record and runs the
+// pacer while its render thread stamps the previous frame (submit, present,
+// CPU slot end), so every access takes one mutex. Writers name the field by
+// member pointer; readers get copies. No reference to a record escapes the
+// lock.
 
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace erhe::frame_pacing {
@@ -27,6 +32,10 @@ public:
     double cpu_slot_end         {0.0}; // work on the frame in flight ends
     double pacer_wait_begin     {0.0}; // pacer starts waiting for release time
     double pacer_wait_end       {0.0}; // wait done, app starts
+    double present_wait_begin   {0.0}; // FR5 present-wait clamp starts (after the frame start, before the swapchain wait)
+    double present_wait_end     {0.0}; // FR5 present-wait clamp done
+    double join_wait_begin      {0.0}; // the frame's main thread starts waiting for the previous frame's render phase
+    double join_wait_end        {0.0}; // that wait done
     double fence_wait_duration  {0.0}; // accumulated vkWaitForFences inside the slot
     double acquire_begin        {0.0}; // just before vkAcquireNextImageKHR
     double acquire_end          {0.0}; // right after vkAcquireNextImageKHR
@@ -47,8 +56,8 @@ public:
 
     // Normative c_k for the pacer (doc/frame_pacing/inputs.md section 3.2):
     // CPU slot span minus the involuntary waits recorded inside it. The
-    // pacer wait is expected to precede the slot and is subtracted only for
-    // the portion overlapping the slot.
+    // pacer wait, the present wait and the join wait are subtracted for the portion
+    // overlapping the slot.
     [[nodiscard]] auto cpu_service_time() const -> double;
 
     // Whole-slot span, for profiling display.
@@ -63,21 +72,45 @@ public:
     // Monotonic reference-clock timestamp in seconds (QPC-backed on Windows).
     [[nodiscard]] static auto now() -> double;
 
-    // Opens (or re-opens) the record for frame_id, clearing stale content.
-    auto begin_frame(std::int64_t frame_id) -> Frame_time_record&;
+    // Opens (or re-opens) the record for frame_id, clearing stale content,
+    // and stamps its CPU slot begin.
+    void begin_frame(std::int64_t frame_id, double cpu_slot_begin);
 
-    // Record for frame_id, or nullptr when never recorded / evicted.
-    [[nodiscard]] auto find(std::int64_t frame_id) -> Frame_time_record*;
-    [[nodiscard]] auto find(std::int64_t frame_id) const -> const Frame_time_record*;
+    // True when the record for frame_id is open (begun and not evicted).
+    [[nodiscard]] auto contains(std::int64_t frame_id) const -> bool;
+
+    // Field writers. Each is a no-op when the record for frame_id is not
+    // open. set_once() writes only a field that is still 0; add()
+    // accumulates. The two-field set() writes both under one lock, so a
+    // reader never sees one half of a (begin, end) pair.
+    void set     (std::int64_t frame_id, double Frame_time_record::* field, double value);
+    void set     (std::int64_t frame_id, double Frame_time_record::* field_a, double value_a, double Frame_time_record::* field_b, double value_b);
+    void set_once(std::int64_t frame_id, double Frame_time_record::* field, double value);
+    void add     (std::int64_t frame_id, double Frame_time_record::* field, double value);
+
+    // Copies the record for frame_id into out_record; false (out_record
+    // untouched) when the record is not open.
+    [[nodiscard]] auto get(std::int64_t frame_id, Frame_time_record& out_record) const -> bool;
 
     [[nodiscard]] auto capacity() const -> std::size_t { return m_records.size(); }
 
     // Highest frame id passed to begin_frame(); -1 before the first frame.
-    [[nodiscard]] auto get_latest_frame_id() const -> std::int64_t { return m_latest_frame_id; }
+    [[nodiscard]] auto get_latest_frame_id() const -> std::int64_t;
+
+    // Display refresh duration (seconds) from the swapchain timing query; 0
+    // while unknown. Kept here, under the same lock, because the swapchain
+    // that sets it may be recreated on the render thread while the pacer
+    // on the main thread reads it.
+    void               set_display_refresh_duration(double seconds);
+    [[nodiscard]] auto get_display_refresh_duration() const -> double;
 
 private:
-    std::vector<Frame_time_record> m_records;
+    [[nodiscard]] auto find_locked(std::int64_t frame_id) -> Frame_time_record*;
+
+    mutable std::mutex             m_mutex;
+    std::vector<Frame_time_record> m_records;        // sized once in the constructor
     std::int64_t                   m_latest_frame_id{-1};
+    double                         m_display_refresh_duration{0.0};
 };
 
 } // namespace erhe::frame_pacing

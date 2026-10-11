@@ -502,6 +502,12 @@ auto Mcp_server::process_queued_requests() -> int
                 m_context.ddgi_renderer->cancel_reference_query();
                 log_mcp->warn("MCP server: reference_indirect_diffuse expired; its remaining chunks are cancelled");
             }
+            if ((m_ray_trace_save_request == req.get()) && (m_context.ray_trace_renderer != nullptr)) {
+                // A copy not recorded yet is dropped; a recorded one
+                // completes and the next request replaces it.
+                m_ray_trace_save_request = nullptr;
+                m_context.ray_trace_renderer->cancel_output_readback();
+            }
             if (m_rc_texels_request == req.get()) {
                 // A recorded copy still completes; a request arriving while
                 // it is in flight reads it (its counters say when it was
@@ -1015,6 +1021,32 @@ auto Mcp_server::action_set_ray_trace(const json& args) -> std::string
     if (renderer == nullptr) {
         return make_error_content("Ray trace renderer not available");
     }
+
+    // save_path: the output readback is handed to the render phase
+    // (Ray_trace_renderer::request_output_readback()), which records the
+    // copy into its frame; later passes of the same request poll until that
+    // frame retired, then write the file.
+    const bool continuation =
+        (m_ray_trace_save_request != nullptr) &&
+        (m_ray_trace_save_request == m_current_request) &&
+        (m_ray_trace_save_enqueued_at == m_current_request->enqueued_at);
+    if (continuation) {
+        const Ray_trace_renderer::Readback_state state = renderer->poll_output_readback();
+        if ((state == Ray_trace_renderer::Readback_state::requested) || (state == Ray_trace_renderer::Readback_state::in_flight)) {
+            m_defer_current_request = true;
+            return {};
+        }
+        m_ray_trace_save_request = nullptr;
+        if (state != Ray_trace_renderer::Readback_state::complete) {
+            return make_error_content("Ray trace output readback failed (renderer not supported, or no output texture)");
+        }
+        std::vector<uint8_t> pixels;
+        int width  = 0;
+        int height = 0;
+        renderer->take_output_readback(pixels, width, height);
+        return write_ray_trace_output(m_ray_trace_save_path, pixels, width, height, std::move(m_ray_trace_save_result));
+    }
+
     if (args.contains("enabled")) {
         renderer->set_enabled(args.value("enabled", false));
     }
@@ -1042,7 +1074,11 @@ auto Mcp_server::action_set_ray_trace(const json& args) -> std::string
     json result{
         {"supported",      renderer->is_supported()},
         {"enabled",        renderer->is_enabled()},
-        {"instance_count", renderer->get_instance_count()}
+        // As traced by the last rendered frame (0 when it traced nothing).
+        {"instance_count", [&]() -> std::size_t {
+            const Ray_trace_renderer::Rendered_output* const output = renderer->get_rendered_output(m_context.last_rendered_frame_index);
+            return (output != nullptr) ? output->instance_count : std::size_t{0};
+        }()}
     };
     if (m_context.editor_settings != nullptr) {
         const Ray_trace_config& config = m_context.editor_settings->ray_trace;
@@ -1052,41 +1088,63 @@ auto Mcp_server::action_set_ray_trace(const json& args) -> std::string
     }
     const std::string save_path = args.value("save_path", "");
     if (!save_path.empty()) {
-        std::vector<uint8_t> pixels;
-        if (!renderer->read_output_rgba8(pixels)) {
+        // Whether there is an output texture to read is the render phase's
+        // to tell (Readback_state::failed).
+        if (!renderer->is_supported()) {
             return make_error_content("Ray trace output readback failed (renderer not supported, or no output texture)");
         }
-        // The output texture stores LINEAR tonemapped color (the in-editor
-        // display path encodes at swapchain write, like every viewport
-        // texture). Encode to sRGB here so the diagnostic PNG is viewable
-        // in external tools.
-        {
-            std::array<uint8_t, 256> linear_to_srgb_lut{};
-            for (std::size_t i = 0; i < linear_to_srgb_lut.size(); ++i) {
-                const float x = static_cast<float>(i) / 255.0f;
-                const float y = (x <= 0.0031308f) ? (12.92f * x) : (1.055f * std::pow(x, 1.0f / 2.4f) - 0.055f);
-                linear_to_srgb_lut[i] = static_cast<uint8_t>(std::lround(std::clamp(y, 0.0f, 1.0f) * 255.0f));
-            }
-            for (std::size_t i = 0, end = pixels.size(); i + 3 < end; i += 4) {
-                pixels[i + 0] = linear_to_srgb_lut[pixels[i + 0]];
-                pixels[i + 1] = linear_to_srgb_lut[pixels[i + 1]];
-                pixels[i + 2] = linear_to_srgb_lut[pixels[i + 2]];
-                // alpha unchanged
-            }
+        if (!renderer->request_output_readback()) {
+            // A copy of an expired request is still in flight; it retires
+            // within a few frames.
+            static_cast<void>(renderer->poll_output_readback());
+            m_defer_current_request = true;
+            return {};
         }
-        const std::shared_ptr<erhe::graphics::Texture> texture = renderer->get_output_texture();
-        const int width      = texture->get_width();
-        const int height     = texture->get_height();
-        const int row_stride = width * 4;
-        std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
-        const std::span<const std::byte> data{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()};
-        if (!writer->write_png(std::filesystem::path{save_path}, width, height, row_stride, texture->get_pixelformat(), data)) {
-            return make_error_content("Failed to write PNG '" + save_path + "' (image writer backend may be disabled)");
-        }
-        result["saved_path"] = save_path;
-        result["width"]      = width;
-        result["height"]     = height;
+        m_ray_trace_save_request     = m_current_request;
+        m_ray_trace_save_enqueued_at = m_current_request->enqueued_at;
+        m_ray_trace_save_path        = save_path;
+        m_ray_trace_save_result      = std::move(result);
+        m_defer_current_request      = true;
+        return {};
     }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::write_ray_trace_output(
+    const std::string&    save_path,
+    std::vector<uint8_t>& pixels,
+    const int             width,
+    const int             height,
+    json                  result
+) -> std::string
+{
+    // The output texture stores LINEAR tonemapped color (the in-editor
+    // display path encodes at swapchain write, like every viewport
+    // texture). Encode to sRGB here so the diagnostic PNG is viewable
+    // in external tools.
+    {
+        std::array<uint8_t, 256> linear_to_srgb_lut{};
+        for (std::size_t i = 0; i < linear_to_srgb_lut.size(); ++i) {
+            const float x = static_cast<float>(i) / 255.0f;
+            const float y = (x <= 0.0031308f) ? (12.92f * x) : (1.055f * std::pow(x, 1.0f / 2.4f) - 0.055f);
+            linear_to_srgb_lut[i] = static_cast<uint8_t>(std::lround(std::clamp(y, 0.0f, 1.0f) * 255.0f));
+        }
+        for (std::size_t i = 0, end = pixels.size(); i + 3 < end; i += 4) {
+            pixels[i + 0] = linear_to_srgb_lut[pixels[i + 0]];
+            pixels[i + 1] = linear_to_srgb_lut[pixels[i + 1]];
+            pixels[i + 2] = linear_to_srgb_lut[pixels[i + 2]];
+            // alpha unchanged
+        }
+    }
+    const int row_stride = width * 4;
+    std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
+    const std::span<const std::byte> data{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()};
+    if (!writer->write_png(std::filesystem::path{save_path}, width, height, row_stride, erhe::dataformat::Format::format_8_vec4_unorm, data)) {
+        return make_error_content("Failed to write PNG '" + save_path + "' (image writer backend may be disabled)");
+    }
+    result["saved_path"] = save_path;
+    result["width"]      = width;
+    result["height"]     = height;
     return make_json_content(result).dump();
 }
 
@@ -1149,7 +1207,12 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
             }
         }
     }
-    const Ddgi_renderer::Grid& grid = renderer->get_grid();
+    // The grid as of the last rendered frame's tick (the fit is the render
+    // phase's); all zero before DDGI first ticked.
+    const Ddgi_renderer::Rendered_state* const rendered = renderer->get_rendered_state(m_context.last_rendered_frame_index);
+    const Ddgi_renderer::Rendered_state        empty_state{};
+    const Ddgi_renderer::Rendered_state&       state    = (rendered != nullptr) ? *rendered : empty_state;
+    const Ddgi_renderer::Grid&                 grid     = state.grid;
     json result{
         {"supported",         renderer->is_supported()},
         {"active",            renderer->is_active()},
@@ -1157,10 +1220,10 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
         {"probe_count",       grid.get_probe_count()},
         {"probe_spacing",     json::array({grid.spacing.x, grid.spacing.y, grid.spacing.z})},
         {"grid_origin",       json::array({grid.origin.x, grid.origin.y, grid.origin.z})},
-        {"rays_per_probe",    renderer->get_rays_per_probe()},
-        {"irradiance_texels", renderer->get_irradiance_texels()},
-        {"distance_texels",   renderer->get_distance_texels()},
-        {"texture_bytes",     renderer->get_texture_byte_count()}
+        {"rays_per_probe",    state.rays_per_probe},
+        {"irradiance_texels", state.irradiance_texels},
+        {"distance_texels",   state.distance_texels},
+        {"texture_bytes",     state.texture_byte_count}
     };
     if (m_context.editor_settings != nullptr) {
         const Ddgi_config& config = m_context.editor_settings->ddgi;
@@ -1177,9 +1240,20 @@ namespace {
 
 // The radiance cascades layout, memory and trace / merge cost
 // (doc/editor/radiance_cascades.md "MCP").
-[[nodiscard]] auto radiance_cascades_stats_json(const Radiance_cascades_renderer& renderer) -> json
+[[nodiscard]] auto radiance_cascades_stats_json(
+    const Radiance_cascades_renderer&  renderer,
+    const std::optional<uint64_t>      last_rendered_frame_index,
+    const Radiance_cascades_merge_mode configured_merge_mode
+) -> json
 {
-    const Radiance_cascades_layout& layout = renderer.get_layout();
+    // Everything as the last rendered frame's tick left it (the layout,
+    // memory, cost, field and probe overlay, Rendered_state); all empty
+    // before radiance cascades first ticked or while another source is
+    // selected (the merge mode is then the configured one).
+    const Radiance_cascades_renderer::Rendered_state* const rendered = renderer.get_rendered_state(last_rendered_frame_index);
+    const Radiance_cascades_renderer::Rendered_state        empty_state{};
+    const Radiance_cascades_renderer::Rendered_state&       state  = (rendered != nullptr) ? *rendered : empty_state;
+    const Radiance_cascades_layout&                         layout = state.layout;
     json cascades = json::array();
     for (int i = 0; i < layout.cascade_count; ++i) {
         const Radiance_cascade& cascade = layout.cascades[static_cast<std::size_t>(i)];
@@ -1193,15 +1267,16 @@ namespace {
             {"interval",      json::array({cascade.interval_start, cascade.interval_end})},
             {"texels",        cascade.get_texel_count()},
             {"atlas_size",    json::array({cascade.get_atlas_width(), cascade.get_atlas_height()})},
-            {"texture_bytes", renderer.get_cascade_texture_byte_count(i)}
+            {"texture_bytes", state.cascade_texture_bytes[static_cast<std::size_t>(i)]}
         });
     }
-    const Radiance_cascades_renderer::Stats stats = renderer.get_stats();
-    // The probe overlay's last retired copy (doc/editor/radiance_cascades.md
-    // "Probe overlay"); readback_count stays put while the overlay is off.
-    const Radiance_cascades_renderer::Probe_overlay_summary& overlay = renderer.get_probe_overlay_summary();
+    const Radiance_cascades_renderer::Stats& stats = state.stats;
+    // The probe overlay's last retired copy as of the last rendered frame
+    // (doc/editor/radiance_cascades.md "Probe overlay"); readback_count
+    // stays put while the overlay is off.
+    const Radiance_cascades_renderer::Probe_overlay_summary& overlay = state.summary;
     const json probe_overlay = json{
-        {"readback_count", stats.probe_overlay_readback_count},
+        {"readback_count", state.readback_count},
         {"cascade",        overlay.cascade},
         {"probe_count",    overlay.probe_count},
         {"active",         overlay.active},
@@ -1219,8 +1294,8 @@ namespace {
     // The probe field the reduce pass writes: cascade 0's grid in the DDGI
     // atlas format (doc/editor/radiance_cascades.md "Reduce").
     json field = nullptr;
-    if (renderer.has_field()) {
-        const erhe::scene_renderer::Ddgi_parameters parameters = renderer.get_forward_parameters();
+    if (state.has_field) {
+        const erhe::scene_renderer::Ddgi_parameters& parameters = state.field_parameters;
         field = json{
             {"grid_origin",       json::array({parameters.grid_origin.x,  parameters.grid_origin.y,  parameters.grid_origin.z })},
             {"grid_spacing",      json::array({parameters.grid_spacing.x, parameters.grid_spacing.y, parameters.grid_spacing.z})},
@@ -1233,15 +1308,15 @@ namespace {
     }
     return json{
         {"supported",                renderer.is_supported()},
-        {"active",                   renderer.is_active()},
-        {"has_field",                renderer.has_field()},
-        {"merge_mode",               std::string{to_string(renderer.get_merge_mode())}},
+        {"active",                   state.active},
+        {"has_field",                state.has_field},
+        {"merge_mode",               std::string{to_string((rendered != nullptr) ? state.merge_mode : configured_merge_mode)}},
         {"cascade_count",            layout.cascade_count},
         {"r0",                       layout.r0},
         {"probe_count",              layout.get_total_probes()},
         {"texels",                   layout.get_total_texels()},
-        {"texture_bytes",            renderer.get_texture_byte_count()},
-        {"fit_count",                renderer.get_fit_count()},
+        {"texture_bytes",            state.texture_bytes},
+        {"fit_count",                state.fit_count},
         {"cascades",                 cascades},
         {"update_count",             stats.update_count},
         {"timing_sample_count",      stats.timing_sample_count},
@@ -1356,8 +1431,9 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
                 return make_error_content("set_radiance_cascades: 'merge_mode' must be \"interpolate\", \"visibility_masked\" or \"per_neighbour_trace\"");
             }
+            // The render phase applies the frame's copy of the setting
+            // (Radiance_cascades_renderer::apply_frame_settings()).
             config.merge_mode = parsed;
-            renderer->set_merge_mode(parsed);
         }
         if (args.contains("debug_cascade_mask")) {
             config.debug_cascade_mask = std::clamp(args.value("debug_cascade_mask", 0), 0, (1 << (Radiance_cascades_renderer::c_sky_mask_bit + 1)) - 1);
@@ -1393,7 +1469,7 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
     if (args.value("show_window", false)) {
         show_window_by_ini_label(m_context, "radiance_cascades");
     }
-    json result = radiance_cascades_stats_json(*renderer);
+    json result = radiance_cascades_stats_json(*renderer, m_context.last_rendered_frame_index, m_context.render_settings->radiance_cascades.merge_mode);
     if (m_context.editor_settings != nullptr) {
         const Radiance_cascades_config& config = m_context.editor_settings->radiance_cascades;
         result["config"] = json{
@@ -1431,13 +1507,18 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
         {"source", std::string{to_string(source)}}
     };
     if (m_context.radiance_cascades_renderer != nullptr) {
-        result["radiance_cascades"] = radiance_cascades_stats_json(*m_context.radiance_cascades_renderer);
+        result["radiance_cascades"] = radiance_cascades_stats_json(*m_context.radiance_cascades_renderer, m_context.last_rendered_frame_index, m_context.render_settings->radiance_cascades.merge_mode);
     }
     if (renderer == nullptr) {
         return make_json_content(result).dump();
     }
-    const Ddgi_renderer::Grid&  grid  = renderer->get_grid();
-    const Ddgi_renderer::Stats stats = renderer->get_stats();
+    // The grid, cost and probe readback as of the last rendered frame's
+    // tick; all zero before DDGI first ticked.
+    const Ddgi_renderer::Rendered_state* const rendered = renderer->get_rendered_state(m_context.last_rendered_frame_index);
+    const Ddgi_renderer::Rendered_state        empty_state{};
+    const Ddgi_renderer::Rendered_state&       state    = (rendered != nullptr) ? *rendered : empty_state;
+    const Ddgi_renderer::Grid&                 grid     = state.grid;
+    const Ddgi_renderer::Stats&                stats    = state.stats;
     const auto pass_time_json = [](const Ddgi_renderer::Pass_time& pass_time) -> json {
         return json{
             {"last_ms",    pass_time.last_ms},
@@ -1450,13 +1531,13 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
     }
     result["ddgi"] = json{
         {"supported",                renderer->is_supported()},
-        {"active",                   renderer->is_active()},
+        {"active",                   state.active},
         {"grid_origin",              json::array({grid.origin.x,  grid.origin.y,  grid.origin.z })},
         {"grid_spacing",             json::array({grid.spacing.x, grid.spacing.y, grid.spacing.z})},
         {"grid_counts",              json::array({grid.counts.x,  grid.counts.y,  grid.counts.z })},
         {"probe_count",              grid.get_probe_count()},
-        {"rays_per_probe",           renderer->get_rays_per_probe()},
-        {"probes_per_update",        renderer->get_probes_per_update()},
+        {"rays_per_probe",           state.rays_per_probe},
+        {"probes_per_update",        state.probes_per_update},
         {"rays_per_update",          stats.rays_per_update},
         {"gpu_ms",                   passes},
         {"gpu_ms_total",             pass_time_json(stats.total)},
@@ -1464,19 +1545,19 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
         {"ms_per_million_rays",      stats.ms_per_million_rays},
         {"updates_per_full_refresh", stats.updates_per_full_refresh},
         {"full_refresh_ms",          stats.full_refresh_ms},
-        {"texture_bytes",            renderer->get_texture_byte_count()},
+        {"texture_bytes",            state.texture_byte_count},
         {"update_count",             stats.update_count},
         {"timing_sample_count",      stats.timing_sample_count},
         {"history_reset_count",      stats.history_reset_count}
     };
 
-    // Probe state: report the last retired copy, and ask for a fresh one.
+    // Probe state: report the newest retired readback the last rendered
+    // frame published, and ask for a fresh one.
     json probe_states = nullptr;
-    if (renderer->is_active()) {
-        const bool valid = renderer->poll_probe_states();
+    if (state.active) {
         renderer->request_probe_states();
-        if (valid) {
-            const Ddgi_renderer::Probe_state_summary& summary = renderer->get_probe_state_summary();
+        if (state.probe_states_valid) {
+            const Ddgi_renderer::Probe_state_summary& summary = state.probe_state_summary;
             probe_states = json{
                 {"update_count",            summary.update_count},
                 {"active",                  summary.active},
@@ -1485,7 +1566,7 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
                 {"max_offset_over_spacing", summary.max_offset_over_spacing}
             };
             if (args.contains("probes") && args["probes"].is_array()) {
-                const std::span<const glm::vec4> states = renderer->get_probe_states();
+                const std::span<const glm::vec4> states{state.probe_states};
                 json probe_data = json::array();
                 for (const json& entry : args["probes"]) {
                     if (!entry.is_array() || (entry.size() != 3) || !entry[0].is_number_integer() || !entry[1].is_number_integer() || !entry[2].is_number_integer()) {
@@ -1818,7 +1899,8 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
             return make_json_content(result).dump();
         }
         if ((state == Rc_readback_state::requested) || (state == Rc_readback_state::in_flight)) {
-            if ((state == Rc_readback_state::requested) && !renderer->is_active()) {
+            const Radiance_cascades_renderer::Rendered_state* const rendered = renderer->get_rendered_state(m_context.last_rendered_frame_index);
+            if ((state == Rc_readback_state::requested) && ((rendered == nullptr) || !rendered->active)) {
                 m_rc_texels_request = nullptr;
                 return make_error_content("get_radiance_cascades_texels: radiance cascades became inactive before the copy was recorded");
             }
@@ -1829,18 +1911,23 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
         return make_error_content("get_radiance_cascades_texels: the readback was dropped");
     }
 
-    if ((renderer == nullptr) || !renderer->is_active()) {
+    // The layout and field as the last rendered frame left them (the
+    // render phase owns the live ones).
+    const Radiance_cascades_renderer::Rendered_state* const rendered = (renderer != nullptr)
+        ? renderer->get_rendered_state(m_context.last_rendered_frame_index)
+        : nullptr;
+    if ((rendered == nullptr) || !rendered->active) {
         return make_error_content("get_radiance_cascades_texels: radiance cascades are not active (select them with set_indirect_diffuse; needs ray query and scene content)");
     }
     const json texels_arg = args.contains("texels") ? args["texels"] : json{};
     std::vector<Rc_texel_address> addresses;
-    const std::string error = parse_rc_texel_addresses(texels_arg, renderer->get_layout(), addresses);
+    const std::string error = parse_rc_texel_addresses(texels_arg, rendered->layout, addresses);
     if (!error.empty()) {
         return make_error_content("get_radiance_cascades_texels: " + error);
     }
     const json field_texels_arg = args.contains("field_texels") ? args["field_texels"] : json{};
     std::vector<Rc_field_texel_address> field_addresses;
-    const std::string field_error = parse_rc_field_texel_addresses(field_texels_arg, renderer->get_forward_parameters(), field_addresses);
+    const std::string field_error = parse_rc_field_texel_addresses(field_texels_arg, rendered->field_parameters, field_addresses);
     if (!field_error.empty()) {
         return make_error_content("get_radiance_cascades_texels: " + field_error);
     }
@@ -1883,7 +1970,7 @@ auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
             return make_json_content(result).dump();
         }
         if ((state == Irradiance_query_state::queued) || (state == Irradiance_query_state::in_flight)) {
-            if ((state == Irradiance_query_state::queued) && !get_indirect_diffuse_field(m_context).is_valid()) {
+            if ((state == Irradiance_query_state::queued) && !has_rendered_indirect_diffuse_field(m_context)) {
                 renderer->cancel_irradiance_query();
                 m_irradiance_query_request = nullptr;
                 return make_error_content("sample_indirect_diffuse: the probe field went away before the query was recorded");
@@ -1950,7 +2037,7 @@ auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
 
     // No active field: the forward pass shades with the flat scene ambient,
     // which is also what the shader returns without a volume.
-    if ((renderer == nullptr) || !get_indirect_diffuse_field(m_context).is_valid()) {
+    if ((renderer == nullptr) || !has_rendered_indirect_diffuse_field(m_context)) {
         const std::shared_ptr<Scene_root> scene_root = (m_context.app_scenes != nullptr)
             ? m_context.app_scenes->get_single_scene_root()
             : std::shared_ptr<Scene_root>{};
@@ -2118,7 +2205,11 @@ auto Mcp_server::query_reference_indirect_diffuse(const json& args) -> std::stri
         {"rays_per_point",  settings.rays_per_point},
         {"seed",            settings.seed},
         {"normal_bias",     settings.normal_bias},
-        {"ddgi_enabled",    renderer->is_active()},
+        {"ddgi_enabled",    [&]() -> bool {
+            // As the last rendered frame left it (the render phase owns the live state).
+            const Ddgi_renderer::Rendered_state* const rendered = renderer->get_rendered_state(m_context.last_rendered_frame_index);
+            return (rendered != nullptr) && rendered->active;
+        }()},
         {"standard_error",  "of the luminance (0.2126 R + 0.7152 G + 0.0722 B) of irradiance"}
     };
     m_reference_query_request     = m_current_request;

@@ -1,6 +1,7 @@
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "app_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/shadow_frustum_fit_config.hpp"
@@ -17,6 +18,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -90,23 +92,45 @@ Shadow_render_node::Shadow_render_node(
 )
     // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
     : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"}
-    , m_context   {context}
-    , m_scene_view{scene_view}
+    , m_context            {context}
+    , m_scene_view         {scene_view}
+    , m_configuration_slots{graphics_device.get_number_of_frames_in_flight()}
 {
+    ERHE_VERIFY(!m_configuration_slots.empty());
+    m_frame_results.resize(graphics_device.get_number_of_frames_in_flight());
     register_output("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 
-    // Start on the depth technique; execute_rendergraph_node lazily switches to
-    // distance on the first frame if the active preset selects it (the App_context
+    // Start on the depth technique; prepare() requests distance for the first
+    // prepared frame if the active preset selects it (the App_context
     // settings are not available to read here at construction time).
-    reconfigure(graphics_device, init_command_buffer, resolution, light_count, depth_bits, false, point_resolution, point_light_count);
+    m_requested_configuration = Shadow_node_configuration{
+        .resolution         = resolution,
+        .light_count        = light_count,
+        .depth_bits         = depth_bits,
+        .distance_technique = false,
+        .point_resolution   = point_resolution,
+        .point_light_count  = point_light_count
+    };
+    reconfigure(graphics_device, init_command_buffer, m_requested_configuration);
 }
 
 Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 
-void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const int resolution, const int light_count, const int requested_depth_bits, const bool distance_technique, const int point_resolution, const int point_light_count)
+void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const Shadow_node_configuration& configuration)
 {
+    const int  resolution           = configuration.resolution;
+    const int  light_count          = configuration.light_count;
+    const int  requested_depth_bits = configuration.depth_bits;
+    const bool distance_technique   = configuration.distance_technique;
+    const int  point_resolution     = configuration.point_resolution;
+    const int  point_light_count    = configuration.point_light_count;
+    // The configuration is applied (or failed, below) once: a request is not
+    // retried each frame.
+    const Shadow_node_configuration previous = m_configuration;
+    m_configuration = configuration;
+
     // Reverse-Z is the static device value; query it rather than caching.
     const bool reverse_depth = graphics_device.get_reverse_depth();
     const erhe::dataformat::Format depth_format = choose_shadow_depth_format(graphics_device, requested_depth_bits);
@@ -124,11 +148,11 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         (m_texture->get_width()             == resolution) &&
         (m_texture->get_height()            == resolution) &&
         (m_texture->get_array_layer_count() == std::max(1, light_count)) &&
-        (m_light_count                      == light_count) &&
+        (previous.light_count               == light_count) &&
         (m_texture->get_pixelformat()       == depth_format) &&
-        (m_distance_technique               == distance_technique) &&
-        (m_point_resolution                 == point_resolution) &&
-        (m_point_light_count                == point_light_count)
+        (previous.distance_technique        == distance_technique) &&
+        (previous.point_resolution          == point_resolution) &&
+        (previous.point_light_count         == point_light_count)
     ) {
         log_render->debug(
             "Reconfigure shadow resolution = {}, light count = {}, format = {} - match old settings, skip",
@@ -141,15 +165,6 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         resolution, light_count, requested_depth_bits, erhe::dataformat::c_str(depth_format),
         erhe::scene_renderer::get_shadow_depth_bits_axis(depth_format)
     );
-
-    // Cache the resolved configuration so execute_rendergraph_node can re-call
-    // reconfigure() with the same dimensions when only the technique changes.
-    m_resolution           = resolution;
-    m_light_count          = light_count;
-    m_requested_depth_bits = requested_depth_bits;
-    m_distance_technique   = distance_technique;
-    m_point_resolution     = point_resolution;
-    m_point_light_count    = point_light_count;
 
     //// TODO device.wait_for_idle()
 
@@ -355,14 +370,16 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         m_point_viewport = {0, 0, point_res, point_res};
     }
 
-    // Invalidate m_light_projections which at this point has stale texture handles
-    m_light_projections.clear();
+    // The frame results of earlier frames keep their references to the
+    // replaced textures until their slots are rewritten; the main thread may
+    // still read the last rendered frame's. This frame's result is cleared at
+    // the start of execute_rendergraph_node(), before this runs.
 }
 
 // One white directional light along the view camera's axis, standing in for
 // the lights a scene has none of. It is not a scene item: nothing owns it but
 // this render node, so it appears in no hierarchy, no save and no undo.
-auto Shadow_render_node::resolve_headlight(const erhe::scene::Camera& camera) -> erhe::scene_renderer::Light_set&
+auto Shadow_render_node::resolve_headlight(const erhe::scene::Camera_snapshot& camera) -> erhe::scene_renderer::Light_set&
 {
     if (!m_headlight) {
         m_headlight = std::make_shared<erhe::scene::Light>("Headlight");
@@ -400,64 +417,158 @@ auto Shadow_render_node::resolve_headlight(const erhe::scene::Camera& camera) ->
     return m_headlight_set;
 }
 
+void Shadow_render_node::request_configuration(const Shadow_node_configuration& configuration)
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    m_requested_configuration = configuration;
+}
+
+void Shadow_render_node::prepare()
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    // The active shadow technique (the preset's Shadow_technique_mode flips
+    // between depth and distance): reconfigure() (re)allocates the R32F
+    // distance map and rebuilds the render passes with / without the color
+    // attachment.
+    m_requested_configuration.distance_technique =
+        (m_context.render_settings->graphics_preset.shadow_technique == Shadow_technique_mode::distance);
+    const uint64_t      frame_index = m_context.graphics_device->get_frame_index();
+    Configuration_slot& slot        = m_configuration_slots[frame_index % m_configuration_slots.size()];
+    slot.frame_index   = frame_index;
+    slot.configuration = m_requested_configuration;
+}
+
+void Shadow_render_node::apply_requested_configuration(erhe::graphics::Command_buffer& command_buffer)
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    const uint64_t            frame_index = m_context.graphics_device->get_frame_index();
+    const Configuration_slot& slot        = m_configuration_slots[frame_index % m_configuration_slots.size()];
+    if ((slot.frame_index != frame_index) || (slot.configuration == m_configuration)) {
+        return;
+    }
+    // The layout transitions record into the frame command buffer, outside
+    // any render pass, before this node's passes use the maps.
+    reconfigure(*m_context.graphics_device, command_buffer, slot.configuration);
+}
+
+void Shadow_render_node::prepare_casters(const uint64_t frame_index, const std::size_t frames_in_flight)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    ERHE_VERIFY(frames_in_flight > 0);
+    if (m_caster_slots.size() != frames_in_flight) {
+        m_caster_slots.resize(frames_in_flight);
+    }
+    Caster_slot& slot = m_caster_slots[frame_index % frames_in_flight];
+    slot.frame_index = frame_index;
+    slot.prepared    = false;
+
+    // The render phase takes the draw-list path with the gate on; the
+    // bucket path is the one to prepare (execute_rendergraph_node()).
+    const Render_settings& render_settings = *m_context.render_settings;
+    if (render_settings.use_draw_lists) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_scene_view.get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>> mesh_spans[] = {
+        scene_root->layers().content()->meshes
+    };
+    // Bucketing reads the meshes' Buffer_mesh variants, which a worker may
+    // be replacing (commit_geometry_buffer_mesh, under this mutex).
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root->item_host_mutex};
+    m_context.shadow_renderer->prepare(
+        erhe::scene_renderer::Shadow_renderer::Prepare_parameters{
+            .mesh_spans            = mesh_spans,
+            // The root's forward set, which the bucket path binds (D5).
+            .material_source       = &scene_root->get_material_set(),
+            .exclude_unlit_casters = render_settings.exclude_unlit_primitives
+        },
+        slot.casters
+    );
+    slot.prepared = true;
+}
+
 void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    // This frame's result slot (one per frame in flight). The slot holds
+    // what the frame frames-in-flight earlier left; reset what this frame
+    // publishes before anything can return, so every exit below - no scene
+    // root, no camera, no content mesh, no shadow map texture - leaves an
+    // empty resolution for the consumers (Composition_pass ->
+    // Light_buffer::update) and the main thread instead of an older frame's.
+    const uint64_t       frame_index = m_context.graphics_device->get_frame_index();
+    Shadow_frame_result& result      = m_frame_results.write(frame_index);
+    // (lights keeps its elements: publish_light_copies() assigns over them,
+    // so the name strings keep their capacity; only the projections point
+    // into it.)
+    result.light_projections.clear();
+    result.draw_statistics.clear();
+
+    // CPU timing of the whole execute (P4 measurement); the scope guard
+    // records on every return path, into this frame's result and the
+    // render phase's running totals.
     class Cpu_timer_scope
     {
     public:
-        explicit Cpu_timer_scope(Shadow_render_node& node)
-            : m_node {node}
-            , m_start{std::chrono::steady_clock::now()}
+        Cpu_timer_scope(Shadow_render_node& node, Shadow_frame_result& result)
+            : m_node  {node}
+            , m_result{result}
+            , m_start {std::chrono::steady_clock::now()}
         {
         }
         ~Cpu_timer_scope() noexcept
         {
             const std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
             const double us = std::chrono::duration<double, std::micro>(end - m_start).count();
-            m_node.m_last_cpu_time_us   = us;
             m_node.m_total_cpu_time_us += us;
             ++m_node.m_execute_count;
+            m_result.cpu_time_us       = us;
+            m_result.total_cpu_time_us = m_node.m_total_cpu_time_us;
+            m_result.execute_count     = m_node.m_execute_count;
         }
     private:
         Shadow_render_node&                   m_node;
+        Shadow_frame_result&                  m_result;
         std::chrono::steady_clock::time_point m_start;
     };
-    const Cpu_timer_scope cpu_timer_scope{*this};
+    const Cpu_timer_scope cpu_timer_scope{*this, result};
 
-    // Forget the previous frame's resolution before anything can return.
-    // Light_projections names its lights by raw pointer, and the consumer
-    // (Composition_pass -> Light_buffer::update) reads whatever this node
-    // last left here, whether or not this frame produced it. Every exit
-    // below - no scene root, no camera, no content mesh, no shadow map
-    // texture - would otherwise hand the forward pass the pointers of a
-    // frame whose lights may already have been destroyed, which is what a
-    // scene close does: the light layer empties and the lights are freed
-    // while this node's early exits keep the stale set alive.
-    m_light_projections.clear();
+    // The configuration the prepare phase of this frame requested, before
+    // anything below reads the maps or the render passes.
+    apply_requested_configuration(command_buffer);
 
-    // Render shadow maps
-    const auto& scene_root = m_scene_view.get_scene_root();
-    std::shared_ptr<erhe::scene::Camera> camera = m_scene_view.get_camera();
-    if (!scene_root || !camera) {
+    // Render shadow maps. The view's scene root and camera as the render
+    // phase's copies of this frame (Scene_view::get_render_scene_root(),
+    // get_render_camera()).
+    const std::shared_ptr<Scene_root> scene_root = m_scene_view.get_render_scene_root();
+    const erhe::scene::Camera_snapshot* camera = m_scene_view.get_render_camera();
+    if (!scene_root || (camera == nullptr)) {
         return;
     }
 
     // Optional shadow fit target camera override (Scene View Config window):
     // fit the shadow frustum (and collect the fit debug data) for this camera
     // instead of the view camera, so the fit can be observed from outside.
-    // Ignored when the camera no longer exists or belongs to another scene.
-    const std::shared_ptr<erhe::scene::Camera> override_camera = m_scene_view.get_shadow_fit_override_camera().lock();
-    if (override_camera) {
-        const erhe::scene::Node* const override_camera_node = override_camera.get();
-        if ((override_camera_node != nullptr) && (override_camera_node->get_scene() == scene_root->get_hosted_scene())) {
-            camera = override_camera;
-        }
+    // The view copies it only while it exists and belongs to the view's scene.
+    const erhe::scene::Camera_snapshot* const override_camera = m_scene_view.get_render_shadow_fit_camera();
+    if (override_camera != nullptr) {
+        camera = override_camera;
     }
 
-    const auto& layers = scene_root->layers();
-    if (layers.content()->meshes.empty()) {
+    // The scene's render settings and light set as the prepare phase of
+    // this frame copied them (one copy per frame in flight).
+    const Scene_render_settings& scene_render_settings = scene_root->get_render_settings(frame_index);
+    if (!scene_render_settings.has_content_meshes) {
         return;
     }
 
@@ -468,25 +579,19 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // The scene's resolved light set: which lights are shaded / shadow-mapped,
     // in light UBO slot order, under the active graphics preset's per light
     // type limits (the shadow limits are also what reconfigure() sized the
-    // shadow maps from; with shadow_enable off they are zero). Scene_root
-    // invalidates the set from its light hooks; resolve() recomputes only
-    // then, or when the limits changed - not per frame / per view.
-    const erhe::scene_renderer::Light_count_limits light_count_limits = (m_context.app_settings != nullptr)
-        ? get_light_count_limits(m_context.app_settings->graphics.current_graphics_preset)
-        : erhe::scene_renderer::Light_count_limits{};
+    // shadow maps from; with shadow_enable off they are zero), as the copies
+    // Scene_root::snapshot_render_settings resolved in M2.
+    const Render_settings& render_settings = *m_context.render_settings;
 
     // A scene whose light layer is empty is lit by this view's headlight
     // instead (see resolve_headlight): a file that authors no light renders
     // black otherwise, where usdview lights the stage with a camera light.
     const bool use_headlight =
-        layers.light()->lights.empty() &&
-        ((m_context.app_settings == nullptr) || m_context.app_settings->graphics.headlight_when_unlit);
-    erhe::scene_renderer::Light_set& light_set = use_headlight
-        ? resolve_headlight(*camera.get())
-        : scene_root->get_light_set();
-    if (!use_headlight) {
-        light_set.resolve(layers.light()->lights, light_count_limits);
-    }
+        !scene_render_settings.has_lights &&
+        render_settings.headlight_when_unlit;
+    const erhe::scene_renderer::Light_set& light_set = use_headlight
+        ? resolve_headlight(*camera)
+        : scene_root->get_light_set(frame_index);
 
     // Shadows off for this view: the preset has shadow_enable off (no shadow
     // maps allocated), or the live per-view Visual Style shadow mode does not
@@ -499,12 +604,12 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // fragment unshadowed (the shadow-mapped slots of the shared resolution
     // simply sample nothing). No caster / receiver AABB gathering, no frustum
     // fit, and no shadow render passes are issued.
-    const bool preset_shadows_enabled = (m_context.app_settings == nullptr) || m_context.app_settings->graphics.current_graphics_preset.shadow_enable;
-    if (!preset_shadows_enabled || (m_scene_view.get_config().shadow_mode != Shadow_mode::shadow_maps)) {
-        const erhe::math::Viewport light_view_camera_viewport = m_scene_view.get_camera_viewport();
-        m_light_projections.apply(
+    const bool preset_shadows_enabled = render_settings.graphics_preset.shadow_enable;
+    if (!preset_shadows_enabled || (m_scene_view.get_render_config().shadow_mode != Shadow_mode::shadow_maps)) {
+        const erhe::math::Viewport light_view_camera_viewport = m_scene_view.get_render_camera_viewport();
+        result.light_projections.apply(
             light_set,
-            camera.get(),
+            camera,
             light_view_camera_viewport,
             m_viewport,
             {},     // no shadow map -> "no shadow map" sentinel in the light UBO
@@ -515,34 +620,23 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             {},     // no receiver bounds
             nullptr // no fit settings
         );
-        m_light_projections.shadow_distance_texture = {};
-        m_light_projections.shadow_cube_texture     = {};
+        result.light_projections.shadow_distance_texture = {};
+        result.light_projections.shadow_cube_texture     = {};
+        publish_light_copies(result, light_set, *camera);
         return;
     }
 
-    // Lazily reconfigure when the active shadow technique changed (the preset's
-    // Shadow_technique_mode flips between depth and distance). reconfigure()
-    // (re)allocates the R32F distance map and rebuilds the render passes with /
-    // without the color attachment.
-    if (m_context.app_settings != nullptr) {
-        const bool want_distance =
-            (m_context.app_settings->graphics.current_graphics_preset.shadow_technique == Shadow_technique_mode::distance);
-        if (want_distance != m_distance_technique) {
-            reconfigure(*m_context.graphics_device, command_buffer, m_resolution, m_light_count, m_requested_depth_bits, want_distance, m_point_resolution, m_point_light_count);
-            if (!m_texture) {
-                return;
-            }
-        }
-    }
+    // The shadow technique the maps are configured for follows the preset
+    // in prepare() (M2); a flip after that (none: the copy is made before
+    // prepare()) renders with the previous configuration this frame.
 
-
-    // Refresh the shadow frustum fit settings from the live editor settings
-    // (edited in the Settings window). m_fit_settings must outlive the render
-    // call; Light_projection_parameters keeps a pointer to it.
-    if (m_context.editor_settings != nullptr) {
-        // Resolve per scene (#239): a scene may override shadow frustum fit.
-        const Shadow_frustum_fit_config& config = get_effective_shadow_frustum_fit(*m_context.editor_settings, *scene_root);
-        m_fit_settings = erhe::scene::Shadow_frustum_fit_settings{
+    // Refresh the shadow frustum fit settings from the scene's render
+    // settings copy (the override or the editor-global default, resolved in
+    // M2). The frame result's copy outlives the render call;
+    // Light_projection_parameters keeps a pointer to it.
+    {
+        const Shadow_frustum_fit_config& config = scene_render_settings.shadow_frustum_fit;
+        result.fit_settings = erhe::scene::Shadow_frustum_fit_settings{
             .fit_to_view_frustum    = config.fit_to_view_frustum,
             .fit_to_casters         = config.fit_to_casters,
             .fit_to_receivers       = config.fit_to_receivers,
@@ -556,8 +650,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .cap_by_shadow_range    = config.cap_by_shadow_range,
             .collect_debug          = config.collect_debug
         };
-    } else {
-        m_fit_settings = erhe::scene::Shadow_frustum_fit_settings{};
     }
 
     // The tight frustum fit needs the main camera viewport for the view
@@ -567,7 +659,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // combined stereo eye frustum, see Headset_view::update_root_camera_projection),
     // and perspective_xr derives the frustum from explicit fov sides and ignores
     // the aspect ratio - so the empty viewport here is harmless for that path.
-    const erhe::math::Viewport view_camera_viewport = m_scene_view.get_camera_viewport();
+    const erhe::math::Viewport view_camera_viewport = m_scene_view.get_render_camera_viewport();
 
     // Diagnostics: the tight shadow fit derives its view frustum from this
     // camera + viewport. For the headset there is no
@@ -577,33 +669,30 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // run shows the fov sides the fit is actually fitted to. For perspective_xr
     // the meaningful fields are the fov sides, not fov_x/fov_y.
     {
-        const erhe::scene::Projection* const projection = camera->projection();
-        const erhe::scene::Projection::Type  type       = (projection != nullptr) ? projection->projection_type : erhe::scene::Projection::Type::other;
+        const erhe::scene::Projection&      projection = camera->projection();
+        const erhe::scene::Projection::Type type       = projection.projection_type;
         if (
-            (camera.get()                != m_dbg_last_camera) ||
             (view_camera_viewport.width  != m_dbg_last_viewport_width) ||
             (view_camera_viewport.height != m_dbg_last_viewport_height) ||
             (static_cast<int>(type)      != m_dbg_last_projection_type)
         ) {
-            m_dbg_last_camera          = camera.get();
             m_dbg_last_viewport_width  = view_camera_viewport.width;
             m_dbg_last_viewport_height = view_camera_viewport.height;
             m_dbg_last_projection_type = static_cast<int>(type);
             log_render->info(
-                "Shadow fit: view={} camera='{}' projection={} fov[L{:.1f} R{:.1f} U{:.1f} D{:.1f}]deg fov_y={:.1f}deg viewport={}x{} aspect={:.3f} shadow_range={:.2f} tight_fit={}",
+                "Shadow fit: view={} projection={} fov[L{:.1f} R{:.1f} U{:.1f} D{:.1f}]deg fov_y={:.1f}deg viewport={}x{} aspect={:.3f} shadow_range={:.2f} tight_fit={}",
                 (m_scene_view.as_viewport_scene_view() != nullptr) ? "viewport" : ((view_camera_viewport.width > 0) ? "offscreen" : "headset/other"),
-                camera->get_name(),
-                (projection != nullptr) ? erhe::scene::Projection::c_type_strings[static_cast<unsigned int>(type)] : "none",
-                (projection != nullptr) ? glm::degrees(projection->fov_left ) : 0.0f,
-                (projection != nullptr) ? glm::degrees(projection->fov_right) : 0.0f,
-                (projection != nullptr) ? glm::degrees(projection->fov_up   ) : 0.0f,
-                (projection != nullptr) ? glm::degrees(projection->fov_down ) : 0.0f,
-                (projection != nullptr) ? glm::degrees(projection->fov_y) : 0.0f,
+                erhe::scene::Projection::c_type_strings[static_cast<unsigned int>(type)],
+                glm::degrees(projection.fov_left ),
+                glm::degrees(projection.fov_right),
+                glm::degrees(projection.fov_up   ),
+                glm::degrees(projection.fov_down ),
+                glm::degrees(projection.fov_y),
                 view_camera_viewport.width,
                 view_camera_viewport.height,
                 view_camera_viewport.aspect_ratio(),
                 camera->get_shadow_range(),
-                m_fit_settings.any_tightening_enabled()
+                result.fit_settings.any_tightening_enabled()
             );
         }
     }
@@ -620,8 +709,8 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // The forward pass samples these maps with the preset's filter, whose
     // value is the kernel width K (0 = hard).
     erhe::scene::Shadow_map_footprint shadow_map_footprint{};
-    if (m_context.app_settings != nullptr) {
-        const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
+    {
+        const Graphics_preset_entry& preset = render_settings.graphics_preset;
         depth_bias_constant = preset.shadow_depth_bias_constant;
         depth_bias_slope    = preset.shadow_depth_bias_slope;
         bias_texel_scale    = preset.shadow_bias_texel_scale;
@@ -634,34 +723,50 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // Draw-list path (plan phase 4): route casters through the scene's
     // persistent shadow draw lists when the gate is on; content layer only,
     // matching mesh_spans below.
+    // Every editor scene root keeps a Draw_list_scene, whatever the gate:
+    // its slot holds the frame's frustum fit bounds for both paths
+    // (Scene_root::prepare_shadow_bounds, M2).
+    erhe::scene_renderer::Draw_list_scene* root_draw_list_scene = scene_root->get_draw_list_scene();
+    ERHE_VERIFY(root_draw_list_scene != nullptr);
     erhe::scene_renderer::Draw_list_scene* draw_list_scene =
-        ((m_context.app_settings != nullptr) && m_context.app_settings->get_use_draw_lists())
-            ? scene_root->get_draw_list_scene()
+        render_settings.use_draw_lists
+            ? root_draw_list_scene
             : nullptr;
-    const erhe::scene::Layer_id draw_list_layers[] = { layers.content()->id };
+    const erhe::scene::Layer_id draw_list_layers[] = { scene_root->layers().content()->id };
+    // The bucket path (use_draw_lists off) draws the casters M2 prepared
+    // into this frame's slot (prepare_casters()); neither path is handed
+    // meshes, and both read the bounds M2 gathered.
+    const erhe::scene_renderer::Render_bucket_snapshot* casters = nullptr;
+    if (draw_list_scene == nullptr) {
+        ERHE_VERIFY(!m_caster_slots.empty());
+        const Caster_slot& slot = m_caster_slots[frame_index % m_caster_slots.size()];
+        ERHE_VERIFY(slot.prepared && (slot.frame_index == frame_index));
+        casters = &slot.casters;
+    }
 
     // Unlit (KHR_materials_unlit) primitives - sky domes, backdrops, emissive
-    // decals - are backdrop geometry, not occluders. The draw-list path bakes
-    // shadow membership into its cached entries, so the flag is pushed to the
-    // scene's draw lists (a no-op unless it changed, a rebuild when it did);
-    // the bucket path applies it per pass.
-    const bool exclude_unlit_casters =
-        (m_context.editor_settings != nullptr) && m_context.editor_settings->exclude_unlit_primitives;
-    if (draw_list_scene != nullptr) {
-        draw_list_scene->set_exclude_unlit_from_shadows(exclude_unlit_casters);
-    }
+    // decals - are backdrop geometry, not occluders. The bucket path applied
+    // the flag when it prepared the casters (prepare_casters()); the
+    // draw-list path bakes shadow membership into its cached entries and
+    // gets the flag from the setting's change sites
+    // (App_scenes::set_exclude_unlit_from_shadows).
+    const bool exclude_unlit_casters = render_settings.exclude_unlit_primitives;
+
+    // The distance fallback report compares with the previous frame's
+    // report, whichever frame result that went to.
+    result.light_projections.distance_fallback_light_ids = m_distance_fallback_light_ids;
 
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
             .command_buffer        = command_buffer,
-            .view_camera           = camera.get(),
+            .view_camera           = camera,
             .view_camera_viewport  = view_camera_viewport,
             .light_camera_viewport = m_viewport,
             .texture               = m_texture,
             .render_passes         = m_render_passes,
-            .mesh_spans            = { layers.content()->meshes },
+            .mesh_spans            = {},
             .light_set             = light_set,
-            .skins                 = scene_root->get_scene().get_skins(),
+            .joint_poses           = scene_root->get_render_joint_poses(frame_index),
             // The set that matches the path this light takes: the draw list's
             // own when the shadow pass draws from cached entries, the root's
             // forward set when it re-buckets (D5). draw_list_scene is resolved
@@ -669,11 +774,11 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .material_source       = (draw_list_scene != nullptr)
                 ? &draw_list_scene->get_material_set()
                 : &scene_root->get_material_set(),
-            .light_projections     = m_light_projections,
+            .light_projections     = result.light_projections,
             .reverse_depth         = m_scene_view.get_reverse_depth(),
             .depth_range           = m_scene_view.get_depth_range(),
             .conventions           = m_scene_view.get_conventions(),
-            .fit_settings          = &m_fit_settings,
+            .fit_settings          = &result.fit_settings,
             .shadow_map_footprint  = shadow_map_footprint,
             .depth_bias_constant   = depth_bias_constant,
             .depth_bias_slope      = depth_bias_slope,
@@ -687,10 +792,35 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .point_shadow_viewport    = m_point_viewport,
             .draw_list_scene          = draw_list_scene,
             .draw_list_layers         = draw_list_layers,
-            .draw_statistics          = &m_last_draw_statistics,
-            .exclude_unlit_casters    = exclude_unlit_casters
+            .draw_statistics          = &result.draw_statistics,
+            .exclude_unlit_casters    = exclude_unlit_casters,
+            .casters                  = casters,
+            .shadow_bounds            = &root_draw_list_scene->get_shadow_bounds(frame_index)
         }
     );
+    m_distance_fallback_light_ids = result.light_projections.distance_fallback_light_ids;
+    publish_light_copies(result, light_set, *camera);
+}
+
+void Shadow_render_node::publish_light_copies(
+    Shadow_frame_result&                   result,
+    const erhe::scene_renderer::Light_set& light_set,
+    const erhe::scene::Camera_snapshot&    camera
+)
+{
+    // apply() gave slot i the light set's light i; the copies keep that
+    // order. Copy assignment reuses the capacity of the result's vector and
+    // of the name strings, so a steady frame allocates nothing.
+    const std::vector<erhe::scene::Light_snapshot>& lights = light_set.get_lights();
+    std::vector<erhe::scene::Light_projection_transforms>& transforms = result.light_projections.light_projection_transforms;
+    ERHE_VERIFY(transforms.size() == lights.size());
+    result.lights = lights;
+    for (std::size_t slot = 0, end = transforms.size(); slot < end; ++slot) {
+        ERHE_VERIFY(transforms[slot].light == &lights[slot]);
+        transforms[slot].light = &result.lights[slot];
+    }
+    result.view_camera = camera;
+    result.light_projections.parameters.view_camera = &result.view_camera;
 }
 
 auto Shadow_render_node::get_producer_output_texture(const int key, int) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -711,9 +841,35 @@ auto Shadow_render_node::get_scene_view() const -> const Scene_view&
     return m_scene_view;
 }
 
-auto Shadow_render_node::get_light_projections() -> erhe::scene_renderer::Light_projections&
+auto Shadow_render_node::get_light_projections(const uint64_t frame_index) const -> const erhe::scene_renderer::Light_projections&
 {
-    return m_light_projections;
+    erhe::utility::Thread_roles::assert_render_thread();
+    return m_frame_results.get(frame_index).light_projections;
+}
+
+auto Shadow_render_node::get_frame_result(const std::optional<uint64_t> frame_index) const -> const Shadow_frame_result*
+{
+    return m_frame_results.find(frame_index);
+}
+
+auto Shadow_render_node::get_total_cpu_time_us(const Shadow_frame_result& result) const -> double
+{
+    return result.total_cpu_time_us - m_total_cpu_time_baseline_us;
+}
+
+auto Shadow_render_node::get_execute_count(const Shadow_frame_result& result) const -> std::size_t
+{
+    return result.execute_count - m_execute_count_baseline;
+}
+
+void Shadow_render_node::reset_cpu_time_stats(const std::optional<uint64_t> frame_index)
+{
+    const Shadow_frame_result* const result = get_frame_result(frame_index);
+    if (result == nullptr) {
+        return; // nothing rendered since the previous baseline
+    }
+    m_total_cpu_time_baseline_us = result->total_cpu_time_us;
+    m_execute_count_baseline     = result->execute_count;
 }
 
 auto Shadow_render_node::get_texture() const -> std::shared_ptr<erhe::graphics::Texture>

@@ -6,6 +6,8 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_utility/debug_label.hpp"
 
+#include <mutex>
+
 namespace erhe::graphics {
 
 class Ring_buffer_create_info
@@ -17,6 +19,21 @@ public:
     erhe::utility::Debug_label debug_label      {};
 };
 
+// Whether Ring_buffer::try_acquire may wrap to the start of the buffer.
+enum class Ring_buffer_wrap : unsigned int
+{
+    not_allowed = 0,
+    allowed
+};
+
+// Thread safety: every method may be called from any thread. m_mutex guards
+// the allocation state (the circular algorithm, the pending reads, the last
+// used frame); the GPU buffer and the CPU shadow are written only through
+// the ranges, each owned by one thread. Ring_buffer_pool hands each role its
+// own buffers (ring_buffer_pool.hpp), so one buffer's ranges are acquired
+// and released in frame order; a range may still be released on another
+// thread (a completion handler on the render thread releasing a main role
+// readback range), which is why the bookkeeping is locked here.
 class Ring_buffer
 {
 public:
@@ -30,6 +47,10 @@ public:
         std::size_t& out_available_byte_count_with_wrap
     ) const;
     [[nodiscard]] auto acquire(std::size_t required_alignment, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+    // Checks the space (without a wrap, or with one when wrap allows it) and
+    // acquires in one step under m_mutex; an empty range (get_buffer() ==
+    // nullptr) when byte_count does not fit.
+    [[nodiscard]] auto try_acquire(std::size_t required_alignment, Ring_buffer_usage usage, std::size_t byte_count, Ring_buffer_wrap wrap) -> Ring_buffer_range;
     [[nodiscard]] auto match  (Ring_buffer_usage ring_buffer_usage) const -> bool;
 
     [[nodiscard]] auto get_ring_buffer_usage() const -> Ring_buffer_usage;
@@ -58,6 +79,8 @@ public:
     void frame_completed(uint64_t completed_frame);
 
 private:
+    [[nodiscard]] auto acquire_locked(std::size_t required_alignment, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+
     // Non-persistent CPU_read readback: the GPU writes the buffer during a
     // frame; once that frame's fence signals we download the written region
     // into m_cpu_buffer (the shadow the acquired span points into) so the
@@ -73,6 +96,7 @@ private:
 
     Device&                                                  m_device;
     Ring_buffer_usage                                        m_ring_buffer_usage;
+    mutable std::mutex                                       m_mutex;
     uint64_t                                                 m_last_used_frame{0};
 
     std::unique_ptr<Buffer>                                  m_buffer;

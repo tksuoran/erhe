@@ -557,6 +557,15 @@ private:
     auto action_animation_create_key          (const nlohmann::json& args) -> std::string;
     auto action_animation_delete_key          (const nlohmann::json& args) -> std::string;
     auto action_set_ray_trace                 (const nlohmann::json& args) -> std::string;
+    // set_ray_trace save_path, once the readback completed: sRGB-encodes the
+    // pixels, writes the PNG and completes the reply.
+    auto write_ray_trace_output(
+        const std::string&    save_path,
+        std::vector<uint8_t>& pixels,
+        int                   width,
+        int                   height,
+        nlohmann::json        result
+    ) -> std::string;
     auto action_set_ddgi                      (const nlohmann::json& args) -> std::string;
     auto action_set_indirect_diffuse          (const nlohmann::json& args) -> std::string;
     auto action_set_radiance_cascades         (const nlohmann::json& args) -> std::string;
@@ -789,6 +798,12 @@ private:
     // (main thread only). enqueued_at tells its own re-run from a new request
     // allocated at the same address. The header holds the result fields
     // decided on the first pass.
+    // set_ray_trace save_path: the request waiting for the render phase's
+    // output readback, and the reply it completes.
+    const Queued_request*                            m_ray_trace_save_request{nullptr};
+    std::chrono::steady_clock::time_point            m_ray_trace_save_enqueued_at{};
+    std::string                                      m_ray_trace_save_path;
+    nlohmann::json                                   m_ray_trace_save_result;
     const Queued_request*                            m_irradiance_query_request{nullptr};
     std::chrono::steady_clock::time_point            m_irradiance_query_enqueued_at{};
     nlohmann::json                                   m_irradiance_query_header;

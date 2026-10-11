@@ -1346,7 +1346,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         }
     }
 
-    m_device_impl.set_active_render_pass_impl(this);
+    command_buffer.get_impl().set_active_render_pass_impl(this);
 
     // Log implicit layout transitions performed by the render pass
     // log_vulkan->trace("render_pass '{}' begin", m_debug_label.data());
@@ -1387,16 +1387,16 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         m_command_buffer = command_buffer.get_impl().get_vulkan_command_buffer();
         if (m_command_buffer == VK_NULL_HANDLE) {
             log_render_pass->error("Command_buffer has no VkCommandBuffer bound (swapchain pass)");
-            m_device_impl.set_active_render_pass_impl(nullptr);
+            command_buffer.get_impl().set_active_render_pass_impl(nullptr);
             return;
         }
 
         const VkFramebuffer framebuffer = (m_swapchain != nullptr)
-            ? m_swapchain->get_impl().acquire_swapchain_framebuffer(m_render_pass)
+            ? m_swapchain->get_impl().acquire_swapchain_framebuffer(command_buffer.get_impl().get_frame_id(), m_render_pass)
             : m_emulated_swapchain->acquire_swapchain_framebuffer(m_render_pass);
         if (framebuffer == VK_NULL_HANDLE) {
             log_render_pass->error("acquire_swapchain_framebuffer() returned VK_NULL_HANDLE");
-            m_device_impl.set_active_render_pass_impl(nullptr);
+            command_buffer.get_impl().set_active_render_pass_impl(nullptr);
             return;
         }
         const VkExtent2D swapchain_extent = (m_swapchain != nullptr)
@@ -1442,7 +1442,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         m_command_buffer = command_buffer.get_impl().get_vulkan_command_buffer();
         if (m_command_buffer == VK_NULL_HANDLE) {
             log_render_pass->error("Command_buffer has no VkCommandBuffer bound");
-            m_device_impl.set_active_render_pass_impl(nullptr);
+            command_buffer.get_impl().set_active_render_pass_impl(nullptr);
             return;
         }
 
@@ -1610,7 +1610,6 @@ auto Render_pass_impl::get_depth_stencil_resolve_driver() const -> const Render_
 
 void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_after)
 {
-    static_cast<void>(command_buffer);
 
 #ifndef NDEBUG
     // Debug-only consistency check: whenever the caller has declared a
@@ -1671,7 +1670,7 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
                 // Armed screenshot capture (Device::request_frame_capture):
                 // copy the freshly composited image to the capture staging
                 // buffer while this frame still owns it (pre-present).
-                m_swapchain->get_impl().record_capture(m_command_buffer);
+                m_swapchain->get_impl().record_capture(command_buffer.get_impl().get_frame_id(), m_command_buffer);
             }
         }
     } else {
@@ -1774,7 +1773,7 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
     }
 
     m_command_buffer = VK_NULL_HANDLE;
-    m_device_impl.set_active_render_pass_impl(nullptr);
+    command_buffer.get_impl().set_active_render_pass_impl(nullptr);
 }
 
 } // namespace erhe::graphics

@@ -3,6 +3,7 @@
 
 #include "erhe_scene/light.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <limits>
 
@@ -31,11 +32,12 @@ auto Light_set::resolve(
     const Light_count_limits&                                  light_count_limits
 ) -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!m_dirty.exchange(false, std::memory_order_acq_rel) && (light_count_limits == m_light_count_limits)) {
+        capture();
         return false;
     }
-
-    ERHE_PROFILE_FUNCTION();
 
     m_light_count_limits = light_count_limits;
 
@@ -64,7 +66,7 @@ auto Light_set::resolve(
     // has room, else an unshadowed slot while that count has room, else the
     // light is not shaded (not in the set). Inactive lights (e.g. a zero-range
     // point light) are never shaded.
-    m_lights.assign(slot_count, std::shared_ptr<erhe::scene::Light>{});
+    m_slot_lights.assign(slot_count, std::shared_ptr<erhe::scene::Light>{});
     std::size_t cursor_shadow   [light_type_count] = {0, 0, 0, 0};
     std::size_t cursor_nonshadow[light_type_count] = {0, 0, 0, 0};
     std::size_t inactive_light_count{};
@@ -89,10 +91,10 @@ auto Light_set::resolve(
 
         const std::size_t t = light_type_index(light->get_light_type());
         if (light->get_cast_shadow() && (cursor_shadow[t] < per_type_shadow[t])) {
-            m_lights[base_shadow[t] + cursor_shadow[t]] = light;
+            m_slot_lights[base_shadow[t] + cursor_shadow[t]] = light;
             ++cursor_shadow[t];
         } else if (cursor_nonshadow[t] < per_type_nonshadow[t]) {
-            m_lights[base_nonshadow[t] + cursor_nonshadow[t]] = light;
+            m_slot_lights[base_nonshadow[t] + cursor_nonshadow[t]] = light;
             ++cursor_nonshadow[t];
         }
     }
@@ -136,17 +138,30 @@ auto Light_set::resolve(
         "  shadow map 2d slots {}, shadow map point slots {}, lights total {}",
         m_shadow_map_2d_slots.size(),
         m_point_shadow_slots.size(),
-        m_lights.size()
+        slot_count
     );
+
+    // One snapshot per slot; a resize only here, where the layout changed.
+    m_lights.resize(slot_count);
+    capture();
 
     ++m_generation;
     return true;
 }
 
-auto Light_set::find_slot(const erhe::scene::Light* light) const -> std::size_t
+void Light_set::capture()
+{
+    ERHE_VERIFY(m_lights.size() == m_slot_lights.size());
+    for (std::size_t slot = 0, end = m_slot_lights.size(); slot < end; ++slot) {
+        ERHE_VERIFY(m_slot_lights[slot]);
+        m_lights[slot].capture(*m_slot_lights[slot]);
+    }
+}
+
+auto Light_set::find_slot(const std::size_t light_id) const -> std::size_t
 {
     for (std::size_t slot = 0, end = m_lights.size(); slot < end; ++slot) {
-        if (m_lights[slot].get() == light) {
+        if (m_lights[slot].get_id() == light_id) {
             return slot;
         }
     }

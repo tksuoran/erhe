@@ -35,6 +35,7 @@ public:
     auto get_writable_byte_count        () const -> std::size_t;
     auto get_written_byte_count         () const -> std::size_t;
     auto is_closed                      () const -> bool;
+    auto is_released                    () const -> bool;
 
     [[nodiscard]] auto get_buffer() const -> Ring_buffer*;
 

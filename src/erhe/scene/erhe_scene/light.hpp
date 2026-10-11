@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_math/aabb.hpp"
@@ -83,10 +84,23 @@ class Shadow_frustum_fit_debug_data; // see light_frustum_fit.hpp
 class Shadow_fit_receiver_cache;     // see light_frustum_fit.hpp
 class Shadow_fit_scratch;            // see light_frustum_fit.hpp
 
+// Whether a light's projection transforms feed a shadow map this frame.
+// Only a shadow-mapped light needs the content-fitted projection (the tight
+// directional fit reads every caster and receiver bound); a light without a
+// shadow map only contributes its direction and position to shading, so it
+// takes the stable (view-bound) projection, which costs nothing.
+enum class Light_shadow_use : unsigned int {
+    none          = 0, // no shadow map this frame
+    shadow_mapped = 1
+};
+
 class Light_projection_parameters
 {
 public:
-    const Camera*                      view_camera         {nullptr};
+    // The view camera the fit is for, as the render phase's copy
+    // (Camera_snapshot): the fit reads its shadow range, projection and
+    // world transform.
+    const Camera_snapshot*             view_camera         {nullptr};
     erhe::math::Viewport               main_camera_viewport{};
     erhe::math::Viewport               shadow_map_viewport {};
     bool                               reverse_depth       {true};
@@ -122,6 +136,7 @@ public:
 };
 
 class Light;
+class Light_snapshot;
 
 // Orthonormal world-space frame of a light, derived from the light node world
 // transform (Light::get_light_frame()).
@@ -152,7 +167,9 @@ public:
 class Light_projection_transforms
 {
 public:
-    const Light*  light       {nullptr};
+    // The render phase's copy of the light these transforms were computed
+    // for (Light_snapshot::projection_transforms); never a live Light.
+    const Light_snapshot* light{nullptr};
     std::size_t   index       {0}; // index in lights block shader resource (all lights)
     std::size_t   shadow_index{0}; // 2D shadow texture array layer / render pass index (directional + spot); std::size_t max for point lights, which use the cube array instead
     // Dense index (counting only shadow-casting point lights) into the R32F
@@ -213,7 +230,12 @@ public:
     // light layer on top of the node registration the base does.
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
-    // Public API
+    // Public API. Cold wrappers for callers that hold a live light (tests,
+    // single-light tools): each captures a Light_snapshot of this light and
+    // computes on it, so the returned transforms name a snapshot that does
+    // not outlive the call (Light_projection_transforms::light is null).
+    // Per-frame rendering goes through erhe::scene_renderer::Light_set, whose
+    // snapshots persist for the frame.
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
     [[nodiscard]] auto projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
@@ -356,35 +378,6 @@ private:
     // Registration / unregistration (attach / detach) notifies on its own.
     void notify_changed();
     static void on_light_property_changed(erhe::property::Dependency_object& object, const erhe::property::Property_changed_args& args);
-
-    [[nodiscard]] auto stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection;
-    [[nodiscard]] auto spot_light_projection              (const Light_projection_parameters& parameters) const -> Projection;
-
-    [[nodiscard]] auto directional_light_projection_transforms       (const Light_projection_parameters& parameters) const -> Light_projection_transforms;
-    [[nodiscard]] auto stable_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
-
-    // Tight modular fit; defined in light_frustum_fit.cpp
-    [[nodiscard]] auto tight_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
-
-    [[nodiscard]] auto spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
-
-    // Point lights cast omnidirectional shadows into an R32F cube-map array
-    // sampled by direction, so the per-face view-projections are computed in
-    // Shadow_renderer at render time, not stored here. This only carries the
-    // light world pose (so light_buffer derives the correct light position) and
-    // a perspective projection with z_far = range; clip_from_world /
-    // texture_from_world are unused by the cube sampling path (left identity).
-    [[nodiscard]] auto point_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
-
-    // Assembles the Light_projection_transforms for a directional light from
-    // the resolved projection and the (snapped) light camera pose. Shared by
-    // the stable and tight fit paths.
-    [[nodiscard]] auto assemble_directional_light_projection_transforms(
-        const Light_projection_parameters& parameters,
-        const Projection&                  light_projection,
-        const glm::mat4&                   world_from_light_camera,
-        const glm::mat4&                   light_camera_from_world
-    ) const -> Light_projection_transforms;
 
 public:
     // Maps clip space to [0,1] texture space (the shadow map's texture

@@ -496,21 +496,25 @@ void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)
     const erhe::math::Viewport view_viewport  {0, 0, c_view_size, c_view_size};
     const erhe::math::Viewport shadow_viewport{0, 0, settings.resolution, settings.resolution};
     const std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes{m_meshes};
-    const std::span<const std::shared_ptr<erhe::scene::Skin>> no_skins{};
+    const std::span<const Joint_pose> no_joint_poses{};
 
+    // The shadow renderer reads the camera through its render copy.
+    const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
     submit_and_wait(
         [&](erhe::graphics::Command_buffer& command_buffer) {
+            // The set's per-frame step: publishes the copy and heap this frame binds.
+            m_material_set->update(command_buffer);
             const bool rendered = m_shadow_renderer->render(
                 Shadow_renderer::Render_parameters{
                     .command_buffer        = command_buffer,
-                    .view_camera           = m_camera.get(),
+                    .view_camera           = &camera_snapshot,
                     .view_camera_viewport  = view_viewport,
                     .light_camera_viewport = shadow_viewport,
                     .texture               = m_shadow_map,
                     .render_passes         = m_shadow_render_passes,
                     .mesh_spans            = { meshes },
                     .light_set             = m_light_set,
-                    .skins                 = no_skins,
+                    .joint_poses           = no_joint_poses,
                     .material_source       = m_material_set.get(),
                     .light_projections     = m_light_projections,
                     .reverse_depth         = reverse_depth,
@@ -575,9 +579,9 @@ auto Shadow_gpu_test::render_visibility(const Shadow_filter_case& filter_case) -
     descriptor.debug_label                        = erhe::utility::Debug_label{"shadow test view"};
 
     const erhe::math::Viewport viewport{0, 0, c_view_size, c_view_size};
+    const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
     const Camera_view_input view_input{
-        .projection = m_camera->projection(),
-        .node       = m_camera.get(),
+        .camera     = &camera_snapshot,
         .viewport   = viewport
     };
     const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans{
@@ -587,6 +591,8 @@ auto Shadow_gpu_test::render_visibility(const Shadow_filter_case& filter_case) -
 
     submit_and_wait(
         [&](erhe::graphics::Command_buffer& command_buffer) {
+            // The set's per-frame step: publishes the copy and heap this frame binds.
+            m_material_set->update(command_buffer);
             erhe::graphics::Render_pass              render_pass{graphics_device, descriptor};
             erhe::graphics::Render_command_encoder   encoder = graphics_device.make_render_command_encoder(command_buffer);
             const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
@@ -737,14 +743,16 @@ auto Shadow_gpu_test::render_tie(const Shadow_filter_case& filter_case) -> Shado
     // and view_origin, which sample_light_visibility() reads; the receiver
     // points come from gl_FragCoord, relative to this camera's view origin.
     const erhe::math::Viewport viewport{0, 0, width, height};
+    const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
     const Camera_view_input view_input{
-        .projection = m_camera->projection(),
-        .node       = m_camera.get(),
+        .camera     = &camera_snapshot,
         .viewport   = viewport
     };
 
     submit_and_wait(
         [&](erhe::graphics::Command_buffer& command_buffer) {
+            // The set's per-frame step: publishes the copy and heap this frame binds.
+            m_material_set->update(command_buffer);
             erhe::graphics::Render_pass              render_pass{graphics_device, descriptor};
             erhe::graphics::Render_command_encoder   encoder = graphics_device.make_render_command_encoder(command_buffer);
             const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};

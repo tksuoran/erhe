@@ -35,7 +35,7 @@ What the subsystem must provide:
 6. When no worker context can exist (headless / null window, or a creation
    failure), `Device::supports_worker_contexts()` returns false and every
    GPU-touching worker call site takes a **budgeted** main-thread fallback --
-   never unbounded work inline in `Editor::tick`.
+   never unbounded work inline in the editor's frame.
 
 ## Design
 
@@ -199,7 +199,7 @@ deleting context's cache directly; every other context gets an entry on its
   the instant `glDelete*` runs (spec 5.1.3), so a name rebound to a new
   object between enqueue and drain must NOT be scrubbed.
 - The **main context has an explicit drain point** in
-  `Device_impl::wait_frame()` / `begin_frame` -- "drain on next
+  `Device_impl::acquire_frame_slot()` / `begin_frame` -- "drain on next
   make-current" never fires for the one context that draws.
 - **Bind elision is suspended while scrubs are pending.** Between a
   delete's enqueue and this context's drain, the cache may hold a deleted
@@ -349,7 +349,7 @@ repeatable tests runnable on the OpenGL `build_tests` tree and under ASAN
   drain, and a worker `blit_framebuffer` between two accessor-held passes
   read back on main.
 - **The scrub queue**: worker-side delete of a main-bound buffer leaves
-  the orphan bound until the `wait_frame` drain issues a REAL unbind
+  the orphan bound until the `acquire_frame_slot` drain issues a REAL unbind
   (verified with a raw GL binding query), and a name rebound after the
   enqueue survives the drain -- the name IS recycled on this driver, so
   the epoch guard and the pending-scrub elision suspension are exercised

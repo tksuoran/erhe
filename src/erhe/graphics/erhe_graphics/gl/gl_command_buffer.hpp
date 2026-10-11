@@ -38,6 +38,10 @@ public:
     Command_buffer_impl& operator=(Command_buffer_impl&& other) noexcept;
 
     [[nodiscard]] auto get_debug_label() const noexcept -> erhe::utility::Debug_label;
+    // The device frame this cb was obtained for; stamped by
+    // Device_impl::get_command_buffer.
+    [[nodiscard]] auto get_frame_id   () const noexcept -> std::uint64_t;
+    void               set_frame_id   (std::uint64_t frame_id) noexcept;
 
     void begin();
     void end  ();
@@ -66,6 +70,7 @@ public:
 private:
     Device*                    m_device{nullptr};
     erhe::utility::Debug_label m_debug_label;
+    std::uint64_t              m_frame_id{0};
     Swapchain_impl*            m_swapchain_used{nullptr};
 };
 

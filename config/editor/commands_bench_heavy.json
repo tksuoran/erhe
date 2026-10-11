@@ -1,0 +1,68 @@
+{
+    "_comment": "Benchmark scene for frame-time measurement (doc/editor/render_thread.md section 3.4): ~1500 static mesh instances packed on a large floor, every light type with shadows. Loaded with --commands config/editor/commands_bench_heavy.json by scripts/render_thread_bench.py.",
+    "commands": [
+        {
+            "name": "scene.create",
+            "args": {
+                "name": "Bench Heavy"
+            }
+        },
+        {
+            "name": "scene.add_cameras",
+            "args": {
+                "_version": 2,
+                "camera_exposure": 1,
+                "shadow_range": 60,
+                "camera_distance": 34,
+                "camera_elevation": 16,
+                "z_near": 0.03,
+                "z_far": 500.0
+            }
+        },
+        {
+            "name": "scene.add_lights",
+            "args": {
+                "_version": 2,
+                "directional_light_intensity": 4,
+                "directional_light_radius": 40,
+                "directional_light_height": 50.0,
+                "directional_light_shadow_count": 4,
+                "directional_light_no_shadow_count": 0,
+                "spot_light_intensity": 2000,
+                "spot_light_radius": 20,
+                "spot_light_height": 14,
+                "spot_light_shadow_count": 2,
+                "spot_light_no_shadow_count": 0,
+                "point_light_intensity": 600,
+                "point_light_radius": 20,
+                "point_light_height": 10,
+                "point_light_shadow_count": 2,
+                "point_light_no_shadow_count": 2
+            }
+        },
+        {
+            "name": "scene.add_room",
+            "args": {
+                "floor": true,
+                "floor_size": 60,
+                "floor_height": 1
+            }
+        },
+        {
+            "name": "scene.add_platonic_solids",
+            "args": { "instance_count": 40, "instance_gap": 0.3, "object_scale": 0.5, "detail": 4, "mass_scale": 0 }
+        },
+        {
+            "name": "scene.add_johnson_solids",
+            "args": { "instance_count": 8, "instance_gap": 0.3, "object_scale": 0.5, "detail": 4, "mass_scale": 0 }
+        },
+        {
+            "name": "scene.add_curved_shapes",
+            "args": { "instance_count": 40, "instance_gap": 0.3, "object_scale": 0.5, "detail": 4, "mass_scale": 0 }
+        },
+        {
+            "name": "scene.add_toruses",
+            "args": { "instance_count": 40, "instance_gap": 0.3, "object_scale": 0.5, "detail": 4, "mass_scale": 0 }
+        }
+    ]
+}

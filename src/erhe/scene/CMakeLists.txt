@@ -9,6 +9,8 @@ erhe_target_sources_grouped(
     erhe_scene/boundable.hpp
     erhe_scene/camera.cpp
     erhe_scene/camera.hpp
+    erhe_scene/camera_snapshot.cpp
+    erhe_scene/camera_snapshot.hpp
     erhe_scene/draw_mode_description.cpp
     erhe_scene/draw_mode_description.hpp
     erhe_scene/gprim.cpp
@@ -25,6 +27,8 @@ erhe_target_sources_grouped(
     erhe_scene/light.hpp
     erhe_scene/light_frustum_fit.cpp
     erhe_scene/light_frustum_fit.hpp
+    erhe_scene/light_snapshot.cpp
+    erhe_scene/light_snapshot.hpp
     erhe_scene/mesh.cpp
     erhe_scene/mesh.hpp
     erhe_scene/mesh_raytrace.cpp

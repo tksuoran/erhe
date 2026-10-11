@@ -7,7 +7,10 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
+#include "renderers/ray_trace_scene.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/render_settings.hpp"
+#include "renderers/render_texture_reference.hpp"
 #include "renderers/trace_lights.hpp"
 #include "scene/scene_root.hpp"
 
@@ -30,6 +33,7 @@
 #include "erhe_math/aabb.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
@@ -161,12 +165,10 @@ Ddgi_renderer::Ddgi_renderer(
     App_message_bus&                         app_message_bus,
     erhe::scene_renderer::Program_interface& program_interface,
     erhe::scene_renderer::Mesh_memory&       mesh_memory,
-    const Ddgi_config&                       config,
     const Producer_selection                 selection
 )
     : m_graphics_device{graphics_device}
     , m_context        {context}
-    , m_config         {config}
     , m_selection      {selection}
     , m_control_block{
         graphics_device,
@@ -217,6 +219,12 @@ Ddgi_renderer::Ddgi_renderer(
         }
     }
 {
+    m_rendered_states.resize(graphics_device.get_number_of_frames_in_flight());
+    // Resolved by the render thread when it draws the DDGI window.
+    m_texture_references[static_cast<std::size_t>(Atlas::irradiance)] = std::make_shared<Render_texture_reference>([this]() -> const erhe::graphics::Texture* { return m_irradiance_texture.get(); });
+    m_texture_references[static_cast<std::size_t>(Atlas::distance  )] = std::make_shared<Render_texture_reference>([this]() -> const erhe::graphics::Texture* { return m_distance_texture  .get(); });
+    m_texture_references[static_cast<std::size_t>(Atlas::probe_data)] = std::make_shared<Render_texture_reference>([this]() -> const erhe::graphics::Texture* { return m_probe_data_texture.get(); });
+    m_texture_references[static_cast<std::size_t>(Atlas::ray_data  )] = std::make_shared<Render_texture_reference>([this]() -> const erhe::graphics::Texture* { return m_ray_data_texture  .get(); });
     using namespace erhe::graphics;
 
     // Ray query gates the whole feature: the probe update has no rasterized
@@ -231,7 +239,6 @@ Ddgi_renderer::Ddgi_renderer(
 
     m_scene_tlas = std::make_unique<Scene_tlas>(
         graphics_device,
-        mesh_memory,
         c_instance_record_binding_point,
         "Ddgi_renderer"
     );
@@ -846,6 +853,7 @@ auto Ddgi_renderer::begin_reference_query(
     const Reference_query_settings&               settings
 ) -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_reference_mutex};
     if ((m_reference_state == Irradiance_query_state::queued) || (m_reference_state == Irradiance_query_state::in_flight)) {
         return false;
     }
@@ -869,6 +877,7 @@ auto Ddgi_renderer::begin_reference_query(
 
 void Ddgi_renderer::cancel_reference_query()
 {
+    const std::lock_guard<std::mutex> lock{m_reference_mutex};
     // Chunks already recorded still write the output buffer; stop recording
     // more, and let the next begin_reference_query() wait until the last
     // recorded frame retired (poll_reference_query() reports in_flight until
@@ -880,7 +889,13 @@ void Ddgi_renderer::cancel_reference_query()
     }
 }
 
-auto Ddgi_renderer::reference_needs_dispatch() const -> bool
+auto Ddgi_renderer::reference_needs_dispatch() -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_reference_mutex};
+    return reference_needs_dispatch_locked();
+}
+
+auto Ddgi_renderer::reference_needs_dispatch_locked() const -> bool
 {
     return
         ((m_reference_state == Irradiance_query_state::queued) || (m_reference_state == Irradiance_query_state::in_flight)) &&
@@ -889,6 +904,7 @@ auto Ddgi_renderer::reference_needs_dispatch() const -> bool
 
 void Ddgi_renderer::fail_reference_query(const char* reason)
 {
+    const std::lock_guard<std::mutex> lock{m_reference_mutex};
     if (m_reference_state == Irradiance_query_state::queued) {
         m_reference_error = reason;
         m_reference_state = Irradiance_query_state::failed;
@@ -902,6 +918,7 @@ void Ddgi_renderer::fail_reference_query(const char* reason)
 
 auto Ddgi_renderer::poll_reference_query() -> Irradiance_query_state
 {
+    const std::lock_guard<std::mutex> lock{m_reference_mutex};
     if (
         (m_reference_state == Irradiance_query_state::in_flight) &&
         (m_reference_next_point >= m_reference_points.size()) &&
@@ -971,6 +988,12 @@ void Ddgi_renderer::record_reference_chunk(
 {
     using namespace erhe::graphics;
 
+    // Rechecked under the lock: the main thread may have cancelled the query
+    // since tick_field() saw it pending.
+    const std::lock_guard<std::mutex> lock{m_reference_mutex};
+    if (!reference_needs_dispatch_locked()) {
+        return;
+    }
     const std::size_t count = m_reference_points.size();
     if (m_reference_state == Irradiance_query_state::queued) {
         // First chunk: upload every point once. The buffer is not touched
@@ -989,7 +1012,7 @@ void Ddgi_renderer::record_reference_chunk(
         m_reference_input_buffer->unmap();
         // The intensity the forward pass multiplies the field with; the
         // results include it the same way.
-        m_reference_intensity = std::max(0.0f, m_config.intensity);
+        m_reference_intensity = std::max(0.0f, get_config().intensity);
         m_reference_state     = Irradiance_query_state::in_flight;
     }
 
@@ -1046,6 +1069,11 @@ void Ddgi_renderer::record_reference_chunk(
 
 Ddgi_renderer::~Ddgi_renderer() noexcept = default;
 
+auto Ddgi_renderer::get_config() const -> const Ddgi_config&
+{
+    return m_context.render_settings->ddgi;
+}
+
 auto Ddgi_renderer::get_forward_parameters() const -> erhe::scene_renderer::Ddgi_parameters
 {
     erhe::scene_renderer::Ddgi_parameters parameters{};
@@ -1058,10 +1086,10 @@ auto Ddgi_renderer::get_forward_parameters() const -> erhe::scene_renderer::Ddgi
     parameters.irradiance_texels = m_irradiance_texels;
     parameters.distance_texels   = m_distance_texels;
     parameters.tiles_per_row     = m_tiles_per_row;
-    parameters.normal_bias       = m_config.normal_bias;
-    parameters.view_bias         = m_config.view_bias;
-    parameters.depth_sharpness   = m_config.depth_sharpness;
-    parameters.intensity         = m_config.intensity;
+    parameters.normal_bias       = get_config().normal_bias;
+    parameters.view_bias         = get_config().view_bias;
+    parameters.depth_sharpness   = get_config().depth_sharpness;
+    parameters.intensity         = get_config().intensity;
     return parameters;
 }
 
@@ -1081,6 +1109,7 @@ auto Ddgi_renderer::get_field() const -> Probe_field
 
 auto Ddgi_renderer::begin_irradiance_query(const std::span<const Irradiance_query_point> points) -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_query_mutex};
     if ((m_query_state == Irradiance_query_state::queued) || (m_query_state == Irradiance_query_state::in_flight)) {
         return false;
     }
@@ -1095,6 +1124,7 @@ auto Ddgi_renderer::begin_irradiance_query(const std::span<const Irradiance_quer
 
 void Ddgi_renderer::cancel_irradiance_query()
 {
+    const std::lock_guard<std::mutex> lock{m_query_mutex};
     // Only a query that has not been recorded can be dropped; a recorded one
     // still writes the output buffer, so it runs to completion and the next
     // begin_irradiance_query() waits for it.
@@ -1105,6 +1135,7 @@ void Ddgi_renderer::cancel_irradiance_query()
 
 auto Ddgi_renderer::poll_irradiance_query() -> Irradiance_query_state
 {
+    const std::lock_guard<std::mutex> lock{m_query_mutex};
     if ((m_query_state == Irradiance_query_state::in_flight) && m_graphics_device.is_frame_completed(m_query_frame)) {
         const std::size_t count      = m_query_points.size();
         const std::size_t capacity   = m_query_output_buffer->get_capacity_byte_count();
@@ -1136,6 +1167,7 @@ void Ddgi_renderer::record_irradiance_query(erhe::graphics::Command_buffer& comm
 {
     using namespace erhe::graphics;
 
+    const std::lock_guard<std::mutex> lock{m_query_mutex};
     if ((m_query_state != Irradiance_query_state::queued) || !m_query_pipeline || !field.is_valid()) {
         return;
     }
@@ -1165,7 +1197,7 @@ void Ddgi_renderer::record_irradiance_query(erhe::graphics::Command_buffer& comm
     // The light block contents the forward pass sees for the field: the
     // scene ambient (the no-volume / zero-weight fallback) and the volume
     // parameters. No lights: ddgi_sample_irradiance() does not read them.
-    const glm::vec3   ambient     = scene_root.get_scene().get_ambient_light();
+    const glm::vec3   ambient     = scene_root.get_render_settings(m_graphics_device.get_frame_index()).ambient_light;
     Ring_buffer_range light_range = m_light_buffer->update(nullptr, ambient, 0u, &field.parameters);
 
     {
@@ -1198,11 +1230,16 @@ auto Ddgi_renderer::is_supported() const -> bool
 
 auto Ddgi_renderer::is_selected() const -> bool
 {
-    return m_selection == Producer_selection::selected;
+    return m_context.render_settings->indirect_diffuse_source == Indirect_diffuse_source::ddgi;
 }
 
-void Ddgi_renderer::set_selection(const Producer_selection selection)
+void Ddgi_renderer::apply_frame_settings()
 {
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    const Producer_selection selection = get_producer_selection(
+        m_context.render_settings->indirect_diffuse_source,
+        Indirect_diffuse_source::ddgi
+    );
     if (selection == m_selection) {
         return;
     }
@@ -1219,10 +1256,9 @@ void Ddgi_renderer::set_selection(const Producer_selection selection)
         m_texture_byte_count = 0;
         m_grid = Grid{};
         m_volume_bounds.reset();
-        m_probe_readback_valid  = false;
-        m_probe_state_requested = false;
-        m_probe_state_in_flight = false;
-        m_probe_state_valid     = false;
+        m_probe_readback_in_flight = false;
+        m_probe_state_requested    = false;
+        m_probe_states_valid       = false;
         clear_pass_timings();
     }
 }
@@ -1230,11 +1266,6 @@ void Ddgi_renderer::set_selection(const Producer_selection selection)
 auto Ddgi_renderer::is_active() const -> bool
 {
     return is_supported() && is_selected() && m_grid.is_valid() && m_irradiance_texture;
-}
-
-auto Ddgi_renderer::get_grid() const -> const Grid&
-{
-    return m_grid;
 }
 
 auto Ddgi_renderer::get_irradiance_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
@@ -1255,31 +1286,6 @@ auto Ddgi_renderer::get_probe_data_texture() const -> const std::shared_ptr<erhe
 auto Ddgi_renderer::get_ray_data_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
 {
     return m_ray_data_texture;
-}
-
-auto Ddgi_renderer::get_texture_byte_count() const -> std::size_t
-{
-    return m_texture_byte_count;
-}
-
-auto Ddgi_renderer::get_rays_per_probe() const -> int
-{
-    return m_rays_per_probe;
-}
-
-auto Ddgi_renderer::get_irradiance_texels() const -> int
-{
-    return m_irradiance_texels;
-}
-
-auto Ddgi_renderer::get_distance_texels() const -> int
-{
-    return m_distance_texels;
-}
-
-auto Ddgi_renderer::get_probes_per_update() const -> int
-{
-    return m_probes_per_update;
 }
 
 auto Ddgi_renderer::get_instance_count() const -> std::size_t
@@ -1417,6 +1423,9 @@ void Ddgi_renderer::allocate_textures(erhe::graphics::Command_buffer& command_bu
         static_cast<std::size_t>(tiles_x) *
         static_cast<std::size_t>(tiles_y) *
         erhe::dataformat::get_format_size_bytes(c_probe_data_format);
+    // A copy still in flight targets the previous buffer, which stays
+    // alive until its frame retired (the device defers the destruction);
+    // its result is dropped.
     m_probe_readback_buffer = std::make_unique<Buffer>(
         m_graphics_device,
         Buffer_create_info{
@@ -1428,20 +1437,8 @@ void Ddgi_renderer::allocate_textures(erhe::graphics::Command_buffer& command_bu
             .debug_label                            = erhe::utility::Debug_label{"DDGI probe readback"}
         }
     );
-    m_probe_readback_valid = false;
-    m_probe_state_readback_buffer = std::make_unique<Buffer>(
-        m_graphics_device,
-        Buffer_create_info{
-            .capacity_byte_count                    = probe_data_byte_count,
-            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
-            .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
-            .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
-            .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
-            .debug_label                            = erhe::utility::Debug_label{"DDGI probe state readback"}
-        }
-    );
-    m_probe_state_in_flight = false;
-    m_probe_state_valid     = false;
+    m_probe_readback_in_flight = false;
+    m_probe_states_valid       = false;
 
     // Refits happen at runtime (content moved, settings changed), so this is
     // a render-log event, not a startup one.
@@ -1454,21 +1451,21 @@ void Ddgi_renderer::allocate_textures(erhe::graphics::Command_buffer& command_bu
     );
 }
 
-auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root) -> bool
+auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer, const Ray_trace_slot& slot) -> bool
 {
-    const int   rays_per_probe    = round_up(std::max(8, m_config.rays_per_probe), c_trace_workgroup_size);
-    const int   irradiance_texels = std::clamp(m_config.irradiance_texels, 2, 32);
-    const int   distance_texels   = std::clamp(m_config.distance_texels,   2, 64);
-    const float fit_spacing_m     = std::max(0.01f, m_config.probe_spacing_m);
-    const float fit_padding_m     = std::max(0.0f,  m_config.volume_padding_m);
+    const int   rays_per_probe    = round_up(std::max(8, get_config().rays_per_probe), c_trace_workgroup_size);
+    const int   irradiance_texels = std::clamp(get_config().irradiance_texels, 2, 32);
+    const int   distance_texels   = std::clamp(get_config().distance_texels,   2, 64);
+    const float fit_spacing_m     = std::max(0.01f, get_config().probe_spacing_m);
+    const float fit_padding_m     = std::max(0.0f,  get_config().volume_padding_m);
     // The probe budget is also bounded by the atlas: every probe tile must
     // fit within the texture size limit.
     const int   fit_max_probes    = std::min(
-        std::max(8, m_config.max_probes),
+        std::max(8, get_config().max_probes),
         get_probe_field_max_probes(std::max(irradiance_texels, distance_texels) + (2 * c_border_texels), m_graphics_device.get_info().max_texture_size)
     );
 
-    const erhe::math::Aabb bounds = compute_padded_content_bounds(scene_root, fit_padding_m);
+    const erhe::math::Aabb bounds = pad_content_bounds(slot.content_bounds, fit_padding_m);
     if (!bounds.is_valid_3d()) {
         return false;
     }
@@ -1477,7 +1474,7 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
     // inside it that the probe density is being wasted. Everything else -
     // meshes moving within the volume - keeps the existing grid and its
     // converged probe contents.
-    const int  probes_per_update = std::max(1, m_config.probes_per_frame);
+    const int  probes_per_update = std::max(1, get_config().probes_per_frame);
     const bool settings_changed =
         (rays_per_probe    != m_rays_per_probe   ) ||
         (irradiance_texels != m_irradiance_texels) ||
@@ -1527,13 +1524,11 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
     return true;
 }
 
-void Ddgi_renderer::copy_probe_data(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Buffer& destination)
+void Ddgi_renderer::copy_probe_data(erhe::graphics::Command_buffer& command_buffer)
 {
     using namespace erhe::graphics;
 
-    if (!m_probe_data_texture) {
-        return;
-    }
+    ERHE_VERIFY(m_probe_data_texture && m_probe_readback_buffer && !m_probe_readback_in_flight);
     const int         width         = m_probe_data_texture->get_width();
     const int         height        = m_probe_data_texture->get_height();
     const std::size_t bytes_per_row = static_cast<std::size_t>(width) * erhe::dataformat::get_format_size_bytes(c_probe_data_format);
@@ -1546,119 +1541,160 @@ void Ddgi_renderer::copy_probe_data(erhe::graphics::Command_buffer& command_buff
         blit.copy_from_texture(
             erhe::graphics::Texture_location{.texture = m_probe_data_texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
             glm::ivec3{width, height, 1},
-            erhe::graphics::Buffer_texel_location{.buffer = &destination, .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
+            erhe::graphics::Buffer_texel_location{.buffer = m_probe_readback_buffer.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
         );
     }
+    // Transfer writes -> host reads once the frame's fence has signalled.
+    command_buffer.memory_barrier(Memory_barrier_mask::client_mapped_buffer_barrier_bit);
+    m_probe_readback_in_flight     = true;
+    m_probe_readback_frame         = m_graphics_device.get_frame_index();
+    m_probe_readback_update_count  = m_update_count;
+    m_probe_readback_grid          = m_grid;
+    m_probe_readback_tiles_per_row = m_tiles_per_row;
 }
 
 void Ddgi_renderer::request_probe_states()
 {
-    m_probe_state_requested = true;
+    erhe::utility::Thread_roles::assert_main_thread();
+    const std::lock_guard<std::mutex> lock{m_probe_state_request_mutex};
+    m_probe_state_request_pending = true;
 }
 
-auto Ddgi_renderer::poll_probe_states() -> bool
+auto Ddgi_renderer::get_texture_reference(const Atlas atlas) const -> const std::shared_ptr<erhe::graphics::Texture_reference>&
 {
-    if (m_probe_state_in_flight && m_probe_state_readback_buffer && m_graphics_device.is_frame_completed(m_probe_state_frame)) {
-        m_probe_state_in_flight = false;
-        const int         probe_count = m_grid.get_probe_count();
-        const float       min_spacing = std::min(m_grid.spacing.x, std::min(m_grid.spacing.y, m_grid.spacing.z));
-        const std::size_t capacity    = m_probe_state_readback_buffer->get_capacity_byte_count();
-        const std::span<std::byte> mapped = m_probe_state_readback_buffer->map_bytes(0, capacity);
-        m_probe_state_readback_buffer->invalidate(0, capacity);
-        m_probe_states.resize(static_cast<std::size_t>(probe_count));
-        Probe_state_summary summary{};
-        summary.update_count = m_probe_state_copy_update_count;
-        float max_offset = 0.0f;
-        for (int z = 0; z < m_grid.counts.z; ++z) {
-            for (int y = 0; y < m_grid.counts.y; ++y) {
-                for (int x = 0; x < m_grid.counts.x; ++x) {
-                    // Probe data texel: the probe's atlas tile.
-                    const glm::ivec2  tile  = get_probe_field_tile(glm::ivec3{x, y, z}, m_grid.counts, m_tiles_per_row);
-                    const std::size_t texel =
-                        (static_cast<std::size_t>(tile.y) * static_cast<std::size_t>(m_tiles_per_row)) +
-                        static_cast<std::size_t>(tile.x);
-                    glm::vec4 value{0.0f};
-                    std::memcpy(&value, mapped.data() + (texel * sizeof(glm::vec4)), sizeof(glm::vec4));
-                    const std::size_t probe_index = static_cast<std::size_t>(x + (m_grid.counts.x * (y + (m_grid.counts.y * z))));
-                    m_probe_states[probe_index] = value;
-                    const float offset = glm::length(glm::vec3{value});
-                    max_offset = std::max(max_offset, offset);
-                    if (value.w < 0.5f) {
-                        ++summary.inactive;
-                    } else {
-                        ++summary.active;
-                    }
-                    if (offset > c_relocated_offset_m) {
-                        ++summary.relocated;
-                    }
+    return m_texture_references[static_cast<std::size_t>(atlas)];
+}
+
+void Ddgi_renderer::poll_probe_readback()
+{
+    if (!m_probe_readback_in_flight || !m_graphics_device.is_frame_completed(m_probe_readback_frame)) {
+        return;
+    }
+    m_probe_readback_in_flight = false;
+    const Grid&       grid        = m_probe_readback_grid;
+    const int         probe_count = grid.get_probe_count();
+    const float       min_spacing = std::min(grid.spacing.x, std::min(grid.spacing.y, grid.spacing.z));
+    const std::size_t capacity    = m_probe_readback_buffer->get_capacity_byte_count();
+    const std::span<std::byte> mapped = m_probe_readback_buffer->map_bytes(0, capacity);
+    m_probe_readback_buffer->invalidate(0, capacity);
+    m_probe_states.resize(static_cast<std::size_t>(probe_count));
+    Probe_state_summary summary{};
+    summary.update_count = m_probe_readback_update_count;
+    float max_offset = 0.0f;
+    for (int z = 0; z < grid.counts.z; ++z) {
+        for (int y = 0; y < grid.counts.y; ++y) {
+            for (int x = 0; x < grid.counts.x; ++x) {
+                // Probe data texel: the probe's atlas tile.
+                const glm::ivec2  tile  = get_probe_field_tile(glm::ivec3{x, y, z}, grid.counts, m_probe_readback_tiles_per_row);
+                const std::size_t texel =
+                    (static_cast<std::size_t>(tile.y) * static_cast<std::size_t>(m_probe_readback_tiles_per_row)) +
+                    static_cast<std::size_t>(tile.x);
+                glm::vec4 value{0.0f};
+                std::memcpy(&value, mapped.data() + (texel * sizeof(glm::vec4)), sizeof(glm::vec4));
+                const std::size_t probe_index = static_cast<std::size_t>(x + (grid.counts.x * (y + (grid.counts.y * z))));
+                m_probe_states[probe_index] = value;
+                const float offset = glm::length(glm::vec3{value});
+                max_offset = std::max(max_offset, offset);
+                if (value.w < 0.5f) {
+                    ++summary.inactive;
+                } else {
+                    ++summary.active;
+                }
+                if (offset > c_relocated_offset_m) {
+                    ++summary.relocated;
                 }
             }
         }
-        m_probe_state_readback_buffer->unmap();
-        summary.max_offset_over_spacing = (min_spacing > 0.0f) ? (max_offset / min_spacing) : 0.0f;
-        m_probe_state_summary = summary;
-        m_probe_state_valid   = true;
     }
-    return m_probe_state_valid;
+    m_probe_readback_buffer->unmap();
+    summary.max_offset_over_spacing = (min_spacing > 0.0f) ? (max_offset / min_spacing) : 0.0f;
+    m_probe_state_summary = summary;
+    m_probe_states_grid   = grid;
+    m_probe_states_valid  = true;
+    ++m_probe_states_serial;
 }
 
-auto Ddgi_renderer::get_probe_state_summary() const -> const Probe_state_summary&
+auto Ddgi_renderer::get_rendered_state(const std::optional<uint64_t> frame_index) const -> const Rendered_state*
 {
-    return m_probe_state_summary;
+    return m_rendered_states.find(frame_index);
 }
 
-auto Ddgi_renderer::get_probe_states() const -> std::span<const glm::vec4>
+void Ddgi_renderer::publish_rendered_state()
 {
-    return std::span<const glm::vec4>{m_probe_states};
+    Rendered_state& state = m_rendered_states.write(m_graphics_device.get_frame_index());
+    state.active              = is_active();
+    state.grid                = m_grid;
+    const auto size_of = [](const std::shared_ptr<erhe::graphics::Texture>& texture) -> glm::ivec2 {
+        return texture ? glm::ivec2{texture->get_width(), texture->get_height()} : glm::ivec2{0, 0};
+    };
+    state.atlas_sizes[static_cast<std::size_t>(Atlas::irradiance)] = size_of(m_irradiance_texture);
+    state.atlas_sizes[static_cast<std::size_t>(Atlas::distance  )] = size_of(m_distance_texture);
+    state.atlas_sizes[static_cast<std::size_t>(Atlas::probe_data)] = size_of(m_probe_data_texture);
+    state.atlas_sizes[static_cast<std::size_t>(Atlas::ray_data  )] = size_of(m_ray_data_texture);
+    state.rays_per_probe      = m_rays_per_probe;
+    state.irradiance_texels   = m_irradiance_texels;
+    state.distance_texels     = m_distance_texels;
+    state.probes_per_update   = m_probes_per_update;
+    state.texture_byte_count  = m_texture_byte_count;
+    state.stats               = get_stats();
+    state.probe_states_valid  = m_probe_states_valid && (m_probe_states_grid == m_grid);
+    state.probe_state_summary = m_probe_state_summary;
+    // The vector only when a newer readback was decoded since this slot's
+    // last copy; a steady frame copies nothing.
+    if (state.probe_states_serial != m_probe_states_serial) {
+        state.probe_states        = m_probe_states;
+        state.probe_states_serial = m_probe_states_serial;
+    }
 }
 
 void Ddgi_renderer::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!is_active() || !m_config.debug_draw_probes) {
+    if (!get_config().debug_draw_probes) {
         return;
     }
     // render_viewport_renderables() runs twice per viewport: first the CPU
-    // phase (no encoder) where debug lines are generated, then the encoder
-    // phase for renderables that issue draw calls. Lines submitted in the
+    // phase (no encoder; M2, Viewport_scene_view::record_view_tools) where
+    // debug lines are generated, then the encoder phase (render phase) for
+    // renderables that issue draw calls. Lines submitted in the
     // second phase would miss the debug renderer's compute dispatch, whose
     // buffer bookkeeping then trips on the unconsumed range.
     if (context.encoder != nullptr) {
         return;
     }
 
+    // The grid and the probe readback of the last rendered frame (M2: this
+    // frame's render phase has not run yet), or of this frame when the
+    // headset draws its renderables in the render phase, after the tick.
+    const Rendered_state* const state = get_rendered_state(m_context.get_results_frame_index());
+    if ((state == nullptr) || !state->active) {
+        return;
+    }
+    const Grid& grid = state->grid;
+
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     // Volume box: what the grid was fitted to.
-    const glm::vec3 volume_max = m_grid.origin + m_grid.spacing * glm::vec3{m_grid.counts - glm::ivec3{1}};
-    line_renderer.add_cube(glm::mat4{1.0f}, glm::vec4{0.3f, 0.6f, 1.0f, 1.0f}, m_grid.origin, volume_max);
+    const glm::vec3 volume_max = grid.origin + grid.spacing * glm::vec3{grid.counts - glm::ivec3{1}};
+    line_renderer.add_cube(glm::mat4{1.0f}, glm::vec4{0.3f, 0.6f, 1.0f, 1.0f}, grid.origin, volume_max);
 
     // Probe spheres. The relocation offset and the classification state come
-    // from the host-visible mirror the tick copies; without a copy yet, the
-    // probes draw at their nominal grid positions in the "active" colour.
-    const float* probe_data = nullptr;
-    std::span<std::byte> mapped{};
-    if (m_probe_readback_valid && m_probe_readback_buffer) {
-        mapped = m_probe_readback_buffer->map_bytes(0, m_probe_readback_buffer->get_capacity_byte_count());
-        if (!mapped.empty()) {
-            probe_data = reinterpret_cast<const float*>(mapped.data());
-        }
-    }
+    // from the newest retired readback of this grid; without one, the probes
+    // draw at their nominal grid positions in the "active" colour.
+    const bool has_states = state->probe_states_valid;
 
-    const float radius = 0.06f * std::min(m_grid.spacing.x, std::min(m_grid.spacing.y, m_grid.spacing.z));
-    for (int z = 0; z < m_grid.counts.z; ++z) {
-        for (int y = 0; y < m_grid.counts.y; ++y) {
-            for (int x = 0; x < m_grid.counts.x; ++x) {
-                glm::vec3 position = m_grid.origin + glm::vec3{x, y, z} * m_grid.spacing;
+    const float radius = 0.06f * std::min(grid.spacing.x, std::min(grid.spacing.y, grid.spacing.z));
+    for (int z = 0; z < grid.counts.z; ++z) {
+        for (int y = 0; y < grid.counts.y; ++y) {
+            for (int x = 0; x < grid.counts.x; ++x) {
+                glm::vec3 position = grid.origin + glm::vec3{x, y, z} * grid.spacing;
                 glm::vec4 color    = glm::vec4{0.2f, 1.0f, 0.4f, 1.0f}; // active
-                if (probe_data != nullptr) {
-                    const glm::ivec2  tile  = get_probe_field_tile(glm::ivec3{x, y, z}, m_grid.counts, m_tiles_per_row);
-                    const std::size_t texel = (static_cast<std::size_t>(tile.y) * static_cast<std::size_t>(m_tiles_per_row)) +
-                                              static_cast<std::size_t>(tile.x);
-                    const float* rgba = probe_data + (texel * 4);
-                    position += glm::vec3{rgba[0], rgba[1], rgba[2]};
-                    if (rgba[3] < 0.5f) {
+                if (has_states) {
+                    const std::size_t probe_index = static_cast<std::size_t>(x + (grid.counts.x * (y + (grid.counts.y * z))));
+                    const glm::vec4&  value       = state->probe_states[probe_index];
+                    position += glm::vec3{value};
+                    if (value.w < 0.5f) {
                         color = glm::vec4{1.0f, 0.2f, 0.2f, 1.0f}; // classified inactive
                     }
                 }
@@ -1675,9 +1711,6 @@ void Ddgi_renderer::render(const Render_context& context)
                 );
             }
         }
-    }
-    if (!mapped.empty()) {
-        m_probe_readback_buffer->unmap();
     }
 }
 
@@ -1725,16 +1758,16 @@ auto Ddgi_renderer::update_control_buffer() -> erhe::graphics::Ring_buffer_range
     // visibility statistics.
     const float max_ray_distance = 4.0f * glm::length(m_grid.spacing * glm::vec3{m_grid.counts - glm::ivec3{1}});
     const glm::uvec4 flags{
-        m_config.relocation_enabled     ? 1u : 0u,
-        m_config.classification_enabled ? 1u : 0u,
+        get_config().relocation_enabled     ? 1u : 0u,
+        get_config().classification_enabled ? 1u : 0u,
         0u,
         0u
     };
     const glm::vec4 params{
-        std::clamp(m_config.hysteresis, 0.0f, 0.999f),
-        std::max(1.0f, m_config.depth_sharpness),
+        std::clamp(get_config().hysteresis, 0.0f, 0.999f),
+        std::max(1.0f, get_config().depth_sharpness),
         max_ray_distance,
-        std::max(0.0f, m_config.intensity)
+        std::max(0.0f, get_config().intensity)
     };
 
     write(gpu_data, m_control_offsets.grid_origin,     as_span(grid_origin    ));
@@ -1756,16 +1789,37 @@ auto Ddgi_renderer::update_control_buffer() -> erhe::graphics::Ring_buffer_range
 
 void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)
 {
-    using namespace erhe::graphics;
-
     if (!is_supported()) {
         return;
     }
+    erhe::utility::Thread_roles::assert_render_thread();
+    // A readback copied by an earlier frame whose GPU work retired.
+    poll_probe_readback();
+    tick_field(command_buffer, scene_root);
+    // What the main thread reads as this frame's result once it joined it.
+    publish_rendered_state();
+}
+
+void Ddgi_renderer::tick_field(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)
+{
+    using namespace erhe::graphics;
+
+    // The prepare phase's view of the scene for this frame: instances,
+    // records, content bounds (Ray_trace_scene).
+    const Ray_trace_scene* ray_trace_scene = scene_root.get_ray_trace_scene();
+    if (ray_trace_scene == nullptr) {
+        if (reference_needs_dispatch()) {
+            fail_reference_query("the scene has no ray trace scene (built without device dependencies)");
+        }
+        return;
+    }
+    const Ray_trace_slot& slot = ray_trace_scene->get_slot(m_graphics_device.get_frame_index());
+
     // Two consumers of this frame's trace inputs (TLAS, lights, materials):
     // the probe update, and a pending reference irradiance query - which
     // runs whatever the source. Building the inputs once serves both, and
     // costs nothing while neither needs them.
-    const bool update_field    = is_selected() && update_volume(command_buffer, scene_root);
+    const bool update_field    = is_selected() && update_volume(command_buffer, slot);
     const bool trace_reference = reference_needs_dispatch();
     if (!update_field && !trace_reference) {
         return;
@@ -1777,7 +1831,7 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     // in it, so the two agree by construction rather than because the buffer
     // happens to have been rewritten from the same list a moment ago.
     erhe::scene_renderer::Material_set& material_set = scene_root.get_material_set();
-    if (material_set.get_live_count() == 0) {
+    if (slot.forward_material_live_count == 0) {
         if (trace_reference) {
             fail_reference_query("the scene has no materials (nothing to trace against)");
         }
@@ -1793,9 +1847,9 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
         return;
     }
 
-    m_sky_radiance = scene_root.get_scene().get_ambient_light();
+    m_sky_radiance = scene_root.get_render_settings(m_graphics_device.get_frame_index()).ambient_light;
 
-    Scene_tlas::Frame tlas_frame     = m_scene_tlas->update(command_buffer, *scene_root.layers().content(), &material_set);
+    Scene_tlas::Frame tlas_frame     = m_scene_tlas->update(command_buffer, slot);
     ERHE_VERIFY(tlas_frame.is_valid());
     // Bounces multi: the light block carries this producer's field (the
     // previous update's atlases), and shade_surface() takes a probe ray
@@ -1808,7 +1862,7 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     // diverges).
     erhe::scene_renderer::Ddgi_parameters field_parameters = get_forward_parameters();
     field_parameters.intensity = 1.0f;
-    const bool multi_bounce = update_field && (m_config.bounces == Indirect_diffuse_bounces::multi);
+    const bool multi_bounce = update_field && (get_config().bounces == Indirect_diffuse_bounces::multi);
     Ring_buffer_range light_range    = m_light_buffer->update(
         m_light_projections.get(),
         m_sky_radiance,
@@ -1909,21 +1963,27 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     command_buffer.transition_texture_layout(*m_irradiance_texture, Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_distance_texture,   Image_layout::shader_read_only_optimal);
 
-    if (m_config.debug_draw_probes && m_probe_readback_buffer) {
-        copy_probe_data(command_buffer, *m_probe_readback_buffer);
-        // The overlay reads whatever the previous frame left in the mirror;
-        // the copy recorded here lands before the next one runs.
-        m_probe_readback_valid = true;
+    // The probe state request the main thread made since the last tick
+    // took one.
+    {
+        const std::lock_guard<std::mutex> lock{m_probe_state_request_mutex};
+        if (m_probe_state_request_pending) {
+            m_probe_state_request_pending = false;
+            m_probe_state_requested       = true;
+        }
     }
-    if (m_probe_state_requested && !m_probe_state_in_flight && m_probe_state_readback_buffer) {
-        copy_probe_data(command_buffer, *m_probe_state_readback_buffer);
-        m_probe_state_requested         = false;
-        m_probe_state_in_flight         = true;
-        m_probe_state_frame             = m_graphics_device.get_frame_index();
-        m_probe_state_copy_update_count = m_update_count;
+    // Probe readback for the overlay and the requested probe states: one
+    // copy in flight at a time, decoded by a later tick (poll_probe_readback()).
+    if (
+        (get_config().debug_draw_probes || m_probe_state_requested) &&
+        !m_probe_readback_in_flight &&
+        m_probe_readback_buffer
+    ) {
+        copy_probe_data(command_buffer);
+        m_probe_state_requested = false;
     }
 
-    m_history.end_update(m_probes_per_update, m_config.hysteresis);
+    m_history.end_update(m_probes_per_update, get_config().hysteresis);
 
     // Advance the round-robin cursor for the next tick.
     const uint32_t probe_count = static_cast<uint32_t>(m_grid.get_probe_count());

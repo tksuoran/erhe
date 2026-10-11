@@ -4,7 +4,6 @@
 #include "erhe_graphics/surface.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/scoped_imgui_context.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
@@ -160,7 +159,8 @@ void Window_imgui_host::begin_imgui_frame()
         return;
     }
     m_is_visible = true;
-    update_render_pass(width, height);
+    // The swapchain render pass follows the window size in the render
+    // phase (update_render_pass from execute_rendergraph_node's caller).
 
     ImGuiIO& io = m_imgui_context->IO;
     io.DisplaySize = ImVec2{static_cast<float>(width), static_cast<float>(height)};
@@ -280,7 +280,14 @@ void Window_imgui_host::execute_rendergraph_node(erhe::graphics::Command_buffer&
 {
     ERHE_PROFILE_FUNCTION();
 
-    Scoped_imgui_context imgui_context{*this};
+    // The frame's draw data copy: made by the main thread's ImGui phase,
+    // which may run while this frame renders. No ImGui context is touched
+    // here: the copy and the texture requests are all this node reads.
+    m_imgui_renderer.wait_for_draw_data();
+
+    if (!m_render_pass) {
+        return;
+    }
 
     // Process pending ImGui texture create/update/destroy BEFORE opening
     // the render pass -- Blit_command_encoder (used for texture uploads)
@@ -291,7 +298,7 @@ void Window_imgui_host::execute_rendergraph_node(erhe::graphics::Command_buffer&
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
     // This host renders directly into the swapchain image, so it must apply the
     // presentation pre-rotation (Android landscape on a portrait-native panel).
-    m_imgui_renderer.render_draw_data(render_encoder, *m_render_pass, m_graphics_device.get_surface_transform());
+    m_imgui_renderer.render_draw_data(render_encoder, *m_render_pass, get_draw_data(), m_graphics_device.get_surface_transform());
 }
 
 auto Window_imgui_host::get_viewport() const -> erhe::math::Viewport

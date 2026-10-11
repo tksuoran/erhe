@@ -5,12 +5,8 @@
 
 #include "erhe_graphics/span.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_scene/node.hpp"
-#include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_verify/verify.hpp"
-
-#include <glm/gtx/matrix_operation.hpp>
 
 namespace erhe::scene_renderer {
 
@@ -56,25 +52,17 @@ Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interf
 }
 
 auto Joint_buffer::update(
-    const glm::uvec4&                                          debug_joint_indices,
-    const std::span<glm::vec4>&                                debug_joint_colors,
-    const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins,
-    const erhe::scene::Node*                                   debug_target_joint
+    const glm::uvec4&                 debug_joint_indices,
+    const std::span<const glm::vec4>& debug_joint_colors,
+    const std::span<const Joint_pose> joint_poses,
+    const erhe::scene::Node*          debug_target_joint
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(log_render, "skins.size() = {}, m_writer.write_offset = {}", skins.size(), m_writer.write_offset);
+    SPDLOG_LOGGER_TRACE(log_render, "joint_poses.size() = {}, m_writer.write_offset = {}", joint_poses.size(), m_writer.write_offset);
 
-    std::size_t joint_count = 0;
-    std::size_t skin_index = 0;
-    for (const std::shared_ptr<erhe::scene::Skin>& skin : skins) {
-        ERHE_VERIFY(skin);
-        ++skin_index;
-
-        const auto& skin_data = skin->skin_data;
-        joint_count += skin_data.joints.size();
-    }
+    const std::size_t joint_count = joint_poses.size();
 
     const auto        entry_size       = m_joint_interface.joint_struct.get_size_bytes();
     const auto&       offsets          = m_joint_interface.offsets;
@@ -111,7 +99,7 @@ auto Joint_buffer::update(
             i < end;
             ++i
         ) {
-            auto& color = debug_joint_colors[i];
+            const glm::vec4& color = debug_joint_colors[i];
             write(
                 primitive_gpu_data,
                 write_offset + offsets.debug_joint_colors + (color_index * 4 * sizeof(float)),
@@ -124,32 +112,19 @@ auto Joint_buffer::update(
     write_offset += offsets.joint_struct;
 
     uint32_t joint_index = 0;
-    for (auto& skin : skins) {
-        ERHE_VERIFY(skin);
+    for (const Joint_pose& pose : joint_poses) {
+        const glm::uvec4 debug_flags{
+            ((debug_target_joint != nullptr) && (pose.joint == debug_target_joint)) ? 1u : 0u,
+            0u,
+            0u,
+            0u
+        };
 
-        erhe::scene::Skin_data& skin_data = skin->skin_data;
-        skin_data.joint_buffer_index = joint_index;
-        for (std::size_t i = 0, end_i = skin->skin_data.joints.size(); i < end_i; ++i) {
-            const std::shared_ptr<erhe::scene::Node>& joint = skin->skin_data.joints[i];
-            const glm::mat4 joint_from_bind  = skin->skin_data.inverse_bind_matrices[i];
-            const glm::mat4 world_from_joint = joint->world_from_node();
-            const glm::mat4 world_from_bind  = world_from_joint * joint_from_bind;
-            const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_bind)); // TODO compute shader pass?
-
-            // Weight-display target marker for this slot.
-            const glm::uvec4 debug_flags{
-                ((debug_target_joint != nullptr) && (joint.get() == debug_target_joint)) ? 1u : 0u,
-                0u,
-                0u,
-                0u
-            };
-
-            write(primitive_gpu_data, write_offset + offsets.joint.world_from_bind,  as_span(world_from_bind ));
-            write(primitive_gpu_data, write_offset + offsets.joint.normal_transform, as_span(normal_transform));
-            write(primitive_gpu_data, write_offset + offsets.joint.debug_flags,      as_span(debug_flags     ));
-            write_offset += entry_size;
-            ++joint_index;
-        }
+        write(primitive_gpu_data, write_offset + offsets.joint.world_from_bind,  as_span(pose.world_from_bind ));
+        write(primitive_gpu_data, write_offset + offsets.joint.normal_transform, as_span(pose.normal_transform));
+        write(primitive_gpu_data, write_offset + offsets.joint.debug_flags,      as_span(debug_flags          ));
+        write_offset += entry_size;
+        ++joint_index;
     }
 
     buffer_range.bytes_written(write_offset);

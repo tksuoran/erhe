@@ -81,6 +81,10 @@ auto Headset_view::get_shadow_render_node() const -> Shadow_render_node*
     return nullptr;
 }
 
+void Headset_view::wait_frame()
+{
+}
+
 void Headset_view::begin_frame()
 {
 }

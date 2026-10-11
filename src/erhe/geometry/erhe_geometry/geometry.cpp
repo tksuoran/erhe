@@ -316,11 +316,7 @@ void Mesh_attributes::bind()
     edge_sharpness           .bind(m_mesh.edges        .attributes());
 }
 
-Mesh_attributes::~Mesh_attributes() noexcept
-{
-    static int counter = 0;
-    ++counter;
-}
+Mesh_attributes::~Mesh_attributes() noexcept = default;
 
 auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t
 {

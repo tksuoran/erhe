@@ -730,7 +730,13 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_usd>& usd) -> bo
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*usd->get_source_path()));
     if (ImGui::MenuItem(import_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
-        import_usd(m_context, make_import_build_info(m_context), scene_root, *usd->get_source_path());
+        // Out of the ImGui iteration: the import parses and uploads inline.
+        const std::filesystem::path path = *usd->get_source_path();
+        m_context.imgui_windows->queue(
+            [this, scene_root, path]() {
+                import_usd(m_context, make_import_build_info(m_context), scene_root, path);
+            }
+        );
         return true;
     }
     return false;
@@ -741,19 +747,25 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogra
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*geogram->get_source_path()));
     if (ImGui::MenuItem(import_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
-        import_geogram(
-            erhe::primitive::Build_info{
-                .primitive_types = {
-                    .fill_triangles  = true,
-                    .fill_triangles_expanded = true,
-                    .edge_lines      = true,
-                    .corner_points   = true,
-                    .centroid_points = true
-                },
-                .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
-            },
-            *scene_root.get(),
-            *geogram->get_source_path()
+        // Out of the ImGui iteration: the import parses and uploads inline.
+        const std::filesystem::path path = *geogram->get_source_path();
+        m_context.imgui_windows->queue(
+            [this, scene_root, path]() {
+                import_geogram(
+                    erhe::primitive::Build_info{
+                        .primitive_types = {
+                            .fill_triangles  = true,
+                            .fill_triangles_expanded = true,
+                            .edge_lines      = true,
+                            .corner_points   = true,
+                            .centroid_points = true
+                        },
+                        .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+                    },
+                    *scene_root.get(),
+                    path
+                );
+            }
         );
         return true;
     }

@@ -24,6 +24,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <fmt/format.h>
 #include <taskflow/taskflow.hpp>
@@ -566,6 +567,8 @@ auto Lightmap_partitioner::request_prepare(
 
 void Lightmap_partitioner::update()
 {
+    // The commit swaps scene content: prepare phase (or outside a frame).
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     if (!m_prepare_job) {
         return;
     }
@@ -657,6 +660,7 @@ auto Lightmap_partitioner::validate_job_against_scene(const Prepare_job& job) co
 void Lightmap_partitioner::commit_prepare()
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
 
     std::unique_ptr<Prepare_job> job = std::move(m_prepare_job); // future is ready - safe to own/destroy
     Lightmap_baker* const  baker  = m_context.lightmap_baker;
@@ -766,8 +770,7 @@ void Lightmap_partitioner::commit_prepare()
                 continue;
             }
             total_pieces += piece_primitives.size();
-            erhe::scene::Node* const node = entry.original_mesh.get();
-            entry.piece_node = std::make_shared<erhe::scene::Xform>(fmt::format("{}.lm", (node != nullptr) ? node->get_name() : entry.original_mesh->get_name()));
+            entry.piece_node = std::make_shared<erhe::scene::Xform>(fmt::format("{}.lm", entry.original_mesh->get_name()));
             entry.piece_mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{}.lm", entry.original_mesh->get_name()));
             entry.piece_mesh->layer_id = scene_root.layers().content()->id;
             entry.piece_mesh->set_primitives(piece_primitives);

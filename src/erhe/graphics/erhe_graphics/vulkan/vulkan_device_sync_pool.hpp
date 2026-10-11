@@ -2,6 +2,7 @@
 
 #include <volk.h>
 
+#include <mutex>
 #include <vector>
 
 namespace erhe::graphics {
@@ -14,6 +15,14 @@ class Device_impl;
 // the desktop window swapchain at all. Previously these pools lived on
 // Swapchain_impl; Swapchain now delegates to this class via a reference
 // obtained from Device_impl::get_sync_pool().
+//
+// Thread safety: every method may be called from any thread. Both roles
+// take the implicit semaphore and fence of their command buffers from here
+// (Device_impl::get_command_buffer), the main role recycles them when
+// acquire_frame_slot resets a slot's command pools, and the render role's
+// swapchain takes and recycles its own. m_mutex guards the two free lists
+// and the label serials only; handle creation and the fence reset run
+// outside it.
 class Device_sync_pool final
 {
 public:
@@ -32,6 +41,7 @@ public:
 private:
     Device_impl&             m_device_impl;
     VkDevice                 m_vulkan_device{VK_NULL_HANDLE};
+    std::mutex               m_mutex;
     std::vector<VkSemaphore> m_semaphore_pool;
     std::vector<VkFence>     m_fence_pool;
     size_t                   m_semaphore_serial{0};

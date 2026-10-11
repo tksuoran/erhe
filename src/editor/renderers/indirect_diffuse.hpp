@@ -51,12 +51,14 @@ enum class Producer_selection : unsigned int
 [[nodiscard]] auto get_producer_selection(Indirect_diffuse_source current, Indirect_diffuse_source producer) -> Producer_selection;
 
 // The single change site of editor_settings.indirect_diffuse_source
-// (doc/editor/radiance_cascades.md "Source selection"): stores the source
-// and tells both producers. The deselected one releases its textures here;
-// the selected one (re)fits on its next tick. Called by the Settings, DDGI
-// and Radiance Cascades window combos and the MCP tools set_indirect_diffuse
-// and set_ddgi; the producers are constructed with the loaded (and
-// migrated) value.
+// (doc/editor/radiance_cascades.md "Source selection"): stores the source.
+// The producers derive their selection from the frame's Render_settings copy
+// (is_selected()), and the render phase applies a change at its start
+// (apply_frame_settings()): the deselected producer releases its textures
+// there, the selected one (re)fits on its next tick. Called by the Settings,
+// DDGI and Radiance Cascades window combos and the MCP tools
+// set_indirect_diffuse and set_ddgi, from any main-thread phase; the
+// producers are constructed with the loaded (and migrated) value.
 void set_indirect_diffuse_source(App_context& context, Indirect_diffuse_source source);
 
 // The field of the selected producer (doc/editor/radiance_cascades.md
@@ -64,6 +66,14 @@ void set_indirect_diffuse_source(App_context& context, Indirect_diffuse_source s
 // producer has no field. The single source of what Editor::tick() publishes
 // to the forward pass and what the MCP irradiance query samples.
 [[nodiscard]] auto get_indirect_diffuse_field(const App_context& context) -> Probe_field;
+
+// Main thread: whether the last rendered frame (App_context::
+// last_rendered_frame_index) published a field of the selected producer,
+// from the producers' Rendered_state. The main thread's view of
+// get_indirect_diffuse_field().is_valid(): the field textures themselves
+// belong to the render phase, which with frame pipelining replaces them
+// while the main thread prepares the next frame.
+[[nodiscard]] auto has_rendered_indirect_diffuse_field(const App_context& context) -> bool;
 
 // Temporal history of a round-robin integrator: the items (radiance
 // cascades raw texels, DDGI probes) are traced in a fixed cyclic order,

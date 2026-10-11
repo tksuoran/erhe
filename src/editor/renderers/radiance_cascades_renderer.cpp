@@ -10,7 +10,10 @@
 #include "config/generated/radiance_cascades_probe_overlay.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
+#include "renderers/ray_trace_scene.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/render_settings.hpp"
+#include "renderers/render_texture_reference.hpp"
 #include "renderers/trace_lights.hpp"
 #include "scene/scene_root.hpp"
 
@@ -31,6 +34,7 @@
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
@@ -173,14 +177,11 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     App_message_bus&                         app_message_bus,
     erhe::scene_renderer::Program_interface& program_interface,
     erhe::scene_renderer::Mesh_memory&       mesh_memory,
-    const Radiance_cascades_config&          config,
-    const Ddgi_config&                       ddgi_config,
+    const Radiance_cascades_merge_mode       merge_mode,
     const Producer_selection                 selection
 )
     : m_graphics_device{graphics_device}
     , m_context        {context}
-    , m_config         {config}
-    , m_ddgi_config    {ddgi_config}
     , m_selection      {selection}
     , m_control_block{
         graphics_device,
@@ -194,7 +195,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
         static_cast<int>(c_control_binding_point),
         erhe::graphics::Shader_resource::Type::uniform_block
     }
-    , m_merge_mode{config.merge_mode}
+    , m_merge_mode{merge_mode}
     , m_visibility_block{
         graphics_device,
         "rc_visibility",
@@ -223,6 +224,13 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
         erhe::graphics::Shader_resource::Type::uniform_block
     }
 {
+    m_rendered_states.resize(graphics_device.get_number_of_frames_in_flight());
+    // Resolved by the render thread when it draws the Radiance Cascades window.
+    m_preview_texture_reference = std::make_shared<Render_texture_reference>(
+        [this]() -> const erhe::graphics::Texture* {
+            return m_preview_texture.get();
+        }
+    );
     using namespace erhe::graphics;
 
     // Ray query gates the whole feature, as for DDGI: the interval trace has
@@ -237,7 +245,6 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
 
     m_scene_tlas = std::make_unique<Scene_tlas>(
         graphics_device,
-        mesh_memory,
         c_instance_record_binding_point,
         "Radiance_cascades_renderer"
     );
@@ -873,6 +880,16 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
 
 Radiance_cascades_renderer::~Radiance_cascades_renderer() noexcept = default;
 
+auto Radiance_cascades_renderer::get_config() const -> const Radiance_cascades_config&
+{
+    return m_context.render_settings->radiance_cascades;
+}
+
+auto Radiance_cascades_renderer::get_ddgi_config() const -> const Ddgi_config&
+{
+    return m_context.render_settings->ddgi;
+}
+
 auto Radiance_cascades_renderer::is_supported() const -> bool
 {
     return
@@ -890,21 +907,41 @@ auto Radiance_cascades_renderer::is_supported() const -> bool
 
 auto Radiance_cascades_renderer::is_selected() const -> bool
 {
-    return m_selection == Producer_selection::selected;
+    return m_context.render_settings->indirect_diffuse_source == Indirect_diffuse_source::radiance_cascades;
 }
 
-void Radiance_cascades_renderer::set_selection(const Producer_selection selection)
+void Radiance_cascades_renderer::apply_frame_settings()
 {
-    if (selection == m_selection) {
-        return;
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    const Producer_selection selection = get_producer_selection(
+        m_context.render_settings->indirect_diffuse_source,
+        Indirect_diffuse_source::radiance_cascades
+    );
+    if (selection != m_selection) {
+        m_selection = selection;
+        if (selection == Producer_selection::deselected) {
+            // Release the cascade memory while another source is selected;
+            // the layout is refitted when the source is selected again.
+            release_textures();
+            m_layout = Radiance_cascades_layout{};
+            m_volume_bounds.reset();
+            clear_pass_timings();
+        }
     }
-    m_selection = selection;
-    if (selection == Producer_selection::deselected) {
-        // Release the cascade memory while another source is selected; the
-        // layout is refitted when the source is selected again.
-        release_textures();
-        m_layout = Radiance_cascades_layout{};
-        m_volume_bounds.reset();
+
+    const Radiance_cascades_merge_mode mode = get_config().merge_mode;
+    if (mode != m_merge_mode) {
+        m_merge_mode = mode;
+        if (mode == Radiance_cascades_merge_mode::visibility_masked) {
+            // Allocated and computed on the next tick (needs its command buffer).
+            m_visibility_dirty = true;
+        } else {
+            release_state_textures();
+        }
+        // Into or out of per_neighbour_trace: the next tick's update_layout()
+        // sees the atlas block of the fit settings change and refits, which
+        // (re)allocates or releases the neighbour atlases with a first fill.
+        // The pass timings of the other mode would mislead.
         clear_pass_timings();
     }
 }
@@ -934,10 +971,10 @@ auto Radiance_cascades_renderer::get_forward_parameters() const -> erhe::scene_r
     parameters.irradiance_texels = m_field_settings.irradiance_texels;
     parameters.distance_texels   = m_field_settings.distance_texels;
     parameters.tiles_per_row     = m_field_tiles_per_row;
-    parameters.normal_bias       = m_ddgi_config.normal_bias;
-    parameters.view_bias         = m_ddgi_config.view_bias;
+    parameters.normal_bias       = get_ddgi_config().normal_bias;
+    parameters.view_bias         = get_ddgi_config().view_bias;
     parameters.depth_sharpness   = m_field_settings.depth_sharpness; // the value the distance atlas was reduced with
-    parameters.intensity         = m_ddgi_config.intensity;
+    parameters.intensity         = get_ddgi_config().intensity;
     return parameters;
 }
 
@@ -953,25 +990,6 @@ auto Radiance_cascades_renderer::get_field() const -> Probe_field
         .probe_data   = m_field_probe_data,
         .update_count = m_update_count
     };
-}
-
-void Radiance_cascades_renderer::set_merge_mode(const Radiance_cascades_merge_mode mode)
-{
-    if (mode == m_merge_mode) {
-        return;
-    }
-    m_merge_mode = mode;
-    if (mode == Radiance_cascades_merge_mode::visibility_masked) {
-        // Allocated and computed on the next tick (needs its command buffer).
-        m_visibility_dirty = true;
-    } else {
-        release_state_textures();
-    }
-    // Into or out of per_neighbour_trace: the next tick's update_layout()
-    // sees the atlas block of the fit settings change and refits, which
-    // (re)allocates or releases the neighbour atlases with a first fill.
-    // The pass timings of the other mode would mislead.
-    clear_pass_timings();
 }
 
 auto Radiance_cascades_renderer::get_merge_mode() const -> Radiance_cascades_merge_mode
@@ -1097,7 +1115,6 @@ auto Radiance_cascades_renderer::get_stats() const -> Stats
     stats.visibility_last_ms      = static_cast<double>(m_visibility_last_ns) * 1.0e-6;
     stats.visibility_update_count = m_visibility_update_count;
     stats.history_reset_count     = m_history.get_reset_count();
-    stats.probe_overlay_readback_count = m_overlay_readback_count;
     return stats;
 }
 
@@ -1241,12 +1258,12 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
     );
 }
 
-auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root) -> bool
+auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& command_buffer, const Ray_trace_slot& slot) -> bool
 {
     const Field_settings field_settings{
-        .irradiance_texels = std::clamp(m_ddgi_config.irradiance_texels, 2, 32),
-        .distance_texels   = std::clamp(m_ddgi_config.distance_texels,   2, 64),
-        .depth_sharpness   = std::max(1.0f, m_ddgi_config.depth_sharpness)
+        .irradiance_texels = std::clamp(get_ddgi_config().irradiance_texels, 2, 32),
+        .distance_texels   = std::clamp(get_ddgi_config().distance_texels,   2, 64),
+        .depth_sharpness   = std::max(1.0f, get_ddgi_config().depth_sharpness)
     };
     const int max_texture_size = m_graphics_device.get_info().max_texture_size;
     // The probe field atlases of cascade 0's grid must fit the texture size
@@ -1256,20 +1273,20 @@ auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& c
         max_texture_size
     );
     const Radiance_cascades_layout_settings settings{
-        .probe_spacing_m      = std::max(0.01f, m_config.probe_spacing_m),
-        .max_probes_cascade0  = std::min(std::max(8, m_config.max_probes_cascade0), field_max_probes),
-        .max_cascades         = std::clamp(m_config.max_cascades, 1, c_max_radiance_cascades),
-        .cascade0_tile_texels = std::clamp(m_config.cascade0_tile_texels, 1, 64),
-        .interval_scale       = std::max(1.0f,  m_config.interval_scale),
+        .probe_spacing_m      = std::max(0.01f, get_config().probe_spacing_m),
+        .max_probes_cascade0  = std::min(std::max(8, get_config().max_probes_cascade0), field_max_probes),
+        .max_cascades         = std::clamp(get_config().max_cascades, 1, c_max_radiance_cascades),
+        .cascade0_tile_texels = std::clamp(get_config().cascade0_tile_texels, 1, 64),
+        .interval_scale       = std::max(1.0f,  get_config().interval_scale),
         .max_texture_size     = max_texture_size,
         // The per_neighbour_trace merge mode's neighbour atlases are part
         // of the layout: switching into or out of the mode refits.
         .atlas_block_width    = (m_merge_mode == Radiance_cascades_merge_mode::per_neighbour_trace) ? c_neighbour_block_width  : 1,
         .atlas_block_height   = (m_merge_mode == Radiance_cascades_merge_mode::per_neighbour_trace) ? c_neighbour_block_height : 1
     };
-    const float padding_m = std::max(0.0f, m_config.volume_padding_m);
+    const float padding_m = std::max(0.0f, get_config().volume_padding_m);
 
-    const erhe::math::Aabb bounds = compute_padded_content_bounds(scene_root, padding_m);
+    const erhe::math::Aabb bounds = pad_content_bounds(slot.content_bounds, padding_m);
     if (!bounds.is_valid_3d()) {
         return false;
     }
@@ -1590,8 +1607,8 @@ void Radiance_cascades_renderer::record_trace(
     // The budget is read every tick, so a change takes effect on the next
     // frame without a refit; clamped so one update never traces a texel
     // twice.
-    m_texels_per_update = std::clamp(static_cast<int64_t>(m_config.texels_per_frame), int64_t{1}, total_texels);
-    const float hysteresis = std::clamp(m_config.hysteresis, 0.0f, 0.999f);
+    m_texels_per_update = std::clamp(static_cast<int64_t>(get_config().texels_per_frame), int64_t{1}, total_texels);
+    const float hysteresis = std::clamp(get_config().hysteresis, 0.0f, 0.999f);
 
     // A change message since the last update starts the temporal history
     // over at the cursor (doc/editor/ddgi.md "History reset").
@@ -1599,7 +1616,7 @@ void Radiance_cascades_renderer::record_trace(
     // One jitter seed per update: every texel gets a new footprint point
     // each time it is traced (rc_trace.comp).
     const uint32_t jitter_seed = static_cast<uint32_t>(m_random_engine());
-    const uint32_t jitter_mode = static_cast<uint32_t>(m_config.direction_jitter);
+    const uint32_t jitter_mode = static_cast<uint32_t>(get_config().direction_jitter);
 
     for (int i = 0; i < m_layout.cascade_count; ++i) {
         command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].raw, Image_layout::general);
@@ -1746,7 +1763,7 @@ void Radiance_cascades_renderer::record_neighbour_trace(
 {
     using namespace erhe::graphics;
 
-    const float hysteresis = std::clamp(m_config.hysteresis, 0.0f, 0.999f);
+    const float hysteresis = std::clamp(get_config().hysteresis, 0.0f, 0.999f);
     for (int i = 0; (i + 1) < m_layout.cascade_count; ++i) {
         command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].neighbours, Image_layout::general);
     }
@@ -1852,7 +1869,7 @@ void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& co
     // Masked cascades contribute their transparency but no radiance
     // (doc/editor/radiance_cascades.md "Merge"). Read every tick like the
     // trace budget, so an edit takes effect on the next frame.
-    const uint32_t  mask = static_cast<uint32_t>(std::max(0, m_config.debug_cascade_mask));
+    const uint32_t  mask = static_cast<uint32_t>(std::max(0, get_config().debug_cascade_mask));
     const glm::vec3 sky  = ((mask & (1u << c_sky_mask_bit)) != 0u) ? glm::vec3{0.0f} : sky_radiance;
 
     const Scoped_gpu_timer merge_timer{*m_pass_timings[static_cast<std::size_t>(Rc_pass::merge)].timer, command_buffer};
@@ -2043,16 +2060,18 @@ void Radiance_cascades_renderer::request_preview(
     const float              radiance_scale
 )
 {
-    m_preview_requested      = true;
-    m_preview_cascade        = cascade;
-    m_preview_source         = source;
-    m_preview_channel        = channel;
-    m_preview_radiance_scale = radiance_scale;
+    erhe::utility::Thread_roles::assert_main_thread();
+    const std::lock_guard<std::mutex> lock{m_preview_request_mutex};
+    m_preview_request_pending        = true;
+    m_preview_request_cascade        = cascade;
+    m_preview_request_source         = source;
+    m_preview_request_channel        = channel;
+    m_preview_request_radiance_scale = radiance_scale;
 }
 
-auto Radiance_cascades_renderer::get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
+auto Radiance_cascades_renderer::get_preview_texture_reference() const -> const std::shared_ptr<erhe::graphics::Texture_reference>&
 {
-    return m_preview_texture;
+    return m_preview_texture_reference;
 }
 
 void Radiance_cascades_renderer::record_preview(erhe::graphics::Command_buffer& command_buffer)
@@ -2132,6 +2151,7 @@ void Radiance_cascades_renderer::record_preview(erhe::graphics::Command_buffer& 
 
 void Radiance_cascades_renderer::request_texel_readback()
 {
+    const std::lock_guard<std::mutex> lock{m_readback_mutex};
     if (m_readback_state != Rc_readback_state::in_flight) {
         m_readback_state = Rc_readback_state::requested;
     }
@@ -2238,6 +2258,7 @@ void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_b
 
 auto Radiance_cascades_renderer::poll_texel_readback() -> Rc_readback_state
 {
+    const std::lock_guard<std::mutex> lock{m_readback_mutex};
     if ((m_readback_state != Rc_readback_state::in_flight) || !m_graphics_device.is_frame_completed(m_readback_frame)) {
         return m_readback_state;
     }
@@ -2498,25 +2519,74 @@ void Radiance_cascades_renderer::bind_trace_field(erhe::graphics::Compute_comman
 
 void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)
 {
-    using namespace erhe::graphics;
-
     if (!is_supported() || !is_selected()) {
         return;
     }
+    erhe::utility::Thread_roles::assert_render_thread();
     // Probe overlay: take a retired copy; when the overlay is off, release
     // its buffer once no copy is in flight (nothing is copied while off).
     poll_probe_overlay();
-    const Radiance_cascades_probe_overlay overlay_mode = m_config.debug_draw_probes;
     if (
-        (overlay_mode == Radiance_cascades_probe_overlay::none) &&
+        (get_config().debug_draw_probes == Radiance_cascades_probe_overlay::none) &&
         !m_overlay_in_flight &&
         (m_overlay_buffer || (m_overlay_summary.cascade >= 0))
     ) {
         m_overlay_buffer.reset();
         m_overlay_summary = Probe_overlay_summary{};
         m_overlay_probes.clear();
+        ++m_overlay_serial;
     }
-    if (!update_layout(command_buffer, scene_root)) {
+    tick_cascades(command_buffer, scene_root);
+    // What the main thread reads as this frame's state once it joined it.
+    publish_rendered_state();
+}
+
+auto Radiance_cascades_renderer::get_rendered_state(const std::optional<uint64_t> frame_index) const -> const Rendered_state*
+{
+    return m_rendered_states.find(frame_index);
+}
+
+void Radiance_cascades_renderer::publish_rendered_state()
+{
+    Rendered_state& overlay = m_rendered_states.write(m_graphics_device.get_frame_index());
+    overlay.layout         = m_layout;
+    overlay.active         = is_active();
+    overlay.has_field      = has_field();
+    overlay.field_parameters = overlay.has_field ? get_forward_parameters() : erhe::scene_renderer::Ddgi_parameters{};
+    for (int i = 0; i < c_max_radiance_cascades; ++i) {
+        overlay.cascade_texture_bytes[static_cast<std::size_t>(i)] = get_cascade_texture_byte_count(i);
+    }
+    overlay.texture_bytes  = get_texture_byte_count();
+    overlay.fit_count      = get_fit_count();
+    overlay.stats          = get_stats();
+    overlay.merge_mode     = m_merge_mode;
+    overlay.preview_width  = m_preview_texture ? m_preview_texture->get_width () : 0;
+    overlay.preview_height = m_preview_texture ? m_preview_texture->get_height() : 0;
+    overlay.grid           = m_overlay_grid;
+    overlay.irradiance_max = m_overlay_irradiance_max;
+    overlay.summary        = m_overlay_summary;
+    overlay.readback_count = m_overlay_readback_count;
+    // The probes only when the overlay changed since this slot's last copy;
+    // a steady frame copies nothing.
+    if (overlay.serial != m_overlay_serial) {
+        overlay.probes = m_overlay_probes;
+        overlay.serial = m_overlay_serial;
+    }
+}
+
+void Radiance_cascades_renderer::tick_cascades(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)
+{
+    using namespace erhe::graphics;
+
+    const Radiance_cascades_probe_overlay overlay_mode = get_config().debug_draw_probes;
+    // The prepare phase's view of the scene for this frame: instances,
+    // records, content bounds (Ray_trace_scene).
+    const Ray_trace_scene* ray_trace_scene = scene_root.get_ray_trace_scene();
+    if (ray_trace_scene == nullptr) {
+        return; // a root without device dependencies traces nothing
+    }
+    const Ray_trace_slot& slot = ray_trace_scene->get_slot(m_graphics_device.get_frame_index());
+    if (!update_layout(command_buffer, slot)) {
         return;
     }
 
@@ -2525,7 +2595,7 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     // doc/erhe/draw_list_material_set.md D5), the light block with its
     // projections, and this frame's TLAS.
     erhe::scene_renderer::Material_set& material_set = scene_root.get_material_set();
-    if (material_set.get_live_count() == 0) {
+    if (slot.forward_material_live_count == 0) {
         return;
     }
     if (!fit_trace_light_projections(m_context, m_graphics_device, scene_root, *m_light_projections)) {
@@ -2533,8 +2603,8 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     }
     // The scene ambient is the trace's ambient term and the merge's sky
     // radiance, as for DDGI's probe rays.
-    const glm::vec3   ambient     = scene_root.get_scene().get_ambient_light();
-    Scene_tlas::Frame tlas_frame  = m_scene_tlas->update(command_buffer, *scene_root.layers().content(), &material_set);
+    const glm::vec3   ambient     = scene_root.get_render_settings(m_graphics_device.get_frame_index()).ambient_light;
+    Scene_tlas::Frame tlas_frame  = m_scene_tlas->update(command_buffer, slot);
     ERHE_VERIFY(tlas_frame.is_valid());
     // Bounces multi: the light block carries this producer's field (written
     // by the previous update's reduce), and shade_surface() takes a hit's
@@ -2546,7 +2616,7 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     // diverges).
     erhe::scene_renderer::Ddgi_parameters field_parameters = get_forward_parameters();
     field_parameters.intensity = 1.0f;
-    const bool multi_bounce = (m_config.bounces == Indirect_diffuse_bounces::multi) && has_field();
+    const bool multi_bounce = (get_config().bounces == Indirect_diffuse_bounces::multi) && has_field();
     Ring_buffer_range light_range = m_light_buffer->update(
         m_light_projections.get(),
         ambient,
@@ -2583,14 +2653,29 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     record_merge(command_buffer, ambient);
     record_reduce(command_buffer);
 
+    // The preview the window requested since the last tick took one.
+    {
+        const std::lock_guard<std::mutex> lock{m_preview_request_mutex};
+        if (m_preview_request_pending) {
+            m_preview_request_pending = false;
+            m_preview_requested       = true;
+            m_preview_cascade         = m_preview_request_cascade;
+            m_preview_source          = m_preview_request_source;
+            m_preview_channel         = m_preview_request_channel;
+            m_preview_radiance_scale  = m_preview_request_radiance_scale;
+        }
+    }
     if (m_preview_requested) {
         m_preview_requested = false;
         record_preview(command_buffer);
     }
     bool recorded_readback = false;
-    if (m_readback_state == Rc_readback_state::requested) {
-        record_texel_readback(command_buffer);
-        recorded_readback = true;
+    {
+        const std::lock_guard<std::mutex> lock{m_readback_mutex};
+        if (m_readback_state == Rc_readback_state::requested) {
+            record_texel_readback(command_buffer);
+            recorded_readback = true;
+        }
     }
     if (
         (overlay_mode != Radiance_cascades_probe_overlay::none) &&
@@ -2612,7 +2697,7 @@ auto Radiance_cascades_renderer::record_probe_overlay_readback(
 {
     using namespace erhe::graphics;
 
-    const int               cascade_index = std::clamp(m_config.debug_draw_cascade, 0, m_layout.cascade_count - 1);
+    const int               cascade_index = std::clamp(get_config().debug_draw_cascade, 0, m_layout.cascade_count - 1);
     const Radiance_cascade& cascade       = m_layout.cascades[static_cast<std::size_t>(cascade_index)];
     const Cascade_textures& textures      = m_cascade_textures[static_cast<std::size_t>(cascade_index)];
     m_overlay_next_frame = m_graphics_device.get_frame_index() + c_probe_overlay_interval_frames;
@@ -2662,6 +2747,7 @@ auto Radiance_cascades_renderer::record_probe_overlay_readback(
         };
         m_overlay_probes.clear();
         m_overlay_probes.resize(static_cast<std::size_t>(cascade.get_probe_count()));
+        ++m_overlay_serial;
         return false;
     }
 
@@ -2715,7 +2801,7 @@ void Radiance_cascades_renderer::poll_probe_overlay()
         return;
     }
     m_overlay_in_flight = false;
-    if (m_config.debug_draw_probes == Radiance_cascades_probe_overlay::none) {
+    if (get_config().debug_draw_probes == Radiance_cascades_probe_overlay::none) {
         return; // turned off while the copy was in flight
     }
 
@@ -2814,18 +2900,14 @@ void Radiance_cascades_renderer::poll_probe_overlay()
     m_overlay_buffer->unmap();
     m_overlay_grid    = cascade.grid;
     m_overlay_summary = summary;
-}
-
-auto Radiance_cascades_renderer::get_probe_overlay_summary() const -> const Probe_overlay_summary&
-{
-    return m_overlay_summary;
+    ++m_overlay_serial;
 }
 
 void Radiance_cascades_renderer::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!is_active() || (m_config.debug_draw_probes == Radiance_cascades_probe_overlay::none)) {
+    if (get_config().debug_draw_probes == Radiance_cascades_probe_overlay::none) {
         return;
     }
     // CPU phase only (doc/editor/ddgi.md "Traps"): lines submitted in the
@@ -2834,8 +2916,16 @@ void Radiance_cascades_renderer::render(const Render_context& context)
         return;
     }
 
-    const int         cascade_index = std::clamp(m_config.debug_draw_cascade, 0, m_layout.cascade_count - 1);
-    const Probe_grid& grid          = m_layout.cascades[static_cast<std::size_t>(cascade_index)].grid;
+    // The layout and the overlay copy of the last rendered frame (M2: this
+    // frame's render phase has not run yet), or of this frame when the
+    // headset draws its renderables in the render phase, after the tick.
+    const Rendered_state* const overlay = get_rendered_state(m_context.get_results_frame_index());
+    if ((overlay == nullptr) || !overlay->active || !overlay->layout.is_valid()) {
+        return;
+    }
+    const Radiance_cascades_layout& layout        = overlay->layout;
+    const int                       cascade_index = std::clamp(get_config().debug_draw_cascade, 0, layout.cascade_count - 1);
+    const Probe_grid&               grid          = layout.cascades[static_cast<std::size_t>(cascade_index)].grid;
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     // Volume box of the cascade's probes.
@@ -2846,23 +2936,23 @@ void Radiance_cascades_renderer::render(const Render_context& context)
     // refit or another cascade shows unclassified positions until the next
     // copy retires.
     const bool has_copy =
-        (m_overlay_summary.cascade == cascade_index) &&
-        (m_overlay_grid == grid) &&
-        (m_overlay_probes.size() == static_cast<std::size_t>(grid.get_probe_count()));
+        (overlay->summary.cascade == cascade_index) &&
+        (overlay->grid == grid) &&
+        (overlay->probes.size() == static_cast<std::size_t>(grid.get_probe_count()));
     const bool draw_irradiance =
         has_copy &&
-        m_overlay_summary.irradiance &&
-        (m_config.debug_draw_probes == Radiance_cascades_probe_overlay::state_and_irradiance);
+        overlay->summary.irradiance &&
+        (get_config().debug_draw_probes == Radiance_cascades_probe_overlay::state_and_irradiance);
     const float min_spacing      = std::min(grid.spacing.x, std::min(grid.spacing.y, grid.spacing.z));
     const float radius           = 0.06f * min_spacing;
-    const float irradiance_scale = (m_overlay_irradiance_max > 0.0f) ? (1.0f / m_overlay_irradiance_max) : 0.0f;
+    const float irradiance_scale = (overlay->irradiance_max > 0.0f) ? (1.0f / overlay->irradiance_max) : 0.0f;
     for (int z = 0; z < grid.counts.z; ++z) {
         for (int y = 0; y < grid.counts.y; ++y) {
             for (int x = 0; x < grid.counts.x; ++x) {
                 const glm::vec3 position    = grid.origin + (grid.spacing * glm::vec3{x, y, z});
                 const int       probe_index = x + (grid.counts.x * (y + (grid.counts.y * z)));
                 const Rc_probe_overlay_state state = has_copy
-                    ? m_overlay_probes[static_cast<std::size_t>(probe_index)].state
+                    ? overlay->probes[static_cast<std::size_t>(probe_index)].state
                     : Rc_probe_overlay_state::unclassified;
                 const glm::vec4 color =
                     (state == Rc_probe_overlay_state::active) ? glm::vec4{0.2f, 1.0f, 0.4f, 1.0f} :
@@ -2882,7 +2972,7 @@ void Radiance_cascades_renderer::render(const Render_context& context)
                 if (draw_irradiance) {
                     // A short thick line toward +Y in the probe's irradiance
                     // toward +Y, normalized by the brightest probe of the copy.
-                    const glm::vec3 irradiance = m_overlay_probes[static_cast<std::size_t>(probe_index)].irradiance * irradiance_scale;
+                    const glm::vec3 irradiance = overlay->probes[static_cast<std::size_t>(probe_index)].irradiance * irradiance_scale;
                     const glm::vec4 patch_color{glm::clamp(irradiance, glm::vec3{0.0f}, glm::vec3{1.0f}), 1.0f};
                     line_renderer.add_line(
                         patch_color, 8.0f, position + glm::vec3{0.0f, radius, 0.0f},

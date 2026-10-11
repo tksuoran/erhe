@@ -1,9 +1,11 @@
 #include "app_scenes.hpp"
+#include "renderers/ray_trace_scene.hpp"
 
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 #include "app_settings.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "items.hpp"
 #include "operations/mesh_operation.hpp"
 #include "tools/selection_tool.hpp"
@@ -28,6 +30,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <imgui/imgui.h>
 
@@ -69,6 +72,13 @@ void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_ro
             return;
         }
         m_scene_roots.push_back(scene_root);
+    }
+
+    // A root re-registered after a close (undo) keeps the Draw_list_scene it
+    // had, with the setting of that time.
+    erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
+    if ((draw_list_scene != nullptr) && (m_context.editor_settings != nullptr)) {
+        draw_list_scene->set_exclude_unlit_from_shadows(m_context.editor_settings->exclude_unlit_primitives);
     }
 
     // R5.3: every registered scene gets an identity container record. The
@@ -144,15 +154,12 @@ void App_scenes::before_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Overlap phase (M1): reads node transforms into the bodies. The
+    // pause / resume edge and the node flag edits are M2
+    // (after_physics_simulation_steps()).
     for (const auto& scene_root : m_scene_roots) {
         const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
-        const bool running = physics.static_enable && physics.dynamic_enable;
-        // Edge-triggered: clears no_transform_update from body-driven nodes
-        // on pause and restores it on resume, so paused bodies follow
-        // hierarchy edits again (the flag otherwise sticks - no deactivation
-        // events fire while the simulation is not stepping).
-        scene_root->set_physics_simulation_running(running);
-        if (!running) {
+        if (!physics.static_enable || !physics.dynamic_enable) {
             continue;
         }
         scene_root->before_physics_simulation_steps();
@@ -535,6 +542,11 @@ void App_scenes::update_material_sets(erhe::graphics::Command_buffer& command_bu
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Prepare phase: every set update()s once per frame, written or clean,
+    // which publishes the buffer copy and texture heap the render phase of
+    // this frame binds (doc/erhe/draw_list_material_set.md D9).
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
     // Copy under m_mutex for the same documented reason flush_draw_lists()
     // does: the work below takes scene-root locks, and m_mutex must never be
     // held while waiting on those.
@@ -544,13 +556,15 @@ void App_scenes::update_material_sets(erhe::graphics::Command_buffer& command_bu
         scene_roots = m_scene_roots;
     }
     for (const std::shared_ptr<Scene_root>& scene_root : scene_roots) {
+        // A root without a content library still updates (and so publishes)
+        // both sets: its passes bind them like any other root's.
         const std::shared_ptr<Content_library>& content_library = scene_root->get_content_library();
-        if (!content_library) {
-            continue;
+        std::span<const std::shared_ptr<erhe::primitive::Material>> material_span{};
+        if (content_library) {
+            material_span = std::span<const std::shared_ptr<erhe::primitive::Material>>{
+                content_library->get_all<erhe::primitive::Material>()
+            };
         }
-        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials =
-            content_library->get_all<erhe::primitive::Material>();
-        const std::span<const std::shared_ptr<erhe::primitive::Material>> material_span{materials};
 
         // A root with a draw list carries TWO sets, and the two reconcile the
         // same library independently: a material normally holds a different
@@ -574,6 +588,22 @@ void App_scenes::update_material_sets(erhe::graphics::Command_buffer& command_bu
     }
 }
 
+void App_scenes::set_exclude_unlit_from_shadows(const bool value)
+{
+    // Draw_list_scene::set_exclude_unlit_from_shadows takes no item-host
+    // lock, so iterating under m_mutex is safe here.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
+        if (!scene_root) {
+            continue;
+        }
+        erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
+        if (draw_list_scene != nullptr) {
+            draw_list_scene->set_exclude_unlit_from_shadows(value);
+        }
+    }
+}
+
 void App_scenes::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION();
@@ -583,6 +613,49 @@ void App_scenes::update_node_transforms()
     for (const auto& scene_root : m_scene_roots) {
         scene_root->get_scene().update_node_transforms();
     }
+}
+
+void App_scenes::snapshot_render_settings()
+{
+    ERHE_PROFILE_FUNCTION();
+    // The frame being prepared: its frame-in-flight slot is the one the
+    // render phase of this frame reads (Scene_root::get_render_joint_poses,
+    // Draw_list_scene::get_shadow_bounds, the published draw lists).
+    const uint64_t    frame_index      = m_context.graphics_device->get_frame_index();
+    const std::size_t frames_in_flight = m_context.graphics_device->get_number_of_frames_in_flight();
+    for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
+        // Order: the joint pose capture assigns the skins' joint slots, the
+        // publish bakes them into the draw list records and copies the
+        // changed lists (doc/editor/editor.md "Frame phases").
+        scene_root->snapshot_render_settings(*m_context.editor_settings, *m_context.render_settings, frame_index, frames_in_flight);
+        scene_root->prepare_shadow_bounds(frame_index, frames_in_flight);
+        scene_root->publish_draw_lists(frame_index, frames_in_flight);
+    }
+}
+
+void App_scenes::prepare_ray_trace_scenes()
+{
+    ERHE_PROFILE_FUNCTION();
+    // The frame being prepared: Ray_trace_renderer::render, Ddgi_renderer::
+    // tick and Radiance_cascades_renderer::tick of this frame read its slot.
+    const uint64_t    frame_index      = m_context.graphics_device->get_frame_index();
+    const std::size_t frames_in_flight = m_context.graphics_device->get_number_of_frames_in_flight();
+    for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
+        scene_root->prepare_ray_trace_scene(frame_index, frames_in_flight);
+    }
+}
+
+auto App_scenes::get_ray_trace_geometry_count() -> std::size_t
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    std::size_t count = 0;
+    for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
+        const Ray_trace_scene* ray_trace_scene = scene_root->get_ray_trace_scene();
+        if (ray_trace_scene != nullptr) {
+            count += ray_trace_scene->get_geometry_count();
+        }
+    }
+    return count;
 }
 
 void App_scenes::update_layout_nodes()
@@ -601,9 +674,20 @@ void App_scenes::after_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Prepare phase (M2): the node-side effects of the steps M1 ran.
     for (const auto& scene_root : m_scene_roots) {
         const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
-        if (!physics.static_enable || !physics.dynamic_enable) {
+        const bool running = physics.static_enable && physics.dynamic_enable;
+        // Edge-triggered: clears no_transform_update from body-driven nodes
+        // on pause and restores it on resume, so paused bodies follow
+        // hierarchy edits again (the flag otherwise sticks - no deactivation
+        // events fire while the simulation is not stepping). M1 gates its
+        // steps on the same settings, which M2 alone edits, so the edge
+        // lands on the frame whose M1 first skipped (or resumed) stepping.
+        scene_root->set_physics_simulation_running(running);
+        // The node flag edits of the activation changes the steps reported.
+        scene_root->apply_queued_body_activations();
+        if (!running) {
             continue;
         }
         scene_root->after_physics_simulation_steps();

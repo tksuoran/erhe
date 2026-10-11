@@ -14,6 +14,7 @@
 #include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 
@@ -34,7 +35,7 @@ Imgui_windows::Imgui_windows(
     ERHE_PROFILE_FUNCTION();
 
     if (context_window != nullptr) {
-        m_window_imgui_host = std::make_shared<erhe::imgui::Window_imgui_host>(
+        m_window_imgui_host = erhe::rendergraph::make_rendergraph_node<erhe::imgui::Window_imgui_host>(
             imgui_renderer,
             graphics_device,
             rendergraph,
@@ -216,12 +217,13 @@ void Imgui_windows::process_events(const float dt_s, const int64_t time_ns)
     m_iterating = false;
 }
 
-void Imgui_windows::begin_frame()
+void Imgui_windows::begin_frame(const uint64_t frame_index)
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare, erhe::utility::Frame_phase::m3_imgui);
 
     ERHE_VERIFY(!m_iterating);
-    m_imgui_renderer.begin_frame();
+    m_imgui_renderer.begin_frame(frame_index);
 
     m_iterating = true;
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
@@ -246,6 +248,10 @@ void Imgui_windows::end_frame()
         if (imgui_host->is_visible()) {
             imgui_host->end_imgui_frame();
         }
+        // The render thread draws this copy, not the live draw data, which
+        // the next frame's NewFrame() may rewrite while this frame renders
+        // (doc/erhe/imgui.md "Threading").
+        imgui_host->copy_draw_data();
     }
     m_iterating = false;
 }
@@ -301,7 +307,6 @@ void Imgui_windows::draw_imgui_windows()
         }
     }
     m_iterating = false;
-    flush_queue();
 }
 
 void Imgui_windows::debug_imgui()

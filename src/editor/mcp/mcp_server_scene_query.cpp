@@ -124,6 +124,10 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             continue;
         }
         const Composition_pass_data& data = pass->data;
+        // The statistics of the last rendered frame (the render phase records
+        // them; the main thread reads the frame it last joined).
+        const Composition_pass_stats* const frame_stats = pass->get_frame_stats(m_context.last_rendered_frame_index);
+        const Composition_pass_stats        stats       = (frame_stats != nullptr) ? *frame_stats : Composition_pass_stats{};
 
         json mesh_layers = json::array();
         for (const erhe::scene::Layer_id id : data.mesh_layers) {
@@ -140,31 +144,40 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             {"filter_require_at_least_one_bit_set", data.filter.require_at_least_one_bit_set},
             {"filter_require_all_bits_clear",       data.filter.require_all_bits_clear},
             {"has_shader_debug_override", data.shader_debug_override.has_value()},
-            // Outcome of this pass's most recent render() call. "submitted"
-            // means it reached draw submission - the meshes may still all have
-            // been rejected by the item filter, which is not visible here.
-            {"last_result",          c_str(pass->get_last_result())},
-            {"last_scene_view",      pass->get_last_scene_view_name()},
-            {"last_mesh_count",      pass->get_last_mesh_count()},
-            {"last_draw_list_entry_count", pass->get_last_draw_list_entry_count()},
-            {"last_draw_list_culled_count", pass->get_last_draw_list_culled_count()},
-            {"last_cpu_time_us",     pass->get_last_cpu_time_us()},
-            {"total_cpu_time_us",    pass->get_total_cpu_time_us()},
-            {"render_call_count",    pass->get_render_call_count()}
+            // Outcome of this pass's most recent render() call in the last
+            // rendered frame (never_rendered when it was not rendered in that
+            // frame). "submitted" means it reached draw submission - the
+            // meshes may still all have been rejected by the item filter,
+            // which is not visible here.
+            {"last_result",          c_str(stats.result)},
+            {"last_scene_view",      stats.scene_view_name},
+            {"last_mesh_count",      stats.mesh_count},
+            {"last_draw_list_entry_count", stats.draw_list_entry_count},
+            {"last_draw_list_culled_count", stats.draw_list_culled_count},
+            {"last_cpu_time_us",     stats.cpu_time_us},
+            {"total_cpu_time_us",    (frame_stats != nullptr) ? pass->get_total_cpu_time_us(*frame_stats) : 0.0},
+            {"render_call_count",    (frame_stats != nullptr) ? pass->get_render_call_count(*frame_stats) : std::size_t{0}}
         });
     }
 
+    // The shadow nodes' timing as of the last rendered frame: a node that
+    // did not execute in it reports rendered_last_frame false and no timing.
     json shadow_nodes = json::array();
     for (const std::shared_ptr<Shadow_render_node>& node : m_context.app_rendering->get_all_shadow_nodes()) {
         if (!node) {
             continue;
         }
-        shadow_nodes.push_back({
-            {"scene_view",        node->get_scene_view().get_settings_key()},
-            {"last_cpu_time_us",  node->get_last_cpu_time_us()},
-            {"total_cpu_time_us", node->get_total_cpu_time_us()},
-            {"execute_count",     node->get_execute_count()}
-        });
+        const Shadow_frame_result* const result = node->get_frame_result(m_context.last_rendered_frame_index);
+        json node_json{
+            {"scene_view",          node->get_scene_view().get_settings_key()},
+            {"rendered_last_frame", result != nullptr}
+        };
+        if (result != nullptr) {
+            node_json["last_cpu_time_us"]  = result->cpu_time_us;
+            node_json["total_cpu_time_us"] = node->get_total_cpu_time_us(*result);
+            node_json["execute_count"]     = node->get_execute_count(*result);
+        }
+        shadow_nodes.push_back(node_json);
     }
 
     json result;
@@ -183,13 +196,13 @@ auto Mcp_server::action_reset_composition_pass_stats(const json& args) -> std::s
     std::size_t count = 0;
     for (const auto& pass : m_context.app_rendering->composition_passes()) {
         if (pass) {
-            pass->reset_cpu_time_stats();
+            pass->reset_cpu_time_stats(m_context.last_rendered_frame_index);
             ++count;
         }
     }
     for (const std::shared_ptr<Shadow_render_node>& node : m_context.app_rendering->get_all_shadow_nodes()) {
         if (node) {
-            node->reset_cpu_time_stats();
+            node->reset_cpu_time_stats(m_context.last_rendered_frame_index);
         }
     }
     return make_json_content({{"reset_count", count}}).dump();
@@ -315,10 +328,13 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         {"material_change_count",          draw_list_scene->get_material_change_count()},
         // Primitive record maintenance (doc/erhe/draw_list_performance_improvements.md):
         // objects whose records were rewritten by the transform hook, the
-        // refresh hook and the draw-time GPU-slot sync.
+        // refresh hook and the joint slot sync of the per-frame publish; and
+        // the draw lists the publish copied into a frame slot (unchanged on
+        // an idle scene).
         {"transform_update_count",         draw_list_scene->get_transform_update_count()},
         {"refresh_count",                  draw_list_scene->get_refresh_count()},
         {"slot_sync_count",                draw_list_scene->get_slot_sync_count()},
+        {"published_list_copy_count",      draw_list_scene->get_published_list_copy_count()},
         // Material persistence (doc/erhe/draw_list_material_set.md R10, R11):
         // how many copies each of this root's two material sets has written,
         // and how many record bytes. Sampling these N frames apart on a
@@ -1224,8 +1240,9 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
         return r.dump();
     }
 
-    // Light slot / shadow map assignment as of the last shadow pass of a view
-    // showing this scene, under the active graphics preset's per light type
+    // Light slot / shadow map assignment as of the last rendered frame's
+    // shadow pass of a view showing this scene (the first shadow node of the
+    // scene that executed in that frame), under the active graphics preset's per light type
     // limits: shaded = got a light UBO slot (within *_shadow_light_count +
     // *_unshadowed_light_count of its type), shadow_mapped = also got a shadow
     // layer (within *_shadow_light_count). Shadow casters beyond the shadow
@@ -1239,9 +1256,13 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                 continue;
             }
             const std::shared_ptr<Scene_root> node_scene_root = shadow_node->get_scene_view().get_scene_root();
-            if (node_scene_root.get() == sr) {
-                light_projections = &shadow_node->get_light_projections();
-                draw_statistics   = &shadow_node->get_last_draw_statistics();
+            if (node_scene_root.get() != sr) {
+                continue;
+            }
+            const Shadow_frame_result* const result = shadow_node->get_frame_result(m_context.last_rendered_frame_index);
+            if (result != nullptr) {
+                light_projections = &result->light_projections;
+                draw_statistics   = &result->draw_statistics;
                 break;
             }
         }
@@ -1274,7 +1295,7 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                 {"cast_shadow", light->get_cast_shadow()}
             };
             const erhe::scene::Light_projection_transforms* transforms = (light_projections != nullptr)
-                ? light_projections->get_light_projection_transforms_for_light(light.get())
+                ? light_projections->get_light_projection_transforms_for_light_id(light->get_id())
                 : nullptr;
             if (transforms != nullptr) {
                 constexpr std::size_t no_index = std::numeric_limits<std::size_t>::max();
@@ -1608,8 +1629,12 @@ auto Mcp_server::query_shadow_fit_debug(const json& args) -> std::string
         if (!node) {
             continue;
         }
-        json node_json = dump_shadow_fit_debug(node->get_light_projections());
-        node_json["shadow_node_index"] = i;
+        // The fit of the last rendered frame; a node that did not execute
+        // in it reports rendered_last_frame false.
+        const Shadow_frame_result* const result = node->get_frame_result(m_context.last_rendered_frame_index);
+        json node_json = (result != nullptr) ? dump_shadow_fit_debug(result->light_projections) : json::object();
+        node_json["shadow_node_index"]   = i;
+        node_json["rendered_last_frame"] = (result != nullptr);
         nodes.push_back(node_json);
     }
 
@@ -2561,6 +2586,10 @@ auto Mcp_server::query_frame_pacing_frames(const json& args) -> std::string
             {"cpu_service_ms",        r.cpu_service_time() * 1000.0},
             {"pacer_wait_begin",      r.pacer_wait_begin},
             {"pacer_wait_end",        r.pacer_wait_end},
+            {"present_wait_begin",    r.present_wait_begin},
+            {"present_wait_end",      r.present_wait_end},
+            {"join_wait_begin",       r.join_wait_begin},
+            {"join_wait_end",         r.join_wait_end},
             {"fence_wait_ms",         r.fence_wait_duration * 1000.0},
             {"acquire_begin",         r.acquire_begin},
             {"acquire_end",           r.acquire_end},

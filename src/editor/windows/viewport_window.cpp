@@ -560,35 +560,12 @@ void Viewport_window::imgui_viewport()
             }
         );
 
-#if !defined(NDEBUG)
-        // Regression guard: the output texture is reallocated later this
-        // frame (during rendergraph execution) from the viewport set above,
-        // so on a stable frame (size unchanged since last frame) it must
-        // already match width/height. A mismatch here means the texture size
-        // and the quad size have drifted apart again.
-        const erhe::graphics::Texture* output_texture = rendergraph_output_node->get_referenced_texture();
-        if (
-            (output_texture != nullptr) &&
-            (width == m_last_viewport_width) && (height == m_last_viewport_height) &&
-            ((output_texture->get_width() != width) || (output_texture->get_height() != height))
-        ) {
-            // Rate-limit: log only when the mismatching texture size changes
-            if ((output_texture->get_width() != m_reported_mismatch_width) || (output_texture->get_height() != m_reported_mismatch_height)) {
-                log_frame->warn(
-                    "Viewport_window '{}': output texture {}x{} != quad {}x{}",
-                    get_title(),
-                    output_texture->get_width(),
-                    output_texture->get_height(),
-                    width,
-                    height
-                );
-                m_reported_mismatch_width  = output_texture->get_width();
-                m_reported_mismatch_height = output_texture->get_height();
-            }
-        }
-        m_last_viewport_width  = width;
-        m_last_viewport_height = height;
-#endif
+        // The output texture's size follows this viewport: the prepare phase
+        // copies the viewport set above into the frame's render state, and
+        // the render phase sizes the texture from that copy and verifies it
+        // (Viewport_scene_view::execute_rendergraph_node()). The texture is
+        // not read here: the render phase replaces it while this ImGui phase
+        // may run.
 
         // Active items are checked below, against this child window, rather
         // than by IsWindowHovered(): the check must tell an interaction that

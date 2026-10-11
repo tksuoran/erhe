@@ -197,7 +197,8 @@ void Init_status_display::render_text_overlay(
             // render pass broadcasts a single screen-space draw to every
             // layer; the per-layer fallback (view_mask = 0) renders into
             // one array slice at a time.
-            m_text_renderer.render(encoder, xr_render_pass, viewport, view_mask != 0u);
+            // The init pump prints into frame slot 0 (the renderer's default).
+            m_text_renderer.render(encoder, xr_render_pass, viewport, view_mask != 0u, 0);
         }
     }
 }
@@ -395,7 +396,8 @@ void Init_status_display::render_present_desktop()
                 log_startup->info("Init: {}",line);
             }
 
-            m_text_renderer.render(encoder, render_pass, viewport);
+            // The init pump prints into frame slot 0 (the renderer's default).
+            m_text_renderer.render(encoder, render_pass, viewport, false, 0);
 
         }
 
@@ -439,11 +441,12 @@ void Init_status_display::render_present_xr()
     // happy and submit init_cb on its own (no XR rendering this tick).
     bool xr_rendered = false;
     if (m_headset->poll_events()) {
-        const erhe::xr::Frame_timing timing = m_headset->begin_frame_();
+        erhe::xr::Frame_timing timing = m_headset->wait_frame();
+        timing.begin_ok = m_headset->begin_frame(timing);
         if (timing.begin_ok) {
             // Refresh actions + view pose so get_headset_pose() reports a valid
             // initial head pose this tick. Safe no-op until the session is
-            // RUNNING; must run after begin_frame_() so update_view_pose() sees
+            // RUNNING; must run after wait_frame() so update_view_pose() sees
             // the frame's predictedDisplayTime.
             m_headset->update_actions();
             // Create the world-placed loading quad once the session exists.

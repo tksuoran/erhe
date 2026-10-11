@@ -18,6 +18,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::renderer {
@@ -392,31 +393,130 @@ Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device, const in
             .bind_group_layout = m_program_interface.bind_group_layout.get()
         }
     }
+    , m_frames{graphics_device.get_number_of_frames_in_flight()}
 {
+    ERHE_VERIFY(!m_frames.empty());
 }
 
 Debug_renderer::~Debug_renderer() noexcept
 {
 }
 
+auto Debug_renderer::get_recording_frame() -> Frame&
+{
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    Frame&         frame       = m_frames[frame_index % m_frames.size()];
+    if (frame.frame_index != frame_index) {
+        // First begin_frame() of this device frame: the frame that used the
+        // entry before has released its slots (release_frames()). The live
+        // settings are copied for the frame's draws.
+        ERHE_VERIFY(frame.frame_slot_count == 0);
+        frame.frame_index      = frame_index;
+        frame.line_bias_margin = m_line_bias_margin;
+        frame.anti_aliasing    = m_anti_aliasing;
+    }
+    return frame;
+}
+
+auto Debug_renderer::get_line_bias_margin() const -> float
+{
+    return get_frame().line_bias_margin;
+}
+
+auto Debug_renderer::get_anti_aliasing() const -> Anti_aliasing
+{
+    return get_frame().anti_aliasing;
+}
+
+auto Debug_renderer::get_frame() -> Frame&
+{
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    Frame&         frame       = m_frames[frame_index % m_frames.size()];
+    ERHE_VERIFY(frame.frame_index == frame_index);
+    return frame;
+}
+
+auto Debug_renderer::get_frame() const -> const Frame&
+{
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    const Frame&   frame       = m_frames[frame_index % m_frames.size()];
+    ERHE_VERIFY(frame.frame_index == frame_index);
+    return frame;
+}
+
+auto Debug_renderer::get_bucket_count() const -> std::size_t
+{
+    const std::lock_guard<std::mutex> lock{m_buckets_mutex};
+    return m_buckets.size();
+}
+
+auto Debug_renderer::get_frame_slot() const -> std::size_t
+{
+    return get_frame().frame_slot;
+}
+
+void Debug_renderer::push_view(const View& view)
+{
+    Frame& frame = get_frame();
+    frame.view_stack.push(view);
+    frame.view = frame.view_stack.top();
+}
+
+void Debug_renderer::pop_view()
+{
+    Frame& frame = get_frame();
+    frame.view_stack.pop();
+    if (!frame.view_stack.empty()) {
+        frame.view = frame.view_stack.top();
+    } else {
+        frame.view.clip_from_world = glm::mat4{1.0f};
+        frame.view.fov_sides       = glm::vec4{-1.0f, 1.0f, 1.0f, -1.0f};
+    }
+}
+
+auto Debug_renderer::get_view() const -> const View&
+{
+    return get_frame().view;
+}
+
+auto Debug_renderer::is_multiview_active() const -> bool
+{
+    return get_frame().multiview_views.size() >= 2;
+}
+
+auto Debug_renderer::get_multiview_views() const -> std::span<const View>
+{
+    return get_frame().multiview_views;
+}
+
 auto Debug_renderer::get(const Debug_renderer_config& config) -> Primitive_renderer
 {
+    // Records into the slot the last begin_frame() of this device frame
+    // opened.
+    Frame& frame = get_frame();
+    ERHE_VERIFY(frame.frame_slot_count > 0);
     auto start_active_view = [&](Debug_renderer_bucket& bucket) {
-        if (is_multiview_active()) {
-            bucket.start_view(std::span<const View>{m_multiview_views});
+        if (frame.multiview_views.size() >= 2) {
+            bucket.start_view(std::span<const View>{frame.multiview_views}, frame.frame_index, frame.frame_slot);
         } else {
-            bucket.start_view(get_view());
+            bucket.start_view(std::span<const View>{&frame.view, 1}, frame.frame_index, frame.frame_slot);
         }
     };
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        if (bucket.match(config)) {
-            start_active_view(bucket);
-            return Primitive_renderer{*this, bucket};
+    Debug_renderer_bucket* found_bucket = nullptr;
+    {
+        const std::lock_guard<std::mutex> lock{m_buckets_mutex};
+        for (Debug_renderer_bucket& bucket : m_buckets) {
+            if (bucket.match(config)) {
+                found_bucket = &bucket;
+                break;
+            }
+        }
+        if (found_bucket == nullptr) {
+            found_bucket = &m_buckets.emplace_back(m_graphics_device, *this, config);
         }
     }
-    Debug_renderer_bucket& bucket = m_buckets.emplace_back(m_graphics_device, *this, config);
-    start_active_view(bucket);
-    return Primitive_renderer{*this, bucket};
+    start_active_view(*found_bucket);
+    return Primitive_renderer{*this, *found_bucket, frame.frame_index};
 }
 
 static constexpr std::string_view c_line_renderer_render{"Debug_renderer::render()"};
@@ -456,12 +556,17 @@ auto Debug_renderer::view_from_camera(
     };
 }
 
-void Debug_renderer::begin_frame(
+auto Debug_renderer::begin_frame(
     const erhe::math::Viewport viewport,
     std::span<const View>      views
-)
+) -> std::size_t
 {
     ERHE_PROFILE_FUNCTION();
+
+    // Slot ids count from 0 in each device frame (after release_frames()).
+    Frame& frame = get_recording_frame();
+    frame.frame_slot = frame.frame_slot_count;
+    ++frame.frame_slot_count;
 
     // No Scoped_debug_group here: this path only sets up CPU-side view
     // state (per-eye Views, view stack); no GPU commands are recorded.
@@ -472,13 +577,13 @@ void Debug_renderer::begin_frame(
     ERHE_VERIFY(static_cast<int>(views.size()) == m_program_interface.view_count);
 
     // Reset both single-view and multiview state.
-    for (size_t i = 0, end = m_view_stack.size(); i < end; ++i) {
-        m_view_stack.pop();
+    for (size_t i = 0, end = frame.view_stack.size(); i < end; ++i) {
+        frame.view_stack.pop();
     }
 
     // Push a representative single-view View (views[0]) so legacy
     // single-camera Tool / Renderable submissions still work; the
-    // multiview UBO write path uses m_multiview_views directly. The
+    // multiview UBO write path uses the frame's multiview_views directly. The
     // shared (x, y, w, h) viewport rect goes into View::viewport so the
     // single-view fallback keeps the swapchain extent.
     View representative = views[0];
@@ -488,25 +593,34 @@ void Debug_renderer::begin_frame(
         static_cast<float>(viewport.width),
         static_cast<float>(viewport.height)
     };
-    push_view(representative);
+    frame.view_stack.push(representative);
+    frame.view = representative;
 
-    m_multiview_views.assign(views.begin(), views.end());
+    frame.multiview_views.assign(views.begin(), views.end());
     // Multiview views share (x, y, w, h) with the swapchain, but each
     // View carries its own clip_from_world, fov, and
     // view_position_in_world. Force the shared viewport so the bucket
     // does not pick up whatever the caller left in views[k].viewport.
-    for (View& v : m_multiview_views) {
+    for (View& v : frame.multiview_views) {
         v.viewport = representative.viewport;
     }
+    return frame.frame_slot;
 }
 
 void Debug_renderer::compute(erhe::graphics::Compute_command_encoder& command_encoder)
 {
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
     command_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
     command_encoder.set_compute_pipeline(m_lines_to_triangles_compute_pipeline);
 
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.dispatch_compute(command_encoder);
+    // The calling role's device frame; a bucket created after the count was
+    // taken holds no draws of this frame.
+    const uint64_t    frame_index  = m_graphics_device.get_frame_index();
+    const std::size_t bucket_count = get_bucket_count();
+    for (std::size_t i = 0; i < bucket_count; ++i) {
+        m_buckets[i].dispatch_compute(command_encoder, frame_index);
     }
 
     // Note: the compute->vertex-attribute memory barrier that pairs
@@ -521,15 +635,24 @@ void Debug_renderer::render(
     erhe::graphics::Render_command_encoder& encoder,
     const erhe::graphics::Render_pass&      render_pass,
     const erhe::math::Viewport              viewport,
-    const bool                              multiview
+    const bool                              multiview,
+    const std::size_t                       frame_slot
 )
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
     erhe::graphics::Scoped_debug_group scoped_debug_group{
         encoder.get_command_buffer(),
         "Debug_renderer::render()"
     };
+
+    // The slot was opened by a begin_frame() of this device frame.
+    const Frame& frame = get_frame();
+    ERHE_VERIFY(frame_slot < frame.frame_slot_count);
+    const uint64_t    frame_index  = frame.frame_index;
+    const std::size_t bucket_count = get_bucket_count();
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 
@@ -549,24 +672,37 @@ void Debug_renderer::render(
     // ordered by stencil reference, not by pass order.
 
     // Draw visible
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.render(encoder, render_pass, false, true, multiview);
+    for (std::size_t i = 0; i < bucket_count; ++i) {
+        m_buckets[i].render(encoder, render_pass, false, true, multiview, frame_index, frame_slot);
     }
 
     // Draw hidden
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.render(encoder, render_pass, true, false, multiview);
+    for (std::size_t i = 0; i < bucket_count; ++i) {
+        m_buckets[i].render(encoder, render_pass, true, false, multiview, frame_index, frame_slot);
     }
 }
 
-void Debug_renderer::end_frame()
+void Debug_renderer::release_frames()
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.release_buffers();
+    // Releases the calling role's device frame. A frame no begin_frame()
+    // recorded into has nothing to release.
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    Frame&         frame       = m_frames[frame_index % m_frames.size()];
+    if (frame.frame_index != frame_index) {
+        ERHE_VERIFY(frame.frame_slot_count == 0); // the entry's earlier frame was released
+        return;
     }
-    m_multiview_views.clear();
+    const std::size_t bucket_count = get_bucket_count();
+    for (std::size_t i = 0; i < bucket_count; ++i) {
+        m_buckets[i].release_buffers(frame_index);
+    }
+    frame.multiview_views.clear();
+    frame.frame_slot       = 0;
+    frame.frame_slot_count = 0;
 }
 
 } // namespace erhe::renderer

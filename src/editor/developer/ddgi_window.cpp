@@ -56,7 +56,13 @@ void Ddgi_window::imgui()
         return;
     }
 
-    const Ddgi_renderer::Grid& grid = renderer->get_grid();
+    // The grid and cost as of the last rendered frame's tick.
+    const Ddgi_renderer::Rendered_state* const state = renderer->get_rendered_state(m_context.last_rendered_frame_index);
+    if (state == nullptr) {
+        ImGui::TextUnformatted("No frame rendered with DDGI yet.");
+        return;
+    }
+    const Ddgi_renderer::Grid& grid = state->grid;
     if (!grid.is_valid()) {
         ImGui::TextUnformatted("No visible content to fit a probe volume to.");
         return;
@@ -65,12 +71,12 @@ void Ddgi_window::imgui()
     ImGui::Text("Probes:  %d x %d x %d = %d", grid.counts.x, grid.counts.y, grid.counts.z, grid.get_probe_count());
     ImGui::Text("Spacing: %.2f %.2f %.2f m", grid.spacing.x, grid.spacing.y, grid.spacing.z);
     ImGui::Text("Origin:  %.2f %.2f %.2f",   grid.origin.x,  grid.origin.y,  grid.origin.z );
-    ImGui::Text("Rays per probe: %d",        renderer->get_rays_per_probe());
-    ImGui::Text("Octahedral: %d irradiance / %d distance texels", renderer->get_irradiance_texels(), renderer->get_distance_texels());
-    ImGui::Text("Probe textures: %.1f MB",   static_cast<double>(renderer->get_texture_byte_count()) / (1024.0 * 1024.0));
+    ImGui::Text("Rays per probe: %d",        state->rays_per_probe);
+    ImGui::Text("Octahedral: %d irradiance / %d distance texels", state->irradiance_texels, state->distance_texels);
+    ImGui::Text("Probe textures: %.1f MB",   static_cast<double>(state->texture_byte_count) / (1024.0 * 1024.0));
 
     // GPU cost of the probe update (doc/editor/ddgi.md "Performance").
-    const Ddgi_renderer::Stats stats = renderer->get_stats();
+    const Ddgi_renderer::Stats& stats = state->stats;
     if (ImGui::CollapsingHeader("GPU time", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginTable("ddgi_gpu_time", 3, ImGuiTableFlags_SizingFixedFit)) {
             ImGui::TableSetupColumn("Pass");
@@ -89,15 +95,19 @@ void Ddgi_window::imgui()
             row("total", stats.total);
             ImGui::EndTable();
         }
-        ImGui::Text("Probes per update: %d",       renderer->get_probes_per_update());
+        ImGui::Text("Probes per update: %d",       state->probes_per_update);
         ImGui::Text("Rays per update: %lld",       static_cast<long long>(stats.rays_per_update));
         ImGui::Text("Cost: %.3f ms per million rays", stats.ms_per_million_rays);
         ImGui::Text("Full refresh: %d updates, %.2f ms", stats.updates_per_full_refresh, stats.full_refresh_ms);
         ImGui::Text("Updates: %llu",               static_cast<unsigned long long>(stats.update_count));
     }
 
-    const auto preview = [this](const char* label, const std::shared_ptr<erhe::graphics::Texture>& texture) {
-        if (!texture) {
+    // The atlases are created and replaced by the render phase's ticks: the
+    // previews take their sizes from the last rendered frame's state and draw
+    // through references the render thread resolves.
+    const auto preview = [this, renderer, state](const char* label, const Ddgi_renderer::Atlas atlas) {
+        const glm::ivec2 size = state->atlas_sizes[static_cast<std::size_t>(atlas)];
+        if ((size.x < 1) || (size.y < 1)) {
             return;
         }
         // Default-open: the previews are the whole point of this window, and
@@ -106,12 +116,12 @@ void Ddgi_window::imgui()
             return;
         }
         const float avail_width    = std::max(64.0f, ImGui::GetContentRegionAvail().x);
-        const float aspect         = static_cast<float>(texture->get_height()) / static_cast<float>(texture->get_width());
+        const float aspect         = static_cast<float>(size.y) / static_cast<float>(size.x);
         const int   display_width  = static_cast<int>(avail_width);
         const int   display_height = std::max(1, static_cast<int>(avail_width * aspect));
         m_context.imgui_renderer->image(
             erhe::imgui::Draw_texture_parameters{
-                .texture_reference = texture,
+                .texture_reference = renderer->get_texture_reference(atlas),
                 .width             = display_width,
                 .height            = display_height,
                 .uv0               = glm::vec2{0.0f, 0.0f},
@@ -123,10 +133,10 @@ void Ddgi_window::imgui()
             }
         );
     };
-    preview("Irradiance atlas", renderer->get_irradiance_texture());
-    preview("Distance atlas",   renderer->get_distance_texture  ());
-    preview("Probe data",       renderer->get_probe_data_texture());
-    preview("Ray data",         renderer->get_ray_data_texture  ());
+    preview("Irradiance atlas", Ddgi_renderer::Atlas::irradiance);
+    preview("Distance atlas",   Ddgi_renderer::Atlas::distance  );
+    preview("Probe data",       Ddgi_renderer::Atlas::probe_data);
+    preview("Ray data",         Ddgi_renderer::Atlas::ray_data  );
 }
 
 } // namespace editor

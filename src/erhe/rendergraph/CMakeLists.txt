@@ -27,6 +27,7 @@ target_link_libraries(${_target}
         erhe::math
     PRIVATE
         erhe::profile
+        erhe::utility
         erhe::verify
 )
 

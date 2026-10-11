@@ -50,6 +50,15 @@ enum class Device_frame_state : uint8_t
     in_swapchain_frame
 };
 
+// The state of one frame-in-flight slot and the id of the frame that holds
+// it (valid while state != idle). See the Vulkan Device_frame_slot.
+class Device_frame_slot
+{
+public:
+    Device_frame_state state   {Device_frame_state::idle};
+    uint64_t           frame_id{0};
+};
+
 class Device;
 class Device_impl final
 {
@@ -61,9 +70,11 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl() noexcept;
 
-    [[nodiscard]] auto wait_frame () -> bool;
+                  void wait_for_frame_start(uint64_t frame_id);
+    [[nodiscard]] auto acquire_frame_slot  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame() -> bool;
     [[nodiscard]] auto end_frame  () -> bool;
+    [[nodiscard]] auto end_frame  (uint64_t frame_id) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
@@ -123,6 +134,7 @@ public:
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
+    // The frame of the calling role (Device::get_frame_index()).
     [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
     [[nodiscard]] auto get_number_of_frames_in_flight     () const -> std::size_t;
     // Conservative: see Device::is_frame_completed().
@@ -223,8 +235,12 @@ private:
     // filtering of 32-bit float color formats (true on all Apple-silicon GPUs).
     // Queried once and applied on top of the table in get_format_properties().
     bool                             m_supports_32bit_float_filtering{false};
-    uint64_t                         m_frame_index{1};
-    Device_frame_state               m_state{Device_frame_state::idle};
+    [[nodiscard]] auto get_frame_slot_index(uint64_t frame_id) const -> std::size_t;
+    // The oldest open frame (end_frame() ends it), or the next frame to be
+    // acquired when none is open. Frame ids start at 1.
+    uint64_t                         m_render_frame_id{1};
+    // The newest acquired frame (0: none yet).
+    uint64_t                         m_prepare_frame_id{0};
     std::vector<Completion_handler>  m_completion_handlers;
     // GPU-completion tracking driven by MTL::CommandBuffer
     // addCompletedHandler callbacks (which run on an arbitrary Metal
@@ -241,16 +257,18 @@ private:
     // it retires them. Only ever moves forward.
     uint64_t                         m_latest_completed_frame{0};
 
-    // Autorelease pool covering one device frame: opened by wait_frame(),
-    // drained by end_frame(). Every command buffer, command encoder and
-    // drawable metal-cpp hands out during the frame is autoreleased into
-    // it; without it they are never deallocated and the command queue runs
-    // out of in-flight slots (see Scoped_transient_object_pool).
-    std::optional<Scoped_transient_object_pool> m_frame_object_pool;
-
     // Frames that presented a drawable and have not completed yet. See
     // wait_for_presented_frame_slot().
     static constexpr int     s_max_frames_in_flight{3};
+
+    std::array<Device_frame_slot, s_max_frames_in_flight> m_frame_slots{};
+    // Autorelease pool covering one device frame, per frame slot: opened by
+    // acquire_frame_slot(), drained by end_frame() of that frame. Every
+    // command buffer, command encoder and drawable metal-cpp hands out
+    // during the frame is autoreleased into it; without it they are never
+    // deallocated and the command queue runs out of in-flight slots (see
+    // Scoped_transient_object_pool).
+    std::array<std::optional<Scoped_transient_object_pool>, s_max_frames_in_flight> m_frame_object_pools;
     std::mutex               m_presented_frames_mutex;
     std::condition_variable  m_presented_frames_cv;
     int                      m_presented_frames_in_flight{0};

@@ -22,6 +22,7 @@ class Device_impl;
 class Frame_begin_info;
 class Frame_end_info;
 class Frame_state;
+class Render_pass_impl;
 class Swapchain_impl;
 class Texture;
 enum class Image_layout : unsigned int;
@@ -55,6 +56,20 @@ public:
 // VkCommandBuffer pair allocated from the Device's graphics queue
 // family. begin()/end() will wrap vkBeginCommandBuffer /
 // vkEndCommandBuffer; submit happens via Device::submit_command_buffers.
+// Descriptor operation counts of one command buffer, for the
+// ERHE_LOG_VULKAN descriptor trace ("[CB_SUMMARY]", logged when the command
+// buffer is submitted). Kept per command buffer, so the threads that record
+// into their own command buffers count without sharing a counter.
+class Descriptor_counters final
+{
+public:
+    uint32_t push_buf_count {0};
+    uint32_t push_img_count {0};
+    uint32_t alloc_set_count{0};
+    uint32_t heap_bind_count{0};
+    uint32_t draw_count     {0};
+};
+
 class Command_buffer_impl final
 {
 public:
@@ -66,6 +81,10 @@ public:
     Command_buffer_impl& operator=(Command_buffer_impl&& other) noexcept;
 
     [[nodiscard]] auto get_debug_label() const noexcept -> erhe::utility::Debug_label;
+    // The device frame this cb was obtained for; stamped by
+    // Device_impl::get_command_buffer.
+    [[nodiscard]] auto get_frame_id   () const noexcept -> std::uint64_t;
+    void               set_frame_id   (std::uint64_t frame_id) noexcept;
 
     void begin();
     void end  ();
@@ -133,6 +152,16 @@ public:
     // fence registered via wait_for_cpu_completion_of(producer) before the cb's submit
     // is enqueued. Called by Device_impl::submit_command_buffers prior
     // to building VkSubmitInfo2.
+    // The Vulkan render pass started on this command buffer and not yet
+    // ended (Render_pass_impl start_render_pass / end_render_pass);
+    // nullptr outside a pass. Render_command_encoder_impl reads it for the
+    // pipeline's render pass, sample count and color attachment count.
+    [[nodiscard]] auto get_active_render_pass_impl() const noexcept -> Render_pass_impl*;
+    [[nodiscard]] auto get_active_render_pass     () const noexcept -> VkRenderPass;
+    void               set_active_render_pass_impl(Render_pass_impl* render_pass_impl) noexcept;
+
+    [[nodiscard]] auto get_descriptor_counters() noexcept -> Descriptor_counters&;
+
     void pre_submit_wait();
 
     // Append this cb's wait/signal/command-buffer submit-info entries to
@@ -156,6 +185,7 @@ private:
     // dereferences Device::m_impl) at that point would dereference null.
     Device_impl*               m_device_impl{nullptr};
     erhe::utility::Debug_label m_debug_label;
+    std::uint64_t              m_frame_id{0};
     VkCommandBuffer            m_vk_command_buffer{VK_NULL_HANDLE};
     bool                       m_recording{false};
     int                        m_open_debug_label_count{0};
@@ -182,6 +212,8 @@ private:
     // can find the active per-slot acquire/present semaphores without
     // having Device_impl thread them through.
     Swapchain_impl*            m_swapchain_used{nullptr};
+    Render_pass_impl*          m_active_render_pass_impl{nullptr};
+    Descriptor_counters        m_descriptor_counters{};
 };
 
 } // namespace erhe::graphics

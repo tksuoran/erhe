@@ -27,6 +27,14 @@ enum class Wake_on_attach : unsigned int {
     yes
 };
 
+// A body activation change the physics world reported (Jolt activation
+// listener events, dispatched by the world on the thread that steps it or
+// removes a body).
+enum class Body_activation : unsigned int {
+    activated = 0,
+    deactivated
+};
+
 // The runtime state one node's rigid-body values imply: the collision shape
 // built for the node, the body made from the shape and the values, the create
 // info it was made from and the material / filter subscriptions that keep the
@@ -118,6 +126,20 @@ public:
     void before_physics_simulation(Node_physics_entry& entry);
     void after_physics_simulation (Node_physics_entry& entry);
 
+    // Body activation changes drive Item_flags::no_transform_update on the
+    // body's node (set while an awake dynamic body drives it). The world
+    // reports them from inside the simulation steps, which run in the
+    // overlap phase (M1) while the render phase of the previous frame may
+    // read the nodes, so between begin_simulation_steps() and
+    // end_simulation_steps() a change is queued; apply_queued_body_activations()
+    // applies the queue in the prepare phase (M2). A change reported outside
+    // the steps (remove_rigid_body() drains the world's pending events, M2)
+    // is applied at once. The queue keeps its capacity.
+    void on_body_activation           (erhe::physics::IRigid_body& rigid_body, Body_activation activation);
+    void begin_simulation_steps       ();
+    void end_simulation_steps         ();
+    void apply_queued_body_activations();
+
 private:
     // The entry of `node`, created when there is none. The caller has already
     // decided the node needs one.
@@ -135,6 +157,12 @@ private:
     void destroy_body(Node_physics_entry& entry);
     // Destroy plus create, for a change only a fresh body realizes.
     void recreate_body(erhe::scene::Node& node, Node_physics_entry& entry);
+
+    // Sets or clears the body's node flag for one activation change.
+    void apply_body_activation(erhe::physics::IRigid_body& rigid_body, Body_activation activation);
+    // Applies (in order) and removes the queued changes of one body; called
+    // before the body is destroyed, so no queued change outlives it.
+    void apply_queued_body_activations_of(const erhe::physics::IRigid_body& rigid_body);
 
     // Refreshes the create-info mirror from the node's effective values.
     void refresh_create_info(const erhe::scene::Node& node, Node_physics_entry& entry);
@@ -154,6 +182,15 @@ private:
     std::unordered_map<const erhe::scene::Node*, Node_physics_entry>  m_entries;
     std::vector<Node_physics_entry*>                                  m_bodies;
     bool                                                              m_bodies_sorted{false};
+
+    class Queued_body_activation
+    {
+    public:
+        erhe::physics::IRigid_body* rigid_body{nullptr};
+        Body_activation             activation{Body_activation::activated};
+    };
+    std::vector<Queued_body_activation>                               m_queued_body_activations;
+    bool                                                              m_in_simulation_steps{false};
 };
 
 // The physics system of the scene holding `node`, or nullptr when the node is

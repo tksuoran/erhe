@@ -162,6 +162,86 @@ State per bake session: the accumulation atlas (RGBA32F sum + count), the
 published display atlas, the texel G-buffer, the atlas layout, the tile cursor
 and the per-cause dirty flags.
 
+**Frame phases.** The lightmap work follows the editor's ownership rule
+(`doc/editor/editor.md` "Frame phases and the render thread"): the main
+thread's prepare phase (M2) writes scene state and makes every decision, the
+render phase (R) records GPU work into the frame command buffer and reads what
+M2 left; the kick orders the two, so the state between them needs no lock.
+
+- M2, before `Mesh_memory::flush` (`Editor::lightmap_commit_phase()`, every
+  frame): the partition commit (`Lightmap_partitioner::update`), the Lightmap
+  window's deferred requests (`Lightmap_window::update`: offline tile bake,
+  save-on-evict and restore-on-activate drains, auto re-prepare, Reorder
+  Charts By Bake) and the streamer reload after an offline bake. A commit's
+  vertex uploads therefore ride this frame's upload command buffer, which R
+  submits before the next M2 can raster a G-buffer from them; the baker's
+  one-tick G-buffer defer after a layout change relies on that order. The
+  commit also precedes `App_scenes::flush_draw_lists`, so the swapped piece
+  primitives render in the frame of the commit.
+- M2, after the draw list flush and the material sets
+  (`Editor::lightmap_prepare_phase()`, rendered frames): the residency camera
+  (the last-used viewport camera, else the scene's first camera), paused
+  change detection (`monitor_paused_scene`), and either
+  `Lightmap_baker::prepare_tick` or the streamer
+  (`Lightmap_streamer::reapply_regions` / `update`), then the lightmap
+  binding (`App_rendering::set_lightmap_texture`). The binding travels in
+  the `Frame_packet` (`lightmap_texture`, copied at the end of M2 on every
+  frame), and R hands it to the forward renderer
+  (`Forward_renderer::set_lightmap_texture`) before it records anything, so
+  R samples the atlas M2 chose for the frame it renders. The MCP direct bake
+  sets the same `App_rendering` binding.
+  `prepare_tick` runs the change detection, relayout, residency, restore
+  queue, cursor band, publish cadence, region mapping writes
+  (`publish_regions`), the single-iteration pause and the occluder and light
+  collection; it creates the textures and BLAS the tick needs and fills the
+  tick slot of the frame it prepares (`Tick_slot`, one per device frame in
+  flight, indexed by the role-keyed `Device::get_frame_index()`): the plan
+  (`Tick_plan`: stage, cursor tile, tile size, band rows, publish kind), the
+  working / display atlas clears and the display slot white clears taken
+  from the working set, the cursor tile's accumulation texture and its
+  pending clear, the occluder instances and records, the pending BLAS builds,
+  the complete gather uniform block (lights, sky, options, RNG frame index,
+  band start), the sky LUTs it enables, and the record inputs
+  (`Record_inputs`): references to the working, dilate and display atlases,
+  the G-buffer and ray origin targets and the cursor tile's accumulation,
+  the tile size, the tile's display slot origin, its seam line range with a
+  reference to the seam vertices (an immutable vector `build_seam_vertices`
+  replaces whole) and the dilation / seam-blend / gutter options. The
+  one-shot virtual-offset pass is decided here too (`take_adjust`): the
+  first gather after a G-buffer bake moves the smooth position target into
+  the inputs and marks the G-buffer adjusted. It verifies that the slot's
+  previous plan was consumed (stage none).
+- R (`Lightmap_baker::record_tick`, in the frame command buffer before the
+  rendergraph): records the tick slot of the frame it renders - the planned
+  clears, the slot white clears, the BLAS builds, the per-frame-in-flight
+  TLAS, the one-shot virtual-offset pass, the gather slice and the resolve /
+  denoise / dilate / seam-blend publish - and marks the slot consumed. It
+  reads only the slot (and the pipelines, samplers and ring buffers fixed at
+  construction) and writes only the slot and its TLAS slot. It
+  records the plan also when `begin_swapchain` refused the frame: the bake
+  is offscreen and the frame command buffer is still submitted,
+  device-only. With frame pipelining the prepare phase of frame N+1 fills
+  another slot while R records frame N's, and a target M2 replaces (a new
+  layout, a resized G-buffer) stays alive while a slot in flight names it.
+  The standalone bakes (`bake_direct`, the offline tile bake) fill the same
+  inputs from the members right before they record (`fill_record_inputs`). A BLAS that leaves the cache
+  (`evict_unreferenced_blas`, its mesh gone) is retired with the frame
+  index of its eviction and destroyed once that frame's tick slot comes
+  around again, since a slot still in flight may hold it as an instance or
+  a pending build.
+
+The streamer stays whole in M2: a tile upload is a standalone submit that the
+mapping write waits for, so the residency decision, the upload and the
+mapping write run together. The other standalone submits (G-buffer raster,
+`bake_direct`, the offline tile bake, tile save readback and restore upload,
+white display clears) run in M2 as well, with `wait_idle`, while R is idle.
+`Thread_roles` asserts the split: the main thread in `m2_prepare` (or outside
+a frame) for `Lightmap_partitioner::update` / `commit_prepare`,
+`Lightmap_window::update`, `Lightmap_baker::prepare_tick` /
+`monitor_paused_scene` / `publish_regions` and `Lightmap_streamer::update` /
+`reapply_regions` / its mapping writes; the render thread in `r_render` for
+`Lightmap_baker::record_tick`.
+
 **Bake lifecycle.** Stopping is pausing: `set_baking_enabled(false)` keeps the
 whole working set, Start continues and Reset restarts. Pausing (including
 completion of Single Iteration, which bakes until the minimum active-tile sweep
@@ -220,9 +300,10 @@ plus one cosine-sampled hemisphere ray per texel per sample whose radiance is
 (`sky_atmosphere_common.glsl`) against `Sky_renderer`'s transmittance and
 multi-scattering LUTs from the same virtual observer as the viewport sky; the
 sun disc is excluded because the directional light covers it. `Editor` fills
-`Lightmap_baker::Sky_lighting` (`set_sky_lighting`) before each tick: the sky
+`Lightmap_baker::Sky_lighting` (`set_sky_lighting`) in M2 before each `prepare_tick`: the sky
 contributes when the effective sky is enabled in atmosphere mode and the LUTs
-exist, with the sun direction from `Sky_renderer::resolve_sun_direction`, the
+were generated as of the last rendered frame (`Frame_result::sky_luts_ready`,
+reported by the render phase that records `Sky_renderer::ensure_luts`), with the sun direction from `Sky_renderer::resolve_sun_direction`, the
 sun intensity, march steps and observer altitude. These inputs are part of the
 lighting hash, so a sun or sky edit resets accumulation.
 
@@ -366,11 +447,13 @@ These keep a non-interactive mode cheap to add (see the plan):
   fold-culling convention (`cull_mode_back_cw` plus `winding_flip_if`) is tuned
   to that. A new unwrap mode must match it, or it rasterizes zero texels.
 - `apply_lightmap_settings()` (`windows/lightmap_window.hpp`) pushes
-  `lightmap_config` (tile size and budget, cell size, bake options, bicubic
-  filtering, streamer budget) into the baker, the forward renderer and the
-  streamer at startup and at every Lightmap window edit of those settings, so
-  MCP-passed tile sizes and budgets do not reach interactive baking: config
-  values rule.
+  `lightmap_config` (tile size and budget, cell size, bake options, streamer
+  budget) into the baker and the streamer at startup and at every Lightmap
+  window edit of those settings, so MCP-passed tile sizes and budgets do not
+  reach interactive baking: config values rule. Bicubic filtering reaches the
+  forward renderer through the frame's `Render_settings` copy
+  (`lightmap_bicubic_sampling`, handed over at the start of the render
+  phase).
 - Piece meshes do not carry `Item_flags::lightmapped`; the partitioned layout
   enumerates them through the partitioner store, and the tick hash mixes the
   piece buffer meshes explicitly.
@@ -504,9 +587,9 @@ change.
 - **Prepare is asynchronous.** `request_prepare` snapshots on the main thread
   (tile config, split estimate, per-region tasks) and runs the heavy phase - per
   region world-space bake and clip, per piece unwrap and primitive build, all
-  parallel - on the app executor; `Lightmap_partitioner::update()` commits on the
-  main thread (validate against the live scene, swap the partition, one relayout
-  and publish). The old partition stays live during the flight, and a structural
+  parallel - on the app executor; `Lightmap_partitioner::update()` commits in
+  the editor's prepare phase (M2, section 3a "Frame phases") (validate
+  against the live scene, swap the partition, one relayout and publish). The old partition stays live during the flight, and a structural
   scene change (primitive swap, mesh removal) or a cancel aborts the commit and
   keeps it. `pending_async_ops` is held for the flight, so every `async_busy`
   gate covers it. The in-flight async-operations guard stays on Prepare: a

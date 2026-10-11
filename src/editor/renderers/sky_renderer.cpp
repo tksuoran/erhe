@@ -1,6 +1,7 @@
 #include "renderers/sky_renderer.hpp"
 
 #include "app_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/sky_config.hpp"
@@ -27,6 +28,7 @@
 #include "erhe_graphics/state/input_assembly_state.hpp"
 #include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/viewport_state.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -342,42 +344,29 @@ auto Sky_renderer::is_atmosphere_supported() const -> bool
     return m_atmosphere_pipeline != nullptr;
 }
 
-auto Sky_renderer::resolve_sun_direction(const Sky_config& sky_config, Scene_root* scene_root) -> glm::vec3
+auto Sky_renderer::resolve_sun_direction(const Sky_config& sky_config, const Scene_render_settings* const scene_render_settings) -> glm::vec3
 {
+    // The scene's last directional light, as Scene_root::snapshot_render_settings
+    // copied it (M2); the config's elevation / azimuth without one.
+    if ((scene_render_settings != nullptr) && scene_render_settings->has_sun_light) {
+        return scene_render_settings->sun_direction;
+    }
     const float elevation = glm::radians(sky_config.sun_elevation_deg);
     const float azimuth   = glm::radians(sky_config.sun_azimuth_deg);
     const float cos_el    = std::cos(elevation);
-    glm::vec3   toward_sun{cos_el * std::cos(azimuth), std::sin(elevation), cos_el * std::sin(azimuth)};
+    return glm::vec3{cos_el * std::cos(azimuth), std::sin(elevation), cos_el * std::sin(azimuth)};
+}
 
-    if (scene_root != nullptr) {
-        for (const std::shared_ptr<erhe::scene::Light>& light : scene_root->layers().light()->lights) {
-            if (!light || (light->get_light_type() != erhe::scene::Light_type::directional)) {
-                continue;
-            }
-            const erhe::scene::Node* node = light.get();
-            if (node == nullptr) {
-                continue;
-            }
-            // erhe stores a directional light's direction as world_from_node * +Z,
-            // which is the direction from the surface toward the light (see
-            // standard.frag: L = normalize(light.direction_and_outer_spot_cos.xyz),
-            // used directly in dot(N, L)). That is already the toward-sun direction
-            // the atmosphere wants, so use it as-is - negating it would put the sun
-            // below the horizon and render a black night sky.
-            const glm::vec3 to_light  = glm::vec3{node->world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-            const float     length_sq = glm::dot(to_light, to_light);
-            if (length_sq > 1e-8f) {
-                toward_sun = glm::normalize(to_light);
-            }
-            break;
-        }
-    }
-    return toward_sun;
+auto Sky_renderer::are_luts_ready() const -> bool
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    return m_luts_ready;
 }
 
 void Sky_renderer::ensure_luts(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
 
     if (!is_atmosphere_supported() || m_luts_ready) {
         return;
@@ -463,12 +452,15 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
     // Sun direction + atmosphere parameters from the sky config effective for this
     // scene (#239: per-scene override or editor-global default), overridden by the
     // scene's first directional light when present.
-    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
-    const Sky_config& sky_config = (scene_root != nullptr)
-        ? get_effective_sky(*m_context.editor_settings, *scene_root)
-        : m_context.editor_settings->sky;
+    const std::shared_ptr<Scene_root>& scene_root = context.scene_root;
+    const Scene_render_settings* const scene_render_settings = (scene_root != nullptr)
+        ? &scene_root->get_render_settings(m_context.graphics_device->get_frame_index())
+        : nullptr;
+    const Sky_config& sky_config = (scene_render_settings != nullptr)
+        ? scene_render_settings->sky
+        : m_context.render_settings->sky;
 
-    const glm::vec3 toward_sun = resolve_sun_direction(sky_config, scene_root.get());
+    const glm::vec3 toward_sun = resolve_sun_direction(sky_config, scene_render_settings);
 
     const float cos_sun_radius = std::cos(glm::radians(sky_config.sun_angular_radius_deg));
 
@@ -481,7 +473,7 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
         sky_config.sun_disc_intensity
     };
 
-    const float exposure = (context.camera != nullptr) ? context.camera->get_exposure() : 1.0f;
+    const float exposure = (context.camera_snapshot != nullptr) ? context.camera_snapshot->get_exposure() : 1.0f;
 
     // Camera_buffer::update_views requires exactly view_count entries; pad with
     // the first view (capacity retained -> no steady-state allocation).

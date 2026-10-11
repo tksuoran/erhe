@@ -114,7 +114,7 @@ Quad_view::Quad_view(
         m_rendertarget_node->hide();
     }
 
-    m_imgui_host = std::make_shared<Rendertarget_imgui_host>(
+    m_imgui_host = erhe::rendergraph::make_rendergraph_node<Rendertarget_imgui_host>(
         imgui_renderer,
         rendergraph,
         context,

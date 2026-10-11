@@ -332,6 +332,11 @@ auto Physics_drag_constraint::get_drag_point_body() const -> erhe::physics::IRig
     return m_drag_point_body.get();
 }
 
+auto Physics_drag_constraint::get_scene_root() const -> Scene_root*
+{
+    return m_scene_root;
+}
+
 auto Physics_drag_constraint::get_projection_description() const -> const std::string&
 {
     return m_projection_description;

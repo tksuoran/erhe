@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <vector>
 
+namespace erhe::graphics {
+    class Device;
+}
 namespace erhe::scene_renderer {
     class Mesh_memory;
     class Primitive_interface;
@@ -23,6 +26,9 @@ class Draw_list_scene_dependencies
 {
 public:
     erhe::scene_renderer::Mesh_memory*          mesh_memory         {nullptr};
+    // The device the scene's ray-tracing view (Ray_trace_scene) is built for;
+    // the root gets one when this is set and the device supports ray queries.
+    erhe::graphics::Device*                     graphics_device     {nullptr};
     erhe::scene_renderer::Shader_variant_cache* shader_variant_cache{nullptr};
     // Layout of the per-entry primitive records
     // (Program_interface::primitive_interface, shared by every renderer).
@@ -35,6 +41,9 @@ public:
     // the owning Scene_root carries: the two reconcile the same content
     // library separately and issue their own slots.
     erhe::scene_renderer::Material_set_create_info material_set_create_info{};
+    // Editor setting exclude_unlit_primitives at creation; later edits are
+    // pushed by App_scenes::set_exclude_unlit_from_shadows().
+    bool                                        exclude_unlit_from_shadows{false};
 
     [[nodiscard]] auto is_valid() const -> bool
     {

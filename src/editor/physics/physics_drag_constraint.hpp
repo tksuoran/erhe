@@ -152,6 +152,8 @@ public:
     [[nodiscard]] auto is_attached         () const -> bool;
     [[nodiscard]] auto get_body            () const -> erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_drag_point_body () const -> erhe::physics::IRigid_body*;
+    // The scene whose world the drag lives in while attached, else null.
+    [[nodiscard]] auto get_scene_root      () const -> Scene_root*;
     [[nodiscard]] auto get_projection_description() const -> const std::string&;
     [[nodiscard]] auto get_requested_drag_point  () const -> glm::vec3;
     [[nodiscard]] auto get_projected_drag_point  () const -> glm::vec3;

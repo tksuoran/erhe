@@ -1238,27 +1238,27 @@ void Operations::imgui()
         if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {
             Add_platonic_solids_command& cmd = m_context.scene_commands->get_add_platonic_solids_command();
             cmd.set_make_mesh_config(m_make_mesh_config);
-            cmd.try_call();
+            m_context.imgui_windows->queue([&cmd]() { static_cast<void>(cmd.try_call()); }); // out of the ImGui iteration: records GPU work
         }
         if (erhe::imgui::make_button("Johnson Solids", erhe::imgui::Item_mode::normal, button_size)) {
             Add_johnson_solids_command& cmd = m_context.scene_commands->get_add_johnson_solids_command();
             cmd.set_make_mesh_config(m_make_mesh_config);
-            cmd.try_call();
+            m_context.imgui_windows->queue([&cmd]() { static_cast<void>(cmd.try_call()); }); // out of the ImGui iteration: records GPU work
         }
         if (erhe::imgui::make_button("Curved Shapes", erhe::imgui::Item_mode::normal, button_size)) {
             Add_curved_shapes_command& cmd = m_context.scene_commands->get_add_curved_shapes_command();
             cmd.set_make_mesh_config(m_make_mesh_config);
-            cmd.try_call();
+            m_context.imgui_windows->queue([&cmd]() { static_cast<void>(cmd.try_call()); }); // out of the ImGui iteration: records GPU work
         }
         if (erhe::imgui::make_button("Chain", erhe::imgui::Item_mode::normal, button_size)) {
             Add_chain_command& cmd = m_context.scene_commands->get_add_chain_command();
             cmd.set_make_mesh_config(m_make_mesh_config);
-            cmd.try_call();
+            m_context.imgui_windows->queue([&cmd]() { static_cast<void>(cmd.try_call()); }); // out of the ImGui iteration: records GPU work
         }
         if (erhe::imgui::make_button("Toruses", erhe::imgui::Item_mode::normal, button_size)) {
             Add_toruses_command& cmd = m_context.scene_commands->get_add_toruses_command();
             cmd.set_make_mesh_config(m_make_mesh_config);
-            cmd.try_call();
+            m_context.imgui_windows->queue([&cmd]() { static_cast<void>(cmd.try_call()); }); // out of the ImGui iteration: records GPU work
         }
     }
 
@@ -1340,10 +1340,10 @@ void Operations::imgui()
 
     if (section("Edit")) {
         if (visible("Undo")   && make_button("Undo",   undo_mode,   button_size)) {
-            operation_stack.undo();
+            operation_stack.queue_undo(); // served by Operation_stack::update (M2)
         }
         if (visible("Redo")   && make_button("Redo",   redo_mode,   button_size)) {
-            operation_stack.redo();
+            operation_stack.queue_redo();
         }
         if (visible("Delete") && make_button("Delete", delete_mode, button_size)) {
             m_context.selection->delete_selection();
@@ -1913,7 +1913,14 @@ void Operations::run_operation(erhe::commands::Command* command, const Operation
 {
     const auto i = m_param_invokers.find(command);
     if (i != m_param_invokers.end()) {
-        i->second(params);
+        // Out of the ImGui iteration (the invokers come from the window's
+        // buttons and the hotbar): an operation may record GPU work.
+        const std::function<void(const Operation_params&)> invoker = i->second;
+        m_context.imgui_windows->queue(
+            [invoker, params]() {
+                invoker(params);
+            }
+        );
     }
 }
 

@@ -4,6 +4,7 @@
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/probe_grid.hpp"
 #include "renderers/radiance_cascades_layout.hpp"
+#include "renderers/render_frame_results.hpp"
 #include "renderers/scene_tlas.hpp"
 #include "renderable.hpp"
 
@@ -16,6 +17,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <random>
 #include <vector>
 
@@ -31,6 +34,7 @@ namespace erhe::graphics {
     class Ring_buffer_client;
     class Sampler;
     class Texture;
+    class Texture_reference;
 }
 namespace erhe::scene_renderer {
     class Light_buffer;
@@ -50,6 +54,7 @@ namespace editor {
 
 class App_context;
 class App_message_bus;
+class Ray_trace_slot;
 class Scene_root;
 
 // State of the request-driven raw texel readback
@@ -183,7 +188,6 @@ public:
         double    visibility_last_ms      {0.0};
         uint64_t  visibility_update_count {0};   // visibility pass runs since construction
         uint64_t  history_reset_count     {0};   // temporal history resets (allocations and change messages)
-        uint64_t  probe_overlay_readback_count{0}; // probe overlay copies recorded (only while the overlay is on)
     };
 
     // The probe overlay's most recent retired copy: which cascade it shows
@@ -226,9 +230,11 @@ public:
     // this bit masks the sky beyond the top cascade.
     static constexpr int c_sky_mask_bit = c_max_radiance_cascades;
 
-    // ddgi_config supplies the field's sampling parameters (irradiance /
+    // The DDGI settings supply the field's sampling parameters (irradiance /
     // distance texels, depth sharpness, biases, intensity), so both
-    // producers' fields render the same way.
+    // producers' fields render the same way. merge_mode is the loaded
+    // setting (Radiance_cascades_config::merge_mode; see
+    // apply_frame_settings()).
     Radiance_cascades_renderer(
         erhe::graphics::Device&                  graphics_device,
         erhe::graphics::Command_buffer&          init_command_buffer,
@@ -236,20 +242,32 @@ public:
         App_message_bus&                         app_message_bus,
         erhe::scene_renderer::Program_interface& program_interface,
         erhe::scene_renderer::Mesh_memory&       mesh_memory,
-        const Radiance_cascades_config&          config,
-        const Ddgi_config&                       ddgi_config,
+        Radiance_cascades_merge_mode             merge_mode,
         Producer_selection                       selection
     );
     ~Radiance_cascades_renderer() noexcept;
 
     [[nodiscard]] auto is_supported() const -> bool;
-    // Radiance cascades is the selected indirect diffuse source.
+    // Radiance cascades is the selected indirect diffuse source in the
+    // calling role's Render_settings copy (App_context::render_settings):
+    // the render phase reads the frame it renders, the main thread the
+    // latest snapshot of the setting set_indirect_diffuse_source() stores.
     [[nodiscard]] auto is_selected () const -> bool;
-    // Called by set_indirect_diffuse_source() only. Deselecting releases the
-    // atlases, the layout and the trace timings; selecting leaves the fit to
-    // the next tick.
-    void               set_selection(Producer_selection selection);
-    // Selected AND supported AND a layout was fitted and allocated.
+    // Render phase, at its start, every frame: applies the frame's source
+    // selection and merge mode (Render_settings copies of
+    // Editor_settings_config::indirect_diffuse_source and
+    // Radiance_cascades_config::merge_mode) to the render-phase state.
+    // Deselecting releases the atlases, the layout and the trace timings;
+    // selecting leaves the fit to the next tick. visibility_masked
+    // allocates and computes the probe states on the next tick, the other
+    // merge modes release them; switching into or out of
+    // per_neighbour_trace refits on the next tick (that mode's neighbour
+    // atlases are part of the layout and start with a fresh first fill).
+    // The change reaches the render phase only as the frame's settings copy,
+    // so this compares the copy with what the previous frame applied.
+    void               apply_frame_settings();
+    // Render phase: selected AND supported AND a layout was fitted and
+    // allocated. The main thread reads Rendered_state::active.
     [[nodiscard]] auto is_active   () const -> bool;
     // Active and the probe field atlases exist: the renderer writes the
     // field the forward pass samples.
@@ -260,15 +278,8 @@ public:
     [[nodiscard]] auto get_field             () const -> Probe_field;
     [[nodiscard]] auto get_forward_parameters() const -> erhe::scene_renderer::Ddgi_parameters;
 
-    // The merge mode (Radiance_cascades_config::merge_mode). Called by the
-    // change sites (Radiance Cascades window combo, MCP
-    // set_radiance_cascades) after they store the setting; the constructor
-    // takes the loaded setting. visibility_masked allocates and computes
-    // the probe states on the next tick, the other modes release them.
-    // Switching into or out of per_neighbour_trace refits on the next tick:
-    // that mode's neighbour atlases are part of the layout (the atlas fit
-    // leaves room for them) and start with a fresh first fill.
-    void               set_merge_mode(Radiance_cascades_merge_mode mode);
+    // Render phase: the merge mode apply_frame_settings() applied (the
+    // constructor takes the loaded setting).
     [[nodiscard]] auto get_merge_mode() const -> Radiance_cascades_merge_mode;
 
     [[nodiscard]] auto get_layout                   () const -> const Radiance_cascades_layout&;
@@ -291,7 +302,10 @@ public:
     // texture after the next trace and merge (no-op while one is in
     // flight); poll_texel_readback()
     // takes the copy into a CPU snapshot once its frame retired. Nothing is
-    // copied unless requested.
+    // copied unless requested. The main thread requests and polls, the
+    // render phase records: the state is shared under m_readback_mutex, and
+    // the snapshot and readback members are the main thread's once it saw
+    // complete (the render phase writes them only for a new request).
     void               request_texel_readback     ();
     [[nodiscard]] auto poll_texel_readback        () -> Rc_readback_state;
     // Valid while poll_texel_readback() reports complete. The layout the
@@ -339,8 +353,13 @@ public:
     // and merge; the window calls it each frame it shows the preview, so
     // the copy is only made while someone looks at it. The distance channel
     // always shows cascade 0.
+    // Main thread (the ImGui phase); the request is handed to the render
+    // phase under a mutex, and the next tick after it records the copy.
     void               request_preview    (int cascade, Rc_preview_source source, Rc_preview_channel channel, float radiance_scale);
-    [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
+    // The preview copy, resolved by the render thread when it draws the
+    // window (the tick creates and replaces the texture); its size is
+    // Rendered_state::preview_width / preview_height.
+    [[nodiscard]] auto get_preview_texture_reference() const -> const std::shared_ptr<erhe::graphics::Texture_reference>&;
 
     // Refits the cascades and reallocates the atlases when the content
     // bounds or a fit setting changed, then records this frame's budgeted
@@ -355,12 +374,62 @@ public:
     // the last retired overlay copy, plus with state_and_irradiance a short
     // line toward +Y coloured by the probe's merged irradiance toward +Y.
     void render(const Render_context& context) override;
-    [[nodiscard]] auto get_probe_overlay_summary() const -> const Probe_overlay_summary&;
+
+    class Probe_overlay_probe
+    {
+    public:
+        Rc_probe_overlay_state state     {Rc_probe_overlay_state::unclassified};
+        glm::vec3              irradiance{0.0f}; // cosine-weighted mean merged irradiance toward +Y
+    };
+
+    // The radiance cascades state as a tick of the render phase leaves it for
+    // the main thread, one per frame in flight (Render_frame_results): the
+    // layout the tick fitted (the overlay draws the chosen cascade's grid),
+    // the field, memory and cost, the preview size and the newest retired
+    // overlay copy. Read by render() (M2), the Radiance Cascades window and
+    // the MCP stats as the last rendered frame's.
+    class Rendered_state
+    {
+    public:
+        Radiance_cascades_layout         layout{};
+        bool                             active{false};                  // is_active()
+        bool                             has_field{false};               // has_field()
+        erhe::scene_renderer::Ddgi_parameters field_parameters{};        // get_forward_parameters(), valid with has_field
+        std::array<std::size_t, c_max_radiance_cascades> cascade_texture_bytes{}; // get_cascade_texture_byte_count()
+        std::size_t                      texture_bytes{0};               // get_texture_byte_count()
+        uint64_t                         fit_count{0};                   // get_fit_count()
+        Stats                            stats{};                        // get_stats()
+        Radiance_cascades_merge_mode     merge_mode{};                   // get_merge_mode()
+        int                              preview_width {0};              // the preview copy (0: none)
+        int                              preview_height{0};
+        // The retired copy: drawn while its grid is the chosen cascade's.
+        Probe_grid                       grid{};
+        float                            irradiance_max{0.0f};
+        Probe_overlay_summary            summary{};
+        uint64_t                         readback_count{0}; // overlay copies recorded
+        std::vector<Probe_overlay_probe> probes;
+        // The render phase's overlay serial the copy was taken at: a slot
+        // copies the probes only when a newer copy retired.
+        uint64_t                         serial{0};
+    };
+    // The overlay the tick of frame_index left: the main thread passes
+    // App_context::last_rendered_frame_index (the last rendered frame),
+    // render() App_context::get_results_frame_index() (it also draws in the
+    // render phase, for the headset); null when radiance cascades did not
+    // tick in that frame or nothing was rendered yet.
+    [[nodiscard]] auto get_rendered_state(std::optional<uint64_t> frame_index) const -> const Rendered_state*;
 
 private:
+    // The calling role's copies of the radiance cascades settings and of the
+    // DDGI settings that supply the field's sampling parameters
+    // (App_context::render_settings): the render phase reads the copies of
+    // the frame it renders, so they are fetched at each use, never kept.
+    [[nodiscard]] auto get_config     () const -> const Radiance_cascades_config&;
+    [[nodiscard]] auto get_ddgi_config() const -> const Ddgi_config&;
+
     // Refits + reallocates when needed. Returns false when there is no
     // usable volume this tick.
-    [[nodiscard]] auto update_layout    (erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root) -> bool;
+    [[nodiscard]] auto update_layout    (erhe::graphics::Command_buffer& command_buffer, const Ray_trace_slot& slot) -> bool;
     void               allocate_textures(erhe::graphics::Command_buffer& command_buffer);
     void               release_textures ();
     // Probe state textures of the visibility_masked merge mode.
@@ -420,6 +489,11 @@ private:
     // Returns true when a copy was recorded.
     [[nodiscard]] auto record_probe_overlay_readback(erhe::graphics::Command_buffer& command_buffer, Radiance_cascades_probe_overlay mode) -> bool;
     void poll_probe_overlay           ();
+    // Render phase: the tick's refit, trace, merge, reduce and readbacks;
+    // tick() publishes the overlay after it.
+    void tick_cascades                (erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
+    // Render phase: fills this frame's Rendered_state.
+    void publish_rendered_state     ();
     // One RGBA16F texel of the snapshot atlas copied at atlas_offset.
     [[nodiscard]] auto read_radiance_texel(std::size_t atlas_offset, int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
 
@@ -437,13 +511,7 @@ private:
 
     erhe::graphics::Device&         m_graphics_device;
     App_context&                    m_context;
-    // Live reference to the editor's Radiance_cascades_config
-    // (editor_settings.radiance_cascades).
-    const Radiance_cascades_config& m_config;
-    // Live reference to the editor's Ddgi_config: the field's sampling
-    // parameters.
-    const Ddgi_config&              m_ddgi_config;
-    Producer_selection              m_selection{Producer_selection::deselected};
+    Producer_selection              m_selection{Producer_selection::deselected}; // render phase: the applied selection (apply_frame_settings())
     bool                            m_supported{false};
 
     // The settings the current layout was fitted with; any change refits.
@@ -567,7 +635,7 @@ private:
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_pipeline;
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_visibility_pipeline;
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_neighbours_pipeline;
-    Radiance_cascades_merge_mode                              m_merge_mode;
+    Radiance_cascades_merge_mode                              m_merge_mode; // render phase: the applied merge mode
 
     // Visibility pass (rc_visibility.comp): the trace's buffers and TLAS,
     // the cascade's state texture as the only storage image. Dirty after
@@ -655,6 +723,15 @@ private:
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_preview_shader_stages;
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_preview_pipeline;
     std::shared_ptr<erhe::graphics::Texture>                  m_preview_texture;
+    std::shared_ptr<erhe::graphics::Texture_reference>        m_preview_texture_reference;
+    // request_preview() (main thread) writes, the tick takes it under the mutex.
+    std::mutex                                                m_preview_request_mutex;
+    bool                                                      m_preview_request_pending{false};
+    int                                                       m_preview_request_cascade{0};
+    Rc_preview_source                                         m_preview_request_source {Rc_preview_source::raw};
+    Rc_preview_channel                                        m_preview_request_channel{Rc_preview_channel::radiance};
+    float                                                     m_preview_request_radiance_scale{1.0f};
+    // Render phase: the request the tick took.
     bool                                                      m_preview_requested     {false};
     int                                                       m_preview_cascade       {0};
     Rc_preview_source                                         m_preview_source        {Rc_preview_source::raw};
@@ -679,6 +756,7 @@ private:
     // Texel readback. The buffer is (re)allocated on request only; the
     // snapshot vectors are filled on the MCP path, never per frame.
     std::unique_ptr<erhe::graphics::Buffer>                  m_readback_buffer;
+    std::mutex                                               m_readback_mutex; // guards m_readback_state and the record / poll handoff
     Rc_readback_state                                        m_readback_state      {Rc_readback_state::idle};
     uint64_t                                                 m_readback_frame      {0};
     uint64_t                                                 m_readback_update_count{0};
@@ -721,12 +799,6 @@ private:
         std::size_t      byte_count        {0};
         uint64_t         update_count      {0};
     };
-    class Probe_overlay_probe
-    {
-    public:
-        Rc_probe_overlay_state state     {Rc_probe_overlay_state::unclassified};
-        glm::vec3              irradiance{0.0f}; // cosine-weighted mean merged radiance toward +Y
-    };
     std::unique_ptr<erhe::graphics::Buffer>                  m_overlay_buffer;
     bool                                                     m_overlay_in_flight{false};
     uint64_t                                                 m_overlay_frame    {0};
@@ -739,6 +811,9 @@ private:
     float                                                    m_overlay_irradiance_max{0.0f};
     Probe_overlay_summary                                    m_overlay_summary{};
     std::vector<Probe_overlay_probe>                         m_overlay_probes;       // cleared per retired copy, capacity kept
+    // Bumped whenever the overlay result above changes (render phase owned).
+    uint64_t                                                 m_overlay_serial{0};
+    Render_frame_results<Rendered_state>                   m_rendered_states;
     // Per texel of a tile of m_overlay_weights_tile_texels: max(0, direction.y)
     // x solid angle, recomputed only when the tile side changes.
     std::vector<float>                                       m_overlay_weights;

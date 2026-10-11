@@ -1099,8 +1099,8 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
     VkSwapchainCreateFlagsKHR swapchain_create_flags =
         (m_device_impl.get_capabilities().m_present_timing &&
          (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::full))
-            ? VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT
-            : 0u;
+            ? static_cast<VkSwapchainCreateFlagsKHR>(VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT)
+            : static_cast<VkSwapchainCreateFlagsKHR>(0);
 
     // Present id 2: Swapchain_impl::present_image() chains VkPresentId2KHR
     // when the device has the present-id capability through

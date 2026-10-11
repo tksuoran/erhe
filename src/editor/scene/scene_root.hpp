@@ -3,10 +3,12 @@
 #include "app_message.hpp"
 #include "editor_item_bits.hpp"
 #include "scene/generated/scene_settings.hpp"
+#include "renderers/render_settings.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_scene_renderer/light_set.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 #include "scene/draw_list_scene_dependencies.hpp"
@@ -14,8 +16,10 @@
 
 #include <deque>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -70,9 +74,12 @@ namespace erhe::scene {
     class Scene;
 }
 
+struct Editor_settings_config;
+
 namespace editor {
 
 class Content_library;
+class Ray_trace_scene;
 class App_context;
 class App_message_bus;
 class App_scenes;
@@ -297,11 +304,27 @@ public:
     void take_display_color_meshes(std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes);
 
     // The scene's resolved light set (which lights are shaded / shadow-mapped,
-    // in light UBO slot order). Invalidated by the light hooks (register /
-    // unregister / on_light_changed); renderers call
-    // get_light_set().resolve(layers().light()->lights, limits) before use,
-    // which recomputes only when invalidated or the limits changed.
-    [[nodiscard]] auto get_light_set() -> erhe::scene_renderer::Light_set&;
+    // in light UBO slot order, as render phase copies of the lights) as
+    // resolved for frame_index, one Light_set per frame in flight.
+    // snapshot_render_settings() resolves the set of the frame it prepares
+    // (the layout recomputes only when a light hook - register / unregister /
+    // on_light_changed - invalidated the scene's lights since that set's last
+    // resolve, or when the limits changed; the copies refresh every frame),
+    // so the render phase of frame N reads the set the prepare phase of
+    // frame N resolved while the prepare phase of frame N+1 resolves
+    // another. Callers pass the role-keyed Device::get_frame_index() (the
+    // prepare frame on the main thread, the render frame in R). Verifies
+    // that frame resolved the set. Pointers into the set stay valid until
+    // the frame's slot is resolved again, N frames later.
+    [[nodiscard]] auto get_light_set(uint64_t frame_index) const -> const erhe::scene_renderer::Light_set&;
+
+    // The posed joints of the scene's skins as snapshot_render_settings()
+    // captured them for frame_index (erhe::scene_renderer::Joint_poses), one
+    // capture per frame in flight; the render phase of that frame feeds them
+    // to Joint_buffer::update(). Verifies the slot was captured for that
+    // frame. Empty for a root the frame loop never prepares (the preview
+    // roots, which hold no skins).
+    [[nodiscard]] auto get_render_joint_poses(uint64_t frame_index) const -> std::span<const erhe::scene_renderer::Joint_pose>;
 
     // This root's FORWARD material slot space (D0): the one the bucket path
     // binds. A root that also has a Draw_list_scene has a SECOND, independent
@@ -324,6 +347,29 @@ public:
     // applies queued register / unregister / flag changes under
     // item_host_mutex. No-op without a Draw_list_scene.
     void flush_draw_lists();
+    // M2, after flush_draw_lists() and the transform updates
+    // (App_scenes::snapshot_render_settings): gathers the content layer's
+    // shadow caster and receiver bounds into the draw list scene's slot for
+    // the frame being prepared (Draw_list_scene::prepare_shadow_bounds;
+    // a full gather only when the records changed), under item_host_mutex.
+    // No-op without a Draw_list_scene.
+    void prepare_shadow_bounds(uint64_t frame_index, std::size_t frames_in_flight);
+    // M2, after snapshot_render_settings() captured the frame's joint poses
+    // (App_scenes::snapshot_render_settings): rewrites the joint slots of the
+    // skinned draw list records and publishes the changed draw lists into
+    // the frame's slot (Draw_list_scene::publish), under item_host_mutex.
+    // No-op without a Draw_list_scene.
+    void publish_draw_lists(uint64_t frame_index, std::size_t frames_in_flight);
+    // The content layer as the ray-query consumers (Ray_trace_renderer, DDGI,
+    // radiance cascades) see it (doc/editor/raytrace.md "Ray_trace_scene"):
+    // null for a root built without device dependencies or on a device
+    // without ray queries. prepare_ray_trace_scene() is the M2 step
+    // (App_scenes::prepare_ray_trace_scenes(), after update_material_sets(),
+    // every frame), under item_host_mutex; no-op without one.
+    [[nodiscard]] auto get_ray_trace_scene() -> Ray_trace_scene*;
+    [[nodiscard]] auto get_ray_trace_scene() const -> const Ray_trace_scene*;
+    void prepare_ray_trace_scene(uint64_t frame_index, std::size_t frames_in_flight);
+    [[nodiscard]] auto is_content_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh) const -> bool;
     auto get_hosted_scene () -> erhe::scene::Scene* override;
 
     void begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
@@ -384,6 +430,21 @@ public:
     // physics gate; edges clear the flag from every body-driven node (pause)
     // or restore it on awake dynamic bodies (resume).
     void set_physics_simulation_running(bool running);
+    [[nodiscard]] auto is_physics_simulation_running() const -> bool;
+
+    // Prepare phase (M2), before after_physics_simulation_steps(): applies
+    // the body activation changes the simulation steps (M1) queued
+    // (Node_physics_system::on_body_activation).
+    void apply_queued_body_activations();
+
+    // Held while the overlap phase (M1) writes the physics world
+    // (before_physics_simulation_steps(), update_physics_simulation_fixed_step())
+    // and by render phase (R) code that reads body state from the world
+    // (the physics debug visualization, the drag point body display): M1 of
+    // the next frame steps the world while R of the previous frame runs.
+    // The prepare phase (M2) never runs at the same time as R and does not
+    // take it.
+    [[nodiscard]] auto get_physics_step_mutex() -> ERHE_PROFILE_LOCKABLE_BASE(std::mutex)&;
 
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
@@ -451,6 +512,39 @@ public:
     // are resolved by the helpers in scene/scene_settings_resolve.hpp.
     [[nodiscard]] auto get_scene_settings()       -> Scene_settings&;
     [[nodiscard]] auto get_scene_settings() const -> const Scene_settings&;
+
+    // M2 (App_scenes::snapshot_render_settings): resolves the overrides the
+    // render phase reads into the copy get_render_settings() returns, so
+    // the render phase never reads the live optionals the Properties window
+    // engages and resets (renderers/render_settings.hpp), and captures the
+    // skins' joint poses into the slot frame_index % frames_in_flight
+    // (get_render_joint_poses()).
+    //
+    // The render settings copy and the light set (get_light_set()) are one
+    // per frame in flight: this fills the slot frame_index %
+    // frames_in_flight, which no other frame in flight reads.
+    void               snapshot_render_settings(
+        const Editor_settings_config& editor_settings,
+        const Render_settings&        render_settings,
+        uint64_t                      frame_index,
+        std::size_t                   frames_in_flight
+    );
+    // For a root the frame loop never prepares (the preview roots, rendered
+    // on the main thread at their own render entry): the render settings
+    // copy and the light set (resolved with light_count_limits) of
+    // frame_index, as snapshot_render_settings() makes them for the roots
+    // of App_scenes. Returns the light set. No joint poses (preview roots
+    // hold no skins).
+    auto               snapshot_preview_render_settings(
+        const Editor_settings_config&                   editor_settings,
+        const erhe::scene_renderer::Light_count_limits& light_count_limits,
+        uint64_t                                        frame_index,
+        std::size_t                                     frames_in_flight
+    ) -> const erhe::scene_renderer::Light_set&;
+    // The render settings copy of frame_index (the role-keyed
+    // Device::get_frame_index(), as for get_light_set()). Verifies that
+    // frame made the copy.
+    [[nodiscard]] auto get_render_settings(uint64_t frame_index) const -> const Scene_render_settings&;
 
     // The variant sets this scene's prims carry
     // (doc/erhe/usd_compatibility_design.md X4), filled by the USD parser when the
@@ -561,6 +655,7 @@ private:
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     ERHE_PROFILE_MUTEX        (std::mutex, m_rendertarget_meshes_mutex);
     ERHE_PROFILE_MUTEX        (std::mutex, m_display_color_meshes_mutex);
+    ERHE_PROFILE_MUTEX        (std::mutex, m_physics_step_mutex);
     std::vector<std::shared_ptr<erhe::scene::Mesh>> m_display_color_meshes;
 
     // Publisher for Skin_registered_message; nullptr for scenes that do not
@@ -601,11 +696,59 @@ private:
     // meshes alive, and ~Mesh may detach from m_raytrace_scene, so it must be
     // destroyed first (also reset explicitly at the top of ~Scene_root).
     std::unique_ptr<erhe::scene_renderer::Draw_list_scene> m_draw_list_scene;
+    // Pins the primitives it traces (Ray_trace_geometry); reset with the draw
+    // list scene at the top of ~Scene_root.
+    std::unique_ptr<Ray_trace_scene>                       m_ray_trace_scene;
     // The FORWARD set (D0). Destroyed before the draw list scene, so the
     // strong material references it holds are dropped while the meshes that
     // named them are still alive.
     erhe::scene_renderer::Material_set                     m_material_set;
-    erhe::scene_renderer::Light_set                        m_light_set;
+    // One frame's copies of what the render phase reads of the scene
+    // (get_render_settings(), get_light_set()), filled by
+    // snapshot_render_settings() / snapshot_preview_render_settings().
+    class Render_snapshot_slot
+    {
+    public:
+        // The frame the slot was last filled for.
+        uint64_t                                         frame_index        {std::numeric_limits<uint64_t>::max()};
+        Scene_render_settings                            render_settings    {};
+        // Owned through a pointer: Light_set is not movable (its dirty flag
+        // is atomic), and the slot vector is sized once.
+        std::unique_ptr<erhe::scene_renderer::Light_set> light_set          {};
+        // m_light_invalidation_serial at the slot's last resolve.
+        uint64_t                                         light_set_serial   {0};
+    };
+    // Light hook (any thread): the scene's lights changed, so every frame's
+    // light set re-resolves its layout at its next resolve.
+    void invalidate_light_sets();
+    // The slot of frame_index (sizes the slots at the first call).
+    [[nodiscard]] auto get_render_snapshot_slot(uint64_t frame_index, std::size_t frames_in_flight) -> Render_snapshot_slot&;
+    // Fills out from the live scene and the effective settings (the
+    // per-scene overrides of editor_settings).
+    void capture_render_settings(const Editor_settings_config& editor_settings, Scene_render_settings& out) const;
+    // Resolves slot's light set from the light layer under
+    // light_count_limits, re-resolving the layout when the lights were
+    // invalidated since the slot's last resolve.
+    void resolve_light_set(Render_snapshot_slot& slot, const erhe::scene_renderer::Light_count_limits& light_count_limits);
+
+    // One slot per frame in flight, indexed by frame index modulo their
+    // count; sized at the first snapshot (main thread only).
+    std::vector<Render_snapshot_slot>                      m_render_snapshot_slots;
+    // Bumped by invalidate_light_sets() from any thread; read by
+    // resolve_light_set() on the main thread.
+    ERHE_PROFILE_MUTEX(std::mutex,                         m_light_invalidation_mutex);
+    uint64_t                                               m_light_invalidation_serial{1};
+    // One joint pose capture per frame in flight (sized by the first
+    // snapshot_render_settings()).
+    class Joint_poses_slot
+    {
+    public:
+        erhe::scene_renderer::Joint_poses poses;
+        // The frame the slot was last captured for.
+        uint64_t                          frame_index{0};
+        bool                              captured   {false};
+    };
+    std::vector<Joint_poses_slot>                          m_render_joint_poses_slots;
 
     static constexpr std::size_t s_max_trigger_event_log_entries = 100;
     std::deque<std::string>                         m_trigger_event_log;

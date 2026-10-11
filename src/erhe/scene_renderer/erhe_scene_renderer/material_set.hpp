@@ -110,11 +110,12 @@ public:
 // be handed a `const Material_set*` and then cannot do anything but look slots
 // up: slots are assigned ahead of every record write, never by one.
 //
-// The GPU half - the material buffer, the texture heap and
+// The GPU half - the material buffer, the texture heaps and
 // update / bind / unbind - is written from that same slot table and is owned
 // here too: a heap handle baked into a record is only meaningful in the heap
 // it was allocated from, so heap and buffer are reset and rewritten together,
-// always, in the one place either is rewritten.
+// always, in the one place either is rewritten. Each written copy has a heap
+// of its own, so a frame still in flight keeps the pair it was published with.
 class Material_set final
 {
 public:
@@ -181,12 +182,20 @@ public:
     //
     // Call once per frame, after sync_library() and flush_pending() have
     // settled membership: the slots a record can name this frame must all be
-    // covered by the copy this writes.
+    // covered by the copy this writes. Every call - written or clean -
+    // publishes the current copy and its texture heap as the pair the
+    // caller's device frame (the role-keyed Device::get_frame_index()) binds,
+    // so it runs on the thread that prepares the frame, before the frame's
+    // first bind(). A write goes to a copy and a heap no unretired frame was
+    // published with.
     void update(erhe::graphics::Command_buffer& command_buffer);
 
-    // Binds the current copy and the texture heap. False when nothing has been
-    // committed yet (a set with no members), which is not an error - the heap
-    // is bound either way.
+    // Binds the copy and the texture heap update() published for the
+    // caller's device frame; reads nothing update() of a later frame writes,
+    // so the thread recording frame F may bind while the thread preparing
+    // frame F + 1 updates. False when nothing has been committed yet, which
+    // is not an error - the heap is bound either way. ERHE_VERIFY that
+    // update() ran for the frame.
     auto bind  (erhe::graphics::Render_command_encoder&  encoder) -> bool;
     auto bind  (erhe::graphics::Compute_command_encoder& encoder) -> bool;
     void unbind(erhe::graphics::Command_buffer& command_buffer);

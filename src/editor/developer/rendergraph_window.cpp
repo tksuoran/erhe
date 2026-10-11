@@ -13,10 +13,12 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/resource_routing.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <imgui/imgui.h>
 
 #include <algorithm>
+#include <mutex>
 
 namespace editor {
 
@@ -33,6 +35,67 @@ namespace {
         default:                                                            return IM_COL32(255,   0, 255, 255);
     }
 }
+
+// One output of a rendergraph node as a texture reference for the
+// thumbnail. The node's output textures are created and replaced by the
+// render phase, which may run while the ImGui phase draws this window, so
+// the window never reads them: the render thread resolves the reference
+// when it draws the thumbnail and records the size it found, and the window
+// sizes the next thumbnail by that record (a one-frame-late copy). Outputs
+// that are not 2D color textures resolve to none and record 0 x 0.
+class Rendergraph_output_reference : public erhe::graphics::Texture_reference
+{
+public:
+    Rendergraph_output_reference(erhe::rendergraph::Rendergraph_node& node, const int key)
+        : m_node{node.weak_from_this()}
+        , m_key {key}
+    {
+    }
+
+    // Render thread.
+    auto get_referenced_texture() const -> const erhe::graphics::Texture* override
+    {
+        erhe::utility::Thread_roles::assert_render_thread();
+        const erhe::graphics::Texture* result = nullptr;
+        const std::shared_ptr<erhe::rendergraph::Rendergraph_node> node = std::dynamic_pointer_cast<erhe::rendergraph::Rendergraph_node>(m_node.lock());
+        if (node) {
+            const std::shared_ptr<erhe::graphics::Texture> texture = node->get_producer_output_texture(m_key);
+            if (
+                texture &&
+                (texture->get_texture_type() == erhe::graphics::Texture_type::texture_2d) &&
+                (texture->get_width () >= 1) &&
+                (texture->get_height() >= 1) &&
+                erhe::dataformat::has_color(texture->get_pixelformat())
+            ) {
+                result = texture.get();
+            }
+        }
+        std::lock_guard<std::mutex> lock{m_mutex};
+        m_width  = (result != nullptr) ? result->get_width () : 0;
+        m_height = (result != nullptr) ? result->get_height() : 0;
+        return result;
+    }
+
+    // Any thread: the size the render thread resolved last; 0 x 0 for none.
+    void get_resolved_size(int& width, int& height) const
+    {
+        std::lock_guard<std::mutex> lock{m_mutex};
+        width  = m_width;
+        height = m_height;
+    }
+
+    [[nodiscard]] auto is_valid() const -> bool { return !m_node.expired(); }
+
+private:
+    // Weak: a node is not kept alive by its thumbnail (the ImGui renderer
+    // keeps the references of the frame it drew last). A node that is not
+    // owned by a shared_ptr has no thumbnail.
+    std::weak_ptr<erhe::Item_base> m_node;
+    int                            m_key;
+    mutable std::mutex             m_mutex;
+    mutable int                    m_width {0};
+    mutable int                    m_height{0};
+};
 
 } // namespace
 
@@ -54,6 +117,7 @@ public:
         }
         for (const erhe::graph::Pin& pin : rendergraph_node.get_output_pins()) {
             base_make_output_pin(pin.get_key(), pin.get_name());
+            m_output_references.push_back(std::make_shared<Rendergraph_output_reference>(rendergraph_node, static_cast<int>(pin.get_key())));
         }
         // Rendergraph pin names are long ("rendertarget texture", "depth
         // visualization"), so reserve wider pin label columns and a wider
@@ -90,25 +154,36 @@ protected:
         if (app_context.imgui_renderer == nullptr) {
             return;
         }
-        for (const erhe::graph::Pin& output : m_rendergraph_node->get_output_pins()) {
-            const std::shared_ptr<erhe::graphics::Texture> texture = m_rendergraph_node->get_producer_output_texture(static_cast<int>(output.get_key()));
-            if (
-                !texture ||
-                (texture->get_texture_type() != erhe::graphics::Texture_type::texture_2d) ||
-                (texture->get_width () < 1) ||
-                (texture->get_height() < 1) ||
-                !erhe::dataformat::has_color(texture->get_pixelformat())
-            ) {
+        for (const std::shared_ptr<Rendergraph_output_reference>& reference : m_output_references) {
+            if (!reference->is_valid()) {
                 continue;
             }
-            const float aspect = static_cast<float>(texture->get_width()) / static_cast<float>(texture->get_height());
+            int texture_width {0};
+            int texture_height{0};
+            reference->get_resolved_size(texture_width, texture_height);
+            if ((texture_width < 1) || (texture_height < 1)) {
+                // Nothing displayable resolved yet: a 1 x 1 transparent draw
+                // keeps the render thread resolving the output, so the
+                // thumbnail appears once the output is a 2D color texture.
+                app_context.imgui_renderer->image(
+                    erhe::imgui::Draw_texture_parameters{
+                        .texture_reference = reference,
+                        .width             = 1,
+                        .height            = 1,
+                        .tint_color        = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+                        .debug_label       = erhe::utility::Debug_label{"Rendergraph_editor_node preview probe"}
+                    }
+                );
+                continue;
+            }
+            const float aspect = static_cast<float>(texture_width) / static_cast<float>(texture_height);
             const float width  = get_preview_fit_size();
             // Render-to-texture UV orientation (get_rtt_uv0/1), like the
             // texture graph previews - without it the thumbnails show
             // upside down on Vulkan.
             app_context.imgui_renderer->image(
                 erhe::imgui::Draw_texture_parameters{
-                    .texture_reference = std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
+                    .texture_reference = reference,
                     .width             = static_cast<int>(width),
                     .height            = static_cast<int>(width / aspect),
                     .uv0               = app_context.imgui_renderer->get_rtt_uv0(),
@@ -120,8 +195,9 @@ protected:
     }
 
 private:
-    erhe::rendergraph::Rendergraph_node* m_rendergraph_node;
-    std::size_t                          m_rendergraph_node_id; // detects pointer reuse after destroy + recreate
+    erhe::rendergraph::Rendergraph_node*                       m_rendergraph_node;
+    std::size_t                                                m_rendergraph_node_id; // detects pointer reuse after destroy + recreate
+    std::vector<std::shared_ptr<Rendergraph_output_reference>> m_output_references;   // one per output pin
 };
 
 Rendergraph_window::Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)

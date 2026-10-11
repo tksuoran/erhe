@@ -107,6 +107,11 @@ public:
     void undo();
     void redo();
 
+    // ImGui-time requests (the Operations window's buttons): served by
+    // update() on the main thread, before the queued operations.
+    void queue_undo();
+    void queue_redo();
+
     // Undo-group scope (MCP batch tool). While a group is open, operations
     // handed to queue() / execute_now() outside of operation execution are
     // executed immediately and collected instead of recorded; end_group()
@@ -192,6 +197,8 @@ private:
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;
     std::vector<std::shared_ptr<Operation>> m_queued;
+    bool                                    m_undo_requested{false};
+    bool                                    m_redo_requested{false};
 
     // Undo-group scope state (begin_group / end_group).
     bool                                    m_grouping{false};

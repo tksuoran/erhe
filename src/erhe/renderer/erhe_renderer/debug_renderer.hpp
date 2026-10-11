@@ -16,7 +16,9 @@
 #include <etl/vector.h>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <stack>
 #include <vector>
@@ -207,26 +209,48 @@ public:
     // the depth precision and reverse-Z distribution, not a magic length) and
     // tilt is a clamped surface-slope factor. This margin is the only knob,
     // unitless; written to the view UBO each frame and tunable live.
+    //
+    // Frames in flight: the setters write the live value (main thread); the
+    // first begin_frame() of a device frame copies the live values into that
+    // frame's recording state, and the getters return the copy of the calling
+    // role's device frame, which the buckets write to the view UBO. A change
+    // takes effect from the next device frame whose recording starts after
+    // it.
     void               set_line_bias_margin(float margin) { m_line_bias_margin = margin; }
-    [[nodiscard]] auto get_line_bias_margin() const -> float { return m_line_bias_margin; }
+    [[nodiscard]] auto get_line_bias_margin() const -> float;
 
     // Wide-line anti-aliasing (default on). Written to the view UBO of every
-    // bucket draw, so a change takes effect on the next frame.
+    // bucket draw; same frame copy rule as set_line_bias_margin().
     void               set_anti_aliasing(Anti_aliasing anti_aliasing) { m_anti_aliasing = anti_aliasing; }
-    [[nodiscard]] auto get_anti_aliasing() const -> Anti_aliasing { return m_anti_aliasing; }
+    [[nodiscard]] auto get_anti_aliasing() const -> Anti_aliasing;
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
-    // Begin a debug-renderer frame. `views` size must equal view_count
-    // from construction; single-view callers pass a 1-element span built
-    // via view_from_camera(). The shared `viewport` matches the
-    // (multiview) swapchain extent (same (w, h) for every eye);
-    // per-eye projection differences are captured in each View's
-    // clip_from_world.
-    void begin_frame(
+    // Frame slots: one device frame draws several views (every viewport,
+    // the headset eyes), and the lines of a view may be recorded on the
+    // main thread before the render phase draws them. begin_frame() opens
+    // a slot for one view set and returns its id; get() records into the
+    // open slot; compute() expands every recorded draw not yet expanded;
+    // render(..., frame_slot) draws one slot; release_frames() releases
+    // every slot's buffers once per device frame, after the last render.
+    //
+    // Frames in flight: the recording state (the slots, their views, the
+    // buckets' draws) is kept once per device frame in flight
+    // (Device::get_number_of_frames_in_flight()) and every entry point
+    // works on the frame of the role-keyed Device::get_frame_index(): the
+    // main thread records into the frame it prepares while the render
+    // thread expands, draws and releases the frame it renders. Slot ids
+    // count from 0 within each device frame.
+    //
+    // Begin a slot. `views` size must equal view_count from construction;
+    // single-view callers pass a 1-element span built via
+    // view_from_camera(). The shared `viewport` matches the (multiview)
+    // swapchain extent (same (w, h) for every eye); per-eye projection
+    // differences are captured in each View's clip_from_world.
+    [[nodiscard]] auto begin_frame(
         erhe::math::Viewport  viewport,
         std::span<const View> views
-    );
+    ) -> std::size_t;
 
     // Helper: derive a single View from a Camera, viewport, pixel scale
     // (View::pixel_scale) and depth conventions. Callers that drive
@@ -243,27 +267,19 @@ public:
         erhe::graphics::Render_command_encoder& encoder,
         const erhe::graphics::Render_pass&      render_pass,
         erhe::math::Viewport                    camera_viewport,
-        bool                                    multiview = false
+        bool                                    multiview,
+        std::size_t                             frame_slot
     );
-    void end_frame  ();
+    void release_frames();
+    // The slot the last begin_frame() of the calling role's device frame
+    // opened.
+    [[nodiscard]] auto get_frame_slot() const -> std::size_t;
 
-    inline void push_view(const View& view) {
-        m_view_stack.push(view);
-        m_view = m_view_stack.top();
-    }
-    inline void pop_view() {
-        m_view_stack.pop();
-        if (!m_view_stack.empty()){
-            m_view = m_view_stack.top();
-        } else {
-            m_view.clip_from_world = glm::mat4{1.0f};
-            m_view.fov_sides       = glm::vec4{-1.0f, 1.0f, 1.0f, -1.0f};
-        }
-    }
-    inline auto get_view() -> const View&
-    {
-        return m_view;
-    }
+    // View stack of the calling role's device frame; begin_frame() resets
+    // it to the slot's representative view.
+    void push_view(const View& view);
+    void pop_view ();
+    [[nodiscard]] auto get_view() const -> const View&;
 
     // API for Debug_renderer_bucket
     auto get_program_interface() const -> const Debug_renderer_program_interface& { return m_program_interface; }
@@ -273,32 +289,60 @@ public:
     // the draw to fire, even when the vertex shader reads its data via
     // gl_VertexID instead of input attributes.
     auto get_empty_vertex_input() -> erhe::graphics::Vertex_input_state* { return &m_empty_vertex_input; }
-    // True only when there are at least two views; matches the
-    // >= 2 gate that Debug_renderer_bucket::dispatch_compute uses
-    // to decide between single-view and multiview pipelines. A
-    // single-view caller (`begin_frame` overload taking one View)
-    // should appear as is_multiview_active() == false.
-    auto is_multiview_active  () const -> bool { return m_multiview_views.size() >= 2; }
-    auto get_multiview_views  () const -> std::span<const View> { return m_multiview_views; }
+    // True only when the open slot of the calling role's device frame has
+    // at least two views; matches the >= 2 gate that
+    // Debug_renderer_bucket::dispatch_compute uses to decide between
+    // single-view and multiview pipelines. A single-view caller
+    // (begin_frame with one View) appears as is_multiview_active() == false.
+    [[nodiscard]] auto is_multiview_active() const -> bool;
+    [[nodiscard]] auto get_multiview_views() const -> std::span<const View>;
 
 private:
+    // The recording state of one device frame in flight.
+    class Frame
+    {
+    public:
+        uint64_t          frame_index     {std::numeric_limits<uint64_t>::max()}; // device frame recorded into this entry
+        std::size_t       frame_slot      {0}; // the open slot; next begin_frame() opens frame_slot + 1 until release_frames()
+        std::size_t       frame_slot_count{0};
+        std::stack<View>  view_stack      {};
+        View              view            {};
+        // Views of the open slot: one for single view, N for multiview.
+        // Buckets copy them into their view spans at start_view().
+        std::vector<View> multiview_views {};
+        // The live settings as of the frame's first begin_frame().
+        float             line_bias_margin{1024.0f};
+        Anti_aliasing     anti_aliasing   {Anti_aliasing::on};
+    };
+
+    // The entry of the calling role's device frame. get_recording_frame()
+    // claims the entry for that frame (verifying the frame that used it
+    // before released it); get_frame() verifies the claim.
+    [[nodiscard]] auto get_recording_frame() -> Frame&;
+    [[nodiscard]] auto get_frame          () -> Frame&;
+    [[nodiscard]] auto get_frame          () const -> const Frame&;
+
     erhe::graphics::Device&                         m_graphics_device;
     Debug_renderer_program_interface                m_program_interface;
     erhe::graphics::Vertex_input_state              m_line_vertex_input;  // direct (vertex-buffer) path
     erhe::graphics::Vertex_input_state              m_empty_vertex_input; // SSBO-read triangle path
     erhe::graphics::Compute_pipeline                m_lines_to_triangles_compute_pipeline;
-    std::stack<View>                                m_view_stack{};
-    View                                            m_view      {};
-    float                                           m_line_bias_margin{1024.0f};
-    Anti_aliasing                                   m_anti_aliasing{Anti_aliasing::on};
+    float                                           m_line_bias_margin{1024.0f};          // live, main thread
+    Anti_aliasing                                   m_anti_aliasing{Anti_aliasing::on};   // live, main thread
 
-    // Multiview state, parallel to m_view_stack / m_view. Non-empty
-    // when a multiview begin_frame() supplied a per-eye View span;
-    // emptied at end_frame(). Buckets check is_multiview_active() to
-    // decide which UBO layout to write per draw.
-    std::vector<View>                               m_multiview_views{};
+    // One entry per device frame in flight, indexed by frame index % size;
+    // sized at construction, never resized (the main thread and the render
+    // thread each touch only their own frame's entry).
+    std::vector<Frame>                              m_frames;
+
+    // The bucket count the render role iterates: a bucket get() creates
+    // while another thread renders has no draws of that thread's frame.
+    [[nodiscard]] auto get_bucket_count() const -> std::size_t;
 
     // NOTE: Elements in m_buckets must be stable, etl::vector<> works, std::vector<> does not work.
+    // m_buckets_mutex guards the vector (get() appends while the render role
+    // iterates); each bucket keeps its draws per device frame in flight.
+    mutable std::mutex                              m_buckets_mutex;
     etl::vector<Debug_renderer_bucket, 32>          m_buckets;
 };
 

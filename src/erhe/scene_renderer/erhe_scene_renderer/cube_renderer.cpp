@@ -113,7 +113,6 @@ void Cube_renderer::render(const Render_parameters& parameters)
     std::optional<Ring_buffer_range> camera_buffer_range{};
     ERHE_VERIFY(camera != nullptr);
     camera_buffer_range = m_camera_buffer.update(
-        *camera->projection(),
         *camera,
         viewport,
         camera->get_exposure(),

@@ -143,10 +143,14 @@ monotonic timestamp (declared in `src/erhe/log/erhe_log/log.hpp`). It costs one
 uncontended mutex lock, reuses the current-text buffer, and is safe from any
 thread. Breadcrumbs are set at:
 
-- `Editor::tick()` major phases (`tick: wait_frame`, `tick: xr poll_events`,
-  `tick: fixed_step (physics)`, `tick: thumbnails update`,
+- The editor's frame phase steps, on the main thread (M1 and M2:
+  `tick: wait_for_frame_start`, `tick: xr wait_frame`,
+  `tick: fixed_step (physics)`, `tick: acquire_frame_slot`,
+  `tick: draw_imgui_windows`, ...) and on the render thread (R:
+  `tick: xr begin_frame`, `tick: thumbnails update`,
   `tick: rendergraph execute`, `tick: submit + end_frame`, ...) in
-  `src/editor/editor.cpp`.
+  `src/editor/editor.cpp` (`doc/editor/editor.md` "Frame phases and the
+  render thread").
 - Each rendergraph node before it executes, breadcrumb = node name
   (`src/erhe/rendergraph/erhe_rendergraph/rendergraph.cpp`).
 - `Geometry::process()` sub-steps (`geometry: facets.connect`,
@@ -163,27 +167,12 @@ proof of which call it is inside.
 
 ### Main-loop watchdog
 
-`Editor::start_main_loop_watchdog()` starts a thread right after `entering main
-loop` and joins it first thing in `~Editor`. It wakes once per second and, if a
-tick has been in progress without the tick-thread breadcrumb advancing for more
-than 5 seconds, logs under the `editor.watchdog` tag:
-
-```
-Main loop STALLED: tick has not progressed for N.N s. Stuck in phase: '<phase>' (tick thread 0x...).
-  breadcrumb t=...s thread=0x...: <phase>
-  ... (the recent ring, oldest -> newest)
-```
-
-The stuck phase is attributed to the tick thread specifically - worker threads
-also set breadcrumbs during background geometry processing, so the newest
-breadcrumb from the tick thread is the authoritative one. The watchdog fires
-only while a tick is actually in progress, so idle or throttled frames
-(including the in-tick 250 ms OpenXR off-head throttle) do not trip it.
-
-When a stall is reported: on Quest keep `scripts/quest_logcat.sh` streaming to
-disk beforehand (the in-memory ring rolls over), on desktop read `logs/log.txt`,
-and grep for `Main loop STALLED`. The ring dump below the report gives the
-sequence of phases leading in.
+The editor's main-loop stall watchdog reports the newest breadcrumb of the
+main and the render thread when a frame stops progressing for 5 s; its report
+and how to read it are in `doc/agents/debugging.md` "Main-loop stall
+watchdog". On Quest keep `scripts/quest_logcat.sh` streaming to disk
+beforehand (the in-memory ring rolls over); on desktop grep `logs/log.txt`
+for `Main loop STALLED`.
 
 ### Structural mesh validation
 

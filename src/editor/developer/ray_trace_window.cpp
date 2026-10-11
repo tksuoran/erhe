@@ -64,11 +64,14 @@ void Ray_trace_window::imgui()
         return;
     }
 
-    ImGui::Text("Instances: %zu", renderer->get_instance_count());
+    // What the render phase traced in the last rendered frame.
+    const Ray_trace_renderer::Rendered_output* const output = renderer->get_rendered_output(m_context.last_rendered_frame_index);
+    ImGui::Text("Instances: %zu", (output != nullptr) ? output->instance_count : std::size_t{0});
 
     // Ray_trace_config lives in the editor settings (autosaved to
-    // editor_settings.json by Editor_settings_store); the renderer holds a
-    // live reference and picks changes up on its next render.
+    // editor_settings.json by Editor_settings_store); the render phase reads
+    // the frame's Render_settings copy, so an edit applies from the next
+    // frame.
     // Integer downscale factors magnify with nearest (crisp NxN pixel
     // blocks); fractional factors use linear to hide the uneven footprint.
     erhe::graphics::Filter magnification_filter = erhe::graphics::Filter::nearest;
@@ -85,19 +88,21 @@ void Ray_trace_window::imgui()
         magnification_filter = integer_downscale ? erhe::graphics::Filter::nearest : erhe::graphics::Filter::linear;
     }
 
-    const std::shared_ptr<erhe::graphics::Texture> texture = renderer->get_output_texture();
-    if (!texture) {
+    // The output texture is created and replaced by the render phase: the
+    // window sizes the image from the last rendered frame's output and draws
+    // it through a reference the render thread resolves.
+    if ((output == nullptr) || (output->width < 1) || (output->height < 1)) {
         return;
     }
     // Fit the image to the window (keep aspect) so the whole output is
     // visible regardless of window size.
     const float avail_width    = std::max(64.0f, ImGui::GetContentRegionAvail().x);
-    const float aspect         = static_cast<float>(texture->get_height()) / static_cast<float>(texture->get_width());
+    const float aspect         = static_cast<float>(output->height) / static_cast<float>(output->width);
     const int   display_width  = static_cast<int>(avail_width);
     const int   display_height = static_cast<int>(avail_width * aspect);
     m_context.imgui_renderer->image(
         erhe::imgui::Draw_texture_parameters{
-            .texture_reference = texture,
+            .texture_reference = renderer->get_output_texture_reference(),
             .width             = display_width,
             .height            = display_height,
             // The compute output's row 0 is the top row; sample it unflipped.

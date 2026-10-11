@@ -10,8 +10,9 @@
 #include <span>
 
 namespace erhe::graphics { class Device; }
+#include "erhe_scene/camera_snapshot.hpp"
+
 namespace erhe::scene {
-    class Xformable; using Node = Xformable;
     class Projection;
     class Trs_transform;
 }
@@ -175,12 +176,14 @@ public:
     std::size_t                     view_count;
 };
 
+// One view of a pass: the camera as the render phase's copy
+// (erhe::scene::Camera_snapshot, captured by the thread that owns the camera)
+// and the viewport it renders to. The renderers read no live camera node.
 class Camera_view_input
 {
 public:
-    const erhe::scene::Projection* projection {nullptr};
-    const erhe::scene::Node*       node       {nullptr};
-    erhe::math::Viewport           viewport   {};
+    const erhe::scene::Camera_snapshot* camera     {nullptr};
+    erhe::math::Viewport                viewport   {};
     // Physical pixels per logical pixel of the render target (the window
     // display scale for a desktop viewport, 1.0 for a headset eye). Scales
     // the content wide-line renderer's negative (screen-space) line widths.
@@ -193,8 +196,7 @@ public:
     Camera_buffer(erhe::graphics::Device& graphics_device, Camera_interface& camera_interface);
 
     auto update(
-        const erhe::scene::Projection&            camera_projection,
-        const erhe::scene::Node&                  camera_node,
+        const erhe::scene::Camera_snapshot&       camera,
         erhe::math::Viewport                      viewport,
         float                                     exposure,
         const Grid_parameters&                    grid_parameters,

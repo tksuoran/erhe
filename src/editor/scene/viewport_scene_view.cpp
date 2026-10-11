@@ -7,6 +7,7 @@
 #include "config/generated/viewport_config_data.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "app_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
@@ -58,6 +59,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -124,6 +126,7 @@ Viewport_scene_view::Viewport_scene_view(
     , m_name           {name}
     , m_ini_label      {ini_label}
     , m_camera         {camera}
+    , m_msaa_sample_count{msaa_sample_count}
     , m_post_processing_enabled{enable_post_processing}
 {
     set_scene_root(scene_root);
@@ -166,23 +169,296 @@ Viewport_scene_view::~Viewport_scene_view() noexcept
     }
 }
 
+void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    // The render state of the frame this prepare phase prepares: what
+    // execute_rendergraph_node() of that frame reads of this view.
+    const erhe::graphics::Device& device           = *m_context.graphics_device;
+    const uint64_t                frame_index      = device.get_frame_index();
+    const std::size_t             frames_in_flight = device.get_number_of_frames_in_flight();
+    ERHE_VERIFY(frames_in_flight > 0);
+    if (m_render_states.size() != frames_in_flight) {
+        m_render_states.resize(frames_in_flight);
+    }
+    Viewport_render_state& state = m_render_states[frame_index % frames_in_flight];
+    state.frame_index           = frame_index;
+    state.scene_root            = get_scene_root();
+    state.camera                = m_camera.lock();
+    state.projection_viewport   = m_projection_viewport;
+    state.msaa_sample_count     = m_msaa_sample_count;
+    state.shader_debug          = m_shader_debug;
+    state.is_scene_view_hovered = m_is_scene_view_hovered;
+    state.position_in_viewport  = m_position_in_viewport;
+    // pick_probe: an armed MCP pick_at probe (see arm_pick_probe) - the ID
+    // pass renders at the armed pointer position without a real hover.
+    state.pick_probe = (m_pick_probe_frames > 0);
+    if (state.pick_probe) {
+        --m_pick_probe_frames;
+    }
+    state.do_render = static_cast<bool>(state.scene_root) && static_cast<bool>(state.camera);
+    // The rendergraph node's enabled flag as this prepare phase sees it
+    // (the Viewport window sets it while it draws, which may follow this
+    // phase): the frame's composition and render phase follow this copy.
+    state.node_enabled = is_enabled();
+    state.tools_frame_slot.reset();
+    // No grid unless the grid tool records one (record_grid()).
+    state.grid         = Grid_pass_state{};
+    state.shadow_debug = m_debug_visualizations.is_shadow_debug_enabled();
+    // Weight_display's joint weight ramp inputs; the colors are assigned
+    // into the slot's vector, which keeps its capacity.
+    const App_rendering& app_rendering = *m_context.app_rendering;
+    state.debug_joint_indices = app_rendering.debug_joint_indices;
+    state.debug_target_joint  = app_rendering.debug_target_joint.lock();
+    state.debug_joint_colors  = app_rendering.debug_joint_colors;
+    snapshot_render_view(state.camera.get());
+
+    // The same gates as execute_rendergraph_node(): a disabled node is not
+    // executed, and the node renders nothing without a size, scene or camera.
+    if (!state.node_enabled) {
+        return;
+    }
+    if ((m_projection_viewport.width < 1) || (m_projection_viewport.height < 1)) {
+        return;
+    }
+    if (!state.do_render) {
+        return;
+    }
+    const std::shared_ptr<Scene_root>&          scene_root = state.scene_root;
+    const std::shared_ptr<erhe::scene::Camera>& camera     = state.camera;
+
+    const erhe::scene_renderer::Camera_view_input single_view_input{
+        .camera      = get_render_camera(),
+        .viewport    = m_projection_viewport,
+        .pixel_scale = m_context.context_window->get_scale_factor()
+    };
+    // No encoder: the tools and renderables take this as the CPU phase and
+    // record lines and labels only.
+    Render_context context{
+        .command_buffer      = &upload_command_buffer,
+        .encoder             = nullptr,
+        .app_context         = m_context,
+        .scene_view          = *this,
+        .viewport_config     = m_viewport_config,
+        .camera              = camera.get(),
+        .camera_snapshot     = get_render_camera(),
+        .viewport_scene_view = this,
+        .scene_root          = scene_root,
+        .render_state        = &state,
+        .viewport            = m_projection_viewport,
+        .shader_debug        = m_shader_debug,
+        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
+    };
+
+    // Screen-space line widths are in logical pixels; the window display
+    // scale turns them into framebuffer pixels.
+    const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
+        *context.camera, context.viewport, m_context.context_window->get_scale_factor(), get_conventions()
+    );
+    const std::size_t frame_slot = m_context.debug_renderer->begin_frame(
+        context.viewport,
+        std::span<const erhe::renderer::View>(&debug_view, 1)
+    );
+    state.tools_frame_slot = frame_slot;
+    m_context.text_renderer->set_frame_slot(frame_slot);
+
+    // Sent before the tools record their geometry: subscribers refresh
+    // per-view state (the transform gizmo's view scale) that
+    // render_viewport_tools() reads.
+    m_context.app_message_bus->render_scene_view.send_message(
+        Render_scene_view_message{
+            .scene_view = this
+        }
+    );
+
+    m_context.tools        ->render_viewport_tools(context);
+    m_context.app_rendering->render_viewport_renderables(context);
+}
+
+void Viewport_scene_view::prepare_wide_line_feed(
+    const Render_context&                         context,
+    const int64_t                                 host_system_time_ns,
+    erhe::scene_renderer::Content_wide_line_feed& out
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    out.clear();
+    if ((m_context.content_wide_line_renderer == nullptr) || !m_context.content_wide_line_renderer->is_enabled()) {
+        return;
+    }
+    const std::shared_ptr<Scene_root>& content_scene_root = context.scene_root;
+    if (!content_scene_root) {
+        return;
+    }
+    erhe::scene::Scene* scene = content_scene_root->get_hosted_scene();
+    if (scene == nullptr) {
+        return;
+    }
+
+    // Feeds the meshes of one composition pass.
+    auto feed_pass = [&](const Composition_pass* pass) {
+        if (pass == nullptr) {
+            return;
+        }
+        const Composition_pass_data& data = pass->data;
+        if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
+            return;
+        }
+        // Mirror Composition_pass::prepare's per-view Visual Style gate
+        // (get_render_style + is_primitive_mode_enabled): when this view's
+        // style disables the pass's edge lines, do not feed its meshes - the
+        // ribbons would be expanded by the compute pass and then never drawn.
+        // Passes without a render style (selection / translucent outline,
+        // ghost edge lines) stay ungated, matching the draw side.
+        if (data.get_render_style && !is_primitive_mode_enabled(data.get_render_style(context), data.primitive_mode)) {
+            return;
+        }
+        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, context, host_system_time_ns);
+        const float     line_width = settings.constant_size;
+        const auto&     filter     = data.filter;
+        const uint32_t  group      = data.content_wide_line_group;
+
+        for (const auto layer_id : data.mesh_layers) {
+            const auto mesh_layer = scene->get_mesh_layer_by_id(layer_id);
+            if (!mesh_layer) {
+                continue;
+            }
+            for (const auto& mesh : mesh_layer->meshes) {
+                if (filter(mesh->get_flag_bits())) {
+                    // The active item of the selection gets its own outline
+                    // color when the pass supplies one (doc/editor/active_item.md D5).
+                    erhe::scene_renderer::Content_wide_line_renderer::prepare_mesh(
+                        *m_context.mesh_memory,
+                        *mesh,
+                        settings.get_selected_color(mesh->get_flag_bits()),
+                        line_width,
+                        group,
+                        out
+                    );
+                }
+            }
+        }
+    };
+
+    // The selection outline (its animated color / width come from
+    // get_pass_primitive_settings, the pass's selection_outline_pulse), the
+    // regular edge line passes, the translucent outline and the ghost edge
+    // lines, in the order their dispatches were always queued.
+    feed_pass(m_context.app_rendering->selection_outline.get());
+    feed_pass(m_context.app_rendering->edge_lines_not_selected.get());
+    feed_pass(m_context.app_rendering->edge_lines_selected.get());
+    feed_pass(m_context.app_rendering->translucent_outline.get());
+    feed_pass(m_context.app_rendering->ghost_edge_lines.get());
+}
+
+void Viewport_scene_view::prepare_composition(const uint64_t frame_index, const std::size_t frames_in_flight, const int64_t host_system_time_ns)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    Composer_prepared& slot = m_composer_slots.begin_prepare(frame_index, frames_in_flight);
+
+    // The same gates as prepare_render() and execute_rendergraph_node(): a
+    // view that renders nothing has no prepared slot, and the render phase
+    // does not ask for one.
+    const Viewport_render_state& state = get_render_state(frame_index);
+    if (!state.node_enabled) {
+        return;
+    }
+    if ((state.projection_viewport.width < 1) || (state.projection_viewport.height < 1)) {
+        return;
+    }
+    if (!state.do_render) {
+        return;
+    }
+
+    const erhe::scene_renderer::Camera_view_input single_view_input{
+        .camera      = get_render_camera(),
+        .viewport    = state.projection_viewport,
+        .pixel_scale = m_context.context_window->get_scale_factor()
+    };
+    // The render phase's context for this view, minus the encoder: the pass
+    // gating reads the render copies (viewport config, shader debug), as the
+    // render phase did when it gated the passes itself.
+    const Render_context context{
+        .command_buffer      = nullptr,
+        .encoder             = nullptr,
+        .app_context         = m_context,
+        .scene_view          = *this,
+        .viewport_config     = get_render_view().viewport_config,
+        .camera              = nullptr,
+        .camera_snapshot     = get_render_camera(),
+        .viewport_scene_view = this,
+        .scene_root          = state.scene_root,
+        .render_state        = &state,
+        .viewport            = state.projection_viewport,
+        .shader_debug        = state.shader_debug,
+        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
+    };
+
+    // Bucketing reads the meshes' Buffer_mesh variants, which a worker may
+    // be replacing (commit_geometry_buffer_mesh, under this mutex).
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{state.scene_root->item_host_mutex};
+    m_context.app_rendering->prepare_composer(context, host_system_time_ns, slot);
+
+    // The edge-line feed of the wide-line passes (the render phase queues
+    // it, runs the compute pre-pass and draws it).
+    prepare_wide_line_feed(context, host_system_time_ns, slot.wide_line_feed);
+
+    // The id pass, under the condition execute_rendergraph_node() renders it
+    // with (Id_renderer::begin_frame handed this frame its region scan in
+    // Scene_views::prepare_render; the first view that prepares an id pass
+    // claims it into its prepared pass).
+    const bool scan_pending = (m_context.id_renderer != nullptr) && m_context.id_renderer->has_frame_scan();
+    if (state.is_scene_view_hovered || scan_pending || state.pick_probe) {
+        m_context.app_rendering->prepare_id(context, slot.id_pass);
+    }
+}
+
 void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if ((m_projection_viewport.width < 1) || (m_projection_viewport.height < 1)) {
+    // The render phase reads the state prepare_render() copied in M2 for
+    // the frame it renders, never the live members (doc/editor/editor.md
+    // "Frame phases and the render thread").
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    erhe::graphics::Device&            graphics_device = m_rendergraph.get_graphics_device();
+    const uint64_t                     frame_index     = graphics_device.get_frame_index();
+    const Viewport_render_state&       state           = get_render_state(frame_index);
+    // The node was disabled when the frame's prepare phase ran (the
+    // Viewport window enabled it after that): nothing was prepared for this
+    // frame, so it renders nothing.
+    if (!state.node_enabled) {
+        return;
+    }
+    const erhe::math::Viewport&  projection_viewport = state.projection_viewport;
+    if ((projection_viewport.width < 1) || (projection_viewport.height < 1)) {
         return;
     }
 
-    bool do_render = true;
-    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
-    if (!scene_root) {
-        do_render = false;
+    // The content and overlay render targets for the size and sample count
+    // the prepare phase copied for this frame: created, replaced and dropped
+    // here, by the render phase, which is the only phase that reads them
+    // (the Viewport window hands the content texture to the ImGui renderer
+    // through the rendergraph node reference, resolved when the ImGui host
+    // renders, and the post-processing node sizes its pyramid from the
+    // content texture when it executes, after this node).
+    if (m_render_target.get_sample_count() != state.msaa_sample_count) {
+        m_render_target.reconfigure(state.msaa_sample_count);
     }
-    std::shared_ptr<erhe::scene::Camera> camera = m_camera.lock();
-    if (!camera) {
-        do_render = false;
-    }
+    m_render_target.update(projection_viewport.width, projection_viewport.height, nullptr);
+    update_overlay_render_target(projection_viewport.width, projection_viewport.height);
+
+    Render_view& render_view = get_render_view();
+
+    const bool                                  do_render  = state.do_render;
+    const std::shared_ptr<Scene_root>&          scene_root = state.scene_root;
+    const std::shared_ptr<erhe::scene::Camera>& camera     = state.camera;
 
     // 1-element views span for the single-view path. Declared in this
     // outer scope so the backing object outlives every use of
@@ -192,46 +468,48 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     erhe::scene_renderer::Camera_view_input single_view_input{};
     if (camera) {
         single_view_input = erhe::scene_renderer::Camera_view_input{
-            .projection  = camera->projection(),
-            .node        = camera.get(),
-            .viewport    = m_projection_viewport,
+            .camera      = get_render_camera(),
+            .viewport    = projection_viewport,
             .pixel_scale = m_context.context_window->get_scale_factor()
         };
     }
+    // No live camera in the render phase: the renderers read camera_snapshot.
     Render_context context{
         .command_buffer      = &command_buffer,
         .encoder             = nullptr, // filled in later once we start render pass
         .app_context         = m_context,
         .scene_view          = *this,
-        .viewport_config     = m_viewport_config,
-        .camera              = camera.get(),
+        .viewport_config     = render_view.viewport_config,
+        .camera              = nullptr,
+        .camera_snapshot     = get_render_camera(),
         .viewport_scene_view = this,
-        .viewport            = m_projection_viewport,
-        .shader_debug        = m_shader_debug,
+        .scene_root          = scene_root,
+        .render_state        = &state,
+        .viewport            = projection_viewport,
+        .shader_debug        = state.shader_debug,
         .views               = camera
             ? std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
             : std::span<const erhe::scene_renderer::Camera_view_input>{}
     };
+    // What the prepare phase decided for this view and frame: the
+    // composition and the id pass (prepare_composition(), under the same
+    // gates: a view that renders is prepared).
+    if (do_render) {
+        context.composer_prepared = &m_composer_slots.get_prepared(frame_index);
+    }
 
     // The ID renderer always runs when the viewport is hovered -- it is
     // the only source of correct picks for skinned meshes (the raytrace
     // BVH is rest-pose only). The id_renderer.enabled config knob is
     // repurposed inside App_rendering::render_id to switch the ID pass
     // between skinned-only (default) and skinned + static (force-id).
-    // It also runs when a region selection scan is pending, so a programmatic
-    // (non-hovered) scan still renders the ID pass it reads back.
-    const bool scan_pending = (m_context.id_renderer != nullptr) && m_context.id_renderer->has_pending_scan();
-    // pick_probe: an armed MCP pick_at probe (see arm_pick_probe) - renders the
-    // ID pass at the armed pointer position without a real hover.
-    const bool pick_probe = m_pick_probe_frames > 0;
-    if (pick_probe) {
-        --m_pick_probe_frames;
-    }
-    if (do_render && (m_is_scene_view_hovered || scan_pending || pick_probe)) {
+    // It also runs when the prepared pass carries the frame's region
+    // selection scan, so a programmatic (non-hovered) scan still renders the
+    // ID pass it reads back.
+    const bool scan_pending = do_render && context.composer_prepared->id_pass.scan.has_value();
+    if (do_render && (state.is_scene_view_hovered || scan_pending || state.pick_probe)) {
         m_context.app_rendering->render_id(context);
     }
-
-    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
     // Meshes fed to the content wide line renderer this frame. Zero when this
     // view's Visual Style disables every edge-line pass (and nothing is
@@ -239,46 +517,20 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // are skipped then.
     std::size_t content_wide_line_mesh_count = 0;
 
-    // Last frame's overlay pass was skipped (early-out) after render() had
-    // deferred the debug-renderer frame to it: release the recorded frame
-    // that never got drawn before beginning a new one.
-    if (m_debug_renderer_frame_pending) {
-        m_context.debug_renderer->end_frame();
-        m_debug_renderer_frame_pending = false;
-    }
-
     if (do_render) {
-        // Screen-space line widths are in logical pixels; the window display
-        // scale turns them into framebuffer pixels.
-        const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
-            *context.camera, context.viewport, m_context.context_window->get_scale_factor(), get_conventions()
-        );
-        m_context.debug_renderer->begin_frame(
-            context.viewport,
-            std::span<const erhe::renderer::View>(&debug_view, 1)
-        );
         if (
             (m_context.content_wide_line_renderer != nullptr) &&
             m_context.content_wide_line_renderer->is_enabled()
         ) {
             // The editor-global edge-line config (method + bias) reaches the
-            // renderer through apply_content_edge_lines_settings().
+            // renderer as the frame's Render_settings copy (set_view_params()).
             m_context.content_wide_line_renderer->begin_frame();
         }
 
-        // Sent before the tools record their geometry: subscribers refresh
-        // per-view state (the transform gizmo's view scale) that
-        // render_viewport_tools() reads.
-        m_context.app_message_bus->render_scene_view.send_message(
-            Render_scene_view_message{
-                .scene_view = this
-            }
-        );
-
-        m_context.tools        ->render_viewport_tools(context);
-        m_context.app_rendering->render_viewport_renderables(context);
-
-        {
+        // The tools, renderables and debug visualizations were recorded in
+        // M2 (prepare_render()); the compute pass expands every recorded
+        // line not expanded yet, whichever view it belongs to.
+        if (state.tools_frame_slot.has_value()) {
             {
                 erhe::graphics::Scoped_debug_group debug_group{command_buffer, "debug_renderer->compute()"};
                 erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
@@ -301,92 +553,28 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         // Content wide line compute path, all edge line passes
         if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
             ERHE_PROFILE_SCOPE("Edge line compute");
-            const auto content_scene_root = context.scene_view.get_scene_root();
-            if (content_scene_root) {
-                erhe::scene::Scene* scene = content_scene_root->get_hosted_scene();
-                if (scene != nullptr) {
-                    erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{command_buffer, "content_wide_line_renderer"};
-
-                    // Helper to feed meshes from a composition pass to the content wide line renderer
-                    auto feed_pass = [&](const Composition_pass* pass) {
-                        if (pass == nullptr) {
-                            return;
-                        }
-                        auto& data = pass->data;
-                        if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
-                            return;
-                        }
-                        // Mirror Composition_pass::render's per-view Visual Style
-                        // gate (get_render_style + is_primitive_mode_enabled): when
-                        // this view's style disables the pass's edge lines, do not
-                        // feed its meshes - the ribbons would be expanded by the
-                        // compute pass and then never drawn. Passes without a
-                        // render style (selection / translucent outline, ghost
-                        // edge lines) stay ungated, matching the render side.
-                        if (data.get_render_style && !is_primitive_mode_enabled(data.get_render_style(context), data.primitive_mode)) {
-                            return;
-                        }
-                        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, context);
-                        const float     line_width = settings.constant_size;
-                        const auto&     filter     = data.filter;
-                        const uint32_t  group      = data.content_wide_line_group;
-
-                        for (const auto layer_id : data.mesh_layers) {
-                            const auto mesh_layer = scene->get_mesh_layer_by_id(layer_id);
-                            if (mesh_layer) {
-                                for (const auto& mesh : mesh_layer->meshes) {
-                                    if (filter(mesh->get_flag_bits())) {
-                                        // The active item of the selection gets
-                                        // its own outline color when the pass
-                                        // supplies one (doc/editor/active_item.md D5).
-                                        m_context.content_wide_line_renderer->add_mesh(
-                                            *m_context.mesh_memory,
-                                            *mesh,
-                                            settings.get_selected_color(mesh->get_flag_bits()),
-                                            line_width,
-                                            group
-                                        );
-                                        ++content_wide_line_mesh_count;
-                                    }
-                                }
-                            }
-                        }
-                    };
-
-                    // Feed the selection outline; its animated color / width
-                    // come from get_pass_primitive_settings (the pass's
-                    // selection_outline_pulse).
-                    if (m_context.app_rendering->selection_outline) {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "selection_outline"};
-                        feed_pass(m_context.app_rendering->selection_outline.get());
-                    }
-
-                    // Feed regular edge line passes
-                    {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "opaque_edge_lines_not_selected"};
-                        feed_pass(m_context.app_rendering->edge_lines_not_selected.get());
-                    }
-                    {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "opaque_edge_lines_selected"};
-                        feed_pass(m_context.app_rendering->edge_lines_selected.get());
-                    }
-                    {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "translucent_outline"};
-                        feed_pass(m_context.app_rendering->translucent_outline.get());
-                    }
-                    {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "ghost_edge_lines"};
-                        feed_pass(m_context.app_rendering->ghost_edge_lines.get());
-                    }
-                }
+            // The feed the prepare phase built for this view and frame
+            // (prepare_wide_line_feed()); the render phase reads no mesh.
+            ERHE_VERIFY(context.composer_prepared != nullptr);
+            const erhe::scene_renderer::Content_wide_line_feed& wide_line_feed = context.composer_prepared->wide_line_feed;
+            {
+                erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{command_buffer, "content_wide_line_renderer"};
+                m_context.content_wide_line_renderer->add_feed(wide_line_feed);
             }
+            content_wide_line_mesh_count = wide_line_feed.mesh_count;
 
             {
                 // Cache per-frame view + depth conventions on the renderer
                 // so both compute() and render() consume the same Per_view_camera
                 // entries without rebuilding them.
+                const Content_edge_lines_config& edge_lines = m_context.render_settings->content_edge_lines;
                 m_context.content_wide_line_renderer->set_view_params(
                     context.views,
+                    erhe::scene_renderer::Content_wide_line_tent_settings{
+                        .use_tent         = edge_lines.use_tent,
+                        .line_bias_margin = edge_lines.line_bias_margin,
+                        .line_bias_clamp  = edge_lines.line_bias_clamp
+                    },
                     get_reverse_depth(),
                     get_depth_range(),
                     get_conventions()
@@ -399,12 +587,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                 // until end_frame() releases it -- the geometry-shader backend
                 // (future) needs the joint UBO bound at render time, which is
                 // after the compute encoder closes.
-                const auto          scene_root_joints = context.scene_view.get_scene_root();
-                erhe::scene::Scene* scene_for_joints  = scene_root_joints ? scene_root_joints->get_hosted_scene() : nullptr;
-                if ((content_wide_line_mesh_count > 0) && (scene_for_joints != nullptr) && (m_context.forward_renderer != nullptr)) {
+                if ((content_wide_line_mesh_count > 0) && context.scene_root && (m_context.forward_renderer != nullptr)) {
                     erhe::scene_renderer::Joint_buffer& joint_buffer = m_context.forward_renderer->get_joint_buffer();
                     erhe::graphics::Ring_buffer_range   joint_buffer_range = joint_buffer.update(
-                        glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, scene_for_joints->get_skins() // no weight-ramp target in this pass
+                        glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, context.scene_root->get_render_joint_poses(frame_index) // no weight-ramp target in this pass
                     );
                     m_context.content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
                 }
@@ -443,21 +629,19 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // vertex-stage texture fetches -- only when the visualization is active, so
     // the common path pays no extra synchronization. Mirrors the content-wide-
     // line compute->vertex barrier above.
-    if (m_debug_visualizations.is_shadow_debug_enabled()) {
+    if (state.shadow_debug) {
         command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::texture_fetch_barrier_bit);
     }
 
     // Generate the atmosphere LUTs once (must be outside the render pass: it
     // issues compute dispatches + image barriers) when the physically-based
     // sky mode is active.
-    if ((m_context.sky_renderer != nullptr) &&
-        (m_context.editor_settings != nullptr)) {
+    if (m_context.sky_renderer != nullptr) {
         // Resolve sky mode per scene (#239) so the atmosphere LUTs are generated
         // when this viewport's scene uses the physically-based sky.
-        const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
-        const int sky_mode = (sky_scene_root != nullptr)
-            ? get_effective_sky(*m_context.editor_settings, *sky_scene_root).mode
-            : m_context.editor_settings->sky.mode;
+        const int sky_mode = scene_root
+            ? scene_root->get_render_settings(graphics_device.get_frame_index()).sky.mode
+            : m_context.render_settings->sky.mode;
         if (sky_mode == 1) {
             m_context.sky_renderer->ensure_luts(graphics_device, command_buffer);
         }
@@ -467,20 +651,19 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // primary-ray compute dispatch record outside the render pass, mirroring
     // the LUT/compute pre-passes above. The renderer no-ops unless the Ray
     // Trace window enabled it and the device supports ray queries.
-    if ((m_context.ray_trace_renderer != nullptr) && (context.camera != nullptr)) {
-        const std::shared_ptr<Scene_root> ray_trace_scene_root = get_scene_root();
-        if (ray_trace_scene_root) {
-            // Light projections come from this view's shadow render node
-            // (already executed this frame); may be null, in which case the
-            // ray tracer shades with ambient light only. The viewport gives
-            // the ray generation the same projection as the raster view.
-            m_context.ray_trace_renderer->render(command_buffer, *ray_trace_scene_root, *context.camera, context.viewport, get_light_projections());
-        }
+    if ((m_context.ray_trace_renderer != nullptr) && (context.camera_snapshot != nullptr) && scene_root) {
+        // Light projections come from this view's shadow render node
+        // (already executed this frame); may be null, in which case the
+        // ray tracer shades with ambient light only. The viewport gives
+        // the ray generation the same projection as the raster view.
+        m_context.ray_trace_renderer->render(command_buffer, *scene_root, *context.camera_snapshot, context.viewport, get_light_projections());
     }
 
-    m_render_target.update(m_projection_viewport.width, m_projection_viewport.height, nullptr);
-
+    // Sized at the start of this function for this frame.
     ERHE_VERIFY(m_render_target.get_render_pass());
+    ERHE_VERIFY(m_render_target.get_color_texture());
+    ERHE_VERIFY(m_render_target.get_color_texture()->get_width()  == projection_viewport.width);
+    ERHE_VERIFY(m_render_target.get_color_texture()->get_height() == projection_viewport.height);
 
     erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_target.get_render_pass(), command_buffer};
@@ -503,28 +686,23 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // See issue #230.
     m_context.app_rendering ->render_viewport_main(context, !m_post_processing_enabled);
     m_context.app_rendering ->render_viewport_renderables(context); // This time with render encoder set
-    if (m_post_processing_enabled) {
-        // Debug rendering (gizmo, debug visualizations) draws in the overlay
-        // pass after post-processing, like the overlay meshes, so bloom and
-        // tonemap never affect it - nearby bright sources cannot drown it and
-        // its colors are WYSIWYG. The overlay pass is multisampled and loads
-        // this pass's depth + stencil, so MSAA and depth/stencil behavior are
-        // unchanged. Deferring across rendergraph nodes is safe because each
-        // view's chain executes contiguously: nodes register per view in
-        // chain order and Graph::sort() picks the earliest-registered
-        // eligible node, so no other view's begin_frame runs in between.
-        m_debug_renderer_frame_pending = true;
-    } else {
-        m_context.debug_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport);
-        m_context.debug_renderer->end_frame();
+    // With post-processing the debug rendering (gizmo, debug visualizations)
+    // draws in the overlay pass after post-processing, like the overlay
+    // meshes, so bloom and tonemap never affect it - nearby bright sources
+    // cannot drown it and its colors are WYSIWYG. The overlay pass is
+    // multisampled and loads this pass's depth + stencil, so MSAA and
+    // depth/stencil behavior are unchanged. The view's frame slot keeps the
+    // recorded lines until render_overlay_pass() draws them.
+    if (!m_post_processing_enabled && state.tools_frame_slot.has_value()) {
+        m_context.debug_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport, false, state.tools_frame_slot.value());
     }
     if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
         m_context.content_wide_line_renderer->end_frame();
     }
     // Text (gizmo readouts, hover labels) defers with the debug rendering so
     // the two stay consistent - both WYSIWYG, neither bloomed / tonemapped.
-    if (!m_post_processing_enabled) {
-        m_context.text_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport);
+    if (!m_post_processing_enabled && state.tools_frame_slot.has_value()) {
+        m_context.text_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport, false, state.tools_frame_slot.value());
     }
 }
 
@@ -650,27 +828,31 @@ void Viewport_scene_view::render_overlay_pass(
 {
     ERHE_PROFILE_FUNCTION();
 
-    if ((m_projection_viewport.width < 1) || (m_projection_viewport.height < 1)) {
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    erhe::graphics::Device&            graphics_device = m_rendergraph.get_graphics_device();
+    const uint64_t                     frame_index     = graphics_device.get_frame_index();
+    const Viewport_render_state&       state           = get_render_state(frame_index);
+    const erhe::math::Viewport&  projection_viewport = state.projection_viewport;
+    if ((projection_viewport.width < 1) || (projection_viewport.height < 1)) {
         return;
     }
     if (!input_texture || (m_context.post_processing == nullptr) || (m_context.app_rendering == nullptr)) {
         return;
     }
-    std::shared_ptr<erhe::scene::Camera> camera = m_camera.lock();
-    if (!camera) {
-        return;
-    }
-    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
-    if (!scene_root) {
+    if (!state.node_enabled || !state.do_render) {
         return;
     }
 
-    update_overlay_render_target(m_projection_viewport.width, m_projection_viewport.height);
+    // Sized by execute_rendergraph_node() for this frame; no overlay
+    // without the content depth/stencil texture.
     if (!m_overlay_render_pass) {
         return;
     }
+    Render_view& render_view = get_render_view();
+    ERHE_VERIFY(m_overlay_width  == projection_viewport.width);
+    ERHE_VERIFY(m_overlay_height == projection_viewport.height);
 
-    erhe::graphics::Device&                 graphics_device = m_rendergraph.get_graphics_device();
     erhe::graphics::Render_command_encoder  encoder         = graphics_device.make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass      scoped_render_pass{*m_overlay_render_pass, command_buffer};
     erhe::graphics::Scoped_debug_group      debug_group{command_buffer, "Viewport overlay"};
@@ -682,9 +864,8 @@ void Viewport_scene_view::render_overlay_pass(
     m_context.post_processing->composite_input(encoder, *m_overlay_render_pass, *input_texture);
 
     erhe::scene_renderer::Camera_view_input single_view_input{
-        .projection = camera->projection(),
-        .node       = camera.get(),
-        .viewport   = m_projection_viewport
+        .camera     = get_render_camera(),
+        .viewport   = projection_viewport
     };
     Render_context context{
         .command_buffer      = &command_buffer,
@@ -692,27 +873,47 @@ void Viewport_scene_view::render_overlay_pass(
         .render_pass         = m_overlay_render_pass.get(),
         .app_context         = m_context,
         .scene_view          = *this,
-        .viewport_config     = m_viewport_config,
-        .camera              = camera.get(),
+        .viewport_config     = render_view.viewport_config,
+        .camera              = nullptr,
+        .camera_snapshot     = get_render_camera(),
         .viewport_scene_view = this,
-        .viewport            = m_projection_viewport,
-        .shader_debug        = m_shader_debug,
-        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
+        .scene_root          = state.scene_root,
+        .render_state        = &state,
+        .viewport            = projection_viewport,
+        .shader_debug        = state.shader_debug,
+        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
+        .composer_prepared   = &m_composer_slots.get_prepared(frame_index)
     };
 
     m_context.app_rendering->render_overlay(context);
 
-    // The debug-renderer frame deferred by render(): draw it over the overlay
-    // meshes (matching the old in-content order: meshes first, debug lines
-    // on top, text last) and close the frame. Text_renderer flushes the
-    // prints accumulated during this view's content render - safe here for
-    // the same chain-contiguity reason as the debug renderer deferral.
-    if (m_debug_renderer_frame_pending) {
-        m_context.debug_renderer->render(encoder, *m_overlay_render_pass, m_projection_viewport);
-        m_context.debug_renderer->end_frame();
-        m_context.text_renderer ->render(encoder, *m_overlay_render_pass, m_projection_viewport);
-        m_debug_renderer_frame_pending = false;
+    // The view's debug renderer frame slot, deferred by
+    // execute_rendergraph_node() when post-processing is on: draw it over
+    // the overlay meshes (meshes first, debug lines on top, text last).
+    if (m_post_processing_enabled && state.tools_frame_slot.has_value()) {
+        m_context.debug_renderer->render(encoder, *m_overlay_render_pass, projection_viewport, false, state.tools_frame_slot.value());
+        m_context.text_renderer ->render(encoder, *m_overlay_render_pass, projection_viewport, false, state.tools_frame_slot.value());
     }
+}
+
+auto Viewport_scene_view::get_render_state(const uint64_t frame_index) const -> const Viewport_render_state&
+{
+    ERHE_VERIFY(!m_render_states.empty());
+    const Viewport_render_state& state = m_render_states[frame_index % m_render_states.size()];
+    // prepare_render() of this frame filled the copy, and the prepare phase
+    // of no later frame has reused it yet.
+    ERHE_VERIFY(state.frame_index == frame_index);
+    return state;
+}
+
+void Viewport_scene_view::record_grid(const Grid_pass_state& grid)
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    ERHE_VERIFY(!m_render_states.empty());
+    const uint64_t         frame_index = m_context.graphics_device->get_frame_index();
+    Viewport_render_state& state       = m_render_states[frame_index % m_render_states.size()];
+    ERHE_VERIFY(state.frame_index == frame_index);
+    state.grid = grid;
 }
 
 auto Viewport_scene_view::get_overlay_output_texture() const -> std::shared_ptr<erhe::graphics::Texture>
@@ -728,6 +929,11 @@ void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
     m_projection_viewport.y      = 0;
     m_projection_viewport.width  = viewport.width;
     m_projection_viewport.height = viewport.height;
+}
+
+void Viewport_scene_view::set_msaa_sample_count(const int sample_count)
+{
+    m_msaa_sample_count = sample_count;
 }
 
 void Viewport_scene_view::set_is_scene_view_hovered(const bool is_hovered)

@@ -188,8 +188,7 @@ void write_camera_entry(
 } // anonymous namespace
 
 auto Camera_buffer::update(
-    const erhe::scene::Projection&            camera_projection,
-    const erhe::scene::Node&                  camera_node,
+    const erhe::scene::Camera_snapshot&       camera,
     erhe::math::Viewport                      viewport,
     float                                     exposure,
     const Grid_parameters&                    grid_parameters,
@@ -214,10 +213,10 @@ auto Camera_buffer::update(
     erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, block_size);
     std::span<std::byte>              gpu_data     = buffer_range.get_span();
 
-    const erhe::scene::Trs_transform& world_from_camera = camera_node.world_from_node_transform();
+    const erhe::scene::Trs_transform& world_from_camera = camera.world_from_node_transform();
     write_camera_entry(
         gpu_data, 0, offsets,
-        camera_projection, world_from_camera,
+        camera.projection(), world_from_camera,
         viewport,
         exposure, grid_parameters, sky_parameters, frame_number,
         reverse_depth, depth_range, conventions,
@@ -301,17 +300,16 @@ auto Camera_buffer::update_views(
 
     // One view origin for the whole pass: the primitive records carry one
     // view-relative translation per primitive, shared by every view.
-    ERHE_VERIFY(!views.empty() && (views.front().node != nullptr));
-    const glm::vec3 view_origin = get_view_origin(views.front().node->world_from_node_transform().get_matrix());
+    ERHE_VERIFY(!views.empty() && (views.front().camera != nullptr));
+    const glm::vec3 view_origin = get_view_origin(views.front().camera->world_from_node());
 
     std::size_t write_offset = 0;
     for (const Camera_view_input& view : views) {
-        ERHE_VERIFY(view.projection != nullptr);
-        ERHE_VERIFY(view.node != nullptr);
+        ERHE_VERIFY(view.camera != nullptr);
         write_camera_entry(
             gpu_data, write_offset, offsets,
-            *view.projection,
-            view.node->world_from_node_transform(),
+            view.camera->projection(),
+            view.camera->world_from_node_transform(),
             view.viewport,
             exposure, grid_parameters, sky_parameters, frame_number,
             reverse_depth, depth_range, conventions,

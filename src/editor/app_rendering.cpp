@@ -3,6 +3,7 @@
 #include "grid/grid_frame.hpp"
 
 #include "app_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/sky_config.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -26,7 +27,10 @@
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/scene_image_capture.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "tools/hotbar.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -72,20 +76,18 @@ class Sky_composition_pass : public Composition_pass
 public:
     explicit Sky_composition_pass(std::string_view name) : Composition_pass{name} {}
 
-    void render(const Render_context& context) override
+    void render(const Render_context& context, const Composition_pass_prepared& prepared) override
     {
-        if (!data.enabled) {
+        if (prepared.result == Composition_pass_result::disabled) {
             return;
         }
         App_context&  app_context  = context.app_context;
         Sky_renderer* sky_renderer = app_context.sky_renderer;
         // Resolve sky mode per scene (#239), consistent with update_sky_parameters().
-        const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
-        const int sky_mode = (app_context.editor_settings == nullptr)
-            ? 0
-            : ((scene_root != nullptr)
-                ? get_effective_sky(*app_context.editor_settings, *scene_root).mode
-                : app_context.editor_settings->sky.mode);
+        const std::shared_ptr<Scene_root>& scene_root = context.scene_root;
+        const int sky_mode = (scene_root != nullptr)
+            ? scene_root->get_render_settings(app_context.graphics_device->get_frame_index()).sky.mode
+            : app_context.render_settings->sky.mode;
         const bool atmosphere =
             (sky_mode == 1) &&
             (sky_renderer != nullptr) &&
@@ -93,7 +95,7 @@ public:
         if (atmosphere) {
             sky_renderer->render_atmosphere(context);
         } else {
-            Composition_pass::render(context);
+            Composition_pass::render(context, prepared);
         }
     }
 };
@@ -123,6 +125,7 @@ App_rendering::App_rendering(
     Programs&                          programs
 )
     : m_context              {app_context}
+    , m_frames_in_flight     {graphics_device.get_number_of_frames_in_flight()}
     , m_capture_frame_command{commands, app_context}
     , m_pipeline_passes      {graphics_device, mesh_memory, programs, graphics_device.get_reverse_depth()}
     , m_composer             {"Main Composer"}
@@ -187,10 +190,10 @@ App_rendering::App_rendering(
     // shared by all scene views. Selected to match the per-view render style
     // each pass gates on (Default vs Selection). See get_primitive_settings.
     const auto& appearance_not_selected = [](const Render_context& context) -> const Render_style_appearance& {
-        return context.app_context.editor_settings->render_style_appearance;
+        return context.app_context.render_settings->render_style_appearance;
     };
     const auto& appearance_selected = [](const Render_context& context) -> const Render_style_appearance& {
-        return context.app_context.editor_settings->selected_render_style_appearance;
+        return context.app_context.render_settings->selected_render_style_appearance;
     };
 
     using namespace erhe::primitive;
@@ -523,7 +526,8 @@ App_rendering::App_rendering(
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
-            .shader_stages{&programs.grid.shader_stages}
+            .shader_stages{&programs.grid.shader_stages},
+            .grid_from_view{true}
         },
         { &m_pipeline_passes.grid }
     );
@@ -616,7 +620,7 @@ App_rendering::App_rendering(
             // controller render models) grew permanent bone spikes.
             .is_enabled                   {
                 [](const Render_context& context) -> bool {
-                    if (!context.app_context.editor_settings->debug_visualizations_style.bone_solid) {
+                    if (!context.app_context.render_settings->debug_visualizations_style.bone_solid) {
                         return false;
                     }
                     const bool bone_mode = (context.app_context.mesh_component_selection != nullptr) &&
@@ -624,11 +628,10 @@ App_rendering::App_rendering(
                     if (bone_mode) {
                         return true;
                     }
-                    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
-                    if (!scene_root) {
+                    if (!context.scene_root) {
                         return false;
                     }
-                    return Debug_visualizations::skins_shown(context.scene_view.get_debug_visualizations_settings(), *scene_root);
+                    return Debug_visualizations::skins_shown(context.scene_view.get_debug_visualizations_settings(), *context.scene_root);
                 }
             }
         },
@@ -744,7 +747,7 @@ auto App_rendering::create_shadow_node_for_scene_view(
         preset.name, preset.shadow_enable, light_count, resolution, preset.shadow_depth_bits, point_light_count, point_resolution
     );
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    auto shadow_render_node = std::make_shared<Shadow_render_node>(
+    std::shared_ptr<Shadow_render_node> shadow_render_node = erhe::rendergraph::make_rendergraph_node<Shadow_render_node>(
         graphics_device,
         *m_context.current_command_buffer,
         rendergraph,
@@ -783,11 +786,69 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* grap
     // is nothing to rebuild here. clip_control is likewise set once at device /
     // editor init to match native_depth_range (zero_to_one when supported); it
     // must not be toggled per preset.
-    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    const bool distance_technique = (graphics_preset != nullptr) && (graphics_preset->shadow_technique == Shadow_technique_mode::distance);
+    // A request per node: the render phase of the next prepared frame
+    // reconfigures the node's maps (Shadow_render_node::prepare()).
+    const Shadow_node_configuration configuration{
+        .resolution         = resolution,
+        .light_count        = light_count,
+        .depth_bits         = graphics_preset->shadow_depth_bits,
+        .distance_technique = (graphics_preset != nullptr) && (graphics_preset->shadow_technique == Shadow_technique_mode::distance),
+        .point_resolution   = point_resolution,
+        .point_light_count  = point_light_count
+    };
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits, distance_technique, point_resolution, point_light_count);
+        node->request_configuration(configuration);
     }
+}
+
+void App_rendering::prepare_shadow_render_nodes()
+{
+    for (const std::shared_ptr<Shadow_render_node>& node : m_all_shadow_render_nodes) {
+        node->prepare();
+    }
+}
+
+void App_rendering::prepare_composition(const uint64_t frame_index, const std::size_t frames_in_flight, const int64_t host_system_time_ns)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    if (m_context.scene_views != nullptr) {
+        for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_context.scene_views->get_viewport_scene_views()) {
+            if (viewport_scene_view) {
+                viewport_scene_view->prepare_composition(frame_index, frames_in_flight, host_system_time_ns);
+            }
+        }
+    }
+    for (Scene_image_view* scene_image_view : m_scene_image_views) {
+        scene_image_view->prepare_composition(frame_index, frames_in_flight, host_system_time_ns);
+    }
+    // Every shadow node's bucket path casters (the viewports', the scene
+    // image captures' and the headset's).
+    for (const std::shared_ptr<Shadow_render_node>& shadow_render_node : m_all_shadow_render_nodes) {
+        shadow_render_node->prepare_casters(frame_index, frames_in_flight);
+    }
+}
+
+void App_rendering::prepare_composer(const Render_context& context, const int64_t host_system_time_ns, Composer_prepared& out)
+{
+    update_sky_parameters(context);
+    m_composer.prepare(context, host_system_time_ns, out);
+}
+
+void App_rendering::register_scene_image_view(Scene_image_view* const scene_image_view)
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    ERHE_VERIFY(scene_image_view != nullptr);
+    m_scene_image_views.push_back(scene_image_view);
+}
+
+void App_rendering::unregister_scene_image_view(Scene_image_view* const scene_image_view)
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    const auto i = std::find(m_scene_image_views.begin(), m_scene_image_views.end(), scene_image_view);
+    ERHE_VERIFY(i != m_scene_image_views.end());
+    m_scene_image_views.erase(i);
 }
 
 auto App_rendering::get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>
@@ -853,7 +914,7 @@ auto App_rendering::get_render_pipeline_state(
 
 auto App_rendering::make_composition_pass(const std::string_view name) -> std::shared_ptr<Composition_pass>
 {
-    auto renderpass = std::make_shared<Composition_pass>(name);
+    auto renderpass = std::make_shared<Composition_pass>(name, m_frames_in_flight);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
     m_composer.composition_passes.push_back(renderpass);
     return renderpass;
@@ -1505,77 +1566,48 @@ void App_rendering::request_renderdoc_capture()
 #endif
 }
 
-void App_rendering::set_grid_visibility(bool visible)
+void App_rendering::set_grid(const Grid_pass_state& grid)
 {
     // TODO Consider using Item visibility flag and removing enabled
     if (m_grid_composition_pass != nullptr) {
-        m_grid_composition_pass->data.enabled = visible;
+        m_grid_composition_pass->data.enabled         = grid.enabled;
+        m_grid_composition_pass->data.grid_parameters = grid.parameters;
     }
 }
 
-void App_rendering::set_grid_frame(const Grid_frame& frame, const Grid_depth_mode depth_mode)
+void App_rendering::set_lightmap_texture(const std::shared_ptr<erhe::graphics::Texture>& texture)
 {
-    if (m_grid_composition_pass != nullptr) {
-        m_grid_composition_pass->data.grid_parameters.world_from_grid = frame.world_from_grid;
-        m_grid_composition_pass->data.grid_parameters.grid_flags      = glm::vec4{
-            frame.label_sign.x,
-            frame.label_sign.y,
-            (depth_mode == Grid_depth_mode::behind_content) ? 1.0f : 0.0f,
-            0.0f
-        };
-    }
+    erhe::utility::Thread_roles::assert_main_thread();
+    m_lightmap_texture = texture;
 }
 
-void App_rendering::set_grid_label(const glm::vec4& grid_label)
+auto App_rendering::get_lightmap_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
 {
-    if (m_grid_composition_pass != nullptr) {
-        m_grid_composition_pass->data.grid_parameters.grid_label = grid_label;
-    }
-}
-
-void App_rendering::set_grid_colors(const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color)
-{
-    if (m_grid_composition_pass != nullptr) {
-        m_grid_composition_pass->data.grid_parameters.grid_color       = level_colors;
-        m_grid_composition_pass->data.grid_parameters.grid_label_color = label_color;
-    }
-}
-
-void App_rendering::set_grid_line_widths(const glm::vec4& level_widths)
-{
-    if (m_grid_composition_pass != nullptr) {
-        m_grid_composition_pass->data.grid_parameters.grid_line_width = level_widths;
-    }
-}
-
-void App_rendering::set_grid_sizes(const glm::vec4& level_cell_sizes)
-{
-    if (m_grid_composition_pass != nullptr) {
-        m_grid_composition_pass->data.grid_parameters.grid_size = level_cell_sizes;
-    }
+    erhe::utility::Thread_roles::assert_main_thread();
+    return m_lightmap_texture;
 }
 
 void App_rendering::update_sky_parameters(const Render_context& context)
 {
-    if ((m_sky_composition_pass == nullptr) || (m_context.editor_settings == nullptr)) {
+    if (m_sky_composition_pass == nullptr) {
         return;
     }
     // Resolve per scene (#239): each viewport's composition uses its own scene's
-    // sky (override if engaged, else the editor-global default).
-    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+    // sky (override if engaged, else the editor-global default), from the
+    // render settings copies M2 made.
+    const std::shared_ptr<Scene_root>& scene_root = context.scene_root;
     const Sky_config& sky = (scene_root != nullptr)
-        ? get_effective_sky(*m_context.editor_settings, *scene_root)
-        : m_context.editor_settings->sky;
+        ? scene_root->get_render_settings(m_context.graphics_device->get_frame_index()).sky
+        : m_context.render_settings->sky;
     // Applied every frame (render_composer() calls this) so the Settings
-    // window checkbox takes effect immediately; same mechanism as
-    // set_grid_visibility(). With the sky pass disabled the scene background
+    // window checkbox takes effect immediately, as the grid tool records
+    // the grid each frame. With the sky pass disabled the scene background
     // keeps the render pass clear value (transparent in the headset path, so
     // camera passthrough shows through; see Headset_view::render_headset()).
     // Graphics_settings::sky_enabled is the session-only capture override
     // (MCP set_graphics_settings); it hides the sky without touching the
     // stored Sky_config.
-    const bool sky_enabled_for_session =
-        (m_context.app_settings == nullptr) || m_context.app_settings->graphics.sky_enabled;
+    const bool sky_enabled_for_session = m_context.render_settings->sky_enabled;
     m_sky_composition_pass->data.enabled = sky.enabled && sky_enabled_for_session;
     erhe::scene_renderer::Sky_parameters& parameters = m_sky_composition_pass->data.sky_parameters;
     parameters.sky_checker          = glm::vec4{sky.checker_frequency.x, sky.checker_frequency.y, sky.checker_intensity_a, sky.checker_intensity_b};
@@ -1682,7 +1714,9 @@ void App_rendering::render_composer(const Render_context& context, const bool in
     erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "Composer"};
     erhe::graphics::Scoped_gpu_zone   gpu_zone  {*context.command_buffer, zone_label};
 
-    if (include_content) {
+    // A prepared composition took the sky parameters in the prepare phase
+    // (prepare_composer()); the headset prepares where it renders.
+    if (include_content && (context.composer_prepared == nullptr)) {
         update_sky_parameters(context);
     }
 
@@ -1691,22 +1725,89 @@ void App_rendering::render_composer(const Render_context& context, const bool in
     ///// TODO Check m_context.graphics_device->opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
+void App_rendering::prepare_id(const Render_context& context, Id_pass_prepared& out)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    out.prepared = false;
+    if (m_context.id_renderer == nullptr) {
+        return;
+    }
+
+    // The gates render_id() renders under: a scene, a pointer position or a
+    // pending region scan, and the render camera.
+    const std::shared_ptr<Scene_root>& scene_root = context.scene_root;
+    if (!scene_root){
+        return;
+    }
+    ERHE_VERIFY(context.render_state != nullptr);
+    const std::optional<glm::vec2> position_opt = context.render_state->position_in_viewport;
+    const bool scan_pending = m_context.id_renderer->has_frame_scan();
+    if (!position_opt.has_value() && !scan_pending) {
+        return;
+    }
+    if (context.camera_snapshot == nullptr) {
+        return;
+    }
+
+    // id_renderer.enabled is repurposed under the hybrid picker: false
+    // (the default) means the ID pass covers only skinned meshes and the
+    // raytrace path covers static meshes; true means the ID pass covers
+    // everything (legacy "all-id" behaviour) and the raytrace path's
+    // contribution becomes whichever per-slot hit it returns sooner. The
+    // viewport_scene_view merge picks the closer hit per slot either way.
+    // This view's pass carries the frame's region scan unless a view
+    // prepared before it claimed the scan; the render phase reads the scan
+    // from the prepared pass (Id_pass_prepared::scan), never from the
+    // renderer.
+    // A region selection scan (box / paint) reads only the ID color texture,
+    // so static meshes -- normally picked by the raytrace BVH and left out of
+    // the ID pass -- must be rasterized into it for that frame, or the scan
+    // would select nothing on them. Force the all-meshes filter whenever this
+    // pass carries a scan.
+    std::optional<Id_renderer::Scan_request> scan = m_context.id_renderer->take_frame_scan();
+    const Id_renderer::Skinning_filter skinning_filter = (m_context.id_renderer->covers_all_meshes() || scan.has_value())
+        ? Id_renderer::Skinning_filter::all
+        : Id_renderer::Skinning_filter::skinned_only;
+
+    // Bone proxies only carry Item_flags::id while bone mode is active, so
+    // outside it they are rasterized into no id at all.
+    const auto& layers = scene_root->layers();
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>> mesh_spans[] = {
+        layers.content()->meshes,
+        layers.rendertarget()->meshes,
+        layers.bone()->meshes
+    };
+    m_context.id_renderer->prepare(
+        Id_renderer::Prepare_parameters{
+            .mesh_spans      = mesh_spans,
+            .skinning_filter = skinning_filter,
+            .scan            = scan
+        },
+        out
+    );
+}
+
 void App_rendering::render_id(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
     // log_frame->trace("App_rendering::render_id()");
 
-    const auto scene_root = context.scene_view.get_scene_root();
+    const std::shared_ptr<Scene_root>& scene_root = context.scene_root;
     if (!scene_root){
         return;
     }
 
-    // A pending region selection scan must render the ID pass even when the
-    // pointer is not over the viewport (e.g. a programmatic scan), so fall back
-    // to the viewport centre for the pointer-pick rect in that case.
-    const std::optional<glm::vec2> position_opt = context.viewport_scene_view->get_position_in_viewport();
-    const bool scan_pending = (m_context.id_renderer != nullptr) && m_context.id_renderer->has_pending_scan();
+    // A region selection scan must render the ID pass even when the pointer
+    // is not over the viewport (e.g. a programmatic scan), so fall back to the
+    // viewport centre for the pointer-pick rect in that case. The scan is the
+    // one the prepare phase put in this view's prepared pass.
+    ERHE_VERIFY(context.render_state != nullptr);
+    ERHE_VERIFY(context.composer_prepared != nullptr);
+    const std::optional<glm::vec2> position_opt = context.render_state->position_in_viewport;
+    const bool scan_pending = context.composer_prepared->id_pass.scan.has_value();
     if (!position_opt.has_value() && !scan_pending) {
         return;
     }
@@ -1714,8 +1815,7 @@ void App_rendering::render_id(const Render_context& context)
         ? position_opt.value()
         : glm::vec2{static_cast<float>(context.viewport.width) * 0.5f, static_cast<float>(context.viewport.height) * 0.5f};
 
-    const auto& layers = scene_root->layers();
-    if (context.camera == nullptr) {
+    if (context.camera_snapshot == nullptr) {
         return;
     }
 
@@ -1724,66 +1824,31 @@ void App_rendering::render_id(const Render_context& context)
     // primitive.skinning_factor, so it needs the joint buffer bound when
     // a skinned mesh is in any of its buckets. Pass the same Joint_buffer
     // Forward_renderer uses; both updates allocate disjoint ring ranges.
-    erhe::scene_renderer::Joint_buffer* joint_buffer{nullptr};
-    std::span<const std::shared_ptr<erhe::scene::Skin>> skins{};
-    if (m_context.forward_renderer != nullptr) {
-        erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
-        if (hosted_scene != nullptr) {
-            const std::vector<std::shared_ptr<erhe::scene::Skin>>& scene_skins = hosted_scene->get_skins();
-            if (!scene_skins.empty()) {
-                joint_buffer = &m_context.forward_renderer->get_joint_buffer();
-                skins        = std::span<const std::shared_ptr<erhe::scene::Skin>>{scene_skins.data(), scene_skins.size()};
-            }
-        }
+    erhe::scene_renderer::Joint_buffer*               joint_buffer{nullptr};
+    std::span<const erhe::scene_renderer::Joint_pose> joint_poses = scene_root->get_render_joint_poses(m_context.graphics_device->get_frame_index());
+    if ((m_context.forward_renderer != nullptr) && !joint_poses.empty()) {
+        joint_buffer = &m_context.forward_renderer->get_joint_buffer();
     }
 
     // TODO listen to viewport changes in msg bus?
     ERHE_VERIFY(context.command_buffer != nullptr);
-    // id_renderer.enabled is repurposed under the hybrid picker: false
-    // (the default) means the ID pass covers only skinned meshes and the
-    // raytrace path covers static meshes; true means the ID pass covers
-    // everything (legacy "all-id" behaviour) and the raytrace path's
-    // contribution becomes whichever per-slot hit it returns sooner. The
-    // viewport_scene_view merge picks the closer hit per slot either way.
-    // A pending region selection scan (box / paint) reads only the ID color
-    // texture, so static meshes -- normally picked by the raytrace BVH and left
-    // out of the ID pass -- must be rasterized into it for that frame, or the
-    // scan would select nothing on them. Force the all-meshes filter whenever a
-    // scan is pending this frame (scan_pending computed above).
-    const Id_renderer::Skinning_filter skinning_filter = (m_context.id_renderer->enabled || scan_pending)
-        ? Id_renderer::Skinning_filter::all
-        : Id_renderer::Skinning_filter::skinned_only;
-
+    // The pass the prepare phase bucketed for this view and frame
+    // (prepare_id(); the skinning filter and the scan were decided there).
     m_context.id_renderer->render(
         Id_renderer::Render_parameters{
             .command_buffer     = *context.command_buffer,
             .viewport           = context.viewport,
-            .camera             = *context.camera,
-            // Bone proxies only carry Item_flags::id while bone mode is
-            // active, so outside it they are rasterized into no id at all.
-            .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes, layers.bone()->meshes },
+            .camera             = *context.camera_snapshot,
             .x                  = static_cast<int>(position.x),
             .y                  = static_cast<int>(position.y),
             .reverse_depth      = context.scene_view.get_reverse_depth(),
             .depth_range        = context.scene_view.get_depth_range(),
             .conventions        = context.scene_view.get_conventions(),
             .joint_buffer       = joint_buffer,
-            .skins              = skins,
-            .skinning_filter    = skinning_filter,
-        }
+            .joint_poses        = joint_poses,
+        },
+        context.composer_prepared->id_pass
     );
-}
-
-void apply_content_edge_lines_settings(App_context& context)
-{
-    erhe::scene_renderer::Content_wide_line_renderer* const renderer = context.content_wide_line_renderer;
-    if (renderer == nullptr) {
-        return;
-    }
-    const Content_edge_lines_config& config = context.editor_settings->content_edge_lines;
-    renderer->set_use_tent        (config.use_tent);
-    renderer->set_line_bias_margin(config.line_bias_margin);
-    renderer->set_line_bias_clamp (config.line_bias_clamp);
 }
 
 }  // namespace editor

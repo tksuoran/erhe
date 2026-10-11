@@ -2408,8 +2408,11 @@ void Item_tree::imgui_tree(float ui_scale)
         clipper.End();
     }
 
-    for (const auto& fun : m_operations) {
-        fun();
+    // The context menu's deferred operations (child prim creation,
+    // imports, flag edits) run out of the ImGui iteration, in the next
+    // prepare phase (Imgui_windows::flush_queue).
+    for (std::function<void()>& fun : m_operations) {
+        m_context.imgui_windows->queue(std::move(fun));
     }
     m_operations.clear();
 

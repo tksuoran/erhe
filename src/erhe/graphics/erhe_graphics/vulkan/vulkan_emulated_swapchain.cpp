@@ -11,6 +11,7 @@
 #include <fmt/format.h>
 
 #include <array>
+#include <optional>
 
 namespace erhe::graphics {
 
@@ -31,7 +32,7 @@ void Emulated_swapchain_impl::release_resources()
 
     // Drain the GPU before destroying any image / framebuffer that an
     // in-flight frame might still reference.
-    vkDeviceWaitIdle(vulkan_device);
+    static_cast<void>(m_device_impl.device_wait_idle());
 
     for (const VkFramebuffer framebuffer : m_framebuffers) {
         if (framebuffer != VK_NULL_HANDLE) {
@@ -216,13 +217,13 @@ void Emulated_swapchain_impl::create_depth_image(const uint32_t width, const uin
     m_device_impl.set_debug_label(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(m_depth_view), "Emulated swapchain depth image view");
 }
 
-auto Emulated_swapchain_impl::wait_frame(Frame_state& out_frame_state) -> bool
+auto Emulated_swapchain_impl::wait_frame(const uint64_t frame_id, Frame_state& out_frame_state) -> bool
 {
-    const size_t slot = static_cast<size_t>(m_device_impl.get_frame_in_flight_index());
+    const size_t slot = m_device_impl.get_frame_slot_index(frame_id);
 
     // Prime the device frame slot the same way the real swapchain's
     // setup_frame does, minus the legacy per-slot submit_fence: the device
-    // timeline semaphore (already waited in Device_impl::wait_frame before
+    // timeline semaphore (already waited in Device_impl::acquire_frame_slot before
     // this call) is the pacing / recycle gate, so the device-frame command
     // pool can be reset without waiting a fence that no present would signal.
     m_device_impl.ensure_device_frame_command_buffer(slot);
@@ -272,7 +273,7 @@ auto Emulated_swapchain_impl::acquire_swapchain_framebuffer(VkRenderPass render_
         // The window/swapchain render pass is stable in headless, so this
         // branch is not expected. If it ever fires, drain the GPU before
         // destroying the framebuffer an in-flight frame might still use.
-        vkDeviceWaitIdle(vulkan_device);
+        static_cast<void>(m_device_impl.device_wait_idle());
         vkDestroyFramebuffer(vulkan_device, m_framebuffers[index], nullptr);
         m_framebuffers[index] = VK_NULL_HANDLE;
     }
@@ -309,10 +310,18 @@ void Emulated_swapchain_impl::mark_render_pass_recorded()
 {
     // The emulated swapchain has no acquire/present state machine to advance
     // (present is a no-op). Record which image just had its swapchain render
-    // pass recorded; that image holds the fully composited frame (viewports +
-    // ImGui) in TRANSFER_SRC_OPTIMAL, and is what read_back_last_frame() reads.
-    m_last_composited_index = m_image_index;
-    m_have_composited       = true;
+    // pass recorded, and for which device frame (the render role's); that
+    // image holds the fully composited frame (viewports + ImGui) in
+    // TRANSFER_SRC_OPTIMAL once the frame's command buffer is submitted, and
+    // is what read_back_last_frame() reads after the frame has ended.
+    const uint64_t                    frame_id = m_device_impl.get_frame_index();
+    const std::lock_guard<std::mutex> lock{m_composited_mutex};
+    if (m_composited[0].valid && (m_composited[0].frame_id == frame_id)) {
+        m_composited[0].image_index = m_image_index;
+        return;
+    }
+    m_composited[1] = m_composited[0];
+    m_composited[0] = Composited_frame{.frame_id = frame_id, .image_index = m_image_index, .valid = true};
 }
 
 auto Emulated_swapchain_impl::get_surface_impl() -> Surface_impl&
@@ -359,7 +368,21 @@ auto Emulated_swapchain_impl::read_back_last_frame(
     std::vector<std::byte>& out_rgba8
 ) -> bool
 {
-    if (!m_have_composited || m_images.empty()) {
+    // The newest composited frame that has ended: its command buffers are
+    // submitted, so the device wait below finds the image complete. A frame
+    // still recording (the render thread's, with frame pipelining) composites
+    // into another image of the ring.
+    std::optional<uint32_t> composited_index{};
+    {
+        const std::lock_guard<std::mutex> lock{m_composited_mutex};
+        for (const Composited_frame& composited : m_composited) {
+            if (composited.valid && m_device_impl.is_frame_ended(composited.frame_id)) {
+                composited_index = composited.image_index;
+                break;
+            }
+        }
+    }
+    if (!composited_index.has_value() || m_images.empty()) {
         return false;
     }
 
@@ -367,7 +390,7 @@ auto Emulated_swapchain_impl::read_back_last_frame(
     const VkQueue  queue         = m_device_impl.get_graphics_queue();
     const uint32_t queue_family  = m_device_impl.get_graphics_queue_family_index();
     VmaAllocator&  allocator     = m_device_impl.get_allocator();
-    const uint32_t index         = m_last_composited_index;
+    const uint32_t index         = composited_index.value();
     const VkImage  image         = m_images[index];
     const uint32_t width         = m_extent.width;
     const uint32_t height        = m_extent.height;
@@ -378,7 +401,7 @@ auto Emulated_swapchain_impl::read_back_last_frame(
     // Drain the GPU so the last composited frame is complete and its color
     // image is settled in TRANSFER_SRC_OPTIMAL before the copy. This is a
     // diagnostic / infrequent path, so a full device wait is acceptable.
-    vkDeviceWaitIdle(vulkan_device);
+    static_cast<void>(m_device_impl.device_wait_idle());
 
     const VkDeviceSize pixel_count = static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height);
     const VkDeviceSize buffer_size = pixel_count * 4u; // source is 4 bytes/pixel (RGBA8 / BGRA8)
@@ -497,7 +520,10 @@ auto Emulated_swapchain_impl::read_back_last_frame(
             .signalSemaphoreCount = 0,
             .pSignalSemaphores    = nullptr
         };
-        ok = (vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
+        {
+            const std::lock_guard<std::mutex> queue_lock{m_device_impl.get_queue_mutex()};
+            ok = (vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
+        }
         if (ok) {
             vkWaitForFences(vulkan_device, 1, &fence, VK_TRUE, UINT64_MAX);
         }

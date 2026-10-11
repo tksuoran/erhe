@@ -10,6 +10,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
@@ -190,6 +191,7 @@ void Operation_stack::update()
     ERHE_PROFILE_FUNCTION();
 
     verify_main_thread();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     ERHE_VERIFY(!m_executing);
 
     // Drain the cross-thread inbox (async worker completions) into the
@@ -204,6 +206,17 @@ void Operation_stack::update()
             );
             m_queued_from_threads.clear();
         }
+    }
+
+    // The Operations window's undo / redo requests, before this frame's
+    // queued operations (the order the immediate calls had).
+    if (m_undo_requested) {
+        m_undo_requested = false;
+        undo();
+    }
+    if (m_redo_requested) {
+        m_redo_requested = false;
+        redo();
     }
 
     if (m_queued.empty()) {
@@ -241,6 +254,18 @@ auto Operation_stack::get_undo_block_reason() const -> const char*
         return "a knife cut is in progress (confirm or cancel it first)";
     }
     return nullptr;
+}
+
+void Operation_stack::queue_undo()
+{
+    verify_main_thread();
+    m_undo_requested = true;
+}
+
+void Operation_stack::queue_redo()
+{
+    verify_main_thread();
+    m_redo_requested = true;
 }
 
 void Operation_stack::undo()

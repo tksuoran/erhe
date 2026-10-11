@@ -12,7 +12,7 @@ Editor-specific render graph nodes that extend `erhe::rendergraph` for shadow ma
 
 - **`Post_processing`** -- Manages the post-processing pipeline (bloom with downsample/upsample passes and tonemapping). Creates shader programs and render pipeline states. Factory method `create_node()` creates `Post_processing_node` instances.
 
-- **`Post_processing_node`** -- A `Rendergraph_node` that applies bloom and tonemapping to a rendered scene texture. Manages downsample/upsample texture pyramids with configurable mip levels. Connected between `Viewport_scene_view` (producer) and `Viewport_window` (consumer). The level 0 upsample texture (the post-processed image, `get_producer_output_texture()`) also carries transfer-source usage, so it can be read back.
+- **`Post_processing_node`** -- A `Rendergraph_node` that applies bloom and tonemapping to a rendered scene texture. Manages downsample/upsample texture pyramids with configurable mip levels; the pyramid is (re)built by `update_size()` at the start of `execute_rendergraph_node`, in the render phase, after the producer node sized the input texture for the frame, so the pyramid's textures, render passes and GPU timers are created, replaced and dropped by the render phase only (the old pyramid is released at the end of `Rendergraph::execute` through `defer_resource`). The parameters the Post Processing window edits are the node's live `Post_processing_parameters` (`parameters`, main thread: tonemap luminance max and alpha, low-pass count, upsample radius, the mix weight curve coefficients and the per-level weights); `prepare_rendergraph_node` copies them into the frame's slot (`Prepared_frame_values`) and the render phase uploads that copy (`update_parameters`, `get_render_parameters`). The per-level weights apply when the window sized them for the pyramid the render phase built (from the published pyramid layout); otherwise the render phase derives them from the curve (`compute_post_processing_weights`), so a resize never resizes a vector the window edits. Connected between `Viewport_scene_view` (producer) and `Viewport_window` (consumer). The level 0 upsample texture (the post-processed image, `get_producer_output_texture()`) also carries transfer-source usage, so it can be read back.
 
 - **`Scene_image_capture`**, **`Scene_image_view`**, **`Scene_image_readback_node`** (`src/editor/scene/scene_image_capture.hpp`) -- the offscreen scene render behind the MCP tool `render_scene_image`; see "Scene image capture" below.
 
@@ -61,7 +61,10 @@ the editor UI.
   request; the next `Rendergraph::execute()` runs the chain, and
   `Scene_image_readback_node` copies the chosen texture (the post-processed
   image for png, the view's resolved HDR color for linear) into a host-visible
-  buffer, records the frame index and disables the chain's nodes; later passes
+  buffer and records the frame index; the prepare phase of the next frame
+  disables the chain's nodes (`Scene_image_capture::prepare_chain`, from the
+  readback node's `prepare_rendergraph_node` hook in
+  `Rendergraph::prepare_frame`), so later frames skip them; later passes
   poll `Device::is_frame_completed()`, convert the half (or fp32) floats, write the file
   and destroy the capture, which unregisters the nodes and hands the shadow
   node back through `App_rendering::destroy_shadow_node()`. Nothing is cached
@@ -108,7 +111,7 @@ the editor UI.
   `shadow_visibility` (30) shows the light named by `shadow_debug_light`
   (light name or id): `Scene_image_view::execute_rendergraph_node()` resolves
   it to its light slot through the light set its own shadow pass just built
-  (`Light_projections::get_light_projection_transforms_for_light()`), passes
+  (`Light_projections::get_light_projection_transforms_for_light_id()`), passes
   the slot as `Render_context::shadow_debug_light_index`, and the reply
   reports it as `shadow_debug_light.light_index` (null when the light got no
   slot). Without it the slot is 0, as for viewports.
@@ -138,14 +141,17 @@ the editor UI.
 
 ## Public API / Integration Points
 
-- `Shadow_render_node::get_light_projections()` -- access light projection matrices. The consumer
-  (`Composition_pass` -> `Light_buffer::update`) reads whatever the node last left there, and the
-  slot entries name their lights by raw pointer, so `execute_rendergraph_node` clears the set before
-  anything can return: a frame in which the node bails (no scene root, no camera, no content mesh, no
-  shadow map texture) must hand the forward pass an empty set, never the previous frame's pointers.
-  Closing a scene empties its light layer and frees its lights while those early exits are being
-  taken, and a retained set is then a use-after-free in `Light_buffer::update`.
-- `Shadow_render_node::reconfigure()` -- change shadow map settings at runtime
+- `Shadow_render_node::get_light_projections(frame_index)` -- the light projection matrices the
+  node's execute produced for the frame being rendered (render phase; verified), one
+  `Shadow_frame_result` per frame in flight. `execute_rendergraph_node` clears its frame's
+  projections before anything can return, so a frame in which the node bails (no scene root, no
+  camera, no content mesh, no shadow map texture) hands the forward pass
+  (`Composition_pass` -> `Light_buffer::update`) an empty set. The result's slot entries name their
+  lights through copies inside the result (and its view camera and fit settings likewise), never
+  the scene's light set, so a result stays valid while later frames resolve new sets or a scene
+  closes. `get_frame_result(App_context::last_rendered_frame_index)` is the main thread's read of
+  the last rendered frame's result (`doc/editor/editor.md` "Frame phases and the render thread").
+- `Shadow_render_node::request_configuration()` -- change shadow map settings at runtime (main thread); `prepare()` copies the request into the frame's slot in M2 and the render phase applies it with `reconfigure()` at the start of the node's execute
 - `Post_processing::create_node()` -- factory for post-processing nodes
 - `Post_processing_node::viewport_toolbar()` -- per-viewport bloom/tonemap settings
 

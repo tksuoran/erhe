@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "renderers/prepared_frame_values.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -36,16 +37,41 @@ public:
     // Implements erhe::rendergraph::Rendergraph_node
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
+    // Prepare phase (Brdf_slice::update()): the render target size the render
+    // phase of this frame applies.
     void set_area_size(int size);
 
     // Public API
+    // Main thread: the material the slice shows; the prepare phase copies it
+    // with the angles into the frame's parameters.
     void set_material(const std::shared_ptr<erhe::primitive::Material>& material);
     [[nodiscard]] auto get_material() const -> erhe::primitive::Material*;
 
+protected:
+    // Rendergraph::prepare_frame(): copies the material and Brdf_slice::phi /
+    // incident_phi (the Properties window's sliders) into the frame, and
+    // settles the node's material set for it: membership, the record write
+    // into the prepare phase's upload command buffer and the publish the
+    // render phase of the frame binds, and the material's slot.
+    void prepare_rendergraph_node(uint64_t frame_index) override;
+
 private:
+    // What execute_rendergraph_node() of one frame reads.
+    class Frame_parameters
+    {
+    public:
+        std::shared_ptr<erhe::primitive::Material> material     {};
+        float                                      phi          {0.0f};
+        float                                      incident_phi {0.0f};
+        uint32_t                                   material_slot{0u}; // the material's slot in m_material_set
+    };
+
+    App_context&                               m_context;
     erhe::scene_renderer::Forward_renderer&    m_forward_renderer;
     Brdf_slice&                                m_brdf_slice;
-    std::shared_ptr<erhe::primitive::Material> m_material;
+    Programs&                                  m_programs;
+    std::shared_ptr<erhe::primitive::Material> m_material; // live, main thread
+    Prepared_frame_values<Frame_parameters>    m_frame_parameters;
 
     // A consumer outside any scene: no scene root, no draw list, no
     // registered objects, so sync_library({material}) is its whole membership
@@ -55,7 +81,6 @@ private:
 
     erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
     erhe::graphics::Base_render_pipeline               m_render_pipeline_state;
-    int                                                m_area_size{0};
 };
 
 
@@ -72,8 +97,14 @@ public:
     );
 
     auto get_node() const -> Brdf_slice_rendergraph_node*;
-    void show_brdf_slice(int area_size);
+    // ImGui time (the Properties window): draws the slice of the material
+    // last rendered and requests material and area_size for the next
+    // render; update() (main thread, M2) applies the request to the node.
+    void show_brdf_slice(const std::shared_ptr<erhe::primitive::Material>& material, int area_size);
+    void update();
 
+    // Live angles, main thread (the sliders of show_brdf_slice()); the node
+    // copies them into the frame being prepared.
     float phi         {0.0f};
     float incident_phi{0.0f};
 
@@ -89,6 +120,9 @@ private:
     erhe::rendergraph::Rendergraph&              m_rendergraph;
     App_context&                                 m_context;
     std::shared_ptr<Brdf_slice_rendergraph_node> m_node;
+    std::shared_ptr<erhe::primitive::Material>   m_requested_material;
+    int                                          m_requested_area_size{0};
+    bool                                         m_request_pending{false};
 
     erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;

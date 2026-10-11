@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_scene_renderer/joint_poses.hpp"
 
 #include <glm/glm.hpp>
 
@@ -55,14 +56,15 @@ class Joint_buffer : public erhe::graphics::Ring_buffer_client
 public:
     Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface);
 
-    // debug_target_joint: the weight display's active joint, or nullptr.
-    // Every slot whose joint Node is this node gets debug_flags.x = 1, in
-    // every skin that uses it.
+    // joint_poses: the frame's posed joints (Joint_poses::capture, one entry
+    // per joint slot). debug_target_joint: the weight display's active joint,
+    // or nullptr. Every slot whose joint Node is this node gets
+    // debug_flags.x = 1, in every skin that uses it.
     auto update(
-        const glm::uvec4&                                          debug_joint_indices,
-        const std::span<glm::vec4>&                                debug_joint_colors,
-        const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins,
-        const erhe::scene::Node*                                   debug_target_joint = nullptr
+        const glm::uvec4&                 debug_joint_indices,
+        const std::span<const glm::vec4>& debug_joint_colors,
+        std::span<const Joint_pose>       joint_poses,
+        const erhe::scene::Node*          debug_target_joint = nullptr
     ) -> erhe::graphics::Ring_buffer_range;
 
 private:

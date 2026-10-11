@@ -78,29 +78,158 @@ const char* safe_str(const char* str)
 
 }
 
+namespace {
+
+// The shader-key axes the render phase owns: Forward_renderer::prepare()
+// derives the keys with these zero (Shader_key::derive copies them from the
+// environment key and sets none of them itself), and drawing a snapshot sets
+// them from the draw's own environment, so the key equals the one a single
+// derive with the full environment produced.
+constexpr Shader_int c_render_environment_int_axes[] = {
+    Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED,
+    Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,
+    Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,
+    Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,
+    Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,
+    Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,
+    Shader_int::SHADOW_FILTER,
+    Shader_int::SHADOW_BIAS,
+    Shader_int::SHADOW_TECHNIQUE,
+    Shader_int::SHADOW_DEPTH_BITS,
+    Shader_int::SHADER_MULTIVIEW_COUNT
+};
+
+void apply_render_environment(Shader_key& key, const Shader_key& environment, const uint32_t force_disable_mask)
+{
+    for (const Shader_int axis : c_render_environment_int_axes) {
+        key.set(axis, environment.get(axis));
+    }
+    // derive() ORs the environment bits in before the pass's forced bits are
+    // applied, so a pass that forces USE_DDGI off keeps it off.
+    if (
+        environment.get(Shader_bool::USE_DDGI) &&
+        ((force_disable_mask & make_shader_bool_mask(Shader_bool::USE_DDGI)) == 0u)
+    ) {
+        key.set(Shader_bool::USE_DDGI, true);
+    }
+}
+
+} // anonymous namespace
+
+void Forward_renderer::prepare(const Prepare_parameters& parameters, Render_bucket_snapshot& out) const
+{
+    ERHE_PROFILE_FUNCTION();
+
+    out.clear();
+    out.force_disable_mask = parameters.shader_key_boolean_mask_force_disable;
+    for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : parameters.mesh_spans) {
+        if (!meshes.empty()) {
+            out.has_meshes = true;
+            break;
+        }
+    }
+    if (!out.has_meshes) {
+        return;
+    }
+
+    // Only SHADER_DEBUG of the environment changes what derive() produces
+    // beyond copying the axes; the render-phase axes are applied when the
+    // snapshot is drawn (apply_render_environment()).
+    Shader_key environment_key{};
+    environment_key.set(Shader_int::SHADER_DEBUG, static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
+
+    // Leaf-function scratch (AGENTS.md: function-local thread_local buffers):
+    // nothing below re-enters prepare(). The entries hold raw Mesh pointers
+    // only while this call runs.
+    static thread_local Render_bucket_list s_buckets;
+    s_buckets.clear();
+    for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : parameters.mesh_spans) {
+        bucket_primitives(
+            s_buckets,
+            parameters.shader_key_boolean_mask_force_enable,
+            parameters.shader_key_boolean_mask_force_disable,
+            m_mesh_memory,
+            environment_key,
+            meshes,
+            parameters.filter,
+            parameters.primitive_mode,
+            parameters.blending_mode_policy,
+            erhe::primitive::Mesh_variant::optimized,
+            parameters.shader_debug_filter
+        );
+    }
+
+    for (const Render_bucket& bucket : s_buckets.get_buckets()) {
+        ERHE_VERIFY(!bucket.entries.empty());
+        Prepared_bucket& prepared = out.add_bucket();
+        prepared.buffer_set.vertex_input_key = bucket.buffer_set.vertex_input_key;
+        prepared.buffer_set.index_buffer     = bucket.buffer_set.index_buffer;
+        prepared.buffer_set.vertex_buffers.insert(
+            prepared.buffer_set.vertex_buffers.end(),
+            bucket.buffer_set.vertex_buffers.begin(),
+            bucket.buffer_set.vertex_buffers.end()
+        );
+        prepared.shader_key           = bucket.shader_key;
+        prepared.negative_determinant = bucket.negative_determinant;
+        prepared.double_sided         = bucket.double_sided;
+        prepared.primitive_mode       = parameters.primitive_mode;
+        prepared.first_entry          = out.draw_commands.size();
+        prepared.entry_count          = bucket.entries.size();
+        m_primitive_buffer.append_records(bucket, parameters.material_source, parameters.primitive_mode, parameters.primitive_settings, out.primitive_records);
+        m_draw_indirect_buffer.append_commands(bucket, parameters.primitive_mode, out.draw_commands);
+        ERHE_VERIFY(out.draw_commands.size() == prepared.first_entry + prepared.entry_count);
+    }
+    s_buckets.clear();
+}
+
 void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION();
 
+    prepare(
+        Prepare_parameters{
+            .mesh_spans                            = parameters.mesh_spans,
+            .material_source                       = parameters.base.material_source,
+            .shader_key_boolean_mask_force_enable  = parameters.base.shader_key_boolean_mask_force_enable,
+            .shader_key_boolean_mask_force_disable = parameters.base.shader_key_boolean_mask_force_disable,
+            .blending_mode_policy                  = parameters.blending_mode_policy,
+            .primitive_mode                        = parameters.primitive_mode,
+            .primitive_settings                    = parameters.primitive_settings,
+            .filter                                = parameters.filter,
+            .shader_debug                          = parameters.shader_debug,
+            .shader_debug_filter                   = parameters.shader_debug_filter
+        },
+        m_immediate_snapshot
+    );
+    render(
+        Draw_parameters{
+            .base                   = parameters.base,
+            .base_render_pipelines  = parameters.base_render_pipelines,
+            .shadow_filter          = parameters.shadow_filter,
+            .shadow_bias            = parameters.shadow_bias,
+            .shadow_technique       = parameters.shadow_technique,
+            .shadow_depth_bits      = parameters.shadow_depth_bits,
+            .debug_joint_indices    = parameters.debug_joint_indices,
+            .debug_joint_colors     = parameters.debug_joint_colors,
+            .debug_target_joint     = parameters.debug_target_joint,
+            .shader_stages_override = parameters.shader_stages_override,
+            .color_blend_override   = parameters.color_blend_override
+        },
+        m_immediate_snapshot
+    );
+}
+
+void Forward_renderer::render(const Draw_parameters& parameters, const Render_bucket_snapshot& snapshot)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Same early out as before the bucketing moved to prepare(): no meshes in
+    // any span, no pass.
+    if (!snapshot.has_meshes) {
+        return;
+    }
+
     const Base_render_parameters& base = parameters.base;
-
-    // Check for early out
-    bool all_empty = true;
-    for (const auto& meshes : parameters.mesh_spans) {
-        if (!meshes.empty()) {
-            all_empty = false;
-            break;
-        }
-    }
-    if (all_empty) {
-        // log_render->debug("Forward_renderer::render({}) - empty", base.debug_label);
-        return; // TODO is this ok?
-    }
-
-    // log_render->debug("Forward_renderer::render({})", base.debug_label);
-
-    const auto& mesh_spans = parameters.mesh_spans;
-    const auto& filter     = parameters.filter;
 
     erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
     Scene_pass_resources::Pass_state pass_state = m_pass_resources.begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors, parameters.debug_target_joint);
@@ -116,7 +245,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
     environment_key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(partition.per_type_shadow   [1]));
     environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(partition.per_type_nonshadow[2]));
     environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(partition.per_type_shadow   [2]));
-    environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
     environment_key.set(Shader_int::SHADOW_FILTER,                            parameters.shadow_filter);
     environment_key.set(Shader_int::SHADOW_BIAS,                              parameters.shadow_bias);
     environment_key.set(Shader_int::SHADOW_TECHNIQUE,                         parameters.shadow_technique);
@@ -129,49 +257,37 @@ void Forward_renderer::render(const Render_parameters& parameters)
     environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   shader_multiview_count);
     environment_key.set(Shader_bool::USE_DDGI,                                m_pass_resources.get_ddgi().is_valid());
 
+    const std::size_t                           record_size = m_program_interface.primitive_interface.primitive_struct.get_size_bytes();
+    const std::span<const Prepared_bucket> buckets     = snapshot.get_buckets();
+
     for (auto* render_pipeline_state : parameters.base_render_pipelines) {
         erhe::graphics::Scoped_debug_group pipeline_scope{
             render_encoder.get_command_buffer(),
             render_pipeline_state->data.debug_label
         };
 
-        Render_bucket_list& buckets = m_buckets;
-        buckets.clear();
-        for (const auto& meshes : mesh_spans) {
-            bucket_primitives(
-                buckets,
-                base.shader_key_boolean_mask_force_enable,
-                base.shader_key_boolean_mask_force_disable,
-                m_mesh_memory,
-                environment_key,
-                meshes,
-                filter,
-                parameters.primitive_mode,
-                parameters.blending_mode_policy,
-                erhe::primitive::Mesh_variant::optimized,
-                parameters.shader_debug_filter
-            );
-        }
-
         for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-            const Render_bucket&      bucket       = buckets.get_buckets()[bucket_index];
+            const Prepared_bucket&    bucket       = buckets[bucket_index];
             const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
 
-            ERHE_VERIFY(!bucket.entries.empty());
+            ERHE_VERIFY(bucket.entry_count > 0);
+
+            Shader_key shader_key = bucket.shader_key;
+            apply_render_environment(shader_key, environment_key, snapshot.force_disable_mask);
 
             const erhe::graphics::Shader_stages* shader_stages = parameters.shader_stages_override;
             if (shader_stages == nullptr) {
                 const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
-                    bucket.shader_key,
+                    shader_key,
                     &vertex_input.vertex_format
                 );
                 if (reloadable_shader_stages == nullptr) {
                     log_draw->warn(
                         "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
                         bucket_index,
-                        bucket.entries.size(),
+                        bucket.entry_count,
                         bucket.buffer_set.vertex_buffers.size(),
-                        bucket.shader_key.describe()
+                        shader_key.describe()
                     );
                     continue;
                 }
@@ -187,7 +303,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             // only); otherwise pick by the bucket's blend mode.
             const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
                 ? parameters.color_blend_override
-                : (bucket.shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque)
+                : (shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque)
                     ? &erhe::graphics::Color_blend_state::color_blend_disabled
                     : &erhe::graphics::Color_blend_state::color_blend_premultiplied; // color_blend_alpha,
             erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
@@ -203,9 +319,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 log_draw->warn(
                     "No render pipeline for bucket {} ({} primitives, {} vertex streams): {}",
                     bucket_index,
-                    bucket.entries.size(),
+                    bucket.entry_count,
                     bucket.buffer_set.vertex_buffers.size(),
-                    bucket.shader_key.describe()
+                    shader_key.describe()
                 );
                 continue;
             }
@@ -216,9 +332,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 "bucket {}/{} prims={} streams={} shader key {:016x}",
                 bucket_index,
                 buckets.size(),
-                bucket.entries.size(),
+                bucket.entry_count,
                 bucket.buffer_set.vertex_buffers.size(),
-                bucket.shader_key_hash
+                shader_key.get_hash()
             );
             erhe::graphics::Scoped_debug_group bucket_scope{render_encoder.get_command_buffer(), std::string_view{m_bucket_label}};
 
@@ -235,10 +351,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 );
             }
 
-            // The FORWARD set - the one this pass binds (D5).
-            Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket, base.material_source, parameters.primitive_mode, parameters.primitive_settings);
-            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, parameters.primitive_mode);
-            ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entries.size());
+            // The records were written against the set this pass binds (D5).
+            Ring_buffer_range          primitive_range            = m_primitive_buffer.update(snapshot.get_records(bucket, record_size));
+            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(snapshot.get_draw_commands(bucket));
+            ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entry_count);
             m_primitive_buffer.bind(render_encoder, primitive_range);
             m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
@@ -260,7 +376,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
 void Forward_renderer::draw_primitives(
     const Primitive_render_parameters& parameters,
-    const erhe::scene::Light*          light
+    const erhe::scene::Light_snapshot* light
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -302,11 +418,9 @@ void Forward_renderer::draw_primitives(
         m_pass_resources.get_camera_buffer().bind(render_encoder, camera_range.value());
     } else if (!base.views.empty()) {
         const Camera_view_input& view = base.views[0];
-        ERHE_VERIFY(view.projection != nullptr);
-        ERHE_VERIFY(view.node       != nullptr);
+        ERHE_VERIFY(view.camera != nullptr);
         camera_range = m_pass_resources.get_camera_buffer().update(
-            *view.projection,
-            *view.node,
+            *view.camera,
             view.viewport,
             base.exposure,
             base.grid_parameters,
@@ -321,7 +435,7 @@ void Forward_renderer::draw_primitives(
 
     std::optional<Ring_buffer_range> light_control_range{};
     if (light != nullptr) {
-        const auto* light_projection_transforms = base.light_projections->get_light_projection_transforms_for_light(light);
+        const auto* light_projection_transforms = base.light_projections->get_light_projection_transforms_for_light_id(light->get_id());
         if (light_projection_transforms != nullptr) {
             light_control_range = m_pass_resources.get_light_buffer().update_control(light_projection_transforms->index);
             m_pass_resources.get_light_buffer().bind_control_buffer(render_encoder, light_control_range.value());

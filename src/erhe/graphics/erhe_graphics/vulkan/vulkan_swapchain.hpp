@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <deque>
 #include <limits>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -22,10 +23,8 @@ enum class Swapchain_frame_state : unsigned int {
     idle                  = 0,
     command_buffer_ready  = 1,  // after wait_frame()
     image_ackquired       = 2,  // after begin_frame()
-    render_pass_begin     = 3,  // after begin_render_pass()
-    render_pass_end       = 4,  // after end_render_pass()
-    command_buffer_submit = 5,  // after submit_command_buffer()
-    image_present         = 6   // after end_frame()
+    render_pass_end       = 3,  // after mark_render_pass_recorded()
+    image_present         = 4   // after present()
 };
 
 class Swapchain_objects
@@ -113,19 +112,19 @@ public:
     // the VkSwapchainKHR against the new VkSurfaceKHR.
     void reset_for_new_surface();
 
-    [[nodiscard]] auto wait_frame           (Frame_state& out_frame_state) -> bool;
-    [[nodiscard]] auto begin_frame          (const Frame_begin_info& frame_begin_info) -> bool;
-    [[nodiscard]] auto begin_render_pass    (VkRenderPassBeginInfo& render_pass_begin_info) -> VkCommandBuffer;
-    [[nodiscard]] auto end_render_pass      () -> bool;
-    [[nodiscard]] auto submit_command_buffer() -> bool;
-    [[nodiscard]] auto end_frame            (const Frame_end_info& frame_end_info) -> bool;
+    // The swapchain frame entry points take the frame id of the command
+    // buffer that drives them (Command_buffer_impl::get_frame_id); the
+    // per-slot state is indexed by it. wait_frame opens the swapchain
+    // frame of that id; begin_frame, the semaphore getters, the framebuffer
+    // lookup and present verify they are driven by the same frame.
+    [[nodiscard]] auto wait_frame           (uint64_t frame_id, Frame_state& out_frame_state) -> bool;
+    [[nodiscard]] auto begin_frame          (uint64_t frame_id, const Frame_begin_info& frame_begin_info) -> bool;
     // Used by Render_pass_impl::start_render_pass to fill in the
     // framebuffer + render area for a swapchain-targeted render pass
-    // recorded into the caller's Command_buffer (no longer routed
-    // through the legacy Swapchain_impl::begin_render_pass cb).
+    // recorded into the caller's Command_buffer.
     // Lazy-creates the per-image framebuffer if it doesn't exist or
     // was created against a different VkRenderPass.
-    [[nodiscard]] auto acquire_swapchain_framebuffer(VkRenderPass render_pass) -> VkFramebuffer;
+    [[nodiscard]] auto acquire_swapchain_framebuffer(uint64_t frame_id, VkRenderPass render_pass) -> VkFramebuffer;
     [[nodiscard]] auto get_swapchain_extent() const -> VkExtent2D;
     void               mark_render_pass_recorded();
     // Windowed screenshot capture (Device::capture_last_frame). A presented
@@ -136,29 +135,34 @@ public:
     // copies the freshly composited image into a persistent staging buffer
     // inside the frame's own command buffer (PRESENT_SRC -> TRANSFER_SRC ->
     // PRESENT_SRC); read_back_capture() then collects the pixels as tightly
-    // packed RGBA8 once that frame has been submitted (it drains the GPU -
-    // diagnostic path, like the emulated swapchain readback). Capture is
-    // supported only when the surface granted TRANSFER_SRC image usage
-    // (is_capture_supported, set by init_swapchain).
+    // packed RGBA8 once that frame has ended (Device_impl::is_frame_ended:
+    // submitted; it drains the GPU - diagnostic path, like the emulated
+    // swapchain readback). request_capture() and read_back_capture() run on
+    // the main thread, record_capture() on the render thread, which with
+    // frame pipelining records the next frame meanwhile: the capture state
+    // is guarded by m_capture_mutex, a recorded capture is collected only
+    // after its frame ended, and no new capture is armed while one waits to
+    // be collected. Capture is supported only when the surface granted
+    // TRANSFER_SRC image usage (is_capture_supported, set by
+    // init_swapchain).
     [[nodiscard]] auto is_capture_supported() const -> bool;
     void               request_capture();
-    void               record_capture(VkCommandBuffer command_buffer);
+    void               record_capture(uint64_t frame_id, VkCommandBuffer command_buffer);
     [[nodiscard]] auto read_back_capture(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool;
     // Drive vkQueuePresentKHR for the currently acquired image. Caller
     // must have already submitted a cb that signals this swapchain's
     // present_semaphore (the implicit-present path: Device_impl::submit_command_buffers
     // calls this after vkQueueSubmit2 returns). Handles VK_SUBOPTIMAL_KHR
     // / VK_ERROR_OUT_OF_DATE_KHR by triggering swapchain recreation.
-    [[nodiscard]] auto present              () -> bool;
+    [[nodiscard]] auto present              (uint64_t frame_id) -> bool;
     [[nodiscard]] auto get_surface_impl     () -> Surface_impl&;
-    [[nodiscard]] auto get_command_buffer   () -> VkCommandBuffer;
     // Active per-frame-in-flight semaphores. acquire is signalled by
     // vkAcquireNextImageKHR (must be waited before the cb writes the
     // swapchain image); present is signalled by the cb's submit (must
     // be waited by vkQueuePresentKHR). Both are valid only between
     // setup_frame()/begin_frame() and the present in end_frame().
-    [[nodiscard]] auto get_active_acquire_semaphore() const -> VkSemaphore;
-    [[nodiscard]] auto get_active_present_semaphore() const -> VkSemaphore;
+    [[nodiscard]] auto get_active_acquire_semaphore(uint64_t frame_id) const -> VkSemaphore;
+    [[nodiscard]] auto get_active_present_semaphore(uint64_t frame_id) const -> VkSemaphore;
     // Present-wait clamp (frame pacing FR5, implementation plan step P2.2):
     // block until the present with id (frame_id + 1), as chained by
     // present_image(), has been displayed. Only ids already submitted on
@@ -185,27 +189,29 @@ private:
     // destructor does not need to.
     void release_resources();
 
-    void setup_frame();
-    [[nodiscard]] auto acquire_next_image(uint32_t* index) -> VkResult;
-    [[nodiscard]] auto present_image     (uint32_t index) -> VkResult;
+    void setup_frame(uint64_t frame_id);
+    [[nodiscard]] auto acquire_next_image(uint64_t frame_id, uint32_t* index) -> VkResult;
+    [[nodiscard]] auto present_image     (uint64_t frame_id, uint32_t index) -> VkResult;
     [[nodiscard]] auto has_maintenance1  () const -> bool;
     [[nodiscard]] auto is_valid          () const -> bool;
     [[nodiscard]] auto get_semaphore     () -> VkSemaphore;
     [[nodiscard]] auto get_fence         () -> VkFence;
     void recycle_semaphore                     (VkSemaphore semaphore);
-    [[nodiscard]] auto current_slot() const -> size_t;
+    [[nodiscard]] auto get_slot_index(uint64_t frame_id) const -> size_t;
     void recycle_fence                         (VkFence fence);
     void cleanup_swapchain_objects             (Swapchain_objects& garbage);
     void cleanup_present_history               ();
     void cleanup_present_info                  (Present_history_entry& entry);
     void cleanup_old_swapchain                 (Swapchain_cleanup_data& old_swapchain);
-    void init_swapchain                        ();
-    void init_swapchain                        (Vulkan_swapchain_create_info& swapchain_create_info);
+    // frame_id: the frame whose slot receives the replaced swapchain
+    // objects as garbage.
+    void init_swapchain                        (uint64_t frame_id);
+    void init_swapchain                        (uint64_t frame_id, Vulkan_swapchain_create_info& swapchain_create_info);
     void init_swapchain_image                  (uint32_t index);
-    void init_swapchain_framebuffer            (uint32_t index, VkRenderPass render_pass);
+    void init_swapchain_framebuffer            (uint64_t frame_id, uint32_t index, VkRenderPass render_pass);
     void create_depth_image                    (uint32_t width, uint32_t height);
     void destroy_depth_image                   (Swapchain_objects& objects);
-    void add_present_to_history                (uint32_t index, VkFence present_fence);
+    void add_present_to_history                (uint64_t frame_id, uint32_t index, VkFence present_fence);
     void associate_fence_with_present_history  (uint32_t index, VkFence acquire_fence);
     void schedule_old_swapchain_for_destruction(VkSwapchainKHR old_swapchain);
     // Present timing (implementation plan step P0.4): opt in to
@@ -215,11 +221,11 @@ private:
     void init_present_timing                   (const Vulkan_swapchain_create_info& swapchain_create_info);
     // Drains available past-presentation timings into the device's frame
     // time recorder (achieved present time per frame id).
-    void poll_present_timing                   ();
+    void poll_present_timing                   (uint64_t frame_id);
     // Calibrates the swapchain's present-stage-local time domain against the
     // host clock (VkSwapchainCalibratedTimestampInfoEXT chained into
     // vkGetCalibratedTimestamps). No-op for host time domains.
-    void update_present_timing_calibration     ();
+    void update_present_timing_calibration     (uint64_t frame_id);
 
     Device_impl&          m_device_impl;
     Surface_impl&         m_surface_impl;
@@ -233,15 +239,18 @@ private:
     Swapchain_objects     m_swapchain_objects;
 
     Swapchain_frame_state m_state{Swapchain_frame_state::idle};
+    // The frame whose swapchain frame is open: set by wait_frame(), verified
+    // by every later entry point of the same frame.
+    uint64_t              m_frame_id{0};
     // TODO Move to Render_pass_impl
 
     /// The submission history. This is a fixed-size queue, indexed by the
-    /// device's frame-in-flight slot (Device_impl::get_frame_in_flight_index).
-    /// Swapchain_impl does not own a separate counter -- having two
-    /// independent counters caused the swapchain and device to disagree on
-    /// the current slot whenever an end_frame happened without a matching
-    /// setup_frame (init-time prime, OpenXR-only ticks). All slot lookups
-    /// go through current_slot() below.
+    /// device's frame-in-flight slot of the driving command buffer's frame
+    /// id (Device_impl::get_frame_slot_index). Swapchain_impl does not own a
+    /// separate counter -- having two independent counters caused the
+    /// swapchain and device to disagree on the current slot whenever an
+    /// end_frame happened without a matching setup_frame (init-time prime,
+    /// OpenXR-only ticks). All slot lookups go through get_slot_index().
     std::array<Swapchain_frame_in_flight, 2> m_submit_history{};
 
     /// The present operation history. This is used to clean up present semaphores and old swapchains.
@@ -320,10 +329,13 @@ private:
     // the staging buffer grows on demand and outgrown buffers go to
     // m_capture_garbage until a GPU drain makes freeing them safe
     // (read_back_capture / release_resources).
+    // Guards the capture members (main thread: request and collect; render
+    // thread: support decision, record and release).
+    mutable std::mutex                       m_capture_mutex;
     bool                                     m_capture_supported{false};
     bool                                     m_capture_requested{false};
     bool                                     m_capture_ready    {false};
-    // Device frame index the capture was recorded on. An armed capture whose
+    // Device frame id the capture was recorded on. An armed capture whose
     // collector went away (e.g. the MCP client timed out) must not be served
     // to a later caller as if it were current: read_back_capture rejects
     // captures older than a couple of frames.

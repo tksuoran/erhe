@@ -123,6 +123,13 @@ private:
     // Deferred Reorder Charts By Bake request (see update()): INT_MIN =
     // none, -1 = all tiles, >= 0 = that tile only.
     int          m_reorder_requested_tile{INT_MIN};
+    // The window's buttons (ImGui time) request; update() (M2) serves: the
+    // standalone submits and scene-side commits run outside the ImGui
+    // iteration (doc/editor/render_thread.md section 2.6).
+    bool         m_revert_tiling_requested{false};
+    bool         m_bake_to_disk_requested {false};
+    bool         m_save_all_requested     {false};
+    bool         m_clear_all_requested    {false};
     // Auto-re-prepare debounce: editing a partitioned source (transform
     // move, geometry swap) marks the pieces stale; once the source state
     // hash stops changing for the debounce window, update() saves the

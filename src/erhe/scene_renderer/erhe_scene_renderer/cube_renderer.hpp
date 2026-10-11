@@ -38,7 +38,7 @@ public:
         erhe::graphics::Render_command_encoder& render_encoder;
         erhe::graphics::Base_render_pipeline&   render_pipeline_state;
         const erhe::graphics::Render_pass&      render_pass;
-        const erhe::scene::Camera*              camera{nullptr};
+        const erhe::scene::Camera_snapshot*     camera{nullptr}; // the render phase's copy of the view camera
         std::shared_ptr<erhe::scene::Node>      node{};
         Primitive_interface_settings            primitive_settings{};
         erhe::math::Viewport                    viewport;

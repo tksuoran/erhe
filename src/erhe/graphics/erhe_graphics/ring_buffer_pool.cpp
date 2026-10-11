@@ -2,6 +2,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <algorithm>
 #include <array>
@@ -16,6 +17,11 @@ Ring_buffer_pool::Ring_buffer_pool(Device& device, const std::size_t min_buffer_
 
 Ring_buffer_pool::~Ring_buffer_pool() noexcept = default;
 
+auto Ring_buffer_pool::get_calling_role_index() -> std::size_t
+{
+    return erhe::utility::Thread_roles::is_render_role() ? 1 : 0;
+}
+
 auto Ring_buffer_pool::allocate(
     const std::size_t       required_alignment,
     const Ring_buffer_usage usage,
@@ -24,39 +30,28 @@ auto Ring_buffer_pool::allocate(
 {
     ERHE_PROFILE_FUNCTION();
 
-    std::size_t alignment_byte_count_without_wrap{0};
-    std::size_t available_byte_count_without_wrap{0};
-    std::size_t available_byte_count_with_wrap{0};
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    std::vector<std::unique_ptr<Ring_buffer>>& ring_buffers = m_ring_buffers[get_calling_role_index()];
 
     // Pass 1: Do we have buffer that can be used without a wrap?
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : ring_buffers) {
         if (!ring_buffer->match(usage)) {
             continue;
         }
-        ring_buffer->get_size_available_for_write(
-            required_alignment,
-            alignment_byte_count_without_wrap,
-            available_byte_count_without_wrap,
-            available_byte_count_with_wrap
-        );
-        if (available_byte_count_without_wrap >= byte_count) {
-            return ring_buffer->acquire(required_alignment, usage, byte_count);
+        Ring_buffer_range range = ring_buffer->try_acquire(required_alignment, usage, byte_count, Ring_buffer_wrap::not_allowed);
+        if (range.get_buffer() != nullptr) {
+            return range;
         }
     }
 
     // Pass 2: Do we have buffer that can be used with a wrap?
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : ring_buffers) {
         if (!ring_buffer->match(usage)) {
             continue;
         }
-        ring_buffer->get_size_available_for_write(
-            required_alignment,
-            alignment_byte_count_without_wrap,
-            available_byte_count_without_wrap,
-            available_byte_count_with_wrap
-        );
-        if (available_byte_count_with_wrap >= byte_count) {
-            return ring_buffer->acquire(required_alignment, usage, byte_count);
+        Ring_buffer_range range = ring_buffer->try_acquire(required_alignment, usage, byte_count, Ring_buffer_wrap::allowed);
+        if (range.get_buffer() != nullptr) {
+            return range;
         }
     }
 
@@ -69,8 +64,14 @@ auto Ring_buffer_pool::allocate(
     std::size_t existing_count      = 0;
     std::size_t existing_byte_count = 0;
     std::size_t total_byte_count    = 0;
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
-        total_byte_count += ring_buffer->get_capacity_byte_count();
+    std::size_t total_buffer_count  = 0;
+    for (const std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
+        total_buffer_count += role_ring_buffers.size();
+        for (const std::unique_ptr<Ring_buffer>& ring_buffer : role_ring_buffers) {
+            total_byte_count += ring_buffer->get_capacity_byte_count();
+        }
+    }
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : ring_buffers) {
         if (ring_buffer->match(usage)) {
             ++existing_count;
             existing_byte_count += ring_buffer->get_capacity_byte_count();
@@ -82,13 +83,14 @@ auto Ring_buffer_pool::allocate(
         .ring_buffer_usage = usage,
         .debug_label       = "Ring_buffer"
     };
-    m_ring_buffers.push_back(std::make_unique<Ring_buffer>(m_device, create_info));
+    ring_buffers.push_back(std::make_unique<Ring_buffer>(m_device, create_info));
     log_buffer->info(
-        "Ring buffer pool: created {} byte buffer (usage {}, request {} bytes); now {} buffer(s), {} bytes total",
+        "Ring buffer pool: created {} byte buffer (usage {}, role {}, request {} bytes); now {} buffer(s), {} bytes total",
         create_info.size,
         static_cast<unsigned int>(usage),
+        (get_calling_role_index() == 0) ? "main" : "render",
         byte_count,
-        m_ring_buffers.size(),
+        total_buffer_count + 1,
         total_byte_count + create_info.size
     );
     if (existing_count >= warn_buffer_count) {
@@ -99,12 +101,20 @@ auto Ring_buffer_pool::allocate(
             existing_byte_count + create_info.size
         );
     }
-    return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
+    return ring_buffers.back()->acquire(required_alignment, usage, byte_count);
 }
 
 void Ring_buffer_pool::frame_completed(const uint64_t completed_frame)
 {
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    for (std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
+        frame_completed_in_role(role_ring_buffers, completed_frame);
+    }
+}
+
+void Ring_buffer_pool::frame_completed_in_role(std::vector<std::unique_ptr<Ring_buffer>>& ring_buffers, const uint64_t completed_frame)
+{
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : ring_buffers) {
         ring_buffer->frame_completed(completed_frame);
     }
 
@@ -134,34 +144,45 @@ void Ring_buffer_pool::frame_completed(const uint64_t completed_frame)
         return false;
     };
     const auto i = std::remove_if(
-        m_ring_buffers.begin(),
-        m_ring_buffers.end(),
+        ring_buffers.begin(),
+        ring_buffers.end(),
         [&keep](const std::unique_ptr<Ring_buffer>& ring_buffer) { return !keep(ring_buffer); }
     );
-    if (i != m_ring_buffers.end()) {
-        m_ring_buffers.erase(i, m_ring_buffers.end());
+    if (i != ring_buffers.end()) {
+        ring_buffers.erase(i, ring_buffers.end());
         log_buffer->info(
-            "Ring buffer pool: reclaimed {} idle buffer(s), {} bytes; {} buffer(s) remain",
-            reclaimed_count, reclaimed_byte_count, m_ring_buffers.size()
+            "Ring buffer pool: reclaimed {} idle buffer(s), {} bytes; {} buffer(s) remain in that role",
+            reclaimed_count, reclaimed_byte_count, ring_buffers.size()
         );
     }
 }
 
 void Ring_buffer_pool::clear()
 {
-    m_ring_buffers.clear();
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    for (std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
+        role_ring_buffers.clear();
+    }
 }
 
 auto Ring_buffer_pool::get_buffer_count() const -> std::size_t
 {
-    return m_ring_buffers.size();
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    std::size_t count = 0;
+    for (const std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
+        count += role_ring_buffers.size();
+    }
+    return count;
 }
 
 auto Ring_buffer_pool::get_total_byte_count() const -> std::size_t
 {
+    const std::lock_guard<std::mutex> lock{m_mutex};
     std::size_t total = 0;
-    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
-        total += ring_buffer->get_capacity_byte_count();
+    for (const std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
+        for (const std::unique_ptr<Ring_buffer>& ring_buffer : role_ring_buffers) {
+            total += ring_buffer->get_capacity_byte_count();
+        }
     }
     return total;
 }

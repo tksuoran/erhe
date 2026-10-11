@@ -11,6 +11,21 @@ alignment, and calls its `frame_completed()` for every completed frame.
 `Ring_buffer` and `erhe::Circular_ring_buffer_algorithm` are the storage and
 the arithmetic under it.
 
+## Roles and threads
+
+Every `Ring_buffer_pool` and `Ring_buffer` method may be called from any
+thread: the pool's mutex guards its buffer lists, each buffer's mutex its
+allocation state (a range can be released on another thread than the one that
+acquired it, for example in a completion handler). The pool keeps its buffers
+per thread role (`erhe::utility::Thread_roles::is_render_role()`): a ring
+buffer reclaims space in acquisition order, which holds only while no range
+of an older frame follows a range of a newer one, and with frame pipelining
+the main role acquires for frame N+1 while the render role acquires for frame
+N. Each role's frames are in order, so each role allocates from its own
+buffers; worker threads share the main role's, and in inline mode (or while
+the roles are unset) every allocation is the main role's. The log line of a
+new buffer names its role.
+
 ## The allocator
 
 An acquisition is served in three passes. Pass 1 and pass 2 look for an

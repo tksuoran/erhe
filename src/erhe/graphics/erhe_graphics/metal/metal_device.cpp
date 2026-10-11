@@ -19,6 +19,7 @@
 #include "erhe_graphics/texture.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -325,19 +326,40 @@ Device_impl::~Device_impl() noexcept
     }
 }
 
-auto Device_impl::wait_frame() -> bool
+void Device_impl::wait_for_frame_start(const uint64_t frame_id)
 {
-    ERHE_VERIFY(m_state == Device_frame_state::idle);
+    // No GPU clock calibration or frame bracket on Metal yet; the frame
+    // time record is opened by Device::wait_for_frame_start.
+    static_cast<void>(frame_id);
+}
+
+auto Device_impl::get_frame_slot_index(const uint64_t frame_id) const -> std::size_t
+{
+    return static_cast<std::size_t>(frame_id % static_cast<uint64_t>(s_max_frames_in_flight));
+}
+
+auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
+{
+    // Order rule (doc/erhe/graphics.md "Frame lifecycle"): frames are
+    // acquired strictly in id order, at most N open.
+    ERHE_VERIFY(frame_id == m_prepare_frame_id + 1);
+    ERHE_VERIFY(frame_id >= m_render_frame_id);
+    ERHE_VERIFY(frame_id - m_render_frame_id < static_cast<uint64_t>(s_max_frames_in_flight));
+    const std::size_t  slot_index = get_frame_slot_index(frame_id);
+    Device_frame_slot& slot       = m_frame_slots[slot_index];
+    ERHE_VERIFY(slot.state == Device_frame_state::idle);
 
     // Open the frame's autorelease pool. Everything metal-cpp hands out
     // autoreleased from here on - command buffers, command encoders,
     // drawables - is drained by the matching end_frame(). Without this the
     // command queue's in-flight slots are never recycled and commandBuffer()
     // eventually blocks forever.
-    ERHE_VERIFY(!m_frame_object_pool.has_value());
-    m_frame_object_pool.emplace();
+    ERHE_VERIFY(!m_frame_object_pools[slot_index].has_value());
+    m_frame_object_pools[slot_index].emplace();
 
-    m_state = Device_frame_state::waited;
+    m_prepare_frame_id = frame_id;
+    slot.frame_id      = frame_id;
+    slot.state         = Device_frame_state::waited;
     return true;
 }
 
@@ -364,7 +386,7 @@ void Device_impl::drain_completed_frames()
         const auto keep_begin = std::partition(
             m_pending_completed_frames.begin(),
             m_pending_completed_frames.end(),
-            [this](const uint64_t frame) { return frame < m_frame_index; }
+            [this](const uint64_t frame) { return frame < m_render_frame_id; }
         );
         drained.assign(m_pending_completed_frames.begin(), keep_begin);
         m_pending_completed_frames.erase(m_pending_completed_frames.begin(), keep_begin);
@@ -382,11 +404,14 @@ void Device_impl::drain_completed_frames()
 
 auto Device_impl::begin_frame() -> bool
 {
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
+    // The legacy shim acts on the oldest open frame.
+    Device_frame_slot& slot = m_frame_slots[get_frame_slot_index(m_render_frame_id)];
+    ERHE_VERIFY(slot.state == Device_frame_state::waited);
+    ERHE_VERIFY(slot.frame_id == m_render_frame_id);
 
     drain_completed_frames();
 
-    m_state = Device_frame_state::recording;
+    slot.state = Device_frame_state::recording;
     return true;
 }
 
@@ -399,16 +424,25 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 
 auto Device_impl::end_frame() -> bool
 {
-    // CONTRACT: end_frame advances the frame index and drives per-frame
+    return end_frame(m_render_frame_id);
+}
+
+auto Device_impl::end_frame(const uint64_t frame_id) -> bool
+{
+    // CONTRACT: end_frame ends the oldest open frame and drives per-frame
     // GPU-completion processing (frame_completed) for frames the GPU has
     // reported done. It does not submit, it does not present. See
     // doc/erhe/graphics.md ("Frame lifecycle") and the Vulkan
     // implementation, whose end_frame()/update_frame_completion() does the
     // same, for the rationale.
+    ERHE_VERIFY(frame_id == m_render_frame_id);
+    const std::size_t  slot_index = get_frame_slot_index(frame_id);
+    Device_frame_slot& slot       = m_frame_slots[slot_index];
+    ERHE_VERIFY(slot.frame_id == frame_id);
     ERHE_VERIFY(
-        (m_state == Device_frame_state::in_swapchain_frame) ||
-        (m_state == Device_frame_state::recording) ||
-        (m_state == Device_frame_state::waited)
+        (slot.state == Device_frame_state::in_swapchain_frame) ||
+        (slot.state == Device_frame_state::recording) ||
+        (slot.state == Device_frame_state::waited)
     );
 
     // Recycle ring buffer ranges and fire completion handlers for any
@@ -421,12 +455,12 @@ auto Device_impl::end_frame() -> bool
     // complete.
     drain_completed_frames();
 
-    ++m_frame_index;
-    m_state = Device_frame_state::idle;
+    ++m_render_frame_id;
+    slot.state = Device_frame_state::idle;
 
     // Drain the frame's autorelease pool last: the completion handlers
     // above may still touch Metal objects that belong to it.
-    m_frame_object_pool.reset();
+    m_frame_object_pools[slot_index].reset();
     return true;
 }
 
@@ -440,7 +474,7 @@ auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 
 auto Device_impl::is_in_swapchain_frame() const -> bool
 {
-    return m_state == Device_frame_state::in_swapchain_frame;
+    return m_frame_slots[get_frame_slot_index(m_render_frame_id)].state == Device_frame_state::in_swapchain_frame;
 }
 
 auto Device_impl::get_surface() -> Surface*
@@ -525,8 +559,9 @@ auto Device_impl::get_command_buffer(const unsigned int thread_slot) -> Command_
 
     std::lock_guard<std::mutex> lock{m_per_thread_mutex};
     Per_thread_command_buffers::Allocated_command_buffer entry{};
-    entry.frame_index    = m_frame_index;
+    entry.frame_index    = get_frame_index();
     entry.command_buffer = std::make_unique<Command_buffer>(m_device);
+    entry.command_buffer->get_impl().set_frame_id(entry.frame_index);
 
     // Hand the cb its implicit GPU + CPU sync primitives. Allocation is
     // cheap on Metal so we go straight through MTL::Device rather than
@@ -626,7 +661,7 @@ void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
 
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
-    m_completion_handlers.emplace_back(m_frame_index, std::move(callback));
+    m_completion_handlers.emplace_back(get_frame_index(), std::move(callback));
 }
 
 void Device_impl::frame_completed(const uint64_t completed_frame)
@@ -749,8 +784,8 @@ void Device_impl::wait_idle()
     // the GL backend makes after glFinish(), and what keeps
     // Device::is_frame_completed() moving for a consumer whose frames produce
     // no completion callbacks of their own.
-    if (m_frame_index > m_latest_completed_frame) {
-        m_latest_completed_frame = m_frame_index;
+    if (m_render_frame_id > m_latest_completed_frame) {
+        m_latest_completed_frame = m_render_frame_id;
     }
 
     // All prior cbs (including device-frame cbs) have now completed on
@@ -808,9 +843,15 @@ auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_
     }
 }
 
+// The render role (a dedicated render thread) gets the oldest open frame;
+// every other caller the newest acquired frame while it is open, otherwise
+// the next frame to be acquired.
 auto Device_impl::get_frame_index() const -> uint64_t
 {
-    return m_frame_index;
+    if (erhe::utility::Thread_roles::is_render_role()) {
+        return m_render_frame_id;
+    }
+    return std::max(m_prepare_frame_id, m_render_frame_id);
 }
 
 auto Device_impl::get_number_of_frames_in_flight() const -> std::size_t

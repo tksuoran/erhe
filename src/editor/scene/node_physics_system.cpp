@@ -180,6 +180,10 @@ void Node_physics_system::destroy_body(Node_physics_entry& entry)
     if (!entry.rigid_body) {
         return;
     }
+    // Changes queued during the last simulation steps refer to this body;
+    // they land before it goes, as they would have had they been applied
+    // when reported.
+    apply_queued_body_activations_of(*entry.rigid_body);
     // Tear down joint constraints referencing this rigid body before it leaves
     // the world; the affected joints return to the pending state.
     m_scene_root.get_joint_system().handle_rigid_body_removed(entry.rigid_body.get());
@@ -484,6 +488,86 @@ void Node_physics_system::after_physics_simulation(Node_physics_entry& entry)
         entry.node->set_world_from_node(erhe::math::create_translation<float>(respawn_location));
     } else {
         entry.node->set_world_from_node(transform);
+    }
+}
+
+void Node_physics_system::on_body_activation(erhe::physics::IRigid_body& rigid_body, const Body_activation activation)
+{
+    if (m_in_simulation_steps) {
+        m_queued_body_activations.push_back(
+            Queued_body_activation{
+                .rigid_body = &rigid_body,
+                .activation = activation
+            }
+        );
+        return;
+    }
+    apply_body_activation(rigid_body, activation);
+}
+
+void Node_physics_system::begin_simulation_steps()
+{
+    ERHE_VERIFY(!m_in_simulation_steps);
+    m_in_simulation_steps = true;
+}
+
+void Node_physics_system::end_simulation_steps()
+{
+    ERHE_VERIFY(m_in_simulation_steps);
+    m_in_simulation_steps = false;
+}
+
+void Node_physics_system::apply_queued_body_activations()
+{
+    ERHE_VERIFY(!m_in_simulation_steps);
+    for (const Queued_body_activation& queued : m_queued_body_activations) {
+        apply_body_activation(*queued.rigid_body, queued.activation);
+    }
+    m_queued_body_activations.clear();
+}
+
+void Node_physics_system::apply_queued_body_activations_of(const erhe::physics::IRigid_body& rigid_body)
+{
+    for (const Queued_body_activation& queued : m_queued_body_activations) {
+        if (queued.rigid_body == &rigid_body) {
+            apply_body_activation(*queued.rigid_body, queued.activation);
+        }
+    }
+    m_queued_body_activations.erase(
+        std::remove_if(
+            m_queued_body_activations.begin(),
+            m_queued_body_activations.end(),
+            [&rigid_body](const Queued_body_activation& queued) { return queued.rigid_body == &rigid_body; }
+        ),
+        m_queued_body_activations.end()
+    );
+}
+
+void Node_physics_system::apply_body_activation(erhe::physics::IRigid_body& rigid_body, const Body_activation activation)
+{
+    void* owner = rigid_body.get_owner();
+    Node_physics_entry* entry = reinterpret_cast<Node_physics_entry*>(owner);
+    if (entry == nullptr) {
+        return;
+    }
+    erhe::scene::Node* node = entry->node;
+    if (node == nullptr) {
+        return;
+    }
+    if (activation == Body_activation::activated) {
+        if (rigid_body.get_motion_mode() != Motion_mode::e_dynamic) {
+            return;
+        }
+        // Activation events can be dispatched while the simulation is
+        // paused (remove_rigid_body() drains the pending queue); the flag
+        // must not be set then, or it sticks until the next resume and
+        // hierarchy edits stop propagating to the node.
+        if (!m_scene_root.is_physics_simulation_running()) {
+            return;
+        }
+        node->enable_flag_bits(erhe::Item_flags::no_transform_update);
+    } else {
+        node->disable_flag_bits(erhe::Item_flags::no_transform_update);
     }
 }
 

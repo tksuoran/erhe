@@ -1,8 +1,8 @@
 // Tight, modular shadow frustum fit for directional lights.
 //
-// Implements the optional tightening steps of Light::projection_transforms()
+// Implements the optional tightening steps of Light_snapshot::projection_transforms()
 // (see Shadow_frustum_fit_settings in light.hpp). The base case with all
-// tightening steps disabled is Light::stable_directional_light_projection_transforms()
+// tightening steps disabled is Light_snapshot::stable_directional_light_projection_transforms()
 // in light.cpp; this file is only entered when at least one tightening step
 // is enabled.
 //
@@ -27,6 +27,7 @@
 #include "erhe_scene/light_frustum_fit.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/light_snapshot.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
@@ -322,14 +323,14 @@ void build_receiver_cull_planes(
 
 } // anonymous namespace
 
-auto Light::tight_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
+auto Light_snapshot::tight_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
     ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(parameters.view_camera != nullptr);
     ERHE_VERIFY(parameters.fit_settings != nullptr);
     const Shadow_frustum_fit_settings& settings = *parameters.fit_settings;
 
-    const Node* const view_camera_node = parameters.view_camera;
+    const Camera_snapshot& view_camera = *parameters.view_camera;
 
     Shadow_frustum_fit_debug_data* const debug_out = settings.collect_debug ? parameters.fit_debug_out : nullptr;
     if (debug_out != nullptr) {
@@ -363,8 +364,8 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     // extrude-toward-light step below still keeps casters past the range whose
     // shadows fall back into the truncated frustum (the far cap is dropped
     // exactly when its inward normal opposes the light direction).
-    const float shadow_range = parameters.view_camera->get_shadow_range();
-    Projection truncated_projection = *parameters.view_camera->projection();
+    const float shadow_range = view_camera.get_shadow_range();
+    Projection truncated_projection = view_camera.projection();
     truncated_projection.set_z_far(
         std::min(
             truncated_projection.get_z_far(),
@@ -374,8 +375,8 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     const Transform main_clip_from_node  = truncated_projection.clip_from_node_transform(
         parameters.main_camera_viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions
     );
-    const glm::mat4 main_clip_from_world = main_clip_from_node.get_matrix()    * view_camera_node->node_from_world();
-    const glm::mat4 world_from_main_clip = view_camera_node->world_from_node() * main_clip_from_node.get_inverse_matrix();
+    const glm::mat4 main_clip_from_world = main_clip_from_node.get_matrix() * view_camera.node_from_world();
+    const glm::mat4 world_from_main_clip = view_camera.world_from_node()    * main_clip_from_node.get_inverse_matrix();
     const std::array<glm::vec4, 6> main_frustum_planes  = erhe::math::extract_frustum_planes (main_clip_from_world, 0.0f, 1.0f);
     const std::array<glm::vec3, 8> main_frustum_corners = erhe::math::extract_frustum_corners(world_from_main_clip, 0.0f, 1.0f);
     const std::span<const glm::vec3> frustum_corner_points{main_frustum_corners};
@@ -653,7 +654,7 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     // Safety cap: never exceed the stable shadow-range box (shadow_range was
     // resolved above for the F_main truncation)
     if (settings.cap_by_shadow_range) {
-        const glm::vec3 view_camera_position_in_light = light_from_world * glm::vec3{view_camera_node->position_in_world()};
+        const glm::vec3 view_camera_position_in_light = light_from_world * glm::vec3{view_camera.position_in_world()};
         const glm::vec2 view_camera_xy_in_rolled      = rolled_from_light_xy * glm::vec2{view_camera_position_in_light};
         const float     view_camera_s                 = glm::dot(view_camera_position_in_light, light_direction_in_light);
         box.xy_min = glm::max(box.xy_min, view_camera_xy_in_rolled - glm::vec2{shadow_range});

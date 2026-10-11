@@ -1,10 +1,13 @@
 #include "scene/scene_root.hpp"
+#include "renderers/ray_trace_scene.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "editor_item_bits.hpp"
 #include "physics/physics_drag_constraint.hpp"
 #include "scene/item_lookup.hpp"
 
 #include "config/generated/physics_config.hpp"
 #include "editor_log.hpp"
+#include "erhe_graphics/device.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
@@ -68,6 +71,7 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -185,9 +189,21 @@ Scene_root::Scene_root(
                 .shader_variant_cache     = draw_list_dependencies->shader_variant_cache,
                 .primitive_interface      = draw_list_dependencies->primitive_interface,
                 .multiview_view_counts    = std::span<const uint32_t>{draw_list_dependencies->multiview_view_counts},
-                .material_set_create_info = draw_list_dependencies->material_set_create_info
+                .material_set_create_info   = draw_list_dependencies->material_set_create_info,
+                .exclude_unlit_from_shadows = draw_list_dependencies->exclude_unlit_from_shadows
             }
         );
+    }
+
+    // The ray-query consumers' view of the content layer (doc/editor/raytrace.md
+    // "Ray_trace_scene"), fed by the mesh hooks below.
+    if (
+        (draw_list_dependencies != nullptr) &&
+        (draw_list_dependencies->mesh_memory != nullptr) &&
+        (draw_list_dependencies->graphics_device != nullptr) &&
+        draw_list_dependencies->graphics_device->get_info().use_ray_query
+    ) {
+        m_ray_trace_scene = std::make_unique<Ray_trace_scene>(*draw_list_dependencies->graphics_device, *draw_list_dependencies->mesh_memory);
     }
 
     m_scene = std::make_shared<Scene>(name, this);
@@ -225,47 +241,18 @@ Scene_root::Scene_root(
     m_scene->get_root_node()->enable_flag_bits(editor::Editor_item_flags::invisible_parent);
     if (enable_physics) {
         m_physics_world = erhe::physics::IWorld::create_unique();
+        // The node flag edits run in Node_physics_system, queued while
+        // the simulation steps (M1) and applied in M2.
         m_physics_world->set_on_body_activated(
             [this](erhe::physics::IRigid_body* rigid_body) {
                 ERHE_VERIFY(rigid_body != nullptr);
-                if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
-                    return;
-                }
-                void* owner = rigid_body->get_owner();
-                Node_physics_entry* entry = reinterpret_cast<Node_physics_entry*>(owner);
-                if (entry == nullptr) {
-                    return;
-                }
-                erhe::scene::Node* node = entry->node;
-                if (node == nullptr) {
-                    return;
-                }
-                // Activation events can be dispatched while the simulation is
-                // paused (remove_rigid_body() drains the pending queue); the
-                // flag must not be set then, or it sticks until the next
-                // resume and hierarchy edits stop propagating to the node.
-                if (!m_physics_simulation_running) {
-                    return;
-                }
-                node->enable_flag_bits(erhe::Item_flags::no_transform_update);
+                m_node_physics_system->on_body_activation(*rigid_body, Body_activation::activated);
             }
         );
         m_physics_world->set_on_body_deactivated(
             [this](erhe::physics::IRigid_body* rigid_body) {
                 ERHE_VERIFY(rigid_body != nullptr);
-                //if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
-                //    return;
-                //}
-                void* owner = rigid_body->get_owner();
-                Node_physics_entry* entry = reinterpret_cast<Node_physics_entry*>(owner);
-                if (entry == nullptr) {
-                    return;
-                }
-                erhe::scene::Node* node = entry->node;
-                if (node == nullptr) {
-                    return;
-                }
-                node->disable_flag_bits(erhe::Item_flags::no_transform_update);
+                m_node_physics_system->on_body_activation(*rigid_body, Body_activation::deactivated);
             }
         );
         m_physics_world->set_on_trigger_enter(
@@ -389,6 +376,7 @@ Scene_root::~Scene_root() noexcept
     // never-flushed changes) while m_raytrace_scene is still alive so a Mesh
     // released here can still detach its raytrace instances.
     m_draw_list_scene.reset();
+    m_ray_trace_scene.reset();
 
     // The Scene and its content (nodes, meshes, node_physics) hold non-owning
     // back-pointers into this Scene_root and the resources it owns (the raytrace
@@ -1670,6 +1658,9 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
     // Content meshes are what the indirect diffuse producers trace.
     if (mesh->layer_id == layers().content()->id) {
+        if (m_ray_trace_scene) {
+            m_ray_trace_scene->on_structure_changed();
+        }
         notify_lighting_changed();
     }
 
@@ -1780,6 +1771,9 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     }
 
     if (mesh->layer_id == layers().content()->id) {
+        if (m_ray_trace_scene) {
+            m_ray_trace_scene->on_structure_changed();
+        }
         notify_lighting_changed();
     }
 
@@ -1845,7 +1839,7 @@ void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light
     if (m_scene) {
         m_scene->register_light(light);
     }
-    m_light_set.invalidate();
+    invalidate_light_sets();
     notify_lighting_changed();
 }
 
@@ -1854,7 +1848,7 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
     if (m_scene) {
         m_scene->unregister_light(light);
     }
-    m_light_set.invalidate();
+    invalidate_light_sets();
     notify_lighting_changed();
 }
 
@@ -1865,7 +1859,7 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
 void Scene_root::on_light_changed(const std::shared_ptr<erhe::scene::Light>& light)
 {
     static_cast<void>(light);
-    m_light_set.invalidate();
+    invalidate_light_sets();
 }
 
 void Scene_root::notify_lighting_changed()
@@ -1875,9 +1869,20 @@ void Scene_root::notify_lighting_changed()
     }
 }
 
-auto Scene_root::get_light_set() -> erhe::scene_renderer::Light_set&
+void Scene_root::invalidate_light_sets()
 {
-    return m_light_set;
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_light_invalidation_mutex};
+    ++m_light_invalidation_serial;
+}
+
+auto Scene_root::get_light_set(const uint64_t frame_index) const -> const erhe::scene_renderer::Light_set&
+{
+    ERHE_VERIFY(!m_render_snapshot_slots.empty());
+    const Render_snapshot_slot& slot = m_render_snapshot_slots[frame_index % m_render_snapshot_slots.size()];
+    // The calling role's frame resolved the set, and no later frame has
+    // reused the slot yet.
+    ERHE_VERIFY(slot.frame_index == frame_index);
+    return *slot.light_set;
 }
 
 // The forward Material_set's object references (D1c). These four hooks -
@@ -1933,6 +1938,9 @@ void Scene_root::on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::M
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_reregister(mesh);
     }
+    if (m_ray_trace_scene && is_content_mesh(mesh)) {
+        m_ray_trace_scene->on_primitives_replaced(mesh);
+    }
 }
 
 void Scene_root::on_mesh_material_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
@@ -1947,12 +1955,21 @@ void Scene_root::on_mesh_material_changed(const std::shared_ptr<erhe::scene::Mes
         // entries would move.
         m_draw_list_scene->enqueue_material_update(mesh);
     }
+    if (m_ray_trace_scene && is_content_mesh(mesh)) {
+        m_ray_trace_scene->on_materials_changed();
+    }
 }
 
-void Scene_root::on_mesh_flags_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh, const uint64_t, const uint64_t new_flag_bits)
+void Scene_root::on_mesh_flags_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh, const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_set_flags(mesh, new_flag_bits);
+    }
+    // Only visibility and activity decide what is traced (selection, hover
+    // and the other flags do not).
+    constexpr uint64_t traced_flags = erhe::Item_flags::visible | erhe::Item_flags::active;
+    if (m_ray_trace_scene && (((old_flag_bits ^ new_flag_bits) & traced_flags) != 0) && is_content_mesh(mesh)) {
+        m_ray_trace_scene->on_structure_changed();
     }
 }
 
@@ -1961,6 +1978,9 @@ void Scene_root::on_mesh_transform_changed(const std::shared_ptr<erhe::scene::Me
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_transform_update(mesh);
     }
+    if (m_ray_trace_scene && is_content_mesh(mesh)) {
+        m_ray_trace_scene->on_transform_changed(mesh);
+    }
 }
 
 void Scene_root::on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
@@ -1968,6 +1988,9 @@ void Scene_root::on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scen
     enqueue_mesh_materials(mesh);
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_refresh(mesh);
+    }
+    if (m_ray_trace_scene && is_content_mesh(mesh)) {
+        m_ray_trace_scene->on_structure_changed();
     }
 }
 
@@ -1979,6 +2002,11 @@ void Scene_root::on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scen
 // thread), cleared after use so it keeps no mesh alive.
 void Scene_root::on_mesh_bounds_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
+    // The ray trace scene refreshes every traced bound on this, so the
+    // sharers need no enumeration there.
+    if (m_ray_trace_scene && is_content_mesh(mesh)) {
+        m_ray_trace_scene->on_bounds_changed();
+    }
     if (!m_draw_list_scene || !mesh) {
         return;
     }
@@ -2042,6 +2070,63 @@ void Scene_root::flush_draw_lists()
     m_draw_list_scene->flush_pending();
 }
 
+void Scene_root::prepare_shadow_bounds(const uint64_t frame_index, const std::size_t frames_in_flight)
+{
+    if (!m_draw_list_scene) {
+        return;
+    }
+    // The skinned objects' posed bounds read their primitives, which a
+    // worker may be replacing (the same reason flush_draw_lists() locks).
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
+    // The shadow nodes draw the content layer (Shadow_render_node).
+    const erhe::scene::Layer_id content_layers[] = { m_layers.content()->id };
+    m_draw_list_scene->prepare_shadow_bounds(
+        erhe::scene_renderer::Shadow_bounds_selection{
+            .layers        = content_layers,
+            .caster_filter = erhe::scene_renderer::shadow_caster_filter
+        },
+        frame_index,
+        frames_in_flight
+    );
+}
+
+void Scene_root::publish_draw_lists(const uint64_t frame_index, const std::size_t frames_in_flight)
+{
+    if (!m_draw_list_scene) {
+        return;
+    }
+    // The joint slot rewrite reads the skinned meshes' primitives, which a
+    // worker may be replacing (the same reason flush_draw_lists() locks).
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
+    m_draw_list_scene->publish(frame_index, frames_in_flight);
+}
+
+auto Scene_root::is_content_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh) const -> bool
+{
+    return mesh && (mesh->layer_id == m_layers.content()->id);
+}
+
+auto Scene_root::get_ray_trace_scene() -> Ray_trace_scene*
+{
+    return m_ray_trace_scene.get();
+}
+
+auto Scene_root::get_ray_trace_scene() const -> const Ray_trace_scene*
+{
+    return m_ray_trace_scene.get();
+}
+
+void Scene_root::prepare_ray_trace_scene(const uint64_t frame_index, const std::size_t frames_in_flight)
+{
+    if (!m_ray_trace_scene) {
+        return;
+    }
+    // The working set reads the content meshes' primitives, which a worker
+    // may be replacing (the same reason flush_draw_lists() locks).
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
+    m_ray_trace_scene->prepare(*m_layers.content(), m_material_set, frame_index, frames_in_flight);
+}
+
 auto Scene_root::get_draw_mode_system() -> Draw_mode_system&
 {
     return *m_draw_mode_system.get();
@@ -2100,6 +2185,7 @@ void Scene_root::unregister_physics_drag(Physics_drag_constraint* const drag)
 
 void Scene_root::set_physics_simulation_running(const bool running)
 {
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     if (running == m_physics_simulation_running) {
         return;
     }
@@ -2128,8 +2214,25 @@ void Scene_root::set_physics_simulation_running(const bool running)
     }
 }
 
+auto Scene_root::is_physics_simulation_running() const -> bool
+{
+    return m_physics_simulation_running;
+}
+
+auto Scene_root::get_physics_step_mutex() -> ERHE_PROFILE_LOCKABLE_BASE(std::mutex)&
+{
+    return m_physics_step_mutex;
+}
+
+void Scene_root::apply_queued_body_activations()
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    m_node_physics_system->apply_queued_body_activations();
+}
+
 void Scene_root::before_physics_simulation_steps()
 {
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> physics_step_lock{m_physics_step_mutex};
     for (Node_physics_entry* const entry : m_node_physics_system->get_bodies()) {
         m_node_physics_system->before_physics_simulation(*entry);
     }
@@ -2140,11 +2243,15 @@ void Scene_root::update_physics_simulation_fixed_step(const double dt, const Phy
     if (!m_physics_world) {
         return;
     }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> physics_step_lock{m_physics_step_mutex};
     apply_wind_forces(static_cast<float>(dt), physics);
     for (Physics_drag_constraint* const drag : m_physics_drags) {
         drag->on_fixed_step(static_cast<float>(dt));
     }
+    // Activation events the step dispatches are queued for M2.
+    m_node_physics_system->begin_simulation_steps();
     m_physics_world->update_fixed_step(dt);
+    m_node_physics_system->end_simulation_steps();
 }
 
 void Scene_root::apply_wind_forces(const float dt, const Physics_config& physics)
@@ -2203,6 +2310,7 @@ void Scene_root::apply_wind_forces(const float dt, const Physics_config& physics
 
 void Scene_root::after_physics_simulation_steps()
 {
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
     if (!m_physics_world) {
         return;
     }
@@ -2380,6 +2488,143 @@ auto Scene_root::get_scene_settings() -> Scene_settings&
 auto Scene_root::get_scene_settings() const -> const Scene_settings&
 {
     return m_scene_settings;
+}
+
+auto Scene_root::get_render_snapshot_slot(const uint64_t frame_index, const std::size_t frames_in_flight) -> Render_snapshot_slot&
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    ERHE_VERIFY(frames_in_flight > 0);
+    if (m_render_snapshot_slots.empty()) {
+        m_render_snapshot_slots.resize(frames_in_flight);
+        for (Render_snapshot_slot& slot : m_render_snapshot_slots) {
+            slot.light_set = std::make_unique<erhe::scene_renderer::Light_set>();
+        }
+    }
+    ERHE_VERIFY(m_render_snapshot_slots.size() == frames_in_flight);
+    return m_render_snapshot_slots[frame_index % frames_in_flight];
+}
+
+void Scene_root::capture_render_settings(const Editor_settings_config& editor_settings, Scene_render_settings& out) const
+{
+    out.sky                = get_effective_sky               (editor_settings, *this);
+    out.shadow_frustum_fit = get_effective_shadow_frustum_fit(editor_settings, *this);
+    out.clear_color        = get_effective_clear_color       (editor_settings, *this);
+    const erhe::scene::Scene& scene = get_scene();
+    const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = scene.get_cameras();
+    out.has_trace_camera = !cameras.empty();
+    if (!cameras.empty()) {
+        out.trace_camera.capture(*cameras.front());
+    }
+    out.ambient_light      = scene.get_ambient_light();
+    out.has_content_meshes = !m_layers.content()->meshes.empty();
+
+    // The sky's sun direction from the last directional light (erhe stores
+    // a directional light's direction as world_from_node * +Z, the
+    // direction from the surface toward the light, which is the toward-sun
+    // direction the atmosphere wants).
+    const std::vector<std::shared_ptr<erhe::scene::Light>>& lights = m_layers.light()->lights;
+    out.has_lights    = !lights.empty();
+    out.has_sun_light = false;
+    for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
+        if (!light || (light->get_light_type() != erhe::scene::Light_type::directional)) {
+            continue;
+        }
+        const glm::vec3 to_light  = glm::vec3{light->world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+        const float     length_sq = glm::dot(to_light, to_light);
+        if (length_sq > 1e-8f) {
+            out.has_sun_light = true;
+            out.sun_direction = glm::normalize(to_light);
+        }
+    }
+}
+
+void Scene_root::resolve_light_set(Render_snapshot_slot& slot, const erhe::scene_renderer::Light_count_limits& light_count_limits)
+{
+    // A light hook since this slot's last resolve invalidates its layout;
+    // the sets of the other frames in flight re-resolve at their own turn.
+    uint64_t invalidation_serial = 0;
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_light_invalidation_mutex};
+        invalidation_serial = m_light_invalidation_serial;
+    }
+    if (slot.light_set_serial != invalidation_serial) {
+        slot.light_set->invalidate();
+        slot.light_set_serial = invalidation_serial;
+    }
+    slot.light_set->resolve(m_layers.light()->lights, light_count_limits);
+}
+
+void Scene_root::snapshot_render_settings(
+    const Editor_settings_config& editor_settings,
+    const Render_settings&        render_settings,
+    const uint64_t                frame_index,
+    const std::size_t             frames_in_flight
+)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    // The frame's slot: the render phase of another frame in flight reads
+    // its own.
+    Render_snapshot_slot& slot = get_render_snapshot_slot(frame_index, frames_in_flight);
+    capture_render_settings(editor_settings, slot.render_settings);
+
+    // The lights: the resolved set under the active graphics preset's per
+    // light type limits (the shadow limits are also what the shadow node
+    // sized its maps from), with every slot's copy refreshed.
+    resolve_light_set(slot, get_light_count_limits(render_settings.graphics_preset));
+    slot.frame_index = frame_index;
+
+    // The skins' joints as posed by this frame's transforms, into the
+    // frame's slot: the render phase of another frame in flight reads its
+    // own. capture() also assigns each skin's joint slot, which
+    // publish_draw_lists() bakes into the draw list records next.
+    if (m_render_joint_poses_slots.empty()) {
+        m_render_joint_poses_slots.resize(frames_in_flight);
+    }
+    ERHE_VERIFY(m_render_joint_poses_slots.size() == frames_in_flight);
+    Joint_poses_slot& joint_poses_slot = m_render_joint_poses_slots[frame_index % frames_in_flight];
+    joint_poses_slot.poses.capture(get_scene().get_skins());
+    joint_poses_slot.frame_index = frame_index;
+    joint_poses_slot.captured    = true;
+}
+
+auto Scene_root::snapshot_preview_render_settings(
+    const Editor_settings_config&                   editor_settings,
+    const erhe::scene_renderer::Light_count_limits& light_count_limits,
+    const uint64_t                                  frame_index,
+    const std::size_t                               frames_in_flight
+) -> const erhe::scene_renderer::Light_set&
+{
+    ERHE_PROFILE_FUNCTION();
+    Render_snapshot_slot& slot = get_render_snapshot_slot(frame_index, frames_in_flight);
+    capture_render_settings(editor_settings, slot.render_settings);
+    resolve_light_set(slot, light_count_limits);
+    slot.frame_index = frame_index;
+    return *slot.light_set;
+}
+
+auto Scene_root::get_render_joint_poses(const uint64_t frame_index) const -> std::span<const erhe::scene_renderer::Joint_pose>
+{
+    if (m_render_joint_poses_slots.empty()) {
+        // Never prepared by the frame loop: a preview root (no skins).
+        return {};
+    }
+    const Joint_poses_slot& slot = m_render_joint_poses_slots[frame_index % m_render_joint_poses_slots.size()];
+    // The prepare phase of this frame captured the slot (and the prepare
+    // phase of no later frame has reused it yet).
+    ERHE_VERIFY(slot.captured && (slot.frame_index == frame_index));
+    return slot.poses.get_poses();
+}
+
+auto Scene_root::get_render_settings(const uint64_t frame_index) const -> const Scene_render_settings&
+{
+    ERHE_VERIFY(!m_render_snapshot_slots.empty());
+    const Render_snapshot_slot& slot = m_render_snapshot_slots[frame_index % m_render_snapshot_slots.size()];
+    // The calling role's frame made the copy, and no later frame has
+    // reused the slot yet.
+    ERHE_VERIFY(slot.frame_index == frame_index);
+    return slot.render_settings;
 }
 
 auto Scene_root::get_variant_table() -> Variant_table&

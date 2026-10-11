@@ -115,20 +115,17 @@ A ray tracing pipeline abstraction can be layered on later if it is ever needed.
 - `Mesh_memory` vertex and index pools carry
   `acceleration_structure_build_input | shader_device_address` usage, so BLAS
   builds read them in place with no data duplication.
-- `Scene_tlas` (`src/editor/renderers/scene_tlas.{hpp,cpp}`) holds the BLAS
-  cache, the per-frame-in-flight TLAS slots and the instance-record SSBO, and is
-  shared with `Ddgi_renderer` and `Radiance_cascades_renderer`
-  (`Lightmap_baker` keeps its own copy, see [`ddgi.md`](ddgi.md)). A BLAS is
-  built lazily, once per unique `Buffer_mesh` of the primitive's original
-  (unoptimized) variant, read in place from stream 0 (position at offset 0;
-  the `triangle_fill_indices` range). Quantized positions are read as snorm16
-  with the dequantization affine applied as a build transform
-  (`erhe::scene_renderer::get_blas_position_input`, see
-  [`vertex_position_quantization.md`](../erhe/vertex_position_quantization.md)).
-  Skinned meshes are skipped,
-  because their BLAS would need post-skinning positions. The TLAS is built per
-  frame from the visible scene mesh instances; instance capacity grows to a
-  high-water mark on scene change, so steady-state frames allocate nothing.
+- `Ray_trace_scene` (`src/editor/renderers/ray_trace_scene.{hpp,cpp}`, one per
+  `Scene_root` with device dependencies on a ray query device) is what the
+  three ray-query consumers - `Ray_trace_renderer`, `Ddgi_renderer` and
+  `Radiance_cascades_renderer` - trace. See "Ray_trace_scene" below.
+- `Scene_tlas` (`src/editor/renderers/scene_tlas.{hpp,cpp}`, one per consumer,
+  render phase) builds the slot's missing bottom level structures, builds the
+  consumer's top level structure for the frame-in-flight slot from the slot's
+  instances, and uploads the slot's instance records into the consumer's
+  record SSBO. Instance capacity grows to a high-water mark on scene change, so
+  steady-state frames allocate nothing. `Lightmap_baker` keeps its own
+  structures and records (see [`ddgi.md`](ddgi.md)).
 - `res/editor/shaders/ray_trace.comp` traces full-screen primary rays from the
   active camera and shades the hits; see
   [`raytrace_materials.md`](raytrace_materials.md) for the material, light and
@@ -142,30 +139,83 @@ A ray tracing pipeline abstraction can be layered on later if it is ever needed.
   Trace") toggles it, edits the `Ray_trace_config` settings (downscale, max
   rays, max bounces) and displays the rgba8 output texture, which is sized to
   the viewport divided by the downscale factor and recreated on resize; the
-  renderer no-ops while disabled.
+  renderer no-ops while disabled. The renderer reads the settings from the
+  render phase's copy of its frame (`App_context::render_settings->ray_trace`,
+  `doc/editor/editor.md` "Frame phases and the render thread"), so an edit
+  takes effect at the next frame's snapshot. The switch is the renderer's
+  live flag (`set_enabled`, main thread: the window and MCP
+  `set_ray_trace`); M2 copies it into the packet
+  (`Frame_packet::ray_trace_enabled`) and R hands it to the renderer
+  (`set_render_enabled`), which traces with that copy. Each trace leaves a
+  `Rendered_output` (output size, instance count) per frame in flight; the
+  window and MCP read the last rendered frame's, and the window draws the
+  output through `get_output_texture_reference()`, which the render thread
+  resolves when it draws the window.
 
-## Trap: the BLAS cache key
+## Ray_trace_scene
 
-`Scene_tlas::m_blas_cache` is keyed by a raw
-`const erhe::primitive::Buffer_mesh*` and `get_or_create_blas()` returns a cache
-hit with no validation. Entries whose primitive nothing else references are
-evicted (`render_shape.use_count() == 1`, see
-[`reloadable_asset_loads.md`](reloadable_asset_loads.md)), which stops the cache
-pinning released content and removes the "dead pointer, address reused by a new
-`Buffer_mesh`" flavour of the problem.
+The content layer as the ray-query consumers see it, kept in the prepare
+phase (M2) and read by the render phase (R) only through one slot per frame
+in flight, so R never walks the live scene.
 
-What eviction does not cover:
-`Primitive_render_shape::commit_geometry_buffer_mesh()` move-assigns the new
-`Buffer_mesh` **in place** (`primitive.cpp`). The key address is unchanged and
-the live mesh keeps the refcount at 2, so no refcount sweep triggers - while the
-vertex and index pool ranges the cached acceleration structure was built over
-have been freed and can be recycled by another mesh. The result is a bottom
-level structure describing geometry that is no longer there. This is reachable
-whenever a deferred import finalize or a geometry edit swaps a primitive's
-renderable mesh while ray query is enabled. `Lightmap_baker::m_blas_cache` is
-the same cache with the same hazard.
+- Hooks. `Scene_root` forwards the mesh hooks of content layer meshes (any
+  thread; they only mark state under a mutex): register, unregister, a
+  primitive list or in-place `Buffer_mesh` replacement
+  (`on_mesh_primitives_changed`), primitive data and a visible or active
+  flag change mark the structure dirty; a material change marks the
+  materials dirty; a transform change queues the mesh; a bounds change
+  (`on_mesh_bounds_changed`, the live mesh-component drag) marks the bounds
+  dirty. Before the first prepare a hook only marks the structure dirty, so a
+  root the frame loop never prepares (the previews) accumulates nothing.
+- Working set (M2 only). `Ray_trace_geometry`, one per unique
+  original-variant `Buffer_mesh` (keyed by address, shared by every instance
+  and every consumer): it pins the `Primitive` and its `Primitive_render_shape`
+  (the shape owns the `Buffer_mesh` and its pool ranges), holds the bottom
+  level build input (stream 0 read in place, position at offset 0, the
+  `triangle_fill_indices` range; quantized positions read as snorm16 with the
+  dequantization affine as a build transform,
+  `erhe::scene_renderer::get_blas_position_input`, see
+  [`vertex_position_quantization.md`](../erhe/vertex_position_quantization.md))
+  and the geometry half of the instance record (addresses, strides, position
+  encoding); `valid` folds every skip condition (no triangles, no stream 1, a
+  missing device address, a stride stream 1 cannot fetch, an unsupported
+  position format). Instances are the visible, active, non-skinned content
+  meshes' primitives in content layer times primitive order, which is
+  `instance_custom_index`. Skinned meshes are not traced (their structure
+  would need post-skinning positions) but have a mesh entry for the content
+  bounds.
+- `prepare(frame_index, frames_in_flight)` (`App_scenes::
+  prepare_ray_trace_scenes`, every frame after `update_material_sets`, under
+  `item_host_mutex`): a dirty structure rebuilds the working set, reusing the
+  geometries by `Buffer_mesh` except those of meshes whose `Buffer_mesh` was
+  replaced in place (`Primitive_render_shape::commit_geometry_buffer_mesh()`
+  move-assigns at the same address over freed pool ranges); the geometries
+  the new structure does not name are retired. Otherwise the queued
+  transforms are applied once per `world_from_node_serial`, the material
+  slots and transmissive flags are re-resolved when the materials are dirty
+  or the forward set's `get_write_count()` moved (a material property edit
+  reaches only the latter), and a bounds change refreshes the mesh bounds
+  and the records' dequantization affine. Only instances whose fields
+  changed are marked.
+- Publish. The slot gets a full copy when its structure serial differs,
+  otherwise only the instances marked since its last publish (a per-instance
+  slot bitmask); plus the content bounds (a cached union of the non-skinned
+  meshes' world bounds and the skinned meshes' posed `get_aabb_world()`, read
+  every frame since no notification reaches posed bounds), and the forward
+  set's live slot count. A quiet frame copies nothing; a dragged mesh costs
+  one transform update and one instance copy per frame.
+- R. `Ray_trace_scene::get_slot(frame_index)` (render thread, `r_render`,
+  verifies the slot's frame) feeds `Scene_tlas::update`, which creates and
+  builds a geometry's bottom level structure the first time any consumer's
+  slot names it; one structure per geometry serves all three consumers. A
+  retired geometry lives on through the slots that still hold it, and
+  `~Acceleration_structure` defers the device destroy to frame completion.
+  `Ddgi_renderer::update_volume` and `Radiance_cascades_renderer::
+  update_layout` fit to `pad_content_bounds(slot.content_bounds, padding)`.
+- The log category `editor.raytrace_frame` (`config/editor/logging.json`) at
+  `trace` logs each prepare's structure rebuilds, transform updates, instance copies and full publishes.
 
 ## Future work
 
-- [plans/raytrace.md](../plans/raytrace.md) - BLAS cache identity, skinned
+- [plans/raytrace.md](../plans/raytrace.md) - `Lightmap_baker` BLAS cache identity, skinned
   meshes, TLAS refit, Metal TLAS build allocations, viewport composition.

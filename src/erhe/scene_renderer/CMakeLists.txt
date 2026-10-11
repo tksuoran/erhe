@@ -8,6 +8,7 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/content_wide_line_interface.cpp
     erhe_scene_renderer/content_wide_line_interface.hpp
     erhe_scene_renderer/content_wide_line_compute_renderer.cpp
+    erhe_scene_renderer/content_wide_line_feed.hpp
     erhe_scene_renderer/content_wide_line_renderer.cpp
     erhe_scene_renderer/content_wide_line_renderer.hpp
     erhe_scene_renderer/content_wide_line_view_writer.hpp
@@ -23,6 +24,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/glyph_buffer.hpp
     erhe_scene_renderer/joint_buffer.cpp
     erhe_scene_renderer/joint_buffer.hpp
+    erhe_scene_renderer/joint_poses.cpp
+    erhe_scene_renderer/joint_poses.hpp
     erhe_scene_renderer/light_buffer.cpp
     erhe_scene_renderer/light_buffer.hpp
     erhe_scene_renderer/light_set.cpp
@@ -38,6 +41,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/published_vector.hpp
     erhe_scene_renderer/primitive_buffer.cpp
     erhe_scene_renderer/primitive_buffer.hpp
+    erhe_scene_renderer/render_bucket_snapshot.cpp
+    erhe_scene_renderer/render_bucket_snapshot.hpp
     erhe_scene_renderer/scene_pass_resources.cpp
     erhe_scene_renderer/scene_pass_resources.hpp
     erhe_scene_renderer/program_interface.cpp
@@ -82,6 +87,7 @@ target_link_libraries(
         erhe::log
         erhe::message_bus
         erhe::profile
+        erhe::utility
 )
 
 # Primitive_color_source enum codegen

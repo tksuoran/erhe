@@ -169,7 +169,9 @@ Debug_renderer_bucket::Debug_renderer_bucket(
     , m_pipeline_hidden         {make_pipeline(Pass_kind::hidden,  Draw_kind::core  )}
     , m_pipeline_visible_fringe {make_pipeline(Pass_kind::visible, Draw_kind::fringe)}
     , m_pipeline_hidden_fringe  {make_pipeline(Pass_kind::hidden,  Draw_kind::fringe)}
+    , m_frames                  (graphics_device.get_number_of_frames_in_flight())
 {
+    ERHE_VERIFY(!m_frames.empty());
     const auto& program_interface = debug_renderer.get_program_interface();
     if (uses_compute()) {
         m_vertex_ssbo_buffer.emplace(
@@ -286,10 +288,19 @@ auto Debug_renderer_bucket::update_view_buffer(
     return view_buffer_range;
 }
 
-auto Debug_renderer_bucket::make_draw(const std::size_t vertex_byte_count, const std::size_t primitive_count) -> std::span<std::byte>
+auto Debug_renderer_bucket::make_draw(
+    const uint64_t    frame_index,
+    const std::size_t vertex_byte_count,
+    const std::size_t primitive_count
+) -> std::span<std::byte>
 {
     constexpr std::size_t min_range_size = 8192; // TODO
-    ERHE_VERIFY(!m_view_spans.empty());
+    // Debug_renderer::get() opened a view span of this frame (start_view).
+    Frame* const frame = find_frame(frame_index);
+    ERHE_VERIFY(frame != nullptr);
+    ERHE_VERIFY(!frame->view_spans.empty());
+    std::vector<Debug_draw_entry>&     draws      = frame->draws;
+    std::vector<Debug_draw_view_span>& view_spans = frame->view_spans;
 
     auto& buffer_client = uses_compute() ? m_vertex_ssbo_buffer.value() : m_line_vertex_buffer.value();
 
@@ -301,29 +312,29 @@ auto Debug_renderer_bucket::make_draw(const std::size_t vertex_byte_count, const
         : std::size_t{0};
     const std::size_t acquire_byte_count = std::max({vertex_byte_count, min_range_size, ssbo_min_byte_count});
 
-    if (m_draws.empty() || m_start_new_draw) {
-        m_start_new_draw = false;
-        m_draws.emplace_back(Debug_draw_entry{
+    if (draws.empty() || frame->start_new_draw) {
+        frame->start_new_draw = false;
+        draws.emplace_back(Debug_draw_entry{
             .input_buffer_range = buffer_client.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, acquire_byte_count),
             .draw_buffer_range  = erhe::graphics::Ring_buffer_range{},
             .view_buffer_range  = erhe::graphics::Ring_buffer_range{},
             .primitive_count    = 0
         });
-        ++m_view_spans.back().end;
-        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
+        ++view_spans.back().end;
+        ERHE_VERIFY(view_spans.back().end == draws.size());
     }
-    if (m_draws.back().input_buffer_range.get_writable_byte_count() < vertex_byte_count) {
-        m_draws.emplace_back(Debug_draw_entry{
+    if (draws.back().input_buffer_range.get_writable_byte_count() < vertex_byte_count) {
+        draws.emplace_back(Debug_draw_entry{
             .input_buffer_range = buffer_client.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, acquire_byte_count),
             .draw_buffer_range  = erhe::graphics::Ring_buffer_range{},
             .view_buffer_range  = erhe::graphics::Ring_buffer_range{},
             .primitive_count    = 0
         });
-        ++m_view_spans.back().end;
-        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
+        ++view_spans.back().end;
+        ERHE_VERIFY(view_spans.back().end == draws.size());
     }
 
-    Debug_draw_entry& draw                = m_draws.back();
+    Debug_draw_entry& draw                = draws.back();
     std::size_t       buffer_range_offset = draw.input_buffer_range.get_written_byte_count();
     const auto        buffer_range_span   = draw.input_buffer_range.get_span();
     draw.input_buffer_range.bytes_written(vertex_byte_count);
@@ -338,39 +349,43 @@ auto Debug_renderer_bucket::match(const Debug_renderer_config& config) const -> 
     return m_config == config;
 }
 
-void Debug_renderer_bucket::clear()
+auto Debug_renderer_bucket::find_frame(const uint64_t frame_index) -> Frame*
 {
-    m_draws.clear();
-    m_view_spans.clear();
-    m_span_views.clear();
+    Frame& frame = m_frames[frame_index % m_frames.size()];
+    return (frame.frame_index == frame_index) ? &frame : nullptr;
 }
 
-void Debug_renderer_bucket::start_view(const View& view)
+void Debug_renderer_bucket::start_view(std::span<const View> views, const uint64_t frame_index, const std::size_t frame_slot)
 {
-    start_view(std::span<const View>{&view, 1});
-}
-
-void Debug_renderer_bucket::start_view(std::span<const View> views)
-{
-    if (!m_view_spans.empty()) {
-        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
+    Frame& frame = m_frames[frame_index % m_frames.size()];
+    if (frame.frame_index != frame_index) {
+        // First view span of this device frame: the frame that used the
+        // entry before has released its draws (release_buffers()).
+        ERHE_VERIFY(frame.draws.empty());
+        ERHE_VERIFY(frame.view_spans.empty());
+        ERHE_VERIFY(frame.span_views.empty());
+        frame.frame_index = frame_index;
     }
-    const std::size_t first_view = m_span_views.size();
-    m_span_views.insert(m_span_views.end(), views.begin(), views.end());
-    m_view_spans.push_back(
+    if (!frame.view_spans.empty()) {
+        ERHE_VERIFY(frame.view_spans.back().end == frame.draws.size());
+    }
+    const std::size_t first_view = frame.span_views.size();
+    frame.span_views.insert(frame.span_views.end(), views.begin(), views.end());
+    frame.view_spans.push_back(
         Debug_draw_view_span{
             .first_view = first_view,
             .view_count = views.size(),
-            .begin      = m_draws.size(),
-            .end        = m_draws.size()
+            .begin      = frame.draws.size(),
+            .end        = frame.draws.size(),
+            .frame_slot = frame_slot
         }
     );
-    m_start_new_draw = true;
+    frame.start_new_draw = true;
 }
 
-auto Debug_renderer_bucket::get_span_views(const Debug_draw_view_span& view_span) const -> std::span<const View>
+auto Debug_renderer_bucket::get_span_views(const Frame& frame, const Debug_draw_view_span& view_span) -> std::span<const View>
 {
-    return std::span<const View>{m_span_views}.subspan(view_span.first_view, view_span.view_count);
+    return std::span<const View>{frame.span_views}.subspan(view_span.first_view, view_span.view_count);
 }
 
 [[nodiscard]] auto vertex_count_from_primitive_count(
@@ -388,10 +403,14 @@ auto Debug_renderer_bucket::get_span_views(const Debug_draw_view_span& view_span
     }
 }
 
-void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_encoder& encoder)
+void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_encoder& encoder, const uint64_t frame_index)
 {
     if (!uses_compute()) {
         return;
+    }
+    Frame* const frame = find_frame(frame_index);
+    if (frame == nullptr) {
+        return; // nothing of this bucket recorded in the frame
     }
 
     // The compute tier is only ever derived for the line primitive (the
@@ -400,8 +419,8 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 
     const std::size_t triangle_vertex_stride = m_debug_renderer.get_program_interface().triangle_vertex_format.streams.front().stride;
 
-    for (const Debug_draw_view_span& view_span : m_view_spans) {
-        const std::span<const View> views      = get_span_views(view_span);
+    for (const Debug_draw_view_span& view_span : frame->view_spans) {
+        const std::span<const View> views      = get_span_views(*frame, view_span);
         const std::size_t           view_count = views.size();
 
         // Always populate a per-draw view UBO range and hold it on the
@@ -412,8 +431,11 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
         // render() re-binds the same per-draw range on the graphics
         // encoder so the fragment shader can read the per-eye viewport.
         for (size_t i = view_span.begin; i < view_span.end; ++i) {
-            Debug_draw_entry& draw = m_draws[i];
+            Debug_draw_entry& draw = frame->draws[i];
             ERHE_VERIFY(draw.primitive_count > 0);
+            if (draw.compute_dispatched) {
+                continue; // dispatched by an earlier compute() of this frame
+            }
 
             draw.view_buffer_range = update_view_buffer(views, draw.primitive_count);
             m_view_buffer.bind(encoder, draw.view_buffer_range);
@@ -459,21 +481,35 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
     }
 }
 
-void Debug_renderer_bucket::release_buffers()
+void Debug_renderer_bucket::release_buffers(const uint64_t frame_index)
 {
-    for (Debug_draw_entry& draw : m_draws) {
-        if (uses_compute()) {
-            draw.draw_buffer_range.release();
-        } else {
-            draw.input_buffer_range.release();
+    Frame* const frame = find_frame(frame_index);
+    if (frame == nullptr) {
+        return; // nothing of this bucket recorded in the frame
+    }
+    // Every range a draw still holds goes back to its ring buffer: the
+    // input range of a draw whose compute never ran (its view was recorded
+    // but not rendered this frame) and the input range of a direct-path
+    // draw that was never drawn are still open, so they are closed first.
+    auto release_range = [](erhe::graphics::Ring_buffer_range& range) {
+        if ((range.get_buffer() == nullptr) || range.is_released()) {
+            return;
         }
+        if (!range.is_closed()) {
+            range.close();
+        }
+        range.release();
+    };
+    for (Debug_draw_entry& draw : frame->draws) {
+        release_range(draw.input_buffer_range);
+        release_range(draw.draw_buffer_range);
         // Multiview path holds a per-draw view UBO range across the
         // compute and render encoders; release here once both have run.
-        if (draw.view_buffer_range.get_buffer() != nullptr) {
-            draw.view_buffer_range.release();
-        }
+        release_range(draw.view_buffer_range);
     }
-    clear();
+    frame->draws.clear();
+    frame->view_spans.clear();
+    frame->span_views.clear();
 }
 
 void Debug_renderer_bucket::render(
@@ -481,13 +517,26 @@ void Debug_renderer_bucket::render(
     const erhe::graphics::Render_pass&      render_pass,
     bool                                    draw_hidden,
     bool                                    draw_visible,
-    bool                                    multiview
+    bool                                    multiview,
+    uint64_t                                frame_index,
+    std::size_t                             frame_slot
 )
 {
-    // Nothing was submitted to this bucket this frame (m_draws is cleared at
-    // end_frame, while the bucket object persists for the Debug_renderer
-    // lifetime).
-    if (m_draws.empty()) {
+    // Nothing was submitted to this bucket for this frame or this slot (the
+    // frame's draws are cleared by release_buffers(), while the bucket
+    // object persists for the Debug_renderer lifetime).
+    Frame* const frame = find_frame(frame_index);
+    if (frame == nullptr) {
+        return;
+    }
+    bool any_draw_in_slot = false;
+    for (const Debug_draw_view_span& view_span : frame->view_spans) {
+        if ((view_span.frame_slot == frame_slot) && (view_span.end > view_span.begin)) {
+            any_draw_in_slot = true;
+            break;
+        }
+    }
+    if (!any_draw_in_slot) {
         return;
     }
 
@@ -541,26 +590,32 @@ void Debug_renderer_bucket::render(
             render_encoder.set_bind_group_layout(pi.graphics_bind_group_layout.get());
             render_encoder.set_render_pipeline_state(temp_state);
 
-            for (const Debug_draw_entry& draw : m_draws) {
-                if (!draw.compute_dispatched) {
+            for (const Debug_draw_view_span& view_span : frame->view_spans) {
+                if (view_span.frame_slot != frame_slot) {
                     continue;
                 }
-                // Re-bind the per-draw view UBO carried across from
-                // dispatch_compute(): the vertex shader reads
-                // stride_per_view from it, and the fragment shader reads
-                // view.cameras[c_view_index].viewport.xy.
-                m_view_buffer.bind(render_encoder, draw.view_buffer_range);
-                // Triangle SSBO at binding 1 (read-only declaration).
-                // Same descriptor binding the compute side wrote to;
-                // triangle_vertex_buffer_read_block declares it readonly
-                // so the vertex shader can index without colliding with
-                // the compute's writeonly declaration.
-                m_triangle_vertex_buffer->bind(render_encoder, draw.draw_buffer_range);
-                render_encoder.draw_primitives(
-                    pipeline.data.input_assembly.primitive_topology,
-                    0,
-                    static_cast<uint32_t>(12 * draw.primitive_count)
-                );
+                for (size_t i = view_span.begin; i < view_span.end; ++i) {
+                    const Debug_draw_entry& draw = frame->draws[i];
+                    if (!draw.compute_dispatched) {
+                        continue;
+                    }
+                    // Re-bind the per-draw view UBO carried across from
+                    // dispatch_compute(): the vertex shader reads
+                    // stride_per_view from it, and the fragment shader reads
+                    // view.cameras[c_view_index].viewport.xy.
+                    m_view_buffer.bind(render_encoder, draw.view_buffer_range);
+                    // Triangle SSBO at binding 1 (read-only declaration).
+                    // Same descriptor binding the compute side wrote to;
+                    // triangle_vertex_buffer_read_block declares it readonly
+                    // so the vertex shader can index without colliding with
+                    // the compute's writeonly declaration.
+                    m_triangle_vertex_buffer->bind(render_encoder, draw.draw_buffer_range);
+                    render_encoder.draw_primitives(
+                        pipeline.data.input_assembly.primitive_topology,
+                        0,
+                        static_cast<uint32_t>(12 * draw.primitive_count)
+                    );
+                }
             }
         };
 
@@ -591,7 +646,7 @@ void Debug_renderer_bucket::render(
         // c_view_index resolves to gl_ViewIndex, picking the per-eye camera
         // from the view UBO (update_view_buffer below writes all views).
         // Close all input ranges first (can only be done once)
-        for (Debug_draw_entry& draw : m_draws) {
+        for (Debug_draw_entry& draw : frame->draws) {
             if (draw.primitive_count > 0 && !draw.input_buffer_range.is_closed()) {
                 draw.input_buffer_range.close();
             }
@@ -629,16 +684,19 @@ void Debug_renderer_bucket::render(
                 const float bias_sign     = reverse_depth ? 1.0f : -1.0f;
                 render_encoder.set_depth_bias(bias_sign * 4.0f, bias_sign * 1.0f, 0.0f);
             }
-            for (const Debug_draw_view_span& view_span : m_view_spans) {
+            for (const Debug_draw_view_span& view_span : frame->view_spans) {
+                if (view_span.frame_slot != frame_slot) {
+                    continue;
+                }
                 // Writes cameras[0..N-1]; the vertex shader picks its eye
                 // via c_view_index. stride_per_view is a compute-path
                 // concept (SSBO slab offset); the direct path fetches
                 // vertices through the input assembler, so 0 is passed.
-                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(get_span_views(view_span), /*primitive_count*/ 0);
+                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(get_span_views(*frame, view_span), /*primitive_count*/ 0);
                 m_view_buffer.bind(render_encoder, view_buffer_range);
 
                 for (size_t i = view_span.begin; i < view_span.end; ++i) {
-                    Debug_draw_entry& draw = m_draws[i];
+                    Debug_draw_entry& draw = frame->draws[i];
                     if (draw.primitive_count == 0) {
                         continue;
                     }

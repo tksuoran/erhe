@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
@@ -8,6 +9,7 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "renderers/id_pass_prepared.hpp"
 
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_math/viewport.hpp"
@@ -17,6 +19,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -41,6 +44,7 @@ namespace erhe::graphics {
 }
 namespace erhe::scene {
     class Camera;
+    class Camera_snapshot;
     class Mesh;
     class Skin;
 }
@@ -60,7 +64,11 @@ class Programs;
 class Id_renderer final
 {
 public:
-    bool enabled{true};
+    // id_renderer.enabled of the config, repurposed under the hybrid picker:
+    // true makes the ID pass cover every mesh, false only skinned meshes
+    // (App_rendering::prepare_id). Fixed at construction (forced true without
+    // a raytrace backend), so the render phase reads it without a frame copy.
+    [[nodiscard]] auto covers_all_meshes() const -> bool;
 
     class Id_query_result
     {
@@ -106,8 +114,7 @@ public:
     public:
         erhe::graphics::Command_buffer&    command_buffer;
         const erhe::math::Viewport&        viewport;
-        const erhe::scene::Camera&         camera;
-        const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
+        const erhe::scene::Camera_snapshot& camera; // the render phase's copy of the view camera
         const int                          x;
         const int                          y;
         bool                               reverse_depth{true};
@@ -121,10 +128,35 @@ public:
         // Joint_buffer that Forward_renderer uses (Forward_renderer::get_joint_buffer())
         // so both updates allocate disjoint ring ranges.
         erhe::scene_renderer::Joint_buffer*                          joint_buffer{nullptr};
-        std::span<const std::shared_ptr<erhe::scene::Skin>>          skins{};
-        Skinning_filter                                              skinning_filter{Skinning_filter::all};
+        std::span<const erhe::scene_renderer::Joint_pose>            joint_poses{}; // the frame's posed joints (Joint_poses::capture)
     };
-    void render            (const Render_parameters& parameters);
+
+    // What the id pass draws: the meshes of these spans that carry
+    // visible | active | id, all of them or only the skinned ones.
+    class Prepare_parameters
+    {
+    public:
+        std::span<const std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
+        Skinning_filter                                                    skinning_filter{Skinning_filter::all};
+        std::optional<Id_scan_request>                                     scan{}; // the frame's region scan this pass carries (take_frame_scan())
+    };
+
+    // Prepare phase (main thread): buckets the meshes on the original
+    // variant (the only one with valid facet ids) and writes their records
+    // (id offsets in the color), draw commands, id ranges and the region
+    // scan into out. Mutates nothing of this renderer.
+    void prepare(const Prepare_parameters& parameters, Id_pass_prepared& out) const;
+
+    // Render phase: renders a prepared id pass around the pointer (and the
+    // region scan the pass carries), reading no Mesh, and starts the readback. The
+    // transfer entry (and the scan's region entry) keep their own copy of
+    // prepared.id_ranges, which get() / take_scan_result() resolve against.
+    void render(const Render_parameters& parameters, const Id_pass_prepared& prepared);
+
+    // prepare() and render() back to back on the calling thread, through a
+    // prepared pass this renderer keeps: the headset, which renders its pick
+    // pass where it prepares it (doc/editor/render_thread.md section 2.2).
+    void render_immediate(const Prepare_parameters& prepare_parameters, const Render_parameters& parameters);
     void next_frame        ();
 
 
@@ -145,17 +177,7 @@ public:
     // visible (mesh, primitive, triangle) hits a few frames later (async, same
     // latency as the pointer pick). Faces only for now; the
     // caller maps triangle -> facet.
-    class Scan_request
-    {
-    public:
-        int       x           {0};      // viewport-pixel bounding rect (clamped to the viewport in render())
-        int       y           {0};
-        int       width       {0};
-        int       height      {0};
-        glm::vec2 brush_center {0.0f, 0.0f};
-        float     brush_radius {0.0f};  // > 0 with is_brush => disk mask over the rect, else whole rect
-        bool      is_brush     {false};
-    };
+    using Scan_request = Id_scan_request;
     class Scan_hit
     {
     public:
@@ -172,10 +194,19 @@ public:
         std::vector<Scan_hit> hits        {};
     };
 
-    // Request a region scan for the next render(). The gesture re-requests every
-    // frame it wants a scan; the request is consumed (and reset) by render().
+    // Request a region scan for the next prepared frame (main thread). The
+    // gesture re-requests every frame it wants a scan; begin_frame() (M2,
+    // after the frame's tools ran) hands the request to the prepare frame,
+    // and the first view that prepares an id pass for that frame claims it
+    // with take_frame_scan() into its Id_pass_prepared, the per-frame copy
+    // render() reads. Main thread only: the render phase never reads these.
     void request_scan(const Scan_request& request);
-    [[nodiscard]] auto has_pending_scan() const -> bool;
+    void begin_frame();
+    // Prepare phase: the prepare frame has an unclaimed scan request.
+    [[nodiscard]] auto has_frame_scan() const -> bool;
+    // Prepare phase: claims the prepare frame's scan request (empty when
+    // there is none or a view already claimed it).
+    [[nodiscard]] auto take_frame_scan() -> std::optional<Scan_request>;
     // Resolve the newest completed region readback (if any newer than the last
     // resolved) into the scan result and return it. The returned reference is
     // stable; check .ready and compare .frame_number against the last value the
@@ -212,13 +243,26 @@ private:
         uint64_t                          frame_number   {0};
         int                               slot           {0};
         State                             state          {State::Unused};
+        // The id range table of the pass whose pixels this entry reads back,
+        // copied from the prepared pass when the entry is recorded
+        // (cleared and refilled, capacity kept): get() resolves the entry's
+        // ids against it, never against a later frame's table.
+        std::vector<erhe::scene_renderer::Primitive_buffer::Id_range> id_ranges{};
     };
 
     [[nodiscard]] auto get_current_transfer_entry() -> Transfer_entry&;
+    // The newest completed readback whose rect contains (x, y): its slot in
+    // m_transfer_entries, or -1. The caller holds m_transfer_mutex.
+    [[nodiscard]] auto read_pixel(int x, int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) const -> int;
+    void draw_prepared(
+        erhe::graphics::Render_command_encoder& render_encoder,
+        const Id_pass_prepared&                 prepared
+    );
 
     void update_framebuffer(erhe::math::Viewport viewport);
 
     bool                                         m_enabled{true};
+    bool                                         m_covers_all_meshes{true}; // constant after construction
     erhe::math::Viewport                         m_viewport{0, 0, 0, 0};
 
     // TODO Do not store these here?
@@ -236,11 +280,10 @@ private:
     erhe::scene_renderer::Draw_indirect_buffer   m_draw_indirect_buffers;
     erhe::scene_renderer::Primitive_buffer       m_primitive_buffers;
 
-    // Per-render scratch, cleared at use so the capacity is kept: the
-    // skinned-only mesh filter, the buckets and one bucket's debug label.
-    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_filtered_meshes;
-    erhe::scene_renderer::Render_bucket_list        m_buckets;
+    // The debug label of one bucket, cleared at use so the capacity is kept;
+    // the pass render_immediate() prepares and draws.
     std::string                                     m_bucket_label;
+    Id_pass_prepared                                m_immediate_prepared;
 
     erhe::graphics::Base_render_pipeline         m_pipeline;
     std::unique_ptr<erhe::graphics::Texture>     m_color_texture;
@@ -249,6 +292,17 @@ private:
     std::unique_ptr<erhe::graphics::Gpu_timer>   m_gpu_timer;
     erhe::graphics::Ring_buffer_client           m_texture_read_buffer;
 
+    // Guards the readback bookkeeping both roles touch: the transfer and
+    // region entries (their state, and the fields the main thread reads once
+    // an entry is Read_complete) and m_current_transfer_entry_slot. With
+    // frame pipelining the render phase records and completes readbacks
+    // (render(), next_frame(), the completion handlers) while the prepare
+    // phase of the next frame reads them (get(), take_scan_result()). An
+    // entry the render phase fills is claimed (Waiting_for_read) under the
+    // lock first, so its other fields are written outside it. Never held
+    // across a Device call: the completion handlers take it under the
+    // device's completion lock.
+    mutable std::mutex                                 m_transfer_mutex;
     std::array<Transfer_entry, s_transfer_entry_count> m_transfer_entries;
     int                                                m_current_transfer_entry_slot{0};
 
@@ -271,9 +325,9 @@ private:
         erhe::graphics::Ring_buffer_range compact_range;
         std::vector<uint8_t>              compact_data{}; // {uint count; uint ids[max_output];}
         uint32_t                          max_output  {0};
-        // Snapshot of the id-range table as it was when this scan was submitted.
-        // The live m_primitive_buffers.id_ranges() is rebuilt every frame from the
-        // meshes actually drawn that frame, and a scan frame forces
+        // Copy of the id-range table of the prepared pass this scan was
+        // submitted with. Every frame's pass has its own table, built from
+        // the meshes drawn that frame, and a scan frame forces
         // Skinning_filter::all (different mesh set => different id_offsets) than the
         // normal skinned_only frame on which the async result is resolved. Resolving
         // against this self-contained snapshot keeps each scan correct regardless of
@@ -281,7 +335,8 @@ private:
         // allocation churn (AGENTS.md run-time allocation discipline).
         std::vector<erhe::scene_renderer::Primitive_buffer::Id_range> id_ranges{};
     };
-    std::optional<Scan_request>                    m_pending_scan;
+    std::optional<Scan_request>                    m_pending_scan; // main thread: request_scan -> begin_frame
+    std::optional<Scan_request>                    m_frame_scan;   // M2: begin_frame -> take_frame_scan
     std::array<Region_entry, s_region_entry_count> m_region_entries;
     Scan_result                                    m_scan_result;
     std::set<uint32_t>                             m_scan_id_scratch; // reused id-dedup set; cleared per resolve
@@ -342,29 +397,6 @@ private:
         std::shared_ptr<erhe::scene::Mesh> mesh     {nullptr};
         std::size_t                        mesh_primitive_index{0};
     };
-
-    void render_meshes(
-        const Render_parameters&                                   parameters,
-        erhe::graphics::Render_command_encoder&                    render_encoder,
-        erhe::graphics::Base_render_pipeline&                      pipeline,
-        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
-    );
-
-    // Bucket-and-draw core for the picking ID render (render_meshes). Buckets
-    // the meshes, resolves a shader variant per bucket (force_enable_mask), and
-    // draws them into the supplied render pass with the given primitive settings.
-    // use_id_ranges records the id_offset->mesh table the picking readback walks.
-    void render_buckets(
-        erhe::graphics::Render_command_encoder&                    render_encoder,
-        erhe::graphics::Base_render_pipeline&                      pipeline,
-        const erhe::graphics::Render_pass&                         render_pass,
-        const erhe::scene_renderer::Primitive_interface_settings&  primitive_settings,
-        uint32_t                                                   force_enable_mask,
-        bool                                                       use_id_ranges,
-        const erhe::Item_filter&                                   filter,
-        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
-    );
-
 
     std::vector<Range> m_ranges;
     // Scissor optimization: restrict rasterization to the s_extent rect

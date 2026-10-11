@@ -1201,7 +1201,7 @@ auto Scene_commands::create_new_rendertarget(erhe::Hierarchy* parent) -> std::sh
     // through a Rendertarget_view; for a standalone scene rendertarget that view
     // is a Mesh_rendertarget_view wrapping the mesh and node.
     auto rendertarget_view = std::make_shared<Mesh_rendertarget_view>(mesh, node);
-    auto rendertarget_imgui_host = std::make_shared<Rendertarget_imgui_host>(
+    std::shared_ptr<Rendertarget_imgui_host> rendertarget_imgui_host = erhe::rendergraph::make_rendergraph_node<Rendertarget_imgui_host>(
         *m_context.imgui_renderer,
         *m_context.rendergraph,
         m_context,

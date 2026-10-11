@@ -81,6 +81,7 @@ public:
     // Public API
     void update_fixed_step();
     void render_headset   ();
+    void wait_frame       ();
     void begin_frame      ();
     void end_frame        ();
 
