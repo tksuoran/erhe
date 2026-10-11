@@ -66,7 +66,9 @@
 ✓9.3.2-R-reads-only-slot-data{9.5-sequence}
 ✓9.3.3{3-commits}
 ✓9.3.4-gates
-?NEXT=user-decision{merge-render-thread->main|headset-verification|NVIDIA-measurement}
+✓frame-pacing-on+acquire-zones{2026-10-11;8c02f41aa+2ec2635cc}
+?NEXT=prompt_queue.txt-item-1{Tracy-analysis-of-threaded-rendering-vs-render_thread.md;bench-scenes;report-first}
+?then=user-decision{merge-render-thread->main|headset-verification|NVIDIA-measurement}
 
 [TASK::rigging-phase-2]{started-2026-09-18;via-harness}
 ✓pole-target-slice{484bac408+67aafe503+c59ba15b3+08a7a73e0;ik_pole_verify.py-all-pass;solver-tests-22;roundtrip-418/421}
