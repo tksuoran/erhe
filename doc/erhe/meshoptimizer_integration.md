@@ -142,15 +142,19 @@ passes empty (`{}`) source mappings to `compose_element_mappings()`** (its
 remaps are not over the vertex buffer the source mappings index; contrast
 the geometry path below).
 
-One shared editor helper attaches the optimized soup after parse, per
-**unique** render_shape (parse dedups shared `Primitive` slots), called from
-all editor parse sites (import operation, `open_scene_gltf`, asset manager,
-async load task, prefab library, controller visualization). `erhe_gltf`
+One shared editor helper (`attach_optimized_render_shape`) attaches the
+optimized soup after parse, per **unique** render_shape (parse dedups shared
+`Primitive` slots), called from all editor parse sites (import operation,
+`open_scene_gltf`, asset manager, async load task, prefab library, controller
+visualization). It is skipped for a primitive the deferred finalize task
+rebuilds in full, which then gets its variant from the geometry path
+(doc/editor/async_asset_loading.md "Deferred load finalize"). `erhe_gltf`
 itself stays ignorant of optimization; `src/example` stays unoptimized by
 design.
 
-The soup path covers the load-time window and soup-only consumers, and
-feeds the cache; the durable win is the geometry path.
+The soup path covers soup-only consumers and the load-time window of
+primitives that are not rebuilt, and feeds the cache; the durable win is the
+geometry path.
 
 ### The geometry path (the steady-state win)
 

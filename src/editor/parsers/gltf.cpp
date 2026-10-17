@@ -833,20 +833,31 @@ void finalize_imported_meshes(
                     mesh->get_name()
                 );
             }
-            // Attach the optimized variant here - after the source build, and
-            // crucially BEFORE mesh->update_rt_primitives() below registers the
-            // mesh with the draw list. Registration BAKES base_vertex and the
-            // index ranges of whichever variant is live at that moment, so a
-            // variant attached afterwards leaves the draw list drawing the
-            // source mesh while the per-primitive record is written from the
-            // optimized one - mismatched base_vertex and, with quantized
-            // positions, a decode AABB belonging to the other mesh.
-            attach_optimized_render_shape(
-                context,
-                mesh_build_info,
-                primitive,
-                fmt::format("{}[{}]", mesh->get_name(), this_primitive_index)
-            );
+            // A primitive the deferred finalize task rebuilds in full gets no
+            // soup-path variant: the task's prepare_geometry_buffer_mesh builds
+            // the optimized variant from the Geometry, and its commit replaces
+            // whatever variant is attached here, so a soup-path optimization
+            // would be thrown away at the swap. The predicate is the task's
+            // own needs_full_build (deferred_finalize_mesh_items in
+            // async_raytrace_kickoff_operation.cpp). Without a variant the
+            // registration below bakes the source build, and the commit
+            // re-registers the mesh after attaching the geometry variant.
+            const bool deferred_full_build =
+                defer_edge_lines &&
+                primitive.render_shape &&
+                primitive.render_shape->has_buffer_mesh_triangles() &&
+                !primitive.render_shape->has_edge_lines();
+            // Otherwise attach the optimized variant here, after the source
+            // build and before mesh->update_rt_primitives() registers the mesh
+            // with the draw list (why: attach_optimized_render_shape's header).
+            if (!deferred_full_build) {
+                attach_optimized_render_shape(
+                    context,
+                    mesh_build_info,
+                    primitive,
+                    fmt::format("{}[{}]", mesh->get_name(), this_primitive_index)
+                );
+            }
             if (defer_raytrace) {
                 // Proxy over the renderable-mesh bounds so picking works the
                 // moment the scene appears; replaced by the real triangle
