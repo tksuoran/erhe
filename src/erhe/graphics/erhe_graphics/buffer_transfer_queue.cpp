@@ -41,6 +41,7 @@ void Buffer_transfer_queue::flush(Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> drain_lock{m_drain_mutex};
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     for (std::size_t i = m_drain_position, end = m_queued.size(); i < end; ++i) {
@@ -67,34 +68,58 @@ auto Buffer_transfer_queue::flush_budgeted(Command_buffer& command_buffer, const
 {
     ERHE_PROFILE_FUNCTION();
 
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    // One drainer at a time: the batch below is selected, recorded and
+    // committed to the watermark as one drain.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> drain_lock{m_drain_mutex};
 
+    // Select the batch under m_mutex, moving each entry out of the queue,
+    // then record it with m_mutex released so concurrent enqueues do not
+    // wait for the staging copies.
     std::size_t recorded_byte_count = 0;
-    while (m_drain_position < m_queued.size()) {
-        Transfer_entry& entry = m_queued[m_drain_position];
-        // Checked BEFORE recording, so an entry larger than the whole budget
-        // still goes through as the first entry of a drain (otherwise a mesh
-        // bigger than the per-frame budget would never upload at all) but
-        // never as a later one.
-        if ((recorded_byte_count > 0) && ((recorded_byte_count + entry.data.size()) > max_byte_count)) {
-            break;
+    Ticket      drained_watermark   = 0;
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        while (m_drain_position < m_queued.size()) {
+            Transfer_entry& entry = m_queued[m_drain_position];
+            // Checked BEFORE taking the entry, so an entry larger than the
+            // whole budget still goes through as the first entry of a drain
+            // (otherwise a mesh bigger than the per-frame budget would never
+            // upload at all) but never as a later one.
+            if ((recorded_byte_count > 0) && ((recorded_byte_count + entry.data.size()) > max_byte_count)) {
+                break;
+            }
+            recorded_byte_count += entry.data.size();
+            drained_watermark    = entry.ticket; // FIFO: every ticket at or below this gets recorded below
+            m_drain_batch.emplace_back(std::move(entry));
+            ++m_drain_position;
+            if (recorded_byte_count >= max_byte_count) {
+                break;
+            }
         }
+        if (m_drain_position == m_queued.size()) {
+            // Drained to empty: nothing enqueued before this point is
+            // outstanding, so the watermark may advance to the last ticket
+            // issued so far, exactly as a full flush would leave it.
+            // Tickets enqueued while the batch records are not covered.
+            m_queued.clear();
+            m_drain_position  = 0;
+            drained_watermark = m_next_ticket - 1;
+        }
+    }
+
+    for (const Transfer_entry& entry : m_drain_batch) {
         command_buffer.upload_to_buffer(*entry.target, entry.target_offset, entry.data.data(), entry.data.size());
-        recorded_byte_count += entry.data.size();
-        m_watermark = entry.ticket; // FIFO: every ticket at or below this is recorded
-        entry.data  = std::vector<uint8_t>{}; // recorded; release the staging copy now
-        ++m_drain_position;
-        if (recorded_byte_count >= max_byte_count) {
-            break;
+    }
+
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        if (drained_watermark > m_watermark) {
+            m_watermark = drained_watermark;
         }
     }
-    if (m_drain_position == m_queued.size()) {
-        // Drained to empty: nothing enqueued is outstanding, so the watermark
-        // may advance all the way, exactly as a full flush would leave it.
-        m_queued.clear();
-        m_drain_position = 0;
-        m_watermark      = m_next_ticket - 1;
-    }
+
+    // Recorded; release the staging copies outside m_mutex.
+    m_drain_batch.clear();
     return recorded_byte_count;
 }
 

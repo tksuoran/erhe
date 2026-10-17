@@ -91,6 +91,11 @@ the highest ticket drained as `get_watermark()`. A loader consumer snapshots
 `get_last_ticket()` when it finishes enqueuing and must not draw until
 `get_watermark()` has reached it.
 
+`flush_budgeted` moves its batch out of the queue under the queue mutex,
+records it with only the drain mutex held, and then advances the watermark,
+so workers enqueuing concurrently (the parallel import build) never wait for
+the staging copies. The drain mutex serializes `flush` and `flush_budgeted`.
+
 ### Buffer_pool
 
 `Buffer_pool` owns the GPU buffers for one vertex stream layout OR one index
