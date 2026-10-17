@@ -33,6 +33,8 @@
 #include <glm/gtx/matrix_operation.hpp>
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <cstring>
 #include <sstream>
 
@@ -1675,14 +1677,144 @@ void Draw_list_scene::draw_list_chunks(
     }
 }
 
+namespace {
+
+// Culling classification lanes (doc/erhe/draw_list_renderer.md Q6): each is
+// one branch-free loop over the entries' SoA bounds, the shape the compiler
+// vectorizes without intrinsics (x86 and NEON). The flags are written with
+// a conditional expression of two constants: MSVC vectorizes that, but not
+// a cast of a negated comparison.
+
+// unbounded[i] = 1 for an entry without bounds (negative extent sentinel,
+// Draw_list_bounds::get_unbounded_flag()).
+void mark_unbounded_lanes(const Draw_list_bounds& bounds, const std::size_t count, uint32_t* const unbounded)
+{
+    const float* const ex = bounds.extent_x.data();
+    for (std::size_t i = 0; i < count; ++i) {
+        unbounded[i] = Draw_list_bounds::get_unbounded_flag(ex[i]);
+    }
+}
+
+// One axis of the range sphere test: adds the squared gap along the axis
+// from the sphere center coordinate to the box (zero where the center
+// coordinate lies within the box's interval) to distance2[i]. |c - s| - e is
+// written as the larger of the two signed gaps (the same bits) so the loop
+// holds only selects.
+void sphere_axis_lanes(const float* const center, const float* const extent, const float sphere_center, const std::size_t count, float* const distance2)
+{
+    for (std::size_t i = 0; i < count; ++i) {
+        const float offset = center[i] - sphere_center;
+        const float below  = (-offset) - extent[i];
+        const float above  = offset - extent[i];
+        const float gap    = (below > above) ? below : above;
+        const float d      = (gap > 0.0f) ? gap : 0.0f;
+        distance2[i] += d * d;
+    }
+}
+
+// Range sphere: inside[i] = 0 where the squared distance from the sphere
+// center to the box exceeds the squared radius (the box lies wholly outside
+// the sphere), 1 otherwise. One loop per axis: MSVC does not vectorize the
+// three axes in one loop.
+void sphere_lanes(const Cull_sphere& sphere, const Draw_list_bounds& bounds, const std::size_t count, float* const distance2, uint32_t* const inside)
+{
+    std::fill(distance2, distance2 + count, 0.0f);
+    sphere_axis_lanes(bounds.center_x.data(), bounds.extent_x.data(), sphere.center.x, count, distance2);
+    sphere_axis_lanes(bounds.center_y.data(), bounds.extent_y.data(), sphere.center.y, count, distance2);
+    sphere_axis_lanes(bounds.center_z.data(), bounds.extent_z.data(), sphere.center.z, count, distance2);
+    const float r2 = sphere.radius * sphere.radius;
+    for (std::size_t i = 0; i < count; ++i) {
+        inside[i] = (distance2[i] > r2) ? 0u : 1u;
+    }
+}
+
+// One plane: d = n . c + w + |n| . e (the expressions and the evaluation
+// order of erhe::math::aabb_in_convex_volume()), inside[i] cleared where
+// d < 0.
+void plane_lanes(const glm::vec4& plane, const Draw_list_bounds& bounds, const std::size_t count, uint32_t* const inside)
+{
+    const float nx = plane.x;
+    const float ny = plane.y;
+    const float nz = plane.z;
+    const float w  = plane.w;
+    const float ax = std::abs(nx);
+    const float ay = std::abs(ny);
+    const float az = std::abs(nz);
+    const float* const cx = bounds.center_x.data();
+    const float* const cy = bounds.center_y.data();
+    const float* const cz = bounds.center_z.data();
+    const float* const ex = bounds.extent_x.data();
+    const float* const ey = bounds.extent_y.data();
+    const float* const ez = bounds.extent_z.data();
+    for (std::size_t i = 0; i < count; ++i) {
+        const float center_distance  = (((nx * cx[i]) + (ny * cy[i])) + (nz * cz[i])) + w;
+        const float projected_extent = ((ax * ex[i]) + (ay * ey[i])) + (az * ez[i]);
+        inside[i] &= ((center_distance + projected_extent) < 0.0f) ? 0u : 1u;
+    }
+}
+
+// The view's bit of every entry inside the view or without bounds.
+void write_view_bit_lanes(const uint32_t* const inside, const uint32_t* const unbounded, const std::size_t count, uint64_t* const masks, const uint32_t bit_index)
+{
+    for (std::size_t i = 0; i < count; ++i) {
+        masks[i] |= static_cast<uint64_t>(inside[i] | unbounded[i]) << bit_index;
+    }
+}
+
+void set_view_bit_lanes(uint64_t* const masks, const std::size_t count, const uint64_t bit)
+{
+    for (std::size_t i = 0; i < count; ++i) {
+        masks[i] |= bit;
+    }
+}
+
+[[nodiscard]] auto same_sphere(const Cull_sphere& lhs, const Cull_sphere& rhs) -> bool
+{
+    // Bitwise per float (like the planes), never the vec3 object's bytes.
+    const auto same_bits = [](const float a, const float b) -> bool {
+        return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b);
+    };
+    return
+        same_bits(lhs.center.x, rhs.center.x) &&
+        same_bits(lhs.center.y, rhs.center.y) &&
+        same_bits(lhs.center.z, rhs.center.z) &&
+        same_bits(lhs.radius,   rhs.radius);
+}
+
+} // anonymous namespace
+
 auto Draw_list_scene::add_cull_view(
     const uint64_t                   frame_index,
     const Draw_purpose               purpose,
     const std::span<const glm::vec4> planes
 ) -> Cull_view
 {
+    return insert_cull_view(frame_index, purpose, Cull_view_kind::planes, planes, Cull_sphere{});
+}
+
+auto Draw_list_scene::add_cull_view(
+    const uint64_t                   frame_index,
+    const Draw_purpose               purpose,
+    const std::span<const glm::vec4> planes,
+    const Cull_sphere&               range_sphere
+) -> Cull_view
+{
+    return insert_cull_view(frame_index, purpose, Cull_view_kind::sphere_and_planes, planes, range_sphere);
+}
+
+auto Draw_list_scene::insert_cull_view(
+    const uint64_t                   frame_index,
+    const Draw_purpose               purpose,
+    const Cull_view_kind             kind,
+    const std::span<const glm::vec4> planes,
+    const Cull_sphere&               sphere
+) -> Cull_view
+{
     assert_render_phase();
     ERHE_VERIFY(planes.size() <= 6);
+    // A range sphere of zero radius would cull every caster (a point light
+    // with range <= 0 has no shadow, Light::is_active()).
+    ERHE_VERIFY((kind != Cull_view_kind::sphere_and_planes) || (sphere.radius > 0.0f));
     if (planes.empty()) {
         return Cull_view::none;
     }
@@ -1699,20 +1831,24 @@ auto Draw_list_scene::add_cull_view(
     }
     // The passes of one viewport share its camera: one view for all of them.
     for (std::size_t i = 0, end = m_cull_views.size(); i < end; ++i) {
-        const Cull_view_planes& view = m_cull_views[i];
+        const Cull_view_tests& view = m_cull_views[i];
         if (
             (view.purpose == purpose) &&
+            (view.kind == kind) &&
             (view.plane_count == planes.size()) &&
-            (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0)
+            (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0) &&
+            ((kind == Cull_view_kind::planes) || same_sphere(view.sphere, sphere))
         ) {
             return static_cast<Cull_view>(i);
         }
     }
     ERHE_VERIFY(m_cull_views.size() < static_cast<std::size_t>(Cull_view::none));
-    Cull_view_planes& view = m_cull_views.emplace_back();
+    Cull_view_tests& view = m_cull_views.emplace_back();
     view.purpose     = purpose;
+    view.kind        = kind;
     view.plane_count = static_cast<uint32_t>(planes.size());
     std::copy(planes.begin(), planes.end(), view.planes.begin());
+    view.sphere      = sphere;
     return static_cast<Cull_view>(m_cull_views.size() - 1);
 }
 
@@ -1757,40 +1893,57 @@ void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull
         if ((entry_count == 0) || !batch_has_purpose[static_cast<std::size_t>(purpose)]) {
             continue;
         }
-        const Draw_list_bounds& bounds  = draw_list.bounds;
+        const Draw_list_bounds& bounds = draw_list.bounds;
         ERHE_VERIFY(bounds.extent_x.size() == entry_count);
+
         // Skinned entries carry no bounds (they follow the joints): never
-        // culled, like entries with an invalid AABB.
-        const bool list_bounded = (draw_list.key.mobility != Draw_mobility::skinned);
-        // Entries outside, views inside: a scalar transliteration of
-        // erhe::math::aabb_in_convex_volume() (the same expressions, the
-        // same early out on the first rejecting plane).
-        for (std::size_t i = 0; i < entry_count; ++i) {
-            const bool      bounded = list_bounded && bounds.is_bounded(i);
-            const glm::vec3 center{bounds.center_x[i], bounds.center_y[i], bounds.center_z[i]};
-            const glm::vec3 extent{bounds.extent_x[i], bounds.extent_y[i], bounds.extent_z[i]};
+        // culled.
+        if (draw_list.key.mobility == Draw_mobility::skinned) {
             for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
-                const Cull_view_planes& view = m_cull_views[view_index];
-                if (view.purpose != purpose) {
+                if (m_cull_views[view_index].purpose != purpose) {
                     continue;
                 }
-                bool inside = true;
-                if (bounded) {
-                    for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
-                        const glm::vec4& plane = view.planes[plane_index];
-                        const glm::vec3  normal{plane};
-                        const float center_distance  = glm::dot(normal, center) + plane.w;
-                        const float projected_extent = glm::dot(glm::abs(normal), extent);
-                        if ((center_distance + projected_extent) < 0.0f) {
-                            inside = false;
-                            break;
-                        }
-                    }
-                }
-                if (inside) {
-                    masks[((view_index / 64) * entry_count) + i] |= (uint64_t{1} << (view_index % 64));
-                }
+                set_view_bit_lanes(masks.data() + ((view_index / 64) * entry_count), entry_count, uint64_t{1} << (view_index % 64));
             }
+            continue;
+        }
+
+        // Views outside, entries inside: per view, each test is one
+        // branch-free lane-wise loop over the SoA bounds (vectorized by the
+        // compiler), narrowing the per-entry inside flags; entries with an
+        // invalid AABB are kept in every view.
+        m_cull_unbounded.resize(entry_count);
+        m_cull_inside.resize(entry_count);
+        m_cull_sphere_inside.resize(entry_count);
+        m_cull_sphere_distance2.resize(entry_count);
+        uint32_t* const unbounded        = m_cull_unbounded.data();
+        uint32_t* const inside           = m_cull_inside.data();
+        uint32_t* const sphere_inside    = m_cull_sphere_inside.data();
+        float* const    sphere_distance2 = m_cull_sphere_distance2.data();
+        mark_unbounded_lanes(bounds, entry_count, unbounded);
+
+        // The range sphere result in sphere_inside belongs to this view's
+        // sphere (the faces of one point light follow each other, so their
+        // shared sphere is tested once per list).
+        const Cull_view_tests* sphere_view = nullptr;
+        for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+            const Cull_view_tests& view = m_cull_views[view_index];
+            if (view.purpose != purpose) {
+                continue;
+            }
+            if (view.kind == Cull_view_kind::sphere_and_planes) {
+                if ((sphere_view == nullptr) || !same_sphere(sphere_view->sphere, view.sphere)) {
+                    sphere_lanes(view.sphere, bounds, entry_count, sphere_distance2, sphere_inside);
+                    sphere_view = &view;
+                }
+                std::copy(sphere_inside, sphere_inside + entry_count, inside);
+            } else {
+                std::fill(inside, inside + entry_count, uint32_t{1});
+            }
+            for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
+                plane_lanes(view.planes[plane_index], bounds, entry_count, inside);
+            }
+            write_view_bit_lanes(inside, unbounded, entry_count, masks.data() + ((view_index / 64) * entry_count), static_cast<uint32_t>(view_index % 64));
         }
     }
 }

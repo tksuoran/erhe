@@ -120,6 +120,36 @@ Each phase lands on its own, verified, before the next starts.
    NDK). Add the point light range sphere as the first test of its 6 faces.
    Expected: the cull share of `draw_shadow` (about 150 to 250 us per frame
    Release on the heavy scene) down to tens of microseconds for all passes.
+   Done: `classify_cull_views()` runs per view of the batch one
+   branch-free loop per test over the SoA bounds, narrowing a per-entry
+   `uint32_t` inside flag (persistent scratch of the `Draw_list_scene`), and
+   a last loop ORs the view's bit into the masks; entries without bounds
+   are ORed back in, skinned lists set the bit of every view. The plane
+   loop keeps the expressions and evaluation order of
+   `aabb_in_convex_volume()`, so its decisions are the phase 1 decisions.
+   A point light's six faces carry its range sphere
+   (`add_cull_view(..., Cull_sphere)`, `Cull_view_kind::sphere_and_planes`);
+   the sphere test (squared box distance against the squared range, one
+   loop per axis) runs once per light per list and seeds the faces'
+   inside flags. It rejects boxes in the cube corners beyond the range that
+   the face frusta (far plane at the range along the face axis) keep: on
+   the heavy scene the two shadowed point lights draw 654 and 843 entries
+   over their six faces instead of 961 and 938; every other pass count and
+   the images (default, heavy, draws scenes; both render thread modes) are
+   identical to phase 1, since a caster beyond the range only shadows
+   receivers where the range attenuation is zero. Vectorization, verified
+   from the compiler reports: clang-cl (`-Rpass=loop-vectorize`, AVX2)
+   and MSVC (`/Qvec-report:2`, SSE2) vectorize all six loops (unbounded
+   marks, sphere axis, sphere compare, plane, bit write, skinned bit set).
+   MSVC refuses a flag written as a cast of a negated comparison and the
+   three sphere axes in one loop, hence the `? 0u : 1u` flags and the
+   per-axis loops. GCC and the NDK were not checked. Measured on the heavy
+   scene, Release MSVC, Intel iGPU, pipelined, 900 frames, two runs each:
+   the shadow batch's classification (`classify_cull_views`, median per
+   call) 94 / 92 us -> 41 / 41 us, the whole classification per frame
+   117 / 118 us -> 57 / 55 us, `draw_shadow` per frame (18 passes,
+   classification included) 684 / 635 us -> 628 / 567 us; the record and
+   command writes are the rest of `draw_shadow` (phase 4).
 3. **Point cube faces by octant.** A face's four side planes through the light
    are fixed in light space, so a box's face set is a sign and magnitude test
    on its min and max relative to the light; faces and whole cubes with no

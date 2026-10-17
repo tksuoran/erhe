@@ -316,6 +316,13 @@ public:
     // per entry and view), so a caller that adds all of its views before
     // its first draw gets one classification for all of them.
     [[nodiscard]] auto add_cull_view(uint64_t frame_index, Draw_purpose purpose, std::span<const glm::vec4> planes) -> Cull_view;
+    // The same for a view whose first test is a range sphere (a point light
+    // cube face, doc/plans/culling.md phase 2): an entry whose box lies
+    // wholly outside the sphere is outside the view; otherwise the planes
+    // decide. Sharing also compares the sphere. Views naming bitwise the
+    // same sphere one after the other share its test, so the six faces of a
+    // light added in a row test it once per entry.
+    [[nodiscard]] auto add_cull_view(uint64_t frame_index, Draw_purpose purpose, std::span<const glm::vec4> planes, const Cull_sphere& range_sphere) -> Cull_view;
     // The shadow frustum fit's inputs from the registered objects, prepared
     // once per frame in the prepare phase (main thread, after
     // flush_pending()) into the frame-in-flight slot frame_index %
@@ -487,6 +494,12 @@ private:
     // since the last classification when cull_view is one of them
     // (add_cull_view()); verifies cull_view belongs to frame_index.
     void classify_cull_views(uint64_t frame_index, Cull_view cull_view);
+    enum class Cull_view_kind : uint8_t
+    {
+        planes,            // the planes alone
+        sphere_and_planes  // the range sphere first, then the planes
+    };
+    [[nodiscard]] auto insert_cull_view(uint64_t frame_index, Draw_purpose purpose, Cull_view_kind kind, std::span<const glm::vec4> planes, const Cull_sphere& sphere) -> Cull_view;
     // The bounds the entries and the object carry, from the mesh's
     // primitives: at registration (add_entries) and on the bounds hook
     // (Pending_op::Kind::bounds). The transform hook rewrites the entries'
@@ -605,14 +618,25 @@ private:
     // rendered (Q6). The render phase renders one frame at a time, so one
     // set serves every frame in flight: the first add_cull_view() of a new
     // frame index clears it (capacity kept).
-    class Cull_view_planes
+    class Cull_view_tests
     {
     public:
         Draw_purpose             purpose    {Draw_purpose::color};
+        Cull_view_kind           kind       {Cull_view_kind::planes};
         uint32_t                 plane_count{0};
         std::array<glm::vec4, 6> planes     {};
+        Cull_sphere              sphere     {}; // sphere_and_planes only
     };
-    std::vector<Cull_view_planes>                                    m_cull_views;
+    std::vector<Cull_view_tests>                                     m_cull_views;
+    // Classification scratch, one element per entry of the list being
+    // classified (capacity kept): the entry has no bounds; the entry is
+    // inside the view being classified; the entry is inside the range sphere
+    // last tested; the squared distance from that sphere's center to the
+    // entry's box.
+    std::vector<uint32_t>                                            m_cull_unbounded;
+    std::vector<uint32_t>                                            m_cull_inside;
+    std::vector<uint32_t>                                            m_cull_sphere_inside;
+    std::vector<float>                                               m_cull_sphere_distance2;
     // Views [0, m_classified_cull_view_count) have their mask bits written.
     std::size_t                                                      m_classified_cull_view_count{0};
     uint64_t                                                         m_cull_frame_index{0};

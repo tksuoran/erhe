@@ -680,7 +680,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // rasterizes with, in the convention Draw_list_renderer builds the view
     // planes. A depth-clamped directional pass keeps casters beyond its
     // depth planes (pancaked), so it culls on the four side planes only;
-    // every other pass clips at all six. A point light culls per cube face.
+    // every other pass clips at all six. A point light culls per cube face,
+    // each face with the light's range sphere as its first test.
     if (parameters.draw_list_scene != nullptr) {
         m_cull_views_2d.assign(parameters.render_passes.size(), Cull_view::none);
         m_cull_views_cube.assign(cube_count * 6, Cull_view::none);
@@ -706,6 +707,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 }
                 const glm::vec3 light_pos      = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
                 const glm::mat4 clip_from_face = lpt->projection.clip_from_node_transform(parameters.point_shadow_viewport, parameters.reverse_depth, parameters.depth_range, cube_conventions).get_matrix();
+                // The range sphere is the first test of all six faces: a
+                // caster wholly beyond the light's range shadows only
+                // receivers beyond it, where the range attenuation is zero.
+                const Cull_sphere range_sphere{
+                    .center = light_pos,
+                    .radius = parameters.light_set.get_lights()[light_slot].get_range()
+                };
                 for (int face = 0; face < 6; ++face) {
                     // The face frustum: the same projection and face pose
                     // the face's camera block is written from.
@@ -713,7 +721,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     const glm::mat4                  clip_from_world = clip_from_face * face_transform.get_inverse_matrix();
                     const std::array<glm::vec4, 6>   face_planes     = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
                     m_cull_views_cube[(lpt->point_shadow_index * 6) + static_cast<std::size_t>(face)] =
-                        parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, std::span<const glm::vec4>{face_planes});
+                        parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, std::span<const glm::vec4>{face_planes}, range_sphere);
                 }
             }
         }

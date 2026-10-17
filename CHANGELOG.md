@@ -233,6 +233,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `excluded_item_type_bits`; `erhe::usd`: the same on `Usd_save_arguments`.
 - `erhe::scene_renderer`: `Primitive_interface_settings::hovered_flag_bits` /
   `active_item_flag_bits`.
+- `erhe::scene_renderer`: `Cull_sphere` (`draw_list.hpp`) and the
+  `Draw_list_scene::add_cull_view(frame_index, purpose, planes,
+  range_sphere)` overload: a culling view whose first test is a range
+  sphere (point light cube faces). `Draw_list_bounds::is_bounded()` is
+  replaced by the static `get_unbounded_flag(extent_x)`.
 
 ### Changed
 

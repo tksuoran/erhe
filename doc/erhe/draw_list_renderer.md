@@ -613,15 +613,26 @@ Drawing:
   first one draws: each 2D pass's light frustum (the pass's own
   `clip_from_world`; a depth-clamped directional pass keeps casters beyond
   its depth planes, so it culls on the four side planes only) and each point
-  light cube face. The first draw naming a view that is not yet classified
-  classifies every entry of every published list of the views' purpose
-  against all views added since the last classification, in one pass with
-  the entries outside and the views inside: the scalar
-  `erhe::math::aabb_in_convex_volume()` test on the SoA center and extent
-  (planes only, conservative, so an infinite reverse-Z far plane cannot
-  reject), writing one bit per view into one `uint64_t` per entry per group
-  of 64 views. The view set and the masks are render-phase state of the
-  `Draw_list_scene` (render thread), started over by the first
+  light cube face, the faces with the light's range sphere
+  (`add_cull_view(frame_index, purpose, planes, Cull_sphere)`: the sphere is
+  the view's first test, so a box wholly outside the range sphere is outside
+  the face whatever its planes say; such a caster is beyond the light's
+  reach, where the range attenuation is zero). Views with a sphere also
+  compare it for sharing. The first draw naming a view that is not yet
+  classified classifies every entry of every published list of the views'
+  purpose against all views added since the last classification, with the
+  views outside and the entries inside: per view, each test is one
+  branch-free lane-wise loop over the SoA bounds that narrows a per-entry
+  inside flag - the range sphere (squared distance from the center to the
+  box against the squared radius; consecutive views naming bitwise the same
+  sphere reuse its result, so the six faces of a point light test it once
+  per entry), then each plane (`d = n . c + w + |n| . e`, the expressions
+  and evaluation order of `erhe::math::aabb_in_convex_volume()`; planes
+  only, conservative, so an infinite reverse-Z far plane cannot reject) -
+  and a last loop ORs the view's bit into one `uint64_t` per entry per
+  group of 64 views. The loops compile to SIMD code without intrinsics.
+  The view set, the masks and the per-entry flag scratch are render-phase
+  state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.
   `draw_list_chunks()` makes one pass decision per entry - the flag filter,
   then the view's mask bit - and the primitive record and draw command

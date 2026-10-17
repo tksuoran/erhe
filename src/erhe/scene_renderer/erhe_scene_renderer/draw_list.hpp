@@ -46,6 +46,16 @@ enum class Cull_view : uint16_t
     none = 0xffffu
 };
 
+// The range sphere of a point light (Draw_list_scene::add_cull_view() of a
+// cube face): the first test of the face's view, so an entry whose box lies
+// wholly outside the sphere is outside the view whatever its planes say.
+class Cull_sphere
+{
+public:
+    glm::vec3 center{0.0f};
+    float     radius{0.0f};
+};
+
 class Draw_statistics
 {
 public:
@@ -105,7 +115,10 @@ public:
     void move  (std::size_t from, std::size_t to);
     // assign() of every array, reusing the capacity this copy already has.
     void assign(const Draw_list_bounds& source);
-    [[nodiscard]] auto is_bounded(const std::size_t index) const -> bool { return extent_x[index] >= 0.0f; }
+    // The one definition of the no-bounds sentinel: 1 for an entry whose
+    // extent_x marks it as having no bounds, 0 otherwise (a flag, not a bool,
+    // so the culling lane loop that uses it vectorizes under MSVC).
+    [[nodiscard]] static auto get_unbounded_flag(const float extent_x) -> uint32_t { return (extent_x >= 0.0f) ? 0u : 1u; }
 
     std::vector<float> center_x;
     std::vector<float> center_y;
