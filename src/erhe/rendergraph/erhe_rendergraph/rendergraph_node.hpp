@@ -126,6 +126,17 @@ protected:
     // Default: nothing.
     virtual void prepare_rendergraph_node(uint64_t frame_index);
 
+    // Render phase hook (render thread, Rendergraph::execute()): called for
+    // every node enabled in the frame, in execution order, before the first
+    // execute_rendergraph_node() of the frame, outside any render pass, with
+    // the frame command buffer. After every hook, and still before the first
+    // execute, execute() runs the pre-execute callback
+    // (Rendergraph::set_pre_execute_callback()). A node that has work every
+    // other node's execute depends on - the culling views of its passes,
+    // which the callback classifies all at once (doc/plans/culling.md
+    // phase 6a) - does it here. Default: nothing.
+    virtual void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer);
+
     // Release hook (Rendergraph_node_deleter, on the releasing thread): the
     // last owner released the node, which the rendergraph unregisters next
     // and then destroys, or retires while a frame still to be rendered

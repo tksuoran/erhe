@@ -162,7 +162,7 @@ The gate of the draw lists' GPU culling classification
 ([culling.md](../plans/culling.md) phase 5,
 [draw_list_renderer.md](../erhe/draw_list_renderer.md) Q6 "GPU
 classification"): the render phase of the next frame the scene's draw lists
-classify on the GPU copies the frame's GPU mask regions to host memory and
+classify on the GPU copies the frame's GPU mask region to host memory and
 keeps the frame's CPU masks; once the frame retired, every (entry, view) bit
 of every published draw list is compared. A new request replaces an earlier
 one. Errors when the device has no GPU path or the setting is cpu
@@ -175,17 +175,15 @@ py -3 scripts/mcp_call.py get_cull_classification_check b64:<base64 of {"scene_n
 ```
 
 Returns: `{scene, frame_index, entry_count, view_count, dispatch_count,
-mismatch_count, gpu_time_first_batch_ns,
-gpu_time_frame_end_ns, gpu_bounds_write_count, lists: [{list_index, purpose,
-entry_count, mismatch_count, mismatches: [{entry, view, cpu, gpu}]}]}`.
-`mismatch_count` 0 is the gate. `entry_count` counts the entries of all
-lists, `view_count` the views the CPU classified, `dispatch_count` the
-compute dispatches (one per classification batch with entries). The two
-times are the classification's `Gpu_timer` results (the first dispatch of a
-frame, normally `Shadow_renderer`'s batch; the end-of-frame dispatch of the
-views classified inside render passes, the color views), the latest
-completed measurements; a dispatch that overlaps the previous work on the
-GPU measures close to 0 (the timer counts work where it finishes).
+mismatch_count, gpu_time_ns, gpu_bounds_write_count, lists: [{list_index,
+purpose, entry_count, mismatch_count, mismatches: [{entry, view, cpu,
+gpu}]}]}`. `mismatch_count` 0 is the gate. `entry_count` counts the entries
+of all lists, `view_count` the views of the frame's set (every view of the
+frame, classified at once before the first draw), `dispatch_count` the
+compute dispatches of the frame (1, or 0 for a scene without entries).
+`gpu_time_ns` is the dispatch's `Gpu_timer` result, the latest completed
+measurement; a dispatch that overlaps the previous work on the GPU measures
+close to 0 (the timer counts work where it finishes).
 `get_draw_lists` reports `cull_classification` (what the last publish
 recorded) and `gpu_bounds_write_count` (the list bounds ranges written to
 the GPU bounds buffers; unchanged on an idle scene).

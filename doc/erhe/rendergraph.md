@@ -24,7 +24,8 @@ such as shadow maps, viewport rendering, post-processing, and GUI compositing.
   `Texture_reference`. Has an enable flag and connections (live, plus one
   record per frame in flight; "Per-frame copies" below), a pure virtual
   `execute_rendergraph_node()`, a virtual `prepare_rendergraph_node()`
-  hook and a virtual `on_released()` hook. Created only through
+  hook, a virtual `pre_execute_rendergraph_node()` hook ("Pre-execute
+  hook" below) and a virtual `on_released()` hook. Created only through
   `make_rendergraph_node<T>(...)`.
 
 - `Render_target` -- Composable helper that manages a color texture (possibly
@@ -88,7 +89,7 @@ rendergraph.connect(Rendergraph_node_key::viewport_texture, viewport.get(),    p
 
 // Each frame
 rendergraph.prepare_frame(); // sorts if needed, copies the node list, enabled flags, connections (and node parameters) into the frame
-rendergraph.execute();       // executes the frame's enabled nodes in order
+rendergraph.execute(command_buffer); // the frame's enabled nodes: every pre-execute hook, the callback, then every execute, in order
 ```
 
 ### Implementing a Node
@@ -233,6 +234,24 @@ phase, never writes what an earlier frame's render phase reads:
   execute reads into its own slot of the frame (the editor's
   `Post_processing_node` parameters and BRDF slice angles), and its
   execute reads that slot.
+
+### Pre-execute hook
+
+`Rendergraph::execute()` runs in three steps on the render thread, with
+the frame command buffer and outside any render pass: first
+`pre_execute_rendergraph_node(command_buffer)` of every node of the frame's
+slot that is enabled in it, in execution order; then the pre-execute
+callback (`Rendergraph::set_pre_execute_callback()`, set once on the main
+thread before the first `prepare_frame()`, verified; none by default); then
+`execute_rendergraph_node()` of the same nodes in the same order. So every
+hook of the frame has run before the first node executes. The hook is for
+work every node's execute depends on that a node's own execute would be too
+late for: the editor's draw-list nodes add their passes' culling views in
+it (the shadow nodes fit their light projections there too), and the
+callback classifies every view of the frame at once, the GPU path recording
+its compute dispatch there (doc/erhe/draw_list_renderer.md Q6,
+doc/plans/culling.md phase 6a). The default hook does nothing.
+`erhe_rendergraph_gpu_tests` checks the order.
 
 ### Resizing from the Prepare Phase
 

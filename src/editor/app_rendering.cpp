@@ -836,6 +836,11 @@ void App_rendering::prepare_composer(const Render_context& context, const int64_
     m_composer.prepare(context, host_system_time_ns, out);
 }
 
+void App_rendering::add_composer_cull_views(const Render_context& context, Composer_prepared& prepared)
+{
+    m_composer.add_cull_views(context, prepared);
+}
+
 void App_rendering::register_scene_image_view(Scene_image_view* const scene_image_view)
 {
     erhe::utility::Thread_roles::assert_main_thread();

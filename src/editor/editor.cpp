@@ -212,6 +212,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/cull_frame_registry.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -1934,15 +1935,6 @@ public:
             m_rendergraph->execute(command_buffer);
         }
 
-        // The GPU culling classification of the views the passes classified
-        // inside their render passes (the color views), and the end of
-        // every draw list scene's GPU classification frame
-        // (doc/plans/culling.md phase 5): after every pass of the frame
-        // that draws draw lists, outside any render pass.
-        if (m_gpu_cull_classifier) {
-            m_gpu_cull_classifier->record_pending(command_buffer);
-        }
-
         // A ray trace output readback the main thread requested (MCP
         // set_ray_trace save_path): copied after every pass that writes or
         // samples the output texture this frame.
@@ -2788,6 +2780,20 @@ public:
                 m_gpu_cull_classifier = std::make_unique<erhe::scene_renderer::Gpu_cull_classifier>(
                     *m_graphics_device.get(),
                     std::filesystem::path{"res"} / std::filesystem::path{"shaders"}
+                );
+                // The frame's culling classification (doc/plans/culling.md
+                // phase 6a): after every rendergraph node's pre-execute hook
+                // added its passes' culling views, before the first node
+                // executes, outside any render pass - every view of the
+                // frame classified at once, on the CPU and (gpu setting) in
+                // one dispatch per scene. Every Draw_list_scene registers
+                // with the registry, whether or not it has a classifier.
+                m_cull_frame_registry = std::make_unique<erhe::scene_renderer::Cull_frame_registry>();
+                erhe::scene_renderer::Cull_frame_registry* const cull_frame_registry = m_cull_frame_registry.get();
+                m_rendergraph->set_pre_execute_callback(
+                    [cull_frame_registry](erhe::graphics::Command_buffer& command_buffer) {
+                        cull_frame_registry->classify_frame(command_buffer);
+                    }
                 );
             }
             ERHE_INIT_STEP_END
@@ -3915,6 +3921,7 @@ public:
         m_app_context.forward_renderer         = m_forward_renderer      .get();
         m_app_context.shadow_renderer          = m_shadow_renderer       .get();
         m_app_context.gpu_cull_classifier      = m_gpu_cull_classifier   .get();
+        m_app_context.cull_frame_registry      = m_cull_frame_registry   .get();
         m_app_context.texel_renderer           = m_texel_renderer        .get();
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
         m_app_context.program_interface        = m_program_interface     .get();
@@ -5144,6 +5151,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Draw_list_renderer>         m_draw_list_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >           m_shadow_renderer;
     std::unique_ptr<erhe::scene_renderer::Gpu_cull_classifier>        m_gpu_cull_classifier;
+    std::unique_ptr<erhe::scene_renderer::Cull_frame_registry>        m_cull_frame_registry;
     std::unique_ptr<erhe::scene_renderer::Texel_renderer >            m_texel_renderer;
     std::unique_ptr<erhe::scene_renderer::Mesh_memory     >           m_mesh_memory;
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_interface> m_content_wide_line_interface;

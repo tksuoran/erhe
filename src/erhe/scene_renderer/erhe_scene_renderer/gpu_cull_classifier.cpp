@@ -133,25 +133,6 @@ auto Gpu_cull_classifier::is_supported() const -> bool
     return m_device_capable && (m_pipeline != nullptr);
 }
 
-void Gpu_cull_classifier::add_pending_scene(Draw_list_scene& draw_list_scene)
-{
-    erhe::utility::Thread_roles::assert_render_thread();
-    m_pending_scenes.push_back(&draw_list_scene);
-}
-
-void Gpu_cull_classifier::record_pending(erhe::graphics::Command_buffer& command_buffer)
-{
-    erhe::utility::Thread_roles::assert_render_thread();
-    if (m_pending_scenes.empty()) {
-        return;
-    }
-    ERHE_PROFILE_FUNCTION();
-    for (Draw_list_scene* draw_list_scene : m_pending_scenes) {
-        draw_list_scene->finish_gpu_cull_frame(command_buffer);
-    }
-    m_pending_scenes.clear();
-}
-
 auto Gpu_cull_classifier::get_device() -> erhe::graphics::Device&
 {
     return m_graphics_device;

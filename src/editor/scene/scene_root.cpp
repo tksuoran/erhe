@@ -191,7 +191,8 @@ Scene_root::Scene_root(
                 .multiview_view_counts    = std::span<const uint32_t>{draw_list_dependencies->multiview_view_counts},
                 .material_set_create_info   = draw_list_dependencies->material_set_create_info,
                 .exclude_unlit_from_shadows = draw_list_dependencies->exclude_unlit_from_shadows,
-                .gpu_cull_classifier        = draw_list_dependencies->gpu_cull_classifier
+                .gpu_cull_classifier        = draw_list_dependencies->gpu_cull_classifier,
+                .cull_frame_registry        = draw_list_dependencies->cull_frame_registry
             }
         );
     }

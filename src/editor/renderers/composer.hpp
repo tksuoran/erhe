@@ -28,6 +28,9 @@ class Composer_prepared
 public:
     uint64_t                               frame_index{0};
     bool                                   prepared   {false};
+    // The render phase's pre-execute hook added the frame's culling views
+    // into passes (Composer::add_cull_views()); Composer::render() verifies.
+    bool                                   cull_views_added{false};
     std::vector<Composition_pass_prepared> passes;
     Id_pass_prepared                       id_pass;
     erhe::scene_renderer::Content_wide_line_feed wide_line_feed;
@@ -45,6 +48,9 @@ public:
     [[nodiscard]] auto begin_prepare(uint64_t frame_index, std::size_t frames_in_flight) -> Composer_prepared&;
     // Render phase: the slot prepared for frame_index; verifies it was.
     [[nodiscard]] auto get_prepared(uint64_t frame_index) const -> const Composer_prepared&;
+    // Render phase, the view's pre-execute hook: the same slot, for
+    // Composer::add_cull_views() to write the passes' culling views into.
+    [[nodiscard]] auto get_render_prepared(uint64_t frame_index) -> Composer_prepared&;
 
 private:
     std::vector<Composer_prepared> m_slots;
@@ -84,6 +90,16 @@ public:
     // the view of context draws (the Render_content filter render() applies;
     // filtered passes stay never_rendered) into out.passes.
     void prepare(const Render_context& context, int64_t host_system_time_ns, Composer_prepared& out);
+
+    // Render phase, from the scene view's rendergraph node's pre-execute
+    // hook (before the frame's culling classification): the culling view of
+    // every pass of prepared that draws through draw lists, one view per
+    // draw list scene (the passes of one scene view share its camera),
+    // added with Draw_list_renderer::add_color_cull_view() from
+    // get_color_view_parameters(context) into the pass's
+    // Composition_pass_prepared::cull_view. context is the view's render
+    // context of the frame, the one its render calls draw with.
+    void add_cull_views(const Render_context& context, Composer_prepared& prepared);
 
     void imgui();
 

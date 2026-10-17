@@ -9,6 +9,23 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::rendergraph`: `Rendergraph_node::pre_execute_rendergraph_node(command_buffer)`
+  (virtual, default nothing) and `Rendergraph::set_pre_execute_callback(callback)`:
+  `Rendergraph::execute()` runs every enabled node's hook in execution order,
+  then the callback, before the first `execute_rendergraph_node()`
+  (`doc/erhe/rendergraph.md` "Pre-execute hook").
+
+- `erhe::scene_renderer`: `Draw_list_scene::classify_frame_cull_views(frame_index,
+  command_buffer)` (the frame's one classification of every view, CPU and GPU;
+  `doc/plans/culling.md` phase 6a), `Cull_frame_registry`
+  (`cull_frame_registry.hpp`: `add_frame_scene()`, `classify_frame(command_buffer)`,
+  which classifies every scene that added views this frame) and the required
+  `Draw_list_scene_create_info::cull_frame_registry`,
+  `Shadow_renderer::fit(parameters, cull_views)` /
+  `draw(parameters, cull_views)` with `Shadow_renderer::Cull_views`,
+  `Draw_list_renderer::add_color_cull_view(draw_list_scene, frame_index,
+  Color_cull_view_parameters)` and `Draw_list_renderer::Render_parameters::cull_view`.
+
 - `erhe::scene_renderer`: the GPU culling classification
   (`doc/plans/culling.md` phase 5). `Cull_classification` (`cpu`, `gpu`,
   `count`) and `c_str(Cull_classification)` (`cull_classification.hpp`);
@@ -276,6 +293,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: every culling view of a frame is added before the
+  frame's classification (`Draw_list_scene::classify_frame_cull_views()`);
+  `add_cull_view()` after it, and `draw_color()` / `draw_shadow()` /
+  `has_cull_view_survivors()` naming a view not classified, are verified
+  defects. `Draw_list_renderer::render()` no longer adds the color view (the
+  caller passes `Render_parameters::cull_view`); `Shadow_renderer::render()`
+  takes the bucket path only (`draw_list_scene` null, verified; the
+  draw-list path is `fit()`, the frame's classification, `draw()`). The GPU
+  classification is one dispatch per scene per frame with one mask region
+  (`group * entry_count + entry`); `Cull_classification_check::gpu_time_ns`
+  is one value and `dispatch_count` is 1 (0 without entries).
+
 - `erhe::scene_renderer`: `Draw_list_scene::publish(frame_index,
   frames_in_flight, classification)` takes the frame's
   `Cull_classification`; with `gpu` (on a supported device) it also writes
@@ -540,6 +569,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   six-plane array.
 
 ### Removed
+
+- `erhe::scene_renderer`: `Draw_list_scene::record_cull_classification()`,
+  `Gpu_cull_classifier::record_pending()` and `add_pending_scene()` (the
+  frame's classification is `classify_frame_cull_views()` /
+  `Cull_frame_registry::classify_frame()`, before the first draw).
 
 - `erhe::graphics`: `Device::get_active_render_pass()` /
   `set_active_render_pass()`; the active render pass is per command buffer

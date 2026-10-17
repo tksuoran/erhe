@@ -609,10 +609,25 @@ Drawing:
   purpose and bitwise the same planes as one already in the frame's set is
   shared, so the color passes of one viewport cull through one view, and the
   spot and point shadow passes of several viewports' shadow nodes through
-  one view each. `Draw_list_renderer::render()` adds the single view's
-  frustum (from its `clip_from_world`, as `Camera_buffer` builds it);
-  `Shadow_renderer::render()` adds every pass it is about to draw before the
-  first one draws: each 2D pass's light frustum (the pass's own
+  one view each. Every view of a frame is added before the frame's
+  classification, which runs once before the first draw of the frame
+  (doc/plans/culling.md phase 6a); the editor adds them from the rendergraph
+  nodes' pre-execute hooks (doc/erhe/rendergraph.md "Pre-execute hook"),
+  outside any render pass, before any node executes.
+  `Draw_list_renderer::add_color_cull_view(draw_list_scene, frame_index,
+  Color_cull_view_parameters)` adds a single-view color pass's frustum (from
+  its `clip_from_world`, as `Camera_buffer` builds it; multiview gives
+  `Cull_view::none`) and the caller passes the view as
+  `Draw_list_renderer::Render_parameters::cull_view` (the editor:
+  `Composer::add_cull_views()` from the viewport and scene image nodes'
+  hooks, from the frame's render context the node's execute draws with
+  (`get_color_view_parameters()`, the views and depth conventions both the
+  cull view and the draw's `Base_render_parameters` take), one view per
+  draw list scene, kept in `Composition_pass_prepared::cull_view`; the
+  headset, which locates its eyes inside its execute, draws unculled).
+  `Shadow_renderer::fit()` fits the light projections and adds every pass
+  `Shadow_renderer::draw()` draws later (the editor: `Shadow_render_node`'s
+  hook fits, its execute draws): each 2D pass's light frustum (the pass's own
   `clip_from_world`; a depth-clamped directional pass keeps casters beyond
   its depth planes, so it culls on the four side planes only) and the six
   cube faces of each shadowed point light
@@ -622,10 +637,16 @@ Drawing:
   (a caster wholly beyond the light's range is beyond its reach, where the
   range attenuation is zero), then the face's octant around the light (the
   90-degree pyramid around the face axis, which the face's frustum is; the
-  near plane is not tested). The first draw naming a view that is not yet
-  classified classifies every entry of every published list of the views'
-  purpose against all views added since the last classification, with the
-  views outside and the entries inside: per view, each test is one
+  near plane is not tested). `classify_frame_cull_views(frame_index,
+  command_buffer)` classifies every entry of every published list of the
+  views' purposes against every view of the frame's set, once per frame
+  (every scene is built with a `Cull_frame_registry`
+  (`Draw_list_scene_create_info::cull_frame_registry`, required) and
+  registers with it at its first `add_cull_view()` of a frame;
+  `Cull_frame_registry::classify_frame()` classifies every registered scene,
+  the GPU dispatch only for a scene whose slot records `gpu`, which needs
+  its `Gpu_cull_classifier`; the editor runs it as the rendergraph's
+  pre-execute callback), with the views outside and the entries inside: per view, each test is one
   branch-free lane-wise loop over the SoA bounds that narrows a per-entry
   inside flag - the range sphere (squared distance from the center to the
   box against the squared radius, from the per-axis gaps `d_k = max(|c_k -
@@ -644,8 +665,11 @@ Drawing:
   `cull_lanes.hpp` (library-internal), tested deviceless by
   `erhe_scene_renderer_tests` (`test_cull_lanes.cpp`: the octant keeps
   every box the face frustum's planes keep, the sphere test matches the
-  box-sphere distance). `has_cull_view_survivors(frame_index, view)` reads
-  that sum (classifying the view's batch first if needed): a view without
+  box-sphere distance). A view added after the frame's classification, and
+  a draw naming a view the classification did not cover, are defects
+  (verified), as is a frame whose views were never classified (the next
+  frame's first `add_cull_view()` verifies).
+  `has_cull_view_survivors(frame_index, view)` reads that sum: a view without
   survivors draws nothing whatever its pass's filter, so
   `Shadow_renderer` begins an empty cube face's render pass for its clear
   and skips the rest of the face. The loops compile to SIMD code without
@@ -673,34 +697,24 @@ Drawing:
   multi-draw indirect and `Record_indexing::first_instance` (the GPU command
   generation of phase 6 names records through `first_instance`), so the
   emulated multi-draw path, Metal and the null device classify on the CPU
-  only. A dispatch cannot be recorded inside a render pass, so the render
-  phase dispatches at two points outside them:
-  `record_cull_classification(frame_index, command_buffer)`, which
-  `Shadow_renderer::render()` calls after adding its views and before its
-  first pass (it classifies every view added so far on the CPU and
-  dispatches those no dispatch covered), and
-  `Gpu_cull_classifier::record_pending(command_buffer)`, which the editor
-  calls after the rendergraph and which dispatches each registered scene's
-  remaining views (the color views, classified inside their passes) and
-  ends the scene's GPU classification frame (a new frame's first
-  `add_cull_view()` verifies it ended). Each dispatch is one batch: a
-  per-dispatch view set (eight `vec4` per view, transcribed from the CPU's
-  view tests: six planes, the range sphere, and purpose, kind, plane count
-  and cube face as small exact floats), one invocation per entry, and a mask
-  region of its own (one `uvec2` per entry per group of 64 views the batch
-  touches, at `(group - first_view / 64) * entry_count + entry`; a group the
-  batch shares with the previous batch holds only its own views' bits). The
+  only. `classify_frame_cull_views()` records, after the CPU
+  classification, the frame's one dispatch per scene into the frame command
+  buffer, outside any render pass and before the first draw: the frame's
+  view set (eight `vec4` per view, transcribed from the CPU's view tests:
+  six planes, the range sphere, and purpose, kind, plane count and cube
+  face as small exact floats), one invocation per entry, and one mask
+  region (one `uvec2` per entry per group of 64 views, at `group *
+  entry_count + entry`). The
   shader runs the CPU lanes' tests in their expression order with every
   intermediate `precise`, so its bits are the CPU's bits. The CPU masks keep
   driving the draws: no pass reads the GPU masks yet, so no barrier follows
   a dispatch (the GPU command generation adds its own).
   `request_cull_classification_check()` / `poll_cull_classification_check()`
-  (MCP `get_cull_classification_check`) copy one frame's mask regions to
+  (MCP `get_cull_classification_check`) copy one frame's mask region to
   host memory (after a transfer barrier) and compare every bit with the same
   frame's CPU masks; a new request replaces an earlier one (its pending
-  readbacks belong to an older generation and are dropped); two
-  `Gpu_timer`s time the first dispatch of a frame and the end-of-frame
-  dispatch.
+  readbacks belong to an older generation and are dropped); a `Gpu_timer`
+  times the dispatch.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.
@@ -848,7 +862,7 @@ at construction from `Primitive_interface::record_indexing`:
   capacity), acquired lazily per chunk within a
   `Draw_list_scene::Shadow_record_scope`
   (`begin_shadow_record_scope()`), a move-only RAII object
-  `Shadow_renderer::render()` holds across its passes; its destructor
+  `Shadow_renderer::draw()` holds across its passes; its destructor
   releases the ranges in the frame that drew them (the release makes the
   ring buffer's sync entry for that frame), so no return path leaks them. A
   scope binds the ranges of one `Primitive_buffer` written with one set of

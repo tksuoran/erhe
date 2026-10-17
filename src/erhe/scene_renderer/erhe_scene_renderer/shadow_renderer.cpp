@@ -414,7 +414,70 @@ void Shadow_renderer::draw_shadow_casters(
     }
 }
 
-auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
+namespace {
+
+// The passes a render draws: a directional / spot light's 2D pass, and a
+// point light's cube (nullptr: the light has no pass).
+[[nodiscard]] auto find_2d_pass(const Shadow_renderer::Render_parameters& parameters, const std::size_t light_slot) -> const erhe::scene::Light_projection_transforms*
+{
+    const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
+    if (
+        !light.casts_shadow() ||
+        (
+            (light.get_light_type() != erhe::scene::Light_type::directional) &&
+            (light.get_light_type() != erhe::scene::Light_type::spot)
+        )
+    ) {
+        return nullptr;
+    }
+    // Slot i of the set is entry i of the projections (Light_projections::apply).
+    if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
+        return nullptr;
+    }
+    const erhe::scene::Light_projection_transforms* light_projection_transform = &parameters.light_projections.light_projection_transforms[light_slot];
+    ERHE_VERIFY(light_projection_transform->index == light_slot);
+    if (light_projection_transform->shadow_index >= parameters.render_passes.size()) {
+        return nullptr;
+    }
+    return light_projection_transform;
+}
+
+[[nodiscard]] auto has_point_cubes(const Shadow_renderer::Render_parameters& parameters) -> bool
+{
+    return
+        (parameters.point_cube_texture != nullptr) &&
+        (parameters.point_cube_render_passes != nullptr) &&
+        (parameters.point_shadow_viewport.width > 0) &&
+        (parameters.point_shadow_viewport.height > 0);
+}
+
+// The point light cubes the passes draw (zero without point cube passes).
+[[nodiscard]] auto get_point_cube_count(const Shadow_renderer::Render_parameters& parameters) -> std::size_t
+{
+    const bool draw_point_cubes = has_point_cubes(parameters) && !parameters.point_cube_render_passes->empty();
+    return draw_point_cubes ? (parameters.point_cube_render_passes->size() / 6) : std::size_t{0};
+}
+
+[[nodiscard]] auto find_cube(const Shadow_renderer::Render_parameters& parameters, const std::size_t cube_count, const std::size_t light_slot) -> const erhe::scene::Light_projection_transforms*
+{
+    const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
+    if (!light.casts_shadow() || (light.get_light_type() != erhe::scene::Light_type::point)) {
+        return nullptr;
+    }
+    if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
+        return nullptr;
+    }
+    const erhe::scene::Light_projection_transforms* lpt = &parameters.light_projections.light_projection_transforms[light_slot];
+    ERHE_VERIFY(lpt->index == light_slot);
+    if (lpt->point_shadow_index >= cube_count) {
+        return nullptr;
+    }
+    return lpt;
+}
+
+} // anonymous namespace
+
+void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_views)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -531,11 +594,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // order); further casters are slotted as non-shadow lights while the
     // unshadowed limit has room, so the loops below skip them and the
     // receiver shades them unshadowed.
-    const bool have_point_cubes =
-        (parameters.point_cube_texture != nullptr) &&
-        (parameters.point_cube_render_passes != nullptr) &&
-        (parameters.point_shadow_viewport.width > 0) &&
-        (parameters.point_shadow_viewport.height > 0);
+    const bool have_point_cubes = has_point_cubes(parameters);
     Light_count_limits light_count_limits = parameters.light_set.get_light_count_limits();
     light_count_limits.per_type_shadow[0] = std::min(light_count_limits.per_type_shadow[0], parameters.render_passes.size());
     light_count_limits.per_type_shadow[1] = std::min(light_count_limits.per_type_shadow[1], parameters.render_passes.size() - light_count_limits.per_type_shadow[0]);
@@ -582,6 +641,92 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // The receiver-side minimum bias scales go with the shadow maps they bias.
     parameters.light_projections.shadow_bias_texel_scale  = parameters.shadow_bias_texel_scale;
     parameters.light_projections.shadow_bias_origin_scale = parameters.shadow_bias_origin_scale;
+
+    cull_views.views_2d.clear();
+    cull_views.views_cube.clear();
+    if (parameters.draw_list_scene == nullptr) {
+        return;
+    }
+
+    // Depth clamping preserves casters outside the (tightly fitted) light
+    // space near plane by clamping their depth instead of clipping them.
+    // It is a setting of the directional fit (it pairs with
+    // near_from_main_frustum) and applies to the directional passes only:
+    // a spot pass clips at its fixed near plane, so every vertex depth it
+    // interpolates stays within [0, 1], while under depth clamp a caster
+    // passing close to the spot light has unbounded vertex depths and the
+    // minimum bias's raster term no finite bound (doc/erhe/shadows.md
+    // "Minimum bias"). Face culling is the active graphics preset's
+    // Shadow_cull_mode; both dimensions index the pre-built pipeline set.
+    const bool        use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
+    // The clip-space near depth of the culling planes.
+    const float       clip_z_min = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
+    const std::size_t cube_count = get_point_cube_count(parameters);
+
+    // Culling views (doc/erhe/draw_list_renderer.md Q6): every pass adds
+    // its planes to the draw list scene's view set, which the frame's
+    // classification classifies with every other view of the frame before
+    // the first pass draws (doc/plans/culling.md phase 6a). A pass's planes
+    // are those of the clip_from_world it rasterizes with, in the
+    // convention Draw_list_renderer builds the view planes. A depth-clamped
+    // directional pass keeps casters beyond its depth planes (pancaked), so
+    // it culls on the four side planes only; every other pass clips at all
+    // six. A point light culls per cube face: the light's range sphere, then
+    // the face's octant around the light
+    // (Draw_list_scene::add_point_light_cull_views(), the world-axis-aligned
+    // faces of make_cube_face_transform() in the same order).
+    {
+        cull_views.views_2d.assign(parameters.render_passes.size(), Cull_view::none);
+        cull_views.views_cube.assign(cube_count * 6, Cull_view::none);
+        const uint64_t frame_index = m_graphics_device.get_frame_index();
+        for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
+            const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(parameters, light_slot);
+            if (light_projection_transform == nullptr) {
+                continue;
+            }
+            const erhe::scene::Light_snapshot& light         = parameters.light_set.get_lights()[light_slot];
+            const bool                         depth_clamped = use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional);
+            const std::array<glm::vec4, 6>     light_frustum_planes = erhe::math::extract_frustum_planes(light_projection_transform->clip_from_world.get_matrix(), clip_z_min, 1.0f);
+            const std::span<const glm::vec4>   cull_planes = depth_clamped
+                ? std::span<const glm::vec4>{light_frustum_planes}.first(erhe::math::plane_near)
+                : std::span<const glm::vec4>{light_frustum_planes};
+            cull_views.views_2d[light_projection_transform->shadow_index] = parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, cull_planes);
+        }
+        if (cube_count > 0) {
+            for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
+                const erhe::scene::Light_projection_transforms* lpt = find_cube(parameters, cube_count, light_slot);
+                if (lpt == nullptr) {
+                    continue;
+                }
+                const glm::vec3 light_pos = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+                // The range sphere is the first test of all six faces: a
+                // caster wholly beyond the light's range shadows only
+                // receivers beyond it, where the range attenuation is zero.
+                // The faces' 90-degree frusta (Light_snapshot::
+                // point_light_projection_transforms()) are the octants
+                // around the light; their near plane is not tested (a caster
+                // closer than it is clipped by the rasterizer).
+                const Cull_sphere range_sphere{
+                    .center = light_pos,
+                    .radius = parameters.light_set.get_lights()[light_slot].get_range()
+                };
+                const std::array<Cull_view, 6> face_views = parameters.draw_list_scene->add_point_light_cull_views(frame_index, Draw_purpose::shadow, range_sphere);
+                std::copy(face_views.begin(), face_views.end(), cull_views.views_cube.begin() + static_cast<std::ptrdiff_t>(lpt->point_shadow_index * 6));
+            }
+        }
+    }
+}
+
+void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views& cull_views)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(parameters.view_camera != nullptr);
+    ERHE_VERIFY(parameters.texture);
+
+    const auto& mesh_spans = parameters.mesh_spans;
+
+    const erhe::Item_filter& shadow_filter = shadow_caster_filter;
 
     erhe::graphics::Scoped_debug_group debug_group{
         parameters.command_buffer,
@@ -641,111 +786,18 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // Shadow_cull_mode; both dimensions index the pre-built pipeline set.
     const bool        use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
     const std::size_t cull_index      = static_cast<std::size_t>(parameters.cull_mode);
-
-    // The clip-space near depth of the culling planes (below).
-    const float clip_z_min = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
     if (parameters.draw_statistics != nullptr) {
         parameters.draw_statistics->clear();
     }
 
-    // The passes this render() draws: a directional / spot light's 2D pass,
-    // and a point light's cube (nullptr: the light has no pass).
-    const auto find_2d_pass = [&parameters](const std::size_t light_slot) -> const erhe::scene::Light_projection_transforms* {
-        const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
-        if (
-            !light.casts_shadow() ||
-            (
-                (light.get_light_type() != erhe::scene::Light_type::directional) &&
-                (light.get_light_type() != erhe::scene::Light_type::spot)
-            )
-        ) {
-            return nullptr;
-        }
-        // Slot i of the set is entry i of the projections (Light_projections::apply).
-        if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
-            return nullptr;
-        }
-        const erhe::scene::Light_projection_transforms* light_projection_transform = &parameters.light_projections.light_projection_transforms[light_slot];
-        ERHE_VERIFY(light_projection_transform->index == light_slot);
-        if (light_projection_transform->shadow_index >= parameters.render_passes.size()) {
-            return nullptr;
-        }
-        return light_projection_transform;
-    };
-    const bool        draw_point_cubes = have_point_cubes && !parameters.point_cube_render_passes->empty();
-    const std::size_t cube_count       = draw_point_cubes ? (parameters.point_cube_render_passes->size() / 6) : std::size_t{0};
-    const auto find_cube = [&parameters, cube_count](const std::size_t light_slot) -> const erhe::scene::Light_projection_transforms* {
-        const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
-        if (!light.casts_shadow() || (light.get_light_type() != erhe::scene::Light_type::point)) {
-            return nullptr;
-        }
-        if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
-            return nullptr;
-        }
-        const erhe::scene::Light_projection_transforms* lpt = &parameters.light_projections.light_projection_transforms[light_slot];
-        ERHE_VERIFY(lpt->index == light_slot);
-        if (lpt->point_shadow_index >= cube_count) {
-            return nullptr;
-        }
-        return lpt;
-    };
+    const std::size_t cube_count       = get_point_cube_count(parameters);
+    const bool        draw_point_cubes = (cube_count > 0);
     const erhe::math::Coordinate_conventions cube_conventions = make_cube_conventions(parameters.conventions);
 
-    // Culling views (doc/erhe/draw_list_renderer.md Q6): every pass of this
-    // render() adds its planes to the draw list scene's view set before the
-    // first pass draws, so that draw classifies the entries against all of
-    // them in one pass. A pass's planes are those of the clip_from_world it
-    // rasterizes with, in the convention Draw_list_renderer builds the view
-    // planes. A depth-clamped directional pass keeps casters beyond its
-    // depth planes (pancaked), so it culls on the four side planes only;
-    // every other pass clips at all six. A point light culls per cube face:
-    // the light's range sphere, then the face's octant around the light
-    // (Draw_list_scene::add_point_light_cull_views(), the world-axis-aligned
-    // faces of make_cube_face_transform() in the same order).
+    // The culling views fit() added for these passes (draw-list path).
     if (parameters.draw_list_scene != nullptr) {
-        m_cull_views_2d.assign(parameters.render_passes.size(), Cull_view::none);
-        m_cull_views_cube.assign(cube_count * 6, Cull_view::none);
-        const uint64_t frame_index = m_graphics_device.get_frame_index();
-        for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
-            const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(light_slot);
-            if (light_projection_transform == nullptr) {
-                continue;
-            }
-            const erhe::scene::Light_snapshot& light         = parameters.light_set.get_lights()[light_slot];
-            const bool                         depth_clamped = use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional);
-            const std::array<glm::vec4, 6>     light_frustum_planes = erhe::math::extract_frustum_planes(light_projection_transform->clip_from_world.get_matrix(), clip_z_min, 1.0f);
-            const std::span<const glm::vec4>   cull_planes = depth_clamped
-                ? std::span<const glm::vec4>{light_frustum_planes}.first(erhe::math::plane_near)
-                : std::span<const glm::vec4>{light_frustum_planes};
-            m_cull_views_2d[light_projection_transform->shadow_index] = parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, cull_planes);
-        }
-        if (draw_point_cubes) {
-            for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
-                const erhe::scene::Light_projection_transforms* lpt = find_cube(light_slot);
-                if (lpt == nullptr) {
-                    continue;
-                }
-                const glm::vec3 light_pos = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-                // The range sphere is the first test of all six faces: a
-                // caster wholly beyond the light's range shadows only
-                // receivers beyond it, where the range attenuation is zero.
-                // The faces' 90-degree frusta (Light_snapshot::
-                // point_light_projection_transforms()) are the octants
-                // around the light; their near plane is not tested (a caster
-                // closer than it is clipped by the rasterizer).
-                const Cull_sphere range_sphere{
-                    .center = light_pos,
-                    .radius = parameters.light_set.get_lights()[light_slot].get_range()
-                };
-                const std::array<Cull_view, 6> face_views = parameters.draw_list_scene->add_point_light_cull_views(frame_index, Draw_purpose::shadow, range_sphere);
-                std::copy(face_views.begin(), face_views.end(), m_cull_views_cube.begin() + static_cast<std::ptrdiff_t>(lpt->point_shadow_index * 6));
-            }
-        }
-        // Classify the views now, before the first render pass: with the
-        // GPU classification this records its compute dispatch, which
-        // cannot be recorded inside a render pass (doc/plans/culling.md
-        // phase 5).
-        parameters.draw_list_scene->record_cull_classification(frame_index, parameters.command_buffer);
+        ERHE_VERIFY(cull_views.views_2d.size() == parameters.render_passes.size());
+        ERHE_VERIFY(cull_views.views_cube.size() == (cube_count * 6));
     }
 
     // The shadow lists' shared records stay acquired across the passes
@@ -757,7 +809,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
-        const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(light_slot);
+        const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(parameters, light_slot);
         if (light_projection_transform == nullptr) {
             continue;
         }
@@ -868,7 +920,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     .filter               = shadow_filter,
                     .layers               = parameters.draw_list_layers,
                     .sub_variant          = parameters.use_distance ? Shadow_sub_variant::depth_only_distance : Shadow_sub_variant::depth_only,
-                    .cull_view            = m_cull_views_2d[shadow_index],
+                    .cull_view            = cull_views.views_2d[shadow_index],
                     .debug_label          = "shadow draw lists",
                     .frame_index          = m_graphics_device.get_frame_index()
                 }
@@ -919,7 +971,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         erhe::graphics::Render_pass* previous_cube_render_pass = nullptr;
         for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
-            const erhe::scene::Light_projection_transforms* lpt = find_cube(light_slot);
+            const erhe::scene::Light_projection_transforms* lpt = find_cube(parameters, cube_count, light_slot);
             if (lpt == nullptr) {
                 continue;
             }
@@ -938,7 +990,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             uint8_t skipped_faces = 0;
             if (parameters.draw_list_scene != nullptr) {
                 for (std::size_t face = 0; face < 6; ++face) {
-                    if (!parameters.draw_list_scene->has_cull_view_survivors(m_graphics_device.get_frame_index(), m_cull_views_cube[(point_shadow_index * 6) + face])) {
+                    if (!parameters.draw_list_scene->has_cull_view_survivors(m_graphics_device.get_frame_index(), cull_views.views_cube[(point_shadow_index * 6) + face])) {
                         skipped_faces |= static_cast<uint8_t>(1u << face);
                     }
                 }
@@ -1028,7 +1080,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                                 .filter               = shadow_filter,
                                 .layers               = parameters.draw_list_layers,
                                 .sub_variant          = Shadow_sub_variant::cube,
-                                .cull_view            = m_cull_views_cube[pass_index],
+                                .cull_view            = cull_views.views_cube[pass_index],
                                 .debug_label          = "shadow cube draw lists",
                                 .frame_index          = m_graphics_device.get_frame_index()
                             }
@@ -1078,7 +1130,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     joint_range.release();
     light_range.release();
+}
 
+auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
+{
+    // The draw-list path classifies the culling views between fit() and
+    // draw(), with every other view of the frame.
+    ERHE_VERIFY(parameters.draw_list_scene == nullptr);
+    fit(parameters, m_immediate_cull_views);
+    draw(parameters, m_immediate_cull_views);
     return true;
 }
 

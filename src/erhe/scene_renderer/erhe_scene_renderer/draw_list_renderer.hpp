@@ -76,9 +76,37 @@ public:
         // joint slot by Joint_buffer::update(). nullptr = none.
         const erhe::scene::Node*                               debug_target_joint{nullptr};
         const erhe::graphics::Color_blend_state*               color_blend_override{nullptr};
+        // The pass's culling view in draw_list_scene's view set of the frame
+        // (add_color_cull_view() before the frame's classification);
+        // Cull_view::none draws unculled (multiview passes).
+        Cull_view                                              cull_view{Cull_view::none};
     };
 
     auto render(const Render_parameters& parameters) -> Draw_statistics;
+
+    // The inputs of a color pass's culling view: the pass's views and the
+    // depth conventions its camera block is written with
+    // (Base_render_parameters).
+    class Color_cull_view_parameters
+    {
+    public:
+        std::span<const Camera_view_input> views{};
+        bool                               reverse_depth{true};
+        erhe::math::Depth_range            depth_range  {erhe::math::Depth_range::zero_to_one};
+        erhe::math::Coordinate_conventions conventions  {};
+    };
+    // Render phase, before the frame's culling classification
+    // (doc/erhe/draw_list_renderer.md Q6, doc/plans/culling.md phase 6a):
+    // adds the culling view of a single-view color pass - the planes of the
+    // view's clip_from_world, built the way Camera_buffer builds the matrix
+    // - to draw_list_scene's view set of frame_index and returns it for
+    // Render_parameters::cull_view. Multiview passes (and a view without a
+    // camera) draw unculled: Cull_view::none.
+    [[nodiscard]] static auto add_color_cull_view(
+        Draw_list_scene&                  draw_list_scene,
+        uint64_t                          frame_index,
+        const Color_cull_view_parameters& parameters
+    ) -> Cull_view;
 
 private:
     erhe::graphics::Device& m_graphics_device;

@@ -418,6 +418,65 @@ void Viewport_scene_view::prepare_composition(const uint64_t frame_index, const 
     }
 }
 
+void Viewport_scene_view::pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    const uint64_t               frame_index = m_rendergraph.get_graphics_device().get_frame_index();
+    const Viewport_render_state& state       = get_render_state(frame_index);
+    m_frame_context.reset();
+    m_frame_context_frame_index = frame_index;
+    // The gates execute_rendergraph_node() renders under.
+    if (!state.node_enabled) {
+        return;
+    }
+    const erhe::math::Viewport& projection_viewport = state.projection_viewport;
+    if ((projection_viewport.width < 1) || (projection_viewport.height < 1)) {
+        return;
+    }
+
+    // The single view of the frame: execute_rendergraph_node() and
+    // render_overlay_pass() draw with this context, and the culling views
+    // below are built from it.
+    m_frame_view_input = state.camera
+        ? erhe::scene_renderer::Camera_view_input{
+            .camera      = get_render_camera(),
+            .viewport    = projection_viewport,
+            .pixel_scale = m_context.context_window->get_scale_factor()
+        }
+        : erhe::scene_renderer::Camera_view_input{};
+    // No live camera in the render phase: the renderers read camera_snapshot.
+    m_frame_context.emplace(
+        Render_context{
+            .command_buffer      = &command_buffer,
+            .encoder             = nullptr, // set where a render pass begins
+            .app_context         = m_context,
+            .scene_view          = *this,
+            .viewport_config     = get_render_view().viewport_config,
+            .camera              = nullptr,
+            .camera_snapshot     = get_render_camera(),
+            .viewport_scene_view = this,
+            .scene_root          = state.scene_root,
+            .render_state        = &state,
+            .viewport            = projection_viewport,
+            .shader_debug        = state.shader_debug,
+            .views               = state.camera
+                ? std::span<const erhe::scene_renderer::Camera_view_input>(&m_frame_view_input, 1)
+                : std::span<const erhe::scene_renderer::Camera_view_input>{}
+        }
+    );
+    // What the prepare phase decided for this view and frame (the
+    // composition and the id pass, prepare_composition(), under the same
+    // gates), with the passes' culling views added.
+    if (state.do_render) {
+        Composer_prepared& prepared = m_composer_slots.get_render_prepared(frame_index);
+        m_context.app_rendering->add_composer_cull_views(m_frame_context.value(), prepared);
+        m_frame_context->composer_prepared = &prepared;
+    }
+}
+
 void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -454,49 +513,15 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     m_render_target.update(projection_viewport.width, projection_viewport.height, nullptr);
     update_overlay_render_target(projection_viewport.width, projection_viewport.height);
 
-    Render_view& render_view = get_render_view();
+    const bool                         do_render  = state.do_render;
+    const std::shared_ptr<Scene_root>& scene_root = state.scene_root;
 
-    const bool                                  do_render  = state.do_render;
-    const std::shared_ptr<Scene_root>&          scene_root = state.scene_root;
-    const std::shared_ptr<erhe::scene::Camera>& camera     = state.camera;
-
-    // 1-element views span for the single-view path. Declared in this
-    // outer scope so the backing object outlives every use of
-    // context.views (Render_context's views field is a span pointing
-    // here; it is read by Forward_renderer, Content_wide_line_renderer,
-    // and downstream renderables for the rest of this function).
-    erhe::scene_renderer::Camera_view_input single_view_input{};
-    if (camera) {
-        single_view_input = erhe::scene_renderer::Camera_view_input{
-            .camera      = get_render_camera(),
-            .viewport    = projection_viewport,
-            .pixel_scale = m_context.context_window->get_scale_factor()
-        };
-    }
-    // No live camera in the render phase: the renderers read camera_snapshot.
-    Render_context context{
-        .command_buffer      = &command_buffer,
-        .encoder             = nullptr, // filled in later once we start render pass
-        .app_context         = m_context,
-        .scene_view          = *this,
-        .viewport_config     = render_view.viewport_config,
-        .camera              = nullptr,
-        .camera_snapshot     = get_render_camera(),
-        .viewport_scene_view = this,
-        .scene_root          = scene_root,
-        .render_state        = &state,
-        .viewport            = projection_viewport,
-        .shader_debug        = state.shader_debug,
-        .views               = camera
-            ? std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
-            : std::span<const erhe::scene_renderer::Camera_view_input>{}
-    };
-    // What the prepare phase decided for this view and frame: the
-    // composition and the id pass (prepare_composition(), under the same
-    // gates: a view that renders is prepared).
-    if (do_render) {
-        context.composer_prepared = &m_composer_slots.get_prepared(frame_index);
-    }
+    // The frame's render context, built (with the composition's culling
+    // views) by pre_execute_rendergraph_node() under the same gates.
+    ERHE_VERIFY((m_frame_context_frame_index == frame_index) && m_frame_context.has_value());
+    Render_context context = m_frame_context.value();
+    ERHE_VERIFY(context.command_buffer == &command_buffer);
+    ERHE_VERIFY(do_render == (context.composer_prepared != nullptr));
 
     // The ID renderer always runs when the viewport is hovered -- it is
     // the only source of correct picks for skinned meshes (the raytrace
@@ -849,7 +874,6 @@ void Viewport_scene_view::render_overlay_pass(
     if (!m_overlay_render_pass) {
         return;
     }
-    Render_view& render_view = get_render_view();
     ERHE_VERIFY(m_overlay_width  == projection_viewport.width);
     ERHE_VERIFY(m_overlay_height == projection_viewport.height);
 
@@ -863,27 +887,14 @@ void Viewport_scene_view::render_overlay_pass(
     // correct; exposure is ignored by the overlay composition passes (#230).
     m_context.post_processing->composite_input(encoder, *m_overlay_render_pass, *input_texture);
 
-    erhe::scene_renderer::Camera_view_input single_view_input{
-        .camera     = get_render_camera(),
-        .viewport   = projection_viewport
-    };
-    Render_context context{
-        .command_buffer      = &command_buffer,
-        .encoder             = &encoder,
-        .render_pass         = m_overlay_render_pass.get(),
-        .app_context         = m_context,
-        .scene_view          = *this,
-        .viewport_config     = render_view.viewport_config,
-        .camera              = nullptr,
-        .camera_snapshot     = get_render_camera(),
-        .viewport_scene_view = this,
-        .scene_root          = state.scene_root,
-        .render_state        = &state,
-        .viewport            = projection_viewport,
-        .shader_debug        = state.shader_debug,
-        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
-        .composer_prepared   = &m_composer_slots.get_prepared(frame_index)
-    };
+    // The frame's render context (pre_execute_rendergraph_node()): the
+    // overlay passes draw with the views their culling views came from.
+    ERHE_VERIFY((m_frame_context_frame_index == frame_index) && m_frame_context.has_value());
+    Render_context context = m_frame_context.value();
+    ERHE_VERIFY(context.command_buffer == &command_buffer);
+    ERHE_VERIFY(context.composer_prepared != nullptr);
+    context.encoder     = &encoder;
+    context.render_pass = m_overlay_render_pass.get();
 
     m_context.app_rendering->render_overlay(context);
 

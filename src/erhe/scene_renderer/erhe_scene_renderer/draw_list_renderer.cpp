@@ -89,17 +89,9 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
     const uint16_t multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
 
     // Frustum culling of the entries (doc/erhe/draw_list_renderer.md Q6):
-    // the culling view of the planes of the single view's clip_from_world,
-    // built the way Camera_buffer builds the matrix. Multiview passes draw
-    // unculled.
-    Cull_view cull_view{Cull_view::none};
-    if ((base.views.size() == 1) && (base.views.front().camera != nullptr)) {
-        const Camera_view_input&       view            = base.views.front();
-        const glm::mat4                clip_from_world = view.camera->projection().clip_from_node_transform(view.viewport, base.reverse_depth, base.depth_range, base.conventions).get_matrix() * view.camera->node_from_world();
-        const float                    clip_z_min      = (base.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
-        const std::array<glm::vec4, 6> view_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
-        cull_view = parameters.draw_list_scene.add_cull_view(frame_index, Draw_purpose::color, std::span<const glm::vec4>{view_frustum_planes});
-    }
+    // the view the caller added before the frame's classification
+    // (add_color_cull_view()).
+    const Cull_view cull_view = parameters.cull_view;
 
     Draw_statistics statistics{};
     for (erhe::graphics::Base_render_pipeline* base_render_pipeline : parameters.base_render_pipelines) {
@@ -134,6 +126,22 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
 
     m_pass_resources.end_pass(pass_state, render_encoder);
     return statistics;
+}
+
+auto Draw_list_renderer::add_color_cull_view(
+    Draw_list_scene&                  draw_list_scene,
+    const uint64_t                    frame_index,
+    const Color_cull_view_parameters& parameters
+) -> Cull_view
+{
+    if ((parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
+        return Cull_view::none;
+    }
+    const Camera_view_input&       view            = parameters.views.front();
+    const glm::mat4                clip_from_world = view.camera->projection().clip_from_node_transform(view.viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions).get_matrix() * view.camera->node_from_world();
+    const float                    clip_z_min      = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
+    const std::array<glm::vec4, 6> view_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
+    return draw_list_scene.add_cull_view(frame_index, Draw_purpose::color, std::span<const glm::vec4>{view_frustum_planes});
 }
 
 } // namespace erhe::scene_renderer

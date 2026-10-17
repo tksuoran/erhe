@@ -244,6 +244,11 @@ void Rendergraph_node::prepare_rendergraph_node(const uint64_t frame_index)
     static_cast<void>(frame_index);
 }
 
+void Rendergraph_node::pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
+{
+    static_cast<void>(command_buffer);
+}
+
 void Rendergraph_node::on_released()
 {
 }

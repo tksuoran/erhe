@@ -31,6 +31,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
@@ -493,7 +494,34 @@ void Shadow_render_node::prepare_casters(const uint64_t frame_index, const std::
     slot.prepared = true;
 }
 
-void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
+namespace {
+
+// CPU timing of the node's work of one frame (P4 measurement): the scope
+// guard adds the elapsed time to out_us on every return path.
+class Cpu_time_scope
+{
+public:
+    explicit Cpu_time_scope(double& out_us)
+        : m_out_us{out_us}
+        , m_start {std::chrono::steady_clock::now()}
+    {
+    }
+    ~Cpu_time_scope() noexcept
+    {
+        const std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        m_out_us += std::chrono::duration<double, std::micro>(end - m_start).count();
+    }
+    Cpu_time_scope(const Cpu_time_scope&)            = delete;
+    Cpu_time_scope& operator=(const Cpu_time_scope&) = delete;
+
+private:
+    double&                               m_out_us;
+    std::chrono::steady_clock::time_point m_start;
+};
+
+} // anonymous namespace
+
+void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -513,35 +541,15 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // into it.)
     result.light_projections.clear();
     result.draw_statistics.clear();
+    // Execute draws only what this hook fitted for this frame.
+    m_frame_passes.frame_index = frame_index;
+    m_frame_passes.parameters.reset();
+    m_frame_passes.scene_root.reset();
 
-    // CPU timing of the whole execute (P4 measurement); the scope guard
-    // records on every return path, into this frame's result and the
-    // render phase's running totals.
-    class Cpu_timer_scope
-    {
-    public:
-        Cpu_timer_scope(Shadow_render_node& node, Shadow_frame_result& result)
-            : m_node  {node}
-            , m_result{result}
-            , m_start {std::chrono::steady_clock::now()}
-        {
-        }
-        ~Cpu_timer_scope() noexcept
-        {
-            const std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-            const double us = std::chrono::duration<double, std::micro>(end - m_start).count();
-            m_node.m_total_cpu_time_us += us;
-            ++m_node.m_execute_count;
-            m_result.cpu_time_us       = us;
-            m_result.total_cpu_time_us = m_node.m_total_cpu_time_us;
-            m_result.execute_count     = m_node.m_execute_count;
-        }
-    private:
-        Shadow_render_node&                   m_node;
-        Shadow_frame_result&                  m_result;
-        std::chrono::steady_clock::time_point m_start;
-    };
-    const Cpu_timer_scope cpu_timer_scope{*this, result};
+    // The frame's CPU time: this hook and execute_rendergraph_node() add
+    // into it.
+    result.cpu_time_us = 0.0;
+    const Cpu_time_scope cpu_time_scope{result.cpu_time_us};
 
     // The configuration the prepare phase of this frame requested, before
     // anything below reads the maps or the render passes.
@@ -732,7 +740,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         render_settings.use_draw_lists
             ? root_draw_list_scene
             : nullptr;
-    const erhe::scene::Layer_id draw_list_layers[] = { scene_root->layers().content()->id };
     // The bucket path (use_draw_lists off) draws the casters M2 prepared
     // into this frame's slot (prepare_casters()); neither path is handed
     // meshes, and both read the bounds M2 gathered.
@@ -756,7 +763,13 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // report, whichever frame result that went to.
     result.light_projections.distance_fallback_light_ids = m_distance_fallback_light_ids;
 
-    m_context.shadow_renderer->render(
+    // The parameters fit() and draw() take, built once: the fit's light
+    // frusta are the shadow passes' culling views, which the frame's
+    // classification classifies with the color views after every node's
+    // pre-execute hook (doc/plans/culling.md phase 6a).
+    m_frame_passes.scene_root       = scene_root;
+    m_frame_passes.draw_list_layers = { scene_root->layers().content()->id }; // content layer only, as the bucket path
+    m_frame_passes.parameters.emplace(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
             .command_buffer        = command_buffer,
             .view_camera           = camera,
@@ -764,7 +777,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .light_camera_viewport = m_viewport,
             .texture               = m_texture,
             .render_passes         = m_render_passes,
-            .mesh_spans            = {},
+            .mesh_spans            = m_no_mesh_spans,
             .light_set             = light_set,
             .joint_poses           = scene_root->get_render_joint_poses(frame_index),
             // The set that matches the path this light takes: the draw list's
@@ -791,15 +804,50 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .point_cube_render_passes = &m_point_render_passes,
             .point_shadow_viewport    = m_point_viewport,
             .draw_list_scene          = draw_list_scene,
-            .draw_list_layers         = draw_list_layers,
+            .draw_list_layers         = m_frame_passes.draw_list_layers,
             .draw_statistics          = &result.draw_statistics,
             .exclude_unlit_casters    = exclude_unlit_casters,
             .casters                  = casters,
             .shadow_bounds            = &root_draw_list_scene->get_shadow_bounds(frame_index)
         }
     );
+    m_context.shadow_renderer->fit(m_frame_passes.parameters.value(), m_cull_views);
     m_distance_fallback_light_ids = result.light_projections.distance_fallback_light_ids;
     publish_light_copies(result, light_set, *camera);
+}
+
+void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    // The pre-execute hook of this frame reset the result and fitted the
+    // passes (Rendergraph::execute() runs it for every node it executes).
+    const uint64_t       frame_index = m_context.graphics_device->get_frame_index();
+    Shadow_frame_result& result      = m_frame_results.write(frame_index);
+    ERHE_VERIFY(m_frame_passes.frame_index == frame_index);
+
+    {
+        const Cpu_time_scope cpu_time_scope{result.cpu_time_us};
+        if (m_frame_passes.parameters.has_value()) {
+            const erhe::scene_renderer::Shadow_renderer::Render_parameters& parameters = m_frame_passes.parameters.value();
+            // The frame command buffer the hook fitted with.
+            ERHE_VERIFY(&parameters.command_buffer == &command_buffer);
+            m_context.shadow_renderer->draw(parameters, m_cull_views);
+        }
+    }
+    // The frame's parameters and scene root go with the frame.
+    m_frame_passes.parameters.reset();
+    m_frame_passes.scene_root.reset();
+
+    // The render phase's running totals, with this frame's time (hook and
+    // execute).
+    m_total_cpu_time_us += result.cpu_time_us;
+    ++m_execute_count;
+    result.total_cpu_time_us = m_total_cpu_time_us;
+    result.execute_count     = m_execute_count;
 }
 
 void Shadow_render_node::publish_light_copies(

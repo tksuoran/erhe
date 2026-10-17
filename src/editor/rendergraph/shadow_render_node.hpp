@@ -11,6 +11,7 @@
 
 #include <array>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -23,11 +24,12 @@
 namespace erhe::dataformat     { enum class Format : unsigned int; }
 namespace erhe::graphics       { class Command_buffer; class Device; class Gpu_timer; }
 namespace erhe::scene          { class Camera; class Light; }
-namespace erhe::scene_renderer { class Light_projections; }
+namespace erhe::scene_renderer { class Draw_list_scene; class Light_projections; class Render_bucket_snapshot; }
 
 namespace editor {
 
 class App_context;
+class Scene_root;
 class Scene_view;
 class Viewport_scene_view;
 
@@ -77,7 +79,8 @@ public:
     // (doc/erhe/draw_list_renderer.md Q6); empty on the bucket path and on
     // the frames that rendered no shadow maps.
     erhe::scene_renderer::Shadow_draw_statistics draw_statistics;
-    // CPU wall time of this execute_rendergraph_node() (P4 measurement,
+    // CPU wall time of this frame's pre_execute_rendergraph_node() and
+    // execute_rendergraph_node() (P4 measurement,
     // doc/erhe/draw_list_renderer.md), and the running total and execute
     // count since construction up to and including this frame.
     double                                       cpu_time_us      {0.0};
@@ -109,6 +112,12 @@ public:
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Shadow_render_node"; }
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
+    // Applies the frame's configuration, fits the light projections
+    // (Shadow_renderer::fit()) and, on the draw-list path, adds the passes'
+    // culling views before the frame's classification (doc/plans/culling.md
+    // phase 6a); execute_rendergraph_node() draws the passes
+    // (Shadow_renderer::draw()).
+    void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     auto get_producer_output_texture (int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
     auto inputs_allowed() const -> bool override;
@@ -124,7 +133,7 @@ public:
     // the render settings copy's shadow technique (depth / distance) and
     // copies the requested configuration into this frame's slot. The render
     // phase of the frame applies it at the start of
-    // execute_rendergraph_node(), with the frame command buffer: the shadow
+    // pre_execute_rendergraph_node(), with the frame command buffer: the shadow
     // maps and render passes are created, replaced and dropped by the render
     // phase only, which is the only phase that reads them.
     void prepare();
@@ -177,6 +186,29 @@ private:
     // copied into its slot; a frame whose prepare phase did not run for this
     // node (it was created after that step) keeps the current configuration.
     void apply_requested_configuration(erhe::graphics::Command_buffer& command_buffer);
+
+    // What pre_execute_rendergraph_node() decided for the frame's shadow
+    // passes: the render parameters Shadow_renderer::fit() ran with, which
+    // execute_rendergraph_node() of the same frame hands to
+    // Shadow_renderer::draw(), so both see the same inputs (render phase
+    // owned; the render phase renders one frame at a time).
+    class Frame_passes
+    {
+    public:
+        uint64_t                                                                frame_index{std::numeric_limits<uint64_t>::max()};
+        // Keeps the frame's scene root (the parameters' joint poses,
+        // material set and draw list scene) alive until execute drew.
+        std::shared_ptr<Scene_root>                                             scene_root {};
+        // Empty: the frame has no shadow passes (execute draws nothing).
+        std::optional<erhe::scene_renderer::Shadow_renderer::Render_parameters> parameters{};
+        std::array<uint64_t, 1>                                                 draw_list_layers{}; // the content layer id
+    };
+    Frame_passes                                              m_frame_passes;
+    erhe::scene_renderer::Shadow_renderer::Cull_views         m_cull_views;
+    // Render_parameters::mesh_spans of the frame's parameters (the editor
+    // hands Shadow_renderer no meshes: it reads the prepared bounds and
+    // casters).
+    std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>> m_no_mesh_spans; // default constructed: empty
 
     // Render phase owned: the running CPU time totals.
     double      m_total_cpu_time_us{0.0};

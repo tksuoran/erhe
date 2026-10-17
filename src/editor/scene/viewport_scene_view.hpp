@@ -2,6 +2,7 @@
 
 #include "renderers/composer.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_render_state.hpp"
 
@@ -13,7 +14,9 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -147,6 +150,12 @@ public:
     void record_grid(const Grid_pass_state& grid);
 
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
+    // Render phase, before the frame's culling classification: builds the
+    // frame's render context (the one execute_rendergraph_node() and
+    // render_overlay_pass() draw with) and adds the color culling views of
+    // the view's draw-list passes from it (Composer::add_cull_views();
+    // doc/plans/culling.md phase 6a).
+    void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Post-processing overlay pass (issue #230). Called by Viewport_overlay_node
     // AFTER the post-processing node when post-processing is enabled. Draws the
@@ -273,6 +282,12 @@ private:
     std::vector<Viewport_render_state>           m_render_states;
     // This view's prepared composition, one slot per frame in flight.
     Composer_frame_slots                         m_composer_slots;
+    // Render phase owned, the frame being rendered: the render context
+    // pre_execute_rendergraph_node() built (empty when the node renders
+    // nothing this frame) and the single view its views span names.
+    erhe::scene_renderer::Camera_view_input      m_frame_view_input{};
+    std::optional<Render_context>                m_frame_context;
+    uint64_t                                     m_frame_context_frame_index{std::numeric_limits<uint64_t>::max()};
 };
 
 }

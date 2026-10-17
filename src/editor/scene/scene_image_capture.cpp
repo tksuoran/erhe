@@ -270,12 +270,58 @@ void Scene_image_view::copy_shadow_projections()
     }
 }
 
+void Scene_image_view::pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    const uint64_t frame_index = m_rendergraph.get_graphics_device().get_frame_index();
+    m_frame_context.reset();
+    m_frame_context_frame_index = frame_index;
+    // The scene root and camera as this frame's render view copy
+    // (prepare_composition()); the gates execute_rendergraph_node() renders
+    // under.
+    Render_view&                       render_view = get_render_view();
+    const std::shared_ptr<Scene_root>& scene_root  = render_view.scene_root;
+    if (!scene_root || !m_camera || (m_viewport.width < 1) || (m_viewport.height < 1)) {
+        return;
+    }
+
+    // The camera as the copy the constructor took (main thread, at the
+    // request); the render phase reads no live camera.
+    m_frame_view_input = erhe::scene_renderer::Camera_view_input{
+        .camera      = get_render_camera(),
+        .viewport    = m_viewport,
+        .pixel_scale = (m_context.context_window != nullptr) ? m_context.context_window->get_scale_factor() : 1.0f
+    };
+    Composer_prepared& prepared = m_composer_slots.get_render_prepared(frame_index);
+    m_frame_context.emplace(
+        Render_context{
+            .command_buffer      = &command_buffer,
+            .encoder             = nullptr,
+            .app_context         = m_context,
+            .scene_view          = *this,
+            .viewport_config     = render_view.viewport_config,
+            .camera              = nullptr,
+            .camera_snapshot     = get_render_camera(),
+            .viewport_scene_view = nullptr,
+            .scene_root          = scene_root,
+            .viewport            = m_viewport,
+            .shader_debug        = m_shader_debug,
+            .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&m_frame_view_input, 1),
+            .content             = m_content,
+            // The composition the prepare phase decided for this frame.
+            .composer_prepared   = &prepared
+        }
+    );
+    m_context.app_rendering->add_composer_cull_views(m_frame_context.value(), prepared);
+}
+
 void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // The scene root and camera as this frame's render view copy
-    // (prepare_composition()).
     erhe::utility::Thread_roles::assert_render_thread();
     erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
     Render_view&                      render_view = get_render_view();
@@ -284,31 +330,14 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
         return;
     }
 
-    // The camera as the copy the constructor took (main thread, at the
-    // request); the render phase reads no live camera.
-    const erhe::scene_renderer::Camera_view_input single_view_input{
-        .camera      = get_render_camera(),
-        .viewport    = m_viewport,
-        .pixel_scale = (m_context.context_window != nullptr) ? m_context.context_window->get_scale_factor() : 1.0f
-    };
-    Render_context context{
-        .command_buffer      = &command_buffer,
-        .encoder             = nullptr,
-        .app_context         = m_context,
-        .scene_view          = *this,
-        .viewport_config     = render_view.viewport_config,
-        .camera              = nullptr,
-        .camera_snapshot     = get_render_camera(),
-        .viewport_scene_view = nullptr,
-        .scene_root          = scene_root,
-        .viewport            = m_viewport,
-        .shader_debug        = m_shader_debug,
-        .shadow_debug_light_index = resolve_shadow_debug_light_index(),
-        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
-        .content             = m_content,
-        // The composition the prepare phase decided for this frame.
-        .composer_prepared   = &m_composer_slots.get_prepared(m_rendergraph.get_graphics_device().get_frame_index())
-    };
+    // The frame's render context, built (with the composition's culling
+    // views) by pre_execute_rendergraph_node() under the same gates.
+    ERHE_VERIFY((m_frame_context_frame_index == m_rendergraph.get_graphics_device().get_frame_index()) && m_frame_context.has_value());
+    Render_context context = m_frame_context.value();
+    ERHE_VERIFY(context.command_buffer == &command_buffer);
+    // The light slots are assigned by this view's own shadow pass, which
+    // fitted the frame's projections in its pre-execute hook.
+    context.shadow_debug_light_index = resolve_shadow_debug_light_index();
     copy_shadow_projections();
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();

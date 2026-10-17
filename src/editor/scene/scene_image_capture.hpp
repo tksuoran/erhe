@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -126,6 +127,11 @@ public:
     // Implements Rendergraph_node
     auto get_type_name           () const -> std::string_view override { return "Scene_image_view"; }
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
+    // Render phase, before the frame's culling classification: builds the
+    // frame's render context (the one execute_rendergraph_node() draws
+    // with) and adds the color culling views of the view's draw-list passes
+    // from it (Composer::add_cull_views(); doc/plans/culling.md phase 6a).
+    void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // M2, the last step (App_rendering::prepare_composition, which lists this
     // view while it exists): prepares the composition the render phase draws
@@ -178,6 +184,12 @@ private:
     bool                                  m_has_rendered{false};
     // The prepared composition, one slot per frame in flight.
     Composer_frame_slots                  m_composer_slots;
+    // Render phase owned, the frame being rendered: the render context
+    // pre_execute_rendergraph_node() built (empty when the view renders
+    // nothing this frame) and the single view its views span names.
+    erhe::scene_renderer::Camera_view_input m_frame_view_input{};
+    std::optional<Render_context>         m_frame_context;
+    uint64_t                              m_frame_context_frame_index{std::numeric_limits<uint64_t>::max()};
     // The camera, viewport config and camera viewport copied at the
     // request; published as the render view copy of every frame the view
     // prepares (prepare_composition()).
