@@ -20,6 +20,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/draw_indirect_buffer.hpp
     erhe_scene_renderer/forward_renderer.cpp
     erhe_scene_renderer/forward_renderer.hpp
+    erhe_scene_renderer/gpu_cull_classifier.cpp
+    erhe_scene_renderer/gpu_cull_classifier.hpp
     erhe_scene_renderer/glyph_buffer.cpp
     erhe_scene_renderer/glyph_buffer.hpp
     erhe_scene_renderer/joint_buffer.cpp
@@ -58,6 +60,7 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/texel_renderer.cpp
     erhe_scene_renderer/texel_renderer.hpp
 
+    erhe_scene_renderer/cull_classification.hpp
     erhe_scene_renderer/cull_lanes.cpp
     erhe_scene_renderer/cull_lanes.hpp
     erhe_scene_renderer/draw_list_entry.cpp
@@ -70,6 +73,7 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/draw_list_renderer.hpp
     erhe_scene_renderer/draw_list_scene.cpp
     erhe_scene_renderer/draw_list_scene.hpp
+    erhe_scene_renderer/draw_list_scene_gpu_cull.cpp
     erhe_scene_renderer/draw_list.cpp
     erhe_scene_renderer/draw_list.hpp
 )

@@ -252,6 +252,44 @@ Each phase lands on its own, verified, before the next starts.
 5. **GPU classification.** Upload the SoA bounds at publish (change-driven, a
    few floats per entry) and the view set per frame; a compute pass writes the
    mask buffer. Consumed by phase 6; alone it only moves the work.
+   Done: `Gpu_cull_classifier` (device-wide: the pipeline of
+   `res/shaders/cull_classify.comp`, ring buffer clients) and the
+   `Draw_list_scene` GPU half (`draw_list_scene_gpu_cull.cpp`), gated by the
+   editor setting `culling_classification` (`cpu` default, `gpu`; Settings
+   window, MCP `set_culling_classification`), which reaches `publish()`
+   through the frame's `Render_settings` snapshot and is recorded in the
+   published slot; the device capability is native multi-draw indirect plus
+   `Record_indexing::first_instance`, so the emulated path, Metal and the null
+   device stay on the CPU path (logged once). `publish()` under `gpu` keeps
+   one host-visible bounds buffer per frame slot (all lists back to back, two
+   `vec4` per entry, a skinned list unbounded) and writes only the lists
+   whose serial or offset differs from what that slot's buffer holds. A
+   dispatch cannot be recorded inside a render pass, so the GPU batches are:
+   `Shadow_renderer`'s views, dispatched by `record_cull_classification()`
+   before its first pass, and the views classified inside passes (the color
+   views, and a later shadow node's batch picks up an earlier viewport's
+   color view), dispatched by `Gpu_cull_classifier::record_pending()` after
+   the rendergraph. Each batch writes its own mask region (one `uvec2` per
+   entry per 64-view group it touches), no read-modify-write between
+   batches, and no barrier after it until phase 6 reads the masks. The shader repeats the lane tests with `precise` intermediates.
+   Gate (MCP `get_cull_classification_check`, the GPU regions read back and
+   compared bit for bit with the same frame's CPU masks): 0 mismatches on
+   default (14 entries, 5 views), heavy (2514, 19), draws (2514, 2), heavy in
+   four view (34 views, 5 dispatches) and heavy with 8+8+8 shadowed lights in
+   four view (92 views, two groups); a deliberately wrong plane test gives
+   178 mismatches on heavy. Images and per-pass counts byte- and
+   count-identical to phase 4 at `cpu` and `gpu` (default, heavy, draws;
+   heavy in both render thread modes); heavy with Vulkan validation: no
+   errors, the known warnings only. Release MSVC, Intel iGPU, heavy, 15 s
+   per run: `classify_cull_views` 21.7 -> 22.0 us mean per call (the CPU
+   classification still runs), dispatch recording 15.8 us median per call
+   (two per frame, 10 us self), `Gpu_cull_classifier::record_pending` 11 us
+   median, the bounds write 0.2 us on a frame where no list changed and 7.4 us
+   median on a frame where an object moved (the heavy scene has one color
+   and one shadow list of 1257 entries each, both holding the object, so a
+   move rewrites both: per-list writes save nothing there; per-entry dirty
+   ranges would); GPU time of the shadow
+   batch 8 to 24 us, of the frame-end color batch about 2 us.
 6. **GPU command generation.** A compute pass compacts, per view, the visible
    entries into a dense indirect command buffer and a count;
    `vkCmdDrawIndexedIndirectCount` (query `drawIndirectCount`; GL has
@@ -292,3 +330,12 @@ measured on the GPU timers.
   face with any skinned shadow list, or with an entry in range that the
   shadow filter rejects (not a caster), is never skipped. A per-pass caster
   mask applied to the count is the fix if it matters.
+- The color views are classified inside their render passes; phase 6 needs
+  a pre-draw view hook so every view of the frame is classified before the
+  first draw-list pass (then the end-of-frame dispatch and
+  `Gpu_cull_classifier::record_pending()` go away).
+- With a node selected and moved (MCP `transform_selection` twice a second
+  on the heavy scene), the draw lists change on every frame, also between
+  the moves: `flush_pending` about 440 us per frame, a list copy and a bounds
+  write per frame. Pre-existing and untraced; the follow-up is which hook
+  fires every frame (transform serial, bounds or material).

@@ -3,6 +3,7 @@
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/draw_list_object.hpp"
+#include "erhe_scene_renderer/cull_classification.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
@@ -23,7 +24,10 @@
 
 namespace erhe::graphics {
     class Base_render_pipeline;
+    class Buffer;
     class Color_blend_state;
+    class Command_buffer;
+    class Gpu_timer;
     class Render_command_encoder;
     class Render_pass;
     class Render_pipeline;
@@ -33,6 +37,8 @@ namespace erhe::scene_renderer {
 
 class Caster_vertex_extent;
 class Draw_indirect_buffer;
+class Gpu_cull_check;
+class Gpu_cull_classifier;
 class Mesh_memory;
 class Primitive_buffer;
 class Shader_variant_cache;
@@ -182,6 +188,56 @@ public:
     // Initial value of set_exclude_unlit_from_shadows(), so a new instance
     // classifies its first registrations with the caller's setting.
     bool                       exclude_unlit_from_shadows{false};
+    // The device's GPU culling classifier (doc/plans/culling.md phase 5);
+    // nullptr: the CPU path only, whatever publish() is asked for.
+    Gpu_cull_classifier*       gpu_cull_classifier{nullptr};
+};
+
+// One (entry, view) whose GPU classification bit differs from the CPU bit
+// (Draw_list_scene::poll_cull_classification_check()).
+class Cull_classification_mismatch
+{
+public:
+    uint32_t entry_index{0};
+    uint32_t view       {0};
+    uint32_t cpu_bit    {0};
+    uint32_t gpu_bit    {0};
+};
+
+class Cull_classification_list_check
+{
+public:
+    uint32_t                                  list_index    {0};
+    Draw_purpose                              purpose       {Draw_purpose::color};
+    uint32_t                                  entry_count   {0};
+    std::size_t                               mismatch_count{0};
+    // The first few mismatches of the list.
+    std::vector<Cull_classification_mismatch> mismatches;
+};
+
+// The comparison of the GPU masks against the CPU masks of one frame.
+class Cull_classification_check
+{
+public:
+    uint64_t                                    frame_index            {0};
+    uint32_t                                    entry_count            {0}; // all published lists
+    uint32_t                                    view_count             {0}; // views the CPU classified
+    uint32_t                                    dispatch_count         {0};
+    std::size_t                                 mismatch_count         {0};
+    // Gpu_timer last results, nanoseconds: [0] the first dispatch of a
+    // frame recorded by record_cull_classification() (Shadow_renderer's
+    // batch), [1] the dispatch recorded at the end of the frame
+    // (Gpu_cull_classifier::record_pending(): the color views). The latest
+    // completed measurements, not necessarily those of the checked frame.
+    std::array<uint64_t, 2>                     gpu_time_ns            {0, 0};
+    std::vector<Cull_classification_list_check> lists;
+};
+
+enum class Cull_classification_check_state : uint8_t
+{
+    idle,     // nothing requested
+    pending,  // requested, or recorded and in flight
+    complete  // the result is ready (poll_cull_classification_check() returns it once)
 };
 
 // Persistent, incrementally maintained rendering-side representation of a
@@ -288,7 +344,19 @@ public:
     // A frame in which nothing changed copies nothing; a change is copied
     // into each slot once. The caller holds item_host_mutex, as for
     // flush_pending() (the joint slot rewrite reads the meshes).
-    void publish           (uint64_t frame_index, std::size_t frames_in_flight);
+    // classification is the frame's culling classification setting
+    // (doc/plans/culling.md phase 5), recorded in the slot for the render
+    // phase. gpu, when the create info's Gpu_cull_classifier is supported,
+    // also writes into the slot's GPU bounds buffer the bounds of the lists
+    // whose slot copy changed or moved since the slot's last write (a frame
+    // in which nothing changed writes nothing), for the render phase's
+    // compute classification; refused (logged once), the slot records cpu.
+    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification);
+    // The classification the last publish() recorded (main thread).
+    [[nodiscard]] auto get_cull_classification() const -> Cull_classification { return m_published_cull_classification; }
+    // Diagnostics: list bounds ranges publish() wrote to the slots' GPU
+    // bounds buffers (a frame in which no list changed adds none).
+    [[nodiscard]] auto get_gpu_bounds_write_count() const -> std::size_t { return m_gpu_bounds_write_count; }
     [[nodiscard]] auto get_pending_count() const -> std::size_t;
 
     // Number of registered-vs-observed negative-determinant mismatches seen
@@ -366,6 +434,20 @@ public:
     // so a pass can skip its draw setup (Shadow_renderer's empty cube
     // faces). True for Cull_view::none.
     [[nodiscard]] auto has_cull_view_survivors(uint64_t frame_index, Cull_view cull_view) -> bool;
+    // Render thread, render phase, outside any render pass: classifies
+    // every view added for frame_index so far (the CPU masks, one batch),
+    // and when the frame's slot was published for the GPU classification
+    // records the compute dispatch of the views no dispatch covered yet
+    // (doc/plans/culling.md phase 5). Shadow_renderer calls it after adding
+    // its views, before its first pass. A frame without views does nothing.
+    void record_cull_classification(uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer);
+    // Diagnostic comparison of the GPU masks against the CPU masks (main
+    // thread): request_...() asks the render phase to read back the GPU
+    // masks of the next frame classified on the GPU and to keep that
+    // frame's CPU masks; poll_...() returns complete, filling out, once the
+    // frame retired and the comparison ran, and is idle again after that.
+    void request_cull_classification_check();
+    [[nodiscard]] auto poll_cull_classification_check(Cull_classification_check& out) -> Cull_classification_check_state;
     // The shadow frustum fit's inputs from the registered objects, prepared
     // once per frame in the prepare phase (main thread, after
     // flush_pending()) into the frame-in-flight slot frame_index %
@@ -565,6 +647,26 @@ private:
     // since the last classification when cull_view is one of them
     // (add_cull_view()); verifies cull_view belongs to frame_index.
     void classify_cull_views(uint64_t frame_index, Cull_view cull_view);
+    // --- GPU classification (draw_list_scene_gpu_cull.cpp) ---
+    friend class Gpu_cull_classifier;
+    class Draw_list_slot;
+    // publish(): copies the working lists whose serial moved into the slot
+    // and lays the lists out back to back (Draw_list_slot::entry_offsets).
+    void copy_to_slot(Draw_list_slot& slot);
+    // publish(): the GPU half of the slot (main thread, prepare phase).
+    void publish_gpu_bounds(Draw_list_slot& slot);
+    // classify_cull_views(): the first classification of a frame whose slot
+    // asks for the GPU path registers this scene with the classifier and
+    // starts a requested check on this frame.
+    void begin_gpu_cull_frame(uint64_t frame_index);
+    // Records one dispatch for the CPU-classified views no dispatch covered
+    // yet, timed by m_gpu_cull_timers[timer_index] when timer_index is in
+    // range; false when there were none (nothing recorded).
+    [[nodiscard]] auto dispatch_gpu_cull_views(erhe::graphics::Command_buffer& command_buffer, std::size_t timer_index) -> bool;
+    // Gpu_cull_classifier::record_pending(): the remaining dispatch, the
+    // check's CPU half, and the end of the frame's GPU classification.
+    void finish_gpu_cull_frame(erhe::graphics::Command_buffer& command_buffer);
+    [[nodiscard]] static auto make_gpu_cull_check() -> std::shared_ptr<Gpu_cull_check>;
     enum class Cull_view_kind : uint8_t
     {
         planes,    // the planes alone
@@ -638,7 +740,26 @@ private:
         // The frame the slot was last published for.
         uint64_t               frame_index{0};
         bool                   published  {false};
+        // The culling classification publish() recorded for the frame.
+        Cull_classification    classification{Cull_classification::cpu};
+        // Per list: its first entry in the lists back to back (the GPU
+        // bounds and mask layout); and the entries of all lists.
+        std::vector<uint32_t>  entry_offsets;
+        uint32_t               entry_count{0};
+        // The slot's GPU bounds (gpu publishes only): the lists back to back
+        // (Gpu_cull_classifier::bounds_bytes_per_entry per entry), host
+        // visible, written by the prepare phase of the slot's frames only.
+        // The slot's previous frame retired before its prepare phase
+        // (Device::acquire_frame_slot() waits for frame - frames in flight),
+        // so a write never races the GPU, and one buffer per slot keeps
+        // every unchanged list's range: a publish writes the lists whose
+        // serial or offset differs from what the slot's buffer holds.
+        std::unique_ptr<erhe::graphics::Buffer> gpu_bounds;
+        std::size_t                             gpu_bounds_capacity{0};
+        std::vector<uint64_t>                   gpu_bounds_serials;  // per list: serial written, 0 none
+        std::vector<uint32_t>                   gpu_bounds_offsets;  // per list: entry offset written
     };
+    [[nodiscard]] auto get_published_slot(uint64_t frame_index) const -> const Draw_list_slot&;
 
     // Declared BEFORE m_objects: a Draw_list_object holds Material_slot_ids
     // into this set, so the set must outlive the objects that name its slots.
@@ -766,6 +887,36 @@ private:
     std::vector<Draw_list_slot>                                      m_draw_list_slots;
     uint64_t                                                         m_shadow_bounds_serial{1};
     std::size_t                                                      m_shadow_bounds_gather_count{0};
+
+    // GPU classification (doc/plans/culling.md phase 5), main thread. The
+    // GPU bounds live in the frame slots (Draw_list_slot::gpu_bounds); the
+    // timers are created at the first gpu publish.
+    Gpu_cull_classifier*                                             m_gpu_cull_classifier{nullptr};
+    Cull_classification                                              m_published_cull_classification{Cull_classification::cpu};
+    bool                                                             m_gpu_cull_refusal_logged{false};
+    std::size_t                                                      m_gpu_bounds_write_count{0};
+    std::array<std::unique_ptr<erhe::graphics::Gpu_timer>, 2>        m_gpu_cull_timers;
+    // Render thread: the GPU classification of the frame being rendered,
+    // one batch per dispatch: its views and the mask region it wrote
+    // (cull_classify.comp layout). The region's range is released at the
+    // dispatch; its memory stays valid until the frame retired.
+    class Gpu_cull_batch
+    {
+    public:
+        uint32_t                      first_view {0};
+        uint32_t                      end_view   {0};
+        const erhe::graphics::Buffer* buffer     {nullptr}; // null: no entries
+        std::size_t                   byte_offset{0};
+        std::size_t                   byte_count {0};
+    };
+    std::vector<Gpu_cull_batch>                                      m_gpu_cull_batches;
+    std::size_t                                                      m_gpu_dispatched_view_count{0};
+    uint64_t                                                         m_gpu_cull_frame_index{0};
+    bool                                                             m_gpu_cull_frame_open{false};
+    bool                                                             m_gpu_cull_first_timer_used{false};
+    // The check request and its read back state, shared with the
+    // completion handlers that copy the mask readbacks.
+    std::shared_ptr<Gpu_cull_check>                                  m_gpu_cull_check;
 };
 
 } // namespace erhe::scene_renderer

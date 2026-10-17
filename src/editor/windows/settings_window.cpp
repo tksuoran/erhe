@@ -22,6 +22,7 @@
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
+#include "config/generated/culling_classification.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/graph_node_previews_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
@@ -631,6 +632,11 @@ void Settings_window::imgui()
                 m_context.app_scenes->set_exclude_unlit_from_shadows(settings.exclude_unlit_primitives);
             }
         }, "Unlit (KHR_materials_unlit) primitives - sky domes, backdrops, emissive decals - do not cast shadows and are ignored when framing the camera on scene open. They still count toward the camera far plane.");
+        add_entry("Culling Classification", [&settings](){
+            // The render settings snapshot carries the value to the draw
+            // lists' publish (doc/plans/culling.md phase 5).
+            static_cast<void>(imgui_enum_combo("##", settings.culling_classification));
+        }, "Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU (devices with native multi-draw indirect and first-instance record indexing; others use the CPU). The CPU result drives the draws in both modes.");
         add_config_section(settings.camera_controls);
         // Default Visual Style for new viewports - shown near the top since it
         // is one of the more commonly edited sections.

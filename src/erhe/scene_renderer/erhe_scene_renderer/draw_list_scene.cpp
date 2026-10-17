@@ -1,12 +1,15 @@
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/cull_lanes.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 
 #include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -262,6 +265,7 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     , m_multiview_view_counts  {create_info.multiview_view_counts.begin(), create_info.multiview_view_counts.end()}
     , m_owner_thread_id        {std::this_thread::get_id()}
     , m_exclude_unlit_from_shadows{create_info.exclude_unlit_from_shadows}
+    , m_gpu_cull_classifier    {create_info.gpu_cull_classifier}
 {
     ERHE_VERIFY(create_info.mesh_memory          != nullptr);
     ERHE_VERIFY(create_info.shader_variant_cache != nullptr);
@@ -272,6 +276,7 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     m_shadow_record_upload = (m_primitive_interface.record_indexing == erhe::graphics::Record_indexing::first_instance)
         ? Shadow_record_upload::shared
         : Shadow_record_upload::per_pass;
+    m_gpu_cull_check = make_gpu_cull_check();
 }
 
 Draw_list_scene::~Draw_list_scene() noexcept = default;
@@ -1367,7 +1372,7 @@ void Draw_list_scene::flush_pending()
 
 // --- Publishing (prepare phase) -------------------------------------------------
 
-void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t frames_in_flight)
+void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t frames_in_flight, const Cull_classification classification)
 {
     ERHE_PROFILE_FUNCTION();
     assert_main_thread();
@@ -1389,9 +1394,33 @@ void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t fram
     Draw_list_slot& slot = m_draw_list_slots[frame_index % frames_in_flight];
     slot.frame_index = frame_index;
     slot.published   = true;
-    if ((slot.serial == m_draw_list_serial) && (slot.lists.size() == m_draw_lists.size())) {
-        return; // no list changed since this slot was last published
+
+    // The GPU classification needs the device's support (doc/plans/
+    // culling.md "Two complete paths"); without it the CPU path classifies.
+    Cull_classification effective_classification = classification;
+    if (
+        (classification == Cull_classification::gpu) &&
+        ((m_gpu_cull_classifier == nullptr) || !m_gpu_cull_classifier->is_supported())
+    ) {
+        if (!m_gpu_cull_refusal_logged) {
+            log_draw_list->warn("GPU culling classification is not available on this device; the CPU path classifies");
+            m_gpu_cull_refusal_logged = true;
+        }
+        effective_classification = Cull_classification::cpu;
     }
+    slot.classification             = effective_classification;
+    m_published_cull_classification = effective_classification;
+
+    if ((slot.serial != m_draw_list_serial) || (slot.lists.size() != m_draw_lists.size())) {
+        copy_to_slot(slot);
+    }
+    if (effective_classification == Cull_classification::gpu) {
+        publish_gpu_bounds(slot);
+    }
+}
+
+void Draw_list_scene::copy_to_slot(Draw_list_slot& slot)
+{
     slot.serial = m_draw_list_serial;
 
     // Lists are only ever appended, except by rebuild_all(), which recreates
@@ -1416,16 +1445,31 @@ void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t fram
         destination.serial = source.serial;
         ++m_published_list_copy_count;
     }
+
+    // The lists back to back: the GPU bounds and mask layout
+    // (publish_gpu_bounds(), cull_classify.comp).
+    slot.entry_offsets.resize(slot.lists.size());
+    uint32_t entry_offset = 0;
+    for (std::size_t i = 0, end = slot.lists.size(); i < end; ++i) {
+        slot.entry_offsets[i] = entry_offset;
+        entry_offset += static_cast<uint32_t>(slot.lists[i].entries.size());
+    }
+    slot.entry_count = entry_offset;
+}
+
+auto Draw_list_scene::get_published_slot(const uint64_t frame_index) const -> const Draw_list_slot&
+{
+    ERHE_VERIFY(!m_draw_list_slots.empty());
+    const Draw_list_slot& slot = m_draw_list_slots[frame_index % m_draw_list_slots.size()];
+    ERHE_VERIFY(slot.published && (slot.frame_index == frame_index));
+    return slot;
 }
 
 auto Draw_list_scene::get_published_draw_lists(const uint64_t frame_index) const -> const std::vector<Draw_list>&
 {
-    ERHE_VERIFY(!m_draw_list_slots.empty());
-    const Draw_list_slot& slot = m_draw_list_slots[frame_index % m_draw_list_slots.size()];
     // The prepare phase of this frame published the slot (and the prepare
     // phase of no later frame has reused it yet).
-    ERHE_VERIFY(slot.published && (slot.frame_index == frame_index));
-    return slot.lists;
+    return get_published_slot(frame_index).lists;
 }
 
 // --- Resolution (render phase) --------------------------------------------------
@@ -1856,6 +1900,12 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     // frame (Shadow_record_scope).
     ERHE_VERIFY(!m_shadow_record_scope_open);
     ERHE_VERIFY(m_shadow_record_lists.empty());
+    // The previous frame's GPU classification ended in its frame
+    // (Gpu_cull_classifier::record_pending()).
+    ERHE_VERIFY(!m_gpu_cull_frame_open);
+    m_gpu_cull_batches.clear();
+    m_gpu_dispatched_view_count  = 0;
+    m_gpu_cull_first_timer_used  = false;
     m_cull_frame_started         = true;
     m_cull_frame_index           = frame_index;
     m_cull_views.clear();
@@ -1953,6 +2003,25 @@ auto Draw_list_scene::has_cull_view_survivors(const uint64_t frame_index, const 
     return m_cull_view_survivors[static_cast<std::size_t>(cull_view)] > 0;
 }
 
+void Draw_list_scene::record_cull_classification(const uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer)
+{
+    assert_render_phase();
+    if (!m_cull_frame_started || (m_cull_frame_index != frame_index) || m_cull_views.empty()) {
+        return;
+    }
+    classify_cull_views(frame_index, static_cast<Cull_view>(m_cull_views.size() - 1));
+    if (get_published_slot(frame_index).classification != Cull_classification::gpu) {
+        return;
+    }
+    // The first such dispatch of the frame is timed (Shadow_renderer's
+    // batch); a later one (another shadow node's) is not, a timer measuring
+    // at most one range per frame.
+    const std::size_t timer_index = m_gpu_cull_first_timer_used ? m_gpu_cull_timers.size() : std::size_t{0};
+    if (dispatch_gpu_cull_views(command_buffer, timer_index)) {
+        m_gpu_cull_first_timer_used = true;
+    }
+}
+
 void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull_view cull_view)
 {
     if (cull_view == Cull_view::none) {
@@ -1978,7 +2047,11 @@ void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull
         batch_has_purpose[static_cast<std::size_t>(m_cull_views[view_index].purpose)] = true;
     }
 
-    const std::vector<Draw_list>& draw_lists = get_published_draw_lists(frame_index);
+    const Draw_list_slot&         slot       = get_published_slot(frame_index);
+    const std::vector<Draw_list>& draw_lists = slot.lists;
+    if (slot.classification == Cull_classification::gpu) {
+        begin_gpu_cull_frame(frame_index);
+    }
     if (m_cull_masks.size() < draw_lists.size()) {
         m_cull_masks.resize(draw_lists.size());
     }

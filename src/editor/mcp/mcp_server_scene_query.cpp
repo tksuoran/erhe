@@ -22,7 +22,10 @@
 #include "windows/transform_update_stats.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/lightmap_partitioner.hpp"
+#include "config/generated/culling_classification.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
@@ -335,6 +338,11 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         {"refresh_count",                  draw_list_scene->get_refresh_count()},
         {"slot_sync_count",                draw_list_scene->get_slot_sync_count()},
         {"published_list_copy_count",      draw_list_scene->get_published_list_copy_count()},
+        // The culling classification the last publish recorded and the GPU
+        // bounds writes it made (doc/plans/culling.md phase 5; unchanged on
+        // an idle scene).
+        {"cull_classification",            erhe::scene_renderer::c_str(draw_list_scene->get_cull_classification())},
+        {"gpu_bounds_write_count",         draw_list_scene->get_gpu_bounds_write_count()},
         // Material persistence (doc/erhe/draw_list_material_set.md R10, R11):
         // how many copies each of this root's two material sets has written,
         // and how many record bytes. Sampling these N frames apart on a
@@ -367,6 +375,115 @@ auto Mcp_server::action_set_draw_lists_enabled(const json& args) -> std::string
     m_context.app_settings->use_draw_lists_session_override = args["enabled"].get<bool>();
     return make_json_content({
         {"use_draw_lists", m_context.app_settings->get_use_draw_lists()}
+    }).dump();
+}
+
+auto Mcp_server::action_set_culling_classification(const json& args) -> std::string
+{
+    // The MCP counterpart of the Settings window's Culling Classification
+    // combo (doc/plans/culling.md phase 5): edits the live editor setting,
+    // which the next frame's render settings snapshot carries to the draw
+    // lists' publish.
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("set_culling_classification: editor settings not available");
+    }
+    if (args.contains("mode")) {
+        const json& value = args["mode"];
+        Culling_classification parsed{};
+        if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+            return make_error_content("set_culling_classification: 'mode' must be \"cpu\" or \"gpu\"");
+        }
+        m_context.editor_settings->culling_classification = parsed;
+    }
+    const erhe::scene_renderer::Gpu_cull_classifier* classifier = m_context.gpu_cull_classifier;
+    return make_json_content(json{
+        {"mode",          std::string{to_string(m_context.editor_settings->culling_classification)}},
+        {"gpu_supported", (classifier != nullptr) && classifier->is_supported()}
+    }).dump();
+}
+
+auto Mcp_server::query_cull_classification_check(const json& args) -> std::string
+{
+    // Compares the GPU culling masks of one frame with the CPU masks of the
+    // same frame (doc/plans/culling.md phase 5): the first pass requests the
+    // check and defers; the re-runs poll until the checked frame retired.
+    const bool continuation =
+        (m_cull_check_request != nullptr) &&
+        (m_cull_check_request == m_current_request) &&
+        (m_cull_check_enqueued_at == m_current_request->enqueued_at);
+    const std::string scene_name = continuation ? m_cull_check_scene_name : args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        m_cull_check_request = nullptr;
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    erhe::scene_renderer::Draw_list_scene* draw_list_scene = sr->get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        m_cull_check_request = nullptr;
+        return make_error_content("get_cull_classification_check: the scene has no draw lists");
+    }
+
+    if (!continuation) {
+        // The request waits for the next frame the scene's draw lists
+        // classify on the GPU (a setting edited in this same batch reaches
+        // the draw lists at the next publish); it fails only when no frame
+        // can: the device has no GPU path, or the setting is cpu.
+        const erhe::scene_renderer::Gpu_cull_classifier* classifier = m_context.gpu_cull_classifier;
+        if ((classifier == nullptr) || !classifier->is_supported()) {
+            return make_error_content("get_cull_classification_check: the device has no GPU culling classification (emulated multi-draw indirect or Record_indexing::draw_position)");
+        }
+        if ((m_context.editor_settings == nullptr) || (m_context.editor_settings->culling_classification != Culling_classification::gpu)) {
+            return make_error_content("get_cull_classification_check: the culling classification setting is cpu (set_culling_classification mode=gpu first)");
+        }
+        draw_list_scene->request_cull_classification_check();
+        m_cull_check_request     = m_current_request;
+        m_cull_check_enqueued_at = m_current_request->enqueued_at;
+        m_cull_check_scene_name  = scene_name;
+        m_defer_current_request  = true;
+        return {};
+    }
+
+    erhe::scene_renderer::Cull_classification_check check{};
+    const erhe::scene_renderer::Cull_classification_check_state state = draw_list_scene->poll_cull_classification_check(check);
+    if (state == erhe::scene_renderer::Cull_classification_check_state::pending) {
+        m_defer_current_request = true;
+        return {};
+    }
+    m_cull_check_request = nullptr;
+    if (state != erhe::scene_renderer::Cull_classification_check_state::complete) {
+        return make_error_content("get_cull_classification_check: the check was dropped");
+    }
+
+    json lists = json::array();
+    for (const erhe::scene_renderer::Cull_classification_list_check& list : check.lists) {
+        json mismatches = json::array();
+        for (const erhe::scene_renderer::Cull_classification_mismatch& mismatch : list.mismatches) {
+            mismatches.push_back(json{
+                {"entry", mismatch.entry_index},
+                {"view",  mismatch.view},
+                {"cpu",   mismatch.cpu_bit},
+                {"gpu",   mismatch.gpu_bit}
+            });
+        }
+        lists.push_back(json{
+            {"list_index",     list.list_index},
+            {"purpose",        erhe::scene_renderer::c_str(list.purpose)},
+            {"entry_count",    list.entry_count},
+            {"mismatch_count", list.mismatch_count},
+            {"mismatches",     std::move(mismatches)}
+        });
+    }
+    return make_json_content(json{
+        {"scene",                   sr->get_name()},
+        {"frame_index",             check.frame_index},
+        {"entry_count",             check.entry_count},
+        {"view_count",              check.view_count},
+        {"dispatch_count",          check.dispatch_count},
+        {"mismatch_count",          check.mismatch_count},
+        {"gpu_time_first_batch_ns", check.gpu_time_ns[0]},
+        {"gpu_time_frame_end_ns",   check.gpu_time_ns[1]},
+        {"gpu_bounds_write_count",  draw_list_scene->get_gpu_bounds_write_count()},
+        {"lists",                   std::move(lists)}
     }).dump();
 }
 

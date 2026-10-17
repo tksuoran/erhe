@@ -341,6 +341,8 @@ private:
     auto query_physics_items    (const nlohmann::json& args) -> std::string;
     auto query_draw_lists       (const nlohmann::json& args) -> std::string;
     auto action_set_draw_lists_enabled(const nlohmann::json& args) -> std::string;
+    auto action_set_culling_classification(const nlohmann::json& args) -> std::string;
+    auto query_cull_classification_check  (const nlohmann::json& args) -> std::string;
     auto action_reset_composition_pass_stats(const nlohmann::json& args) -> std::string;
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;
@@ -804,6 +806,11 @@ private:
     std::chrono::steady_clock::time_point            m_ray_trace_save_enqueued_at{};
     std::string                                      m_ray_trace_save_path;
     nlohmann::json                                   m_ray_trace_save_result;
+    // get_cull_classification_check in flight (main thread only): the
+    // request whose re-runs poll the scene's check, and its scene.
+    const Queued_request*                            m_cull_check_request{nullptr};
+    std::chrono::steady_clock::time_point            m_cull_check_enqueued_at{};
+    std::string                                      m_cull_check_scene_name;
     const Queued_request*                            m_irradiance_query_request{nullptr};
     std::chrono::steady_clock::time_point            m_irradiance_query_enqueued_at{};
     nlohmann::json                                   m_irradiance_query_header;

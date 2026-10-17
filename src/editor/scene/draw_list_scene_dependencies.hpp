@@ -9,6 +9,7 @@ namespace erhe::graphics {
     class Device;
 }
 namespace erhe::scene_renderer {
+    class Gpu_cull_classifier;
     class Mesh_memory;
     class Primitive_interface;
     class Shader_variant_cache;
@@ -44,6 +45,9 @@ public:
     // Editor setting exclude_unlit_primitives at creation; later edits are
     // pushed by App_scenes::set_exclude_unlit_from_shadows().
     bool                                        exclude_unlit_from_shadows{false};
+    // The device's GPU culling classifier (doc/plans/culling.md phase 5);
+    // null: the scene's draw lists classify on the CPU only.
+    erhe::scene_renderer::Gpu_cull_classifier*  gpu_cull_classifier{nullptr};
 
     [[nodiscard]] auto is_valid() const -> bool
     {

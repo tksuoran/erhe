@@ -212,6 +212,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
@@ -1933,6 +1934,15 @@ public:
             m_rendergraph->execute(command_buffer);
         }
 
+        // The GPU culling classification of the views the passes classified
+        // inside their render passes (the color views), and the end of
+        // every draw list scene's GPU classification frame
+        // (doc/plans/culling.md phase 5): after every pass of the frame
+        // that draws draw lists, outside any render pass.
+        if (m_gpu_cull_classifier) {
+            m_gpu_cull_classifier->record_pending(command_buffer);
+        }
+
         // A ray trace output readback the main thread requested (MCP
         // set_ray_trace save_path): copied after every pass that writes or
         // samples the output texture this frame.
@@ -2766,6 +2776,18 @@ public:
                     *m_mesh_memory.get(),
                     *m_program_interface.get(),
                     *m_shader_variant_cache.get()
+                );
+            }
+            ERHE_INIT_STEP_END
+
+            // The draw lists' GPU culling classification (doc/plans/
+            // culling.md phase 5): the Draw_list_scenes of the scene roots
+            // created after this record their dispatches through it.
+            ERHE_INIT_STEP_BEGIN("Gpu_cull_classifier")
+            {
+                m_gpu_cull_classifier = std::make_unique<erhe::scene_renderer::Gpu_cull_classifier>(
+                    *m_graphics_device.get(),
+                    std::filesystem::path{"res"} / std::filesystem::path{"shaders"}
                 );
             }
             ERHE_INIT_STEP_END
@@ -3892,6 +3914,7 @@ public:
         m_app_context.text_renderer            = m_text_renderer         .get();
         m_app_context.forward_renderer         = m_forward_renderer      .get();
         m_app_context.shadow_renderer          = m_shadow_renderer       .get();
+        m_app_context.gpu_cull_classifier      = m_gpu_cull_classifier   .get();
         m_app_context.texel_renderer           = m_texel_renderer        .get();
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
         m_app_context.program_interface        = m_program_interface     .get();
@@ -5120,6 +5143,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>           m_forward_renderer;
     std::unique_ptr<erhe::scene_renderer::Draw_list_renderer>         m_draw_list_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >           m_shadow_renderer;
+    std::unique_ptr<erhe::scene_renderer::Gpu_cull_classifier>        m_gpu_cull_classifier;
     std::unique_ptr<erhe::scene_renderer::Texel_renderer >            m_texel_renderer;
     std::unique_ptr<erhe::scene_renderer::Mesh_memory     >           m_mesh_memory;
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_interface> m_content_wide_line_interface;

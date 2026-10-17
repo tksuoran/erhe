@@ -650,6 +650,57 @@ Drawing:
   `Shadow_renderer` begins an empty cube face's render pass for its clear
   and skips the rest of the face. The loops compile to SIMD code without
   intrinsics.
+  **GPU classification** (doc/plans/culling.md phase 5): the same masks are
+  also computed by a compute pass when the frame's slot records
+  `Cull_classification::gpu`. `publish(frame_index, frames_in_flight,
+  classification)` records the classification in the slot (the editor
+  passes its `culling_classification` setting from the frame's
+  `Render_settings` snapshot; a device without the capability, or a scene
+  built without `Draw_list_scene_create_info::gpu_cull_classifier`, records
+  `cpu`, logged once) and, under `gpu`, keeps the slot's GPU bounds buffer
+  current: the published lists back to back (each list's first entry in
+  `entry_offsets`), two `vec4` per entry, `(center, 0)` and `(extent,
+  purpose)`, the floats the CPU lanes read, a skinned list's entries without
+  bounds (negative extent). Each frame slot owns one host-visible buffer
+  (the slot's previous frame retired before its prepare phase, which
+  `Device::acquire_frame_slot()` waits for), and a publish writes only the
+  lists whose serial or offset differs from what that buffer holds (the
+  per-list serial `copy_to_slot()` compares; `get_gpu_bounds_write_count()`
+  counts the list ranges written), so a frame in which nothing changed
+  writes nothing and a drag writes the moved object's lists. The device-wide
+  `Gpu_cull_classifier` owns the pipeline of `res/shaders/cull_classify.comp`
+  and the ring buffer clients; it is supported on devices with native
+  multi-draw indirect and `Record_indexing::first_instance` (the GPU command
+  generation of phase 6 names records through `first_instance`), so the
+  emulated multi-draw path, Metal and the null device classify on the CPU
+  only. A dispatch cannot be recorded inside a render pass, so the render
+  phase dispatches at two points outside them:
+  `record_cull_classification(frame_index, command_buffer)`, which
+  `Shadow_renderer::render()` calls after adding its views and before its
+  first pass (it classifies every view added so far on the CPU and
+  dispatches those no dispatch covered), and
+  `Gpu_cull_classifier::record_pending(command_buffer)`, which the editor
+  calls after the rendergraph and which dispatches each registered scene's
+  remaining views (the color views, classified inside their passes) and
+  ends the scene's GPU classification frame (a new frame's first
+  `add_cull_view()` verifies it ended). Each dispatch is one batch: a
+  per-dispatch view set (eight `vec4` per view, transcribed from the CPU's
+  view tests: six planes, the range sphere, and purpose, kind, plane count
+  and cube face as small exact floats), one invocation per entry, and a mask
+  region of its own (one `uvec2` per entry per group of 64 views the batch
+  touches, at `(group - first_view / 64) * entry_count + entry`; a group the
+  batch shares with the previous batch holds only its own views' bits). The
+  shader runs the CPU lanes' tests in their expression order with every
+  intermediate `precise`, so its bits are the CPU's bits. The CPU masks keep
+  driving the draws: no pass reads the GPU masks yet, so no barrier follows
+  a dispatch (the GPU command generation adds its own).
+  `request_cull_classification_check()` / `poll_cull_classification_check()`
+  (MCP `get_cull_classification_check`) copy one frame's mask regions to
+  host memory (after a transfer barrier) and compare every bit with the same
+  frame's CPU masks; a new request replaces an earlier one (its pending
+  readbacks belong to an older generation and are dropped); two
+  `Gpu_timer`s time the first dispatch of a frame and the end-of-frame
+  dispatch.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.
@@ -870,7 +921,8 @@ Rules:
   poses are captured: `App_scenes::snapshot_render_settings()` runs, per scene
   root, `Scene_root::snapshot_render_settings` (joint pose capture),
   `prepare_shadow_bounds` and `publish_draw_lists`, the last under
-  `item_host_mutex` (the joint slot rewrite reads the meshes).
+  `item_host_mutex` (the joint slot rewrite reads the meshes), with the
+  frame's culling classification setting (Q6 "GPU classification").
 - `flush_pending()` takes the scene root's `item_host_mutex` (lock order:
   item_host_mutex, then pending mutex; swap the queue out under the pending
   mutex, then process under item_host_mutex only) so registration never reads a

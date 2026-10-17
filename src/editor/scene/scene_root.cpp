@@ -190,7 +190,8 @@ Scene_root::Scene_root(
                 .primitive_interface      = draw_list_dependencies->primitive_interface,
                 .multiview_view_counts    = std::span<const uint32_t>{draw_list_dependencies->multiview_view_counts},
                 .material_set_create_info   = draw_list_dependencies->material_set_create_info,
-                .exclude_unlit_from_shadows = draw_list_dependencies->exclude_unlit_from_shadows
+                .exclude_unlit_from_shadows = draw_list_dependencies->exclude_unlit_from_shadows,
+                .gpu_cull_classifier        = draw_list_dependencies->gpu_cull_classifier
             }
         );
     }
@@ -2090,7 +2091,7 @@ void Scene_root::prepare_shadow_bounds(const uint64_t frame_index, const std::si
     );
 }
 
-void Scene_root::publish_draw_lists(const uint64_t frame_index, const std::size_t frames_in_flight)
+void Scene_root::publish_draw_lists(const uint64_t frame_index, const std::size_t frames_in_flight, const erhe::scene_renderer::Cull_classification classification)
 {
     if (!m_draw_list_scene) {
         return;
@@ -2098,7 +2099,7 @@ void Scene_root::publish_draw_lists(const uint64_t frame_index, const std::size_
     // The joint slot rewrite reads the skinned meshes' primitives, which a
     // worker may be replacing (the same reason flush_draw_lists() locks).
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
-    m_draw_list_scene->publish(frame_index, frames_in_flight);
+    m_draw_list_scene->publish(frame_index, frames_in_flight, classification);
 }
 
 auto Scene_root::is_content_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh) const -> bool

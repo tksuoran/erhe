@@ -8855,7 +8855,7 @@
   },
   {
     "name": "get_draw_lists",
-    "description": "Inspect the scene's persistent draw lists (Draw_list_scene, doc/draw_list_renderer_requirements.md): registered object count, draw list / entry counts, pending (unflushed) change count and runtime negative-determinant flip count. verbose=true also lists every non-empty draw list with its identity key. has_draw_lists=false when the scene root has no Draw_list_scene (preview / tool scenes). Also reports resolution diagnostics: color_environment_change_count (each change re-resolves every color list), lazy_resolution_count (one-off first-use resolutions), material_change_count (material identity changes that re-registered objects). Supplying mesh_name or mesh_id adds an entries array for that one mesh: per entry its draw list / entry index, mesh_primitive_index, identity key, the material_index its CACHED primitive record was written with (what the draw actually resolves the material through), and the live Mesh_primitive's material_id / material_name / material_buffer_index, and world_aabb, the cached culling bounds the entry is tested against (doc/erhe/draw_list_renderer.md Q6; absent for a skinned entry). A material_index that disagrees with the material the mesh names is a stale cached record.",
+    "description": "Inspect the scene's persistent draw lists (Draw_list_scene, doc/draw_list_renderer_requirements.md): registered object count, draw list / entry counts, pending (unflushed) change count and runtime negative-determinant flip count. verbose=true also lists every non-empty draw list with its identity key. has_draw_lists=false when the scene root has no Draw_list_scene (preview / tool scenes). Also reports resolution diagnostics: color_environment_change_count (each change re-resolves every color list), lazy_resolution_count (one-off first-use resolutions), material_change_count (material identity changes that re-registered objects). Supplying mesh_name or mesh_id adds an entries array for that one mesh: per entry its draw list / entry index, mesh_primitive_index, identity key, the material_index its CACHED primitive record was written with (what the draw actually resolves the material through), and the live Mesh_primitive's material_id / material_name / material_buffer_index, and world_aabb, the cached culling bounds the entry is tested against (doc/erhe/draw_list_renderer.md Q6; absent for a skinned entry). A material_index that disagrees with the material the mesh names is a stale cached record. cull_classification is the culling classification the last publish recorded (cpu or gpu, doc/plans/culling.md phase 5) and gpu_bounds_write_count the list bounds ranges the publishes wrote to the GPU bounds buffers (unchanged on an idle scene).",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -8896,6 +8896,35 @@
       ],
       "type": "object"
     }
+  },
+  {
+    "description": "Set the editor's culling classification setting (Editor_settings_config::culling_classification, doc/plans/culling.md phase 5; the live setting, saved only by a Settings window save): cpu classifies the draw lists' entries against the frame's culling views with the CPU lane loops; gpu also runs the classification as a compute pass (res/shaders/cull_classify.comp) into GPU mask buffers, which get_cull_classification_check compares with the CPU masks. The CPU masks drive the draws in both modes. Takes effect at the next frame's render settings snapshot; a device without the capability (emulated multi-draw indirect, Record_indexing::draw_position: Metal, the null device) keeps the CPU path (get_draw_lists cull_classification reports what was published). Omit mode to read the setting.",
+    "inputSchema": {
+      "properties": {
+        "mode": {
+          "description": "\"cpu\" or \"gpu\"",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_culling_classification"
+  },
+  {
+    "description": "Diagnostic gate of the GPU culling classification (doc/plans/culling.md phase 5): requests that the render phase of the next frame classified on the GPU copy its GPU mask regions to host memory and keep that frame's CPU masks (a new request replaces an earlier one); once the frame retired, every (entry, view) bit of every published draw list of the scene is compared. Returns frame_index, entry_count (all lists), view_count (views the CPU classified), dispatch_count, mismatch_count (0 is the gate), the classification compute pass GPU times (gpu_time_first_batch_ns: the first dispatch of a frame, Shadow_renderer's batch; gpu_time_frame_end_ns: the end-of-frame dispatch of the views classified inside render passes, the color views; latest completed measurements), gpu_bounds_write_count, and per non-empty list its index, purpose, entry_count, mismatch_count and the first mismatches {entry, view, cpu, gpu}. Errors when the device has no GPU path or the culling_classification setting is cpu (set_culling_classification mode=gpu first; the check then waits for the first frame published with it). The call waits a few frames.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_cull_classification_check"
   },
   {
     "name": "reset_composition_pass_stats",

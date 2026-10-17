@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/generated/content_edge_lines_config.hpp"
+#include "config/generated/culling_classification.hpp"
 #include "config/generated/ddgi_config.hpp"
 #include "config/generated/debug_visualizations_style.hpp"
 #include "config/generated/graphics_preset_entry.hpp"
@@ -57,6 +58,7 @@ public:
     Content_edge_lines_config  content_edge_lines             {};
     bool                       exclude_unlit_primitives       {true};
     Indirect_diffuse_source    indirect_diffuse_source        {Indirect_diffuse_source::ambient};
+    Culling_classification     culling_classification         {Culling_classification::cpu};
     bool                       lightmap_bicubic_sampling      {true}; // Lightmap_config::bicubic_sampling
 
     // App_settings::graphics

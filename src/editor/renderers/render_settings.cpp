@@ -27,6 +27,7 @@ void Render_settings::snapshot(const Editor_settings_config& editor_settings, co
     content_edge_lines               = editor_settings.content_edge_lines;
     exclude_unlit_primitives         = editor_settings.exclude_unlit_primitives;
     indirect_diffuse_source          = editor_settings.indirect_diffuse_source;
+    culling_classification           = editor_settings.culling_classification;
     lightmap_bicubic_sampling        = editor_settings.lightmap.bicubic_sampling;
 
     graphics_preset                  = app_settings.graphics.current_graphics_preset;
