@@ -88,8 +88,17 @@ public:
     [[nodiscard]] auto get_queued_byte_count() const -> std::size_t;
 
 private:
+    // m_drain_mutex serializes the drainers (flush, flush_budgeted) against
+    // each other; m_mutex guards the queue state and is what enqueue takes.
+    // flush_budgeted records its batch with only m_drain_mutex held, so
+    // workers enqueuing concurrently (the parallel import build) never wait
+    // for the upload recording. Lock order: m_drain_mutex, then m_mutex.
+    ERHE_PROFILE_MUTEX(std::mutex, m_drain_mutex);
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<Transfer_entry>    m_queued;
+    // flush_budgeted's batch, moved out of m_queued under m_mutex and
+    // recorded outside it. Cleared after each drain, capacity kept.
+    std::vector<Transfer_entry>    m_drain_batch;
     // Entries before this index have been recorded and their data released.
     // A partial drain advances it instead of erasing from the front, so the
     // Transfer_entry stays move-construct-only (no move ASSIGNMENT, which
