@@ -296,8 +296,9 @@ extension; material and node variants are that document's step X4.
   Open-Scene path reuses the import machinery (`parse_gltf` plus
   `finalize_imported_meshes` plus physics import) but constructs the
   `Scene_root` directly, is not undoable, and repurposes an empty viewport.
-  `Scene_open_operation` is the undoable Operation that always opens a NEW
-  viewport; it is the explicit "open a foreign glTF as a new scene" action,
+  `Scene_open_operation` is the undoable Operation that shows the scene in an
+  empty viewport window, or a new one when none is empty (undo unbinds that
+  viewport again); it is the explicit "open a foreign glTF as a new scene" action,
   used by the asset browser and the MCP `open_scene` tool.
 - MCP tools: `save_scene` writes `.glb` (full editor state), `load_scene`
   opens an erhe-authored `.glb`, and `export_gltf` is the plain interchange
