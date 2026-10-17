@@ -134,6 +134,7 @@ def main():
     parser.add_argument("--out", default=os.path.join(REPO_ROOT, "logs", "scene_load.tracy"), help="capture file")
     parser.add_argument("--port", type=int, default=None, help="preferred MCP port (ERHE_MCP_PORT)")
     parser.add_argument("--keep-open", action="store_true", help="do not close the scene after the last open")
+    parser.add_argument("--render-image", default=None, metavar="PNG", help="after each open settles, render the scene through a fixed camera to this path (an index suffix is added for the second and later opens); byte-compare it against a baseline")
     parser.add_argument("--tool", default="open_scene", choices=["open_scene", "load_scene"], help="open_scene = Scene_open_operation with the parse on the main thread (asset browser Load); load_scene = File > Load Scene (async loader)")
     args = parser.parse_args()
 
@@ -182,6 +183,17 @@ def main():
         if not isinstance(reply, dict):
             print(f"  open_scene replied: {str(reply)[:200]}")
         summarize_log(read_log(), marker_offset)
+        if args.render_image:
+            image_path = args.render_image if open_index == 1 else re.sub(r"(\.[^.]+)$", f"_{open_index}\1", args.render_image)
+            image_path = os.path.abspath(image_path)
+            # Fixed camera over the Bistro content fit (center 24.4 -4.2 18.0, radius 129); the same
+            # view for every build so the images byte-compare.
+            render = mcp(port, "render_scene_image", {
+                "camera": {"eye": [114.4, 45.8, 108.0], "target": [24.4, -4.2, 18.0], "up": [0.0, 1.0, 0.0],
+                           "fov_y_degrees": 45.0, "near": 0.1, "far": 1000.0},
+                "width": 1024, "height": 768, "output": "png", "path": image_path
+            })
+            print(f"  render: {image_path} {'ok' if os.path.isfile(image_path) else 'FAILED: ' + str(render)[:200]}")
         if (open_index < args.opens) or not args.keep_open:
             for name in scene_names(port):
                 if os.path.basename(scene_path) in name:
