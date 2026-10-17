@@ -2,6 +2,11 @@
 
 @rule::active-tasks-only;DONE-task-sections-move-to-memory-bank/topics/<topic>.md[PROGRESS]
 
+[TASK::culling]{started-2026-10-17;branch=render-thread;via-harness;doc/plans/culling.md}
+✓phase-1{6846081f4;SoA-bounds+view-set+masks;scalar;identical-images+counts;review-fixes:purpose-skip+negative-extent-sentinel+null-scene-guard}
+⚡phase-2{vectorized-classification+point-range-sphere;Release-ninja-tree-Tracy-measurement}
+?phases-3..7
+
 [TASK::render-thread]{started-2026-10-09;branch=render-thread;via-harness;doc/editor/render_thread.md}
 ✓step-1-measure{phase-timing-M1/M2/R-log-every-60-frames;fable-medium-review->swapchain-waits-timed-as-R;headless-baseline-Debug-Intel:M1~14us-M2~5.9ms(wait_frame~5.4ms)-R~1ms}
 ✓step-2a{e2b768e0a;Headset::wait_frame+begin_frame(Frame_timing);CHANGELOG}
