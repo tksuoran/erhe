@@ -183,11 +183,11 @@ TEST(Shadow_fit_replay, stages)
     if (dir_env == nullptr) {
         GTEST_SKIP() << "set ERHE_FIT_CAPTURE_DIR to a directory with heavy_<scenario>.txt capture files";
     }
-    const std::string dir{dir_env};
+    const std::string replay_dir{dir_env};
     log_line("replay of captured fit inputs; microseconds per stage, mean over frames (receiver stage per frame, others per light fit)");
 
     for (const char* scenario : {"static", "orbit", "pan", "drag", "dragmid", "sun"}) {
-        const std::vector<Replay_frame> frames = load_frames(dir + "/heavy_" + scenario + ".txt");
+        const std::vector<Replay_frame> frames = load_frames(replay_dir + "/heavy_" + scenario + ".txt");
         if (frames.empty()) {
             log_line("%s: no frames", scenario);
             continue;
