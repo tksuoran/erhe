@@ -1368,6 +1368,18 @@ void import_gltf(
                 if (!target) {
                     return; // scene closed while loading; the task cancelled itself
                 }
+                // A cancelled or failed load has no parse: queueing the
+                // operation would re-read the file inline on the main
+                // thread. A done load with no parse (record adoption) still
+                // queues - the operation takes the record's parse.
+                if (result.state != Asset_load_state::done) {
+                    log_parsers->info(
+                        "Import glTF: '{}' {} - nothing imported",
+                        erhe::file::to_string(path),
+                        (result.state == Asset_load_state::cancelled) ? "cancelled" : "failed"
+                    );
+                    return;
+                }
                 // Wrapped in the reloadable operation so an undo can give the
                 // memory back and a redo re-reads the file
                 // (doc/editor/reloadable_asset_loads.md). The asynchronously prepared
