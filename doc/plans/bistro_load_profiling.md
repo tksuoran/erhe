@@ -233,7 +233,7 @@ steps 2 and 3. The Bistro KTX2 files are Basis Universal (ETC1S + BasisLZ,
 vkFormat 0), so the "decode" is a transcode: 393 images, 21
 worker-seconds, 47 ms mean per image.
 
-### Step 4: parallel buffer-mesh build in the worker build phase
+### Step 4: parallel buffer-mesh build in the worker build phase (done, 14f05e4b6)
 
 `build_imported_buffer_meshes` (`src/editor/parsers/gltf.cpp`) builds the
 3896 primitives one after another on the one worker that runs the task's
@@ -248,7 +248,14 @@ is unchanged. Gate: `build_imported_buffer_meshes: 3896 primitives, N ms`
 under 250 ms (was 1029 ms); scene listed under 3.5 s by the script (was
 4.1 s); idle no later than before; render byte-identical; the per-stream
 "vertex stream allocations out of lockstep" error never appears in the
-log.
+log. Result: build 952 -> 158 to 245 ms, listed 2.7 to 3.7 s (the script's
+polling makes this number noisy at this scale), idle 9.6 to 10.6 s, render
+identical, no lockstep errors. The fan-out exposed two lock holds that
+were fixed on the way (dc6ea1bd5: trace-string formatting inside
+`buffer_mesh_allocation_mutex`; 405183e2a: `flush_budgeted` recorded
+uploads under the enqueue mutex) and one copy (2516f9f50: `Transfer_entry`
+copied its staging vector). Review found: a throwing build task was
+swallowed by `future.wait()`; fixed with `get()` plus a logged error.
 
 ### Step 5 (decide after step 4): KTX2 transcode
 
