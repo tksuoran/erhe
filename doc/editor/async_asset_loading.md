@@ -169,6 +169,17 @@ node, and commits on the main thread through `Scene_commit_queue`; the shape
 level of that swap and what a commit refreshes are in
 doc/editor/operations.md and doc/erhe/mesh_memory_deferred_free.md.
 
+The soup-path mesh optimizer (doc/erhe/meshoptimizer_integration.md) runs at
+load time only for a primitive the deferred task does not rebuild in full. A
+primitive that leaves `finalize_imported_meshes` with buffer-mesh triangles
+and no edge lines while `deferred_edge_lines` is in effect - the predicate the
+task itself uses to pick the full build - gets its optimized variant from
+`prepare_geometry_buffer_mesh`, built from the `Geometry`, and attached by the
+commit before the mesh is re-registered with the draw list; until then it
+draws its source build. Every other primitive (eager mode, a `Geometry`
+restored from the ERHE_geometry extension with edges, no worker contexts) is
+optimized at load time, before its first draw list registration.
+
 Two process-wide serialization points exist because the work is concurrent:
 the soup-to-`Geometry` conversion takes `erhe::geometry::geogram_lock()`
 (doc/erhe/geogram.md), and the multi-stream buffer-mesh allocation groups and the
