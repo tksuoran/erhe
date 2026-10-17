@@ -41,6 +41,11 @@ void Mesh_rendertarget_view::finish_render(erhe::graphics::Command_buffer& comma
     }
 }
 
+auto Mesh_rendertarget_view::get_rendertarget_mesh_shared() const -> std::shared_ptr<Rendertarget_mesh>
+{
+    return m_mesh;
+}
+
 auto Mesh_rendertarget_view::get_output_texture() const -> std::shared_ptr<erhe::graphics::Texture>
 {
     return (m_mesh != nullptr) ? m_mesh->get_texture() : nullptr;

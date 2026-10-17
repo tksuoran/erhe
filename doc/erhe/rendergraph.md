@@ -289,6 +289,17 @@ has already released it. Every node is therefore created by
   retired node and makes later releases destroy at once.
   `~Rendergraph()` clears the nodes' registered flag, so a node released
   after the rendergraph is gone is destroyed directly.
+- Retirement keeps the node object alive, not what its owner held beside
+  it: the owner's other members are destroyed with the owner, while the
+  retired node's execute of the frame in flight still runs. So an execute
+  reaches such resources only through the node's own per-frame copy, made
+  by `prepare_rendergraph_node()` in the prepare phase of the frame
+  (`Prepared_frame_values`, doc/editor/render_thread.md). Precedent: the
+  editor's `Rendertarget_imgui_host` copies the shared pointer to the
+  scene rendertarget mesh it draws into (render pass and texture) into the
+  frame's slot; a scene close destroys the mesh's owner (`Quad_view`) on
+  the main thread while the frame renders, and the slot keeps the mesh
+  alive until the node is destroyed.
 - The deleter first calls the node's release hook,
   `Rendergraph_node::on_released()` (virtual, default nothing), on the
   releasing thread, before the rendergraph unregisters it. A node that

@@ -92,8 +92,9 @@ public:
     [[nodiscard]] auto intersect_ray(glm::vec3 origin_in_world, glm::vec3 direction_in_world) const -> std::optional<glm::vec3>;
 
     // Path A scene objects. Both are null when uses_composition_layer() is true.
-    [[nodiscard]] auto get_rendertarget_mesh() const -> Rendertarget_mesh*;
-    [[nodiscard]] auto get_node             () const -> erhe::scene::Node*;
+    [[nodiscard]] auto get_rendertarget_mesh       () const -> Rendertarget_mesh*;
+    [[nodiscard]] auto get_rendertarget_mesh_shared() const -> std::shared_ptr<Rendertarget_mesh> override;
+    [[nodiscard]] auto get_node                    () const -> erhe::scene::Node*;
 
     // Position the quad. Path A: reparent the node under parent_node (a null
     // parent detaches the node) and set its world transform.

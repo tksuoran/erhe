@@ -30,6 +30,7 @@ public:
     [[nodiscard]] auto acquire_render_pass(erhe::graphics::Command_buffer& command_buffer) -> erhe::graphics::Render_pass* override;
     void               finish_render      (erhe::graphics::Command_buffer& command_buffer, App_context& context) override;
     [[nodiscard]] auto get_output_texture () const -> std::shared_ptr<erhe::graphics::Texture> override;
+    [[nodiscard]] auto get_rendertarget_mesh_shared() const -> std::shared_ptr<Rendertarget_mesh> override;
     [[nodiscard]] auto is_quad_visible       () const -> bool override;
     [[nodiscard]] auto get_pointer           () const -> std::optional<glm::vec2> override;
     [[nodiscard]] auto world_to_window       (glm::vec3 world_position) const -> std::optional<glm::vec2> override;

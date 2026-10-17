@@ -153,6 +153,11 @@ auto Quad_view::get_rendertarget_mesh() const -> Rendertarget_mesh*
     return m_rendertarget_mesh.get();
 }
 
+auto Quad_view::get_rendertarget_mesh_shared() const -> std::shared_ptr<Rendertarget_mesh>
+{
+    return m_rendertarget_mesh;
+}
+
 auto Quad_view::get_node() const -> erhe::scene::Node*
 {
     return m_rendertarget_node.get();

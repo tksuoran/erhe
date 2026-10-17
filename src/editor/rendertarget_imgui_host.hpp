@@ -1,6 +1,9 @@
 #pragma once
 
 #include "erhe_imgui/imgui_host.hpp"
+#include "renderers/prepared_frame_values.hpp"
+
+#include <memory>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -18,6 +21,7 @@ namespace editor {
 
 class App_context;
 class Headset_view;
+class Rendertarget_mesh;
 class Rendertarget_view;
 
 class Rendertarget_imgui_host : public erhe::imgui::Imgui_host
@@ -44,6 +48,7 @@ public:
     void stop_text_input    ()                            override;
 
     // Implements Rendergraph_node
+    void prepare_rendergraph_node(uint64_t frame_index) override;
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Implements Input_event_handler
@@ -60,8 +65,22 @@ public:
     auto get_producer_output_texture(int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
 private:
-    App_context&       m_app_context;
-    Rendertarget_view* m_view{nullptr};
+    // What the render phase of one frame draws into: the view's scene
+    // rendertarget mesh (its render pass and texture), copied by the prepare
+    // phase of the frame. The copy keeps the mesh alive through the render
+    // phase when the view is destroyed meanwhile (the main thread closes
+    // the scene while the frame renders; the node itself is retired until
+    // the frame rendered, doc/erhe/rendergraph.md "Node lifetime"). Null in
+    // the OpenXR quad composition layer path, which draws through m_view.
+    class Frame_target
+    {
+    public:
+        std::shared_ptr<Rendertarget_mesh> mesh;
+    };
+
+    App_context&                        m_app_context;
+    Rendertarget_view*                  m_view{nullptr};
+    Prepared_frame_values<Frame_target> m_frame_target;
     float              m_last_mouse_x{0.0f};
     float              m_last_mouse_y{0.0f};
     // Right trigger analog value > 0 acts as the ImGui right mouse button

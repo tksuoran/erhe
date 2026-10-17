@@ -4,6 +4,7 @@
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
+#include "rendertarget_mesh.hpp"
 #include "rendertarget_view.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -49,6 +50,8 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     , m_view       {&view}
 {
     register_output("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
+
+    m_frame_target.resize(rendergraph.get_graphics_device().get_number_of_frames_in_flight());
 
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
@@ -537,6 +540,13 @@ void Rendertarget_imgui_host::stop_text_input()
     //// m_app_context_window.stop_text_input();
 }
 
+void Rendertarget_imgui_host::prepare_rendergraph_node(const uint64_t frame_index)
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    Frame_target& target = m_frame_target.prepare(frame_index);
+    target.mesh = m_view->get_rendertarget_mesh_shared();
+}
+
 void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -557,18 +567,33 @@ void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_b
     m_app_context.imgui_renderer->update_draw_data_textures(command_buffer);
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
-    // Path A returns the Rendertarget_mesh render pass; Path B acquires the
-    // quad swapchain image and builds a transient render pass over it.
+    const Frame_target&     target          = m_frame_target.get(graphics_device.get_frame_index());
+    if (target.mesh) {
+        // Path A: the frame's copy of the scene rendertarget mesh, not
+        // m_view, whose owner the main thread may have destroyed by now.
+        {
+            erhe::graphics::Render_pass*           render_pass    = target.mesh->get_render_pass();
+            erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(command_buffer);
+            erhe::graphics::Scoped_render_pass     scoped_render_pass{*render_pass, command_buffer};
+            m_app_context.imgui_renderer->render_draw_data(render_encoder, *render_pass, get_draw_data());
+        }
+        // render_done() issues a blit (generate_mipmaps), which cannot be
+        // recorded inside an active Vulkan render pass -- after the scoped
+        // render pass ended.
+        target.mesh->render_done(command_buffer, m_app_context);
+        return;
+    }
+    // Path B: acquires the quad swapchain image and builds a transient render
+    // pass over it; finish_render() marks the quad layer rendered (Xr_session
+    // waits on and releases the swapchain image itself). The view lives as
+    // long as the headset view: a scene close refuses the scene the headset
+    // is homed in (Editor::on_close_scene).
     erhe::graphics::Render_pass* render_pass = m_view->acquire_render_pass(command_buffer);
     if (render_pass != nullptr) {
         erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
         m_app_context.imgui_renderer->render_draw_data(render_encoder, *render_pass, get_draw_data());
     }
-    // finish_render() may issue a blit (generate_mipmaps), which cannot be
-    // recorded inside an active Vulkan render pass -- must run after
-    // scoped_render_pass ends. (Path B only marks the quad layer rendered;
-    // Xr_session waits on and releases the swapchain image itself.)
     m_view->finish_render(command_buffer, m_app_context);
 }
 

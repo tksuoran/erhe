@@ -21,6 +21,8 @@ class App_context;
 //   - Quad_view              -- a tool UI quad, scene-mesh (Path A) or OpenXR
 //                               quad composition layer (Path B).
 //   - Mesh_rendertarget_view -- a standalone scene rendertarget mesh.
+class Rendertarget_mesh;
+
 class Rendertarget_view
 {
 public:
@@ -36,6 +38,14 @@ public:
     [[nodiscard]] virtual auto acquire_render_pass(erhe::graphics::Command_buffer& command_buffer) -> erhe::graphics::Render_pass* = 0;
     virtual void               finish_render      (erhe::graphics::Command_buffer& command_buffer, App_context& context) = 0;
     [[nodiscard]] virtual auto get_output_texture () const -> std::shared_ptr<erhe::graphics::Texture> = 0;
+
+    // The scene rendertarget mesh the ImGui host draws into (Path A), as
+    // shared ownership: the host copies it into the slot of the frame it
+    // prepares, so the render phase of that frame draws into a mesh that is
+    // alive even when the view is destroyed meanwhile (a scene close in the
+    // main thread while the frame renders). Null for a view without a scene
+    // mesh (the OpenXR quad composition layer).
+    [[nodiscard]] virtual auto get_rendertarget_mesh_shared() const -> std::shared_ptr<Rendertarget_mesh> = 0;
 
     // Pointer / picking sources used to drive the ImGui mouse from the desktop
     // pointer or the VR controller ray.
