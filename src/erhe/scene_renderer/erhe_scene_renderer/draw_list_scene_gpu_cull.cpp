@@ -784,7 +784,15 @@ void Draw_list_scene::decode_retired_gpu_shadow_counts(const uint64_t frame_inde
         .views       = std::span<const Gpu_shadow_view_counts>{m_retired_gpu_shadow_view_counts}
     };
     m_has_retired_gpu_shadow_counts = true;
-    readback.range.bytes_gpu_used(data.size_bytes());
+    finish_count_readback(readback);
+}
+
+void Draw_list_scene::finish_count_readback(Gpu_count_readback& readback)
+{
+    // A CPU_read range is closed with the bytes the GPU wrote before its
+    // release (Ring_buffer_range::release() requires a closed range).
+    ERHE_VERIFY(readback.pending);
+    readback.range.bytes_gpu_used(readback.range.get_span().size_bytes());
     readback.range.close();
     readback.range.release();
     readback.range   = erhe::graphics::Ring_buffer_range{};
