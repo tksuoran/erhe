@@ -288,7 +288,7 @@ Draw_list_scene::~Draw_list_scene() noexcept
     // off, or the scene is destroyed with frames in flight).
     for (Gpu_count_readback& readback : m_gpu_count_readbacks) {
         if (readback.pending) {
-            readback.range.release();
+            finish_count_readback(readback);
         }
     }
 }

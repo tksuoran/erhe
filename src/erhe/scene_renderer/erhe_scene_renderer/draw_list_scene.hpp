@@ -1119,6 +1119,8 @@ private:
         std::vector<uint32_t>             job_views;
         bool                              pending    {false};
     };
+    // Closes and releases a pending readback (decode and destruction alike).
+    void finish_count_readback(Gpu_count_readback& readback);
     std::vector<Gpu_count_readback>                                  m_gpu_count_readbacks;
     std::vector<Gpu_shadow_view_counts>                              m_retired_gpu_shadow_view_counts;
     Retired_gpu_shadow_counts                                        m_retired_gpu_shadow_counts{};
