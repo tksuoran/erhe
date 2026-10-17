@@ -21,6 +21,7 @@
 #include <array>
 #include <cstddef>
 #include <initializer_list>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -87,6 +88,15 @@ inline constexpr std::size_t shadow_cull_mode_count = 3;
 // culling and drew nothing (bit f for face f; all six bits: the whole cube
 // drew nothing). Empty on the bucket path. The vectors keep their capacity
 // across frames.
+//
+// Under Cull_classification::gpu with GPU-generated shadow commands
+// (doc/plans/culling.md phase 6) the CPU counts no entries: the entry and
+// culled counts are those of the GPU count readback of an earlier, retired
+// frame (Draw_list_scene::get_retired_gpu_shadow_counts(), frames in flight
+// late), laid out by that frame's passes, and gpu_counts_frame_index names
+// the frame; before the first readback they are zero. Draw list and draw
+// call counts are the frame's own (every chunk of a drawn list is one count
+// draw), and so are the skipped faces.
 class Shadow_draw_statistics
 {
 public:
@@ -97,6 +107,9 @@ public:
     std::vector<Draw_statistics> point_cube_faces;
     std::vector<uint8_t>         point_cube_skipped_faces;
     Draw_statistics              total{};
+    // The frame whose GPU counts the entry and culled counts are (GPU
+    // command path only).
+    std::optional<uint64_t>      gpu_counts_frame_index{};
 };
 
 class Shadow_renderer
@@ -271,6 +284,20 @@ public:
     public:
         std::vector<Cull_view> views_2d;
         std::vector<Cull_view> views_cube;
+        // The views of the recent fits, by frame (a ring; capacity kept):
+        // the pass layout the GPU count readback of a frame drawn with
+        // GPU-generated commands is mapped with, frames in flight later
+        // (Shadow_draw_statistics). Per caller, since every caller fits its
+        // own passes.
+        class Fitted_frame
+        {
+        public:
+            uint64_t               frame_index{0};
+            bool                   valid      {false};
+            std::vector<Cull_view> views_2d;
+            std::vector<Cull_view> views_cube;
+        };
+        std::array<Fitted_frame, 8> fitted_frames;
     };
 
     // Render phase, outside any render pass: the light projections of the
@@ -368,6 +395,10 @@ private:
     std::vector<Caster_vertex_extent>             m_caster_vertex_extents;
     // render()'s culling views (empty: the bucket path adds none).
     Cull_views                                    m_immediate_cull_views;
+    bool                                          m_index_count_clamp_refusal_logged{false};
+    // draw(): fills the entry and culled counts of statistics from the GPU
+    // count readback (see Shadow_draw_statistics).
+    void apply_gpu_counts(const Render_parameters& parameters, const Cull_views& cull_views, Shadow_draw_statistics& statistics);
 };
 
 

@@ -1,4 +1,5 @@
 #include "erhe_graphics/null/null_render_command_encoder.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics {
 
@@ -150,6 +151,28 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     static_cast<void>(indirect_offset);
     static_cast<void>(drawcount);
     static_cast<void>(stride);
+}
+
+void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect_count(
+    const Primitive_type           primitive_type,
+    const erhe::dataformat::Format index_type,
+    const std::uintptr_t           indirect_offset,
+    const Buffer&                  count_buffer,
+    const std::uintptr_t           count_offset,
+    const std::uintptr_t           max_draw_count,
+    const std::uintptr_t           stride
+) const
+{
+    static_cast<void>(primitive_type);
+    static_cast<void>(index_type);
+    static_cast<void>(indirect_offset);
+    static_cast<void>(count_buffer);
+    static_cast<void>(count_offset);
+    static_cast<void>(max_draw_count);
+    static_cast<void>(stride);
+    // A caller selects the count path only with Device_info::
+    // use_draw_indirect_count, which this backend never reports.
+    ERHE_FATAL("multi_draw_indexed_primitives_indirect_count: the null device has no GPU-read draw count path (Device_info::use_draw_indirect_count is false)");
 }
 
 void Render_command_encoder_impl::dump_state(const char* label) const

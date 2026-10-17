@@ -156,15 +156,28 @@ curl -X POST http://127.0.0.1:3743/mcp \
 
 Returns: `{lights: [{name, node, type, color, intensity, range}]}`
 
+The shadow pass counts (`shadow_draw_list_entry_count` /
+`shadow_draw_list_culled_count`): under the `gpu` culling classification with
+GPU-generated shadow commands ([culling.md](../plans/culling.md) phase 6)
+the CPU counts nothing, and the counts are the GPU count readback of an
+earlier, retired frame (frames in flight late, laid out by that frame's
+passes), named by the top-level `shadow_draw_list_counts_frame_index`; zero
+before the first readback. Compare them with the `cpu` counts in steady
+state; `get_cull_classification_check` compares the same frame's GPU and CPU
+counts per job.
+
 ### get_cull_classification_check
 
-The gate of the draw lists' GPU culling classification
-([culling.md](../plans/culling.md) phase 5,
+The gate of the draw lists' GPU culling classification and GPU command
+generation ([culling.md](../plans/culling.md) phases 5 and 6,
 [draw_list_renderer.md](../erhe/draw_list_renderer.md) Q6 "GPU
-classification"): the render phase of the next frame the scene's draw lists
-classify on the GPU copies the frame's GPU mask region to host memory and
-keeps the frame's CPU masks; once the frame retired, every (entry, view) bit
-of every published draw list is compared. A new request replaces an earlier
+classification", "GPU command generation"): the render phase of the next
+frame the scene's draw lists classify on the GPU copies the frame's GPU mask
+region, and the counts and commands its command generation wrote for the
+shadow passes, to host memory and keeps the frame's CPU masks and what the
+CPU command writer produces from them per job; once the frame retired, every
+(entry, view) bit of every published draw list is compared, and per job
+the GPU count and the commands up to it. A new request replaces an earlier
 one. Errors when the device has no GPU path or the setting is cpu
 (`set_culling_classification` `mode=gpu` first; the check then waits for the
 first frame published with it, so both calls can go in one batch) and waits
@@ -184,6 +197,15 @@ compute dispatches of the frame (1, or 0 for a scene without entries).
 `gpu_time_ns` is the dispatch's `Gpu_timer` result, the latest completed
 measurement; a dispatch that overlaps the previous work on the GPU measures
 close to 0 (the timer counts work where it finishes).
+The command generation adds `command_job_count` (one job per shadow view and
+chunk of each drawn shadow list; 0 for a frame without shadow passes),
+`command_count` (the commands the CPU writer produces over all jobs, the
+drawn shadow entries), `command_mismatch_count` (jobs whose GPU count or
+commands differ; 0 is the gate), `command_gpu_time_ns` (the compaction's
+`Gpu_timer` result), `command_views: [{view, cpu_drawn, gpu_drawn}]` (per
+shadow view the drawn entries: the pass's `Draw_statistics::entry_count` and
+the GPU-written count) and `command_mismatches: [{job, view, list_index,
+chunk_begin, cpu_count, gpu_count, command_mismatch_count}]` (the first few).
 `get_draw_lists` reports `cull_classification` (what the last publish
 recorded) and `gpu_bounds_write_count` (the list bounds ranges written to
 the GPU bounds buffers; unchanged on an idle scene).
@@ -514,7 +536,9 @@ without a 24-bit format) and `shadow_depth_bits_axis` (that format's
 Set `Editor_settings_config::culling_classification` (the live setting, as
 the Settings window's Culling Classification combo edits it; saved only by a
 Settings window save): `mode` `cpu` or `gpu`
-([culling.md](../plans/culling.md) phase 5). The next frame's render
+([culling.md](../plans/culling.md) phases 5 and 6; `gpu` classifies on
+the GPU and generates the shadow passes' draw commands there). The next
+frame's render
 settings snapshot carries it to the draw lists' publish; a device without the
 GPU path's capability keeps the CPU path (`get_draw_lists`
 `cull_classification` reports what was published). Omit `mode` to query.

@@ -94,6 +94,12 @@ public:
         Draw_record_layout             record_layout
     ) -> Draw_indirect_buffer_range;
 
+    // The debug index count clamp (m_max_index_count) applies to the
+    // commands this buffer writes. GPU-generated commands carry the entries'
+    // raw counts, so a caller that draws them requires the clamp off
+    // (Shadow_renderer refuses the GPU command path while it is on).
+    [[nodiscard]] auto is_index_count_clamped() const -> bool { return m_max_index_count_enable; }
+
     //// void debug_properties_window();
 
 private:

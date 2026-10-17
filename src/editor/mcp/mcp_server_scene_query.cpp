@@ -473,6 +473,29 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
             {"mismatches",     std::move(mismatches)}
         });
     }
+    // The GPU command generation of the shadow passes (doc/plans/culling.md
+    // phase 6): per job the GPU-written count and commands against the CPU
+    // writer's, per shadow view the drawn entries both ways.
+    json command_views = json::array();
+    for (const erhe::scene_renderer::Cull_command_view_check& view : check.command_views) {
+        command_views.push_back(json{
+            {"view",      view.view},
+            {"cpu_drawn", view.cpu_drawn},
+            {"gpu_drawn", view.gpu_drawn}
+        });
+    }
+    json command_mismatches = json::array();
+    for (const erhe::scene_renderer::Cull_command_job_mismatch& mismatch : check.command_mismatches) {
+        command_mismatches.push_back(json{
+            {"job",                    mismatch.job},
+            {"view",                   mismatch.view},
+            {"list_index",             mismatch.list_index},
+            {"chunk_begin",            mismatch.chunk_begin},
+            {"cpu_count",              mismatch.cpu_count},
+            {"gpu_count",              mismatch.gpu_count},
+            {"command_mismatch_count", mismatch.command_mismatch_count}
+        });
+    }
     return make_json_content(json{
         {"scene",                   sr->get_name()},
         {"frame_index",             check.frame_index},
@@ -482,7 +505,13 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"mismatch_count",          check.mismatch_count},
         {"gpu_time_ns",             check.gpu_time_ns},
         {"gpu_bounds_write_count",  draw_list_scene->get_gpu_bounds_write_count()},
-        {"lists",                   std::move(lists)}
+        {"lists",                   std::move(lists)},
+        {"command_job_count",       check.job_count},
+        {"command_count",           check.command_count},
+        {"command_mismatch_count",  check.command_mismatch_count},
+        {"command_gpu_time_ns",     check.command_gpu_time_ns},
+        {"command_views",           std::move(command_views)},
+        {"command_mismatches",      std::move(command_mismatches)}
     }).dump();
 }
 
@@ -1455,7 +1484,14 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
         }
     }
 
-    return make_json_content({{"lights", lights}}).dump();
+    json result_json{{"lights", lights}};
+    // Under GPU-generated shadow commands (doc/plans/culling.md phase 6) the
+    // shadow entry / culled counts are the GPU count readback of this
+    // earlier, retired frame.
+    if ((draw_statistics != nullptr) && draw_statistics->gpu_counts_frame_index.has_value()) {
+        result_json["shadow_draw_list_counts_frame_index"] = draw_statistics->gpu_counts_frame_index.value();
+    }
+    return make_json_content(result_json).dump();
 }
 
 auto Mcp_server::query_raycast(const json& args) -> std::string

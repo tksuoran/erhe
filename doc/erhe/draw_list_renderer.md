@@ -692,12 +692,13 @@ Drawing:
   per-list serial `copy_to_slot()` compares; `get_gpu_bounds_write_count()`
   counts the list ranges written), so a frame in which nothing changed
   writes nothing and a drag writes the moved object's lists. The device-wide
-  `Gpu_cull_classifier` owns the pipeline of `res/shaders/cull_classify.comp`
-  and the ring buffer clients; it is supported on devices with native
-  multi-draw indirect and `Record_indexing::first_instance` (the GPU command
-  generation of phase 6 names records through `first_instance`), so the
-  emulated multi-draw path, Metal and the null device classify on the CPU
-  only. `classify_frame_cull_views()` records, after the CPU
+  `Gpu_cull_classifier` owns the pipelines of `res/shaders/cull_classify.comp`
+  and `res/shaders/cull_compact.comp` and the ring buffer clients; it is
+  supported on devices with native multi-draw indirect with a GPU-read draw
+  count (`erhe::graphics::Device_info::use_draw_indirect_count`) and
+  `Record_indexing::first_instance` (the generated commands name records
+  through `first_instance`), so the emulated multi-draw path, Metal and the
+  null device classify and write their commands on the CPU only. `classify_frame_cull_views()` records, after the CPU
   classification, the frame's one dispatch per scene into the frame command
   buffer, outside any render pass and before the first draw: the frame's
   view set (eight `vec4` per view, transcribed from the CPU's view tests:
@@ -706,15 +707,77 @@ Drawing:
   region (one `uvec2` per entry per group of 64 views, at `group *
   entry_count + entry`). The
   shader runs the CPU lanes' tests in their expression order with every
-  intermediate `precise`, so its bits are the CPU's bits. The CPU masks keep
-  driving the draws: no pass reads the GPU masks yet, so no barrier follows
-  a dispatch (the GPU command generation adds its own).
+  intermediate `precise`, so its bits are the CPU's bits.
+  **GPU command generation** (doc/plans/culling.md phase 6): the shadow
+  passes draw commands a compute pass writes from the GPU masks.
+  `Shadow_renderer::fit()` gives the frame's `Shadow_command_selection`
+  (`Draw_list_scene::set_shadow_command_selection()`: the caster filter, the
+  draw-list layers and its `Primitive_buffer`'s chunk size) with its views;
+  `classify_frame_cull_views()` of a `gpu` frame with a selection then
+  builds, after the classification dispatch, a job table on the CPU (one
+  job per shadow view of the frame and per chunk of each published,
+  non-empty shadow list the layers select: view, first entry, entry count
+  and the job's own dense command range, at a multiple of 32 commands) and
+  records the two passes of `cull_compact.comp` after a storage barrier
+  (classification writes -> compaction reads), one storage barrier between
+  them, and a command barrier after them (compaction writes -> indirect
+  command and count reads). The pass bits pass runs one invocation per
+  (job, entry): the job's view bit and the selection's `Item_filter`
+  (transcribed as 32-bit halves) against the entry's flag bits, collected
+  into the job's pass bit words (command offset / 32 on), each word written
+  whole by the workgroup owning its 32 entries. The compaction pass runs one
+  workgroup per job: each lane counts the set bits of a consecutive run of
+  the job's words, one prefix sum over the lanes gives each lane its first
+  command, and the lane writes the commands of its set bits in entry order
+  (the entry's `index_count`, `first_index`, `base_vertex`, instance count
+  1, `first_instance = entry - chunk begin`), so a job's commands are
+  exactly those the CPU writer produces, in the same order (deterministic:
+  no atomics on the output, and the depth-only and the cube distance passes
+  rasterize the same primitive sequence as on the CPU path); the job's
+  draw count goes to its count slot. `publish()` writes, with the GPU bounds and under the same per-list
+  serial check, the slot's command templates (two `uvec4` per entry at the
+  bounds' offsets: `index_count, first_index, base_vertex, 0` and the
+  entry's flag bits), the fields the CPU writer reads from the entry. The
+  job table is a CPU-write ring range per frame, the pass bits, commands
+  and counts are device ring ranges per frame (released at the dispatch, kept by the
+  ring until the frame retired); the job vector and the per (view, list)
+  first-job lookup are render-phase scratch kept with their capacity.
+  `draw_shadow()` with a culling view on such a frame verifies its filter,
+  layers and chunk size are the selection's and draws each chunk with
+  `multi_draw_indexed_primitives_indirect_count()` over its job's command
+  range and count slot (`max_draw_count` = the chunk's entry count),
+  binding the chunk's shared records as before; no
+  `Draw_indirect_buffer::update()` runs for it, and no per-entry decision:
+  every chunk of a drawn list is one count draw (a zero count draws
+  nothing), the list's pipeline, buffers and command buffer bound once. The
+  compaction also writes, per job, the chunk's entries passing the filter;
+  every `gpu` frame copies the count buffer to host memory, and the
+  classification of the frame that reuses its frame slot (the frame retired)
+  decodes it into per-view drawn / filtered counts
+  (`get_retired_gpu_shadow_counts()`). `Shadow_renderer::Cull_views` keeps
+  the views of the caller's recent fits (`fitted_frames`), and `draw()`
+  fills the entry and culled counts of its `Shadow_draw_statistics` from the retired frame's counts by that
+  frame's passes (`gpu_counts_frame_index`; frames in flight late; MCP
+  `get_scene_lights` reports the frame), the draw list and draw call counts
+  being the frame's own. The CPU lanes still run on a `gpu` frame:
+  `has_cull_view_survivors()` still skips empty cube faces, and the color
+  passes still write their commands on the CPU (their records are patched
+  per pass). A frame without a selection (no shadow renderer drew the
+  scene), and a renderer whose `Draw_indirect_buffer` has its debug index
+  count clamp on (`is_index_count_clamped()`; the GPU commands carry the raw
+  counts; refused and logged once), draw their shadow passes with CPU
+  commands. The dispatches index their workgroups flat and split the count
+  into y past the device's x limit (`max_compute_workgroup_count`,
+  verified).
   `request_cull_classification_check()` / `poll_cull_classification_check()`
-  (MCP `get_cull_classification_check`) copy one frame's mask region to
-  host memory (after a transfer barrier) and compare every bit with the same
-  frame's CPU masks; a new request replaces an earlier one (its pending
-  readbacks belong to an older generation and are dropped); a `Gpu_timer`
-  times the dispatch.
+  (MCP `get_cull_classification_check`) copy one frame's mask region, and
+  its command generation's counts and commands, to host memory (after a
+  transfer barrier), compare every bit with the same frame's CPU masks and,
+  per job, the GPU count and the commands up to it with what the CPU writer
+  produces from those masks (captured at the generation); a new request
+  replaces an earlier one (its pending readbacks belong to an older
+  generation and are dropped); one `Gpu_timer` times the classification
+  dispatch, another the compaction.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.
@@ -871,6 +934,11 @@ at construction from `Primitive_interface::record_indexing`:
   shadow pass uploads every entry of a chunk where the per-pass write copied
   only the passing ones (the trade measured in `doc/plans/culling.md` phase
   4).
+- Shadow passes under `Cull_classification::gpu` (doc/plans/culling.md
+  phase 6, Q6 "GPU command generation") bind the same shared records and
+  draw the commands the GPU generated for their view and chunk with the
+  count draw: they name the same records through the same `first_instance`,
+  so the record upload is unchanged and the pass writes no commands.
 - Shadow passes under `Record_indexing::draw_position` (Metal, null device,
   devices without base instance) write their records per pass like the color
   passes.

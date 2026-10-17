@@ -440,6 +440,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         log_startup->warn("Forced emulation for Draw Indirect due to config setting");
     }
 
+    // glMultiDrawElementsIndirectCount is GL 4.6 core; the erhe::gl
+    // wrapper loads the core entry point only (not the ARB_indirect_parameters
+    // name), so a 4.5 driver with the extension does not take the count path.
+    m_info.use_draw_indirect_count = (m_info.gl_version >= 460) && !m_info.emulate_multi_draw_indirect;
+    log_startup->info("Draw indirect count supported: {}", m_info.use_draw_indirect_count);
+
     m_info.use_base_instance = (m_info.gl_version >= 420) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_base_instance);
     log_startup->info("Base Instance supported: {}", m_info.use_base_instance);
     // gl_InstanceID does not include the base instance on GL; the record

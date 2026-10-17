@@ -221,6 +221,13 @@ public:
     bool use_multi_draw_indirect_core{false};
     bool use_multi_draw_indirect_arb {false};
     bool emulate_multi_draw_indirect {false};
+    // Render_command_encoder::multi_draw_indexed_primitives_indirect_count()
+    // is available: a multi-draw whose draw count the GPU reads from a
+    // buffer. Vulkan: VK_KHR_draw_indirect_count enabled (which enables the
+    // drawIndirectCount feature) on a device with native multi-draw
+    // indirect; OpenGL: 4.6 (glMultiDrawElementsIndirectCount); false on
+    // Metal and the null device.
+    bool use_draw_indirect_count     {false};
     // Compute shaders and shader storage buffers are required on every
     // backend (OpenGL requires 4.5 at device creation); there are no
     // capability flags for them and no fallback paths.

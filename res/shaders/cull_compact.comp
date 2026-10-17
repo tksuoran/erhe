@@ -1,0 +1,232 @@
+// GPU command generation for the shadow passes (doc/plans/culling.md phase
+// 6, doc/erhe/draw_list_renderer.md Q6 "GPU command generation").
+//
+// Runs after cull_classify.comp in the same frame, over the job table the
+// CPU writes per frame: one job per (shadow view, shadow list chunk) the
+// shadow passes draw. A job compacts the chunk's entries that pass the job's
+// view bit and the passes' Item_filter into a dense run of indexed indirect
+// commands at the job's command offset and writes the run's length to the
+// job's count slot, the draw count vkCmdDrawIndexedIndirectCount /
+// glMultiDrawElementsIndirectCount read, followed by the number of the
+// chunk's entries passing the filter alone (the pass statistics: culled =
+// filtered - drawn). Two dispatches of this shader (ERHE_CULL_COMPACT_PASS),
+// both over a flat workgroup index (x + y * x count; the CPU splits a count
+// past the device's workgroup count limit into y):
+//
+// 0, pass bits: cull_jobs.header.w workgroups per job, one invocation per
+//   entry, writes the entry's pass bit (view bit and filter) and filter bit
+//   into the job's bit words (pass words at command offset / 32 + local
+//   entry / 32, filter words cull_jobs.header.z words later; the CPU aligns
+//   every job's command offset to 32). Every word is written whole by the
+//   workgroup that owns its 32 entries, so the words need no clear.
+// 1, compaction: one workgroup per job. Lane l owns the consecutive words
+//   [l * run, (l + 1) * run); it counts their set pass bits, one exclusive
+//   prefix sum over the lanes' counts gives each lane its first output
+//   command, and the lane writes the commands of its set bits there in entry
+//   order. So the commands are those the CPU writer
+//   (Draw_indirect_buffer::update(..., Draw_record_layout::chunk_entries))
+//   writes, in the same order: index_count, instance_count 1, first_index,
+//   base_vertex, first_instance = entry - chunk begin (the entry's record in
+//   the chunk's shared shadow records). Deterministic: no atomics on the
+//   output (the filter total is an order-independent shared sum).
+//
+// cull_templates.templates[2 * entry + 0] = index_count, first_index,
+//   base_vertex (int bits), 0
+// cull_templates.templates[2 * entry + 1] = flag bits low, flag bits high, 0, 0
+//   (entry: the published lists back to back, Draw_list_scene's GPU bounds
+//   layout)
+// cull_jobs.header = job_count, mask entry count (all published lists),
+//   pass word count (the filter words follow), pass 0 workgroups per job
+// cull_jobs.filter_masks[0] = require_all_bits_set (lo, hi),
+//                             require_at_least_one_bit_set (lo, hi)
+// cull_jobs.filter_masks[1] = require_all_bits_clear (lo, hi),
+//                             require_at_least_one_bit_clear (lo, hi)
+// cull_jobs.jobs[job] = view, first entry, entry count, command offset
+//   (in commands, a multiple of 32)
+// cull_masks.masks[group * mask entry count + entry]: cull_classify.comp's
+//   output (uvec2: x = view bits 0..31, y = bits 32..63)
+// cull_bits.words[command offset / 32 + i]: the job's pass bits, entry
+//   32 i + b at bit b; cull_bits.words[pass word count + command offset / 32
+//   + i]: its filter bits
+// cull_commands.commands[5 * command + k]: the job's dense commands
+// cull_counts.counts[2 * job + 0]: the number of commands the job wrote
+// cull_counts.counts[2 * job + 1]: the chunk's entries passing the filter
+
+layout(local_size_x = ERHE_CULL_COMPACT_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+const uint c_group_size = uint(ERHE_CULL_COMPACT_GROUP_SIZE);
+
+uint flat_workgroup_index()
+{
+    return gl_WorkGroupID.x + (gl_WorkGroupID.y * gl_NumWorkGroups.x);
+}
+
+#if ERHE_CULL_COMPACT_PASS == 0
+
+shared uint s_pass_words  [ERHE_CULL_COMPACT_GROUP_SIZE / 32];
+shared uint s_filter_words[ERHE_CULL_COMPACT_GROUP_SIZE / 32];
+
+bool all_set(uvec2 bits, uvec2 mask)
+{
+    return ((bits.x & mask.x) == mask.x) && ((bits.y & mask.y) == mask.y);
+}
+
+bool any_set(uvec2 bits, uvec2 mask)
+{
+    return ((bits.x & mask.x) != 0u) || ((bits.y & mask.y) != 0u);
+}
+
+bool is_zero(uvec2 mask)
+{
+    return (mask.x == 0u) && (mask.y == 0u);
+}
+
+// erhe::Item_filter::operator() on the 64-bit flag bits.
+bool filter_passes(uvec2 flag_bits)
+{
+    uvec4 set_masks   = cull_jobs.filter_masks[0];
+    uvec4 clear_masks = cull_jobs.filter_masks[1];
+    if (!all_set(flag_bits, set_masks.xy)) {
+        return false;
+    }
+    if (!is_zero(set_masks.zw) && !any_set(flag_bits, set_masks.zw)) {
+        return false;
+    }
+    if (any_set(flag_bits, clear_masks.xy)) {
+        return false;
+    }
+    if (!is_zero(clear_masks.zw) && all_set(flag_bits, clear_masks.zw)) {
+        return false;
+    }
+    return true;
+}
+
+void main()
+{
+    uint workgroups_per_job = cull_jobs.header.w;
+    uint linear             = flat_workgroup_index();
+    uint job_index          = linear / workgroups_per_job;
+    // Past the last job, and workgroups wholly past their job's chunk (the
+    // per-job count covers the largest job), write nothing. Uniform per
+    // workgroup, so the barriers below stay in uniform control flow.
+    if (job_index >= cull_jobs.header.x) {
+        return;
+    }
+    uvec4 job               = cull_jobs.jobs[job_index];
+    uint  chunk_entry_count = job.z;
+    uint  workgroup_begin   = (linear % workgroups_per_job) * c_group_size;
+    if (workgroup_begin >= chunk_entry_count) {
+        return;
+    }
+    uint lane             = gl_LocalInvocationID.x;
+    uint local_index      = workgroup_begin + lane;
+    uint mask_entry_count = cull_jobs.header.y;
+    uint view             = job.x;
+    uint chunk_begin      = job.y;
+    uint word_base        = job.w / 32u;
+    uint group            = view / 64u;
+    uint bit              = view % 64u;
+
+    if (lane < (c_group_size / 32u)) {
+        s_pass_words  [lane] = 0u;
+        s_filter_words[lane] = 0u;
+    }
+    barrier();
+
+    if (local_index < chunk_entry_count) {
+        uint  entry     = chunk_begin + local_index;
+        uvec2 mask      = cull_masks.masks[(group * mask_entry_count) + entry];
+        uint  mask_word = (bit < 32u) ? mask.x : mask.y;
+        uint  mask_bit  = (bit < 32u) ? bit : (bit - 32u);
+        bool  filtered  = filter_passes(cull_templates.templates[(2u * entry) + 1u].xy);
+        bool  passes    = filtered && (((mask_word >> mask_bit) & 1u) != 0u);
+        uint  lane_bit  = 1u << (lane % 32u);
+        if (filtered) {
+            atomicOr(s_filter_words[lane / 32u], lane_bit);
+        }
+        if (passes) {
+            atomicOr(s_pass_words[lane / 32u], lane_bit);
+        }
+    }
+    barrier();
+
+    // The workgroup's words that hold entries of the chunk.
+    uint word_in_job = (workgroup_begin / 32u) + lane;
+    if ((lane < (c_group_size / 32u)) && ((word_in_job * 32u) < chunk_entry_count)) {
+        cull_bits.words[word_base + word_in_job]                        = s_pass_words  [lane];
+        cull_bits.words[cull_jobs.header.z + word_base + word_in_job] = s_filter_words[lane];
+    }
+}
+
+#else // ERHE_CULL_COMPACT_PASS == 1
+
+shared uint s_scan[ERHE_CULL_COMPACT_GROUP_SIZE];
+shared uint s_filtered;
+
+void main()
+{
+    uint job_index = flat_workgroup_index();
+    if (job_index >= cull_jobs.header.x) {
+        return;
+    }
+    uint  lane              = gl_LocalInvocationID.x;
+    uvec4 job               = cull_jobs.jobs[job_index];
+    uint  chunk_begin       = job.y;
+    uint  chunk_entry_count = job.z;
+    uint  command_offset    = job.w;
+    uint  word_base         = command_offset / 32u;
+    uint  filter_word_base  = cull_jobs.header.z + word_base;
+    uint  word_count        = (chunk_entry_count + 31u) / 32u;
+
+    if (lane == 0u) {
+        s_filtered = 0u;
+    }
+    barrier();
+
+    // This lane's run of the job's words.
+    uint run       = (word_count + c_group_size - 1u) / c_group_size;
+    uint run_begin = min(lane * run, word_count);
+    uint run_end   = min(run_begin + run, word_count);
+
+    uint lane_count    = 0u;
+    uint lane_filtered = 0u;
+    for (uint word = run_begin; word < run_end; ++word) {
+        lane_count    += uint(bitCount(cull_bits.words[word_base + word]));
+        lane_filtered += uint(bitCount(cull_bits.words[filter_word_base + word]));
+    }
+    atomicAdd(s_filtered, lane_filtered);
+
+    // Inclusive prefix sum of the lanes' counts (Hillis-Steele).
+    s_scan[lane] = lane_count;
+    barrier();
+    for (uint offset = 1u; offset < c_group_size; offset *= 2u) {
+        uint addend = (lane >= offset) ? s_scan[lane - offset] : 0u;
+        barrier();
+        s_scan[lane] += addend;
+        barrier();
+    }
+    uint position = command_offset + (s_scan[lane] - lane_count);
+
+    for (uint word = run_begin; word < run_end; ++word) {
+        uint bits = cull_bits.words[word_base + word];
+        while (bits != 0u) {
+            uint  bit_index   = uint(findLSB(bits));
+            uint  local_index = (32u * word) + bit_index;
+            uvec4 command     = cull_templates.templates[2u * (chunk_begin + local_index)];
+            uint  base        = 5u * position;
+            cull_commands.commands[base + 0u] = command.x;   // index_count
+            cull_commands.commands[base + 1u] = 1u;          // instance_count
+            cull_commands.commands[base + 2u] = command.y;   // first_index
+            cull_commands.commands[base + 3u] = command.z;   // base_vertex
+            cull_commands.commands[base + 4u] = local_index; // first_instance
+            ++position;
+            bits &= (bits - 1u);
+        }
+    }
+    if (lane == (c_group_size - 1u)) {
+        cull_counts.counts[(2u * job_index) + 0u] = s_scan[lane];
+        cull_counts.counts[(2u * job_index) + 1u] = s_filtered;
+    }
+}
+
+#endif

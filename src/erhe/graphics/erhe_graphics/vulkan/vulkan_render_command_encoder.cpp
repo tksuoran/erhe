@@ -881,6 +881,53 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     }
 }
 
+void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect_count(
+    const Primitive_type           /*primitive_type*/,
+    const erhe::dataformat::Format index_type,
+    const std::uintptr_t           indirect_offset,
+    const Buffer&                  count_buffer,
+    const std::uintptr_t           count_offset,
+    const std::uintptr_t           max_draw_count,
+    const std::uintptr_t           stride
+) const
+{
+    // Only the native multi-draw path has a GPU-read draw count
+    // (Device_info::use_draw_indirect_count).
+    const Device_info& info = m_device.get_info();
+    ERHE_VERIFY(info.use_draw_indirect_count && info.use_multi_draw_indirect_core);
+
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
+    if (command_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+    if (m_index_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+    if (m_indirect_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+    // VUID-vkCmdDrawIndexedIndirectCount-countBufferOffset-02264
+    ERHE_VERIFY((count_offset % 4) == 0);
+
+    vkCmdBindIndexBuffer(command_buffer, m_index_buffer, 0, to_vk_index_type(index_type));
+
+    const uint32_t actual_stride = (stride != 0)
+        ? static_cast<uint32_t>(stride)
+        : static_cast<uint32_t>(sizeof(Draw_indexed_primitives_indirect_command));
+
+    vkCmdDrawIndexedIndirectCountKHR(
+        command_buffer,
+        m_indirect_buffer,
+        static_cast<VkDeviceSize>(indirect_offset),
+        count_buffer.get_impl().get_vk_buffer(),
+        static_cast<VkDeviceSize>(count_offset),
+        static_cast<uint32_t>(max_draw_count),
+        actual_stride
+    );
+    ++m_command_buffer.get_impl().get_descriptor_counters().draw_count;
+    ERHE_VULKAN_TRACE("[DRAW] type=mdi_count max_draw_count={}", max_draw_count);
+}
+
 void Render_command_encoder_impl::dump_state(const char* label) const
 {
     static_cast<void>(label);
