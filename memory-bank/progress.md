@@ -11,7 +11,9 @@
 ✓import-cancel-guard{380f08da2}
 ✓remeasure-after-step-3{listed-3.3s:parse-1.7s(images=basis-transcode-1.0s)+build-1.0s-serial-one-worker+residency-0.45s+op-0.15s;finalize-144ms=old-step-4-moot}
 ✓step-4{14f05e4b6+dc6ea1bd5+405183e2a+2516f9f50;parallel-build-per-unique-shape;build-952->158-245ms;listed-2.7-3.7s;idle-9.6-10.6s;image-identical;fable-review:future.get-exception-fix+staging-move}
-?steps-5-6{KTX2-transcode-cache|lazy;deferred-phase-optimizer-cache;decide-after-step-4}
+✗step-5{KTX2-transcode;not-picked-2026-10-18}
+⚡step-7{scene-close-stall-~10s;measure-set_parent-terms-then-root-cause;gate:close<1s,no-STALLED,leak-check-unchanged}
+?step-6{deferred-phase:mesh_optimize_cache-replay+capture;after-step-7}
 
 [TASK::culling]{started-2026-10-17;branch=render-thread;via-harness;doc/plans/culling.md}
 ✓phase-1{6846081f4;SoA-bounds+view-set+masks;scalar;identical-images+counts;review-fixes:purpose-skip+negative-extent-sentinel+null-scene-guard}
