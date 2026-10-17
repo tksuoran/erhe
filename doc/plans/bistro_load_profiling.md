@@ -1,6 +1,6 @@
 # Bistro load time: profile and optimization candidates
 
-Status: proposed
+Status: in progress
 
 Profile what the editor spends while opening
 `res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf` (2782
@@ -142,6 +142,94 @@ Found alongside, outside this task's scope:
   watchdog reports it as `tick: prepare_render` stalled 5 to 11 s. Needs its
   own task.
 
+## Build order
+
+Picked 2026-10-18: steps 1 to 4 below, in order, one commit each through
+the orchestration harness (`doc/agents/orchestration_harness.md`; Opus
+coder, review per commit). Steps 5 and 6 are decided after step 4's
+re-measurement. Every step's gate is run with
+`scripts/scene_load_profile.py` on the Release headless editor
+(`build_vs2026_vulkan_headless/bin/Release/editor.exe`); the baseline
+render of the loaded scene (`--render-image`, fixed camera over the
+content fit) must stay byte-identical, since none of the steps may change
+what the loaded scene looks like once it has settled.
+
+### Step 1: profiling hygiene in the primitive builder
+
+Remove the per-polygon, per-corner and per-vertex profile zones from
+`src/erhe/primitive/erhe_primitive/primitive_builder.cpp`: the
+`ERHE_PROFILE_SCOPE` zones named "polygon", "corner", "n" and "2n", and the
+`ERHE_PROFILE_FUNCTION` zones of the per-vertex helpers
+(`build_vertex_position`, `build_vertex_normal` and the other helpers
+called once per corner). Keep the per-primitive zones
+(`Primitive_builder::build`, `build_polygon_fill`,
+`build_expanded_polygon_fill`, `Build_context`, `take_optimizable_snapshot`,
+`build_buffer_mesh`). Gate: a two-open Tracy capture of the Bistro load
+holds under 70 million zones (was 350 million) and the deferred phase
+measured under Tracy is within 2 s of the un-profiled run (was 22 s vs
+6 s); the render is byte-identical.
+
+### Step 2: no soup-path optimizer when the full build is deferred
+
+In `finalize_imported_meshes` (`src/editor/parsers/gltf.cpp`), skip
+`attach_optimized_render_shape` for a primitive the deferred finalize task
+is going to rebuild in full, which is exactly the task's own condition:
+edge lines deferred, `render_shape->has_buffer_mesh_triangles()` and
+`!render_shape->has_edge_lines()`. The deferred task's
+`prepare_geometry_buffer_mesh` builds the optimized variant from the
+`Geometry`. Every other case (eager mode, a `Geometry` restored from the
+ERHE_geometry extension that already has edges, GL without worker
+contexts) keeps the pass. Record the rule in
+`doc/editor/async_asset_loading.md` "Deferred load finalize". Gate:
+`finalize_imported_meshes: N ms` in the log under 2000 ms in Release (was
+9300 to 9500); the "mesh optimize totals" line written at finalize time
+reports 0 measured primitives and the one written after the load settles
+reports 3852; the scene is listed in under 6 s (was 13.8 s via File > Load
+Scene); idle no later than before; render byte-identical. Also run once
+with `deferred_edge_lines` off (temporary edit of
+`config/editor/editor_settings.json`, restored afterwards) and confirm the
+eager path still optimizes at finalize time.
+
+### Step 3: every glTF open goes through the async loader
+
+Make the asset browser's Load entry (`Asset_browser::try_open`) and MCP
+`open_scene` (`Mcp_server::action_open_scene`) queue the load with
+`Asset_manager::queue_load` and hand the prepared parse to
+`Scene_open_operation`, the way `Operations_window`'s Load Scene handler
+does; factor that completion into one shared function so the three entry
+points do not carry three copies. The fallback when `queue_load` returns
+null (async loading off) stays the direct operation. Update the entry
+points table in `doc/editor/async_asset_loading.md`. Gate: with `--tool
+open_scene` the log carries `async parse_gltf` and `consuming
+asynchronously prepared parse`, exactly one `parse_gltf 'bistro_lights_c`
+line per open, and the listed time is within 1 s of `--tool load_scene`;
+`mcp_server_tests` filtered to `*open_scene*` passes; render
+byte-identical.
+
+### Step 4: the rest of the finalize frame
+
+After steps 2 and 3 the operation frame is the per-primitive scene-side
+work over 3896 primitives (about 1.2 s): `make_renderable_mesh`'s fast
+path, `make_raytrace_proxy`, `update_rt_primitives`, plus the node attach
+and draw-list registration. Move what needs no scene into the worker
+`build` phase next to `build_imported_buffer_meshes` (the proxy raytrace
+and the renderable fast path are candidates) and re-measure. Gate: the
+`finalize_imported_meshes` log line under 500 ms; listed under 5 s; idle
+no later than before; render byte-identical. Then re-measure both paths,
+record the numbers in `memory-bank/local/bistro_load_2026_10.md` and
+decide steps 5 and 6.
+
+### Step 5 (decide after step 4): residency budget
+
+1.4 s at 4 MiB per frame; a bandwidth- or time-based budget when no
+interactive frame deadline is at stake.
+
+### Step 6 (decide after step 4): deferred phase
+
+6 to 7 s of saturated workers before idle: geometry-path optimizer (28
+worker-seconds, could replay through `mesh_optimize_cache`), the full
+buffer build and `Geometry::process`. Measure with the step 1 capture.
+
 ## Plan
 
 1. Done: wall time of the open in Release and Debug, both entry points,
@@ -151,5 +239,4 @@ Found alongside, outside this task's scope:
    for a full export).
 3. Done: ranking above.
 4. Done: numbers in `memory-bank/local/bistro_load_2026_10.md`, proposal
-   here. Implementation waits for the user's pick; the suggested order is
-   6, 1, 2, then re-measure, then 3 to 5.
+   here; the user picked the build order above (2026-10-18).
