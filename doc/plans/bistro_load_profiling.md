@@ -257,7 +257,7 @@ uploads under the enqueue mutex) and one copy (2516f9f50: `Transfer_entry`
 copied its staging vector). Review found: a throwing build task was
 swallowed by `future.wait()`; fixed with `get()` plus a logged error.
 
-### Step 5 (decide after step 4): KTX2 transcode
+### Step 5 (not picked 2026-10-18): KTX2 transcode
 
 The 1.0 s image half of the parse is Basis Universal transcoding (ETC1S
 to the GPU's block format) of 393 images on 24 workers. Candidates: a
@@ -265,12 +265,41 @@ transcode cache under `cache/` keyed by file hash and target format, so a
 second load reads BC blocks straight from disk; or transcoding lazily
 after publish (textures resident later, the scene listed earlier).
 
-### Step 6 (decide after step 4): deferred phase
+### Step 6 (picked 2026-10-18, after step 7): deferred phase
 
 6 s of saturated workers before idle: geometry-path optimizer (28
 worker-seconds, could replay through `mesh_optimize_cache`, off by default
 in `config/editor/mesh_memory.json`), the full buffer build and
-`Geometry::process`. Measure with a step 1 capture.
+`Geometry::process`. Measure with a step 1 capture. Build order: enable
+`mesh_optimize_cache` replay for the geometry-path optimizer and measure
+the second open; then a capture of the remaining worker time (full buffer
+build, `Geometry::process`, BVH cache load) decides whether anything else
+is worth doing. Gate: idle on the second open in the same process at least
+2 s earlier than the first; render byte-identical; `cache/mesh_optimizer`
+populated by the first open and replayed by the second (`replayed from
+cache` count in the script's log summary equals the primitive count).
+
+### Step 7 (picked 2026-10-18, before step 6): scene close stall
+
+Closing the Bistro scene blocks the main thread for 9.7 to 10.2 s in
+Release (Debug the same), reported by the watchdog as `tick:
+prepare_render` stalled. The Tracy capture places it inside
+`Viewport_scene_view::prepare_render`, where the view's per-frame render
+state drops the last reference to the closed `Scene_root`, and
+`Hierarchy::set_parent` is called about 2800 times at about 3.5 ms self
+time each (no child zones). Suspects: `hierarchy_sanity_check` and
+`sanity_check_root_path` run on every call under `#if 1`;
+`capture_inheritance_snapshot` / `apply_inheritance_snapshot`;
+`invalidate_dependents(child_count_property)` per removed child; and the
+detach order in `Scene::sever_host` (detaching the root's children one by
+one is linear per call if each call walks what is left). First a
+measurement with zones inside `set_parent` to name the term, then the
+root-cause fix; a defensive skip is not acceptable. Gate:
+`scripts/scene_load_profile.py` reports `close N: scene gone after` under
+1 s (was about 10 s); no watchdog stall lines in the log; the scene-close
+leak check line (`scene-close check: all N tracked items ... released`)
+unchanged; `mcp_server_tests` `*close_scene*` and `*undo*` pass; render of
+a second open byte-identical.
 
 ## Plan
 
