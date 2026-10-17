@@ -1,0 +1,129 @@
+// GPU culling classification (doc/plans/culling.md phase 5,
+// doc/erhe/draw_list_renderer.md Q6 "GPU classification").
+//
+// One invocation per entry of the frame's published draw lists (all lists
+// back to back, Draw_list_scene's GPU bounds). Each tests its entry against
+// the views [first_view, end_view) of one classification batch and writes
+// one 64-bit mask (uvec2: x = bits 0..31, y = bits 32..63) per group of 64
+// views the batch touches, into the batch's own mask region:
+// cull_masks.masks[(group - first_view / 64) * entry_count + entry].
+// A group the batch shares with the previous batch holds only the batch's
+// own views' bits here; the previous batch's region holds the others.
+//
+// The tests and their evaluation order are those of the CPU lanes
+// (src/erhe/scene_renderer/erhe_scene_renderer/cull_lanes.cpp), with every
+// intermediate declared precise so no multiply-add is contracted: the bit
+// decisions are the CPU's decisions.
+//
+// cull_bounds.bounds[2 * entry + 0] = center.xyz, 0
+// cull_bounds.bounds[2 * entry + 1] = extent.xyz, purpose (0 color, 1 shadow)
+//   extent.x < 0: no bounds (or a skinned list): inside every view of the
+//   entry's purpose.
+// cull_views.header = first_view, end_view, entry_count, 0
+// cull_views.views[8 * (view - first_view) + k]:
+//   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
+//   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
+//   face (0..5 = +X -X +Y -Y +Z -Z), as exact small floats.
+
+layout(local_size_x = ERHE_CULL_CLASSIFY_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+// d = n . c + w + |n| . e, inside unless d < 0 (cull_lanes::plane_lanes).
+bool plane_keeps(vec4 plane, vec3 c, vec3 e)
+{
+    precise float nx = plane.x;
+    precise float ny = plane.y;
+    precise float nz = plane.z;
+    precise float w  = plane.w;
+    precise float ax = abs(nx);
+    precise float ay = abs(ny);
+    precise float az = abs(nz);
+    precise float center_distance  = (((nx * c.x) + (ny * c.y)) + (nz * c.z)) + w;
+    precise float projected_extent = ((ax * e.x) + (ay * e.y)) + (az * e.z);
+    precise float d                = center_distance + projected_extent;
+    return !(d < 0.0);
+}
+
+// The gap from the sphere center coordinate s to the box's interval on one
+// axis (cull_lanes::sphere_axis_lanes).
+float sphere_axis_gap(float c, float e, float s)
+{
+    precise float offset     = c - s;
+    precise float below      = (-offset) - e;
+    precise float above      = offset - e;
+    precise float signed_gap = (below > above) ? below : above;
+    return (signed_gap > 0.0) ? signed_gap : 0.0;
+}
+
+void main()
+{
+    uint entry       = gl_GlobalInvocationID.x;
+    uint first_view  = cull_views.header.x;
+    uint end_view    = cull_views.header.y;
+    uint entry_count = cull_views.header.z;
+    if (entry >= entry_count) {
+        return;
+    }
+    uint first_group = first_view / 64u;
+
+    vec4 center_w  = cull_bounds.bounds[(2u * entry) + 0u];
+    vec4 extent_w  = cull_bounds.bounds[(2u * entry) + 1u];
+    vec3 c         = center_w.xyz;
+    vec3 e         = extent_w.xyz;
+    uint purpose   = uint(extent_w.w);
+    bool unbounded = !(e.x >= 0.0);
+
+    uint  group = first_group;
+    uvec2 bits  = uvec2(0u, 0u);
+    for (uint view = first_view; view < end_view; ++view) {
+        uint view_group = view / 64u;
+        if (view_group != group) {
+            cull_masks.masks[((group - first_group) * entry_count) + entry] = bits;
+            bits  = uvec2(0u, 0u);
+            group = view_group;
+        }
+        uint base = 8u * (view - first_view);
+        vec4 info = cull_views.views[base + 7u];
+        if (uint(info.x) != purpose) {
+            continue;
+        }
+        bool inside = true;
+        if (!unbounded) {
+            if (uint(info.y) == 1u) {
+                // Cube face: the range sphere, then the face's octant
+                // (cull_lanes::sphere_lanes, cull_lanes::cube_face_lanes).
+                vec4  sphere = cull_views.views[base + 6u];
+                precise float gap_x = sphere_axis_gap(c.x, e.x, sphere.x);
+                precise float gap_y = sphere_axis_gap(c.y, e.y, sphere.y);
+                precise float gap_z = sphere_axis_gap(c.z, e.z, sphere.z);
+                precise float distance2 = ((gap_x * gap_x) + (gap_y * gap_y)) + (gap_z * gap_z);
+                precise float r2        = sphere.w * sphere.w;
+                bool sphere_inside = !(distance2 > r2);
+                uint face      = uint(info.w);
+                uint axis      = face / 2u;
+                float direction = ((face % 2u) == 0u) ? 1.0 : -1.0;
+                vec3  gaps     = vec3(gap_x, gap_y, gap_z);
+                float gap_a    = gaps[(axis + 1u) % 3u];
+                float gap_b    = gaps[(axis + 2u) % 3u];
+                precise float reach   = (direction * (c[axis] - sphere[axis])) + e[axis];
+                float lateral = (gap_a > gap_b) ? gap_a : gap_b;
+                inside = sphere_inside && (reach >= lateral);
+            } else {
+                uint plane_count = uint(info.z);
+                for (uint plane = 0u; plane < plane_count; ++plane) {
+                    if (!plane_keeps(cull_views.views[base + plane], c, e)) {
+                        inside = false;
+                    }
+                }
+            }
+        }
+        if (inside) {
+            uint bit = view % 64u;
+            if (bit < 32u) {
+                bits.x |= (1u << bit);
+            } else {
+                bits.y |= (1u << (bit - 32u));
+            }
+        }
+    }
+    cull_masks.masks[((group - first_group) * entry_count) + entry] = bits;
+}

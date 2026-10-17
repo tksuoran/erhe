@@ -741,6 +741,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 std::copy(face_views.begin(), face_views.end(), m_cull_views_cube.begin() + static_cast<std::ptrdiff_t>(lpt->point_shadow_index * 6));
             }
         }
+        // Classify the views now, before the first render pass: with the
+        // GPU classification this records its compute dispatch, which
+        // cannot be recorded inside a render pass (doc/plans/culling.md
+        // phase 5).
+        parameters.draw_list_scene->record_cull_classification(frame_index, parameters.command_buffer);
     }
 
     // The shadow lists' shared records stay acquired across the passes

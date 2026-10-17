@@ -21,6 +21,7 @@ auto make_draw_list_scene_dependencies(App_context& context) -> Draw_list_scene_
     dependencies.graphics_device      = context.graphics_device;
     dependencies.shader_variant_cache = context.shader_variant_cache;
     dependencies.primitive_interface  = (context.program_interface != nullptr) ? &context.program_interface->primitive_interface : nullptr;
+    dependencies.gpu_cull_classifier  = context.gpu_cull_classifier;
     dependencies.exclude_unlit_from_shadows =
         (context.editor_settings != nullptr) && context.editor_settings->exclude_unlit_primitives;
     // The draw-list set holds the materials of a root that renders content,

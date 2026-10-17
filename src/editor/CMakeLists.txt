@@ -966,6 +966,8 @@ set(_config_sources
     ${_config_out}/radiance_cascades_config.cpp
     ${_config_out}/indirect_diffuse_source.hpp
     ${_config_out}/indirect_diffuse_source.cpp
+    ${_config_out}/culling_classification.hpp
+    ${_config_out}/culling_classification.cpp
     ${_config_out}/radiance_cascades_merge_mode.hpp
     ${_config_out}/radiance_cascades_merge_mode.cpp
     ${_config_out}/radiance_cascades_direction_jitter.hpp

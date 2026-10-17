@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=5,
+    version=6,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -136,6 +136,20 @@ struct("Editor_settings_config",
             long_desc="Producer of the indirect diffuse light for non-lightmapped draws: the flat scene ambient term, DDGI, or radiance cascades. DDGI and radiance cascades need GPU ray query support.",
             visible=True,
             developer=False
+        ),
+        # Where the draw lists' culling classification runs
+        # (doc/plans/culling.md phase 5). gpu also runs it as a compute pass
+        # whose masks a diagnostic compares with the CPU masks; the CPU masks
+        # drive the draws either way.
+        field(
+            "culling_classification",
+            EnumRef("Culling_classification"),
+            added_in=6,
+            default="Culling_classification::cpu",
+            short_desc="Culling Classification",
+            long_desc="Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU (devices with native multi-draw indirect and first-instance record indexing; others use the CPU). The CPU result drives the draws in both modes.",
+            visible=True,
+            developer=True
         ),
         field(
             "quit_after_frames",

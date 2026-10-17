@@ -9,6 +9,23 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: the GPU culling classification
+  (`doc/plans/culling.md` phase 5). `Cull_classification` (`cpu`, `gpu`,
+  `count`) and `c_str(Cull_classification)` (`cull_classification.hpp`);
+  `Gpu_cull_classifier` (`gpu_cull_classifier.hpp`:
+  the device-wide compute pipeline of `res/shaders/cull_classify.comp`,
+  `is_device_capable()`, `is_supported()`, `record_pending(command_buffer)`,
+  which the application calls in the render phase after its last pass that
+  draws draw lists); `Draw_list_scene_create_info::gpu_cull_classifier`;
+  `Draw_list_scene::record_cull_classification(frame_index, command_buffer)`
+  (classifies the frame's views added so far and records their GPU dispatch,
+  outside any render pass; `Shadow_renderer::render()` calls it before its
+  first pass), `get_cull_classification()`, `get_gpu_bounds_write_count()`,
+  `request_cull_classification_check()` /
+  `poll_cull_classification_check(out)` with `Cull_classification_check`,
+  `Cull_classification_list_check`, `Cull_classification_mismatch` and
+  `Cull_classification_check_state`.
+
 - `erhe::graphics`: `Record_indexing` (`draw_position`, `first_instance`),
   `Device_info::record_indexing` and `c_str(Record_indexing)`: how a draw
   names its record. The GLSL preamble defines `ERHE_PRIMITIVE_INDEX`, the
@@ -258,6 +275,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::scene_renderer`: `Draw_list_scene::publish(frame_index,
+  frames_in_flight, classification)` takes the frame's
+  `Cull_classification`; with `gpu` (on a supported device) it also writes
+  the bounds of the lists whose slot copy changed into the slot's GPU bounds
+  buffer.
 
 - `erhe::scene_renderer`: the shaders index `primitive.primitives[]` with
   `ERHE_PRIMITIVE_INDEX` instead of `ERHE_DRAW_ID`, and every

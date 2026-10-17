@@ -156,6 +156,40 @@ curl -X POST http://127.0.0.1:3743/mcp \
 
 Returns: `{lights: [{name, node, type, color, intensity, range}]}`
 
+### get_cull_classification_check
+
+The gate of the draw lists' GPU culling classification
+([culling.md](../plans/culling.md) phase 5,
+[draw_list_renderer.md](../erhe/draw_list_renderer.md) Q6 "GPU
+classification"): the render phase of the next frame the scene's draw lists
+classify on the GPU copies the frame's GPU mask regions to host memory and
+keeps the frame's CPU masks; once the frame retired, every (entry, view) bit
+of every published draw list is compared. A new request replaces an earlier
+one. Errors when the device has no GPU path or the setting is cpu
+(`set_culling_classification` `mode=gpu` first; the check then waits for the
+first frame published with it, so both calls can go in one batch) and waits
+a few frames.
+
+```bash
+py -3 scripts/mcp_call.py get_cull_classification_check b64:<base64 of {"scene_name":"Bench Heavy"}>
+```
+
+Returns: `{scene, frame_index, entry_count, view_count, dispatch_count,
+mismatch_count, gpu_time_first_batch_ns,
+gpu_time_frame_end_ns, gpu_bounds_write_count, lists: [{list_index, purpose,
+entry_count, mismatch_count, mismatches: [{entry, view, cpu, gpu}]}]}`.
+`mismatch_count` 0 is the gate. `entry_count` counts the entries of all
+lists, `view_count` the views the CPU classified, `dispatch_count` the
+compute dispatches (one per classification batch with entries). The two
+times are the classification's `Gpu_timer` results (the first dispatch of a
+frame, normally `Shadow_renderer`'s batch; the end-of-frame dispatch of the
+views classified inside render passes, the color views), the latest
+completed measurements; a dispatch that overlaps the previous work on the
+GPU measures close to 0 (the timer counts work where it finishes).
+`get_draw_lists` reports `cull_classification` (what the last publish
+recorded) and `gpu_bounds_write_count` (the list bounds ranges written to
+the GPU bounds buffers; unchanged on an idle scene).
+
 ### get_scene_materials
 
 List all materials in a scene's content library.
@@ -476,6 +510,18 @@ Returns: every field above with the value in effect, plus `preset_name`,
 `shadow_depth_bits` resolves to, e.g. `format_d32_sfloat` for 24 on a device
 without a 24-bit format) and `shadow_depth_bits_axis` (that format's
 `ERHE_SHADOW_DEPTH_BITS` variant value: 16 / 24 UNORM, 32 float).
+
+### set_culling_classification
+
+Set `Editor_settings_config::culling_classification` (the live setting, as
+the Settings window's Culling Classification combo edits it; saved only by a
+Settings window save): `mode` `cpu` or `gpu`
+([culling.md](../plans/culling.md) phase 5). The next frame's render
+settings snapshot carries it to the draw lists' publish; a device without the
+GPU path's capability keeps the CPU path (`get_draw_lists`
+`cull_classification` reports what was published). Omit `mode` to query.
+
+Returns: `{mode, gpu_supported}`.
 
 ### instantiate_prefab / reload_prefab / get_prefabs / set_prefab_template_property
 

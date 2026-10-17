@@ -8,6 +8,7 @@
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene_renderer/cull_classification.hpp"
 #include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_scene_renderer/light_set.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
@@ -357,9 +358,10 @@ public:
     // M2, after snapshot_render_settings() captured the frame's joint poses
     // (App_scenes::snapshot_render_settings): rewrites the joint slots of the
     // skinned draw list records and publishes the changed draw lists into
-    // the frame's slot (Draw_list_scene::publish), under item_host_mutex.
-    // No-op without a Draw_list_scene.
-    void publish_draw_lists(uint64_t frame_index, std::size_t frames_in_flight);
+    // the frame's slot (Draw_list_scene::publish), under item_host_mutex,
+    // with the frame's culling classification setting. No-op without a
+    // Draw_list_scene.
+    void publish_draw_lists(uint64_t frame_index, std::size_t frames_in_flight, erhe::scene_renderer::Cull_classification classification);
     // The content layer as the ray-query consumers (Ray_trace_renderer, DDGI,
     // radiance cascades) see it (doc/editor/raytrace.md "Ray_trace_scene"):
     // null for a root built without device dependencies or on a device
