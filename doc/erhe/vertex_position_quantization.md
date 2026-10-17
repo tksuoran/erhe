@@ -321,7 +321,7 @@ swizzle differences and no `#if` outside this helper.
 
 Call sites split into two classes over *where the scale and offset come from*:
 
-- **Class A** reads `primitive.primitives[ERHE_DRAW_ID]` and needs no new
+- **Class A** reads `primitive.primitives[ERHE_PRIMITIVE_INDEX]` and needs no new
   uniforms: `standard.vert` (the lit forward pass, depth-only, ID render,
   brush preview, shadow distance, shadow cube, points, solid wireframe and the
   edge-lines-from-id variants) and `tool.vert`.

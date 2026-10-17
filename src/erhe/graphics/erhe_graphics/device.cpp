@@ -426,4 +426,13 @@ auto get_depth_function(const Compare_operation depth_function, const bool rever
 //
 
 
+auto c_str(const Record_indexing record_indexing) -> const char*
+{
+    switch (record_indexing) {
+        case Record_indexing::draw_position:  return "draw_position";
+        case Record_indexing::first_instance: return "first_instance";
+        default:                              return "?";
+    }
+}
+
 } // namespace erhe::graphics

@@ -24,7 +24,7 @@
 #if defined(ERHE_VARIANT_ID_RENDER)
 // Matching the layout locations standard.vert assigns under the
 // ID-render variant.
-layout(location = 0) flat in int v_draw_id;
+layout(location = 0) flat in int v_primitive_index;
 layout(location = 1) flat in int v_primitive_id;
 #endif
 
@@ -271,7 +271,7 @@ void main()
     // reads beyond the shared primitive block.
     uint facet_id = uint(v_primitive_id);
     vec3 id_rgb   = vec3_from_uint(facet_id);
-    vec3 id       = id_rgb + primitive.primitives[v_draw_id].color.xyz;
+    vec3 id       = id_rgb + primitive.primitives[v_primitive_index].color.xyz;
     out_color     = vec4(id, 1.0);
     return;
 #endif

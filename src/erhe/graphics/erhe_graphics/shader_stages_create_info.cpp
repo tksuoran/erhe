@@ -357,6 +357,22 @@ auto Shader_stages_create_info::final_source(
     } else {
         log_glsl->warn("gl_DrawID is not supported");
     }
+    // ERHE_PRIMITIVE_INDEX: the record a draw reads (Device_info::record_indexing,
+    // doc/erhe/graphics.md "Draw records"). gl_InstanceID does not include the
+    // base instance on GL, so the command's first_instance comes from
+    // gl_BaseInstance (GLSL 4.60) or gl_BaseInstanceARB.
+    if (graphics_device.get_info().record_indexing == Record_indexing::first_instance) {
+        if (graphics_device.get_info().glsl_version >= 460) {
+            sb << "#define ERHE_PRIMITIVE_INDEX (gl_BaseInstance + gl_InstanceID)\n";
+        } else {
+            if (!graphics_device.get_info().use_multi_draw_indirect_arb) {
+                sb << "#extension GL_ARB_shader_draw_parameters : enable\n";
+            }
+            sb << "#define ERHE_PRIMITIVE_INDEX (gl_BaseInstanceARB + gl_InstanceID)\n";
+        }
+    } else {
+        sb << "#define ERHE_PRIMITIVE_INDEX ERHE_DRAW_ID\n";
+    }
     sb << "\n";
 #endif
 #if defined(ERHE_GRAPHICS_API_VULKAN)
@@ -368,6 +384,14 @@ auto Shader_stages_create_info::final_source(
         if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {
             sb << "layout(push_constant) uniform Erhe_draw_id_block { int ERHE_DRAW_ID; };\n";
         }
+    }
+    // ERHE_PRIMITIVE_INDEX: the record a draw reads (Device_info::record_indexing,
+    // doc/erhe/graphics.md "Draw records"). gl_InstanceIndex includes the
+    // command's firstInstance on the native and the emulated multi-draw path.
+    if (graphics_device.get_info().record_indexing == Record_indexing::first_instance) {
+        sb << "#define ERHE_PRIMITIVE_INDEX gl_InstanceIndex\n";
+    } else {
+        sb << "#define ERHE_PRIMITIVE_INDEX ERHE_DRAW_ID\n";
     }
     // Only declare the bindless texture heap when the bind group layout
     // opts in. Shaders that don't sample from the heap (e.g. most compute
@@ -429,6 +453,14 @@ auto Shader_stages_create_info::final_source(
     // Only emit for vertex/compute -- fragment shaders receive draw ID via interpolated varying.
     if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {
         sb << "layout(push_constant) uniform Erhe_draw_id_block { int ERHE_DRAW_ID; };\n";
+    }
+    // ERHE_PRIMITIVE_INDEX (doc/erhe/graphics.md "Draw records"): the Metal
+    // device names records by position (Record_indexing::draw_position); the
+    // instance index would carry first_instance through SPIRV-Cross.
+    if (graphics_device.get_info().record_indexing == Record_indexing::first_instance) {
+        sb << "#define ERHE_PRIMITIVE_INDEX gl_InstanceIndex\n";
+    } else {
+        sb << "#define ERHE_PRIMITIVE_INDEX ERHE_DRAW_ID\n";
     }
     sb << "#define ERHE_BACKEND_METAL 1\n";
     // ERHE_TEXTURE_HEAP_METAL_ARGUMENT_BUFFER is the Metal-specific shader code

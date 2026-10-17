@@ -86,6 +86,9 @@ public:
     erhe::graphics::Shader_resource primitive_struct;
     Primitive_struct                offsets;
     std::size_t                     max_primitive_count;
+    // How the shaders name a draw's record (ERHE_PRIMITIVE_INDEX), the
+    // device's Device_info::record_indexing.
+    erhe::graphics::Record_indexing record_indexing;
 };
 
 using ::Primitive_color_source;
@@ -203,6 +206,19 @@ public:
         std::span<const std::uint8_t>       entry_passes,
         const Primitive_interface_settings& settings,
         std::size_t&                        out_primitive_count
+    ) -> erhe::graphics::Ring_buffer_range;
+
+    // Shared-record overload (doc/erhe/draw_list_renderer.md "Record
+    // upload"): writes the record of EVERY entry in [begin, end) of
+    // draw_list, entry i at record i - begin, the same bytes the overload
+    // above writes for a passing entry (one block copy, then the same color /
+    // size patch). The draw commands name their records through
+    // Draw_record_layout::chunk_entries. Reads no Mesh.
+    auto update_records(
+        const Draw_list&                    draw_list,
+        std::size_t                         begin,
+        std::size_t                         end,
+        const Primitive_interface_settings& settings
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Prepare-phase half of the bucket path (render_bucket_snapshot.hpp):

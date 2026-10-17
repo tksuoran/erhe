@@ -69,6 +69,13 @@ namespace erhe::graphics::test {
 // with base_vertex 0, which is the non-indexed Draw_primitives_indirect_command
 // {count 6, first 6 q}. Both variants render the same image and share its
 // golden (draw_indirect_single, draw_indirect_multi).
+//
+// First-instance variant (draw_indexed_indirect_first_instance): command q
+// carries first_instance 2 - q, and the color comes from
+// ERHE_PRIMITIVE_INDEX instead of ERHE_DRAW_ID, so column q shows color 2 - q
+// where the record index travels in the command's first_instance
+// (Device_info::record_indexing == Record_indexing::first_instance; skipped
+// elsewhere). Its expected image is computed; it has no golden.
 // -----------------------------------------------------------------------------
 
 namespace {
@@ -81,7 +88,8 @@ constexpr int      c_row_step     = c_height / c_column_count; // quad q starts 
 constexpr uint32_t c_command_words = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command) / sizeof(uint32_t);
 
 // Command q: index_count 6, instance_count 1, first_index 6 q,
-// base_vertex BASE_VERTEX_STEP q, base_instance 0.
+// base_vertex BASE_VERTEX_STEP q, base_instance FIRST_INSTANCE_BIAS -
+// FIRST_INSTANCE_STEP q.
 constexpr const char* c_command_compute_source = R"glsl(
 layout(local_size_x = 1) in;
 void main()
@@ -92,7 +100,7 @@ void main()
     Commands.data[base + 1u] = 1u;
     Commands.data[base + 2u] = q * 6u;
     Commands.data[base + 3u] = q * BASE_VERTEX_STEP;
-    Commands.data[base + 4u] = 0u;
+    Commands.data[base + 4u] = FIRST_INSTANCE_BIAS - (q * FIRST_INSTANCE_STEP);
 }
 )glsl";
 
@@ -105,7 +113,11 @@ void main()
     vec4  p            = Vertices.data[gl_VertexID];
     float column_width = 2.0 / float(COLUMN_COUNT);
     gl_Position = vec4(-1.0 + ((float(ERHE_DRAW_ID) + p.x) * column_width), p.y, 0.0, 1.0);
+#if COLOR_FROM_PRIMITIVE_INDEX
+    v_draw_id   = int(ERHE_PRIMITIVE_INDEX);
+#else
     v_draw_id   = ERHE_DRAW_ID;
+#endif
 }
 )glsl";
 
@@ -122,6 +134,14 @@ enum class Indexing : unsigned int
 {
     indexed,  // shared corners, first_index and base_vertex both non-zero
     identity  // de-indexed triangles through an identity index buffer
+};
+
+// What colors a column: the draw's position, or the record index its
+// command's first_instance names (reversed: command q names record 2 - q).
+enum class Color_source : unsigned int
+{
+    draw_id,
+    first_instance_reversed
 };
 
 constexpr std::array<std::array<uint8_t, 4>, c_column_count> c_column_colors{{
@@ -143,7 +163,7 @@ protected:
     // Write draw_count commands with a compute pass, draw them with
     // multi_draw_indexed_primitives_indirect and return the read-back target
     // (memory rows) in pixels.
-    void draw(const uint32_t draw_count, const Indexing indexing, std::vector<uint8_t>& pixels)
+    void draw(const uint32_t draw_count, const Indexing indexing, const Color_source color_source, std::vector<uint8_t>& pixels)
     {
         erhe::graphics::Device& graphics_device = device();
 
@@ -171,6 +191,9 @@ protected:
             }
         }
         const uint32_t base_vertex_step = (indexing == Indexing::indexed) ? 3u : 0u;
+        const bool     reversed         = (color_source == Color_source::first_instance_reversed);
+        const uint32_t first_instance_bias = reversed ? static_cast<uint32_t>(c_column_count - 1) : 0u;
+        const uint32_t first_instance_step = reversed ? 1u : 0u;
 
         const std::size_t vertex_bytes  = vertices.size() * sizeof(glm::vec4);
         const std::size_t index_bytes   = indices.size() * sizeof(uint32_t);
@@ -228,8 +251,10 @@ protected:
             "draw_indirect_commands",
             c_command_compute_source,
             {
-                { "COMMAND_WORDS",    std::to_string(c_command_words) + "u" },
-                { "BASE_VERTEX_STEP", std::to_string(base_vertex_step) + "u" }
+                { "COMMAND_WORDS",       std::to_string(c_command_words) + "u" },
+                { "BASE_VERTEX_STEP",    std::to_string(base_vertex_step) + "u" },
+                { "FIRST_INSTANCE_BIAS", std::to_string(first_instance_bias) + "u" },
+                { "FIRST_INSTANCE_STEP", std::to_string(first_instance_step) + "u" }
             },
             {},
             { &commands_block },
@@ -266,7 +291,10 @@ protected:
         };
         erhe::graphics::Shader_stages_create_info shader_create_info{
             .name             = "draw_indirect",
-            .defines          = { { "COLUMN_COUNT", std::to_string(c_column_count) } },
+            .defines          = {
+                { "COLUMN_COUNT",                std::to_string(c_column_count) },
+                { "COLOR_FROM_PRIMITIVE_INDEX", reversed ? "1" : "0" }
+            },
             .interface_blocks = { &vertices_block },
             .fragment_outputs = &fragment_outputs,
             .no_vertex_input  = true,
@@ -345,34 +373,44 @@ protected:
         ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_width) * static_cast<std::size_t>(c_height) * 4u);
     }
 
-    // Column c < draw_count holds color c in image rows [16 c, 48) and the
-    // clear color above; the other columns are clear. Exact per texel.
-    void check(const std::vector<uint8_t>& pixels, const uint32_t draw_count, std::string_view golden_name)
+    // Column c < draw_count holds color c (color 2 - c for
+    // first_instance_reversed) in image rows [16 c, 48) and the clear color
+    // above; the other columns are clear. Exact per texel; an empty
+    // golden_name skips the golden comparison.
+    void check(const std::vector<uint8_t>& pixels, const uint32_t draw_count, const Color_source color_source, std::string_view golden_name)
     {
         std::vector<uint8_t> expected(static_cast<std::size_t>(c_width) * static_cast<std::size_t>(c_height) * 4u);
         for (int y = 0; y < c_height; ++y) {
             for (int x = 0; x < c_width; ++x) {
                 const int                    column = x / c_column_width;
                 const bool                   drawn  = (column < static_cast<int>(draw_count)) && (y >= (column * c_row_step));
-                const std::array<uint8_t, 4> color  = drawn ? c_column_colors[static_cast<std::size_t>(column)] : std::array<uint8_t, 4>{ 0, 0, 0, 255 };
+                const int                    record = (color_source == Color_source::first_instance_reversed) ? (c_column_count - 1 - column) : column;
+                const std::array<uint8_t, 4> color  = drawn ? c_column_colors[static_cast<std::size_t>(record)] : std::array<uint8_t, 4>{ 0, 0, 0, 255 };
                 const std::size_t            base   = ((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_width)) + static_cast<std::size_t>(x)) * 4u;
                 std::memcpy(expected.data() + base, color.data(), 4u);
             }
         }
         const std::vector<uint8_t> image_rows = memory_rows_to_image_rows(pixels, static_cast<std::size_t>(c_width) * 4u, c_height);
-        expect_rgba8_near(image_rows, expected, c_width, c_height, 1, golden_name);
+        expect_rgba8_near(image_rows, expected, c_width, c_height, 1, golden_name.empty() ? std::string_view{"draw_indirect_first_instance"} : golden_name);
 
-        expect_image_matches_golden(golden_name, c_width, c_height, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
+        if (!golden_name.empty()) {
+            expect_image_matches_golden(golden_name, c_width, c_height, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
+        }
     }
 
     void run(const uint32_t draw_count, const Indexing indexing, std::string_view golden_name)
     {
+        run(draw_count, indexing, Color_source::draw_id, golden_name);
+    }
+
+    void run(const uint32_t draw_count, const Indexing indexing, const Color_source color_source, std::string_view golden_name)
+    {
         std::vector<uint8_t> pixels;
-        draw(draw_count, indexing, pixels);
+        draw(draw_count, indexing, color_source, pixels);
         if (HasFatalFailure()) {
             return;
         }
-        check(pixels, draw_count, golden_name);
+        check(pixels, draw_count, color_source, golden_name);
     }
 };
 
@@ -401,6 +439,17 @@ TEST_F(Draw_indirect_test, draw_indirect)
 TEST_F(Draw_indirect_test, draw_indirect_multi)
 {
     run(3, Indexing::identity, "draw_indirect_multi");
+}
+
+// Three GPU-written indexed commands whose first_instance names the record
+// in reverse order: ERHE_PRIMITIVE_INDEX (doc/erhe/graphics.md "Draw
+// records") reaches the shader as 2 - q in column q.
+TEST_F(Draw_indirect_test, draw_indexed_indirect_first_instance)
+{
+    if (device().get_info().record_indexing != erhe::graphics::Record_indexing::first_instance) {
+        GTEST_SKIP() << "Record_indexing::first_instance not available on this device";
+    }
+    run(3, Indexing::indexed, Color_source::first_instance_reversed, {});
 }
 
 } // namespace erhe::graphics::test

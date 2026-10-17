@@ -21,6 +21,19 @@ namespace erhe::scene_renderer {
 class Draw_list;
 class Render_bucket;
 
+// Which record of the bound primitive range a draw-list command names
+// (Draw_indirect_buffer::update(Draw_list, ...)).
+enum class Draw_record_layout : unsigned int
+{
+    // The range holds one record per passing entry, in entry order: command
+    // i names record i.
+    packed = 0,
+    // The range holds the record of every entry of [begin, end), passing or
+    // not: a command names its entry's record, entry index - begin, through
+    // its first_instance. Needs erhe::graphics::Record_indexing::first_instance.
+    chunk_entries = 1
+};
+
 class Draw_indirect_buffer_range
 {
 public:
@@ -59,25 +72,38 @@ public:
     ) const;
 
     // Render-phase half: copies prepared draw commands into a ring buffer
-    // range, applying the debug index count clamp. Reads no Mesh.
+    // range, applying the debug index count clamp, and writes each command's
+    // first_instance: its position in commands (the record index; 0 under
+    // Record_indexing::draw_position). The commands must carry
+    // first_instance 0 (verified). Reads no Mesh.
     auto update(std::span<const erhe::graphics::Draw_indexed_primitives_indirect_command> commands) -> Draw_indirect_buffer_range;
 
     // Draw-list overload: one draw command per entry in [begin, end) of
     // draw_list whose entry_passes value (indexed like draw_list.entries) is
-    // non-zero, in entry order - the exact counterpart of
-    // Primitive_buffer::update(Draw_list, ...) so ERHE_DRAW_ID indexes line
-    // up. Uses the index_count / first_index / base_vertex baked into the
-    // entries at registration; touches no Mesh.
+    // non-zero, in entry order. With Draw_record_layout::packed it is the
+    // exact counterpart of Primitive_buffer::update(Draw_list, ...); with
+    // chunk_entries the commands name the records of
+    // Primitive_buffer::update_records(Draw_list, begin, end, ...). Uses the
+    // index_count / first_index / base_vertex baked into the entries at
+    // registration; touches no Mesh.
     auto update(
         const Draw_list&               draw_list,
         std::size_t                    begin,
         std::size_t                    end,
-        std::span<const std::uint8_t>  entry_passes
+        std::span<const std::uint8_t>  entry_passes,
+        Draw_record_layout             record_layout
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();
 
 private:
+    // The record a command names travels in its first_instance with
+    // Record_indexing::first_instance (ERHE_PRIMITIVE_INDEX, the command's
+    // record index in the bound primitive range); with draw_position every
+    // first_instance is 0 and ERHE_PRIMITIVE_INDEX is the command's position.
+    [[nodiscard]] auto get_first_instance(std::size_t record_index) const -> uint32_t;
+
+    erhe::graphics::Record_indexing m_record_indexing{erhe::graphics::Record_indexing::draw_position};
     bool m_max_index_count_enable{false};
     int  m_max_index_count       {256};
     int  m_max_draw_count        {8000};

@@ -167,6 +167,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.api_info                                 = fmt::format("Metal ({})", m_mtl_device->name()->utf8String());
     m_info.max_texture_size                         = 16384;
     m_info.sub_pixel_precision_bits                 = 0; // Metal does not report it
+    // The multi-draw emulation pushes the draw index and issues draws with
+    // base instance 0: records are named by position.
+    m_info.record_indexing                          = Record_indexing::draw_position;
     m_info.max_samples                              = max_samples;
     m_info.max_color_texture_samples                = max_samples;
     m_info.max_depth_texture_samples                = max_samples;

@@ -126,6 +126,22 @@ enum class Texture_heap_path : unsigned int {
     vulkan_descriptor_indexing  // Vulkan: erhe_texture_heap[] at set 1 + assigned samplers at set 0
 };
 
+// How a draw names its per-draw record (the primitive record of
+// erhe::scene_renderer, indexed by the GLSL preamble's ERHE_PRIMITIVE_INDEX;
+// doc/erhe/graphics.md "Draw records: ERHE_DRAW_ID and
+// ERHE_PRIMITIVE_INDEX"). Resolved once at device init.
+enum class Record_indexing : unsigned int {
+    // ERHE_PRIMITIVE_INDEX is ERHE_DRAW_ID, the command's position in its
+    // multi-draw; indirect commands keep first_instance 0.
+    draw_position = 0,
+    // ERHE_PRIMITIVE_INDEX is the instance index that carries the command's
+    // first_instance (Vulkan gl_InstanceIndex, GL gl_BaseInstance(ARB) +
+    // gl_InstanceID), so a command can name any record of the bound range.
+    first_instance = 1
+};
+
+[[nodiscard]] auto c_str(Record_indexing record_indexing) -> const char*;
+
 class Device_info
 {
 public:
@@ -251,6 +267,9 @@ public:
     // ARB_base_instance, Vulkan drawIndirectFirstInstance (a non-zero
     // base_instance in a Draw_*_indirect_command).
     bool use_base_instance           {false};
+    // What ERHE_PRIMITIVE_INDEX reads: first_instance needs use_base_instance
+    // and, on GL, gl_BaseInstance (GLSL 4.60 or ARB_shader_draw_parameters).
+    Record_indexing record_indexing  {Record_indexing::draw_position};
     bool use_clear_texture           {false};
     bool use_texture_view            {false};
     bool use_debug_output            {false}; // GL 4.3 or ARB_debug_output -- debug callback

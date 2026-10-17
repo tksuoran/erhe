@@ -14,7 +14,7 @@
 // flat outputs the fragment packs into an RGB id. The lit varyings below
 // are skipped via ERHE_VARIANT_POSITION_PASS, so there is no link
 // conflict.
-layout(location = 0) flat out int v_draw_id;
+layout(location = 0) flat out int v_primitive_index;
 layout(location = 1) flat out int v_primitive_id;
 #endif
 
@@ -182,12 +182,12 @@ void main()
     // from the fact that they sum to one; see erhe_vertex_joint_weights.glsl.
     vec4 node_joint_weights = erhe_decode_vertex_joint_weights();
 
-    if (primitive.primitives[ERHE_DRAW_ID].skinning_factor < 0.5) {
-        world_from_node        = primitive.primitives[ERHE_DRAW_ID].world_from_node;
-        world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
+    if (primitive.primitives[ERHE_PRIMITIVE_INDEX].skinning_factor < 0.5) {
+        world_from_node        = primitive.primitives[ERHE_PRIMITIVE_INDEX].world_from_node;
+        world_from_node_normal = primitive.primitives[ERHE_PRIMITIVE_INDEX].world_from_node_normal;
     } else {
         erhe_skin_matrices(
-            primitive.primitives[ERHE_DRAW_ID].base_joint_index,
+            primitive.primitives[ERHE_PRIMITIVE_INDEX].base_joint_index,
             a_joint_indices_0,
             node_joint_weights,
             world_from_node,
@@ -195,8 +195,8 @@ void main()
         );
     }
 #else
-    world_from_node        = primitive.primitives[ERHE_DRAW_ID].world_from_node;
-    world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
+    world_from_node        = primitive.primitives[ERHE_PRIMITIVE_INDEX].world_from_node;
+    world_from_node_normal = primitive.primitives[ERHE_PRIMITIVE_INDEX].world_from_node_normal;
 #endif
 
     // Relative to eye (doc/erhe/shadows.md "View-relative positions"): the
@@ -220,11 +220,11 @@ void main()
 
     // Object space position: identical to a_position unless the vertex format
     // stores it quantized into the primitive AABB, in which case this is the
-    // decode. ERHE_DRAW_ID is the same primitive record the transforms above
+    // decode. ERHE_PRIMITIVE_INDEX is the same primitive record the transforms above
     // came from, so caster and lit pass always decode with the same affine.
     vec3 node_position   = erhe_decode_vertex_position(
-        primitive.primitives[ERHE_DRAW_ID].position_scale.xyz,
-        primitive.primitives[ERHE_DRAW_ID].position_offset.xyz
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].position_scale.xyz,
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].position_offset.xyz
     );
 
     vec4 position               = world_from_node * vec4(node_position, 1.0);
@@ -262,7 +262,7 @@ void main()
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
-    v_draw_id      = ERHE_DRAW_ID;
+    v_primitive_index = ERHE_PRIMITIVE_INDEX;
     // Emit this facet's GEO index directly, decoded from the per-vertex facet-id
     // attribute (a_custom_0 = build_polygon_id()'s vec4_from_uint(facet)). Every
     // corner of a facet carries the same value, so this flat output is the facet
@@ -304,8 +304,8 @@ void main()
 #   else
     gl_Position.z               -= clip_depth_direction * 0.0005;
 #   endif
-    gl_PointSize  = max(primitive.primitives[ERHE_DRAW_ID].size / point_distance, 2.0);
-    v_point_color = primitive.primitives[ERHE_DRAW_ID].color;
+    gl_PointSize  = max(primitive.primitives[ERHE_PRIMITIVE_INDEX].size / point_distance, 2.0);
+    v_point_color = primitive.primitives[ERHE_PRIMITIVE_INDEX].color;
 #endif
 
 #if !defined(ERHE_VARIANT_POSITION_PASS)
@@ -323,14 +323,14 @@ void main()
 #   endif
 
 #   if (ERHE_SHADER_DEBUG != 0) && defined(ERHE_USE_SKINNING)
-    if (primitive.primitives[ERHE_DRAW_ID].skinning_factor < 0.5) {
+    if (primitive.primitives[ERHE_PRIMITIVE_INDEX].skinning_factor < 0.5) {
         v_bone_color = vec4(0.3, 0.0, 0.3, 1.0);
     } else {
         v_bone_color =
-            node_joint_weights.x * joint.debug_joint_colors[(int(a_joint_indices_0.x) + primitive.primitives[ERHE_DRAW_ID].base_joint_index) % joint.debug_joint_color_count] +
-            node_joint_weights.y * joint.debug_joint_colors[(int(a_joint_indices_0.y) + primitive.primitives[ERHE_DRAW_ID].base_joint_index) % joint.debug_joint_color_count] +
-            node_joint_weights.z * joint.debug_joint_colors[(int(a_joint_indices_0.z) + primitive.primitives[ERHE_DRAW_ID].base_joint_index) % joint.debug_joint_color_count] +
-            node_joint_weights.w * joint.debug_joint_colors[(int(a_joint_indices_0.w) + primitive.primitives[ERHE_DRAW_ID].base_joint_index) % joint.debug_joint_color_count];
+            node_joint_weights.x * joint.debug_joint_colors[(int(a_joint_indices_0.x) + primitive.primitives[ERHE_PRIMITIVE_INDEX].base_joint_index) % joint.debug_joint_color_count] +
+            node_joint_weights.y * joint.debug_joint_colors[(int(a_joint_indices_0.y) + primitive.primitives[ERHE_PRIMITIVE_INDEX].base_joint_index) % joint.debug_joint_color_count] +
+            node_joint_weights.z * joint.debug_joint_colors[(int(a_joint_indices_0.z) + primitive.primitives[ERHE_PRIMITIVE_INDEX].base_joint_index) % joint.debug_joint_color_count] +
+            node_joint_weights.w * joint.debug_joint_colors[(int(a_joint_indices_0.w) + primitive.primitives[ERHE_PRIMITIVE_INDEX].base_joint_index) % joint.debug_joint_color_count];
     }
 #   endif
 
@@ -338,10 +338,10 @@ void main()
     // joint_weight_ramp: sum this vertex's influence from the target joint.
     // debug_joint_indices.x == 0xffffffffu = no target joint;
     // .y != 0 = show zero-weight vertices as black (-1).
-    if ((primitive.primitives[ERHE_DRAW_ID].skinning_factor < 0.5) || (joint.debug_joint_indices.x == 0xffffffffu)) {
+    if ((primitive.primitives[ERHE_PRIMITIVE_INDEX].skinning_factor < 0.5) || (joint.debug_joint_indices.x == 0xffffffffu)) {
         v_weight = -2.0;
     } else {
-        uint base_joint = primitive.primitives[ERHE_DRAW_ID].base_joint_index;
+        uint base_joint = primitive.primitives[ERHE_PRIMITIVE_INDEX].base_joint_index;
         float w =
             ((joint.joints[int(a_joint_indices_0.x) + int(base_joint)].debug_flags.x != 0u) ? node_joint_weights.x : 0.0) +
             ((joint.joints[int(a_joint_indices_0.y) + int(base_joint)].debug_flags.x != 0u) ? node_joint_weights.y : 0.0) +
@@ -397,7 +397,7 @@ void main()
     v_view_relative_position = view_relative_position.xyz;
     v_position_rounding      = position_rounding;
 
-    v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
+    v_material_index = primitive.primitives[ERHE_PRIMITIVE_INDEX].material_index;
 
 #   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD0)
     // xy of the primitive's texcoord affine is channel 0, zw is channel 1. The
@@ -405,8 +405,8 @@ void main()
     // unorm16x2 (the optimized variant); see erhe_vertex_texcoord.glsl.
     v_texcoord_0     = erhe_decode_vertex_texcoord(
         a_texcoord_0,
-        primitive.primitives[ERHE_DRAW_ID].texcoord_scale.xy,
-        primitive.primitives[ERHE_DRAW_ID].texcoord_offset.xy
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].texcoord_scale.xy,
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].texcoord_offset.xy
     );
 #   endif
 
@@ -416,13 +416,13 @@ void main()
 
 #   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
     v_texcoord_2            = a_texcoord_2;
-    v_lightmap_scale_offset = primitive.primitives[ERHE_DRAW_ID].lightmap_scale_offset;
+    v_lightmap_scale_offset = primitive.primitives[ERHE_PRIMITIVE_INDEX].lightmap_scale_offset;
 #   endif
 #   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD1)
     v_texcoord_1     = erhe_decode_vertex_texcoord(
         a_texcoord_1,
-        primitive.primitives[ERHE_DRAW_ID].texcoord_scale.zw,
-        primitive.primitives[ERHE_DRAW_ID].texcoord_offset.zw
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].texcoord_scale.zw,
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].texcoord_offset.zw
     );
 #   endif
 
@@ -438,7 +438,7 @@ void main()
 #       ifdef ERHE_ATTRIBUTE_a_tangent
     v_tangent_scale       = node_handedness;
 #       endif
-    v_line_width          = primitive.primitives[ERHE_DRAW_ID].size;
+    v_line_width          = primitive.primitives[ERHE_PRIMITIVE_INDEX].size;
 #       if defined(ERHE_ATTRIBUTE_a_custom_2)
     v_valency_edge_count  = a_valency_edge_count;
 #       endif
@@ -454,8 +454,8 @@ void main()
         (wireframe_corner == 2u) ? 1.0 : 0.0
     );
     v_edge_mask  = (a_custom_4 >> 2u) & 7u;
-    v_wire_color = primitive.primitives[ERHE_DRAW_ID].color;
-    v_wire_width = primitive.primitives[ERHE_DRAW_ID].size;
+    v_wire_color = primitive.primitives[ERHE_PRIMITIVE_INDEX].color;
+    v_wire_width = primitive.primitives[ERHE_PRIMITIVE_INDEX].size;
 #   endif
 #endif
 
