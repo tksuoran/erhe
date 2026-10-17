@@ -88,18 +88,17 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
     // Same convention as the bucket path: 0 for single view, N for multiview.
     const uint16_t multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
 
-    // Frustum culling of the entries (doc/erhe/draw_list_renderer.md
-    // "Frustum culling"): the planes of the single view's clip_from_world,
+    // Frustum culling of the entries (doc/erhe/draw_list_renderer.md Q6):
+    // the culling view of the planes of the single view's clip_from_world,
     // built the way Camera_buffer builds the matrix. Multiview passes draw
     // unculled.
-    std::array<glm::vec4, 6>   view_frustum_planes{};
-    std::span<const glm::vec4> view_frustum_planes_span{};
+    Cull_view cull_view{Cull_view::none};
     if ((base.views.size() == 1) && (base.views.front().camera != nullptr)) {
-        const Camera_view_input& view            = base.views.front();
-        const glm::mat4          clip_from_world = view.camera->projection().clip_from_node_transform(view.viewport, base.reverse_depth, base.depth_range, base.conventions).get_matrix() * view.camera->node_from_world();
-        const float              clip_z_min      = (base.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
-        view_frustum_planes      = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
-        view_frustum_planes_span = std::span<const glm::vec4>{view_frustum_planes};
+        const Camera_view_input&       view            = base.views.front();
+        const glm::mat4                clip_from_world = view.camera->projection().clip_from_node_transform(view.viewport, base.reverse_depth, base.depth_range, base.conventions).get_matrix() * view.camera->node_from_world();
+        const float                    clip_z_min      = (base.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
+        const std::array<glm::vec4, 6> view_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
+        cull_view = parameters.draw_list_scene.add_cull_view(frame_index, Draw_purpose::color, std::span<const glm::vec4>{view_frustum_planes});
     }
 
     Draw_statistics statistics{};
@@ -122,7 +121,7 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
                 .multiview_count      = multiview_count,
                 .environment          = environment,
                 .color_blend_override = parameters.color_blend_override,
-                .view_frustum_planes  = view_frustum_planes_span,
+                .cull_view            = cull_view,
                 .debug_label          = base.debug_label,
                 .frame_index          = frame_index
             }

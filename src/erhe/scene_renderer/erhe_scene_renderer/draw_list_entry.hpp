@@ -39,8 +39,11 @@ public:
     uint32_t         first_index         {0};
     uint32_t         base_vertex         {0};
     // World-space bounds of the owning mesh, set at registration and by the
-    // transform hook; color passes cull on it (Q6). Not maintained for
-    // skinned objects, which are never culled.
+    // transform and bounds hooks, together with Draw_list::bounds (the SoA
+    // copy the culling classifies). Kept as min / max because the shadow
+    // bounds gather (Draw_list_scene::gather_shadow_bounds) hands the exact
+    // box to the shadow fit: center +- extent does not round-trip it bit
+    // for bit. Not maintained for skinned objects, which are never culled.
     erhe::math::Aabb world_aabb          {};
 };
 

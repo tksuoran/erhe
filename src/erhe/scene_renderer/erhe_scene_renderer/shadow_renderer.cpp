@@ -45,6 +45,58 @@ static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow
 
 namespace {
 
+// Cube face look / up vectors in Vulkan cube-face order (+X, -X, +Y, -Y,
+// +Z, -Z), matching the layer order the point cube pass writes and the
+// direction-based samplerCubeArray lookup in the forward pass. These match
+// the GL/forge cube up-vectors.
+constexpr std::array<glm::vec3, 6> c_cube_look{
+    glm::vec3{ 1.0f,  0.0f,  0.0f}, glm::vec3{-1.0f,  0.0f,  0.0f},
+    glm::vec3{ 0.0f,  1.0f,  0.0f}, glm::vec3{ 0.0f, -1.0f,  0.0f},
+    glm::vec3{ 0.0f,  0.0f,  1.0f}, glm::vec3{ 0.0f,  0.0f, -1.0f}
+};
+constexpr std::array<glm::vec3, 6> c_cube_up{
+    glm::vec3{ 0.0f, -1.0f,  0.0f}, glm::vec3{ 0.0f, -1.0f,  0.0f},
+    glm::vec3{ 0.0f,  0.0f,  1.0f}, glm::vec3{ 0.0f,  0.0f, -1.0f},
+    glm::vec3{ 0.0f, -1.0f,  0.0f}, glm::vec3{ 0.0f, -1.0f,  0.0f}
+};
+
+// The pose of one point light cube face: the camera the face's camera block
+// is written from and its culling planes are built from.
+[[nodiscard]] auto make_cube_face_transform(const glm::vec3& light_pos, const int face) -> erhe::scene::Trs_transform
+{
+    const glm::mat4 world_from_face = erhe::math::create_look_at(
+        light_pos,                                                 // eye
+        light_pos + c_cube_look[static_cast<std::size_t>(face)],   // center
+        c_cube_up[static_cast<std::size_t>(face)]                  // up
+    );
+    return erhe::scene::Trs_transform{world_from_face, glm::inverse(world_from_face)};
+}
+
+// Cube-shadow caster coordinate conventions. Unlike a 2D color target or
+// the 2D shadow map (which is sampled through a texture_from_world matrix
+// that absorbs the flip via Light::get_texture_from_clip), a cube face is
+// sampled by raw direction through the API's FIXED cube-map (s,t)
+// convention, which is vertically inverted relative to the framebuffer
+// row order. So the stored face must be physically oriented to match it:
+// the cube caster needs its clip-space Y flipped OPPOSITE to the screen
+// pass. erhe's framebuffer y-flip is the framebuffer_origin compensation
+// (a negative-height viewport on top_left backends, none on bottom_left
+// GL). We express the cube's counter-flip the same convention-driven way
+// get_texture_from_clip does -- derived from framebuffer_origin, via
+// clip_space_y_flip: on a top_left framebuffer the projection y-negate
+// cancels the viewport flip (net GL-native orientation == the cube
+// convention); on bottom_left GL nothing is flipped. This is the one
+// legitimate use of clip_space_y_flip (disabled device-wide otherwise).
+[[nodiscard]] auto make_cube_conventions(const erhe::math::Coordinate_conventions& conventions) -> erhe::math::Coordinate_conventions
+{
+    erhe::math::Coordinate_conventions cube_conventions = conventions;
+    cube_conventions.clip_space_y_flip =
+        (conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left)
+            ? erhe::math::Clip_space_y_flip::enabled
+            : erhe::math::Clip_space_y_flip::disabled;
+    return cube_conventions;
+}
+
 // True when every primitive of the mesh is unlit (KHR_materials_unlit), i.e.
 // the mesh contributes no caster to the shadow pass once unlit primitives are
 // excluded. A mesh with a mix of lit and unlit primitives still casts, and
@@ -572,20 +624,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     const bool        use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
     const std::size_t cull_index      = static_cast<std::size_t>(parameters.cull_mode);
 
-    // Draw-list entry culling against the light frustum of each pass (Q6):
-    // the planes of the clip_from_world the pass rasterizes with, in the
-    // convention Draw_list_renderer builds the view planes. A depth-clamped
-    // directional pass keeps casters beyond its depth planes (pancaked), so
-    // it culls on the four side planes only; every other pass clips at all
-    // six.
+    // The clip-space near depth of the culling planes (below).
     const float clip_z_min = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
-    std::array<glm::vec4, 6> light_frustum_planes{};
     if (parameters.draw_statistics != nullptr) {
         parameters.draw_statistics->clear();
     }
 
-    erhe::graphics::Render_pass* previous_render_pass = nullptr;
-    for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
+    // The passes this render() draws: a directional / spot light's 2D pass,
+    // and a point light's cube (nullptr: the light has no pass).
+    const auto find_2d_pass = [&parameters](const std::size_t light_slot) -> const erhe::scene::Light_projection_transforms* {
         const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
         if (
             !light.casts_shadow() ||
@@ -594,20 +641,93 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 (light.get_light_type() != erhe::scene::Light_type::spot)
             )
         ) {
-            continue;
+            return nullptr;
         }
-
         // Slot i of the set is entry i of the projections (Light_projections::apply).
         if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
-            continue;
+            return nullptr;
         }
         const erhe::scene::Light_projection_transforms* light_projection_transform = &parameters.light_projections.light_projection_transforms[light_slot];
         ERHE_VERIFY(light_projection_transform->index == light_slot);
-        const std::size_t light_index  = light_projection_transform->index;
-        const std::size_t shadow_index = light_projection_transform->shadow_index;
-        if (shadow_index >= parameters.render_passes.size()) {
+        if (light_projection_transform->shadow_index >= parameters.render_passes.size()) {
+            return nullptr;
+        }
+        return light_projection_transform;
+    };
+    const bool        draw_point_cubes = have_point_cubes && !parameters.point_cube_render_passes->empty();
+    const std::size_t cube_count       = draw_point_cubes ? (parameters.point_cube_render_passes->size() / 6) : std::size_t{0};
+    const auto find_cube = [&parameters, cube_count](const std::size_t light_slot) -> const erhe::scene::Light_projection_transforms* {
+        const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
+        if (!light.casts_shadow() || (light.get_light_type() != erhe::scene::Light_type::point)) {
+            return nullptr;
+        }
+        if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
+            return nullptr;
+        }
+        const erhe::scene::Light_projection_transforms* lpt = &parameters.light_projections.light_projection_transforms[light_slot];
+        ERHE_VERIFY(lpt->index == light_slot);
+        if (lpt->point_shadow_index >= cube_count) {
+            return nullptr;
+        }
+        return lpt;
+    };
+    const erhe::math::Coordinate_conventions cube_conventions = make_cube_conventions(parameters.conventions);
+
+    // Culling views (doc/erhe/draw_list_renderer.md Q6): every pass of this
+    // render() adds its planes to the draw list scene's view set before the
+    // first pass draws, so that draw classifies the entries against all of
+    // them in one pass. A pass's planes are those of the clip_from_world it
+    // rasterizes with, in the convention Draw_list_renderer builds the view
+    // planes. A depth-clamped directional pass keeps casters beyond its
+    // depth planes (pancaked), so it culls on the four side planes only;
+    // every other pass clips at all six. A point light culls per cube face.
+    if (parameters.draw_list_scene != nullptr) {
+        m_cull_views_2d.assign(parameters.render_passes.size(), Cull_view::none);
+        m_cull_views_cube.assign(cube_count * 6, Cull_view::none);
+        const uint64_t frame_index = m_graphics_device.get_frame_index();
+        for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
+            const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(light_slot);
+            if (light_projection_transform == nullptr) {
+                continue;
+            }
+            const erhe::scene::Light_snapshot& light         = parameters.light_set.get_lights()[light_slot];
+            const bool                         depth_clamped = use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional);
+            const std::array<glm::vec4, 6>     light_frustum_planes = erhe::math::extract_frustum_planes(light_projection_transform->clip_from_world.get_matrix(), clip_z_min, 1.0f);
+            const std::span<const glm::vec4>   cull_planes = depth_clamped
+                ? std::span<const glm::vec4>{light_frustum_planes}.first(erhe::math::plane_near)
+                : std::span<const glm::vec4>{light_frustum_planes};
+            m_cull_views_2d[light_projection_transform->shadow_index] = parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, cull_planes);
+        }
+        if (draw_point_cubes) {
+            for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
+                const erhe::scene::Light_projection_transforms* lpt = find_cube(light_slot);
+                if (lpt == nullptr) {
+                    continue;
+                }
+                const glm::vec3 light_pos      = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+                const glm::mat4 clip_from_face = lpt->projection.clip_from_node_transform(parameters.point_shadow_viewport, parameters.reverse_depth, parameters.depth_range, cube_conventions).get_matrix();
+                for (int face = 0; face < 6; ++face) {
+                    // The face frustum: the same projection and face pose
+                    // the face's camera block is written from.
+                    const erhe::scene::Trs_transform face_transform  = make_cube_face_transform(light_pos, face);
+                    const glm::mat4                  clip_from_world = clip_from_face * face_transform.get_inverse_matrix();
+                    const std::array<glm::vec4, 6>   face_planes     = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
+                    m_cull_views_cube[(lpt->point_shadow_index * 6) + static_cast<std::size_t>(face)] =
+                        parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, std::span<const glm::vec4>{face_planes});
+                }
+            }
+        }
+    }
+
+    erhe::graphics::Render_pass* previous_render_pass = nullptr;
+    for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
+        const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(light_slot);
+        if (light_projection_transform == nullptr) {
             continue;
         }
+        const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
+        const std::size_t light_index  = light_projection_transform->index;
+        const std::size_t shadow_index = light_projection_transform->shadow_index;
         erhe::graphics::Base_render_pipeline& base_pipeline =
             (use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional))
                 ? m_pipelines_depth_clamp[cull_index]
@@ -701,11 +821,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             : &erhe::graphics::Color_blend_state::color_writes_disabled; // depth-only
 
         if (parameters.draw_list_scene != nullptr) {
-            const bool depth_clamped = use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional);
-            light_frustum_planes = erhe::math::extract_frustum_planes(light_projection_transform->clip_from_world.get_matrix(), clip_z_min, 1.0f);
-            const std::span<const glm::vec4> cull_planes = depth_clamped
-                ? std::span<const glm::vec4>{light_frustum_planes}.first(erhe::math::plane_near)
-                : std::span<const glm::vec4>{light_frustum_planes};
             const Draw_statistics pass_statistics = parameters.draw_list_scene->draw_shadow(
                 Draw_shadow_parameters{
                     .render_encoder       = encoder,
@@ -717,7 +832,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     .filter               = shadow_filter,
                     .layers               = parameters.draw_list_layers,
                     .sub_variant          = parameters.use_distance ? Shadow_sub_variant::depth_only_distance : Shadow_sub_variant::depth_only,
-                    .light_frustum_planes = cull_planes,
+                    .cull_view            = m_cull_views_2d[shadow_index],
                     .debug_label          = "shadow draw lists",
                     .frame_index          = m_graphics_device.get_frame_index()
                 }
@@ -745,45 +860,12 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // light renders the scene into the six faces of its R32F cube (radial
     // distance from the light), one render pass per face. cull_none (per the
     // forge SKILL.md: safe for non-watertight glTF) with color writes enabled.
-    if (have_point_cubes && !parameters.point_cube_render_passes->empty()) {
+    if (draw_point_cubes) {
         const std::vector<std::unique_ptr<erhe::graphics::Render_pass>>& cube_passes = *parameters.point_cube_render_passes;
-        const std::size_t cube_count = cube_passes.size() / 6;
 
-        // Cube face look / up vectors in Vulkan cube-face order (+X, -X, +Y, -Y,
-        // +Z, -Z), matching the layer order written here and the direction-based
-        // samplerCubeArray lookup in the forward pass. These match the GL/forge
-        // cube up-vectors.
-        static const glm::vec3 cube_look[6] = {
-            { 1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f},
-            { 0.0f,  1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f},
-            { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f, -1.0f}
-        };
-        static const glm::vec3 cube_up[6] = {
-            { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f},
-            { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f, -1.0f},
-            { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f}
-        };
-
-        // Cube-shadow caster coordinate conventions. Unlike a 2D color target or
-        // the 2D shadow map (which is sampled through a texture_from_world matrix
-        // that absorbs the flip via Light::get_texture_from_clip), a cube face is
-        // sampled by raw direction through the API's FIXED cube-map (s,t)
-        // convention, which is vertically inverted relative to the framebuffer
-        // row order. So the stored face must be physically oriented to match it:
-        // the cube caster needs its clip-space Y flipped OPPOSITE to the screen
-        // pass. erhe's framebuffer y-flip is the framebuffer_origin compensation
-        // (a negative-height viewport on top_left backends, none on bottom_left
-        // GL). We express the cube's counter-flip the same convention-driven way
-        // get_texture_from_clip does -- derived from framebuffer_origin, via
-        // clip_space_y_flip: on a top_left framebuffer the projection y-negate
-        // cancels the viewport flip (net GL-native orientation == the cube
-        // convention); on bottom_left GL nothing is flipped. This is the one
-        // legitimate use of clip_space_y_flip (disabled device-wide otherwise).
-        erhe::math::Coordinate_conventions cube_conventions = parameters.conventions;
-        cube_conventions.clip_space_y_flip =
-            (parameters.conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left)
-                ? erhe::math::Clip_space_y_flip::enabled
-                : erhe::math::Clip_space_y_flip::disabled;
+        // The cube faces (c_cube_look / c_cube_up, make_cube_face_transform)
+        // and the caster conventions (make_cube_conventions) are shared with
+        // the culling views above.
         const uint32_t cube_force_enable = erhe::scene_renderer::make_shader_bool_mask(
             erhe::scene_renderer::Shader_bool::VARIANT_SHADOW_CUBE
         );
@@ -797,19 +879,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         erhe::graphics::Render_pass* previous_cube_render_pass = nullptr;
         for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
-            const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
-            if (!light.casts_shadow() || (light.get_light_type() != erhe::scene::Light_type::point)) {
+            const erhe::scene::Light_projection_transforms* lpt = find_cube(light_slot);
+            if (lpt == nullptr) {
                 continue;
             }
-            if (light_slot >= parameters.light_projections.light_projection_transforms.size()) {
-                continue;
-            }
-            const erhe::scene::Light_projection_transforms* lpt = &parameters.light_projections.light_projection_transforms[light_slot];
-            ERHE_VERIFY(lpt->index == light_slot);
             const std::size_t point_shadow_index = lpt->point_shadow_index;
-            if (point_shadow_index >= cube_count) {
-                continue;
-            }
             const std::size_t light_index = lpt->index;
             const glm::vec3   light_pos   = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
 
@@ -844,12 +918,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 m_joint_buffer.bind(encoder, joint_range);
                 m_light_buffer.bind_light_buffer(encoder, light_range);
 
-                const glm::mat4 world_from_face = erhe::math::create_look_at(
-                    light_pos,                   // eye
-                    light_pos + cube_look[face], // center
-                    cube_up[face]                // up
-                );
-                const erhe::scene::Trs_transform face_transform{world_from_face, glm::inverse(world_from_face)};
+                const erhe::scene::Trs_transform face_transform  = make_cube_face_transform(light_pos, face);
+                const glm::mat4                  world_from_face = face_transform.get_matrix();
                 Ring_buffer_range camera_range = m_camera_buffer.update(
                     lpt->projection,
                     face_transform,
@@ -879,11 +949,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 material_set.bind(encoder);
 
                 if (parameters.draw_list_scene != nullptr) {
-                    // The face frustum: the same projection and face pose the
-                    // camera block above was written from.
-                    const glm::mat4 clip_from_face  = lpt->projection.clip_from_node_transform(parameters.point_shadow_viewport, parameters.reverse_depth, parameters.depth_range, cube_conventions).get_matrix();
-                    const glm::mat4 clip_from_world = clip_from_face * face_transform.get_inverse_matrix();
-                    light_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
                     const Draw_statistics pass_statistics = parameters.draw_list_scene->draw_shadow(
                         Draw_shadow_parameters{
                             .render_encoder       = encoder,
@@ -895,7 +960,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                             .filter               = shadow_filter,
                             .layers               = parameters.draw_list_layers,
                             .sub_variant          = Shadow_sub_variant::cube,
-                            .light_frustum_planes = std::span<const glm::vec4>{light_frustum_planes},
+                            .cull_view            = m_cull_views_cube[pass_index],
                             .debug_label          = "shadow cube draw lists",
                             .frame_index          = m_graphics_device.get_frame_index()
                         }

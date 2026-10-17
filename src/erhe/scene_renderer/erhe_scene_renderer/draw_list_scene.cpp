@@ -401,6 +401,8 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             draw_list.entries.push_back(entry);
             ERHE_VERIFY(draw_list.primitive_records.size() == (draw_list.entries.size() - 1) * m_primitive_record_stride);
             draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
+            // The bounds: write_object_bounds() below, as for world_aabb.
+            draw_list.bounds.resize(draw_list.entries.size());
             write_entry_record(object, entry, get_record(object.locations.back()));
             // The shader stages resolve in the render phase, at the list's
             // first draw (R17): the color environment they combine with is
@@ -429,6 +431,7 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
         }
         ERHE_VERIFY(patched);
         draw_list.entries[location.entry_index] = moved;
+        draw_list.bounds.move(last_index, location.entry_index);
         std::memcpy(
             draw_list.primitive_records.data() + static_cast<std::size_t>(location.entry_index) * m_primitive_record_stride,
             draw_list.primitive_records.data() + static_cast<std::size_t>(last_index)           * m_primitive_record_stride,
@@ -437,6 +440,7 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
     }
     draw_list.entries.pop_back();
     draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
+    draw_list.bounds.resize(draw_list.entries.size());
 }
 
 // --- Primitive records ---------------------------------------------------------
@@ -588,7 +592,9 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     // fit bounds the object from its posed joints at gather time.
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
     for (const Draw_list_entry_location& location : object.locations) {
-        edit_draw_list(location.draw_list_index).entries[location.entry_index].world_aabb = world_aabb;
+        Draw_list& draw_list = edit_draw_list(location.draw_list_index);
+        draw_list.entries[location.entry_index].world_aabb = world_aabb;
+        draw_list.bounds.set(location.entry_index, world_aabb);
     }
     // The caster vertex shader's node-space input bound (Caster_vertex_extent).
     glm::vec3 node_abs_extent{0.0f};
@@ -618,7 +624,9 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
     for (const Draw_list_entry_location& location : object.locations) {
         write_transform_fields(get_record(location), offsets, *node);
-        edit_draw_list(location.draw_list_index).entries[location.entry_index].world_aabb = world_aabb;
+        Draw_list& draw_list = edit_draw_list(location.draw_list_index);
+        draw_list.entries[location.entry_index].world_aabb = world_aabb;
+        draw_list.bounds.set(location.entry_index, world_aabb);
     }
     object.transform_serial = node->node_data.transforms.world_from_node_serial;
     mark_shadow_bounds_changed();
@@ -1395,6 +1403,7 @@ void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t fram
         // assign() reuses the capacity the slot's copy already has.
         destination.entries          .assign(source.entries.begin(),           source.entries.end());
         destination.primitive_records.assign(source.primitive_records.begin(), source.primitive_records.end());
+        destination.bounds.assign(source.bounds);
         destination.serial = source.serial;
         ++m_published_list_copy_count;
     }
@@ -1566,7 +1575,8 @@ void Draw_list_scene::draw_list_chunks(
     Draw_indirect_buffer&                    draw_indirect_buffer,
     const Primitive_interface_settings&      primitive_settings,
     const erhe::Item_filter&                 filter,
-    const std::span<const glm::vec4>         frustum_planes,
+    const std::size_t                        draw_list_index,
+    const Cull_view                          cull_view,
     Draw_statistics&                         statistics
 )
 {
@@ -1578,19 +1588,26 @@ void Draw_list_scene::draw_list_chunks(
 
     // One pass decision per entry, shared by the record and the command
     // writer so ERHE_DRAW_ID indexes stay paired: the filter on the mirrored
-    // flag bits, then the pass frustum (view or light) on the entry's world
-    // AABB. Every entry of a list has the list's mobility; skinned entries
-    // are never culled (their bounds follow the joints and they carry none).
-    const bool cull = !frustum_planes.empty() && (draw_list.key.mobility != Draw_mobility::skinned);
+    // flag bits, then the pass's culling view bit of the entry's mask, which
+    // classify_cull_views() wrote (skinned entries and entries without
+    // bounds have the bit of every view of their purpose set).
+    const uint64_t* view_masks = nullptr;
+    uint64_t        view_bit   = 0;
+    if (cull_view != Cull_view::none) {
+        const std::size_t view_index = static_cast<std::size_t>(cull_view);
+        ERHE_VERIFY(draw_list_index < m_cull_masks.size());
+        const std::vector<uint64_t>& masks = m_cull_masks[draw_list_index];
+        ERHE_VERIFY(masks.size() >= (((view_index / 64) + 1) * entry_count));
+        view_masks = masks.data() + ((view_index / 64) * entry_count);
+        view_bit   = uint64_t{1} << (view_index % 64);
+    }
     m_entry_passes.resize(entry_count);
     for (std::size_t i = 0; i < entry_count; ++i) {
         const Draw_list_entry& entry = draw_list.entries[i];
         bool passes = filter(entry.flag_bits);
-        if (passes && cull && entry.world_aabb.is_valid_3d()) {
-            if (!erhe::math::aabb_in_convex_volume(frustum_planes, entry.world_aabb)) {
-                passes = false;
-                ++statistics.culled_count;
-            }
+        if (passes && (view_masks != nullptr) && ((view_masks[i] & view_bit) == 0)) {
+            passes = false;
+            ++statistics.culled_count;
         }
         m_entry_passes[i] = passes ? 1 : 0;
     }
@@ -1658,6 +1675,126 @@ void Draw_list_scene::draw_list_chunks(
     }
 }
 
+auto Draw_list_scene::add_cull_view(
+    const uint64_t                   frame_index,
+    const Draw_purpose               purpose,
+    const std::span<const glm::vec4> planes
+) -> Cull_view
+{
+    assert_render_phase();
+    ERHE_VERIFY(planes.size() <= 6);
+    if (planes.empty()) {
+        return Cull_view::none;
+    }
+    // A new frame starts a new view set; the frame's classifications write
+    // the masks from zero.
+    if (!m_cull_frame_started || (m_cull_frame_index != frame_index)) {
+        m_cull_frame_started         = true;
+        m_cull_frame_index           = frame_index;
+        m_cull_views.clear();
+        m_classified_cull_view_count = 0;
+        for (std::vector<uint64_t>& masks : m_cull_masks) {
+            masks.clear();
+        }
+    }
+    // The passes of one viewport share its camera: one view for all of them.
+    for (std::size_t i = 0, end = m_cull_views.size(); i < end; ++i) {
+        const Cull_view_planes& view = m_cull_views[i];
+        if (
+            (view.purpose == purpose) &&
+            (view.plane_count == planes.size()) &&
+            (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0)
+        ) {
+            return static_cast<Cull_view>(i);
+        }
+    }
+    ERHE_VERIFY(m_cull_views.size() < static_cast<std::size_t>(Cull_view::none));
+    Cull_view_planes& view = m_cull_views.emplace_back();
+    view.purpose     = purpose;
+    view.plane_count = static_cast<uint32_t>(planes.size());
+    std::copy(planes.begin(), planes.end(), view.planes.begin());
+    return static_cast<Cull_view>(m_cull_views.size() - 1);
+}
+
+void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull_view cull_view)
+{
+    if (cull_view == Cull_view::none) {
+        return;
+    }
+    const std::size_t cull_view_index = static_cast<std::size_t>(cull_view);
+    ERHE_VERIFY(m_cull_frame_started && (m_cull_frame_index == frame_index));
+    ERHE_VERIFY(cull_view_index < m_cull_views.size());
+    if (cull_view_index < m_classified_cull_view_count) {
+        return;
+    }
+    ERHE_PROFILE_FUNCTION();
+
+    const std::size_t first_view  = m_classified_cull_view_count;
+    const std::size_t end_view    = m_cull_views.size();
+    const std::size_t group_count = (end_view + 63) / 64;
+    m_classified_cull_view_count  = end_view;
+
+    // The purposes the views of this batch cull for: a list of another
+    // purpose is never drawn through them and is not classified.
+    std::array<bool, 2> batch_has_purpose{false, false};
+    for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+        batch_has_purpose[static_cast<std::size_t>(m_cull_views[view_index].purpose)] = true;
+    }
+
+    const std::vector<Draw_list>& draw_lists = get_published_draw_lists(frame_index);
+    if (m_cull_masks.size() < draw_lists.size()) {
+        m_cull_masks.resize(draw_lists.size());
+    }
+    for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
+        const Draw_list&       draw_list   = draw_lists[list_index];
+        const std::size_t      entry_count = draw_list.entries.size();
+        std::vector<uint64_t>& masks       = m_cull_masks[list_index];
+        // The groups appended since the last classification start at zero.
+        if (masks.size() < (group_count * entry_count)) {
+            masks.resize(group_count * entry_count, uint64_t{0});
+        }
+        const Draw_purpose purpose = draw_list.key.purpose;
+        if ((entry_count == 0) || !batch_has_purpose[static_cast<std::size_t>(purpose)]) {
+            continue;
+        }
+        const Draw_list_bounds& bounds  = draw_list.bounds;
+        ERHE_VERIFY(bounds.extent_x.size() == entry_count);
+        // Skinned entries carry no bounds (they follow the joints): never
+        // culled, like entries with an invalid AABB.
+        const bool list_bounded = (draw_list.key.mobility != Draw_mobility::skinned);
+        // Entries outside, views inside: a scalar transliteration of
+        // erhe::math::aabb_in_convex_volume() (the same expressions, the
+        // same early out on the first rejecting plane).
+        for (std::size_t i = 0; i < entry_count; ++i) {
+            const bool      bounded = list_bounded && bounds.is_bounded(i);
+            const glm::vec3 center{bounds.center_x[i], bounds.center_y[i], bounds.center_z[i]};
+            const glm::vec3 extent{bounds.extent_x[i], bounds.extent_y[i], bounds.extent_z[i]};
+            for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+                const Cull_view_planes& view = m_cull_views[view_index];
+                if (view.purpose != purpose) {
+                    continue;
+                }
+                bool inside = true;
+                if (bounded) {
+                    for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
+                        const glm::vec4& plane = view.planes[plane_index];
+                        const glm::vec3  normal{plane};
+                        const float center_distance  = glm::dot(normal, center) + plane.w;
+                        const float projected_extent = glm::dot(glm::abs(normal), extent);
+                        if ((center_distance + projected_extent) < 0.0f) {
+                            inside = false;
+                            break;
+                        }
+                    }
+                }
+                if (inside) {
+                    masks[((view_index / 64) * entry_count) + i] |= (uint64_t{1} << (view_index % 64));
+                }
+            }
+        }
+    }
+}
+
 auto Draw_list_scene::has_drawable_entries(
     const uint64_t                               frame_index,
     const Draw_purpose                           purpose,
@@ -1696,6 +1833,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
 
     set_color_environment(parameters.environment);
     const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
+    classify_cull_views(parameters.frame_index, parameters.cull_view);
 
     const Draw_blending classes_both[] = { Draw_blending::opaque, Draw_blending::translucent };
     const std::span<const Draw_blending> classes =
@@ -1761,7 +1899,8 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 parameters.draw_indirect_buffer,
                 parameters.primitive_settings,
                 parameters.filter,
-                parameters.view_frustum_planes,
+                list_index,
+                parameters.cull_view,
                 statistics
             );
         }
@@ -1778,6 +1917,7 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
     ERHE_VERIFY(parameters.render_pass != nullptr);
     ERHE_VERIFY(parameters.color_blend != nullptr);
     const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
+    classify_cull_views(parameters.frame_index, parameters.cull_view);
 
     for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
         const Draw_list&     draw_list = draw_lists[list_index];
@@ -1817,7 +1957,8 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             parameters.draw_indirect_buffer,
             Primitive_interface_settings{},
             parameters.filter,
-            parameters.light_frustum_planes,
+            list_index,
+            parameters.cull_view,
             statistics
         );
     }

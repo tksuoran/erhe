@@ -3,6 +3,8 @@
 #include "erhe_scene_renderer/draw_list_entry.hpp"
 #include "erhe_scene_renderer/draw_list_key.hpp"
 
+#include "erhe_math/aabb.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -32,6 +34,16 @@ enum class Draw_blending_selection : uint8_t
     opaque_only      = 0,
     translucent_only = 1,
     both             = 2  // opaque lists first, then translucent (R7)
+};
+
+// One culling view of the frame being rendered
+// (doc/erhe/draw_list_renderer.md Q6): the index
+// Draw_list_scene::add_cull_view() handed out for the view's planes, or
+// none: the pass draws every entry passing its filter (multiview passes,
+// passes without planes).
+enum class Cull_view : uint16_t
+{
+    none = 0xffffu
 };
 
 class Draw_statistics
@@ -74,6 +86,35 @@ public:
     bool                                              shadow_failed{false};
 };
 
+// The world AABBs of a list's entries in SoA form, parallel to
+// Draw_list::entries (appended and swap-removed together): the center and
+// the half extents, one array per component, so the per-frame
+// classification reads each component contiguously over consecutive entries
+// (the lane-wise layout a views-outside, entries-inside loop vectorizes
+// over, doc/plans/culling.md phase 2). center and extent are computed
+// exactly as erhe::math::aabb_in_convex_volume() computes them from the box.
+// An entry without bounds (an invalid AABB: skinned objects carry none)
+// stores a negative extent_x and passes every view.
+class Draw_list_bounds
+{
+public:
+    // Entries appended by a resize have no bounds (negative extent).
+    void resize(std::size_t count);
+    void set   (std::size_t index, const erhe::math::Aabb& aabb);
+    // Swap-remove support: copies entry from over entry to.
+    void move  (std::size_t from, std::size_t to);
+    // assign() of every array, reusing the capacity this copy already has.
+    void assign(const Draw_list_bounds& source);
+    [[nodiscard]] auto is_bounded(const std::size_t index) const -> bool { return extent_x[index] >= 0.0f; }
+
+    std::vector<float> center_x;
+    std::vector<float> center_y;
+    std::vector<float> center_z;
+    std::vector<float> extent_x;
+    std::vector<float> extent_y;
+    std::vector<float> extent_z;
+};
+
 // A group of entries that share one Draw_list_key and can therefore be
 // drawn with one pipeline, one buffer bind and one multi-draw
 // (doc/erhe/draw_list_renderer.md R13/R14). Owned by
@@ -99,6 +140,11 @@ public:
     // Primitive_buffer::update(Draw_list, ...) memcpys them per pass and only
     // patches the pass-dependent color / size fields.
     std::vector<std::byte>                            primitive_records;
+    // The entries' world AABBs (Draw_list_entry::world_aabb) in SoA form,
+    // parallel to entries; written by the same registration, transform and
+    // bounds hooks and published with the entries. The render phase
+    // classifies them against the frame's culling views.
+    Draw_list_bounds                                  bounds;
     // Unique per list creation within a Draw_list_scene (a rebuild creates
     // new lists, possibly at the same indices): what the render phase's
     // resolution cache is keyed on.

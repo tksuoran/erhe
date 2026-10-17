@@ -335,6 +335,12 @@ private:
     // Per-render() caster vertex rounding inputs (Caster_vertex_extent, one
     // per caster mesh), gathered with the bounds above.
     std::vector<Caster_vertex_extent>             m_caster_vertex_extents;
+    // Draw-list path: the culling view of each pass of one render() call
+    // (Draw_list_scene::add_cull_view()), indexed by 2D shadow index and by
+    // cube pass index; members (reassigned each call) so the vectors keep
+    // their capacity.
+    std::vector<Cull_view>                        m_cull_views_2d;
+    std::vector<Cull_view>                        m_cull_views_cube;
 };
 
 

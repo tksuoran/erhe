@@ -1,6 +1,6 @@
 # Culling: one classification for every pass, then on the GPU
 
-Status: proposed
+Status: in progress
 
 Extends [../erhe/draw_list_renderer.md](../erhe/draw_list_renderer.md) (Q6, the
 per-pass entry cull), [../erhe/shadows.md](../erhe/shadows.md) and
@@ -104,6 +104,17 @@ Each phase lands on its own, verified, before the next starts.
    loop is a scalar transliteration of `aabb_in_convex_volume`, so the pass
    bytes, counts and images are identical to today's. Measures the plumbing
    alone.
+   Done: `Draw_list_bounds`, `Draw_list_scene::add_cull_view()` /
+   `Cull_view`, the masks as render-phase state of the `Draw_list_scene`
+   (one `uint64_t` per entry per group of 64 views, so a frame past 64 views
+   needs no fallback). Views with bitwise equal planes and the same purpose
+   are shared. `Shadow_renderer` adds all of its passes before its first
+   draw, so its passes classify together; a color view is added at its
+   pass's draw and classifies on its own (a pre-draw hook in the render
+   phase would let the color views join the shadow batch). Images and
+   per-pass culled counts are byte- and count-identical to the per-pass
+   cull on the default, heavy and draws bench scenes, in both render thread
+   modes. The plumbing cost was not measured.
 2. **Vectorized classification.** Reorder the loop views-outside,
    entries-inside over the SoA; verify the compiler vectorizes it (GCC, clang,
    NDK). Add the point light range sphere as the first test of its 6 faces.
