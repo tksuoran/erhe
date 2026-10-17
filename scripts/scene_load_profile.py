@@ -199,10 +199,15 @@ def main():
                 if os.path.basename(scene_path) in name:
                     mcp(port, "close_scene", {"scene_name": name})
             close_start = time.time()
+            gone_s = None
             while (time.time() - close_start) < 120.0:
                 if not any(os.path.basename(scene_path) in name for name in scene_names(port)):
+                    gone_s = time.time() - close_start
                     break
                 time.sleep(0.25)
+            # The close runs on the main thread; a stalled main loop delays the
+            # list_scenes reply, so this is the user-visible close time.
+            print(f"close {open_index}: scene gone after {gone_s:.2f} s" if gone_s is not None else f"close {open_index}: scene still listed after 120 s")
             time.sleep(1.0)
 
     mcp(port, "request_exit")
