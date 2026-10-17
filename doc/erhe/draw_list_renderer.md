@@ -867,3 +867,6 @@ for `Shader_variant_cache miss` in the first frames with the setting on.
 - [plans/draw_list_renderer.md](../plans/draw_list_renderer.md): entry AABBs for the shadow fit, static
   lists, determinant-flip re-listing, translucent sorting and the remaining
   material-set follow-ups.
+- [plans/culling.md](../plans/culling.md): one classification of every entry
+  against every pass of the frame, SoA bounds published with the lists, then
+  the same on the GPU with indirect command generation.

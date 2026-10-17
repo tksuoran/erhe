@@ -307,4 +307,4 @@ API mapping to the SDL3 GPU lesson this path was ported from:
 
 ## Future work
 
-- [plans/shadows.md](../plans/shadows.md) - point-shadow culling and budget work.
+- [plans/shadows.md](../plans/shadows.md) - point-shadow budget work; [plans/culling.md](../plans/culling.md) - face culling by octant and range, empty faces skipped, GPU culling.

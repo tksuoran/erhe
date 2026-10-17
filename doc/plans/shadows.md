@@ -87,6 +87,9 @@ the receiver hulls still show in a profile. The library is vendored in
 
 ## Point-light cube shadow budget
 
+The culling items below are phases 2 and 3 of [culling.md](culling.md); the
+depth scratch and resolution items stay here.
+
 Every shadow-casting point light renders its six faces. On the draw list path
 each face culls the entries against its own 90-degree frustum (the six planes
 of the face `clip_from_world`, `Draw_list_scene::draw_shadow`); the bucket
