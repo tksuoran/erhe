@@ -1144,6 +1144,11 @@ auto Device_impl::query_device_extensions(
     }
     check_device_extension(VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_KHR_load_store_op_none            , 2.0f);
     check_device_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,                device_extensions_out.m_VK_KHR_push_descriptor               , 1.0f);
+    // GPU-generated draw commands (doc/plans/culling.md phase 6): enabling
+    // the extension enables the drawIndirectCount feature it was promoted to
+    // in Vulkan 1.2 (the 1.2 feature struct cannot be chained next to the
+    // promoted per-extension feature structs this device enables).
+    check_device_extension(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME,            device_extensions_out.m_VK_KHR_draw_indirect_count           , 0.0f);
     if (!headless) {
         check_device_extension(VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready, 3.0f);
     }

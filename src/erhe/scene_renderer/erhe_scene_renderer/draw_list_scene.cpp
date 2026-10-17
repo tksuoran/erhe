@@ -282,7 +282,16 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     m_gpu_cull_check = make_gpu_cull_check();
 }
 
-Draw_list_scene::~Draw_list_scene() noexcept = default;
+Draw_list_scene::~Draw_list_scene() noexcept
+{
+    // A count readback no later frame decoded (the GPU path was switched
+    // off, or the scene is destroyed with frames in flight).
+    for (Gpu_count_readback& readback : m_gpu_count_readbacks) {
+        if (readback.pending) {
+            readback.range.release();
+        }
+    }
+}
 
 void Draw_list_scene::assert_render_phase()
 {
@@ -1606,9 +1615,7 @@ auto Draw_list_scene::resolve_shadow_stages(
 
 // --- Drawing -------------------------------------------------------------------
 
-namespace {
-
-[[nodiscard]] auto layer_selected(const std::span<const erhe::scene::Layer_id> layers, const erhe::scene::Layer_id layer_id) -> bool
+auto Draw_list_scene::is_layer_selected(const std::span<const erhe::scene::Layer_id> layers, const erhe::scene::Layer_id layer_id) -> bool
 {
     if (layers.empty()) {
         return true;
@@ -1621,7 +1628,63 @@ namespace {
     return false;
 }
 
-} // anonymous namespace
+void Draw_list_scene::draw_list_gpu_chunks(
+    const Draw_list&                        draw_list,
+    erhe::graphics::Render_command_encoder& render_encoder,
+    erhe::graphics::Render_pipeline&        render_pipeline,
+    Primitive_buffer&                       primitive_buffer,
+    const Primitive_interface_settings&     primitive_settings,
+    const std::size_t                       draw_list_index,
+    const uint32_t                          first_gpu_job,
+    const uint64_t                          frame_index,
+    Draw_statistics&                        statistics
+)
+{
+    // Every chunk draws its job's commands with the GPU-written count (a
+    // zero count draws nothing): no per-entry work on the CPU. The pass's
+    // entry and culled counts come from the count readback
+    // (get_retired_gpu_shadow_counts()).
+    const std::size_t max_per_chunk = get_records_per_chunk(primitive_buffer);
+    const std::size_t entry_count   = draw_list.entries.size();
+    erhe::graphics::Buffer* const        index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
+    const erhe::dataformat::Format       index_format = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer);
+    constexpr std::size_t                command_stride = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
+    const erhe::graphics::Primitive_type topology       = render_pipeline.get_create_info().base.input_assembly.primitive_topology;
+
+    render_encoder.set_render_pipeline(render_pipeline);
+    render_encoder.set_index_buffer(index_buffer);
+    for (std::size_t stream_index = 0, stream_end = draw_list.key.buffer_set.vertex_buffers.size(); stream_index < stream_end; ++stream_index) {
+        erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(draw_list.key.buffer_set.vertex_buffers[stream_index]);
+        render_encoder.set_vertex_buffer(vertex_buffer, 0, static_cast<uint32_t>(stream_index));
+    }
+    render_encoder.set_buffer(erhe::graphics::Buffer_target::draw_indirect, m_gpu_command_buffer);
+
+    for (std::size_t begin = 0, chunk = 0; begin < entry_count; begin += max_per_chunk, ++chunk) {
+        const std::size_t end       = std::min(entry_count, begin + max_per_chunk);
+        const std::size_t job_index = static_cast<std::size_t>(first_gpu_job) + chunk;
+        ERHE_VERIFY(job_index < m_gpu_shadow_jobs.size());
+        const Gpu_shadow_job& job = m_gpu_shadow_jobs[job_index];
+        ERHE_VERIFY(job.entry_count == (end - begin));
+        const erhe::graphics::Ring_buffer_range& shared_range = shared_shadow_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, primitive_settings, frame_index);
+        primitive_buffer.bind(render_encoder, shared_range);
+        render_encoder.multi_draw_indexed_primitives_indirect_count(
+            topology,
+            index_format,
+            m_gpu_command_byte_offset + (static_cast<std::size_t>(job.command_offset) * command_stride),
+            *m_gpu_count_buffer,
+            m_gpu_count_byte_offset + (job_index * Gpu_cull_classifier::count_bytes_per_job),
+            end - begin,
+            command_stride
+        );
+        statistics.draw_call_count += 1;
+    }
+    statistics.draw_list_count += 1;
+}
+
+auto Draw_list_scene::get_records_per_chunk(const Primitive_buffer& primitive_buffer) -> std::size_t
+{
+    return std::max<std::size_t>(std::size_t{1}, primitive_buffer.get_max_primitive_count());
+}
 
 void Draw_list_scene::draw_list_chunks(
     const Draw_list&                         draw_list,
@@ -1634,15 +1697,36 @@ void Draw_list_scene::draw_list_chunks(
     const std::size_t                        draw_list_index,
     const Cull_view                          cull_view,
     const Draw_record_layout                 record_layout,
+    const Draw_command_source                command_source,
     const uint64_t                           frame_index,
     Draw_statistics&                         statistics
 )
 {
     // P3a: chunk entries so no multi-draw exceeds the primitive block capacity
     // (ERHE_PRIMITIVE_INDEX indexes the primitives[] array of one chunk).
-    const std::size_t max_per_chunk = std::max<std::size_t>(std::size_t{1}, primitive_buffer.get_max_primitive_count());
+    const std::size_t max_per_chunk = get_records_per_chunk(primitive_buffer);
     const std::size_t entry_count   = draw_list.entries.size();
     bool list_drew = false;
+
+    // GPU-generated commands (doc/plans/culling.md phase 6): the list's jobs
+    // for this pass's view, one per chunk, cut with the same chunk size.
+    uint32_t first_gpu_job = c_no_gpu_shadow_job;
+    if (command_source == Draw_command_source::gpu_generated) {
+        ERHE_VERIFY(record_layout == Draw_record_layout::chunk_entries);
+        ERHE_VERIFY(cull_view != Cull_view::none);
+        ERHE_VERIFY((m_gpu_command_buffer != nullptr) && (m_gpu_count_buffer != nullptr));
+        // The jobs were cut with the chunk size of this same buffer.
+        ERHE_VERIFY(&primitive_buffer == m_shadow_selection_primitive_buffer);
+        const std::size_t lookup_index = (static_cast<std::size_t>(cull_view) * m_gpu_shadow_job_list_count) + draw_list_index;
+        ERHE_VERIFY(draw_list_index < m_gpu_shadow_job_list_count);
+        ERHE_VERIFY(lookup_index < m_gpu_shadow_job_lookup.size());
+        first_gpu_job = m_gpu_shadow_job_lookup[lookup_index];
+        // Every shadow list the selection's layers select has jobs for
+        // every shadow view of the frame.
+        ERHE_VERIFY(first_gpu_job != c_no_gpu_shadow_job);
+        draw_list_gpu_chunks(draw_list, render_encoder, render_pipeline, primitive_buffer, primitive_settings, draw_list_index, first_gpu_job, frame_index, statistics);
+        return;
+    }
 
     // One pass decision per entry, shared by the record and the command
     // writer so the records the commands name are the passing entries' (the
@@ -1675,6 +1759,19 @@ void Draw_list_scene::draw_list_chunks(
     erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
     const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer);
     bool buffers_bound = false;
+    // The list's pipeline, index and vertex buffers, once, at its first draw.
+    const auto bind_list_buffers = [&]() {
+        if (buffers_bound) {
+            return;
+        }
+        render_encoder.set_render_pipeline(render_pipeline);
+        render_encoder.set_index_buffer(index_buffer);
+        for (std::size_t stream_index = 0, stream_end = draw_list.key.buffer_set.vertex_buffers.size(); stream_index < stream_end; ++stream_index) {
+            erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(draw_list.key.buffer_set.vertex_buffers[stream_index]);
+            render_encoder.set_vertex_buffer(vertex_buffer, 0, static_cast<uint32_t>(stream_index));
+        }
+        buffers_bound = true;
+    };
 
     for (std::size_t begin = 0; begin < entry_count; begin += max_per_chunk) {
         const std::size_t end = std::min(entry_count, begin + max_per_chunk);
@@ -1691,6 +1788,7 @@ void Draw_list_scene::draw_list_chunks(
         if (!any_passing) {
             continue;
         }
+
 
         // Packed: this pass's own records, one per passing entry, released
         // after the draw. Chunk entries: the chunk's shared records, which
@@ -1715,15 +1813,7 @@ void Draw_list_scene::draw_list_chunks(
             ERHE_VERIFY(primitive_count > 0);
         }
 
-        if (!buffers_bound) {
-            render_encoder.set_render_pipeline(render_pipeline);
-            render_encoder.set_index_buffer(index_buffer);
-            for (std::size_t stream_index = 0, stream_end = draw_list.key.buffer_set.vertex_buffers.size(); stream_index < stream_end; ++stream_index) {
-                erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(draw_list.key.buffer_set.vertex_buffers[stream_index]);
-                render_encoder.set_vertex_buffer(vertex_buffer, 0, static_cast<uint32_t>(stream_index));
-            }
-            buffers_bound = true;
-        }
+        bind_list_buffers();
 
         primitive_buffer.bind(render_encoder, *primitive_range);
         draw_indirect_buffer.bind(render_encoder, draw_indirect_range.range);
@@ -1911,6 +2001,12 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     m_cull_frame_index      = frame_index;
     m_cull_views.clear();
     m_cull_view_survivors.clear();
+    // The previous frame's GPU commands belong to that frame.
+    m_gpu_command_buffer      = nullptr;
+    m_gpu_command_byte_offset = 0;
+    m_gpu_count_buffer        = nullptr;
+    m_gpu_count_byte_offset   = 0;
+    m_gpu_shadow_jobs.clear();
     for (std::vector<uint64_t>& masks : m_cull_masks) {
         masks.clear();
     }
@@ -2000,6 +2096,41 @@ auto Draw_list_scene::add_point_light_cull_views(
     return views;
 }
 
+void Draw_list_scene::set_shadow_command_selection(const uint64_t frame_index, const Shadow_command_selection& selection)
+{
+    assert_render_phase();
+    ERHE_VERIFY(selection.primitive_buffer != nullptr);
+    // Given with the frame's views, before their classification.
+    ERHE_VERIFY(!(m_cull_frame_started && (m_cull_frame_index == frame_index) && m_cull_frame_classified));
+    if (m_shadow_selection_set && (m_shadow_selection_frame_index == frame_index)) {
+        // Every shadow renderer of the frame draws with the same selection.
+        ERHE_VERIFY(selection.filter == m_shadow_selection_filter);
+        ERHE_VERIFY(std::ranges::equal(selection.layers, m_shadow_selection_layers));
+        ERHE_VERIFY(selection.primitive_buffer == m_shadow_selection_primitive_buffer);
+        return;
+    }
+    m_shadow_selection_set          = true;
+    m_shadow_selection_frame_index  = frame_index;
+    m_shadow_selection_filter       = selection.filter;
+    m_shadow_selection_layers.assign(selection.layers.begin(), selection.layers.end());
+    m_shadow_selection_primitive_buffer = selection.primitive_buffer;
+}
+
+auto Draw_list_scene::has_gpu_shadow_commands(const uint64_t frame_index) const -> bool
+{
+    return
+        m_cull_frame_started &&
+        (m_cull_frame_index == frame_index) &&
+        m_cull_frame_classified &&
+        (m_gpu_command_buffer != nullptr);
+}
+
+auto Draw_list_scene::get_retired_gpu_shadow_counts() const -> const Retired_gpu_shadow_counts*
+{
+    assert_render_phase();
+    return m_has_retired_gpu_shadow_counts ? &m_retired_gpu_shadow_counts : nullptr;
+}
+
 auto Draw_list_scene::has_cull_view_survivors(const uint64_t frame_index, const Cull_view cull_view) -> bool
 {
     assert_render_phase();
@@ -2030,6 +2161,7 @@ void Draw_list_scene::classify_frame_cull_views(const uint64_t frame_index, erhe
     }
     ERHE_VERIFY(!m_cull_frame_classified);
     m_cull_frame_classified = true;
+    decode_retired_gpu_shadow_counts(frame_index);
     classify_cull_views();
     if (get_published_slot(frame_index).classification == Cull_classification::gpu) {
         dispatch_gpu_cull_views(frame_index, command_buffer);
@@ -2165,7 +2297,7 @@ auto Draw_list_scene::has_drawable_entries(
         }
         if ((blending == Draw_blending_selection::opaque_only     ) && (key.blending != Draw_blending::opaque     )) { continue; }
         if ((blending == Draw_blending_selection::translucent_only) && (key.blending != Draw_blending::translucent)) { continue; }
-        if (!layer_selected(layers, key.layer_id)) {
+        if (!is_layer_selected(layers, key.layer_id)) {
             continue;
         }
         for (const Draw_list_entry& entry : draw_list.entries) {
@@ -2188,7 +2320,7 @@ auto Draw_list_scene::get_filtered_entry_count(
     std::size_t count = 0;
     for (const Draw_list& draw_list : get_published_draw_lists(frame_index)) {
         const Draw_list_key& key = draw_list.key;
-        if ((key.purpose != purpose) || !layer_selected(layers, key.layer_id)) {
+        if ((key.purpose != purpose) || !is_layer_selected(layers, key.layer_id)) {
             continue;
         }
         for (const Draw_list_entry& entry : draw_list.entries) {
@@ -2225,7 +2357,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
             if ((key.purpose != Draw_purpose::color) || (key.blending != blending) || draw_list.entries.empty()) {
                 continue;
             }
-            if (!layer_selected(parameters.layers, key.layer_id)) {
+            if (!is_layer_selected(parameters.layers, key.layer_id)) {
                 continue;
             }
             // R17 / R19: a list's first color draw (and the first after an
@@ -2279,6 +2411,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 list_index,
                 parameters.cull_view,
                 Draw_record_layout::packed,
+                Draw_command_source::cpu_written,
                 parameters.frame_index,
                 statistics
             );
@@ -2298,13 +2431,28 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
     const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
     verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
 
+    // The frame's GPU command generation covers every culled shadow pass
+    // (doc/plans/culling.md phase 6): its commands were generated for the
+    // selection set_shadow_command_selection() recorded, which this pass
+    // must draw.
+    const bool gpu_commands =
+        (m_gpu_command_buffer != nullptr) &&
+        (parameters.cull_view != Cull_view::none);
+    if (gpu_commands) {
+        ERHE_VERIFY(m_shadow_selection_set && (m_shadow_selection_frame_index == parameters.frame_index));
+        ERHE_VERIFY(parameters.filter == m_shadow_selection_filter);
+        ERHE_VERIFY(std::ranges::equal(parameters.layers, m_shadow_selection_layers));
+        ERHE_VERIFY(&parameters.primitive_buffer == m_shadow_selection_primitive_buffer);
+    }
+    const Draw_command_source command_source = gpu_commands ? Draw_command_source::gpu_generated : Draw_command_source::cpu_written;
+
     for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
         const Draw_list&     draw_list = draw_lists[list_index];
         const Draw_list_key& key       = draw_list.key;
         if ((key.purpose != Draw_purpose::shadow) || draw_list.entries.empty()) {
             continue;
         }
-        if (!layer_selected(parameters.layers, key.layer_id)) {
+        if (!is_layer_selected(parameters.layers, key.layer_id)) {
             continue;
         }
         Draw_list_resolutions& resolutions = get_resolutions(list_index, draw_list);
@@ -2339,6 +2487,7 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             list_index,
             parameters.cull_view,
             (m_shadow_record_upload == Shadow_record_upload::shared) ? Draw_record_layout::chunk_entries : Draw_record_layout::packed,
+            command_source,
             parameters.frame_index,
             statistics
         );
@@ -2410,7 +2559,7 @@ void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_selection& select
         if (!object.alive || object.locations.empty()) {
             continue;
         }
-        if (!layer_selected(selection.layers, object.layer_id)) {
+        if (!is_layer_selected(selection.layers, object.layer_id)) {
             continue;
         }
         if ((object.flag_bits & visible_active) != visible_active) {

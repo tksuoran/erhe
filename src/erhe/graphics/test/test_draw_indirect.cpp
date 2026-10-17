@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -42,7 +43,7 @@ namespace erhe::graphics::test {
 // Memory_barrier_mask::command_barrier_bit barrier (Vulkan: draw-indirect stage,
 // indirect-command-read access) orders the writes before
 // multi_draw_indexed_primitives_indirect consumes them. The draw count is
-// CPU-side: erhe has no count buffer.
+// CPU-side, except in the count variants below.
 //
 // The target is three 32-pixel columns, 96x48. Draw d places its quad in
 // column d and colors it with color d (red, green, blue), both from
@@ -76,6 +77,15 @@ namespace erhe::graphics::test {
 // where the record index travels in the command's first_instance
 // (Device_info::record_indexing == Record_indexing::first_instance; skipped
 // elsewhere). Its expected image is computed; it has no golden.
+//
+// Count variants (draw_indexed_indirect_count, draw_indexed_indirect_count_zero):
+// the compute pass writes all three commands, and
+// multi_draw_indexed_primitives_indirect_count draws them with max_draw_count
+// 3 and the draw count read from a count buffer holding 2 (columns 0 and 1
+// drawn, column 2 clear) or 0 (nothing drawn): the GPU-read count, not the
+// maximum, decides (Device_info::use_draw_indirect_count; skipped elsewhere).
+// Their expected images are computed (the count-2 image is not the golden of
+// any CPU-count variant).
 // -----------------------------------------------------------------------------
 
 namespace {
@@ -162,8 +172,18 @@ class Draw_indirect_test : public Gpu_test
 protected:
     // Write draw_count commands with a compute pass, draw them with
     // multi_draw_indexed_primitives_indirect and return the read-back target
-    // (memory rows) in pixels.
-    void draw(const uint32_t draw_count, const Indexing indexing, const Color_source color_source, std::vector<uint8_t>& pixels)
+    // (memory rows) in pixels. With count_buffer_value, write all
+    // c_column_count commands and draw them with
+    // multi_draw_indexed_primitives_indirect_count (max_draw_count
+    // c_column_count, the count buffer holding the value; draw_count is the
+    // value).
+    void draw(
+        const uint32_t                draw_count,
+        const Indexing                indexing,
+        const Color_source            color_source,
+        const std::optional<uint32_t> count_buffer_value,
+        std::vector<uint8_t>&         pixels
+    )
     {
         erhe::graphics::Device& graphics_device = device();
 
@@ -222,6 +242,17 @@ protected:
             std::memset(mapped.data(), 0, command_bytes);
             command_buffer_object->unmap();
         }
+        // The count variants' draw count, read by the GPU.
+        std::shared_ptr<erhe::graphics::Buffer> count_buffer_object{};
+        if (count_buffer_value.has_value()) {
+            ASSERT_EQ(count_buffer_value.value(), draw_count);
+            count_buffer_object = make_host_buffer(sizeof(uint32_t), erhe::graphics::Buffer_usage::indirect | erhe::graphics::Buffer_usage::storage, "draw indirect count");
+            const uint32_t             value  = count_buffer_value.value();
+            const std::span<std::byte> mapped = count_buffer_object->map_bytes(0, sizeof(value));
+            std::memcpy(mapped.data(), &value, sizeof(value));
+            count_buffer_object->unmap();
+        }
+        const uint32_t command_write_count = count_buffer_value.has_value() ? static_cast<uint32_t>(c_column_count) : draw_count;
 
         // Compute pass writing the commands.
         erhe::graphics::Shader_resource commands_block{
@@ -344,7 +375,7 @@ protected:
                     encoder.set_bind_group_layout(&compute_layout);
                     encoder.set_compute_pipeline(*program.pipeline);
                     encoder.set_buffer(erhe::graphics::Buffer_target::storage, command_buffer_object.get(), 0, command_bytes, 0);
-                    encoder.dispatch_compute(draw_count, 1, 1);
+                    encoder.dispatch_compute(command_write_count, 1, 1);
                 }
                 command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::command_barrier_bit);
                 {
@@ -358,13 +389,25 @@ protected:
                     encoder.set_buffer(erhe::graphics::Buffer_target::storage, vertex_buffer.get(), 0, vertex_bytes, 0);
                     encoder.set_index_buffer(index_buffer.get());
                     encoder.set_buffer(erhe::graphics::Buffer_target::draw_indirect, command_buffer_object.get());
-                    encoder.multi_draw_indexed_primitives_indirect(
-                        erhe::graphics::Primitive_type::triangle,
-                        erhe::dataformat::Format::format_32_scalar_uint,
-                        0,
-                        draw_count,
-                        sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-                    );
+                    if (count_buffer_object) {
+                        encoder.multi_draw_indexed_primitives_indirect_count(
+                            erhe::graphics::Primitive_type::triangle,
+                            erhe::dataformat::Format::format_32_scalar_uint,
+                            0,
+                            *count_buffer_object,
+                            0,
+                            c_column_count,
+                            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+                        );
+                    } else {
+                        encoder.multi_draw_indexed_primitives_indirect(
+                            erhe::graphics::Primitive_type::triangle,
+                            erhe::dataformat::Format::format_32_scalar_uint,
+                            0,
+                            draw_count,
+                            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+                        );
+                    }
                 }
             }
         );
@@ -391,7 +434,7 @@ protected:
             }
         }
         const std::vector<uint8_t> image_rows = memory_rows_to_image_rows(pixels, static_cast<std::size_t>(c_width) * 4u, c_height);
-        expect_rgba8_near(image_rows, expected, c_width, c_height, 1, golden_name.empty() ? std::string_view{"draw_indirect_first_instance"} : golden_name);
+        expect_rgba8_near(image_rows, expected, c_width, c_height, 1, golden_name.empty() ? std::string_view{(color_source == Color_source::first_instance_reversed) ? "draw_indirect_first_instance" : "draw_indirect_count"} : golden_name);
 
         if (!golden_name.empty()) {
             expect_image_matches_golden(golden_name, c_width, c_height, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
@@ -406,11 +449,22 @@ protected:
     void run(const uint32_t draw_count, const Indexing indexing, const Color_source color_source, std::string_view golden_name)
     {
         std::vector<uint8_t> pixels;
-        draw(draw_count, indexing, color_source, pixels);
+        draw(draw_count, indexing, color_source, std::nullopt, pixels);
         if (HasFatalFailure()) {
             return;
         }
         check(pixels, draw_count, color_source, golden_name);
+    }
+
+    // Three commands, drawn with the GPU-read count gpu_count.
+    void run_count(const uint32_t gpu_count)
+    {
+        std::vector<uint8_t> pixels;
+        draw(gpu_count, Indexing::indexed, Color_source::draw_id, gpu_count, pixels);
+        if (HasFatalFailure()) {
+            return;
+        }
+        check(pixels, gpu_count, Color_source::draw_id, {});
     }
 };
 
@@ -450,6 +504,25 @@ TEST_F(Draw_indirect_test, draw_indexed_indirect_first_instance)
         GTEST_SKIP() << "Record_indexing::first_instance not available on this device";
     }
     run(3, Indexing::indexed, Color_source::first_instance_reversed, {});
+}
+
+// Three GPU-written indexed commands drawn with a GPU-read count of 2 out of
+// max_draw_count 3: columns 0 and 1, column 2 clear.
+TEST_F(Draw_indirect_test, draw_indexed_indirect_count)
+{
+    if (!device().get_info().use_draw_indirect_count) {
+        GTEST_SKIP() << "Device_info::use_draw_indirect_count not available on this device";
+    }
+    run_count(2);
+}
+
+// The same with a GPU-read count of 0: nothing drawn.
+TEST_F(Draw_indirect_test, draw_indexed_indirect_count_zero)
+{
+    if (!device().get_info().use_draw_indirect_count) {
+        GTEST_SKIP() << "Device_info::use_draw_indirect_count not available on this device";
+    }
+    run_count(0);
 }
 
 } // namespace erhe::graphics::test

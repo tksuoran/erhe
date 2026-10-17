@@ -42,6 +42,15 @@ public:
         std::uintptr_t           drawcount,
         std::uintptr_t           stride
     ) const;
+    void multi_draw_indexed_primitives_indirect_count(
+        Primitive_type           primitive_type,
+        erhe::dataformat::Format index_type,
+        std::uintptr_t           indirect_offset,
+        const Buffer&            count_buffer,
+        std::uintptr_t           count_offset,
+        std::uintptr_t           max_draw_count,
+        std::uintptr_t           stride
+    ) const;
 
 private:
     void apply_viewport();

@@ -69,6 +69,23 @@ public:
         std::uintptr_t           stride
     ) const;
 
+    // The multi-draw of multi_draw_indexed_primitives_indirect() with the
+    // draw count read by the GPU from count_buffer at count_offset (one
+    // uint32), clamped to max_draw_count: the commands at indirect_offset in
+    // the bound draw_indirect buffer. Needs Device_info::
+    // use_draw_indirect_count (Vulkan vkCmdDrawIndexedIndirectCount, GL
+    // glMultiDrawElementsIndirectCount); a device without it (Metal, the null
+    // device) never selects a path that calls it (verified).
+    void multi_draw_indexed_primitives_indirect_count(
+        Primitive_type           primitive_type,
+        erhe::dataformat::Format index_type,
+        std::uintptr_t           indirect_offset,
+        const Buffer&            count_buffer,
+        std::uintptr_t           count_offset,
+        std::uintptr_t           max_draw_count,
+        std::uintptr_t           stride
+    ) const;
+
     void dump_state(const char* label) const;
 
     // The Command_buffer this encoder records into. Used by APIs that

@@ -2101,6 +2101,15 @@ Device_impl::Device_impl(
             has_multi_draw_indirect, has_shader_draw_parameters, is_moltenvk
         );
     }
+    // The count variant needs the native multi-draw path (the emulation
+    // issues one draw per command and cannot read a GPU-written count).
+    m_info.use_draw_indirect_count = m_device_extensions.m_VK_KHR_draw_indirect_count && m_info.use_multi_draw_indirect_core;
+    log_startup->info(
+        "Draw indirect count: {} (VK_KHR_draw_indirect_count={}, native multi-draw indirect={})",
+        m_info.use_draw_indirect_count ? "yes" : "no",
+        m_device_extensions.m_VK_KHR_draw_indirect_count,
+        m_info.use_multi_draw_indirect_core
+    );
     // Mesa KosmicKrisp (Vulkan-on-Metal) rejects OpImageRead from a storage
     // image (imageLoad on a `uniform image2D`) at vkCreateComputePipelines with
     // VK_ERROR_INVALID_SHADER_NV, even though the SPIR-V is valid and the same

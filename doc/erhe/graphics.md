@@ -472,6 +472,31 @@ different subsets of the same records can share one upload
 (`doc/erhe/draw_list_renderer.md` "Record upload"). The device logs its choice
 at startup (`Record indexing (ERHE_PRIMITIVE_INDEX): ...`).
 
+## Draw count from the GPU
+
+`Render_command_encoder::multi_draw_indexed_primitives_indirect_count(
+primitive_type, index_type, indirect_offset, count_buffer, count_offset,
+max_draw_count, stride)` is the multi-draw of
+`multi_draw_indexed_primitives_indirect()` (the commands at
+`indirect_offset` of the bound `Buffer_target::draw_indirect` buffer) whose
+draw count the GPU reads from `count_buffer` at `count_offset` (one
+`uint32_t`, 4-byte aligned), clamped to `max_draw_count`, so a compute pass
+can write both the commands and their count (`doc/plans/culling.md` phase
+6). It needs `Device_info::use_draw_indirect_count`: Vulkan enables
+`VK_KHR_draw_indirect_count` when the device has it (enabling the extension
+enables the `drawIndirectCount` feature it was promoted to in 1.2; the 1.2
+feature struct cannot sit in the create chain next to the promoted
+per-extension structs the device enables) and reports the capability on the
+native multi-draw path only (the emulation issues one draw per command and
+cannot read a GPU count); GL reports it from 4.6 (`glMultiDrawElementsIndirectCount`,
+the count read from the `GL_PARAMETER_BUFFER` binding; the `erhe::gl`
+loader takes the core entry point only); Metal and the null device report
+false and fail fatally if called. A count written by a shader reaches the
+draw after a `Memory_barrier_mask::command_barrier_bit` barrier (Vulkan
+draw-indirect stage, indirect-command-read access; GL
+`GL_COMMAND_BARRIER_BIT`, which covers the parameter buffer). The device
+logs the capability at startup (`Draw indirect count: ...`).
+
 ## Dependencies
 - **erhe libraries (interface target, public):** `erhe::circular_ring_buffer`, `erhe::dataformat`, `erhe::frame_pacing`, `erhe::item`, `erhe::math`
 - **erhe libraries (backend target):** `erhe::window` (public; the surface and swapchain backends), `erhe::gl` (private, OpenGL backend only)

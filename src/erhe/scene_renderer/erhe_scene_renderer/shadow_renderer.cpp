@@ -162,6 +162,7 @@ void Shadow_draw_statistics::clear()
     point_cube_faces.clear();
     point_cube_skipped_faces.clear();
     total = Draw_statistics{};
+    gpu_counts_frame_index.reset();
 }
 
 Shadow_renderer::Shadow_renderer(
@@ -714,6 +715,33 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
                 std::copy(face_views.begin(), face_views.end(), cull_views.views_cube.begin() + static_cast<std::ptrdiff_t>(lpt->point_shadow_index * 6));
             }
         }
+        // This fit's pass layout, for the GPU count readback of the frame
+        // (apply_gpu_counts(), frames in flight later).
+        Cull_views::Fitted_frame& fitted = cull_views.fitted_frames[frame_index % cull_views.fitted_frames.size()];
+        fitted.frame_index = frame_index;
+        fitted.valid       = true;
+        fitted.views_2d.assign(cull_views.views_2d.begin(), cull_views.views_2d.end());
+        fitted.views_cube.assign(cull_views.views_cube.begin(), cull_views.views_cube.end());
+        // What draw() draws, so that under Cull_classification::gpu the
+        // frame's classification also generates the passes' commands
+        // (doc/plans/culling.md phase 6). The GPU commands carry the
+        // entries' raw index counts: with the draw indirect buffer's debug
+        // index count clamp on, the passes keep the CPU-written commands.
+        if (m_draw_indirect_buffer.is_index_count_clamped()) {
+            if (!m_index_count_clamp_refusal_logged) {
+                log_shadow_renderer->warn("Shadow_renderer: GPU shadow commands refused, the Draw_indirect_buffer index count clamp is enabled; the shadow passes write their commands on the CPU");
+                m_index_count_clamp_refusal_logged = true;
+            }
+        } else {
+            parameters.draw_list_scene->set_shadow_command_selection(
+                frame_index,
+                Shadow_command_selection{
+                    .filter           = shadow_caster_filter,
+                    .layers           = parameters.draw_list_layers,
+                    .primitive_buffer = &m_primitive_buffer
+                }
+            );
+        }
     }
 }
 
@@ -806,6 +834,10 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
     const Draw_list_scene::Shadow_record_scope shadow_record_scope = (parameters.draw_list_scene != nullptr)
         ? parameters.draw_list_scene->begin_shadow_record_scope()
         : Draw_list_scene::Shadow_record_scope{};
+    // GPU-generated commands: the passes count nothing on the CPU.
+    const bool gpu_counted =
+        (parameters.draw_list_scene != nullptr) &&
+        parameters.draw_list_scene->has_gpu_shadow_commands(m_graphics_device.get_frame_index());
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
@@ -1102,7 +1134,9 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                     return face_statistics;
                 };
                 const auto skipped_face = [&]() -> Draw_statistics {
-                    if (parameters.draw_statistics == nullptr) {
+                    // Under GPU commands the readback gives every pass's
+                    // counts, the skipped faces' too (apply_gpu_counts()).
+                    if ((parameters.draw_statistics == nullptr) || gpu_counted) {
                         return Draw_statistics{};
                     }
                     if (!skipped_face_culled_count.has_value()) {
@@ -1125,11 +1159,79 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         }
     }
 
+    if (gpu_counted && (parameters.draw_statistics != nullptr)) {
+        apply_gpu_counts(parameters, cull_views, *parameters.draw_statistics);
+    }
+
     // R9: bind / unbind stay per pass.
     material_set.unbind(parameters.command_buffer);
 
     joint_range.release();
     light_range.release();
+}
+
+void Shadow_renderer::apply_gpu_counts(const Render_parameters& parameters, const Cull_views& cull_views, Shadow_draw_statistics& statistics)
+{
+    const Retired_gpu_shadow_counts* const counts = parameters.draw_list_scene->get_retired_gpu_shadow_counts();
+    if (counts == nullptr) {
+        return;
+    }
+    const Cull_views::Fitted_frame& counted = cull_views.fitted_frames[counts->frame_index % cull_views.fitted_frames.size()];
+    if (!counted.valid || (counted.frame_index != counts->frame_index)) {
+        return;
+    }
+    const auto view_statistics = [counts](const Cull_view view) -> Draw_statistics {
+        const std::size_t view_index = static_cast<std::size_t>(view);
+        if ((view == Cull_view::none) || (view_index >= counts->views.size())) {
+            return Draw_statistics{};
+        }
+        const Gpu_shadow_view_counts& view_counts = counts->views[view_index];
+        ERHE_VERIFY(view_counts.drawn <= view_counts.filtered);
+        return Draw_statistics{
+            .entry_count  = view_counts.drawn,
+            .culled_count = view_counts.filtered - view_counts.drawn
+        };
+    };
+    // Entry and culled counts by the counted frame's passes; the draw list
+    // and draw call counts stay the frame's own.
+    const auto set_counts = [](Draw_statistics& slot, const Draw_statistics& source) {
+        slot.entry_count  = source.entry_count;
+        slot.culled_count = source.culled_count;
+    };
+    statistics.total.entry_count  = 0;
+    statistics.total.culled_count = 0;
+    const std::vector<Cull_view>& views_2d = counted.views_2d;
+    if (statistics.shadow_map_2d.size() < views_2d.size()) {
+        statistics.shadow_map_2d.resize(views_2d.size());
+    }
+    for (std::size_t shadow_index = 0, end = views_2d.size(); shadow_index < end; ++shadow_index) {
+        const Draw_statistics pass = view_statistics(views_2d[shadow_index]);
+        set_counts(statistics.shadow_map_2d[shadow_index], pass);
+        statistics.total.entry_count  += pass.entry_count;
+        statistics.total.culled_count += pass.culled_count;
+    }
+    const std::vector<Cull_view>& views_cube = counted.views_cube;
+    const std::size_t             cube_count = views_cube.size() / 6;
+    if (statistics.point_cubes.size() < cube_count) {
+        statistics.point_cubes.resize(cube_count);
+    }
+    if (statistics.point_cube_faces.size() < views_cube.size()) {
+        statistics.point_cube_faces.resize(views_cube.size());
+    }
+    for (std::size_t cube = 0; cube < cube_count; ++cube) {
+        Draw_statistics cube_counts{};
+        for (std::size_t face = 0; face < 6; ++face) {
+            const std::size_t     pass_index = (cube * 6) + face;
+            const Draw_statistics pass       = view_statistics(views_cube[pass_index]);
+            set_counts(statistics.point_cube_faces[pass_index], pass);
+            cube_counts.entry_count  += pass.entry_count;
+            cube_counts.culled_count += pass.culled_count;
+        }
+        set_counts(statistics.point_cubes[cube], cube_counts);
+        statistics.total.entry_count  += cube_counts.entry_count;
+        statistics.total.culled_count += cube_counts.culled_count;
+    }
+    statistics.gpu_counts_frame_index = counts->frame_index;
 }
 
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool

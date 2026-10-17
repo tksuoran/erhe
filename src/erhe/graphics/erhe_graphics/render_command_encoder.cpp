@@ -110,6 +110,27 @@ void Render_command_encoder::multi_draw_indexed_primitives_indirect(
     );
 }
 
+void Render_command_encoder::multi_draw_indexed_primitives_indirect_count(
+    Primitive_type           primitive_type,
+    erhe::dataformat::Format index_type,
+    std::uintptr_t           indirect_offset,
+    const Buffer&            count_buffer,
+    std::uintptr_t           count_offset,
+    std::uintptr_t           max_draw_count,
+    std::uintptr_t           stride
+) const
+{
+    m_impl->multi_draw_indexed_primitives_indirect_count(
+        primitive_type,
+        index_type,
+        indirect_offset,
+        count_buffer,
+        count_offset,
+        max_draw_count,
+        stride
+    );
+}
+
 void Render_command_encoder::dump_state(const char* label) const
 {
     m_impl->dump_state(label);

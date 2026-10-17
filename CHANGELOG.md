@@ -9,6 +9,42 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Render_command_encoder::multi_draw_indexed_primitives_indirect_count(
+  primitive_type, index_type, indirect_offset, count_buffer, count_offset,
+  max_draw_count, stride)` (the multi-draw with a GPU-read draw count: Vulkan
+  `vkCmdDrawIndexedIndirectCount`, GL `glMultiDrawElementsIndirectCount`;
+  fatal on Metal and the null device) and `Device_info::use_draw_indirect_count`
+  (Vulkan: `VK_KHR_draw_indirect_count` enabled on a device with native
+  multi-draw indirect; GL 4.6; false on Metal and the null device).
+
+- `erhe::scene_renderer`: GPU command generation of the shadow passes
+  (`doc/plans/culling.md` phase 6). `Shadow_command_selection` and
+  `Draw_list_scene::set_shadow_command_selection(frame_index, selection)`
+  (`Shadow_renderer::fit()` calls it), with which a frame whose slot records
+  `Cull_classification::gpu` generates the shadow passes' commands on the GPU
+  (`res/shaders/cull_compact.comp`) and `draw_shadow()` draws them with the
+  count draw; `Gpu_cull_classifier` constants and accessors of the compaction
+  (`compact_*_binding_point`, `compact_workgroup_size`,
+  `template_bytes_per_entry`, `job_bytes`, `job_command_alignment`,
+  `count_bytes_per_job`, `get_compact_bind_group_layout()`,
+  `get_compact_bits_pipeline()`, `get_compact_pipeline()`,
+  `get_job_buffer()`, `get_bits_buffer()`, `get_command_buffer()`,
+  `get_count_buffer()`, `get_job_*_offset()`);
+  `Shadow_command_selection` carries the drawing `Primitive_buffer`, whose
+  record capacity (`Draw_list_scene::get_records_per_chunk()`) both the job
+  table and the draws cut chunks with; a GPU-command pass counts no entries
+  on the CPU: `Draw_list_scene::has_gpu_shadow_commands(frame_index)`,
+  `get_retired_gpu_shadow_counts()` (`Retired_gpu_shadow_counts`,
+  `Gpu_shadow_view_counts`: per view drawn / filtered of the newest retired
+  frame) and `Shadow_draw_statistics::gpu_counts_frame_index` (the entry and
+  culled counts are that retired frame's, frames in flight late);
+  `Draw_indirect_buffer::is_index_count_clamped()` (Shadow_renderer keeps the
+  CPU commands while the debug clamp is on); `Gpu_cull_classifier::split_uint64()`;
+  `Cull_classification_check` reports the command generation (`job_count`,
+  `command_count`, `command_mismatch_count`, `command_mismatches`
+  (`Cull_command_job_mismatch`), `command_views` (`Cull_command_view_check`),
+  `command_gpu_time_ns`).
+
 - `erhe::rendergraph`: `Rendergraph_node::pre_execute_rendergraph_node(command_buffer)`
   (virtual, default nothing) and `Rendergraph::set_pre_execute_callback(callback)`:
   `Rendergraph::execute()` runs every enabled node's hook in execution order,
@@ -292,6 +328,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::scene_renderer`: `Gpu_cull_classifier::is_device_capable()` also
+  needs `erhe::graphics::Device_info::use_draw_indirect_count` (and six
+  compute storage blocks), and `is_supported()` the two compaction
+  pipelines; under `Cull_classification::gpu` the shadow passes of a frame
+  with a `Shadow_command_selection` draw GPU-generated commands
+  (`doc/plans/culling.md` phase 6; the color passes keep the CPU-written
+  commands).
 
 - `erhe::scene_renderer`: every culling view of a frame is added before the
   frame's classification (`Draw_list_scene::classify_frame_cull_views()`);

@@ -334,6 +334,56 @@ Each phase lands on its own, verified, before the next starts.
    255.1 us, `Shadow_renderer::fit()` in the shadow node's hook 958 / 950
    us (the fit `Shadow_renderer::render()` ran before),
    `Composer::add_cull_views()` 1.0 us.
+   6b, GPU command generation for the shadow passes. Done:
+   `Device_info::use_draw_indirect_count` (Vulkan: `VK_KHR_draw_indirect_count`
+   enabled, which enables `drawIndirectCount`, on the native multi-draw path;
+   GL 4.6; false on Metal and the null device) and
+   `Render_command_encoder::multi_draw_indexed_primitives_indirect_count()`
+   (`doc/erhe/graphics.md` "Draw count from the GPU"); the
+   `Gpu_cull_classifier` capability now needs the count draw.
+   `Shadow_renderer::fit()` gives the frame's `Shadow_command_selection`
+   (caster filter, draw-list layers, chunk size); under `gpu` the
+   classification then builds a job table per frame (one job per shadow view
+   and per chunk of each selected shadow list, its command range aligned to
+   32) and records the two passes of `res/shaders/cull_compact.comp`: pass
+   bits (one invocation per job entry: view bit and filter on the entry's
+   flag bits, into per-job bit words) and compaction (one workgroup per job:
+   per-lane runs of words, one prefix sum, commands written in entry order),
+   between storage barriers and a command barrier. `publish()` writes the
+   command templates (`index_count, first_index, base_vertex` and the flag
+   bits) next to the GPU bounds under the same serial check. `draw_shadow()`
+   binds the chunk's shared records and draws the job's commands with the
+   count draw (`max_draw_count` = chunk size); no `Draw_indirect_buffer`
+   write. The order is the CPU order by construction (no atomics on the
+   output), so the depth-only and the cube distance passes rasterize the
+   same primitive sequence; a first version with one workgroup per job
+   scanning 64-entry tiles measured about 100 us GPU on heavy, per-lane runs
+   about 45 us, the two-pass split the same at the low GPU clock and scales
+   with the job size. The GPU path makes no per-entry decision on the CPU:
+   every chunk of a drawn list is one count draw, and the passes' entry and
+   culled counts come from the count readback (drawn and filter-passing per
+   job) of the retired frame that last used the frame slot, mapped by that
+   frame's passes (`Shadow_draw_statistics::gpu_counts_frame_index`, frames
+   in flight late). Refused, logged once, while the `Draw_indirect_buffer`
+   debug index count clamp is on. Still on the CPU under `gpu`: the CPU
+   lanes (for `has_cull_view_survivors()`, the empty cube face skip, the
+   color passes), the job table, and the color passes' commands. Gate: MCP `get_cull_classification_check` compares per job the
+   GPU count and commands with what the CPU writer produces from the same
+   frame's CPU masks: 0 mismatches on default (4 jobs, 24 commands), heavy
+   (18 jobs, 6619), draws (1 job, 1044), heavy in four view (30 jobs, 6707),
+   heavy in both render thread modes and with validation; per view the GPU
+   drawn counts equal the passes' counts (heavy: 6619 over the 8 lights as
+   `get_scene_lights` reports them). Images and per-pass / per-light counts
+   byte- and count-identical to phase 6a at `cpu` and to `cpu` at `gpu`
+   (default, heavy, draws, heavy in four view, heavy at `gpu` in both render
+   thread modes); a deliberately wrong `first_instance` in the compaction
+   changes the heavy image, so the gate sees the GPU path; heavy with Vulkan
+   validation: no errors, the same 6 + 9 warnings as phase 6a.
+   `erhe_graphics_gpu_tests` `Draw_indirect_test.draw_indexed_indirect_count`
+   / `_count_zero` check that the GPU-read count (2, 0 of max 3) decides.
+   The CPU and GPU timings of this phase (`draw_shadow`,
+   `generate_gpu_shadow_commands`, the classification and compaction GPU
+   timers) are taken by a separate measurement pass on an idle machine.
 7. **Occlusion.** [occlusion_culling.md](occlusion_culling.md), fed into the
    mask of the camera views as one more test; depends on phase 6 to be worth
    it (its step 7).
@@ -379,6 +429,21 @@ measured on the GPU timers.
   locate, and the eye camera poses computed there too (the resources are
   keyed by the acquired swapchain images); not done without a headset to
   verify it.
+- The color passes stay on CPU-written commands under `gpu` (phase 6b):
+  their records are patched per pass (color and size from the pass's
+  `Primitive_interface_settings`), so they are not shared and a command's
+  `first_instance` cannot name a shared record. The fix direction: move the
+  per-pass color and size into a per-pass constant block the shaders read,
+  so the color records can be shared like the shadow records, then generate
+  their commands with the shadow passes' jobs (one more filter per job).
+- Under `gpu` the CPU lanes still run for `has_cull_view_survivors()` and
+  the color passes; dropping them for the shadow passes needs the empty
+  face skip from a GPU-written survivor count (an indirect clear-only
+  path).
+- The compaction pass runs one workgroup per job, so a single large job
+  (the draws scene: one shadow pass over one list) is latency-bound (about
+  44 us GPU at the low iGPU clock); splitting jobs into several workgroups
+  needs a per-job prefix over workgroup counts (one more pass).
 - With a node selected and moved (MCP `transform_selection` twice a second
   on the heavy scene), the draw lists change on every frame, also between
   the moves: `flush_pending` about 440 us per frame, a list copy and a bounds

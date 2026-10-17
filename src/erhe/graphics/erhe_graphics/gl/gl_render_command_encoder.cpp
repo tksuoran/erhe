@@ -287,6 +287,36 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     }
 }
 
+void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect_count(
+    const Primitive_type           primitive_type,
+    const erhe::dataformat::Format index_type,
+    const std::uintptr_t           indirect_offset,
+    const Buffer&                  count_buffer,
+    const std::uintptr_t           count_offset,
+    const std::uintptr_t           max_draw_count,
+    const std::uintptr_t           stride
+) const
+{
+    // GL 4.6 (Device_info::use_draw_indirect_count); the count is read from
+    // the GL_PARAMETER_BUFFER binding.
+    ERHE_VERIFY(m_device.get_info().use_draw_indirect_count);
+    ERHE_VERIFY((count_offset % 4) == 0);
+
+    const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
+    const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
+
+    gl::bind_buffer(gl::Buffer_target::parameter_buffer, count_buffer.get_impl().gl_name());
+    gl::multi_draw_elements_indirect_count(
+        gl_primitive_type,
+        gl_index_type,
+        reinterpret_cast<const void *>(indirect_offset),
+        static_cast<GLintptr>(count_offset),
+        static_cast<GLsizei>(max_draw_count),
+        static_cast<GLsizei>(stride)
+    );
+    gl::bind_buffer(gl::Buffer_target::parameter_buffer, 0);
+}
+
 void Render_command_encoder_impl::dump_state(const char* label) const
 {
     std::string dump = m_tracker.dump_state(

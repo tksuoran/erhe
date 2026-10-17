@@ -79,6 +79,7 @@ public:
     bool m_VK_KHR_load_store_op_none            {false};
     bool m_VK_EXT_load_store_op_none            {false};
     bool m_VK_KHR_push_descriptor               {false};
+    bool m_VK_KHR_draw_indirect_count           {false};
     bool m_VK_KHR_portability_subset            {false};
     bool m_VK_EXT_fragment_density_map          {false};
     bool m_VK_EXT_fragment_density_map2         {false};

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <thread>
@@ -143,6 +144,40 @@ inline constexpr erhe::Item_filter shadow_caster_filter{
     .require_at_least_one_bit_clear = 0u
 };
 
+// What the shadow passes of one frame draw, for the GPU command generation
+// (doc/plans/culling.md phase 6, Draw_list_scene::set_shadow_command_selection):
+// the filter, layer selection and Primitive_buffer every draw_shadow() of the
+// frame passes (the buffer's record capacity is the chunk size both the job
+// table and the draws cut the lists with).
+class Shadow_command_selection
+{
+public:
+    erhe::Item_filter                      filter          {shadow_caster_filter};
+    // EMPTY selects every layer (Draw_shadow_parameters::layers).
+    std::span<const erhe::scene::Layer_id> layers          {};
+    const Primitive_buffer*                primitive_buffer{nullptr};
+};
+
+// The GPU command generation's counts of one shadow view over its jobs, read
+// back from the count buffer: entries drawn, and entries passing the filter
+// (culled = filtered - drawn).
+class Gpu_shadow_view_counts
+{
+public:
+    uint32_t drawn   {0};
+    uint32_t filtered{0};
+};
+
+// The per-view counts of the newest retired frame with GPU-generated shadow
+// commands (Draw_list_scene::get_retired_gpu_shadow_counts()), indexed by
+// that frame's culling views.
+class Retired_gpu_shadow_counts
+{
+public:
+    uint64_t                                frame_index{0};
+    std::span<const Gpu_shadow_view_counts> views      {};
+};
+
 // Which registered objects the shadow frustum fit reads
 // (Draw_list_scene::prepare_shadow_bounds).
 class Shadow_bounds_selection
@@ -222,7 +257,35 @@ public:
     std::vector<Cull_classification_mismatch> mismatches;
 };
 
-// The comparison of the GPU masks against the CPU masks of one frame.
+// One GPU command generation job (one shadow view, one chunk of one shadow
+// list) whose GPU-written count or commands differ from what the CPU writer
+// produces from the same frame's CPU masks.
+class Cull_command_job_mismatch
+{
+public:
+    uint32_t job          {0};
+    uint32_t view         {0};
+    uint32_t list_index   {0};
+    uint32_t chunk_begin  {0}; // first entry of the chunk in the list
+    uint32_t cpu_count    {0};
+    uint32_t gpu_count    {0};
+    // Commands of the job (up to the smaller count) that differ.
+    uint32_t command_mismatch_count{0};
+};
+
+// The drawn entries of one shadow view over its jobs: the CPU writer's count
+// from the frame's CPU masks and the GPU-written count.
+class Cull_command_view_check
+{
+public:
+    uint32_t view     {0};
+    uint32_t cpu_drawn{0};
+    uint32_t gpu_drawn{0};
+};
+
+// The comparison of the GPU masks against the CPU masks of one frame, and of
+// the frame's GPU-generated shadow commands (doc/plans/culling.md phase 6)
+// against the commands the CPU writer produces from the CPU masks.
 class Cull_classification_check
 {
 public:
@@ -236,6 +299,15 @@ public:
     // frame.
     uint64_t                                    gpu_time_ns            {0};
     std::vector<Cull_classification_list_check> lists;
+    // GPU command generation: the frame's jobs (0 when it generated none),
+    // the jobs whose count or commands differ, the first few of them, the
+    // per shadow view drawn counts and the compaction's Gpu_timer last result.
+    uint32_t                                    job_count              {0};
+    uint32_t                                    command_count          {0}; // commands the CPU writer produces over all jobs
+    std::size_t                                 command_mismatch_count {0};
+    std::vector<Cull_command_job_mismatch>      command_mismatches;
+    std::vector<Cull_command_view_check>        command_views;
+    uint64_t                                    command_gpu_time_ns    {0};
 };
 
 enum class Cull_classification_check_state : uint8_t
@@ -440,6 +512,40 @@ public:
     // so a pass can skip its draw setup (Shadow_renderer's empty cube
     // faces). True for Cull_view::none.
     [[nodiscard]] auto has_cull_view_survivors(uint64_t frame_index, Cull_view cull_view) -> bool;
+    // GPU command generation of the shadow passes (doc/plans/culling.md
+    // phase 6; render thread, render phase, with the frame's shadow views,
+    // before its classification): what every draw_shadow() of frame_index
+    // draws. When the frame's slot records Cull_classification::gpu, the
+    // classification also records one compute pass that writes, per shadow
+    // view of the frame and per chunk of each published shadow list the
+    // selection's layers select, the chunk's commands (the entries passing
+    // the view's mask bit and the filter, in entry order) and their count;
+    // draw_shadow() with a culling view then draws them with
+    // multi_draw_indexed_primitives_indirect_count() instead of writing
+    // commands on the CPU, and verifies its filter, layers and chunk size are
+    // the selection's. Such a draw makes no per-entry decision on the CPU: it
+    // draws every chunk with the count draw and reports no entry or culled
+    // count (Draw_statistics of the pass: draw lists and draw calls only);
+    // the counts are read back per job when the frame retired
+    // (get_retired_gpu_shadow_counts()). A frame without a selection writes
+    // its shadow commands on the CPU. A second call in the same frame passes
+    // the same selection (verified).
+    void set_shadow_command_selection(uint64_t frame_index, const Shadow_command_selection& selection);
+    // Whether draw_shadow() with a culling view draws GPU-generated commands
+    // in frame_index (render thread, render phase, after the frame's
+    // classification).
+    [[nodiscard]] auto has_gpu_shadow_commands(uint64_t frame_index) const -> bool;
+    // The GPU command generation's per-view counts of the newest frame whose
+    // count readback this scene decoded (render thread, render phase): every
+    // frame with GPU-generated shadow commands copies its count buffer to
+    // host memory, and the classification of the frame that reuses its frame
+    // slot (the frame retired, Device::acquire_frame_slot()) decodes it, so
+    // the counts arrive frames-in-flight frames late. Null before the first
+    // decoded frame.
+    [[nodiscard]] auto get_retired_gpu_shadow_counts() const -> const Retired_gpu_shadow_counts*;
+    // The chunk size of draws through primitive_buffer (P3a): the job table
+    // and draw_list_chunks() both cut the lists with it.
+    [[nodiscard]] static auto get_records_per_chunk(const Primitive_buffer& primitive_buffer) -> std::size_t;
     // Render thread, render phase, outside any render pass, once per frame
     // after every view of the frame was added and before the first draw
     // (doc/plans/culling.md phase 6a): classifies every entry of every
@@ -622,6 +728,25 @@ private:
     auto resolve_color_stages (Draw_list_resolutions& resolutions, const Draw_list& draw_list, uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*;
     auto resolve_shadow_stages(Draw_list_resolutions& resolutions, const Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     void set_color_environment(const Color_environment& environment);
+    // Where a pass's draw commands come from (draw_list_chunks()).
+    enum class Draw_command_source : uint8_t
+    {
+        cpu_written,  // Draw_indirect_buffer::update() per chunk
+        gpu_generated // the frame's GPU command generation (chunk_entries only)
+    };
+    // draw_list_chunks() of a pass drawing GPU-generated commands: every
+    // chunk with the count draw over its job (first_gpu_job + chunk).
+    void draw_list_gpu_chunks(
+        const Draw_list&                        draw_list,
+        erhe::graphics::Render_command_encoder& render_encoder,
+        erhe::graphics::Render_pipeline&        render_pipeline,
+        Primitive_buffer&                       primitive_buffer,
+        const Primitive_interface_settings&     primitive_settings,
+        std::size_t                             draw_list_index,
+        uint32_t                                first_gpu_job,
+        uint64_t                                frame_index,
+        Draw_statistics&                        statistics
+    );
     // Draw one list in chunks of <= max primitives per multi-draw (P3a).
     // record_layout packed: the pass writes the passing entries' records;
     // chunk_entries: the chunk's shared shadow records (shared_shadow_records()).
@@ -636,6 +761,7 @@ private:
         std::size_t                              draw_list_index,
         Cull_view                                cull_view,
         Draw_record_layout                       record_layout,
+        Draw_command_source                      command_source,
         uint64_t                                 frame_index,
         Draw_statistics&                         statistics
     );
@@ -674,6 +800,36 @@ private:
     // m_gpu_cull_timer) and, when a requested check records this frame, the
     // region's readback and the check's CPU half (the frame's CPU masks).
     void dispatch_gpu_cull_views(uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer);
+    // dispatch_gpu_cull_views(), after the classification dispatch, when the
+    // frame has a shadow command selection and shadow views: builds the
+    // frame's job table, records the compaction (timed by
+    // m_gpu_command_timer) between its barriers and, for a check recording
+    // this frame, the count and command readbacks and the CPU writer's
+    // expected counts and commands.
+    void generate_gpu_shadow_commands(
+        uint64_t                        frame_index,
+        erhe::graphics::Command_buffer& command_buffer,
+        const erhe::graphics::Buffer&   mask_buffer,
+        std::size_t                     mask_byte_offset,
+        std::size_t                     mask_byte_count,
+        std::optional<uint64_t>         check_generation
+    );
+    // classify_frame_cull_views(): decodes the count readback of the frame
+    // that last used frame_index's frame slot (retired) into
+    // m_retired_gpu_shadow_counts and releases it.
+    void decode_retired_gpu_shadow_counts(uint64_t frame_index);
+    // generate_gpu_shadow_commands() of a check frame: the count and
+    // command readbacks and what the CPU writer produces per job.
+    void record_gpu_command_check(
+        uint64_t                        frame_index,
+        erhe::graphics::Command_buffer& command_buffer,
+        uint64_t                        check_generation,
+        uint32_t                        command_count,
+        std::size_t                     command_bytes,
+        std::size_t                     count_bytes
+    );
+    // Whether layer_id is in layers (an empty span selects every layer).
+    [[nodiscard]] static auto is_layer_selected(std::span<const erhe::scene::Layer_id> layers, erhe::scene::Layer_id layer_id) -> bool;
     [[nodiscard]] static auto make_gpu_cull_check() -> std::shared_ptr<Gpu_cull_check>;
     enum class Cull_view_kind : uint8_t
     {
@@ -763,6 +919,10 @@ private:
         // every unchanged list's range: a publish writes the lists whose
         // serial or offset differs from what the slot's buffer holds.
         std::unique_ptr<erhe::graphics::Buffer> gpu_bounds;
+        // The command templates of the GPU command generation
+        // (Gpu_cull_classifier::template_bytes_per_entry per entry, at the
+        // bounds' entry offsets), written with the bounds.
+        std::unique_ptr<erhe::graphics::Buffer> gpu_templates;
         std::size_t                             gpu_bounds_capacity{0};
         std::vector<uint64_t>                   gpu_bounds_serials;  // per list: serial written, 0 none
         std::vector<uint32_t>                   gpu_bounds_offsets;  // per list: entry offset written
@@ -909,6 +1069,60 @@ private:
     // The check request and its read back state, shared with the
     // completion handlers that copy the mask readbacks.
     std::shared_ptr<Gpu_cull_check>                                  m_gpu_cull_check;
+
+    // GPU command generation (doc/plans/culling.md phase 6), render phase
+    // state of the frame being rendered, started over by the frame's first
+    // add_cull_view() (begin_cull_frame()). One job per (shadow view, shadow
+    // list chunk): view, first entry (all published lists back to back),
+    // entry count and the offset of its dense commands, in commands; the
+    // uvec4 of cull_compact.comp's job table.
+    class Gpu_shadow_job
+    {
+    public:
+        uint32_t view          {0};
+        uint32_t entry_begin   {0};
+        uint32_t entry_count   {0};
+        uint32_t command_offset{0};
+    };
+    static_assert(sizeof(Gpu_shadow_job) == (4 * sizeof(uint32_t)));
+    static constexpr uint32_t                                        c_no_gpu_shadow_job{UINT32_MAX};
+    // The frame's selection (set_shadow_command_selection()); the layers
+    // are a copy (capacity kept).
+    bool                                                             m_shadow_selection_set{false};
+    uint64_t                                                         m_shadow_selection_frame_index{0};
+    erhe::Item_filter                                                m_shadow_selection_filter{};
+    std::vector<erhe::scene::Layer_id>                               m_shadow_selection_layers;
+    const Primitive_buffer*                                          m_shadow_selection_primitive_buffer{nullptr};
+    // The frame's jobs and, per (view, published list), the list's first
+    // job (its chunks' jobs are consecutive) or c_no_gpu_shadow_job, at
+    // [view * m_gpu_shadow_job_list_count + list] (capacity kept).
+    std::vector<Gpu_shadow_job>                                      m_gpu_shadow_jobs;
+    std::vector<uint32_t>                                            m_gpu_shadow_job_lookup;
+    std::size_t                                                      m_gpu_shadow_job_list_count{0};
+    // The frame's generated commands and counts (null: none this frame):
+    // device ring buffer regions released at the dispatch, kept by the ring
+    // until the frame retired.
+    const erhe::graphics::Buffer*                                    m_gpu_command_buffer{nullptr};
+    std::size_t                                                      m_gpu_command_byte_offset{0};
+    const erhe::graphics::Buffer*                                    m_gpu_count_buffer{nullptr};
+    std::size_t                                                      m_gpu_count_byte_offset{0};
+    std::unique_ptr<erhe::graphics::Gpu_timer>                       m_gpu_command_timer;
+    // Per frame slot: the count readback of the slot's last frame with
+    // GPU-generated shadow commands, until decode_retired_gpu_shadow_counts()
+    // of the frame reusing the slot (capacity kept), and the decoded counts.
+    class Gpu_count_readback
+    {
+    public:
+        erhe::graphics::Ring_buffer_range range;
+        uint64_t                          frame_index{0};
+        std::size_t                       view_count {0};
+        std::vector<uint32_t>             job_views;
+        bool                              pending    {false};
+    };
+    std::vector<Gpu_count_readback>                                  m_gpu_count_readbacks;
+    std::vector<Gpu_shadow_view_counts>                              m_retired_gpu_shadow_view_counts;
+    Retired_gpu_shadow_counts                                        m_retired_gpu_shadow_counts{};
+    bool                                                             m_has_retired_gpu_shadow_counts{false};
 };
 
 } // namespace erhe::scene_renderer
