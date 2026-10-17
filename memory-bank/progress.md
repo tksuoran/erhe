@@ -6,8 +6,8 @@
 ✓profile+rank{4d0c4eb8a;Release+Debug;tracy-captures;proposal-6-items}
 ✓build-order-doc{f796e67b4;steps-1-6;--render-image-gate}
 ✓step-1{f627354b9;per-corner-zones-dropped;capture-1.5GB->65MB;deferred-phase-under-Tracy-22s->6.5s;image-identical}
-⚡step-2{skip-soup-optimizer-when-full-build-deferred;gate:finalize<2000ms,listed<6s,image-identical,eager-run-still-optimizes}
-?step-3{asset-browser-Load+MCP-open_scene->Asset_manager::queue_load}
+✓step-2{4cc9dce17;skip-soup-optimizer-when-full-build-deferred;finalize-9323->120-141ms;listed-13.8->4.4-6.4s;idle-20.6->10.5-11s;image-identical;fable-review:meshoptimizer_integration.md-fixed;found:eager-mode-optimizes-twice(not-pursued)}
+⚡step-3{asset-browser-Load+MCP-open_scene->Asset_manager::queue_load;shared-completion}
 ?step-4{rest-of-finalize-frame->worker-build-phase;then-remeasure}
 ?steps-5-6{residency-budget;deferred-phase;decide-after-step-4}
 

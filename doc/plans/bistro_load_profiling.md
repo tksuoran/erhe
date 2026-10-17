@@ -154,7 +154,7 @@ render of the loaded scene (`--render-image`, fixed camera over the
 content fit) must stay byte-identical, since none of the steps may change
 what the loaded scene looks like once it has settled.
 
-### Step 1: profiling hygiene in the primitive builder
+### Step 1: profiling hygiene in the primitive builder (done, f627354b9)
 
 Remove the per-polygon, per-corner and per-vertex profile zones from
 `src/erhe/primitive/erhe_primitive/primitive_builder.cpp`: the
@@ -167,9 +167,11 @@ called once per corner). Keep the per-primitive zones
 `build_buffer_mesh`). Gate: a two-open Tracy capture of the Bistro load
 holds under 70 million zones (was 350 million) and the deferred phase
 measured under Tracy is within 2 s of the un-profiled run (was 22 s vs
-6 s); the render is byte-identical.
+6 s); the render is byte-identical. Result: 8.2 million zones, 65 MB
+capture (was 1.5 GB), deferred phase 6.2 to 6.7 s under Tracy vs 6.0 s
+without, render identical.
 
-### Step 2: no soup-path optimizer when the full build is deferred
+### Step 2: no soup-path optimizer when the full build is deferred (done, 4cc9dce17)
 
 In `finalize_imported_meshes` (`src/editor/parsers/gltf.cpp`), skip
 `attach_optimized_render_shape` for a primitive the deferred finalize task
@@ -188,7 +190,12 @@ reports 3852; the scene is listed in under 6 s (was 13.8 s via File > Load
 Scene); idle no later than before; render byte-identical. Also run once
 with `deferred_edge_lines` off (temporary edit of
 `config/editor/editor_settings.json`, restored afterwards) and confirm the
-eager path still optimizes at finalize time.
+eager path still optimizes at finalize time. Result: finalize 120 to
+141 ms, listed 4.4 to 6.4 s, idle 10.5 to 11.0 s, render identical in
+three runs; eager mode unchanged (3852 measured at finalize, listed
+18.6 s). Found: eager mode also optimizes every primitive twice (the
+finalize pass reports +0.0% vertices, the geometry build optimizes again);
+not pursued, eager mode is not the default.
 
 ### Step 3: every glTF open goes through the async loader
 
