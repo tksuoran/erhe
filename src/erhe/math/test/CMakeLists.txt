@@ -4,6 +4,7 @@ add_executable(${_target}
     test_box_hull.cpp
     test_euler_angles.cpp
     test_projection.cpp
+    test_sphere.cpp
     test_shadow_fit_bench.cpp
     test_shadow_fit_replay.cpp
 )

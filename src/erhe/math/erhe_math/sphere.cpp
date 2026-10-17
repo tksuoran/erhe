@@ -5,6 +5,7 @@
 #include <glm/gtc/epsilon.hpp>
 
 #include <algorithm>
+#include <limits>
 
 // Adapted from https://github.com/juj/MathGeoLib
 
@@ -90,18 +91,64 @@ auto Sphere::contains(const glm::vec3& point, float epsilon) const -> bool
     return glm::distance2(center, point) <= (radius * radius + epsilon);
 }
 
-// The epsilon value used for enclosing sphere computations.
-static const float s_epsilon = 5e-3f;
+// Every tolerance below is relative to the magnitude of the coordinates
+// involved: float rounding in distance2() and radius * radius grows with that
+// magnitude, and an absolute tolerance would be too loose for a small sphere
+// and too tight for one far from the origin.
+constexpr float float_epsilon = std::numeric_limits<float>::epsilon();
 
-auto fit_sphere_through_points(const glm::vec3& ab, const glm::vec3& ac, float& s, float& t) -> bool
+// Tolerance for a sphere/point containment test, in squared-distance units.
+// The difference point - center carries an absolute error of about one ulp of
+// the coordinate magnitude, which the squaring scales by twice the distance.
+[[nodiscard]] auto containment_tolerance(const Sphere& sphere, const glm::vec3& point) -> float
 {
+    const float magnitude = glm::length(sphere.center) + glm::length(point);
+    const float radius    = sphere.radius;
+    return 8.0f * float_epsilon * ((radius * magnitude) + (radius * radius));
+}
+
+[[nodiscard]] auto contains_within_tolerance(const Sphere& sphere, const glm::vec3& point) -> bool
+{
+    return glm::distance2(sphere.center, point) <= ((sphere.radius * sphere.radius) + containment_tolerance(sphere, point));
+}
+
+// Grows the radius so that the exact test Sphere::contains(point) holds for the point,
+// with margin for float rounding at the magnitude of the coordinates.
+void grow_to_contain(Sphere& sphere, const glm::vec3& point)
+{
+    const float distance = glm::distance(sphere.center, point);
+    const float padding  = 8.0f * float_epsilon * (distance + glm::length(sphere.center) + glm::length(point));
+    sphere.radius = std::max(sphere.radius, distance + padding);
+}
+
+// Largest edge length of the vectors, used to normalize a fit so that its
+// degeneracy thresholds are relative to the size of the input.
+[[nodiscard]] auto largest_length(const glm::vec3& ab, const glm::vec3& ac) -> float
+{
+    return std::sqrt(std::max(glm::length2(ab), glm::length2(ac)));
+}
+
+[[nodiscard]] auto largest_length(const glm::vec3& ab, const glm::vec3& ac, const glm::vec3& ad) -> float
+{
+    return std::sqrt(std::max(std::max(glm::length2(ab), glm::length2(ac)), glm::length2(ad)));
+}
+
+auto fit_sphere_through_points(const glm::vec3& ab_in, const glm::vec3& ac_in, float& s, float& t) -> bool
+{
+    // Normalize so that the thresholds below are relative to the size of the triangle.
+    const float scale = largest_length(ab_in, ac_in);
+    if (scale == 0.0f) {
+        return false;
+    }
+    const glm::vec3 ab = ab_in / scale;
+    const glm::vec3 ac = ac_in / scale;
     const float BB = glm::dot(ab, ab);
     const float CC = glm::dot(ac, ac);
     const float BC = glm::dot(ab, ac);
 
-    float denom = BB * CC - BC * BC;
+    float denom = BB * CC - BC * BC; // == |ab|^2 |ac|^2 sin^2(angle)
 
-    if (glm::epsilonEqual(denom, 0.f, 5e-3f)) {
+    if (denom < 1e-6f) {
         return false;
     }
 
@@ -113,8 +160,17 @@ auto fit_sphere_through_points(const glm::vec3& ab, const glm::vec3& ac, float& 
     return true;
 }
 
-auto fit_sphere_through_points(const glm::vec3& ab, const glm::vec3& ac, const glm::vec3& ad, float& s, float& t, float& u) -> bool
+auto fit_sphere_through_points(const glm::vec3& ab_in, const glm::vec3& ac_in, const glm::vec3& ad_in, float& s, float& t, float& u) -> bool
 {
+    // Normalize so that the determinant test in inverse_symmetric() is relative
+    // to the size of the tetrahedron. s, t and u are invariant under the scaling.
+    const float scale = largest_length(ab_in, ac_in, ad_in);
+    if (scale == 0.0f) {
+        return false;
+    }
+    const glm::vec3 ab = ab_in / scale;
+    const glm::vec3 ac = ac_in / scale;
+    const glm::vec3 ad = ad_in / scale;
     const float BB = glm::dot(ab, ab);
     const float BC = glm::dot(ab, ac);
     const float BD = glm::dot(ab, ad);
@@ -143,184 +199,139 @@ auto optimal_enclosing_sphere(const glm::vec3& a, const glm::vec3& b) -> Sphere
         .center = (a + b) * 0.5f,
         .radius = glm::distance(b, s.center)
     };
-    assert(std::isfinite(s.radius));
-    assert(s.radius >= 0.f);
-
-    // Allow floating point inconsistency and expand the radius by a small epsilon so that the containment tests
-    // really contain the points (note that the points must be sufficiently near enough to the origin)
-    s.radius += s_epsilon;
-
-    assert(s.contains(a));
-    assert(s.contains(b));
+    // Expand the radius so that the containment tests really contain the points, at any
+    // distance from the origin.
+    grow_to_contain(s, a);
+    grow_to_contain(s, b);
     return s;
 }
 
+// Keeps the candidate with the smaller radius.
+void keep_smaller(Sphere& best, const Sphere& candidate)
+{
+    if (candidate.radius < best.radius) {
+        best = candidate;
+    }
+}
+
+// The minimal sphere of three points is either their circumscribed circle
+// (when its center lies inside the triangle) or the minimal sphere of the
+// two farthest points, which then contains the third. Every candidate is
+// grown so that the exact containment tests hold, and the smallest one is
+// the answer: a candidate that does not contain a point mathematically grows
+// past the true minimal sphere, one that does equals it up to rounding.
 auto optimal_enclosing_sphere(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) -> Sphere
 {
-    Sphere sphere;
-
     const glm::vec3 ab = b - a;
     const glm::vec3 ac = c - a;
+
+    Sphere best{.center = a, .radius = std::numeric_limits<float>::infinity()};
 
     float s = 0.0f;
     float t = 0.0f;
-    bool are_collinear = glm::length2(glm::cross(ab, ac)) < 1e-4f; // Manually test that we don't try to fit sphere to three collinear points.
-    bool success = !are_collinear && fit_sphere_through_points(ab, ac, s, t);
-    if (!success || std::abs(s) > 10000.f || std::abs(t) > 10000.f) { // If s and t are very far from the triangle, do a manual box fitting for numerical stability.
-        glm::vec3 min_pt = min(a, b, c);
-        glm::vec3 max_pt = max(a, b, c);
-        sphere.center = (min_pt + max_pt) * 0.5f;
-        sphere.radius = glm::distance(sphere.center, min_pt);
-    } else if (s < 0.0f) {
-        sphere.center = (a + c) * 0.5f;
-        sphere.radius = glm::distance(a, c) * 0.5f;
-        sphere.radius = std::max( // For numerical stability, expand the radius of the sphere so it certainly contains the third point.
-            sphere.radius,
-            glm::distance(b, sphere.center)
-        );
-    } else if (t < 0.f) {
-        sphere.center = (a + b) * 0.5f;
-        sphere.radius = glm::distance(a, b) * 0.5f;
-        sphere.radius = std::max( // For numerical stability, expand the radius of the sphere so it certainly contains the third point.
-            sphere.radius,
-            glm::distance(c, sphere.center)
-        );
-    } else if (s + t > 1.f) {
-        sphere.center = (b + c) * 0.5f;
-        sphere.radius = glm::distance(b, c) * 0.5f;
-        sphere.radius = std::max( // For numerical stability, expand the radius of the sphere so it certainly contains the third point.
-            sphere.radius,
-            glm::distance(a, sphere.center)
-        );
-    } else {
-        const glm::vec3 center = s * ab + t * ac;
-        sphere.center = a + center;
-        // Mathematically, the following would be correct, but it suffers from floating point inaccuracies,
-        // since it only tests distance against one point.
-        // sphere.radius = glm::length(center);
-
-        // For robustness, take the radius to be the distance to the farthest point (though the distance are all
-        // equal).
-        sphere.radius = std::sqrt(
-            max(
-                glm::distance2(sphere.center, a),
-                glm::distance2(sphere.center, b),
-                glm::distance2(sphere.center, c)
-            )
-        );
+    const bool fitted = fit_sphere_through_points(ab, ac, s, t);
+    if (fitted && (s >= 0.0f) && (t >= 0.0f) && ((s + t) <= 1.0f)) {
+        // The circumscribed circle, with its center inside the triangle.
+        Sphere circle{.center = a + (s * ab) + (t * ac), .radius = 0.0f};
+        grow_to_contain(circle, a);
+        grow_to_contain(circle, b);
+        grow_to_contain(circle, c);
+        keep_smaller(best, circle);
     }
 
-    // Allow floating point inconsistency and expand the radius by a small epsilon so that the containment tests
-    // really contain the points (note that the points must be sufficiently near enough to the origin)
-    sphere.radius += 2.f * s_epsilon; // We test against one epsilon, so expand by two epsilons.
+    Sphere pair = optimal_enclosing_sphere(a, b);
+    grow_to_contain(pair, c);
+    keep_smaller(best, pair);
 
-#ifdef MATH_ASSERT_CORRECTNESS
-    if (!sphere.contains(a, s_epsilon) || !sphere.contains(b, s_epsilon) || !sphere.contains(c, s_epsilon))
-    {
-        LOGE("Pos: {}, r: {}", sphere.center, sphere.radius);
-        LOGE("A: {}, dist: {}", a, glm::distance(a, sphere.center));
-        LOGE("B: {}, dist: {}", b, glm::distance(b, sphere.center));
-        LOGE("C: {}, dist: {}", c, glm::distance(c, sphere.center));
-        ERGE_FATAL(false);
-    }
-#endif
-    return sphere;
+    pair = optimal_enclosing_sphere(a, c);
+    grow_to_contain(pair, b);
+    keep_smaller(best, pair);
+
+    pair = optimal_enclosing_sphere(b, c);
+    grow_to_contain(pair, a);
+    keep_smaller(best, pair);
+
+    return best;
 }
 
+// The minimal sphere of four points is either their circumscribed sphere
+// (when its center lies inside the tetrahedron) or the minimal sphere of
+// three of them, which then contains the fourth; see the three point case
+// for why the smallest grown candidate is the answer.
 auto optimal_enclosing_sphere(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d) -> Sphere
 {
-    Sphere sphere;
-
-    float s,t,u;
     const glm::vec3 ab = b - a;
     const glm::vec3 ac = c - a;
     const glm::vec3 ad = d - a;
-    bool success = fit_sphere_through_points(ab, ac, ad, s, t, u);
-    if (!success || s < 0.0f || t < 0.0f || u < 0.0f || s + t + u > 1.0f) {
-        sphere = optimal_enclosing_sphere(a, b, c);
-        if (!sphere.contains(d)) {
-            sphere = optimal_enclosing_sphere(a, b, d);
-            if (!sphere.contains(c)) {
-                sphere = optimal_enclosing_sphere(a, c, d);
-                if (!sphere.contains(b)) {
-                    sphere = optimal_enclosing_sphere(b, c, d);
-                    sphere.radius = std::max( // For numerical stability, expand the radius of the sphere so it certainly contains the fourth point.
-                        sphere.radius,
-                        glm::distance(a, sphere.center) + 1e-3f
-                    );
-                    assert(sphere.contains(a));
-                }
-            }
-        }
-    } else { // The fitted sphere is inside the convex hull of the vertices (a,b,c,d), so it must be optimal.
-        const glm::vec3 center = s*ab + t*ac + u*ad;
 
-        sphere.center = a + center;
-        // Mathematically, the following would be correct, but it suffers from floating point inaccuracies,
-        // since it only tests distance against one point.
-        //sphere.r = center.Length();
+    Sphere best{.center = a, .radius = std::numeric_limits<float>::infinity()};
 
-        // For robustness, take the radius to be the distance to the farthest point (though the distance are all
-        // equal).
-        sphere.radius = std::sqrt(
-            max(
-                glm::distance2(sphere.center, a),
-                glm::distance2(sphere.center, b),
-                glm::distance2(sphere.center, c),
-                glm::distance2(sphere.center, d)
-            )
-        );
+    float s = 0.0f;
+    float t = 0.0f;
+    float u = 0.0f;
+    const bool fitted = fit_sphere_through_points(ab, ac, ad, s, t, u);
+    if (fitted && (s >= 0.0f) && (t >= 0.0f) && (u >= 0.0f) && ((s + t + u) <= 1.0f)) {
+        Sphere circumsphere{.center = a + (s * ab) + (t * ac) + (u * ad), .radius = 0.0f};
+        grow_to_contain(circumsphere, a);
+        grow_to_contain(circumsphere, b);
+        grow_to_contain(circumsphere, c);
+        grow_to_contain(circumsphere, d);
+        keep_smaller(best, circumsphere);
     }
 
-    // Allow floating point inconsistency and expand the radius by a small epsilon so that the containment tests
-    // really contain the points (note that the points must be sufficiently near enough to the origin)
-    sphere.radius += 2.0f * s_epsilon; // We test against one epsilon, so expand using 2 epsilons.
+    Sphere triple = optimal_enclosing_sphere(a, b, c);
+    grow_to_contain(triple, d);
+    keep_smaller(best, triple);
 
-#ifdef MATH_ASSERT_CORRECTNESS
-    if (!sphere.Contains(a, sEpsilon) || !sphere.Contains(b, sEpsilon) || !sphere.Contains(c, sEpsilon) || !sphere.Contains(d, sEpsilon))
-    {
-        LOGE("Pos: %s, r: %f", sphere.pos.ToString().c_str(), sphere.r);
-        LOGE("A: %s, dist: %f", a.ToString().c_str(), a.Distance(sphere.pos));
-        LOGE("B: %s, dist: %f", b.ToString().c_str(), b.Distance(sphere.pos));
-        LOGE("C: %s, dist: %f", c.ToString().c_str(), c.Distance(sphere.pos));
-        LOGE("D: %s, dist: %f", d.ToString().c_str(), d.Distance(sphere.pos));
-        mathassert(false);
-    }
-#endif
+    triple = optimal_enclosing_sphere(a, b, d);
+    grow_to_contain(triple, c);
+    keep_smaller(best, triple);
 
-    return sphere;
+    triple = optimal_enclosing_sphere(a, c, d);
+    grow_to_contain(triple, b);
+    keep_smaller(best, triple);
+
+    triple = optimal_enclosing_sphere(b, c, d);
+    grow_to_contain(triple, a);
+    keep_smaller(best, triple);
+
+    return best;
 }
 
+// The minimal sphere of five points is the minimal sphere of four of them
+// that contains the fifth. The first candidate found to contain its fifth
+// point within rounding tolerance is it: the sphere contains all five, and
+// the minimal sphere of a subset is never larger than that of the set. When
+// rounding leaves every candidate short, the smallest candidate grown to
+// reach its fifth point is the answer up to rounding, by the argument of the
+// three point case.
 auto optimal_enclosing_sphere(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d, const glm::vec3& e, std::size_t& redundant_point) -> Sphere
 {
-    Sphere s = optimal_enclosing_sphere(b, c, d, e);
-    if (s.contains(a, s_epsilon)) {
-        redundant_point = 0;
-        return s;
+    const glm::vec3* points[5] = {&a, &b, &c, &d, &e};
+    Sphere best{.center = a, .radius = std::numeric_limits<float>::infinity()};
+    std::size_t best_redundant = 4;
+    for (std::size_t redundant = 0; redundant < 5; ++redundant) {
+        const glm::vec3* support[4];
+        std::size_t count = 0;
+        for (std::size_t i = 0; i < 5; ++i) {
+            if (i != redundant) {
+                support[count++] = points[i];
+            }
+        }
+        Sphere candidate = optimal_enclosing_sphere(*support[0], *support[1], *support[2], *support[3]);
+        if (contains_within_tolerance(candidate, *points[redundant])) {
+            grow_to_contain(candidate, *points[redundant]);
+            redundant_point = redundant;
+            return candidate;
+        }
+        grow_to_contain(candidate, *points[redundant]);
+        if (candidate.radius < best.radius) {
+            best           = candidate;
+            best_redundant = redundant;
+        }
     }
-
-    s = optimal_enclosing_sphere(a, c, d, e);
-    if (s.contains(b, s_epsilon)) {
-        redundant_point = 1;
-        return s;
-    }
-
-    s = optimal_enclosing_sphere(a, b, d, e);
-    if (s.contains(c, s_epsilon)) {
-        redundant_point = 2;
-        return s;
-    }
-
-    s = optimal_enclosing_sphere(a, b, c, e);
-    if (s.contains(d, s_epsilon)) {
-        redundant_point = 3;
-        return s;
-    }
-
-    s = optimal_enclosing_sphere(a, b, c, d);
-    assert(s.contains(e, s_epsilon));
-    redundant_point = 4;
-    return s;
+    redundant_point = best_redundant;
+    return best;
 }
 
 auto optimal_enclosing_sphere(const std::vector<glm::vec3>& pts) -> Sphere
@@ -351,18 +362,16 @@ auto optimal_enclosing_sphere(const std::vector<glm::vec3>& pts) -> Sphere
 
     // The so-far constructed minimal sphere.
     Sphere s = optimal_enclosing_sphere(pts[sp[0]], pts[sp[1]], pts[sp[2]], pts[sp[3]]);
-    float r_squared = s.radius * s.radius + s_epsilon;
-    for(int i = 4; i < num_points; ++i) {
+    for (std::size_t i = 4; i < num_points; ++i) {
         if (i == sp[0] || i == sp[1] || i == sp[2] || i == sp[3]) {
             continue; // Take care not to add the same point twice to the support set.
         }
 
         // If the next point (pts[i]) does not fit inside the currently computed minimal sphere, compute
         // a new minimal sphere that also contains pts[i].
-        if (glm::distance2(pts[i], s.center) > r_squared) {
+        if (!contains_within_tolerance(s, pts[i])) {
             std::size_t redundant;
             s = optimal_enclosing_sphere(pts[sp[0]], pts[sp[1]], pts[sp[2]], pts[sp[3]], pts[i], redundant);
-            r_squared = s.radius * s.radius + s_epsilon;
             // A sphere is uniquely defined by four points, so one of the five points passed in above is
             // now redundant, and can be removed from the support set.
             if (
@@ -381,10 +390,27 @@ auto optimal_enclosing_sphere(const std::vector<glm::vec3>& pts) -> Sphere
                 if (sp[3] < i) expendable[3] = true;
 
                 // Have to start all over and make sure all old points also lie inside this new sphere,
-                // since our guess for the minimal enclosing sphere changed.
-                i = 0;
+                // since our guess for the minimal enclosing sphere changed. The loop increment
+                // brings i to 0, so the first point is checked again too.
+                i = std::numeric_limits<std::size_t>::max();
             }
         }
+    }
+
+    // When the redundant support point could not be evicted above (the cycle guard),
+    // the sphere still changed without a restart, so points checked before it may lie
+    // outside. Enclose every point left outside by growing the sphere toward it; the
+    // result is an enclosing sphere for every input, minimal up to those cases.
+    for (const glm::vec3& point : pts) {
+        if (s.contains(point)) {
+            continue;
+        }
+        const glm::vec3 to_point   = point - s.center;
+        const float     distance   = glm::length(to_point);
+        const float     new_radius = 0.5f * (s.radius + distance);
+        s.center += to_point * ((new_radius - s.radius) / distance);
+        s.radius  = new_radius;
+        grow_to_contain(s, point);
     }
 
     return s;
