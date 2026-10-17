@@ -379,10 +379,11 @@ void Scene::update_subtree_transforms(erhe::Hierarchy& prim, const bool carry_bo
     // chain of body-driven nodes. Any OTHER writer's dirt (tools, MCP, undo,
     // animation) CARRIES them: their parent_from_node is kept current by
     // set_world_from_node, so the recompute moves the body-driven subtree
-    // with its edited ancestor; the physics writeback then teleports the
-    // rigid bodies to the carried node poses (Node_physics::
-    // before_physics_simulation runs node -> body for every body each frame
-    // while the simulation runs, and on resume when it is paused).
+    // with its edited ancestor; the recompute reaches each carried node's
+    // transform observers, through which the editor's physics system queues
+    // the body for the node -> body write before the next simulation steps
+    // (Node_physics_system::apply_pending_node_poses; queued while paused,
+    // applied on resume).
     for (const auto& child : prim.get_children()) {
         // Type-bit test + static_cast: this loop visits every node under a
         // moving subtree each frame, so avoid dynamic_pointer_cast's RTTI

@@ -202,8 +202,10 @@ In order:
 3. OpenXR: `Headset_view::wait_frame()` (`xrWaitFrame`; skipped when the
    previous M2's event poll failed). The `Frame_timing` goes into the packet;
    a failed wait sleeps 250 ms.
-4. `App_scenes::before_physics_simulation_steps`, then one
-   `update_physics_simulation_fixed_step` per fixed step of
+4. `App_scenes::before_physics_simulation_steps` (the node -> body writes
+   the transform observers queued since the previous frame, plus the
+   kinematic physical re-targets; `Node_physics_system::apply_pending_node_poses`),
+   then one `update_physics_simulation_fixed_step` per fixed step of
    `Time::for_each_fixed_step`. Both hold
    `Scene_root::get_physics_step_mutex()`; R code that reads body state (the
    physics debug visualization, the drag point body display) takes the same

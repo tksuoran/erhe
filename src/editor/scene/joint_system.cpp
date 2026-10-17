@@ -39,7 +39,7 @@ namespace {
 
 // Rotation + translation of the node world transform as a physics transform;
 // scale is ignored (the same convention as
-// Node_physics_system::before_physics_simulation()).
+// Node_physics_system::write_body_from_node()).
 [[nodiscard]] auto world_transform_of(const erhe::scene::Node& node) -> erhe::physics::Transform
 {
     const erhe::scene::Trs_transform& world_from_node = node.world_from_node_transform();

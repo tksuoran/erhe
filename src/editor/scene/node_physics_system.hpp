@@ -1,12 +1,16 @@
 #pragma once
 
 #include "erhe_physics/irigid_body.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_scene/node_system.hpp"
+#include "erhe_scene/transform_observer.hpp"
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -65,6 +69,15 @@ public:
     bool                                             in_world{false};
     erhe::property::Observer_token                   physics_material_observer{};
     erhe::property::Observer_token                   collision_filter_observer{};
+    // Node -> body: the node's transform observer, alive with the body. Every
+    // transform write that is not the system's own body -> node writeback
+    // queues the entry (node_pose_pending, Node_physics_system::
+    // m_pending_node_poses) for the next apply_pending_node_poses().
+    erhe::scene::Transform_observer_token            transform_observer{};
+    bool                                             node_pose_pending{false};
+    // The apply_pending_node_poses() pass that last wrote this body, so a
+    // kinematic physical body moved by its node is not re-targeted twice.
+    std::uint64_t                                    node_pose_applied_pass{0};
     // Debug visualization points, filled by the physics tool.
     std::vector<glm::vec3>                           markers{};
 };
@@ -121,10 +134,20 @@ public:
     // node's transform is written after its ancestor's.
     [[nodiscard]] auto get_bodies() -> const std::vector<Node_physics_entry*>&;
 
-    // Body <-> node transform write-back, called by Scene_root around the
-    // simulation steps.
-    void before_physics_simulation(Node_physics_entry& entry);
-    void after_physics_simulation (Node_physics_entry& entry);
+    // Node -> body, called by Scene_root before the frame's simulation steps
+    // (overlap phase, M1, under the physics step mutex). Writes the bodies
+    // whose node transform was written since the previous pass - by a tool,
+    // MCP, undo, animation or the propagation of an ancestor's edit; the
+    // transform observer of each body's node queues them, so the pass costs
+    // the changes, not the scene - parents before children, then re-targets
+    // every kinematic physical body (a selected or dragged body, or one
+    // authored so): Jolt keeps the velocity of the last MoveKinematic, so a
+    // body whose node stopped moving must be told to stay. Dirt queued while
+    // the simulation is paused is applied by the first pass after resume.
+    void apply_pending_node_poses();
+    // Body -> node, called by Scene_root after the steps (prepare phase, M2)
+    // for every active body. The writes it makes do not queue the body.
+    void after_physics_simulation(Node_physics_entry& entry);
 
     // Body activation changes drive Item_flags::no_transform_update on the
     // body's node (set while an awake dynamic body drives it). The world
@@ -178,6 +201,20 @@ private:
     void reapply_physics_material(Node_physics_entry& entry);
     void reapply_collision_filter(Node_physics_entry& entry);
 
+    // Subscribes the entry to its node's transform updates; released with the
+    // body.
+    void observe_node_transform(Node_physics_entry& entry);
+    // The transform observer's work: queues the entry once.
+    void queue_node_pose(Node_physics_entry& entry);
+    // Takes the entry out of the queue (a body about to go).
+    void unqueue_node_pose(Node_physics_entry& entry);
+    // Writes the node's world pose into the body.
+    void write_body_from_node(Node_physics_entry& entry);
+    // Every body motion mode change goes through here, so the kinematic
+    // physical list stays current.
+    void set_body_motion_mode(Node_physics_entry& entry, erhe::physics::Motion_mode motion_mode);
+    void update_kinematic_physical_membership(Node_physics_entry& entry);
+
     Scene_root&                                                       m_scene_root;
     std::unordered_map<const erhe::scene::Node*, Node_physics_entry>  m_entries;
     std::vector<Node_physics_entry*>                                  m_bodies;
@@ -191,6 +228,19 @@ private:
     };
     std::vector<Queued_body_activation>                               m_queued_body_activations;
     bool                                                              m_in_simulation_steps{false};
+
+    // The node -> body queue. The observers fill it from whichever thread
+    // writes a node transform or runs the propagation pass;
+    // apply_pending_node_poses() swaps it out under the mutex and works on
+    // the copy.
+    ERHE_PROFILE_MUTEX(std::mutex, m_pending_mutex);
+    std::vector<Node_physics_entry*>                                  m_pending_node_poses;
+    std::vector<Node_physics_entry*>                                  m_pending_processing;
+    std::vector<Node_physics_entry*>                                  m_kinematic_physical_bodies;
+    std::uint64_t                                                     m_node_pose_pass{0};
+    // True while after_physics_simulation() writes a node, so the node's
+    // transform observer does not queue the body for its own pose.
+    bool                                                              m_writing_nodes_from_bodies{false};
 };
 
 // The physics system of the scene holding `node`, or nullptr when the node is

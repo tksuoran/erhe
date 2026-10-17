@@ -22,3 +22,5 @@
 [TASK::deferred-brush-geometry]{DONE-2026-09-21;6-phases-6-commits;detail=activeContext;left=doc/plans/brushes.md;?user-interactive{spinners-windowed}}
 
 [TASK::startup-profiling]{2026-09-21;~24-commits-dd023d9f4..78015a6d3;16.9s->1.68s-Debug;detail=activeContext;left=prewarm-330ms+facet-texcoord-step-regression-uninvestigated}
+
+@physics-node-pose-change-driven::DONE-2026-10-17{Node_physics_system::apply_pending_node_poses;transform-observer-per-body-node-queues-entry(mutex;writeback-flag-skips-own-writes)+kinematic-physical-list-re-targeted-each-pass;replaces-per-frame-node->body-copy-of-every-body;heavy-Release-M1:before_physics_simulation_steps-205us->0.9us;gate=scripts/physics_node_pose_gate.py{positions-identical-base-vs-new};FOUND:old-copy-reset-Jolt-sleep-timer-every-frame->awake-dynamic-bodies-never-slept(now-they-do)}

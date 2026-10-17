@@ -164,6 +164,8 @@ void Node_physics_system::create_body(erhe::scene::Node& node, Node_physics_entr
     entry.in_world = true;
     m_bodies.push_back(&entry);
     m_bodies_sorted = false;
+    observe_node_transform(entry);
+    update_kinematic_physical_membership(entry);
 
     if ((entry.wake_on_attach == Wake_on_attach::yes) && (entry.rigid_body->get_motion_mode() == Motion_mode::e_dynamic)) {
         entry.rigid_body->begin_move();
@@ -190,9 +192,12 @@ void Node_physics_system::destroy_body(Node_physics_entry& entry)
     if (entry.in_world && m_scene_root.has_physics_world()) {
         m_scene_root.get_physics_world().remove_rigid_body(entry.rigid_body.get());
     }
+    entry.transform_observer.release();
+    unqueue_node_pose(entry);
     entry.in_world = false;
     entry.rigid_body.reset();
     m_bodies.erase(std::remove(m_bodies.begin(), m_bodies.end(), &entry), m_bodies.end());
+    update_kinematic_physical_membership(entry);
 }
 
 void Node_physics_system::recreate_body(erhe::scene::Node& node, Node_physics_entry& entry)
@@ -254,7 +259,7 @@ void Node_physics_system::on_values_changed(erhe::scene::Node& node, const erhe:
         }
         entry.motion_mode = node.get_value(Node_physics::motion_mode_property);
         entry.create_info.motion_mode = get_effective_motion_mode(entry);
-        entry.rigid_body->set_motion_mode(entry.create_info.motion_mode);
+        set_body_motion_mode(entry, entry.create_info.motion_mode);
         return;
     }
 
@@ -388,7 +393,7 @@ void Node_physics_system::begin_interaction(const erhe::scene::Node& node)
     }
     // entry->motion_mode already holds the intended mode - no need to re-read
     // from the rigid body, which may already be kinematic from a prior call.
-    entry->rigid_body->set_motion_mode(Motion_mode::e_kinematic_physical);
+    set_body_motion_mode(*entry, Motion_mode::e_kinematic_physical);
     entry->rigid_body->begin_move();
 }
 
@@ -398,7 +403,7 @@ void Node_physics_system::end_interaction(const erhe::scene::Node& node)
     if ((entry == nullptr) || !entry->rigid_body) {
         return;
     }
-    entry->rigid_body->set_motion_mode(get_effective_motion_mode(*entry));
+    set_body_motion_mode(*entry, get_effective_motion_mode(*entry));
     entry->rigid_body->end_move();
 }
 
@@ -452,7 +457,72 @@ auto Node_physics_system::get_bodies() -> const std::vector<Node_physics_entry*>
     return m_bodies;
 }
 
-void Node_physics_system::before_physics_simulation(Node_physics_entry& entry)
+void Node_physics_system::observe_node_transform(Node_physics_entry& entry)
+{
+    entry.transform_observer.release();
+    if (entry.node == nullptr) {
+        return;
+    }
+    // The entry lives in a node-based map, so the reference stays valid until
+    // the entry is erased, and the token (released with the body, destroyed
+    // with the entry) never lets the callback outlive it.
+    entry.transform_observer = entry.node->add_transform_observer(
+        [this, &entry](erhe::scene::Xformable&) {
+            if (m_writing_nodes_from_bodies) {
+                return; // the body -> node writeback: the body already has this pose
+            }
+            queue_node_pose(entry);
+        }
+    );
+}
+
+void Node_physics_system::queue_node_pose(Node_physics_entry& entry)
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_mutex};
+    if (entry.node_pose_pending) {
+        return;
+    }
+    entry.node_pose_pending = true;
+    m_pending_node_poses.push_back(&entry);
+}
+
+void Node_physics_system::unqueue_node_pose(Node_physics_entry& entry)
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_mutex};
+    if (!entry.node_pose_pending) {
+        return;
+    }
+    entry.node_pose_pending = false;
+    m_pending_node_poses.erase(
+        std::remove(m_pending_node_poses.begin(), m_pending_node_poses.end(), &entry),
+        m_pending_node_poses.end()
+    );
+}
+
+void Node_physics_system::set_body_motion_mode(Node_physics_entry& entry, const Motion_mode motion_mode)
+{
+    if (!entry.rigid_body) {
+        return;
+    }
+    entry.rigid_body->set_motion_mode(motion_mode);
+    update_kinematic_physical_membership(entry);
+}
+
+void Node_physics_system::update_kinematic_physical_membership(Node_physics_entry& entry)
+{
+    const bool wanted =
+        entry.rigid_body &&
+        (entry.rigid_body->get_motion_mode() == Motion_mode::e_kinematic_physical);
+    const std::vector<Node_physics_entry*>::iterator i = std::find(m_kinematic_physical_bodies.begin(), m_kinematic_physical_bodies.end(), &entry);
+    const bool listed = (i != m_kinematic_physical_bodies.end());
+    if (wanted && !listed) {
+        m_kinematic_physical_bodies.push_back(&entry);
+    } else if (!wanted && listed) {
+        m_kinematic_physical_bodies.erase(i);
+    }
+}
+
+void Node_physics_system::write_body_from_node(Node_physics_entry& entry)
 {
     if (!entry.rigid_body || (entry.node == nullptr)) {
         return;
@@ -464,6 +534,54 @@ void Node_physics_system::before_physics_simulation(Node_physics_entry& entry)
             world_from_node.get_translation()
         }
     );
+}
+
+void Node_physics_system::apply_pending_node_poses()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ++m_node_pose_pass;
+
+    // Take the queue and clear the flags under the lock, so a write that
+    // lands while the copy is worked on queues the entry again for the next
+    // pass instead of being lost.
+    m_pending_processing.clear();
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_mutex};
+        std::swap(m_pending_node_poses, m_pending_processing);
+        for (Node_physics_entry* const entry : m_pending_processing) {
+            entry->node_pose_pending = false;
+        }
+    }
+
+    // Parents before children, as get_bodies() orders the writeback, so a
+    // body-driven node's pose is written after its ancestor's.
+    std::sort(
+        m_pending_processing.begin(),
+        m_pending_processing.end(),
+        [](const Node_physics_entry* const lhs, const Node_physics_entry* const rhs) -> bool {
+            if ((lhs->node == nullptr) || (rhs->node == nullptr)) {
+                return false;
+            }
+            return lhs->node->get_depth() < rhs->node->get_depth();
+        }
+    );
+    for (Node_physics_entry* const entry : m_pending_processing) {
+        entry->node_pose_applied_pass = m_node_pose_pass;
+        write_body_from_node(*entry);
+    }
+    m_pending_processing.clear();
+
+    // A kinematic physical body is re-targeted every pass: MoveKinematic sets
+    // the velocity that reaches the node pose over the step, and a body whose
+    // node did not move needs the zero velocity that targeting its current
+    // pose gives.
+    for (Node_physics_entry* const entry : m_kinematic_physical_bodies) {
+        if (entry->node_pose_applied_pass == m_node_pose_pass) {
+            continue;
+        }
+        write_body_from_node(*entry);
+    }
 }
 
 void Node_physics_system::after_physics_simulation(Node_physics_entry& entry)
@@ -480,6 +598,10 @@ void Node_physics_system::after_physics_simulation(Node_physics_entry& entry)
     const glm::mat4 transform      = entry.rigid_body->get_world_transform();
     const glm::vec3 world_position = glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
 
+    // The node's transform observer sees these writes; the flag tells it
+    // the body already holds the pose.
+    ERHE_VERIFY(!m_writing_nodes_from_bodies);
+    m_writing_nodes_from_bodies = true;
     if (world_position.y < -100.0f) {
         const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
         entry.rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{1.0f}, respawn_location});
@@ -489,6 +611,7 @@ void Node_physics_system::after_physics_simulation(Node_physics_entry& entry)
     } else {
         entry.node->set_world_from_node(transform);
     }
+    m_writing_nodes_from_bodies = false;
 }
 
 void Node_physics_system::on_body_activation(erhe::physics::IRigid_body& rigid_body, const Body_activation activation)

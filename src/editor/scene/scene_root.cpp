@@ -2233,9 +2233,7 @@ void Scene_root::apply_queued_body_activations()
 void Scene_root::before_physics_simulation_steps()
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> physics_step_lock{m_physics_step_mutex};
-    for (Node_physics_entry* const entry : m_node_physics_system->get_bodies()) {
-        m_node_physics_system->before_physics_simulation(*entry);
-    }
+    m_node_physics_system->apply_pending_node_poses();
 }
 
 void Scene_root::update_physics_simulation_fixed_step(const double dt, const Physics_config& physics)

@@ -187,9 +187,10 @@ TEST(Joint_drives, velocity_drive_turns_a_sphere_hanging_under_gravity)
     drive.damping             = 1.0f;
     hinge.build(*world);
     for (int i = 0; i < 240; ++i) {
-        // The editor writes every body's node pose back into the body before
-        // each step (Node_physics_system::before_physics_simulation), a round
-        // trip through the node's transform that must not disturb the motion.
+        // The editor writes a moved node's pose into its body before the
+        // frame's steps (Node_physics_system::apply_pending_node_poses), a
+        // round trip through the node's transform that must not disturb the
+        // motion; here every body takes it every step.
         for (const std::shared_ptr<erhe::physics::IRigid_body>& body : {hinge.anchor, hinge.body}) {
             const glm::mat4 m = body->get_world_transform();
             body->set_world_transform(Transform{glm::mat3{m}, glm::vec3{m[3]}});
