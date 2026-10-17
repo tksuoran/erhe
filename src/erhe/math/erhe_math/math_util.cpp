@@ -912,7 +912,7 @@ void calculate_bounding_volume(
     bounding_sphere.center = sphere.center;
 
     // Post-processing: optimal_enclosing_sphere() accepts the first candidate
-    // that contains all points within absolute epsilon tolerances, which can
+    // that contains all points within its rounding tolerance, which can
     // leave the center visibly off the symmetry axis when the true minimal
     // sphere is supported by only two points (e.g. a capsule's poles).
     // Try the bounding box center as an alternative center; keep it when the
