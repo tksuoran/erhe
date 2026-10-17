@@ -34,6 +34,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/scoped_worker_context.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
@@ -55,11 +56,13 @@
 
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_task/task.hpp"
 
 #include "scene/generated/scene_settings_serialization.hpp"
 
 #include <fmt/format.h>
 #include <simdjson.h>
+#include <taskflow/taskflow.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -626,16 +629,30 @@ auto make_import_build_info(
 // shape already has buffer-mesh triangles), so the later main-thread pass
 // simply fast-paths over what this built.
 //
-// Deliberately SERIAL over the primitives rather than a per-mesh fan-out:
-// the parse clones a mesh per instantiating node and the clones share
-// Primitive objects, and make_buffer_mesh has no per-shape serialization of
-// its own, so building two meshes concurrently could build one shared
-// primitive twice at once. The point here is to get the work off the main
-// thread; parallelising within it needs that serialization first.
+// The builds run as parallel executor tasks, one per unique render shape.
+// The parse clones a mesh per instantiating node and the clones share
+// Primitive objects. make_renderable_mesh checks "already built" before
+// taking the shape's build mutex, so two concurrent calls for one shape
+// could both build it: the jobs are therefore deduplicated by shape BEFORE
+// dispatch, keeping the first reference in node order - the one the serial
+// loop built (its Build_info, and its Primitive receives the optimized
+// variant), so every later reference fast-paths exactly as before.
+// Distinct shapes build concurrently: the multi-stream pool allocation is
+// one transaction under buffer_mesh_allocation_mutex(), the pools are
+// Published_vectors read without a lock, and the loader
+// Buffer_transfer_queue enqueue is mutex-protected - the rules the
+// concurrent deferred finalize builds already rely on.
+//
+// On GL each task holds a Scoped_worker_context around its build only (the
+// GPU allocation happens inside it); the caller must NOT hold one, because
+// a thread holding a pool context may not schedule tasks
+// (erhe::task::verify_thread_may_spawn).
 //
 // build_info / skinned_build_info must be constructed by the CALLER on the
 // main thread: make_primitive_buffer_info can create a Vertex_input_state.
 void build_imported_buffer_meshes(
+    tf::Executor&                      executor,
+    erhe::graphics::Device&            graphics_device,
     const erhe::primitive::Build_info& build_info,
     const erhe::primitive::Build_info& skinned_build_info,
     const erhe::gltf::Gltf_data&       gltf_data
@@ -643,8 +660,18 @@ void build_imported_buffer_meshes(
 {
     ERHE_PROFILE_FUNCTION();
 
+    class Build_job
+    {
+    public:
+        erhe::primitive::Primitive*        primitive;
+        const erhe::primitive::Build_info* build_info;
+        const erhe::scene::Mesh*           mesh;
+    };
+
     const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-    std::size_t built_count = 0;
+    std::size_t                                                        primitive_count = 0;
+    std::vector<Build_job>                                             jobs;
+    std::unordered_set<const erhe::primitive::Primitive_render_shape*> seen_shapes;
     for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
         if (!node) {
             continue;
@@ -660,20 +687,66 @@ void build_imported_buffer_meshes(
         // not happen.
         const erhe::primitive::Build_info& mesh_build_info = mesh->skin ? skinned_build_info : build_info;
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+            ++primitive_count;
             erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
-            if (!primitive.make_renderable_mesh(mesh_build_info, erhe::primitive::Normal_style::corner_normals)) {
+            if (!primitive.render_shape) {
+                // make_renderable_mesh refuses a primitive without a render
+                // shape; reported the way the serial build reported it.
                 log_parsers->error(
                     "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
                     mesh->get_name()
                 );
+                continue;
             }
-            ++built_count;
+            if (!seen_shapes.insert(primitive.render_shape.get()).second) {
+                continue;
+            }
+            jobs.push_back(
+                Build_job{
+                    .primitive  = &primitive,
+                    .build_info = &mesh_build_info,
+                    .mesh       = mesh.get()
+                }
+            );
         }
     }
+
+    // gltf_data.nodes keeps the meshes (and through them the primitives)
+    // alive, and `jobs` outlives the wait below, so the raw pointers and the
+    // job references captured by the tasks stay valid.
+    tf::Taskflow taskflow;
+    for (const Build_job& job : jobs) {
+        taskflow.emplace(
+            [&job, &graphics_device]()
+            {
+                ERHE_PROFILE_SCOPE("build_imported_buffer_mesh");
+                // On GL the GPU buffer allocations inside the build need a
+                // worker share context; no-op on other backends.
+                const erhe::graphics::Scoped_worker_context worker_context{graphics_device};
+                if (!job.primitive->make_renderable_mesh(*job.build_info, erhe::primitive::Normal_style::corner_normals)) {
+                    log_parsers->error(
+                        "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
+                        job.mesh->get_name()
+                    );
+                }
+            }
+        );
+    }
+    // Same shape as parse_gltf, which runs its image-decode and mesh-parse
+    // taskflows from the parse worker: this worker waits, the others build.
+    // Like parse_gltf it needs more than one executor thread (with one, the
+    // waiting worker is the only one that could run the tasks).
+    // get(), not wait(): a task that throws marks the topology failed and
+    // skips the tasks not yet started, and only get() rethrows - so the
+    // caller sees the failure instead of a silently partial build.
+    tf::Future<void> future = erhe::task::run(executor, taskflow);
+    future.get();
+
     log_parsers->info(
-        "build_imported_buffer_meshes: {} primitives, {} ms",
-        built_count,
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count()
+        "build_imported_buffer_meshes: {} primitives, {} ms ({} unique shapes built in parallel)",
+        primitive_count,
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count(),
+        jobs.size()
     );
 }
 

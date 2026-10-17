@@ -135,10 +135,13 @@ void import_gltf(
 // kickoff operation).
 // Worker-side Buffer_mesh build for an asynchronous load
 // (doc/editor/async_asset_loading_design.md phase 3a). Safe off the main thread; the
-// build_infos must be made on the main thread by the caller. See the
-// definition for why it is serial. finalize_imported_meshes still runs
-// afterwards on the main thread and fast-paths over the built primitives.
+// build_infos must be made on the main thread by the caller. Builds the
+// unique shapes as parallel tasks on `executor`; the caller must not hold a
+// Scoped_worker_context (see the definition). finalize_imported_meshes still
+// runs afterwards on the main thread and fast-paths over the built primitives.
 void build_imported_buffer_meshes(
+    tf::Executor&                      executor,
+    erhe::graphics::Device&            graphics_device,
     const erhe::primitive::Build_info& build_info,
     const erhe::primitive::Build_info& skinned_build_info,
     const erhe::gltf::Gltf_data&       gltf_data

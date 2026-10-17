@@ -14,7 +14,6 @@
 #include "erhe_item/item.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/scoped_worker_context.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_task/task.hpp"
@@ -26,6 +25,8 @@
 #include <taskflow/taskflow.hpp>
 
 #include <chrono>
+#include <exception>
+#include <filesystem>
 
 namespace editor {
 
@@ -145,17 +146,23 @@ void Gltf_load_task::start_build(Asset_load_tick_context& tick_context)
     auto parse_result = m_parse_result;
     m_build_result    = build_result;
     erhe::graphics::Device* const graphics_device = &tick_context.graphics_device;
+    tf::Executor* const           executor        = &tick_context.executor;
+    const std::filesystem::path   path            = m_handle->get_path();
     erhe::task::spawn(
         tick_context.executor,
-        [build_result, parse_result, build_info, skinned_build_info, graphics_device]() {
+        [build_result, parse_result, build_info, skinned_build_info, graphics_device, executor, path]() {
             try {
-                // On GL the GPU buffer allocations inside the build need a
-                // worker share context; no-op on other backends.
-                const erhe::graphics::Scoped_worker_context worker_context{*graphics_device};
-                build_imported_buffer_meshes(build_info, skinned_build_info, parse_result->gltf_data);
+                // Fans the builds out as executor tasks; each task takes its
+                // own GL worker context (no-op on other backends), so this
+                // worker must not hold one while scheduling them.
+                build_imported_buffer_meshes(*executor, *graphics_device, build_info, skinned_build_info, parse_result->gltf_data);
+            } catch (const std::exception& e) {
+                // A failed build leaves primitives without buffer meshes
+                // (tasks not yet started when one threw are skipped); the
+                // main-thread finalize pass then builds them itself.
+                log_parsers->error("async glTF load: buffer mesh build failed for '{}': {}", erhe::file::to_string(path), e.what());
             } catch (...) {
-                // A failed build leaves primitives without buffer meshes;
-                // the main-thread finalize pass reports them individually.
+                log_parsers->error("async glTF load: buffer mesh build failed for '{}'", erhe::file::to_string(path));
             }
             build_result->finished.store(true, std::memory_order_release);
         }
