@@ -21,11 +21,15 @@ itself.
 
 Per frame, for each scene view:
 
-1. `Shadow_render_node::execute_rendergraph_node()` (editor) refreshes
-   `Shadow_frustum_fit_settings` from the live editor settings, resolves the
-   fit target camera (the view camera, or the per-scene-view override), and
-   calls `Shadow_renderer::render()`.
-2. `Shadow_renderer::render()` (erhe::scene_renderer) takes one world-space
+1. `Shadow_render_node::pre_execute_rendergraph_node()` (editor, before any
+   node of the frame executes; doc/erhe/rendergraph.md "Pre-execute hook")
+   refreshes `Shadow_frustum_fit_settings` from the frame's settings copy,
+   resolves the fit target camera (the view camera, or the per-scene-view
+   override), and calls `Shadow_renderer::fit()`; its
+   `execute_rendergraph_node()` calls `Shadow_renderer::draw()`. A caller
+   without a frame classification calls `Shadow_renderer::render()` (fit and
+   draw, bucket path only).
+2. `Shadow_renderer::fit()` (erhe::scene_renderer) takes one world-space
    AABB per shadow caster (from the prepare phase's slot, or gathered from
    `mesh_spans`; see fit_to_casters), then calls `Light_projections::apply()`, which invokes
    `Light::projection_transforms()` per light to compute the light camera
@@ -117,7 +121,7 @@ Pipeline order, with the box recorded per step for debugging
 (`Shadow_fit_step`): fit points -> frustum constraint -> shadow range cap ->
 stabilization.
 
-**fit_to_casters.** `Shadow_renderer::render()` reads one world-space AABB
+**fit_to_casters.** `Shadow_renderer::fit()` reads one world-space AABB
 per visible shadow-casting mesh: on the draw-list path the ones the prepare
 phase gathered from the registered draw-list objects into the frame's slot
 (`Draw_list_scene::prepare_shadow_bounds()` / `get_shadow_bounds()`, the
@@ -176,7 +180,7 @@ If no caster survives the cull (or the clip produces no points) and
 `fit_to_view_frustum` is off, the fit falls back to the stable path.
 
 **fit_to_receivers.** Refines the caster cull (step 2 above) with the actual
-receiver geometry. `Shadow_renderer::render()` additionally gathers one
+receiver geometry. `Shadow_renderer::fit()` additionally gathers one
 world-space AABB per visible receiver (every visible content mesh; casters are a
 subset). The fit builds a second caster-cull volume from the receiver bounds that
 touch the view frustum, extruded toward the light, and requires each caster to
@@ -975,7 +979,7 @@ erhe also goes beyond the article:
   negative slope bias moves the stored back faces away from the light and
   widens that mode's leaks. Both values are signed toward the light
   under either depth convention: negative moves the stored caster depth away
-  from the light. `Shadow_renderer::render()` passes them to the device as is
+  from the light. `Shadow_renderer::draw()` passes them to the device as is
   for reverse-Z (the light side is the larger depth) and negated for forward-Z
   (the light side is the smaller depth), so one preset value means the same
   bias in both conventions. The article criticizes rasterizer slope

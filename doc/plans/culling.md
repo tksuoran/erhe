@@ -264,14 +264,10 @@ Each phase lands on its own, verified, before the next starts.
    one host-visible bounds buffer per frame slot (all lists back to back, two
    `vec4` per entry, a skinned list unbounded) and writes only the lists
    whose serial or offset differs from what that slot's buffer holds. A
-   dispatch cannot be recorded inside a render pass, so the GPU batches are:
-   `Shadow_renderer`'s views, dispatched by `record_cull_classification()`
-   before its first pass, and the views classified inside passes (the color
-   views, and a later shadow node's batch picks up an earlier viewport's
-   color view), dispatched by `Gpu_cull_classifier::record_pending()` after
-   the rendergraph. Each batch writes its own mask region (one `uvec2` per
-   entry per 64-view group it touches), no read-modify-write between
-   batches, and no barrier after it until phase 6 reads the masks. The shader repeats the lane tests with `precise` intermediates.
+   dispatch cannot be recorded inside a render pass; phase 6a records one
+   per scene per frame before the first pass, with no barrier after it
+   until phase 6 reads the masks. The shader repeats the lane tests with
+   `precise` intermediates.
    Gate (MCP `get_cull_classification_check`, the GPU regions read back and
    compared bit for bit with the same frame's CPU masks): 0 mismatches on
    default (14 entries, 5 views), heavy (2514, 19), draws (2514, 2), heavy in
@@ -296,6 +292,48 @@ Each phase lands on its own, verified, before the next starts.
    `glMultiDrawElementsIndirectCount`, Metal its indirect command buffers)
    executes it. Phase 4's record indexing is the precondition. Devices on the
    emulated multi-draw path keep phases 2 to 4.
+   6a, the pre-draw view hook. Done: `Rendergraph::execute()` runs every
+   enabled node's `Rendergraph_node::pre_execute_rendergraph_node()` in
+   execution order, then the pre-execute callback
+   (`Rendergraph::set_pre_execute_callback()`), before the first node
+   executes, outside any render pass (doc/erhe/rendergraph.md "Pre-execute
+   hook"). `Shadow_render_node`'s hook applies the frame's configuration
+   and calls `Shadow_renderer::fit()` (the frustum fit, once, and the passes'
+   culling views); its execute calls `Shadow_renderer::draw()`.
+   `Viewport_scene_view`'s and `Scene_image_view`'s hooks add the color
+   views (`Composer::add_cull_views()`: one view per draw list scene the
+   view's draw-list passes draw, `Draw_list_renderer::add_color_cull_view()`
+   from the frame's render context, which the node's hook builds and its
+   execute draws with), kept in `Composition_pass_prepared::cull_view` and
+   passed to `Draw_list_renderer::render()` as `Render_parameters::cull_view`.
+   The editor's callback is `Cull_frame_registry::classify_frame()`: every
+   scene that added views this frame (registered at its first
+   `add_cull_view()`; every `Draw_list_scene` has a registry, a
+   `Gpu_cull_classifier` is optional) runs
+   `Draw_list_scene::classify_frame_cull_views()`, the CPU lanes over every
+   view of the frame at once and, under `gpu`, the frame's one dispatch with
+   one mask region (`group * entry_count + entry`). `record_pending()`,
+   `add_pending_scene()`, `record_cull_classification()` and the
+   end-of-frame dispatch are gone; a view added after the classification, a
+   draw naming an unclassified view and a frame whose views were never
+   classified are verified defects. The headset's passes draw unculled
+   (Open below; multiview drew unculled already). Scenes built without a
+   `Gpu_cull_classifier` classify on the CPU (heavy, also in four view,
+   byte-identical). `erhe_rendergraph_gpu_tests` checks the hook order. Images and
+   per-pass / per-light counts byte- and count-identical to phase 5 at `cpu`
+   and `gpu` (default, heavy, draws; heavy in four view; heavy at `gpu` in
+   both render thread modes); readback gate 0 mismatches with one dispatch
+   per frame: default 5 views, heavy 19, draws 2, heavy in four view 34
+   (phase 5: 2, 2, 2 and 5 dispatches); heavy with Vulkan validation: no
+   errors, the same warnings as phase 5 in the same run (6 shader output
+   not consumed, 9 undefined-to-read-only transitions). Release MSVC, Intel iGPU,
+   heavy, `cpu`, pipelined, 900 frames, two runs each, median per frame:
+   `classify_cull_views` 38.7 / 39.8 us in two calls -> 39.2 / 38.0 us in
+   one, `draw_color` 101.7 / 103.2 -> 92.0 / 90.7 us (its color
+   classification moved to the hook), `draw_shadow` 245.5 / 254.6 -> 252.6 /
+   255.1 us, `Shadow_renderer::fit()` in the shadow node's hook 958 / 950
+   us (the fit `Shadow_renderer::render()` ran before),
+   `Composer::add_cull_views()` 1.0 us.
 7. **Occlusion.** [occlusion_culling.md](occlusion_culling.md), fed into the
    mask of the camera views as one more test; depends on phase 6 to be worth
    it (its step 7).
@@ -330,10 +368,17 @@ measured on the GPU timers.
   face with any skinned shadow list, or with an entry in range that the
   shadow filter rejects (not a caster), is never skipped. A per-pass caster
   mask applied to the count is the fix if it matters.
-- The color views are classified inside their render passes; phase 6 needs
-  a pre-draw view hook so every view of the frame is classified before the
-  first draw-list pass (then the end-of-frame dispatch and
-  `Gpu_cull_classifier::record_pending()` go away).
+- The headset's per-eye passes draw unculled (the per-eye path culled at
+  draw time before phase 6a; multiview never culled). Their eye views are
+  located by `Xr_session::render_frame()` (`xrLocateViews` at the frame's
+  display time), whose located views are also the ones submitted in
+  `xrEndFrame`'s projection layers, and the eye cameras are posed from them
+  inside the per-view callback (`Headset_view_resources::update()`, then the
+  scene's node transform update). Classifying them in the hook needs
+  `erhe::xr` to locate once in the hook and have `render_frame()` reuse that
+  locate, and the eye camera poses computed there too (the resources are
+  keyed by the acquired swapchain images); not done without a headset to
+  verify it.
 - With a node selected and moved (MCP `transform_selection` twice a second
   on the heavy scene), the draw lists change on every frame, also between
   the moves: `flush_pending` about 440 us per frame, a list copy and a bounds

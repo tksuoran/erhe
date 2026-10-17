@@ -71,7 +71,7 @@ Multiple viewports can exist simultaneously, each with their own shadow node, sc
 
 ## Shadow rendering
 
-`Shadow_render_node` owns a depth texture array (one layer per light) and a `Light_projections` object. With the draw-list gate on, the casters come from the scene's shadow draw lists; with it off (the bucket path), `Shadow_render_node::prepare_casters()` buckets the content layer's casters in the last M2 step into the node's slot for the frame (`Shadow_renderer::prepare`, a `Render_bucket_snapshot` without the pass variant bits). Both paths take the frustum fit bounds from the scene's `Draw_list_scene` slot (`get_shadow_bounds`), so the render phase reads no mesh or node. During execution it calls `erhe::scene_renderer::Shadow_renderer::render()` which:
+`Shadow_render_node` owns a depth texture array (one layer per light) and a `Light_projections` object. With the draw-list gate on, the casters come from the scene's shadow draw lists; with it off (the bucket path), `Shadow_render_node::prepare_casters()` buckets the content layer's casters in the last M2 step into the node's slot for the frame (`Shadow_renderer::prepare`, a `Render_bucket_snapshot` without the pass variant bits). Both paths take the frustum fit bounds from the scene's `Draw_list_scene` slot (`get_shadow_bounds`), so the render phase reads no mesh or node. Its pre-execute hook (before any node of the frame executes) fits the light projections and adds the draw-list passes' culling views (`Shadow_renderer::fit()`, doc/plans/culling.md phase 6a); its execute calls `erhe::scene_renderer::Shadow_renderer::draw()`, which:
 
 - Renders each light into its own array layer via a separate render pass
 - Uses a depth-only shader with `Color_writes_disabled`

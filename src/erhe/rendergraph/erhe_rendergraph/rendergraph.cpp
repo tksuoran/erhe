@@ -16,6 +16,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <optional>
+#include <utility>
 
 namespace erhe::rendergraph {
 
@@ -172,6 +173,18 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
             render_graph_cb_scope.emplace(command_buffer, execute_label);
         }
 
+        // Every node's pre-execute hook, then the callback, before the
+        // first node executes (Rendergraph_node::pre_execute_rendergraph_node()).
+        for (Rendergraph_node* node : slot.nodes) {
+            if (node->is_enabled_in_frame(frame_index)) {
+                erhe::log::set_breadcrumb(node->get_name());
+                node->pre_execute_rendergraph_node(command_buffer);
+            }
+        }
+        if (m_pre_execute_callback) {
+            m_pre_execute_callback(command_buffer);
+        }
+
         for (Rendergraph_node* node : slot.nodes) {
             if (node->is_enabled_in_frame(frame_index)) {
                 SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph node '{}'", node->get_name());
@@ -201,6 +214,24 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> rendered_lock{m_rendered_mutex};
     m_has_rendered_frame = true;
     m_rendered_frame     = frame_index;
+}
+
+void Rendergraph::set_pre_execute_callback(std::function<void(erhe::graphics::Command_buffer&)> callback)
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    // execute() reads the callback without a lock: it is set before the
+    // first frame is prepared, so no render phase can be reading it.
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        for (const Frame_slot& slot : m_frame_slots) {
+            ERHE_VERIFY(slot.frame_index == std::numeric_limits<uint64_t>::max());
+        }
+    }
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> rendered_lock{m_rendered_mutex};
+        ERHE_VERIFY(!m_has_rendered_frame);
+    }
+    m_pre_execute_callback = std::move(callback);
 }
 
 void Rendergraph::end_rendering()

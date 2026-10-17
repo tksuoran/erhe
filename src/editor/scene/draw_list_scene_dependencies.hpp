@@ -9,6 +9,7 @@ namespace erhe::graphics {
     class Device;
 }
 namespace erhe::scene_renderer {
+    class Cull_frame_registry;
     class Gpu_cull_classifier;
     class Mesh_memory;
     class Primitive_interface;
@@ -48,10 +49,11 @@ public:
     // The device's GPU culling classifier (doc/plans/culling.md phase 5);
     // null: the scene's draw lists classify on the CPU only.
     erhe::scene_renderer::Gpu_cull_classifier*  gpu_cull_classifier{nullptr};
+    erhe::scene_renderer::Cull_frame_registry*  cull_frame_registry{nullptr};
 
     [[nodiscard]] auto is_valid() const -> bool
     {
-        return (mesh_memory != nullptr) && (shader_variant_cache != nullptr) && (primitive_interface != nullptr);
+        return (mesh_memory != nullptr) && (shader_variant_cache != nullptr) && (primitive_interface != nullptr) && (cull_frame_registry != nullptr);
     }
 };
 

@@ -2,6 +2,9 @@
 #include "editor_log.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/scene_root.hpp"
+
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/thread_roles.hpp"
@@ -77,6 +80,7 @@ auto Composer_frame_slots::begin_prepare(const uint64_t frame_index, const std::
     Composer_prepared& slot = m_slots[frame_index % frames_in_flight];
     slot.frame_index      = frame_index;
     slot.prepared         = false;
+    slot.cull_views_added = false;
     slot.id_pass.prepared = false;
     slot.id_pass.scan.reset();
     slot.wide_line_feed.clear();
@@ -95,6 +99,48 @@ auto Composer_frame_slots::get_prepared(const uint64_t frame_index) const -> con
     return slot;
 }
 
+auto Composer_frame_slots::get_render_prepared(const uint64_t frame_index) -> Composer_prepared&
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    ERHE_VERIFY(!m_slots.empty());
+    Composer_prepared& slot = m_slots[frame_index % m_slots.size()];
+    ERHE_VERIFY(slot.prepared && (slot.frame_index == frame_index));
+    return slot;
+}
+
+void Composer::add_cull_views(const Render_context& context, Composer_prepared& prepared)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
+
+    ERHE_VERIFY(prepared.prepared);
+    ERHE_VERIFY(!prepared.cull_views_added);
+    ERHE_VERIFY(prepared.passes.size() == composition_passes.size());
+    const erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);
+    for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
+        const Composition_pass&    composition_pass = *composition_passes[i].get();
+        Composition_pass_prepared& pass_prepared    = prepared.passes[i];
+        pass_prepared.cull_view = erhe::scene_renderer::Cull_view::none;
+        // The passes Composition_pass::render() draws through draw lists.
+        if ((pass_prepared.result != Composition_pass_result::submitted) || !pass_prepared.use_draw_lists) {
+            continue;
+        }
+        const std::shared_ptr<Scene_root>& pass_scene_root = composition_pass.data.override_scene_root
+            ? composition_pass.data.override_scene_root
+            : context.scene_root;
+        ERHE_VERIFY(pass_scene_root);
+        erhe::scene_renderer::Draw_list_scene* draw_list_scene = pass_scene_root->get_draw_list_scene();
+        ERHE_VERIFY(draw_list_scene != nullptr);
+        // Add_cull_view() returns the view an earlier pass of this scene
+        // added (same purpose, same planes).
+        pass_prepared.cull_view = erhe::scene_renderer::Draw_list_renderer::add_color_cull_view(*draw_list_scene, prepared.frame_index, view_parameters);
+    }
+    prepared.cull_views_added = true;
+}
+
 void Composer::prepare(const Render_context& context, const int64_t host_system_time_ns, Composer_prepared& out)
 {
     ERHE_PROFILE_FUNCTION();
@@ -107,6 +153,7 @@ void Composer::prepare(const Render_context& context, const int64_t host_system_
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         const Composition_pass& composition_pass = *composition_passes[i].get();
         Composition_pass_prepared& prepared = out.passes[i];
+        prepared.cull_view = erhe::scene_renderer::Cull_view::none;
         if (!is_drawn_for_content(composition_pass, context.content)) {
             prepared.result = Composition_pass_result::never_rendered;
             prepared.buckets.clear();
@@ -125,6 +172,8 @@ void Composer::render(const Render_context& context, const bool include_content,
     const Composer_prepared* const prepared = context.composer_prepared;
     if (prepared != nullptr) {
         ERHE_VERIFY(prepared->passes.size() == composition_passes.size());
+        // The view's pre-execute hook added the frame's culling views.
+        ERHE_VERIFY(prepared->cull_views_added);
     }
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         Composition_pass& composition_pass = *composition_passes[i].get();

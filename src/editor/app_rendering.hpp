@@ -141,6 +141,9 @@ public:
     // One view's composition (called by the views' prepare_composition()):
     // the sky pass parameters for the view's scene, then Composer::prepare.
     void prepare_composer(const Render_context& context, int64_t host_system_time_ns, Composer_prepared& out);
+    // Render phase, from a view's rendergraph node's pre-execute hook: the
+    // view's color culling views of the frame (Composer::add_cull_views()).
+    void add_composer_cull_views(const Render_context& context, Composer_prepared& prepared);
     // Main thread: Scene_image_view lists itself for prepare_composition()
     // for its lifetime.
     void register_scene_image_view  (Scene_image_view* scene_image_view);

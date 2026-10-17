@@ -3,6 +3,8 @@
 #include "erhe_renderer/enums.hpp"
 #include "editor_item_bits.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/draw_list.hpp"
+#include "erhe_scene_renderer/draw_list_renderer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/render_bucket_snapshot.hpp"
@@ -172,7 +174,20 @@ public:
     erhe::scene_renderer::Sky_parameters               sky_parameters    {};
     // The bucket path's draws (Forward_renderer::prepare).
     erhe::scene_renderer::Render_bucket_snapshot       buckets;
+    // The draw-list path's culling view, in the view set of the frame of
+    // the pass's draw list scene: none from prepare(), set by the view's
+    // rendergraph node's pre-execute hook (Composer::add_cull_views(),
+    // doc/plans/culling.md phase 6a) before the frame's classification;
+    // render_immediate() draws with none (unculled).
+    erhe::scene_renderer::Cull_view                    cull_view         {erhe::scene_renderer::Cull_view::none};
 };
+
+// The view inputs a draw-list color pass of context culls against
+// (Draw_list_renderer::add_color_cull_view(), Composer::add_cull_views())
+// and rasterizes with (Composition_pass::render()): the context's views and
+// its scene view's depth conventions. One derivation for both, so the
+// culled frustum is the rasterized one.
+[[nodiscard]] auto get_color_view_parameters(const Render_context& context) -> erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters;
 
 // What the render calls of one frame recorded for one Composition_pass
 // (Composition_pass::get_frame_stats()): the outcome of the frame's most

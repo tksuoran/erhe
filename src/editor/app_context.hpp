@@ -31,6 +31,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
     class Mesh_memory;
     class Program_interface;
+    class Cull_frame_registry;
     class Gpu_cull_classifier;
     class Shadow_renderer;
     class Shader_variant_cache;
@@ -296,6 +297,7 @@ public:
     erhe::scene_renderer::Draw_list_renderer*         draw_list_renderer        {nullptr};
     erhe::scene_renderer::Shadow_renderer*            shadow_renderer           {nullptr};
     erhe::scene_renderer::Gpu_cull_classifier*        gpu_cull_classifier       {nullptr};
+    erhe::scene_renderer::Cull_frame_registry*        cull_frame_registry       {nullptr};
     erhe::scene_renderer::Texel_renderer*             texel_renderer            {nullptr};
     erhe::scene_renderer::Shader_variant_cache*       shader_variant_cache      {nullptr};
     erhe::scene_renderer::Program_interface*          program_interface         {nullptr};

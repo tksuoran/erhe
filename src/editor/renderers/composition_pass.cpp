@@ -305,9 +305,22 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     s_mesh_spans.clear();
 }
 
+auto get_color_view_parameters(const Render_context& context) -> erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters
+{
+    return erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters{
+        .views         = context.views,
+        .reverse_depth = context.scene_view.get_reverse_depth(),
+        .depth_range   = context.scene_view.get_depth_range(),
+        .conventions   = context.scene_view.get_conventions()
+    };
+}
+
 void Composition_pass::render_immediate(const Render_context& context)
 {
     prepare(context, context.app_context.render_phase_host_system_time_ns, m_immediate_prepared);
+    // No pre-execute hook added a culling view for a pass prepared where it
+    // renders: the draw-list path draws unculled.
+    m_immediate_prepared.cull_view = erhe::scene_renderer::Cull_view::none;
     render(context, m_immediate_prepared);
 }
 
@@ -473,13 +486,16 @@ void Composition_pass::render(const Render_context& context, const Composition_p
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only     ) ? erhe::scene_renderer::Draw_blending_selection::opaque_only :
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only) ? erhe::scene_renderer::Draw_blending_selection::translucent_only :
                                                                                                                      erhe::scene_renderer::Draw_blending_selection::both;
+        // The views and depth conventions the pass's culling view was built
+        // from (Composer::add_cull_views()).
+        const erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);
         const erhe::scene_renderer::Draw_statistics statistics = context.app_context.draw_list_renderer->render(
             erhe::scene_renderer::Draw_list_renderer::Render_parameters{
                 .base = erhe::scene_renderer::Base_render_parameters{
                     .render_encoder    = *context.encoder,
                     .render_pass       = context.render_pass,
                     .viewport          = context.viewport,
-                    .views             = context.views,
+                    .views             = view_parameters.views,
                     .exposure          = exposure,
                     .ambient_light     = scene_root->get_render_settings(context.app_context.graphics_device->get_frame_index()).ambient_light,
                     .light_projections = context.scene_view.get_light_projections(),
@@ -488,9 +504,9 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                     .material_source   = &draw_list_scene->get_material_set(),
                     .shader_key_boolean_mask_force_enable  = 0u,
                     .shader_key_boolean_mask_force_disable = 0u,
-                    .reverse_depth     = context.scene_view.get_reverse_depth(),
-                    .depth_range       = context.scene_view.get_depth_range(),
-                    .conventions       = context.scene_view.get_conventions(),
+                    .reverse_depth     = view_parameters.reverse_depth,
+                    .depth_range       = view_parameters.depth_range,
+                    .conventions       = view_parameters.conventions,
                     .debug_label       = get_name(),
                 },
                 .draw_list_scene       = *draw_list_scene,
@@ -507,6 +523,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .debug_joint_colors    = debug_joint_colors,
                 .debug_target_joint    = debug_target_joint.get(),
                 .color_blend_override  = nullptr,
+                .cull_view             = prepared.cull_view
             }
         );
         if (stats != nullptr) {

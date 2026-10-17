@@ -1,6 +1,7 @@
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/cull_lanes.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/cull_frame_registry.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -266,7 +267,9 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     , m_owner_thread_id        {std::this_thread::get_id()}
     , m_exclude_unlit_from_shadows{create_info.exclude_unlit_from_shadows}
     , m_gpu_cull_classifier    {create_info.gpu_cull_classifier}
+    , m_cull_frame_registry    {*create_info.cull_frame_registry}
 {
+    ERHE_VERIFY(create_info.cull_frame_registry  != nullptr);
     ERHE_VERIFY(create_info.mesh_memory          != nullptr);
     ERHE_VERIFY(create_info.shader_variant_cache != nullptr);
     ERHE_VERIFY(create_info.primitive_interface  != nullptr);
@@ -1900,20 +1903,20 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     // frame (Shadow_record_scope).
     ERHE_VERIFY(!m_shadow_record_scope_open);
     ERHE_VERIFY(m_shadow_record_lists.empty());
-    // The previous frame's GPU classification ended in its frame
-    // (Gpu_cull_classifier::record_pending()).
-    ERHE_VERIFY(!m_gpu_cull_frame_open);
-    m_gpu_cull_batches.clear();
-    m_gpu_dispatched_view_count  = 0;
-    m_gpu_cull_first_timer_used  = false;
-    m_cull_frame_started         = true;
-    m_cull_frame_index           = frame_index;
+    // The previous frame's views were classified in their frame
+    // (classify_frame_cull_views()).
+    ERHE_VERIFY(!m_cull_frame_started || m_cull_frame_classified);
+    m_cull_frame_started    = true;
+    m_cull_frame_classified = false;
+    m_cull_frame_index      = frame_index;
     m_cull_views.clear();
     m_cull_view_survivors.clear();
-    m_classified_cull_view_count = 0;
     for (std::vector<uint64_t>& masks : m_cull_masks) {
         masks.clear();
     }
+    // The classification of the frame: Cull_frame_registry::classify_frame()
+    // classifies every scene that started a view set.
+    m_cull_frame_registry.add_frame_scene(*this, frame_index);
 }
 
 auto Draw_list_scene::append_cull_view(const Draw_purpose purpose, const Cull_view_kind kind) -> Cull_view_tests&
@@ -1938,6 +1941,8 @@ auto Draw_list_scene::add_cull_view(
         return Cull_view::none;
     }
     begin_cull_frame(frame_index);
+    // Every view of the frame is added before its classification.
+    ERHE_VERIFY(!m_cull_frame_classified);
     // The passes of one viewport share its camera: one view for all of them.
     for (std::size_t i = 0, end = m_cull_views.size(); i < end; ++i) {
         const Cull_view_tests& view = m_cull_views[i];
@@ -1967,6 +1972,8 @@ auto Draw_list_scene::add_point_light_cull_views(
     // with range <= 0 has no shadow, Light::is_active()).
     ERHE_VERIFY(range_sphere.radius > 0.0f);
     begin_cull_frame(frame_index);
+    // Every view of the frame is added before its classification.
+    ERHE_VERIFY(!m_cull_frame_classified);
     std::array<Cull_view, 6> views{};
     // The six faces of a light are appended together, face 0 first.
     for (std::size_t i = 0, end = m_cull_views.size(); i < end; ++i) {
@@ -1999,48 +2006,46 @@ auto Draw_list_scene::has_cull_view_survivors(const uint64_t frame_index, const 
     if (cull_view == Cull_view::none) {
         return true;
     }
-    classify_cull_views(frame_index, cull_view);
+    verify_cull_view_classified(frame_index, cull_view);
     return m_cull_view_survivors[static_cast<std::size_t>(cull_view)] > 0;
 }
 
-void Draw_list_scene::record_cull_classification(const uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer)
-{
-    assert_render_phase();
-    if (!m_cull_frame_started || (m_cull_frame_index != frame_index) || m_cull_views.empty()) {
-        return;
-    }
-    classify_cull_views(frame_index, static_cast<Cull_view>(m_cull_views.size() - 1));
-    if (get_published_slot(frame_index).classification != Cull_classification::gpu) {
-        return;
-    }
-    // The first such dispatch of the frame is timed (Shadow_renderer's
-    // batch); a later one (another shadow node's) is not, a timer measuring
-    // at most one range per frame.
-    const std::size_t timer_index = m_gpu_cull_first_timer_used ? m_gpu_cull_timers.size() : std::size_t{0};
-    if (dispatch_gpu_cull_views(command_buffer, timer_index)) {
-        m_gpu_cull_first_timer_used = true;
-    }
-}
-
-void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull_view cull_view)
+void Draw_list_scene::verify_cull_view_classified(const uint64_t frame_index, const Cull_view cull_view) const
 {
     if (cull_view == Cull_view::none) {
         return;
     }
-    const std::size_t cull_view_index = static_cast<std::size_t>(cull_view);
+    // A view of this frame's set, added before the frame's classification
+    // (doc/plans/culling.md phase 6a): a view added at draw time is a defect.
     ERHE_VERIFY(m_cull_frame_started && (m_cull_frame_index == frame_index));
-    ERHE_VERIFY(cull_view_index < m_cull_views.size());
-    if (cull_view_index < m_classified_cull_view_count) {
+    ERHE_VERIFY(static_cast<std::size_t>(cull_view) < m_cull_views.size());
+    ERHE_VERIFY(m_cull_frame_classified);
+}
+
+void Draw_list_scene::classify_frame_cull_views(const uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer)
+{
+    assert_render_phase();
+    if (!m_cull_frame_started || (m_cull_frame_index != frame_index)) {
         return;
     }
+    ERHE_VERIFY(!m_cull_frame_classified);
+    m_cull_frame_classified = true;
+    classify_cull_views();
+    if (get_published_slot(frame_index).classification == Cull_classification::gpu) {
+        dispatch_gpu_cull_views(frame_index, command_buffer);
+    }
+}
+
+void Draw_list_scene::classify_cull_views()
+{
     ERHE_PROFILE_FUNCTION();
 
-    const std::size_t first_view  = m_classified_cull_view_count;
+    const uint64_t    frame_index = m_cull_frame_index;
+    const std::size_t first_view  = 0;
     const std::size_t end_view    = m_cull_views.size();
     const std::size_t group_count = (end_view + 63) / 64;
-    m_classified_cull_view_count  = end_view;
 
-    // The purposes the views of this batch cull for: a list of another
+    // The purposes the views of the set cull for: a list of another
     // purpose is never drawn through them and is not classified.
     std::array<bool, 2> batch_has_purpose{false, false};
     for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
@@ -2049,9 +2054,6 @@ void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull
 
     const Draw_list_slot&         slot       = get_published_slot(frame_index);
     const std::vector<Draw_list>& draw_lists = slot.lists;
-    if (slot.classification == Cull_classification::gpu) {
-        begin_gpu_cull_frame(frame_index);
-    }
     if (m_cull_masks.size() < draw_lists.size()) {
         m_cull_masks.resize(draw_lists.size());
     }
@@ -2059,7 +2061,7 @@ void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull
         const Draw_list&       draw_list   = draw_lists[list_index];
         const std::size_t      entry_count = draw_list.entries.size();
         std::vector<uint64_t>& masks       = m_cull_masks[list_index];
-        // The groups appended since the last classification start at zero.
+        // The masks start at zero (cleared when the frame's set started).
         if (masks.size() < (group_count * entry_count)) {
             masks.resize(group_count * entry_count, uint64_t{0});
         }
@@ -2208,7 +2210,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
 
     set_color_environment(parameters.environment);
     const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
-    classify_cull_views(parameters.frame_index, parameters.cull_view);
+    verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
 
     const Draw_blending classes_both[] = { Draw_blending::opaque, Draw_blending::translucent };
     const std::span<const Draw_blending> classes =
@@ -2294,7 +2296,7 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
     ERHE_VERIFY(parameters.render_pass != nullptr);
     ERHE_VERIFY(parameters.color_blend != nullptr);
     const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
-    classify_cull_views(parameters.frame_index, parameters.cull_view);
+    verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
 
     for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
         const Draw_list&     draw_list = draw_lists[list_index];

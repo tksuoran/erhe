@@ -480,8 +480,7 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"view_count",              check.view_count},
         {"dispatch_count",          check.dispatch_count},
         {"mismatch_count",          check.mismatch_count},
-        {"gpu_time_first_batch_ns", check.gpu_time_ns[0]},
-        {"gpu_time_frame_end_ns",   check.gpu_time_ns[1]},
+        {"gpu_time_ns",             check.gpu_time_ns},
         {"gpu_bounds_write_count",  draw_list_scene->get_gpu_bounds_write_count()},
         {"lists",                   std::move(lists)}
     }).dump();

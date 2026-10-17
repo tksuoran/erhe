@@ -1,14 +1,12 @@
-// GPU culling classification (doc/plans/culling.md phase 5,
+// GPU culling classification (doc/plans/culling.md phases 5 and 6a,
 // doc/erhe/draw_list_renderer.md Q6 "GPU classification").
 //
-// One invocation per entry of the frame's published draw lists (all lists
-// back to back, Draw_list_scene's GPU bounds). Each tests its entry against
-// the views [first_view, end_view) of one classification batch and writes
-// one 64-bit mask (uvec2: x = bits 0..31, y = bits 32..63) per group of 64
-// views the batch touches, into the batch's own mask region:
-// cull_masks.masks[(group - first_view / 64) * entry_count + entry].
-// A group the batch shares with the previous batch holds only the batch's
-// own views' bits here; the previous batch's region holds the others.
+// One dispatch per scene per frame, one invocation per entry of the frame's
+// published draw lists (all lists back to back, Draw_list_scene's GPU
+// bounds). Each tests its entry against every view [0, view_count) of the
+// frame's set and writes one 64-bit mask (uvec2: x = bits 0..31, y = bits
+// 32..63) per group of 64 views into the frame's mask region:
+// cull_masks.masks[group * entry_count + entry].
 //
 // The tests and their evaluation order are those of the CPU lanes
 // (src/erhe/scene_renderer/erhe_scene_renderer/cull_lanes.cpp), with every
@@ -19,8 +17,8 @@
 // cull_bounds.bounds[2 * entry + 1] = extent.xyz, purpose (0 color, 1 shadow)
 //   extent.x < 0: no bounds (or a skinned list): inside every view of the
 //   entry's purpose.
-// cull_views.header = first_view, end_view, entry_count, 0
-// cull_views.views[8 * (view - first_view) + k]:
+// cull_views.header = view_count, entry_count, 0, 0
+// cull_views.views[8 * view + k]:
 //   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
 //   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
 //   face (0..5 = +X -X +Y -Y +Z -Z), as exact small floats.
@@ -57,13 +55,11 @@ float sphere_axis_gap(float c, float e, float s)
 void main()
 {
     uint entry       = gl_GlobalInvocationID.x;
-    uint first_view  = cull_views.header.x;
-    uint end_view    = cull_views.header.y;
-    uint entry_count = cull_views.header.z;
+    uint view_count  = cull_views.header.x;
+    uint entry_count = cull_views.header.y;
     if (entry >= entry_count) {
         return;
     }
-    uint first_group = first_view / 64u;
 
     vec4 center_w  = cull_bounds.bounds[(2u * entry) + 0u];
     vec4 extent_w  = cull_bounds.bounds[(2u * entry) + 1u];
@@ -72,16 +68,16 @@ void main()
     uint purpose   = uint(extent_w.w);
     bool unbounded = !(e.x >= 0.0);
 
-    uint  group = first_group;
+    uint  group = 0u;
     uvec2 bits  = uvec2(0u, 0u);
-    for (uint view = first_view; view < end_view; ++view) {
+    for (uint view = 0u; view < view_count; ++view) {
         uint view_group = view / 64u;
         if (view_group != group) {
-            cull_masks.masks[((group - first_group) * entry_count) + entry] = bits;
+            cull_masks.masks[(group * entry_count) + entry] = bits;
             bits  = uvec2(0u, 0u);
             group = view_group;
         }
-        uint base = 8u * (view - first_view);
+        uint base = 8u * view;
         vec4 info = cull_views.views[base + 7u];
         if (uint(info.x) != purpose) {
             continue;
@@ -125,5 +121,5 @@ void main()
             }
         }
     }
-    cull_masks.masks[((group - first_group) * entry_count) + entry] = bits;
+    cull_masks.masks[(group * entry_count) + entry] = bits;
 }

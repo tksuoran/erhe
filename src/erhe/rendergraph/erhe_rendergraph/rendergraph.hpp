@@ -3,6 +3,7 @@
 #include "erhe_profile/profile.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -44,11 +45,19 @@ public:
     // ImGui phase or a later prepare phase never reaches a frame the render
     // phase is already rendering.
     void prepare_frame  ();
-    // Render phase: executes the nodes of the slot of the frame being
-    // rendered (prepare_frame() of the same frame filled it; verified) that
-    // are enabled in it. Never takes m_mutex: it reads only the slot and
-    // the nodes' records of its frame.
+    // Render phase: runs the nodes of the slot of the frame being rendered
+    // (prepare_frame() of the same frame filled it; verified) that are
+    // enabled in it: first every node's pre_execute_rendergraph_node() hook
+    // in execution order, then the pre-execute callback, then every node's
+    // execute_rendergraph_node() in execution order. Never takes m_mutex: it
+    // reads only the slot and the nodes' records of its frame.
     void execute        (erhe::graphics::Command_buffer& command_buffer);
+    // Main thread, before the first prepare_frame() (verified): the step execute() runs after
+    // every node's pre-execute hook and before the first node executes, on
+    // the render thread with the frame command buffer, outside any render
+    // pass (the editor: the culling classification of every view the hooks
+    // added, doc/plans/culling.md phase 6a). Empty: none.
+    void set_pre_execute_callback(std::function<void(erhe::graphics::Command_buffer&)> callback);
     // Shutdown, after the last render phase returned (the render thread is
     // stopped): no frame renders any more. Destroys every retired node now;
     // a node released later is destroyed at once.
@@ -129,6 +138,9 @@ private:
 
     // Resources deferred for destruction until after execute() completes
     std::vector<std::shared_ptr<void>> m_deferred_resources;
+
+    // set_pre_execute_callback(); set before rendering starts, read by execute().
+    std::function<void(erhe::graphics::Command_buffer&)> m_pre_execute_callback;
 };
 
 } // namespace erhe::rendergraph

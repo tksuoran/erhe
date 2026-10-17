@@ -16,6 +16,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/cube_instance_buffer.hpp
     erhe_scene_renderer/cube_renderer.cpp
     erhe_scene_renderer/cube_renderer.hpp
+    erhe_scene_renderer/cull_frame_registry.cpp
+    erhe_scene_renderer/cull_frame_registry.hpp
     erhe_scene_renderer/draw_indirect_buffer.cpp
     erhe_scene_renderer/draw_indirect_buffer.hpp
     erhe_scene_renderer/forward_renderer.cpp

@@ -60,17 +60,6 @@ public:
     // The device is capable and the pipeline built.
     [[nodiscard]] auto is_supported() const -> bool;
 
-    // Render thread, render phase: a scene whose published slot asks for
-    // the GPU classification registers itself at its first classification
-    // of the frame. record_pending() records each registered scene's
-    // remaining dispatches (the batches classified inside render passes:
-    // the color views) and ends its GPU classification frame.
-    void add_pending_scene(Draw_list_scene& draw_list_scene);
-    // Render thread, render phase, outside any render pass, after the last
-    // pass of the frame that draws draw lists (the editor: after the
-    // rendergraph). Every scene added since the previous call is recorded.
-    void record_pending(erhe::graphics::Command_buffer& command_buffer);
-
     // For Draw_list_scene's dispatch recording.
     [[nodiscard]] auto get_device           () -> erhe::graphics::Device&;
     [[nodiscard]] auto get_bind_group_layout() const -> const erhe::graphics::Bind_group_layout*;
@@ -95,8 +84,6 @@ private:
     erhe::graphics::Ring_buffer_client                        m_view_buffer;
     erhe::graphics::Ring_buffer_client                        m_mask_buffer;
     erhe::graphics::Ring_buffer_client                        m_readback_buffer;
-    // Render thread only; cleared (capacity kept) by record_pending().
-    std::vector<Draw_list_scene*>                             m_pending_scenes;
 };
 
 } // namespace erhe::scene_renderer

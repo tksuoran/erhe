@@ -262,6 +262,31 @@ public:
     // renderer.
     void prepare(const Prepare_parameters& parameters, Render_bucket_snapshot& out) const;
 
+    // The culling view of each pass of one fit() (draw-list path,
+    // Draw_list_scene::add_cull_view()), indexed by 2D shadow index and by
+    // cube pass index; empty on the bucket path. Kept by the caller from
+    // fit() to draw(), reassigned (capacity kept) by every fit().
+    class Cull_views
+    {
+    public:
+        std::vector<Cull_view> views_2d;
+        std::vector<Cull_view> views_cube;
+    };
+
+    // Render phase, outside any render pass: the light projections of the
+    // passes (the frustum fit, Light_projections::apply(), into
+    // parameters.light_projections) and, on the draw-list path, every
+    // pass's culling view added to draw_list_scene's view set, into
+    // cull_views. The draw-list path calls it before the frame's culling
+    // classification (Draw_list_scene::classify_frame_cull_views(); the
+    // editor: Shadow_render_node's pre-execute hook, doc/plans/culling.md
+    // phase 6a), so the views classify with every other view of the frame.
+    void fit (const Render_parameters& parameters, Cull_views& cull_views);
+    // Render phase, after fit() of the same parameters (and, on the
+    // draw-list path, after the frame's classification): the shadow passes.
+    void draw(const Render_parameters& parameters, const Cull_views& cull_views);
+    // fit() and draw() back to back: the bucket path's one-call form
+    // (parameters.draw_list_scene null, verified).
     auto render(const Render_parameters& parameters) -> bool;
 
     // Init-time prewarm. Drives both:
@@ -341,12 +366,8 @@ private:
     // Per-render() caster vertex rounding inputs (Caster_vertex_extent, one
     // per caster mesh), gathered with the bounds above.
     std::vector<Caster_vertex_extent>             m_caster_vertex_extents;
-    // Draw-list path: the culling view of each pass of one render() call
-    // (Draw_list_scene::add_cull_view()), indexed by 2D shadow index and by
-    // cube pass index; members (reassigned each call) so the vectors keep
-    // their capacity.
-    std::vector<Cull_view>                        m_cull_views_2d;
-    std::vector<Cull_view>                        m_cull_views_cube;
+    // render()'s culling views (empty: the bucket path adds none).
+    Cull_views                                    m_immediate_cull_views;
 };
 
 
