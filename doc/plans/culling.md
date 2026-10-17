@@ -381,9 +381,22 @@ Each phase lands on its own, verified, before the next starts.
    validation: no errors, the same 6 + 9 warnings as phase 6a.
    `erhe_graphics_gpu_tests` `Draw_indirect_test.draw_indexed_indirect_count`
    / `_count_zero` check that the GPU-read count (2, 0 of max 3) decides.
-   The CPU and GPU timings of this phase (`draw_shadow`,
-   `generate_gpu_shadow_commands`, the classification and compaction GPU
-   timers) are taken by a separate measurement pass on an idle machine.
+   Measured on an idle machine (Intel iGPU, pipelined render thread, 900
+   frames, median per frame; the same build at the cpu and the gpu setting,
+   images byte-identical): heavy scene Release `draw_shadow` 251 -> 86 us,
+   `Draw_indirect_buffer::update` 82 us over 17 calls -> 10 us over 2 (the
+   color passes), render phase 2829 -> 2693 us; Debug `draw_shadow` 1122 ->
+   212 us, render phase 31.9 -> 30.9 ms. Default scene Release `draw_shadow`
+   67 -> 28 us, Debug 142 -> 84 us. GPU timers, Release: classification 7.0
+   us and command generation 12.6 us on heavy, 3.4 / 4.5 us on default. The
+   CPU side of the gpu setting costs 55 to 75 us per frame more than the
+   cpu setting in `Cull_frame_registry::classify_frame` (the CPU lanes still
+   run for the survivor counts and the job table is built on the CPU); the
+   next saving is there. Against the pre-culling baseline the whole plan
+   (phases 1 to 6, gpu setting) takes the heavy scene's `draw_shadow` from
+   674 to 86 us Release and from 9.7 ms to 0.21 ms Debug, and the Debug
+   heavy frame rate from 24 to 32 fps; the Release scenes are GPU-bound on
+   that machine, so their frame rate does not move.
 7. **Occlusion.** [occlusion_culling.md](occlusion_culling.md), fed into the
    mask of the camera views as one more test; depends on phase 6 to be worth
    it (its step 7).
