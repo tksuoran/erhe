@@ -57,6 +57,34 @@ public:
     bool      valid {false};
 };
 
+// Grows the box by one world space point.
+void add_to_light_space_box(
+    Light_space_box&  box,
+    const glm::vec3&  p_in_world,
+    const glm::mat3&  light_from_world,
+    const glm::mat2&  rolled_from_light_xy,
+    const glm::vec3&  light_direction_in_light
+)
+{
+    const glm::vec3 p_in_light  = light_from_world * p_in_world;
+    const glm::vec2 p_in_rolled = rolled_from_light_xy * glm::vec2{p_in_light};
+    const float     s           = glm::dot(p_in_light, light_direction_in_light);
+    box.xy_min = glm::min(box.xy_min, p_in_rolled);
+    box.xy_max = glm::max(box.xy_max, p_in_rolled);
+    box.s_min  = std::min(box.s_min, s);
+    box.s_max  = std::max(box.s_max, s);
+}
+
+[[nodiscard]] auto make_empty_light_space_box() -> Light_space_box
+{
+    Light_space_box box{};
+    box.xy_min = glm::vec2{std::numeric_limits<float>::max()};
+    box.xy_max = glm::vec2{std::numeric_limits<float>::lowest()};
+    box.s_min  = std::numeric_limits<float>::max();
+    box.s_max  = std::numeric_limits<float>::lowest();
+    return box;
+}
+
 [[nodiscard]] auto fit_box(
     const std::span<const glm::vec3> points_in_world,
     const glm::mat3&                 light_from_world,
@@ -66,22 +94,79 @@ public:
 {
     ERHE_PROFILE_FUNCTION();
 
-    Light_space_box box{};
     if (points_in_world.empty()) {
-        return box;
+        return Light_space_box{};
     }
-    box.xy_min = glm::vec2{std::numeric_limits<float>::max()};
-    box.xy_max = glm::vec2{std::numeric_limits<float>::lowest()};
-    box.s_min  = std::numeric_limits<float>::max();
-    box.s_max  = std::numeric_limits<float>::lowest();
+    Light_space_box box = make_empty_light_space_box();
     for (const glm::vec3& p_in_world : points_in_world) {
-        const glm::vec3 p_in_light  = light_from_world * p_in_world;
-        const glm::vec2 p_in_rolled = rolled_from_light_xy * glm::vec2{p_in_light};
-        const float     s           = glm::dot(p_in_light, light_direction_in_light);
-        box.xy_min = glm::min(box.xy_min, p_in_rolled);
-        box.xy_max = glm::max(box.xy_max, p_in_rolled);
-        box.s_min  = std::min(box.s_min, s);
-        box.s_max  = std::max(box.s_max, s);
+        add_to_light_space_box(box, p_in_world, light_from_world, rolled_from_light_xy, light_direction_in_light);
+    }
+    box.valid = true;
+    return box;
+}
+
+// The same box over every AABB plus extra points. Under the linear map
+// world -> (rolled xy, s) the extent of an AABB is the image of its center
+// +- the absolute map times its half diagonal: the min / max over its 8
+// corners without projecting them. This rounds differently from projecting
+// each corner (measured: within 2 ulp of the largest world coordinate), so
+// the result is not bit-equal to fit_box() over the corners; the margin
+// below keeps it from ever being smaller. Extra points are added one by one.
+[[nodiscard]] auto fit_box_of_aabbs(
+    const std::span<const erhe::math::Aabb> aabbs,
+    const std::span<const glm::vec3>        points_in_world,
+    const glm::mat3&                        light_from_world,
+    const glm::mat2&                        rolled_from_light_xy,
+    const glm::vec3&                        light_direction_in_light
+) -> Light_space_box
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (aabbs.empty() && points_in_world.empty()) {
+        return Light_space_box{};
+    }
+    Light_space_box box = make_empty_light_space_box();
+
+    // Rows of the composed map world -> (rolled x, rolled y, s), absolute
+    // values for the extent.
+    const glm::mat3 light_rows = glm::transpose(light_from_world);
+    const glm::vec3 row_x      = (rolled_from_light_xy[0][0] * light_rows[0]) + (rolled_from_light_xy[1][0] * light_rows[1]);
+    const glm::vec3 row_y      = (rolled_from_light_xy[0][1] * light_rows[0]) + (rolled_from_light_xy[1][1] * light_rows[1]);
+    const glm::vec3 row_s      = (light_direction_in_light.x * light_rows[0]) + (light_direction_in_light.y * light_rows[1]) + (light_direction_in_light.z * light_rows[2]);
+    const glm::vec3 abs_row_x  = glm::abs(row_x);
+    const glm::vec3 abs_row_y  = glm::abs(row_y);
+    const glm::vec3 abs_row_s  = glm::abs(row_s);
+
+    glm::vec3 max_abs_world{0.0f};
+    for (const erhe::math::Aabb& aabb : aabbs) {
+        max_abs_world = glm::max(max_abs_world, glm::max(glm::abs(aabb.min), glm::abs(aabb.max)));
+        const glm::vec3 center = aabb.center();
+        const glm::vec3 half   = 0.5f * aabb.diagonal();
+        const glm::vec3 center_in_light  = light_from_world * center;
+        const glm::vec2 center_in_rolled = rolled_from_light_xy * glm::vec2{center_in_light};
+        const float     center_s         = glm::dot(center_in_light, light_direction_in_light);
+        const glm::vec2 half_xy{glm::dot(abs_row_x, half), glm::dot(abs_row_y, half)};
+        const float     half_s = glm::dot(abs_row_s, half);
+        box.xy_min = glm::min(box.xy_min, center_in_rolled - half_xy);
+        box.xy_max = glm::max(box.xy_max, center_in_rolled + half_xy);
+        box.s_min  = std::min(box.s_min, center_s - half_s);
+        box.s_max  = std::max(box.s_max, center_s + half_s);
+    }
+    if (!aabbs.empty()) {
+        // The map and the roll are rotations, so every intermediate is bounded
+        // by the largest world coordinate and the rounding error by a few ulp
+        // of it (measured worst case: 2 ulp). Growing the box by 16 epsilon
+        // times that coordinate (16 to 32 ulp) keeps it from ever being
+        // smaller than the exact corner projection, so every caster stays
+        // inside.
+        const float margin = 16.0f * std::numeric_limits<float>::epsilon() * std::max(max_abs_world.x, std::max(max_abs_world.y, max_abs_world.z));
+        box.xy_min -= margin;
+        box.xy_max += margin;
+        box.s_min  -= margin;
+        box.s_max  += margin;
+    }
+    for (const glm::vec3& p_in_world : points_in_world) {
+        add_to_light_space_box(box, p_in_world, light_from_world, rolled_from_light_xy, light_direction_in_light);
     }
     box.valid = true;
     return box;
@@ -106,6 +191,42 @@ constexpr float min_box_extent = 0.01f; // meters; keeps degenerate (flat) fits 
         }
     }
     return -1;
+}
+
+void fill_abs_planes(const std::span<const glm::vec4> planes, std::vector<Abs_plane>& out)
+{
+    out.clear();
+    for (const glm::vec4& plane : planes) {
+        const glm::vec3 normal{plane};
+        out.push_back(Abs_plane{.normal = normal, .w = plane.w, .abs_normal = glm::abs(normal)});
+    }
+}
+
+// True when the whole box lies outside one single plane. The same arithmetic as
+// erhe::math::aabb_in_convex_volume() (which keeps a box when this is false).
+[[nodiscard]] auto abs_planes_reject(const std::span<const Abs_plane> planes, const glm::vec3& center, const glm::vec3& extent) -> bool
+{
+    for (const Abs_plane& plane : planes) {
+        const float center_distance  = glm::dot(plane.normal, center) + plane.w;
+        const float projected_extent = glm::dot(plane.abs_normal, extent);
+        if ((center_distance + projected_extent) < 0.0f) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// True when the whole box lies inside every plane.
+[[nodiscard]] auto abs_planes_contain(const std::span<const Abs_plane> planes, const glm::vec3& center, const glm::vec3& extent) -> bool
+{
+    for (const Abs_plane& plane : planes) {
+        const float center_distance  = glm::dot(plane.normal, center) + plane.w;
+        const float projected_extent = glm::dot(plane.abs_normal, extent);
+        if (center_distance < projected_extent) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // Fills the light-independent part of the receiver cull volume build: the
@@ -384,8 +505,15 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
     // Steps 2-3: Caster point set - filter the per-caster world AABBs to those
     // that can shadow a visible receiver, and clip each survivor to the shadow
     // caster volume F_shadow.
-    std::vector<glm::vec3>& caster_points = scratch.caster_points;
+    // The fit point set is the 8 corners of every interior caster box
+    // (scratch.interior_caster_aabbs) plus the boundary points; the expanded
+    // list (caster_points) exists only for the debug visualization.
+    std::vector<glm::vec3>&        caster_points   = scratch.caster_points;
+    std::vector<erhe::math::Aabb>& interior_boxes  = scratch.interior_caster_aabbs;
+    std::vector<glm::vec3>&        boundary_points = scratch.boundary_points;
     caster_points.clear();
+    interior_boxes.clear();
+    boundary_points.clear();
     bool casters_available = false;
     if (settings.fit_to_casters && !parameters.caster_world_aabbs.empty()) {
         ERHE_PROFILE_SCOPE("fit: casters");
@@ -457,43 +585,12 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
             debug_out->receiver_filter_planes  = receiver_filter_planes;
         }
 
-        // Surviving casters: those whose bounds can shadow a visible receiver.
-        std::vector<erhe::math::Aabb>& surviving_casters = scratch.surviving_caster_aabbs;
-        surviving_casters.clear();
-        {
-            ERHE_PROFILE_SCOPE("fit: filter casters");
-            for (const erhe::math::Aabb& aabb : parameters.caster_world_aabbs) {
-                if (!aabb.is_valid_3d()) {
-                    continue;
-                }
-                const bool in_shadow_volume = erhe::math::aabb_in_convex_volume(filter_planes, aabb);
-                // The receiver verdict only matters when the shadow volume keeps the
-                // caster; with diagnostics on it is evaluated unconditionally so the
-                // dump shows both verdicts for every caster.
-                bool in_receiver_volume = true;
-                if (!receiver_filter_planes.empty() && (in_shadow_volume || (debug_out != nullptr))) {
-                    in_receiver_volume = erhe::math::aabb_in_convex_volume(receiver_filter_planes, aabb);
-                }
-                if (debug_out != nullptr) {
-                    Shadow_frustum_fit_debug_data::Caster_box caster_box{};
-                    caster_box.aabb                      = aabb;
-                    caster_box.culled_by_shadow_volume   = !in_shadow_volume;
-                    caster_box.culled_by_receiver_volume = !in_receiver_volume;
-                    if (!in_shadow_volume) {
-                        caster_box.rejecting_plane = first_rejecting_plane(filter_planes, aabb);
-                    } else if (!in_receiver_volume) {
-                        caster_box.rejecting_plane = first_rejecting_plane(receiver_filter_planes, aabb);
-                    }
-                    debug_out->caster_boxes.push_back(caster_box);
-                }
-                if (!in_shadow_volume || !in_receiver_volume) {
-                    continue; // outside F_shadow, or cannot shadow any visible receiver
-                }
-                surviving_casters.push_back(aabb);
-            }
-        }
-
-        // Fit point set: each surviving box clipped to the **open** F_shadow
+        // One pass over the casters. Each caster's bounds are tested in
+        // center + extents form against F_shadow and the receiver volume (a
+        // caster that cannot shadow a visible receiver is dropped), then the
+        // survivor is routed: a box entirely inside the open F_shadow clips
+        // to itself and goes to the interior list as a box (its 8 corners are
+        // never expanded); any other box is clipped to the open F_shadow
         // individually (the box is bounded laterally by itself, so the
         // silhouette side planes are not needed). A box is its own convex hull
         // with fixed topology, so no hull build is involved; and the union of
@@ -501,8 +598,17 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
         // whole-set hull - which also covered the empty bridge regions between
         // separated casters - so the fit can only get tighter while still
         // covering every caster.
-        if (!surviving_casters.empty()) {
-            ERHE_PROFILE_SCOPE("fit: clip casters");
+        {
+            ERHE_PROFILE_SCOPE("fit: filter and clip casters");
+
+            // The planes with their absolute normals precomputed: the tests
+            // below read the same values glm::abs() would produce per box.
+            std::vector<Abs_plane>& filter_abs_planes   = scratch.filter_abs_planes;
+            std::vector<Abs_plane>& receiver_abs_planes = scratch.receiver_abs_planes;
+            std::vector<Abs_plane>& volume_abs_planes   = scratch.volume_abs_planes;
+            fill_abs_planes(filter_planes,          filter_abs_planes);
+            fill_abs_planes(receiver_filter_planes, receiver_abs_planes);
+            fill_abs_planes(shadow_volume_planes,   volume_abs_planes);
 
             // Box hull topology for the corner order built below (bit 0 = z,
             // bit 1 = y, bit 2 = x). Triangle winding is irrelevant: this hull
@@ -523,18 +629,53 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
             caster_corner_points.clear();
             unsigned int frustum_corners_added = 0u; // bit per F_main corner already in the fit point set
 
-            for (const erhe::math::Aabb& aabb : surviving_casters) {
-                box_hull.points.clear();
-                for (std::size_t i = 0; i < 8; ++i) {
-                    box_hull.points.push_back(
-                        glm::vec3{
-                            ((i & 4u) != 0u) ? aabb.max.x : aabb.min.x,
-                            ((i & 2u) != 0u) ? aabb.max.y : aabb.min.y,
-                            ((i & 1u) != 0u) ? aabb.max.z : aabb.min.z
-                        }
-                    );
+            for (const erhe::math::Aabb& aabb : parameters.caster_world_aabbs) {
+                if (!aabb.is_valid_3d()) {
+                    continue;
+                }
+                const glm::vec3 center = aabb.center();
+                const glm::vec3 extent = 0.5f * aabb.diagonal();
+
+                const bool in_shadow_volume = !abs_planes_reject(filter_abs_planes, center, extent);
+                // The receiver verdict only matters when the shadow volume keeps the
+                // caster; with diagnostics on it is evaluated unconditionally so the
+                // dump shows both verdicts for every caster.
+                bool in_receiver_volume = true;
+                if (!receiver_abs_planes.empty() && (in_shadow_volume || (debug_out != nullptr))) {
+                    in_receiver_volume = !abs_planes_reject(receiver_abs_planes, center, extent);
                 }
                 if (debug_out != nullptr) {
+                    Shadow_frustum_fit_debug_data::Caster_box caster_box{};
+                    caster_box.aabb                      = aabb;
+                    caster_box.culled_by_shadow_volume   = !in_shadow_volume;
+                    caster_box.culled_by_receiver_volume = !in_receiver_volume;
+                    if (!in_shadow_volume) {
+                        caster_box.rejecting_plane = first_rejecting_plane(filter_planes, aabb);
+                    } else if (!in_receiver_volume) {
+                        caster_box.rejecting_plane = first_rejecting_plane(receiver_filter_planes, aabb);
+                    }
+                    debug_out->caster_boxes.push_back(caster_box);
+                }
+                if (!in_shadow_volume || !in_receiver_volume) {
+                    continue; // outside F_shadow, or cannot shadow any visible receiver
+                }
+
+                // The 8 corners (bit 0 = z, bit 1 = y, bit 2 = x). Only the
+                // debug visualization and the clip path need them as points.
+                const auto fill_box_corners = [&box_hull, &aabb]() {
+                    box_hull.points.clear();
+                    for (std::size_t i = 0; i < 8; ++i) {
+                        box_hull.points.push_back(
+                            glm::vec3{
+                                ((i & 4u) != 0u) ? aabb.max.x : aabb.min.x,
+                                ((i & 2u) != 0u) ? aabb.max.y : aabb.min.y,
+                                ((i & 1u) != 0u) ? aabb.max.z : aabb.min.z
+                            }
+                        );
+                    }
+                };
+                if (debug_out != nullptr) {
+                    fill_box_corners();
                     caster_corner_points.insert(caster_corner_points.end(), box_hull.points.begin(), box_hull.points.end());
                 }
 
@@ -542,25 +683,22 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
                 // and its corners are the complete vertex set of the
                 // intersection (interior F_shadow vertices cannot be extremal
                 // against the corner span, so the check below is not needed).
-                const glm::vec3 center = aabb.center();
-                const glm::vec3 extent = 0.5f * aabb.diagonal();
-                bool fully_inside = true;
-                for (const glm::vec4& plane : shadow_volume_planes) {
-                    const glm::vec3 normal{plane};
-                    const float center_distance  = glm::dot(normal, center) + plane.w;
-                    const float projected_extent = glm::dot(glm::abs(normal), extent);
-                    if (center_distance < projected_extent) {
-                        fully_inside = false;
-                        break;
+                if (abs_planes_contain(volume_abs_planes, center, extent)) {
+                    interior_boxes.push_back(aabb);
+                    if (debug_out != nullptr) {
+                        caster_points.insert(caster_points.end(), box_hull.points.begin(), box_hull.points.end());
                     }
-                }
-                if (fully_inside) {
-                    caster_points.insert(caster_points.end(), box_hull.points.begin(), box_hull.points.end());
                     continue;
                 }
 
+                if (debug_out == nullptr) {
+                    fill_box_corners();
+                }
                 erhe::math::clip_convex_hull_points_by_planes(box_hull, shadow_volume_planes, box_clip_points);
-                caster_points.insert(caster_points.end(), box_clip_points.begin(), box_clip_points.end());
+                boundary_points.insert(boundary_points.end(), box_clip_points.begin(), box_clip_points.end());
+                if (debug_out != nullptr) {
+                    caster_points.insert(caster_points.end(), box_clip_points.begin(), box_clip_points.end());
+                }
 
                 // The surface clip cannot produce F_shadow vertices interior
                 // to the box (a box strictly containing the whole volume even
@@ -578,12 +716,15 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
                         (corner.y >= aabb.min.y) && (corner.y <= aabb.max.y) &&
                         (corner.z >= aabb.min.z) && (corner.z <= aabb.max.z)
                     ) {
-                        caster_points.push_back(corner);
+                        boundary_points.push_back(corner);
+                        if (debug_out != nullptr) {
+                            caster_points.push_back(corner);
+                        }
                         frustum_corners_added |= (1u << corner_index);
                     }
                 }
             }
-            casters_available = !caster_points.empty();
+            casters_available = !interior_boxes.empty() || !boundary_points.empty();
             if ((debug_out != nullptr) && (caster_corner_points.size() >= 4)) {
                 // Visualization only: the hull of the surviving corners no
                 // longer participates in the fit itself.
@@ -597,6 +738,7 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
         return stable_directional_light_projection_transforms(parameters);
     }
 
+    // Debug visualization only: the point set the box was fitted to. caster_points is filled only when debug_out is set.
     const std::span<const glm::vec3> primary_fit_points = casters_available ? std::span<const glm::vec3>{caster_points} : frustum_corner_points;
 
     // Step 4: Optional roll around the light direction (rotating calipers)
@@ -606,14 +748,20 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
     light_plane_hull.clear(); // also read on the debug path when optimize_rotation is off
     if (settings.optimize_rotation) {
         ERHE_PROFILE_SCOPE("fit: optimize rotation (calipers)");
-        std::vector<glm::vec2>& projected_points = scratch.projected_points;
-        projected_points.clear();
-        projected_points.reserve(primary_fit_points.size());
-        for (const glm::vec3& p_in_world : primary_fit_points) {
-            const glm::vec3 p_in_light = light_from_world * p_in_world;
-            projected_points.push_back(glm::vec2{p_in_light});
+        if (casters_available) {
+            // Boxes inside the hull of the others are dropped before the
+            // sort; the hull is identical to hulling every projected corner.
+            erhe::math::calculate_bounding_convex_hull_of_boxes(interior_boxes, boundary_points, light_from_world, scratch.box_hull, light_plane_hull);
+        } else {
+            std::vector<glm::vec2>& projected_points = scratch.projected_points;
+            projected_points.clear();
+            projected_points.reserve(frustum_corner_points.size());
+            for (const glm::vec3& p_in_world : frustum_corner_points) {
+                const glm::vec3 p_in_light = light_from_world * p_in_world;
+                projected_points.push_back(glm::vec2{p_in_light});
+            }
+            erhe::math::calculate_bounding_convex_hull(projected_points, light_plane_hull);
         }
-        erhe::math::calculate_bounding_convex_hull(projected_points, light_plane_hull);
         if (light_plane_hull.size() >= 3) {
             obb = erhe::math::calculate_min_area_obb_2d(light_plane_hull);
             rolled_from_light_xy = obb.edge_from_original;
@@ -632,7 +780,9 @@ auto Light_snapshot::tight_directional_light_projection_transforms(const Light_p
     };
 
     // Fit the light space box to the active point sets
-    Light_space_box box = fit_box(primary_fit_points, light_from_world, rolled_from_light_xy, light_direction_in_light);
+    Light_space_box box = casters_available
+        ? fit_box_of_aabbs(interior_boxes, boundary_points, light_from_world, rolled_from_light_xy, light_direction_in_light)
+        : fit_box(frustum_corner_points, light_from_world, rolled_from_light_xy, light_direction_in_light);
     record_step_box(Shadow_fit_step::fit_points, box);
     if (casters_available && (settings.fit_to_view_frustum || settings.near_from_main_frustum)) {
         const Light_space_box frustum_box = fit_box(frustum_corner_points, light_from_world, rolled_from_light_xy, light_direction_in_light);

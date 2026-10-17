@@ -9,6 +9,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::math`: `calculate_bounding_convex_hull_of_boxes()` and
+  `Box_hull_scratch` (`box_hull.hpp`): the 2D convex hull of many projected
+  `Aabb`s, identical to hulling every corner, with interior boxes pruned
+  before the sort. `erhe::scene`: `Shadow_fit_scratch` gains
+  `interior_caster_aabbs`, `boundary_points`, `box_hull` and the `Abs_plane`
+  vectors `filter_abs_planes`, `receiver_abs_planes` and `volume_abs_planes`
+  (planes with their absolute normals, for the center + extents caster
+  tests); `surviving_caster_aabbs` is removed (the caster cull and the per-box
+  clip are one pass) and `caster_points` is filled only when `collect_debug`
+  is on.
+
 - `erhe::graphics`: `Command_buffer::get_active_render_pass()` /
   `set_active_render_pass()` (set by `Render_pass::start_render_pass()` /
   `end_render_pass()`); `Ring_buffer::try_acquire()` and `Ring_buffer_wrap`

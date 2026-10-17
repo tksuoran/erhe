@@ -23,6 +23,11 @@ namespace {
     return json::array({v.x, v.y, v.z});
 }
 
+[[nodiscard]] auto to_json(const glm::vec2& v) -> json
+{
+    return json::array({v.x, v.y});
+}
+
 [[nodiscard]] auto to_json(const glm::vec4& v) -> json
 {
     return json::array({v.x, v.y, v.z, v.w});
@@ -155,6 +160,29 @@ auto dump_shadow_fit_debug(const erhe::scene_renderer::Light_projections& light_
         }
         light_json["caster_box_count"] = fd.caster_boxes.size();
         light_json["caster_boxes"]     = caster_boxes;
+
+        // The fit result: the light plane hull the rotation was chosen from, the
+        // rotating calipers result and the light space box after every stage.
+        // Lets two builds of the fit be compared exactly (printed floats
+        // round-trip).
+        json light_plane_hull = json::array();
+        for (const glm::vec2& p : fd.light_plane_hull) {
+            light_plane_hull.push_back(to_json(p));
+        }
+        light_json["light_plane_hull"] = light_plane_hull;
+        light_json["obb_edge_from_original"] = json::array({fd.obb.edge_from_original[0][0], fd.obb.edge_from_original[0][1], fd.obb.edge_from_original[1][0], fd.obb.edge_from_original[1][1]});
+        light_json["obb_aabb_min"] = to_json(fd.obb.aabb_min);
+        light_json["obb_aabb_max"] = to_json(fd.obb.aabb_max);
+        light_json["fit_point_count"] = fd.fit_points.size();
+        json step_boxes = json::array();
+        for (const erhe::scene::Shadow_frustum_fit_debug_data::Step_box& step_box : fd.step_boxes) {
+            json step_json = json::object();
+            step_json["valid"] = step_box.valid;
+            step_json["min"]   = to_json(step_box.min);
+            step_json["max"]   = to_json(step_box.max);
+            step_boxes.push_back(step_json);
+        }
+        light_json["step_boxes"] = step_boxes;
 
         lights.push_back(light_json);
     }

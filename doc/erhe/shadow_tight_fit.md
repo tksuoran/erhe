@@ -29,7 +29,7 @@ surviving the filter:
 | Silhouette + sweep planes | 2D hull (sort) | per light |
 | Caster filter | M x (<=12 + 1 + S) planes, center+extents | per light |
 | Caster per-box clip | boundary boxes: 12 triangles x <=6 planes Sutherland-Hodgman; interior boxes: corner append | per light |
-| Calipers projection + 2D hull | sort over the fit point set | per light, with `optimize_rotation` |
+| Calipers projection + 2D hull | interior-box prune over the caster boxes, sort over the survivors | per light, with `optimize_rotation` |
 
 The only QuickHull runs left are the two receiver-side ones, at most once per
 pass and skipped entirely on repeated inputs. The per-light caster stage is
@@ -81,6 +81,52 @@ of `hull(all corners) ^ F_shadow`, which additionally covered the empty bridge
 regions between separated casters. The caster hull survives only as a debug
 visualization, built when `collect_debug` is on.
 
+**One pass over the casters.** The per-caster cull and the clip share one loop
+over the caster AABBs: the center and extents of a box are formed once, tested
+against the filter planes, the receiver planes and the open shadow volume planes
+(each plane stored with its absolute normal, `Abs_plane`, so no per-box
+`abs`), and the survivor goes straight to the interior list (no corner list is
+built for it) or to the per-box clip. The verdict arithmetic is that of
+`aabb_in_convex_volume()`, so the surviving set is unchanged.
+
+**Box extents from center and extents.** `fit_box_of_aabbs` projects each box
+center through the light space map and adds `abs(map) * half diagonal`, which is
+the min and max over the 8 corners without projecting them. It rounds
+differently from projecting each corner (measured: within 2 ulp of the largest
+world coordinate), so the box grows by 16 epsilon times the largest world
+coordinate, which keeps it from ever being smaller than the exact corner
+projection. The light plane hull, the point counts and the caster verdicts stay
+bit-identical to the corner version; the box before stabilization is larger by
+at most that margin, and the stabilized box lands one snap step away in about
+3% of its extents. On the heavy bench scene (Release, about 800 surviving
+casters per light) the extents went from 17.5 to 4.9 us per light and the
+caster cull plus clip from 56 to 34 us; the whole fit from about 120 to 85 us.
+
+**Interior-box prune for the light plane hull.** The rotation stage needs the
+2D hull of the projected fit points. Sorting all 8 corners of every surviving
+caster box dominated the fit (the rotating calipers itself costs a few
+microseconds for hulls of tens of vertices). Interior boxes (entirely inside
+the open shadow volume) are therefore kept as boxes in
+`Shadow_fit_scratch::interior_caster_aabbs`, not expanded into points, and
+`erhe::math::calculate_bounding_convex_hull_of_boxes()` builds the hull:
+a polygon from the extreme corners in 16 fixed light plane directions, a
+center and extents test of every box against its edges, and a sort over the
+corners of the boxes that are not inside it (corners inside the polygon are
+dropped too). The margin of the test is far above float rounding, so the hull
+is bit-identical to hulling every corner; the light space extents of the
+boxes come from `fit_box_of_aabbs` (below). On the heavy bench scene
+(about 800 surviving casters) this took the per-light fit from 320 to 700 us
+down to 120 to 310 us, with about 96% of interior boxes pruned. The boundary
+boxes (clipped to the volume) and the view frustum corners they contain stay
+in `Shadow_fit_scratch::boundary_points`. The expanded point list
+(`caster_points`) exists only when `collect_debug` is on.
+
+A hull of the previous frame's participants as the seed was measured and is
+not worth its bookkeeping (about 13% better than the fixed directions).
+Reusing the receiver hull across frames helps only when objects move: with a
+moving camera the hull of the in-frustum receiver corners changed on about
+90% of the frames.
+
 **Receiver cache.** `ensure_receiver_cache` gathers the in-frustum receiver
 corner set into a scratch and compares it, by exact float equality (the corners
 are copied from the same AABB source every pass), against the previous pass:
@@ -115,6 +161,22 @@ Any change here keeps the fit output identical or tighter at the same coverage:
   shows no receiver clip or re-hull zones;
 - the "fit: clip casters" zone stays small, because most boxes take the
   interior fast path.
+
+## Experiments and verification tools
+
+- `src/erhe/math/test/test_shadow_fit_bench.cpp` (synthetic boxes) and
+  `test_shadow_fit_replay.cpp` (captured fit inputs) time the fit stages and
+  compare the pruned hull with the plain one. Both skip unless
+  `ERHE_FIT_BENCH=1` (bench) or `ERHE_FIT_CAPTURE_DIR` (replay) is set, and
+  only mean something in a Release build.
+- `scripts/shadow_fit_capture.py` records the replay inputs from a running
+  headless editor on the heavy bench scene (physics is switched off first: a
+  teleported body shoves its neighbours and pollutes later frames).
+- `scripts/shadow_fit_ab.py` launches one editor binary, plays scripted
+  camera, light and mesh moves and writes the fit results (hull, rotation
+  result, light space box after every stage) as text. Two builds of the fit
+  must produce byte-identical files; `get_shadow_fit_debug` carries these
+  fields.
 
 ## Future work
 
