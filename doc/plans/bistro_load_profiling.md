@@ -197,7 +197,7 @@ three runs; eager mode unchanged (3852 measured at finalize, listed
 finalize pass reports +0.0% vertices, the geometry build optimizes again);
 not pursued, eager mode is not the default.
 
-### Step 3: every glTF open goes through the async loader
+### Step 3: every glTF open goes through the async loader (done, 0b7fe5f29)
 
 Make the asset browser's Load entry (`Asset_browser::try_open`) and MCP
 `open_scene` (`Mcp_server::action_open_scene`) queue the load with
@@ -211,7 +211,13 @@ open_scene` the log carries `async parse_gltf` and `consuming
 asynchronously prepared parse`, exactly one `parse_gltf 'bistro_lights_c`
 line per open, and the listed time is within 1 s of `--tool load_scene`;
 `mcp_server_tests` filtered to `*open_scene*` passes; render
-byte-identical.
+byte-identical. Result: `queue_open_scene_gltf` is the one entry;
+`Erhe_scene_open::as_foreign_gltf` keeps the asset browser and open_scene
+on the undoable operation for erhe-authored files; open_scene listed
+3.9 to 5.1 s (was 12.0 s), load_scene 3.8 to 5.1 s, render identical.
+Review found and fixed: a load cancelled or failed after the scan queued
+an inline re-parse; `Asset_load_result::state` now gates the open (the
+import completion gets the same guard in a follow-up commit).
 
 ### Step 4: the rest of the finalize frame
 
