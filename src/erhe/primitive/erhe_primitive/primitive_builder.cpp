@@ -708,8 +708,6 @@ Build_context::~Build_context() noexcept
 
 void Build_context::build_polygon_id()
 {
-    ERHE_PROFILE_FUNCTION();
-
     if (attribute_writers.id == nullptr) {
         return;
     }
@@ -752,8 +750,6 @@ void Build_context::write_position(const Vertex_attribute_info& info, const GEO:
 
 void Build_context::build_vertex_position()
 {
-    ERHE_PROFILE_FUNCTION();
-
     v_position = get_pointf(root.mesh.vertices, mesh_vertex);
 
     ERHE_VERIFY(std::isfinite(v_position.x) && std::isfinite(v_position.y) && std::isfinite(v_position.z));
@@ -768,7 +764,6 @@ void Build_context::build_vertex_position()
 
 auto Build_context::get_facet_normal() -> GEO::vec3f
 {
-    ERHE_PROFILE_FUNCTION();
     {
         const std::optional<GEO::vec3f> facet_normal = mesh_attributes.facet_normal.try_get(mesh_facet);
         if (facet_normal.has_value()) {
@@ -813,7 +808,6 @@ void Build_context::build_tangent_frame()
     std::optional<GEO::vec3f> vertex_normal = mesh_attributes.vertex_normal.try_get(mesh_vertex);
 
     {
-        ERHE_PROFILE_SCOPE("n");
         switch (normal_style) {
             //using enum Normal_style;
             case Normal_style::none: {
@@ -884,8 +878,6 @@ void Build_context::build_tangent_frame()
 
 void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
 {
-    ERHE_PROFILE_FUNCTION();
-
     /// if (!root.attributes.normal.is_valid() && !root.attributes.normal_smooth.is_valid()) {
     ///     return;
     /// }
@@ -900,7 +892,6 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
     // }
     // 
     if (do_normal_smooth) {
-        ERHE_PROFILE_SCOPE("2n");
     
         std::optional<GEO::vec3f> smooth_vertex_normal = mesh_attributes.vertex_normal_smooth.try_get(mesh_vertex);
         if (smooth_vertex_normal.has_value()) {
@@ -1513,7 +1504,6 @@ void Build_context::build_polygon_fill()
 
     for (GEO::index_t facet : root.mesh.facets) {
         mesh_facet = facet;
-        ERHE_PROFILE_SCOPE("polygon");
         first_index    = vertex_buffer_index;
         previous_index = first_index;
 
@@ -1522,7 +1512,6 @@ void Build_context::build_polygon_fill()
         //const Polygon_corner_id polyon_corner_id_end = polygon.first_polygon_corner_id + polygon.corner_count;
         for (GEO::index_t corner : root.mesh.facets.corners(mesh_facet)) {
             mesh_corner = corner;
-            ERHE_PROFILE_SCOPE("corner");
             mesh_vertex = root.mesh.facet_corners.vertex(mesh_corner);
             ERHE_VERIFY(mesh_vertex != GEO::NO_INDEX);
 
