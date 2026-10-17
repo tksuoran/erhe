@@ -145,11 +145,15 @@ instead of hanging.
   with the item, so they are announced, which is correct.
 - **Scene unregistration** - `Asset_manager::on_scene_unregistered`, reached
   from `App_scenes::unregister_scene_root`. This is the route
-  `Scene_open_operation::undo` takes: it unregisters the scene and removes the
-  browser window, never undoes the inner import compound and never publishes
-  `Close_scene_message`, so without this producer "Open Scene, select an
-  animation, Ctrl+Z" would leave the Animation window pointing into an
-  unregistered scene. The record survives unregistration with its scene
+  `Scene_open_operation::undo` takes: it unbinds the viewports showing the
+  scene (`Scene_views::unbind_views_from_scene`, as a close does; a bound view
+  would keep preparing a scene that no longer gets its per-frame render
+  snapshot), unregisters the scene and removes the browser window, never
+  undoes the inner import compound and never publishes `Close_scene_message`,
+  so without this producer "Open Scene, select an animation, Ctrl+Z" would
+  leave the Animation window pointing into an unregistered scene. Redo
+  re-registers the scene and binds it into an empty viewport window again
+  (the one undo emptied, when it is still open). The record survives unregistration with its scene
   entries intact, so every asset of the record is enumerated into the pending
   list. It fires on a normal scene close too, harmlessly redundant with the
   `close_scene` handlers.
