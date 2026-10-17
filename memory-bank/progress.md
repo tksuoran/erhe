@@ -11,7 +11,8 @@
 ✓phase-6a{9d21b1bd9;pre_execute hook+callback;Cull_frame_registry;review-fixes:registry-not-classifier-owned+callback-VERIFY+one-timer+params-once+one-color-view-source+cull_view-in-prepared;headset-per-eye-unculled=open}
 ✓phase-6b{GPU-shadow-commands;count-draw;review-fixes:no-per-entry-CPU-loop+readback-stats+index-clamp-refusal+flat-dispatch+chunk-size-once+split_uint64}
 ✗phase-7{not-started;user-said-stop-before-7}
-?perf-summary-report{Release+Debug;A/B/HEAD;idle-machine}
+✓gpu-shutdown-fix{d00438512}
+✓perf-summary-report{memory-bank/local/culling_perf_2026_10_17.md;plan-6b-numbers-c66811366}
 
 [TASK::render-thread]{started-2026-10-09;branch=render-thread;via-harness;doc/editor/render_thread.md}
 ✓step-1-measure{phase-timing-M1/M2/R-log-every-60-frames;fable-medium-review->swapchain-waits-timed-as-R;headless-baseline-Debug-Intel:M1~14us-M2~5.9ms(wait_frame~5.4ms)-R~1ms}
