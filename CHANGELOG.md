@@ -236,6 +236,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: draw-list culling runs through a per-frame view
+  set: `Draw_list_scene::add_cull_view(frame_index, purpose, planes)` returns
+  a `Cull_view` (`draw_list.hpp`; `Cull_view::none` draws unculled), and
+  `Draw_color_parameters::cull_view` / `Draw_shadow_parameters::cull_view`
+  replace `view_frustum_planes` / `light_frustum_planes`. `Draw_list` gains
+  `bounds` (`Draw_list_bounds`: the entries' world AABB centers and half
+  extents as six float arrays, parallel to `entries`).
+
 - `erhe::graphics`: `max_texture_heap_size` moved from the Vulkan backend
   header to `texture_heap.hpp` (public, 4096; 1024 on Android) and is the
   default `Texture_heap` `max_textures`.

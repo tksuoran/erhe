@@ -594,20 +594,40 @@ Drawing:
   every mesh naming the primitive, which the in-place mesh-component drag
   raises once per edited mesh per frame after growing a primitive's box from
   the positions it wrote) - together with `Draw_list_object::node_abs_extent`,
-  the shadow fit's caster vertex rounding input. `Draw_list_renderer::render()`
-  builds the view frustum planes from the single view's `clip_from_world`
-  (as `Camera_buffer` does) and passes them as
-  `Draw_color_parameters::view_frustum_planes`; `Shadow_renderer::render()`
-  passes each shadow pass's light frustum as
-  `Draw_shadow_parameters::light_frustum_planes` (the pass's own
-  `clip_from_world`; a point light per cube face; a depth-clamped
-  directional pass keeps casters beyond its depth planes, so it culls on the
-  four side planes only). `draw_list_chunks()` makes one pass decision per
-  entry - the flag filter, then `erhe::math::aabb_in_convex_volume()`
+  the shadow fit's caster vertex rounding input. The same writes keep
+  `Draw_list::bounds` (`Draw_list_bounds`) current: the entries' AABB
+  centers and half extents as six float arrays parallel to `entries`
+  (swap-removed with them, copied by `publish()` with the entries; an entry
+  with an invalid AABB stores a negative extent). Culling runs through a
+  view set (doc/plans/culling.md): each pass adds its inward-facing planes
+  with `Draw_list_scene::add_cull_view(frame_index, purpose, planes)`
+  (render phase) and passes the returned `Cull_view` as
+  `Draw_color_parameters::cull_view` / `Draw_shadow_parameters::cull_view`;
+  empty planes give `Cull_view::none` (no culling). A view with the same
+  purpose and bitwise the same planes as one already in the frame's set is
+  shared, so the color passes of one viewport cull through one view, and the
+  spot and point shadow passes of several viewports' shadow nodes through
+  one view each. `Draw_list_renderer::render()` adds the single view's
+  frustum (from its `clip_from_world`, as `Camera_buffer` builds it);
+  `Shadow_renderer::render()` adds every pass it is about to draw before the
+  first one draws: each 2D pass's light frustum (the pass's own
+  `clip_from_world`; a depth-clamped directional pass keeps casters beyond
+  its depth planes, so it culls on the four side planes only) and each point
+  light cube face. The first draw naming a view that is not yet classified
+  classifies every entry of every published list of the views' purpose
+  against all views added since the last classification, in one pass with
+  the entries outside and the views inside: the scalar
+  `erhe::math::aabb_in_convex_volume()` test on the SoA center and extent
   (planes only, conservative, so an infinite reverse-Z far plane cannot
-  reject) - and the primitive record and draw command writers both consume
-  that mask, so `ERHE_DRAW_ID` stays paired. Skinned entries (bounds follow
-  the joints, not the transform hook), entries with an invalid AABB and
+  reject), writing one bit per view into one `uint64_t` per entry per group
+  of 64 views. The view set and the masks are render-phase state of the
+  `Draw_list_scene` (render thread), started over by the first
+  `add_cull_view()` of each frame and kept with their capacity.
+  `draw_list_chunks()` makes one pass decision per entry - the flag filter,
+  then the view's mask bit - and the primitive record and draw command
+  writers both consume that decision, so `ERHE_DRAW_ID` stays paired.
+  Skinned entries (bounds follow the joints, not the transform hook),
+  entries with an invalid AABB and
   multiview passes are never culled. Culled entries are counted in
   `Draw_statistics::culled_count`: per composition pass in MCP
   `get_composition_passes` (`last_draw_list_culled_count`), per shadow pass

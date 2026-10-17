@@ -84,12 +84,13 @@ public:
     // nullptr: pick color_blend_disabled / color_blend_premultiplied by the
     // list's blending class, as Forward_renderer::render() does.
     const erhe::graphics::Color_blend_state* color_blend_override{nullptr};
-    // Inward-facing world-space planes of the view frustum
-    // (erhe::math::extract_frustum_planes()); entries whose world AABB lies
-    // fully outside one plane are not drawn. Skinned entries are never
-    // culled (their bounds follow the joints, not the transform hook).
-    // Empty: no culling (multiview passes).
-    std::span<const glm::vec4>              view_frustum_planes {};
+    // The culling view of this pass (Draw_list_scene::add_cull_view() of
+    // the view frustum's inward-facing world-space planes,
+    // erhe::math::extract_frustum_planes()): entries whose world AABB lies
+    // fully outside one of its planes are not drawn. Skinned entries are
+    // never culled (their bounds follow the joints, not the transform hook).
+    // Cull_view::none: no culling (multiview passes).
+    Cull_view                               cull_view           {Cull_view::none};
     std::string_view                        debug_label         {};
     // The frame being drawn: the published slot frame_index %
     // frames_in_flight is read (Draw_list_scene::publish).
@@ -108,12 +109,13 @@ public:
     erhe::Item_filter                       filter              {};
     std::span<const erhe::scene::Layer_id>  layers              {};
     Shadow_sub_variant                      sub_variant         {Shadow_sub_variant::depth_only};
-    // Inward-facing world-space planes of this pass's light frustum (one
-    // cube face for a point light), same convention and same per-entry test
-    // as Draw_color_parameters::view_frustum_planes. The caller leaves out
-    // the planes its pipeline does not clip at (the depth planes of a
-    // depth-clamped directional pass). Empty: no culling.
-    std::span<const glm::vec4>              light_frustum_planes{};
+    // The culling view of this pass: Draw_list_scene::add_cull_view() of
+    // the planes of its light frustum (one cube face for a point light),
+    // same convention and same per-entry test as
+    // Draw_color_parameters::cull_view. The caller leaves out the planes its
+    // pipeline does not clip at (the depth planes of a depth-clamped
+    // directional pass). Cull_view::none: no culling.
+    Cull_view                               cull_view           {Cull_view::none};
     std::string_view                        debug_label         {};
     // The frame being drawn (Draw_color_parameters::frame_index).
     uint64_t                                frame_index         {0};
@@ -301,6 +303,19 @@ public:
     // verify that slot was published for that frame.
     auto draw_color (const Draw_color_parameters&  parameters) -> Draw_statistics;
     auto draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics;
+    // Culling views (doc/erhe/draw_list_renderer.md Q6; render thread,
+    // render phase): adds the inward-facing world-space planes (at most 6)
+    // of one pass of frame_index to the frame's view set and returns its
+    // view, for Draw_color_parameters / Draw_shadow_parameters::cull_view.
+    // A view with the same purpose and the same planes as one already in
+    // the set returns that view; empty planes return Cull_view::none. The
+    // first call for a new frame_index starts that frame's set. The first
+    // draw that names a view not yet classified classifies every entry of
+    // every published list of the view's purpose against all views added
+    // since the previous classification, in one pass (one uint64_t mask bit
+    // per entry and view), so a caller that adds all of its views before
+    // its first draw gets one classification for all of them.
+    [[nodiscard]] auto add_cull_view(uint64_t frame_index, Draw_purpose purpose, std::span<const glm::vec4> planes) -> Cull_view;
     // The shadow frustum fit's inputs from the registered objects, prepared
     // once per frame in the prepare phase (main thread, after
     // flush_pending()) into the frame-in-flight slot frame_index %
@@ -464,9 +479,14 @@ private:
         Draw_indirect_buffer&                    draw_indirect_buffer,
         const Primitive_interface_settings&      primitive_settings,
         const erhe::Item_filter&                 filter,
-        std::span<const glm::vec4>               frustum_planes,
+        std::size_t                              draw_list_index,
+        Cull_view                                cull_view,
         Draw_statistics&                         statistics
     );
+    // Classifies the published lists of frame_index against the views added
+    // since the last classification when cull_view is one of them
+    // (add_cull_view()); verifies cull_view belongs to frame_index.
+    void classify_cull_views(uint64_t frame_index, Cull_view cull_view);
     // The bounds the entries and the object carry, from the mesh's
     // primitives: at registration (add_entries) and on the bounds hook
     // (Pending_op::Kind::bounds). The transform hook rewrites the entries'
@@ -554,8 +574,8 @@ private:
     std::vector<Pending_op>                                          m_flushing;
     // Debug label of one draw list, cleared at use (capacity kept).
     std::string                                                      m_list_label;
-    // Per-entry pass mask of the draw list being drawn (filter and frustum),
-    // resized at use (capacity kept).
+    // Per-entry pass mask of the draw list being drawn (filter and culling
+    // view), resized at use (capacity kept).
     std::vector<std::uint8_t>                                        m_entry_passes;
     std::size_t                                                      m_determinant_flip_count{0};
     std::size_t                                                      m_transform_update_count{0};
@@ -580,6 +600,28 @@ private:
     std::vector<Draw_list_resolutions>                               m_resolutions;
     Color_environment                                                m_color_environment{};
     bool                                                             m_color_environment_set{false};
+
+    // Render phase (render thread) culling state of the frame being
+    // rendered (Q6). The render phase renders one frame at a time, so one
+    // set serves every frame in flight: the first add_cull_view() of a new
+    // frame index clears it (capacity kept).
+    class Cull_view_planes
+    {
+    public:
+        Draw_purpose             purpose    {Draw_purpose::color};
+        uint32_t                 plane_count{0};
+        std::array<glm::vec4, 6> planes     {};
+    };
+    std::vector<Cull_view_planes>                                    m_cull_views;
+    // Views [0, m_classified_cull_view_count) have their mask bits written.
+    std::size_t                                                      m_classified_cull_view_count{0};
+    uint64_t                                                         m_cull_frame_index{0};
+    bool                                                             m_cull_frame_started{false};
+    // Per published list index: one uint64_t per entry per group of 64
+    // views, group-major (mask of entry i, view v at
+    // [(v / 64) * entry_count + i], bit v % 64). Cleared when a frame
+    // starts and grown with zeros at classification (capacity kept).
+    std::vector<std::vector<uint64_t>>                               m_cull_masks;
     std::size_t                                                      m_color_environment_change_count{0};
     std::size_t                                                      m_lazy_resolution_count{0};
 
