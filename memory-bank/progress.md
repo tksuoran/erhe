@@ -8,8 +8,10 @@
 ✓step-1{f627354b9;per-corner-zones-dropped;capture-1.5GB->65MB;deferred-phase-under-Tracy-22s->6.5s;image-identical}
 ✓step-2{4cc9dce17;skip-soup-optimizer-when-full-build-deferred;finalize-9323->120-141ms;listed-13.8->4.4-6.4s;idle-20.6->10.5-11s;image-identical;fable-review:meshoptimizer_integration.md-fixed;found:eager-mode-optimizes-twice(not-pursued)}
 ✓step-3{0b7fe5f29;queue_open_scene_gltf-one-entry;Erhe_scene_open;open_scene-listed-12->3.9-5.1s;image-identical;fable-review-found:cancelled/failed-load-re-parsed-inline->Asset_load_result::state-guard;import-completion-follow-up-pending}
-?step-4{rest-of-finalize-frame->worker-build-phase;then-remeasure}
-?steps-5-6{residency-budget;deferred-phase;decide-after-step-4}
+✓import-cancel-guard{380f08da2}
+✓remeasure-after-step-3{listed-3.3s:parse-1.7s(images=basis-transcode-1.0s)+build-1.0s-serial-one-worker+residency-0.45s+op-0.15s;finalize-144ms=old-step-4-moot}
+⚡step-4{parallel-build_imported_buffer_meshes;gate:<250ms,listed<3.5s,image-identical}
+?steps-5-6{KTX2-transcode-cache|lazy;deferred-phase-optimizer-cache;decide-after-step-4}
 
 [TASK::culling]{started-2026-10-17;branch=render-thread;via-harness;doc/plans/culling.md}
 ✓phase-1{6846081f4;SoA-bounds+view-set+masks;scalar;identical-images+counts;review-fixes:purpose-skip+negative-extent-sentinel+null-scene-guard}
