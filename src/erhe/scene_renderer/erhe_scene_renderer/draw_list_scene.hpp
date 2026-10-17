@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/draw_list_object.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
@@ -303,6 +304,36 @@ public:
     // verify that slot was published for that frame.
     auto draw_color (const Draw_color_parameters&  parameters) -> Draw_statistics;
     auto draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics;
+    // Shared shadow records (doc/erhe/draw_list_renderer.md "Record
+    // upload"): with erhe::graphics::Record_indexing::first_instance, the
+    // first draw_shadow() of a scope that draws a chunk of a shadow list
+    // uploads the records of every entry of the chunk, and the later shadow
+    // passes of the scope bind the same range, their commands naming the
+    // records by entry through first_instance. The scope's destructor
+    // releases the ranges; the caller holds it across its shadow passes of
+    // one frame (render thread, render phase), and a new frame's first
+    // add_cull_view() verifies the previous scope ended. Every draw_shadow()
+    // of one scope passes the same Primitive_buffer and settings. Move-only;
+    // a default-constructed scope holds nothing.
+    class Shadow_record_scope
+    {
+    public:
+        Shadow_record_scope() = default;
+        ~Shadow_record_scope() noexcept;
+        Shadow_record_scope(const Shadow_record_scope&)            = delete;
+        Shadow_record_scope& operator=(const Shadow_record_scope&) = delete;
+        Shadow_record_scope(Shadow_record_scope&& other) noexcept;
+        Shadow_record_scope& operator=(Shadow_record_scope&& other) noexcept;
+
+    private:
+        friend class Draw_list_scene;
+        explicit Shadow_record_scope(Draw_list_scene& draw_list_scene);
+        void end();
+
+        Draw_list_scene* m_draw_list_scene{nullptr};
+    };
+    // Opens the scope draw_shadow()'s shared records live in (one at a time).
+    [[nodiscard]] auto begin_shadow_record_scope() -> Shadow_record_scope;
     // Culling views (doc/erhe/draw_list_renderer.md Q6; render thread,
     // render phase): adds the inward-facing world-space planes (at most 6)
     // of one pass of frame_index to the frame's view set and returns its
@@ -499,6 +530,8 @@ private:
     auto resolve_shadow_stages(Draw_list_resolutions& resolutions, const Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     void set_color_environment(const Color_environment& environment);
     // Draw one list in chunks of <= max primitives per multi-draw (P3a).
+    // record_layout packed: the pass writes the passing entries' records;
+    // chunk_entries: the chunk's shared shadow records (shared_shadow_records()).
     void draw_list_chunks(
         const Draw_list&                         draw_list,
         erhe::graphics::Render_command_encoder&  render_encoder,
@@ -509,8 +542,25 @@ private:
         const erhe::Item_filter&                 filter,
         std::size_t                              draw_list_index,
         Cull_view                                cull_view,
+        Draw_record_layout                       record_layout,
+        uint64_t                                 frame_index,
         Draw_statistics&                         statistics
     );
+    // The shared records of entries [begin, end) of the published shadow
+    // list draw_list_index, chunk begin / max per chunk: uploaded by the
+    // first call of the open Shadow_record_scope, the same range after it.
+    [[nodiscard]] auto shared_shadow_records(
+        const Draw_list&                    draw_list,
+        std::size_t                         draw_list_index,
+        std::size_t                         begin,
+        std::size_t                         end,
+        std::size_t                         max_per_chunk,
+        Primitive_buffer&                   primitive_buffer,
+        const Primitive_interface_settings& primitive_settings,
+        uint64_t                            frame_index
+    ) -> const erhe::graphics::Ring_buffer_range&;
+    // Shadow_record_scope's end: releases the shared shadow records.
+    void release_shadow_records();
     // Classifies the published lists of frame_index against the views added
     // since the last classification when cull_view is one of them
     // (add_cull_view()); verifies cull_view belongs to frame_index.
@@ -624,6 +674,35 @@ private:
     // Per-entry pass mask of the draw list being drawn (filter and culling
     // view), resized at use (capacity kept).
     std::vector<std::uint8_t>                                        m_entry_passes;
+
+    // How the shadow passes get their records, chosen at construction from
+    // Primitive_interface::record_indexing: per_pass writes the passing
+    // entries' records in every pass (Record_indexing::draw_position);
+    // shared uploads each shadow list chunk once per release scope
+    // (Shadow_record_scope) and lets every pass's commands name them.
+    enum class Shadow_record_upload : uint8_t
+    {
+        per_pass,
+        shared
+    };
+    // The shared record ranges of one shadow list, one per chunk (a range
+    // without buffer is not acquired); kept with its capacity.
+    class Shared_shadow_records
+    {
+    public:
+        std::vector<erhe::graphics::Ring_buffer_range> chunks;
+        // The list index is in m_shadow_record_lists (some chunk acquired).
+        bool                                           in_release_list{false};
+    };
+    Shadow_record_upload                                             m_shadow_record_upload{Shadow_record_upload::per_pass};
+    // Render phase state, per published list index (capacity kept).
+    std::vector<Shared_shadow_records>                               m_shadow_records;
+    // The list indices holding acquired chunks, for release (capacity kept).
+    std::vector<std::size_t>                                         m_shadow_record_lists;
+    // The open scope's Primitive_buffer and settings (null: none bound yet).
+    const Primitive_buffer*                                          m_shadow_record_buffer{nullptr};
+    Primitive_interface_settings                                     m_shadow_record_settings{};
+    bool                                                             m_shadow_record_scope_open{false};
     std::size_t                                                      m_determinant_flip_count{0};
     std::size_t                                                      m_transform_update_count{0};
     std::size_t                                                      m_refresh_count{0};

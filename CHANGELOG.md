@@ -9,6 +9,20 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Record_indexing` (`draw_position`, `first_instance`),
+  `Device_info::record_indexing` and `c_str(Record_indexing)`: how a draw
+  names its record. The GLSL preamble defines `ERHE_PRIMITIVE_INDEX`, the
+  record index (`gl_InstanceIndex` on Vulkan, `gl_BaseInstance` /
+  `gl_BaseInstanceARB` + `gl_InstanceID` on GL, with `first_instance`;
+  `ERHE_DRAW_ID` otherwise and on Metal).
+  `erhe::scene_renderer`: `Primitive_interface::record_indexing`;
+  `Primitive_buffer::update_records(draw_list, begin, end, settings)` (the
+  records of every entry of a chunk); `Draw_record_layout` (`packed`,
+  `chunk_entries`); `Draw_list_scene::begin_shadow_record_scope()` and the
+  move-only `Draw_list_scene::Shadow_record_scope`, whose destructor releases
+  the shared shadow records (`Shadow_renderer::render()` holds one across its
+  passes).
+
 - `erhe::math`: `calculate_bounding_convex_hull_of_boxes()` and
   `Box_hull_scratch` (`box_hull.hpp`): the 2D convex hull of many projected
   `Aabb`s, identical to hulling every corner, with interior boxes pruned
@@ -244,6 +258,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::scene_renderer`: the shaders index `primitive.primitives[]` with
+  `ERHE_PRIMITIVE_INDEX` instead of `ERHE_DRAW_ID`, and every
+  `Draw_indirect_buffer` writer sets a command's `base_instance` to its record
+  index (the command's position in its multi-draw) under
+  `Record_indexing::first_instance`, 0 otherwise.
+  `Draw_indirect_buffer::update(draw_list, begin, end, entry_passes)` takes a
+  `Draw_record_layout`. With `first_instance`, `Draw_list_scene::draw_shadow()`
+  uploads each shadow list chunk's records once per `Shadow_record_scope`
+  and the passes write only their commands.
+  `Draw_indirect_buffer::update(span<commands>)` writes each command's
+  `first_instance` and verifies the commands carry 0.
 
 - `erhe::scene_renderer`: draw-list culling runs through a per-frame view
   set: `Draw_list_scene::add_cull_view(frame_index, purpose, planes)` returns

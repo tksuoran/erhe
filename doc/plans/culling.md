@@ -205,6 +205,50 @@ Each phase lands on its own, verified, before the next starts.
    per-pass record memcpy (half of what phase 2 leaves). Needs the shader
    interface change in `erhe_primitive.glsl` and the emulated path to keep
    working through its push constant.
+   Done: the shaders index `primitive.primitives[]` with
+   `ERHE_PRIMITIVE_INDEX`, which the GLSL preamble defines from
+   `Device_info::record_indexing` (`doc/erhe/graphics.md` "Draw records"):
+   `Record_indexing::first_instance` reads the instance index that carries
+   the command's `first_instance` (Vulkan `gl_InstanceIndex` on the native
+   and the push-constant emulated multi-draw alike, the emulation still
+   issuing one indirect draw per command; GL `gl_BaseInstance(ARB) +
+   gl_InstanceID`), `draw_position` is `ERHE_DRAW_ID`. Vulkan takes
+   `first_instance` with `drawIndirectFirstInstance`, GL with base instance
+   and GLSL 4.60 / `ARB_shader_draw_parameters`; Metal and the null device
+   take `draw_position`, and so does every device without the capabilities;
+   the device logs the choice. Every `Draw_indirect_buffer` writer sets a
+   command's `first_instance` to its position (0 under `draw_position`), so
+   the color, id and bucket passes draw exactly as before. Under
+   `first_instance` the shadow passes share their records
+   (`doc/erhe/draw_list_renderer.md` "Record upload"): the first
+   `draw_shadow()` that draws a chunk of a shadow list uploads the records
+   of every entry of the chunk (`Primitive_buffer::update_records()`, one
+   block copy plus the default color / size patch), the later passes bind
+   the same range and write only their commands
+   (`Draw_record_layout::chunk_entries`, `first_instance = entry - chunk
+   begin`), and the `Draw_list_scene::Shadow_record_scope` that
+   `Shadow_renderer::render()` holds across its passes releases the ranges
+   when it ends, in the same frame. The color passes keep their per-pass records (their
+   color and size are per pass). `draw_position` devices keep the per-pass
+   shadow records, the phase 3 path. `erhe_graphics_gpu_tests`
+   `Draw_indirect_test.draw_indexed_indirect_first_instance` checks that a
+   command's `first_instance` reaches `ERHE_PRIMITIVE_INDEX`. Images
+   byte-identical and per-pass / per-light counts identical to phase 3
+   (default, heavy, draws scenes; heavy in both render thread modes); a
+   deliberately wrong record index changes the heavy image, so the gate
+   sees the shared path; heavy with Vulkan validation: no errors. Release
+   MSVC, Intel iGPU, pipelined, 900 frames, two runs each, per frame:
+   heavy (15 shadow passes) `draw_shadow` 568 / 566 us -> 347 / 301 us, the
+   shadow record writes (15 `Primitive_buffer::update` calls, about 6600
+   records of 256 bytes) become one `update_records` call of 35 / 36 us,
+   `Draw_indirect_buffer::update` 110 / 111 -> 89 / 88 us (17 calls),
+   `classify_cull_views` unchanged (41 / 41 -> 39 / 41 us); default scene
+   (4 shadow passes) `draw_shadow` 104 / 106 -> 93 / 77 us, shadow record
+   writes about 29 us (4 calls) -> 10 / 10 us; draws scene (1 shadow pass,
+   where the shared upload copies every entry of the list and the per-pass
+   write copied only the passing ones) `draw_shadow` 87 / 86 -> 78 / 80 us,
+   shadow record writes about 44 us -> 39 / 40 us, so the single-pass case
+   is not slower here. Phase 5 moves the upload to publish time.
 5. **GPU classification.** Upload the SoA bounds at publish (change-driven, a
    few floats per entry) and the view set per frame; a compute pass writes the
    mask buffer. Consumed by phase 6; alone it only moves the work.

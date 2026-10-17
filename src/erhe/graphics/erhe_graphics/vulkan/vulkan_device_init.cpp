@@ -2076,6 +2076,12 @@ Device_impl::Device_impl(
     m_info.texture_heap_path       = Texture_heap_path::vulkan_descriptor_indexing;
     m_info.use_sparse_texture      = false;
     m_info.use_base_instance = (query_device_features.features.drawIndirectFirstInstance == VK_TRUE);
+    // gl_InstanceIndex includes the command's firstInstance on the native
+    // and the emulated (per-draw vkCmdDrawIndexedIndirect) multi-draw paths
+    // alike; MoltenVK lowers it to the Metal instance_id, which includes the
+    // base instance.
+    m_info.record_indexing = m_info.use_base_instance ? Record_indexing::first_instance : Record_indexing::draw_position;
+    log_startup->info("Record indexing (ERHE_PRIMITIVE_INDEX): {}", c_str(m_info.record_indexing));
     const bool has_multi_draw_indirect    = (query_device_features.features.multiDrawIndirect == VK_TRUE);
     const bool has_shader_draw_parameters = (query_vulkan_11_features.shaderDrawParameters == VK_TRUE);
     // MoltenVK advertises shaderDrawParameters = VK_TRUE to stay Vulkan 1.1 conformant, but Metal

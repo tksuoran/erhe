@@ -743,6 +743,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
     }
 
+    // The shadow lists' shared records stay acquired across the passes
+    // below and are released when this scope ends (doc/erhe/
+    // draw_list_renderer.md "Record upload").
+    const Draw_list_scene::Shadow_record_scope shadow_record_scope = (parameters.draw_list_scene != nullptr)
+        ? parameters.draw_list_scene->begin_shadow_record_scope()
+        : Draw_list_scene::Shadow_record_scope{};
+
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
         const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(light_slot);

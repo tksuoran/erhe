@@ -20,8 +20,16 @@ Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Device& graphics_devi
         erhe::graphics::Buffer_target::draw_indirect,
         "Draw_indirect_buffer"
     }
-    , m_max_draw_count{max_draw_count}
+    , m_record_indexing{graphics_device.get_info().record_indexing}
+    , m_max_draw_count {max_draw_count}
 {
+}
+
+auto Draw_indirect_buffer::get_first_instance(const std::size_t record_index) const -> uint32_t
+{
+    return (m_record_indexing == erhe::graphics::Record_indexing::first_instance)
+        ? static_cast<uint32_t>(record_index)
+        : uint32_t{0};
 }
 
 auto Draw_indirect_buffer::update(
@@ -58,7 +66,6 @@ auto Draw_indirect_buffer::update(
     const auto                        gpu_data       = buffer_range.get_span();
     size_t      write_offset       {0};
     uint32_t    instance_count     {1};
-    uint32_t    base_instance      {0};
     std::size_t draw_indirect_count{0};
     
     for (const auto& mesh : meshes) {
@@ -95,7 +102,7 @@ auto Draw_indirect_buffer::update(
                 instance_count,
                 first_index,
                 base_vertex,
-                base_instance
+                get_first_instance(draw_indirect_count)
             };
 
             erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));
@@ -131,7 +138,6 @@ auto Draw_indirect_buffer::update(
     const std::span<std::byte>        gpu_data        = buffer_range.get_span();
     std::size_t        write_offset       {0};
     constexpr uint32_t instance_count     {1};
-    constexpr uint32_t base_instance      {0};
     std::size_t        draw_indirect_count{0};
 
     for (const Mesh_primitive_entry& entry : bucket.entries) {
@@ -163,7 +169,7 @@ auto Draw_indirect_buffer::update(
             instance_count,
             first_index,
             base_vertex,
-            base_instance
+            get_first_instance(draw_indirect_count)
         };
         erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));
         write_offset += entry_size;
@@ -188,6 +194,8 @@ void Draw_indirect_buffer::append_commands(
     ERHE_PROFILE_FUNCTION();
 
     constexpr uint32_t instance_count{1};
+    // first_instance is the command's position in its multi-draw, written by
+    // update(span) when the commands are copied for the draw.
     constexpr uint32_t base_instance {0};
     for (const Mesh_primitive_entry& entry : bucket.entries) {
         // The variant bucketing chose - do not re-derive it here.
@@ -224,8 +232,13 @@ auto Draw_indirect_buffer::update(
     erhe::graphics::Ring_buffer_range buffer_range   = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
     const std::span<std::byte>        gpu_data       = buffer_range.get_span();
     std::size_t write_offset{0};
-    for (const erhe::graphics::Draw_indexed_primitives_indirect_command& command : commands) {
-        erhe::graphics::Draw_indexed_primitives_indirect_command draw_command = command;
+    for (std::size_t command_index = 0, command_count = commands.size(); command_index < command_count; ++command_index) {
+        erhe::graphics::Draw_indexed_primitives_indirect_command draw_command = commands[command_index];
+        // The commands of one span are one multi-draw over the records the
+        // caller binds with it, in the same order: the record index is the
+        // position, which this writer owns (prepared commands carry none).
+        ERHE_VERIFY(draw_command.base_instance == 0);
+        draw_command.base_instance = get_first_instance(command_index);
         if (m_max_index_count_enable) {
             draw_command.index_count = std::min(draw_command.index_count, static_cast<uint32_t>(m_max_index_count));
         }
@@ -244,10 +257,16 @@ auto Draw_indirect_buffer::update(
     const Draw_list&                    draw_list,
     const std::size_t                   begin,
     const std::size_t                   end,
-    const std::span<const std::uint8_t> entry_passes
+    const std::span<const std::uint8_t> entry_passes,
+    const Draw_record_layout            record_layout
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(
+        (record_layout == Draw_record_layout::packed) ||
+        (m_record_indexing == erhe::graphics::Record_indexing::first_instance)
+    );
 
     ERHE_VERIFY(begin <= end);
     ERHE_VERIFY(end <= draw_list.entries.size());
@@ -259,7 +278,6 @@ auto Draw_indirect_buffer::update(
     const std::span<std::byte>        gpu_data       = buffer_range.get_span();
     std::size_t        write_offset       {0};
     constexpr uint32_t instance_count     {1};
-    constexpr uint32_t base_instance      {0};
     std::size_t        draw_indirect_count{0};
 
     for (std::size_t i = begin; i < end; ++i) {
@@ -271,12 +289,17 @@ auto Draw_indirect_buffer::update(
         if (m_max_index_count_enable) {
             index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
         }
+        // The record index travels only under Record_indexing::first_instance.
+        uint32_t first_instance = 0;
+        if (m_record_indexing == erhe::graphics::Record_indexing::first_instance) {
+            first_instance = static_cast<uint32_t>((record_layout == Draw_record_layout::chunk_entries) ? (i - begin) : draw_indirect_count);
+        }
         const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
             index_count,
             instance_count,
             entry.first_index,
             entry.base_vertex,
-            base_instance
+            first_instance
         };
         erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));
         write_offset += entry_size;

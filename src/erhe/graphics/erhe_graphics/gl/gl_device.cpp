@@ -442,6 +442,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     m_info.use_base_instance = (m_info.gl_version >= 420) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_base_instance);
     log_startup->info("Base Instance supported: {}", m_info.use_base_instance);
+    // gl_InstanceID does not include the base instance on GL; the record
+    // index needs gl_BaseInstance (GLSL 4.60) or gl_BaseInstanceARB.
+    const bool has_shader_base_instance =
+        (m_info.glsl_version >= 460) ||
+        gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters);
+    m_info.record_indexing = (m_info.use_base_instance && has_shader_base_instance)
+        ? Record_indexing::first_instance
+        : Record_indexing::draw_position;
+    log_startup->info("Record indexing (ERHE_PRIMITIVE_INDEX): {}", c_str(m_info.record_indexing));
 
     {
         for (GLuint i = 0; i < 3; ++i) {

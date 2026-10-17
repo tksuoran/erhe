@@ -438,6 +438,40 @@ the matching binding to pick the correct image view aspect (`color` /
 `depth` / `stencil`) -- a sampling view must commit to a single aspect per
 VUID-VkDescriptorImageInfo-imageView-01976.
 
+## Draw records: ERHE_DRAW_ID and ERHE_PRIMITIVE_INDEX
+
+A multi-draw's per-draw data lives in a record array the shader indexes
+(`erhe::scene_renderer`'s `primitive.primitives[]`, the ImGui renderer's
+`draw.draw_parameters[]`). The GLSL preamble (`Shader_stages_create_info::
+final_source()`) defines two names for the index:
+
+- `ERHE_DRAW_ID` is the command's position in its multi-draw: `gl_DrawID`
+  (`gl_DrawIDARB` with `GL_ARB_shader_draw_parameters`) where multi-draw
+  indirect is native; a per-draw push constant on Vulkan without
+  `multiDrawIndirect` + `shaderDrawParameters`, on MoltenVK and on Metal
+  (vertex and compute stages only); a `uniform int` on GL with emulated
+  multi-draw.
+- `ERHE_PRIMITIVE_INDEX` is the record index, chosen once at device init as
+  `Device_info::record_indexing`:
+  - `Record_indexing::first_instance`: the instance index that carries the
+    command's `first_instance` (instance count is 1): `gl_InstanceIndex` on
+    Vulkan, native and emulated multi-draw alike (the emulation still issues
+    one `vkCmdDrawIndexedIndirect` per command; MoltenVK lowers it to Metal's
+    `instance_id`, which includes the base instance);
+    `gl_BaseInstance + gl_InstanceID` on GL with GLSL 4.60, else
+    `gl_BaseInstanceARB + gl_InstanceID`. Vulkan takes it when
+    `drawIndirectFirstInstance` is enabled (`use_base_instance`), GL when it
+    has base instance (4.2 / `ARB_base_instance`) and the shader built-in
+    (GLSL 4.60 / `ARB_shader_draw_parameters`).
+  - `Record_indexing::draw_position`: `ERHE_DRAW_ID`, and every command's
+    `first_instance` stays 0. Metal and the null device, and Vulkan / GL
+    devices without the capabilities above.
+
+A command can then name any record of the bound range, so passes that draw
+different subsets of the same records can share one upload
+(`doc/erhe/draw_list_renderer.md` "Record upload"). The device logs its choice
+at startup (`Record indexing (ERHE_PRIMITIVE_INDEX): ...`).
+
 ## Dependencies
 - **erhe libraries (interface target, public):** `erhe::circular_ring_buffer`, `erhe::dataformat`, `erhe::frame_pacing`, `erhe::item`, `erhe::math`
 - **erhe libraries (backend target):** `erhe::window` (public; the surface and swapchain backends), `erhe::gl` (private, OpenGL backend only)
