@@ -50,7 +50,7 @@ an async result is compared against.
 |---|---|---|
 | `scan` | worker | one task |
 | `parse` | worker | one task |
-| `build` (`Buffer_mesh` construction) | worker | one task |
+| `build` (`Buffer_mesh` construction) | workers | one task fanning out one build task per unique render shape |
 | `residency` (textures + samplers) | main, in tick | GPU upload bytes/frame, items/frame, time slice |
 | `publish` | main, in tick | atomic, gated on the loader watermark |
 
@@ -58,9 +58,16 @@ The scan decides erhe-authored-scene vs plain glTF asset; it is a whole-file
 read plus a full JSON parse, which is why it does not run on the main thread.
 Import and prefab modes skip it - neither cares.
 
+The build phase (`build_imported_buffer_meshes`) builds the primitives in
+parallel: one executor task per unique render shape, deduplicated before
+dispatch so a shape shared by instancing meshes is built once.
+
 Three threading invariants hold (design record 2.3): only the main thread
 touches `erhe::graphics::Device`, creates GPU objects or records commands, and
-only from `Asset_manager::tick`; workers build detached data only, which is
+only from `Asset_manager::tick` - the one sanctioned exception being the
+mesh-memory allocations of the `build` phase and the deferred finalize, which
+a worker makes holding a GL worker share context (`Scoped_worker_context`,
+narrow-scoped around each build); workers build detached data only, which is
 why `parse_gltf` is structurally device-free (`Gltf_parse_arguments` holds no
 `Device&` and no `Image_transfer&`, only a `Gltf_device_options` the caller
 fills on the main thread through `query_gltf_device_options()`) and parses
