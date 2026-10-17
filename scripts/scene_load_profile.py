@@ -184,7 +184,7 @@ def main():
             print(f"  open_scene replied: {str(reply)[:200]}")
         summarize_log(read_log(), marker_offset)
         if args.render_image:
-            image_path = args.render_image if open_index == 1 else re.sub(r"(\.[^.]+)$", f"_{open_index}\1", args.render_image)
+            image_path = args.render_image if open_index == 1 else re.sub(r"(\.[^.]+)$", lambda m: "_" + str(open_index) + m.group(1), args.render_image)
             image_path = os.path.abspath(image_path)
             # Fixed camera over the Bistro content fit (center 24.4 -4.2 18.0, radius 129); the same
             # view for every build so the images byte-compare.
