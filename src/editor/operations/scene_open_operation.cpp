@@ -3,7 +3,10 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
+#include "editor_log.hpp"
+#include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -123,6 +126,68 @@ void Scene_open_operation::undo(App_context& context)
     }
     m_scene_root->unregister_from_editor_scenes(*context.app_scenes);
     m_scene_root->remove_browser_window();
+}
+
+void queue_open_scene_gltf(
+    App_context&                                            context,
+    const std::filesystem::path&                            path,
+    const Erhe_scene_open                                   erhe_scene_open,
+    std::function<void(const std::shared_ptr<Scene_root>&)> on_erhe_scene_opened
+)
+{
+    // Asynchronous path (doc/editor/async_asset_loading_design.md step 6):
+    // the task runs the scan AND the parse on workers and spreads residency
+    // over frames, so nothing here reads the file on the main thread. The
+    // erhe-vs-foreign decision comes back through the completion callback.
+    if (context.asset_manager != nullptr) {
+        std::shared_ptr<Asset_load_handle> handle = context.asset_manager->queue_load(
+            Asset_load_request{
+                .path            = path,
+                .erhe_scene_open = erhe_scene_open
+            },
+            [&context, path, on_erhe_scene_opened](const Asset_load_result& result) {
+                if (result.state != Asset_load_state::done) {
+                    log_operations->info(
+                        "Open scene: '{}' {} - nothing opened",
+                        erhe::file::to_string(path),
+                        (result.state == Asset_load_state::cancelled) ? "cancelled" : "failed"
+                    );
+                    return;
+                }
+                if (result.foreign_gltf) {
+                    log_operations->info(
+                        "Open scene: '{}' opens as foreign glTF{}",
+                        erhe::file::to_string(path),
+                        result.prepared_parse ? " (parse already done)" : ""
+                    );
+                    context.operation_stack->queue(
+                        std::make_shared<Scene_open_operation>(path, result.prepared_parse)
+                    );
+                    return;
+                }
+                if (result.scene_root && on_erhe_scene_opened) {
+                    on_erhe_scene_opened(result.scene_root);
+                }
+            }
+        );
+        if (handle) {
+            return;
+        }
+    }
+
+    // Blocking path (async_gltf_load off), scan included.
+    if (erhe_scene_open == Erhe_scene_open::full_scene) {
+        const Gltf_scan_summary summary = editor::scan_gltf(path);
+        if (is_erhe_scene(summary.extensions_used)) {
+            std::shared_ptr<Scene_root> scene_root = editor::open_scene_gltf(context, path);
+            if (scene_root && on_erhe_scene_opened) {
+                on_erhe_scene_opened(scene_root);
+            }
+            return;
+        }
+    }
+    log_operations->info("Open scene: '{}' opens as foreign glTF", erhe::file::to_string(path));
+    context.operation_stack->queue(std::make_shared<Scene_open_operation>(path));
 }
 
 }

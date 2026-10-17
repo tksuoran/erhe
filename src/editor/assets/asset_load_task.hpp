@@ -73,6 +73,12 @@ class Scene_root;
 class Asset_load_result
 {
 public:
+    // How the load settled: done, failed or cancelled. foreign_gltf and
+    // prepared_parse are only meaningful for a done load - a foreign load
+    // that was cancelled or failed after the scan still has foreign_gltf
+    // set, and the caller must not open anything then.
+    Asset_load_state state{Asset_load_state::failed};
+
     // The opened scene. Null when the load failed, was cancelled, or the
     // file turned out not to be an erhe-authored scene.
     std::shared_ptr<Scene_root> scene_root;
@@ -83,12 +89,25 @@ public:
     // never happens on the main thread.
     bool foreign_gltf{false};
 
-    // Set with foreign_gltf when the task went on to parse the file
-    // asynchronously as well: hand it to Scene_open_operation so the
-    // operation does no file I/O. Null when the task handed back at the scan
-    // (an adoptable container record exists, so the operation should take the
-    // record's parse instead).
+    // Set with foreign_gltf on a done load when the task went on to parse the
+    // file asynchronously as well: hand it to Scene_open_operation so the
+    // operation does no file I/O. Null on a done load when the task handed
+    // back at the scan (an adoptable container record exists, so the
+    // operation should take the record's parse instead); always null on a
+    // cancelled or failed load.
     std::shared_ptr<Prepared_gltf_parse> prepared_parse;
+};
+
+// How an open of a NEW scene treats a file that turns out to be an
+// erhe-authored scene (ERHE_scene in extensionsUsed).
+enum class Erhe_scene_open : unsigned int {
+    // open_scene_gltf: a full Scene_root with its saved editor state, not
+    // undoable (File > Load Scene, MCP load_scene).
+    full_scene      = 0,
+    // Handed back like any foreign glTF (foreign_gltf + prepared_parse), so
+    // the caller queues the undoable Scene_open_operation (asset browser
+    // Load, MCP open_scene).
+    as_foreign_gltf = 1
 };
 
 // What to load, and what to do with it.
@@ -96,6 +115,9 @@ class Asset_load_request
 {
 public:
     std::filesystem::path path{};
+
+    // New-scene opens only (no import_target, not prefab_template).
+    Erhe_scene_open erhe_scene_open{Erhe_scene_open::full_scene};
 
     // Empty: open `path` as a NEW scene (erhe-authored scene or foreign glTF,
     // decided by the scan). Set: import `path` INTO this existing scene, and

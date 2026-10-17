@@ -1,12 +1,15 @@
 #pragma once
 
+#include "assets/asset_load_task.hpp"
 #include "operations/operation.hpp"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 
 namespace editor {
 
+class App_context;
 class Content_library;
 class Prepared_gltf_parse;
 class Scene_root;
@@ -42,5 +45,21 @@ private:
     std::shared_ptr<Scene_root>      m_scene_root;
     std::shared_ptr<Content_library> m_content_library;
 };
+
+// The one glTF new-scene open path; which entry point passes which
+// Erhe_scene_open is listed in doc/editor/async_asset_loading.md "Entry
+// points". Queues the load with
+// Asset_manager::queue_load - scan and parse on workers - and, when it
+// finishes, queues Scene_open_operation with the prepared parse for a foreign
+// glTF, or hands an erhe-authored scene opened in full (Erhe_scene_open::
+// full_scene) to on_erhe_scene_opened; a cancelled or failed load opens
+// nothing. With asynchronous loading off
+// (queue_load returns null) the same decision runs on the blocking path.
+void queue_open_scene_gltf(
+    App_context&                                            context,
+    const std::filesystem::path&                            path,
+    Erhe_scene_open                                         erhe_scene_open,
+    std::function<void(const std::shared_ptr<Scene_root>&)> on_erhe_scene_opened = {}
+);
 
 }

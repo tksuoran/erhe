@@ -348,12 +348,13 @@ auto Mcp_server::action_open_scene(const json& args) -> std::string
             {"format",     "usd"}
         }).dump();
     }
-    // Same path as the Asset Browser's "Open" context menu entry: queue a
-    // Scene_open_operation (new scene root + content library + browser
-    // window + inline glTF import, all one undo entry). It executes on a
-    // following Operation_stack::update(); discover the scene afterwards
-    // via list_scenes.
-    m_context.operation_stack->queue(std::make_shared<Scene_open_operation>(path));
+    // Same path as the Asset Browser's "Load" context menu entry: the file is
+    // scanned and parsed asynchronously, then a Scene_open_operation (new
+    // scene root + content library + browser window + import, all one undo
+    // entry) is queued with the prepared parse - an erhe-authored scene
+    // included. The scene appears some frames later; discover it via
+    // list_scenes.
+    queue_open_scene_gltf(m_context, path, Erhe_scene_open::as_foreign_gltf);
     return make_json_content({
         {"queued",     true},
         {"path",       path_str},

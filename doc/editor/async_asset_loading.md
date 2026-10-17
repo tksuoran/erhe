@@ -23,10 +23,14 @@ interactive and keeps presenting while a scene streams in.
 | Entry point | Path |
 |---|---|
 | `--scene`, `commands.json`, File > Load Scene, MCP `load_scene` | erhe-authored scene: opened by the task; foreign glTF: parse handed to `Scene_open_operation` |
+| Asset browser Load, MCP `open_scene` | parse handed to `Scene_open_operation`, an erhe-authored scene included (`Erhe_scene_open::as_foreign_gltf`) |
 | Asset browser Import, MCP `import_gltf` | import into an existing scene |
 | Viewport drop, hierarchy drop, asset browser Instantiate, MCP `instantiate_prefab` | prefab template load |
 | Asset browser tooltip / context menu | `scan_gltf` on a worker |
 | Asset browser directory walk (startup and the Scan button) | the walk of `res/editor/assets` and `res/editor/scenes` runs on a worker and publishes batches the main thread attaches (doc/editor/asset_browser_scan.md) |
+
+Every new-scene glTF open goes through `queue_open_scene_gltf`
+(`src/editor/operations/scene_open_operation.hpp`).
 
 Deliberately synchronous: `Asset_manager::get_or_load_container`,
 `Prefab_library`'s nested external-asset resolution, MCP `reload_prefab` and
