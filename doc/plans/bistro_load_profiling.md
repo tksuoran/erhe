@@ -219,29 +219,51 @@ Review found and fixed: a load cancelled or failed after the scan queued
 an inline re-parse; `Asset_load_result::state` now gates the open (the
 import completion gets the same guard in a follow-up commit).
 
-### Step 4: the rest of the finalize frame
+### Re-measurement after step 3 (2026-10-18)
 
-After steps 2 and 3 the operation frame is the per-primitive scene-side
-work over 3896 primitives (about 1.2 s): `make_renderable_mesh`'s fast
-path, `make_raytrace_proxy`, `update_rt_primitives`, plus the node attach
-and draw-list registration. Move what needs no scene into the worker
-`build` phase next to `build_imported_buffer_meshes` (the proxy raytrace
-and the renderable fast path are candidates) and re-measure. Gate: the
-`finalize_imported_meshes` log line under 500 ms; listed under 5 s; idle
-no later than before; render byte-identical. Then re-measure both paths,
-record the numbers in `memory-bank/local/bistro_load_2026_10.md` and
-decide steps 5 and 6.
+Release, File > Load Scene, from the log: scan 0.02 s, `parse_gltf` 1.68 s
+on workers (image decode 0.98 s over 24 workers, mesh parse 0.53 s, the
+two in parallel), `build_imported_buffer_meshes` 1.03 s on ONE worker
+(3896 `make_renderable_mesh` calls in a serial loop), residency 0.45 s on
+the main thread, the open operation 0.15 s (`finalize_imported_meshes`
+144 ms), scene listed 3.3 s after the request (the script reports 4.1 s
+with its polling granularity), idle after 10.3 s. The main thread no
+longer stalls, so the original step 4 (finalize under 500 ms) is met by
+steps 2 and 3. The Bistro KTX2 files are Basis Universal (ETC1S + BasisLZ,
+vkFormat 0), so the "decode" is a transcode: 393 images, 21
+worker-seconds, 47 ms mean per image.
 
-### Step 5 (decide after step 4): residency budget
+### Step 4: parallel buffer-mesh build in the worker build phase
 
-1.4 s at 4 MiB per frame; a bandwidth- or time-based budget when no
-interactive frame deadline is at stake.
+`build_imported_buffer_meshes` (`src/editor/parsers/gltf.cpp`) builds the
+3896 primitives one after another on the one worker that runs the task's
+`build` phase. Build them as parallel executor tasks (taskflow over the
+unique primitives, the way `parse_gltf` spreads image decode and the
+deferred finalize spreads its full builds), keeping the rules the
+concurrent deferred builds already obey: one build per shape (shared
+primitives are built once), `buffer_mesh_allocation_mutex()` around the
+multi-stream allocation, and on GL a `Scoped_worker_context` around the
+GPU allocation only. The main-thread `finalize_imported_meshes` fast path
+is unchanged. Gate: `build_imported_buffer_meshes: 3896 primitives, N ms`
+under 250 ms (was 1029 ms); scene listed under 3.5 s by the script (was
+4.1 s); idle no later than before; render byte-identical; the per-stream
+"vertex stream allocations out of lockstep" error never appears in the
+log.
+
+### Step 5 (decide after step 4): KTX2 transcode
+
+The 1.0 s image half of the parse is Basis Universal transcoding (ETC1S
+to the GPU's block format) of 393 images on 24 workers. Candidates: a
+transcode cache under `cache/` keyed by file hash and target format, so a
+second load reads BC blocks straight from disk; or transcoding lazily
+after publish (textures resident later, the scene listed earlier).
 
 ### Step 6 (decide after step 4): deferred phase
 
-6 to 7 s of saturated workers before idle: geometry-path optimizer (28
-worker-seconds, could replay through `mesh_optimize_cache`), the full
-buffer build and `Geometry::process`. Measure with the step 1 capture.
+6 s of saturated workers before idle: geometry-path optimizer (28
+worker-seconds, could replay through `mesh_optimize_cache`, off by default
+in `config/editor/mesh_memory.json`), the full buffer build and
+`Geometry::process`. Measure with a step 1 capture.
 
 ## Plan
 
