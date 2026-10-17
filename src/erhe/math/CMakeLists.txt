@@ -6,6 +6,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_math/aabb.cpp
     erhe_math/aabb.hpp
+    erhe_math/box_hull.cpp
+    erhe_math/box_hull.hpp
     erhe_math/euler_angles.hpp
     erhe_math/input_axis.cpp
     erhe_math/input_axis.hpp

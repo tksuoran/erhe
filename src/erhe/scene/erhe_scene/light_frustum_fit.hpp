@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_math/aabb.hpp"
+#include "erhe_math/box_hull.hpp"
 #include "erhe_math/math_util.hpp"
 
 #include <glm/glm.hpp>
@@ -140,6 +141,17 @@ public:
     std::vector<glm::vec3>  receiver_clipped_hull_points;
 };
 
+// A plane with the absolute value of its normal precomputed, for the
+// center + extents box tests of the per-caster cull (the test needs
+// dot(abs(n), extent) for every plane of every caster).
+class Abs_plane
+{
+public:
+    glm::vec3 normal;
+    float     w;
+    glm::vec3 abs_normal;
+};
+
 // Persistent scratch buffers for the per-light tight fit
 // (Light::tight_directional_light_projection_transforms in
 // light_frustum_fit.cpp). Each buffer is cleared (capacity kept) at its point
@@ -154,11 +166,16 @@ public:
     std::vector<glm::vec4>        filter_planes;           // F_shadow per-caster cull planes (volume + silhouette)
     std::vector<glm::vec4>        receiver_filter_planes;  // receiver cull volume planes
     std::vector<glm::vec3>        receiver_far_plane_hull; // receiver cull silhouette polygon; filled only when collect_debug is on
-    std::vector<erhe::math::Aabb> surviving_caster_aabbs;  // casters that passed the F_shadow (and receiver volume) cull
+    std::vector<Abs_plane>        filter_abs_planes;       // filter_planes with absolute normals, for the per-caster center + extents tests
+    std::vector<Abs_plane>        receiver_abs_planes;     // receiver_filter_planes with absolute normals
+    std::vector<Abs_plane>        volume_abs_planes;       // the open F_shadow planes with absolute normals (interior box test)
     erhe::math::Convex_hull       caster_box_hull;         // one caster box as a fixed-topology hull (8 corners, constant 12-triangle table), reused per box
     std::vector<glm::vec3>        box_clip_points;         // per-box Sutherland-Hodgman clip output
     std::vector<glm::vec3>        caster_corner_points;    // surviving caster AABB corners; filled only when collect_debug is on (debug caster hull input)
-    std::vector<glm::vec3>        caster_points;           // fit point set: union of the per-box clipped caster points
+    std::vector<erhe::math::Aabb> interior_caster_aabbs;   // surviving casters entirely inside the open shadow volume: their 8 corners are fit points, never expanded into a point list
+    std::vector<glm::vec3>        boundary_points;         // fit points of the other surviving casters: per-box clipped points plus the view frustum corners inside a box
+    erhe::math::Box_hull_scratch  box_hull;                // light plane hull of the interior boxes and the boundary points
+    std::vector<glm::vec3>        caster_points;           // the complete fit point set (interior corners and boundary points); filled only when collect_debug is on
     std::vector<glm::vec2>        projected_points;        // fit points projected onto the light plane
     std::vector<glm::vec2>        light_plane_hull;        // 2D hull of projected_points (rotating calipers input)
 };

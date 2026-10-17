@@ -1,8 +1,11 @@
 set(_target "erhe_math_tests")
 add_executable(${_target}
     main.cpp
+    test_box_hull.cpp
     test_euler_angles.cpp
     test_projection.cpp
+    test_shadow_fit_bench.cpp
+    test_shadow_fit_replay.cpp
 )
 
 target_link_libraries(${_target}

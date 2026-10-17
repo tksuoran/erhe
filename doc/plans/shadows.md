@@ -57,6 +57,14 @@ the receiver hulls still show in a profile. The library is vendored in
 
 ## Cheaper receiver pipelines
 
+- **Receiver hull reuse across frames** (measured on the heavy bench scene):
+  the hull of the in-frustum receiver corners changed on about 90% of the
+  frames of a camera orbit or pan, so reuse pays only while objects move (one
+  moving object left the hull unchanged on every frame). A sufficient test
+  that caught all those frames: no corner that left the set was a vertex of
+  the previous hull and every corner that entered lies inside it. It needs
+  per-receiver ids in the bounds and would save up to about 100 us per frame,
+  shared by all lights.
 - **Interior-point prune before the receiver hull** (Akl-Toussaint at box
   granularity): gather extreme corners along about 14 fixed directions (axes and
   diagonals), hull those points, then drop every receiver AABB fully inside that
@@ -79,14 +87,13 @@ the receiver hulls still show in a profile. The library is vendored in
 
 ## Point-light cube shadow budget
 
-The cube path re-rasterizes the whole shadow-caster set into all six faces of
-every shadow-casting point light with no culling, which is the dominant point
-shadow cost.
+Every shadow-casting point light renders its six faces. On the draw list path
+each face culls the entries against its own 90-degree frustum (the six planes
+of the face `clip_from_world`, `Draw_list_scene::draw_shadow`); the bucket
+path (`Shadow_renderer::draw_shadow_casters`, callers without a
+`Draw_list_scene`) draws every caster into every face. What is left of the
+budget is below.
 
-- **Per-face caster culling.** Each cube face is a 90-degree frustum; cull
-  caster AABBs against it and against the light range sphere, so a face draws
-  only the casters that can fall in it. This reuses `aabb_in_frustum` and the
-  center+extents test.
 - **Skip empty faces and lights.** A face (or a whole cube) with no surviving
   casters can clear only; a light whose range sphere contains no casters needs
   no cube at all.
