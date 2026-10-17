@@ -7,8 +7,10 @@
 ✓phase-2{827577a92;lane-loops-vectorized-clang-cl+MSVC;Cull_sphere;94->41us;review-fixes:radius-VERIFY+get_unbounded_flag+bitwise-sphere-compare+Cull_view_tests-rename}
 ✓phase-3{a0687c589;octant-faces;empty-faces-draw-nothing(pass-still-clears);cull_lanes-TU+4-tests;review-fixes:fused-count+one-stats-path+phase-2-paragraph-rewrite+survivor-limitation-open-item}
 ✓phase-4{70d85a38a;ERHE_PRIMITIVE_INDEX/record_indexing;shared-shadow-records-per-Shadow_record_scope;review-fixes:RAII-scope+base_instance-VERIFY+settings-pass-through+get_pass_color+Metal-branch+cleanups;single-pass-scenes-not-slower}
-⚡phase-5{GPU-classification:SoA-upload-at-publish+view-set-buffer+compute-mask}
-?phases-6..7
+✓phase-5{ffa58f817;Gpu_cull_classifier+cull_classify.comp;per-slot-bounds-buffer;per-batch-mask-regions;MCP-check-0-mismatches;review-fixes:per-list-writes+no-dispatch-barrier+check-waits-for-gpu-frame+generations+cull_classification.hpp+enum-static_asserts}
+⚡phase-6a{pre-draw-view-hook;all-views-classified-before-first-draw;record_pending-removed}
+?phase-6b{GPU-command-generation-shadow-passes;drawIndirectCount}
+?phase-7
 
 [TASK::render-thread]{started-2026-10-09;branch=render-thread;via-harness;doc/editor/render_thread.md}
 ✓step-1-measure{phase-timing-M1/M2/R-log-every-60-frames;fable-medium-review->swapchain-waits-timed-as-R;headless-baseline-Debug-Intel:M1~14us-M2~5.9ms(wait_frame~5.4ms)-R~1ms}
