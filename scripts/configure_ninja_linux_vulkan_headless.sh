@@ -15,6 +15,7 @@ cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -Wno-dev \
+    -DERHE_BUILD_TESTS=ON \
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype \
     -DERHE_GLTF_LIBRARY=fastgltf \
     -DERHE_GUI_LIBRARY=imgui \

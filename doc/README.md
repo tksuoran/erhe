@@ -428,6 +428,7 @@ flowchart TD
 - [plans/command_script.md](plans/command_script.md) (proposed): Editor command scripts: outstanding work
 - [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
 - [plans/crash_signal.md](plans/crash_signal.md) (in progress): Positive crash signal for harness-run apps
+- [plans/culling.md](plans/culling.md) (proposed): Culling: one classification for every pass, then on the GPU
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
 - [plans/debug_renderer_anti_aliasing.md](plans/debug_renderer_anti_aliasing.md) (in progress): Debug renderer: analytic anti-aliasing for wide lines
 - [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
