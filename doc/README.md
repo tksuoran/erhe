@@ -459,6 +459,7 @@ flowchart TD
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
+- [plans/quest_performance.md](plans/quest_performance.md) (proposed): Quest 3 performance: baseline, ranking, items
 - [plans/parallel_editor_init.md](plans/parallel_editor_init.md) (proposed): Parallel editor initialization: a Taskflow graph over the init steps
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
