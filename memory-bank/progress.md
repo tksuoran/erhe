@@ -10,7 +10,7 @@
 ✓step-3{0b7fe5f29;queue_open_scene_gltf-one-entry;Erhe_scene_open;open_scene-listed-12->3.9-5.1s;image-identical;fable-review-found:cancelled/failed-load-re-parsed-inline->Asset_load_result::state-guard;import-completion-follow-up-pending}
 ✓import-cancel-guard{380f08da2}
 ✓remeasure-after-step-3{listed-3.3s:parse-1.7s(images=basis-transcode-1.0s)+build-1.0s-serial-one-worker+residency-0.45s+op-0.15s;finalize-144ms=old-step-4-moot}
-⚡step-4{parallel-build_imported_buffer_meshes;gate:<250ms,listed<3.5s,image-identical}
+✓step-4{14f05e4b6+dc6ea1bd5+405183e2a+2516f9f50;parallel-build-per-unique-shape;build-952->158-245ms;listed-2.7-3.7s;idle-9.6-10.6s;image-identical;fable-review:future.get-exception-fix+staging-move}
 ?steps-5-6{KTX2-transcode-cache|lazy;deferred-phase-optimizer-cache;decide-after-step-4}
 
 [TASK::culling]{started-2026-10-17;branch=render-thread;via-harness;doc/plans/culling.md}
