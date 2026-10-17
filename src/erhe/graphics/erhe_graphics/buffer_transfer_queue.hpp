@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 namespace erhe::graphics {
@@ -27,7 +28,7 @@ public:
         Transfer_entry(const Buffer* target, const std::size_t target_offset, std::vector<uint8_t>&& data, const std::uint64_t ticket)
             : target       {target}
             , target_offset{target_offset}
-            , data         {data}
+            , data         {std::move(data)}
             , ticket       {ticket}
         {
         }
