@@ -4,8 +4,9 @@
 
 [TASK::culling]{started-2026-10-17;branch=render-thread;via-harness;doc/plans/culling.md}
 ✓phase-1{6846081f4;SoA-bounds+view-set+masks;scalar;identical-images+counts;review-fixes:purpose-skip+negative-extent-sentinel+null-scene-guard}
-⚡phase-2{vectorized-classification+point-range-sphere;Release-ninja-tree-Tracy-measurement}
-?phases-3..7
+✓phase-2{827577a92;lane-loops-vectorized-clang-cl+MSVC;Cull_sphere;94->41us;review-fixes:radius-VERIFY+get_unbounded_flag+bitwise-sphere-compare+Cull_view_tests-rename}
+⚡phase-3{octant-face-bits+empty-face/cube-skip-with-clear}
+?phases-4..7
 
 [TASK::render-thread]{started-2026-10-09;branch=render-thread;via-harness;doc/editor/render_thread.md}
 ✓step-1-measure{phase-timing-M1/M2/R-log-every-60-frames;fable-medium-review->swapchain-waits-timed-as-R;headless-baseline-Debug-Intel:M1~14us-M2~5.9ms(wait_frame~5.4ms)-R~1ms}
