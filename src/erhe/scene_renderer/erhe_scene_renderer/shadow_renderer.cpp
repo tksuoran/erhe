@@ -28,7 +28,9 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <iterator>
+#include <optional>
 
 namespace erhe::scene_renderer {
 
@@ -61,7 +63,8 @@ constexpr std::array<glm::vec3, 6> c_cube_up{
 };
 
 // The pose of one point light cube face: the camera the face's camera block
-// is written from and its culling planes are built from.
+// is written from. The faces look along the world axes, so face f's culling
+// view is the octant Draw_list_scene::add_point_light_cull_views() tests.
 [[nodiscard]] auto make_cube_face_transform(const glm::vec3& light_pos, const int face) -> erhe::scene::Trs_transform
 {
     const glm::mat4 world_from_face = erhe::math::create_look_at(
@@ -137,12 +140,27 @@ void accumulate_pass_statistics(Shadow_draw_statistics* statistics, std::vector<
     statistics->total.culled_count    += pass.culled_count;
 }
 
+// The draw-list statistics of one point cube face, into its own slot (the
+// cube's slot and the total are accumulate_pass_statistics()'s).
+void record_face_statistics(Shadow_draw_statistics* statistics, const std::size_t face_slot, const Draw_statistics& face)
+{
+    if (statistics == nullptr) {
+        return;
+    }
+    if (statistics->point_cube_faces.size() <= face_slot) {
+        statistics->point_cube_faces.resize(face_slot + 1);
+    }
+    statistics->point_cube_faces[face_slot] = face;
+}
+
 }
 
 void Shadow_draw_statistics::clear()
 {
     shadow_map_2d.clear();
     point_cubes.clear();
+    point_cube_faces.clear();
+    point_cube_skipped_faces.clear();
     total = Draw_statistics{};
 }
 
@@ -680,8 +698,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // rasterizes with, in the convention Draw_list_renderer builds the view
     // planes. A depth-clamped directional pass keeps casters beyond its
     // depth planes (pancaked), so it culls on the four side planes only;
-    // every other pass clips at all six. A point light culls per cube face,
-    // each face with the light's range sphere as its first test.
+    // every other pass clips at all six. A point light culls per cube face:
+    // the light's range sphere, then the face's octant around the light
+    // (Draw_list_scene::add_point_light_cull_views(), the world-axis-aligned
+    // faces of make_cube_face_transform() in the same order).
     if (parameters.draw_list_scene != nullptr) {
         m_cull_views_2d.assign(parameters.render_passes.size(), Cull_view::none);
         m_cull_views_cube.assign(cube_count * 6, Cull_view::none);
@@ -705,24 +725,20 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 if (lpt == nullptr) {
                     continue;
                 }
-                const glm::vec3 light_pos      = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-                const glm::mat4 clip_from_face = lpt->projection.clip_from_node_transform(parameters.point_shadow_viewport, parameters.reverse_depth, parameters.depth_range, cube_conventions).get_matrix();
+                const glm::vec3 light_pos = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
                 // The range sphere is the first test of all six faces: a
                 // caster wholly beyond the light's range shadows only
                 // receivers beyond it, where the range attenuation is zero.
+                // The faces' 90-degree frusta (Light_snapshot::
+                // point_light_projection_transforms()) are the octants
+                // around the light; their near plane is not tested (a caster
+                // closer than it is clipped by the rasterizer).
                 const Cull_sphere range_sphere{
                     .center = light_pos,
                     .radius = parameters.light_set.get_lights()[light_slot].get_range()
                 };
-                for (int face = 0; face < 6; ++face) {
-                    // The face frustum: the same projection and face pose
-                    // the face's camera block is written from.
-                    const erhe::scene::Trs_transform face_transform  = make_cube_face_transform(light_pos, face);
-                    const glm::mat4                  clip_from_world = clip_from_face * face_transform.get_inverse_matrix();
-                    const std::array<glm::vec4, 6>   face_planes     = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
-                    m_cull_views_cube[(lpt->point_shadow_index * 6) + static_cast<std::size_t>(face)] =
-                        parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, std::span<const glm::vec4>{face_planes}, range_sphere);
-                }
+                const std::array<Cull_view, 6> face_views = parameters.draw_list_scene->add_point_light_cull_views(frame_index, Draw_purpose::shadow, range_sphere);
+                std::copy(face_views.begin(), face_views.end(), m_cull_views_cube.begin() + static_cast<std::ptrdiff_t>(lpt->point_shadow_index * 6));
             }
         }
     }
@@ -872,8 +888,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         const std::vector<std::unique_ptr<erhe::graphics::Render_pass>>& cube_passes = *parameters.point_cube_render_passes;
 
         // The cube faces (c_cube_look / c_cube_up, make_cube_face_transform)
-        // and the caster conventions (make_cube_conventions) are shared with
-        // the culling views above.
+        // are world-axis aligned in the face order the culling views above
+        // classify (Draw_list_scene::add_point_light_cull_views()).
         const uint32_t cube_force_enable = erhe::scene_renderer::make_shader_bool_mask(
             erhe::scene_renderer::Shader_bool::VARIANT_SHADOW_CUBE
         );
@@ -885,6 +901,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             erhe::utility::Debug_label{"Shadow_renderer point cubes"}
         };
 
+        // The entries a skipped face would have culled, counted once per
+        // render() at the first skipped face (statistics only).
+        std::optional<std::size_t> skipped_face_culled_count{};
+
         erhe::graphics::Render_pass* previous_cube_render_pass = nullptr;
         for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
             const erhe::scene::Light_projection_transforms* lpt = find_cube(light_slot);
@@ -894,6 +914,30 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             const std::size_t point_shadow_index = lpt->point_shadow_index;
             const std::size_t light_index = lpt->index;
             const glm::vec3   light_pos   = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+
+            // Empty faces (doc/plans/culling.md phase 3): a face whose view
+            // has no surviving entry in any shadow list draws nothing. Its
+            // render pass still begins and ends, because the pass's clear
+            // (load action, 1.0e30 = no occluder) is what leaves the face
+            // holding "lit" for the forward pass, which samples every face;
+            // everything else of the face (buffer and pipeline binds,
+            // camera and control blocks, record and command writes) is
+            // skipped.
+            uint8_t skipped_faces = 0;
+            if (parameters.draw_list_scene != nullptr) {
+                for (std::size_t face = 0; face < 6; ++face) {
+                    if (!parameters.draw_list_scene->has_cull_view_survivors(m_graphics_device.get_frame_index(), m_cull_views_cube[(point_shadow_index * 6) + face])) {
+                        skipped_faces |= static_cast<uint8_t>(1u << face);
+                    }
+                }
+                if (parameters.draw_statistics != nullptr) {
+                    std::vector<uint8_t>& cube_skipped_faces = parameters.draw_statistics->point_cube_skipped_faces;
+                    if (cube_skipped_faces.size() <= point_shadow_index) {
+                        cube_skipped_faces.resize(point_shadow_index + 1, uint8_t{0});
+                    }
+                    cube_skipped_faces[point_shadow_index] = skipped_faces;
+                }
+            }
 
             for (int face = 0; face < 6; ++face) {
                 const std::size_t pass_index = (point_shadow_index * 6) + static_cast<std::size_t>(face);
@@ -907,89 +951,112 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 };
                 previous_cube_render_pass = cube_passes[pass_index].get();
 
-                encoder.set_bind_group_layout(m_bind_group_layout);
-                encoder.set_viewport_rect(
-                    parameters.point_shadow_viewport.x,
-                    parameters.point_shadow_viewport.y,
-                    parameters.point_shadow_viewport.width,
-                    parameters.point_shadow_viewport.height
-                );
-                // Full-face scissor: unlike the 2D map there is no empty border,
-                // so adjacent cube faces meet without a clear-value seam.
-                encoder.set_scissor_rect(
-                    parameters.point_shadow_viewport.x,
-                    parameters.point_shadow_viewport.y,
-                    parameters.point_shadow_viewport.width,
-                    parameters.point_shadow_viewport.height
-                );
-                encoder.set_depth_bias(depth_bias_constant, depth_bias_slope, 0.0f);
-                m_joint_buffer.bind(encoder, joint_range);
-                m_light_buffer.bind_light_buffer(encoder, light_range);
-
-                const erhe::scene::Trs_transform face_transform  = make_cube_face_transform(light_pos, face);
-                const glm::mat4                  world_from_face = face_transform.get_matrix();
-                Ring_buffer_range camera_range = m_camera_buffer.update(
-                    lpt->projection,
-                    face_transform,
-                    parameters.point_shadow_viewport,
-                    1.0f,                      // exposure
-                    Grid_parameters{},
-                    Sky_parameters{},
-                    0,                         // frame number
-                    parameters.reverse_depth,
-                    parameters.depth_range,
-                    cube_conventions           // clip_space_y_flip per framebuffer_origin (see above)
-                );
-                m_camera_buffer.bind(encoder, camera_range);
-
-                // The caster fragment shader reads the face resolution from the
-                // light control block to store the radial distance on each
-                // texel's centre ray. The face camera's view origin is the light
-                // position (world_from_face[3] = light_pos), so the caster's
-                // view-relative position is its direction from the light.
-                ERHE_VERIFY(get_view_origin(world_from_face) == light_pos);
-                Ring_buffer_range control_range = m_light_buffer.update_control(
-                    light_index,
-                    static_cast<float>(parameters.point_shadow_viewport.width)
-                );
-                m_light_buffer.bind_control_buffer(encoder, control_range);
-
-                material_set.bind(encoder);
-
-                if (parameters.draw_list_scene != nullptr) {
-                    const Draw_statistics pass_statistics = parameters.draw_list_scene->draw_shadow(
-                        Draw_shadow_parameters{
-                            .render_encoder       = encoder,
-                            .render_pass          = cube_passes[pass_index].get(),
-                            .base_render_pipeline = cube_base_pipeline,
-                            .color_blend          = &erhe::graphics::Color_blend_state::color_blend_disabled,
-                            .primitive_buffer     = m_primitive_buffer,
-                            .draw_indirect_buffer = m_draw_indirect_buffer,
-                            .filter               = shadow_filter,
-                            .layers               = parameters.draw_list_layers,
-                            .sub_variant          = Shadow_sub_variant::cube,
-                            .cull_view            = m_cull_views_cube[pass_index],
-                            .debug_label          = "shadow cube draw lists",
-                            .frame_index          = m_graphics_device.get_frame_index()
-                        }
+                // The face's binds, blocks and draws; an empty face skips
+                // them all (its render pass above is its clear).
+                const auto draw_face = [&]() -> Draw_statistics {
+                    encoder.set_bind_group_layout(m_bind_group_layout);
+                    encoder.set_viewport_rect(
+                        parameters.point_shadow_viewport.x,
+                        parameters.point_shadow_viewport.y,
+                        parameters.point_shadow_viewport.width,
+                        parameters.point_shadow_viewport.height
                     );
-                    if (parameters.draw_statistics != nullptr) {
-                        accumulate_pass_statistics(parameters.draw_statistics, parameters.draw_statistics->point_cubes, point_shadow_index, pass_statistics);
+                    // Full-face scissor: unlike the 2D map there is no empty border,
+                    // so adjacent cube faces meet without a clear-value seam.
+                    encoder.set_scissor_rect(
+                        parameters.point_shadow_viewport.x,
+                        parameters.point_shadow_viewport.y,
+                        parameters.point_shadow_viewport.width,
+                        parameters.point_shadow_viewport.height
+                    );
+                    encoder.set_depth_bias(depth_bias_constant, depth_bias_slope, 0.0f);
+                    m_joint_buffer.bind(encoder, joint_range);
+                    m_light_buffer.bind_light_buffer(encoder, light_range);
+
+                    const erhe::scene::Trs_transform face_transform  = make_cube_face_transform(light_pos, face);
+                    const glm::mat4                  world_from_face = face_transform.get_matrix();
+                    Ring_buffer_range camera_range = m_camera_buffer.update(
+                        lpt->projection,
+                        face_transform,
+                        parameters.point_shadow_viewport,
+                        1.0f,                      // exposure
+                        Grid_parameters{},
+                        Sky_parameters{},
+                        0,                         // frame number
+                        parameters.reverse_depth,
+                        parameters.depth_range,
+                        cube_conventions           // clip_space_y_flip per framebuffer_origin (see above)
+                    );
+                    m_camera_buffer.bind(encoder, camera_range);
+
+                    // The caster fragment shader reads the face resolution from the
+                    // light control block to store the radial distance on each
+                    // texel's centre ray. The face camera's view origin is the light
+                    // position (world_from_face[3] = light_pos), so the caster's
+                    // view-relative position is its direction from the light.
+                    ERHE_VERIFY(get_view_origin(world_from_face) == light_pos);
+                    Ring_buffer_range control_range = m_light_buffer.update_control(
+                        light_index,
+                        static_cast<float>(parameters.point_shadow_viewport.width)
+                    );
+                    m_light_buffer.bind_control_buffer(encoder, control_range);
+
+                    material_set.bind(encoder);
+
+                    Draw_statistics face_statistics{};
+                    if (parameters.draw_list_scene != nullptr) {
+                        face_statistics = parameters.draw_list_scene->draw_shadow(
+                            Draw_shadow_parameters{
+                                .render_encoder       = encoder,
+                                .render_pass          = cube_passes[pass_index].get(),
+                                .base_render_pipeline = cube_base_pipeline,
+                                .color_blend          = &erhe::graphics::Color_blend_state::color_blend_disabled,
+                                .primitive_buffer     = m_primitive_buffer,
+                                .draw_indirect_buffer = m_draw_indirect_buffer,
+                                .filter               = shadow_filter,
+                                .layers               = parameters.draw_list_layers,
+                                .sub_variant          = Shadow_sub_variant::cube,
+                                .cull_view            = m_cull_views_cube[pass_index],
+                                .debug_label          = "shadow cube draw lists",
+                                .frame_index          = m_graphics_device.get_frame_index()
+                            }
+                        );
+                    } else {
+                        draw_shadow_casters(
+                            parameters.command_buffer,
+                            encoder,
+                            cube_base_pipeline,
+                            *cube_passes[pass_index].get(),
+                            &erhe::graphics::Color_blend_state::color_blend_disabled,
+                            *casters,
+                            cube_force_enable
+                        );
                     }
-                } else {
-                    draw_shadow_casters(
-                        parameters.command_buffer,
-                        encoder,
-                        cube_base_pipeline,
-                        *cube_passes[pass_index].get(),
-                        &erhe::graphics::Color_blend_state::color_blend_disabled,
-                        *casters,
-                        cube_force_enable
-                    );
-                }
 
-                control_range.release();
-                camera_range.release();
+                    control_range.release();
+                    camera_range.release();
+                    return face_statistics;
+                };
+                const auto skipped_face = [&]() -> Draw_statistics {
+                    if (parameters.draw_statistics == nullptr) {
+                        return Draw_statistics{};
+                    }
+                    if (!skipped_face_culled_count.has_value()) {
+                        skipped_face_culled_count = parameters.draw_list_scene->get_filtered_entry_count(
+                            m_graphics_device.get_frame_index(),
+                            Draw_purpose::shadow,
+                            parameters.draw_list_layers,
+                            shadow_filter
+                        );
+                    }
+                    return Draw_statistics{.culled_count = skipped_face_culled_count.value()};
+                };
+                const bool            skipped         = (((skipped_faces >> face) & 1u) != 0);
+                const Draw_statistics pass_statistics = skipped ? skipped_face() : draw_face();
+                if ((parameters.draw_list_scene != nullptr) && (parameters.draw_statistics != nullptr)) {
+                    accumulate_pass_statistics(parameters.draw_statistics, parameters.draw_statistics->point_cubes, point_shadow_index, pass_statistics);
+                    record_face_statistics(parameters.draw_statistics, pass_index, pass_statistics);
+                }
             }
         }
     }

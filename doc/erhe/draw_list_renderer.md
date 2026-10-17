@@ -612,25 +612,42 @@ Drawing:
   `Shadow_renderer::render()` adds every pass it is about to draw before the
   first one draws: each 2D pass's light frustum (the pass's own
   `clip_from_world`; a depth-clamped directional pass keeps casters beyond
-  its depth planes, so it culls on the four side planes only) and each point
-  light cube face, the faces with the light's range sphere
-  (`add_cull_view(frame_index, purpose, planes, Cull_sphere)`: the sphere is
-  the view's first test, so a box wholly outside the range sphere is outside
-  the face whatever its planes say; such a caster is beyond the light's
-  reach, where the range attenuation is zero). Views with a sphere also
-  compare it for sharing. The first draw naming a view that is not yet
+  its depth planes, so it culls on the four side planes only) and the six
+  cube faces of each shadowed point light
+  (`add_point_light_cull_views(frame_index, purpose, Cull_sphere)`, six
+  consecutive views in the face order +X -X +Y -Y +Z -Z, shared by a light
+  with bitwise the same sphere): a face's view is the light's range sphere
+  (a caster wholly beyond the light's range is beyond its reach, where the
+  range attenuation is zero), then the face's octant around the light (the
+  90-degree pyramid around the face axis, which the face's frustum is; the
+  near plane is not tested). The first draw naming a view that is not yet
   classified classifies every entry of every published list of the views'
   purpose against all views added since the last classification, with the
   views outside and the entries inside: per view, each test is one
   branch-free lane-wise loop over the SoA bounds that narrows a per-entry
   inside flag - the range sphere (squared distance from the center to the
-  box against the squared radius; consecutive views naming bitwise the same
-  sphere reuse its result, so the six faces of a point light test it once
-  per entry), then each plane (`d = n . c + w + |n| . e`, the expressions
-  and evaluation order of `erhe::math::aabb_in_convex_volume()`; planes
-  only, conservative, so an infinite reverse-Z far plane cannot reject) -
-  and a last loop ORs the view's bit into one `uint64_t` per entry per
-  group of 64 views. The loops compile to SIMD code without intrinsics.
+  box against the squared radius, from the per-axis gaps `d_k = max(|c_k -
+  l_k| - e_k, 0)`; the six faces of a point light are consecutive and reuse
+  the result and the gaps, so they test the sphere once per entry), then
+  for a cube face the octant (face +X keeps a box where `(c_x - l_x) + e_x
+  >= max(d_y, d_z)`, face -X where `e_x - (c_x - l_x) >= max(d_y, d_z)`,
+  the other axes alike; exact for the octant, so a rejected box covers no
+  texel of the face), for any other view each plane (`d = n . c + w + |n| .
+  e`, the expressions and evaluation order of
+  `erhe::math::aabb_in_convex_volume()`; planes only, conservative, so an
+  infinite reverse-Z far plane cannot reject) - and a last loop ORs the
+  view's bit into one `uint64_t` per entry per group of 64 views and sums
+  the view's survivors (entries with the bit set) over the classified
+  lists. The lane loops are free functions over raw arrays in
+  `cull_lanes.hpp` (library-internal), tested deviceless by
+  `erhe_scene_renderer_tests` (`test_cull_lanes.cpp`: the octant keeps
+  every box the face frustum's planes keep, the sphere test matches the
+  box-sphere distance). `has_cull_view_survivors(frame_index, view)` reads
+  that sum (classifying the view's batch first if needed): a view without
+  survivors draws nothing whatever its pass's filter, so
+  `Shadow_renderer` begins an empty cube face's render pass for its clear
+  and skips the rest of the face. The loops compile to SIMD code without
+  intrinsics.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.

@@ -80,9 +80,13 @@ inline constexpr std::size_t shadow_cull_mode_count = 3;
 
 // What the draw-list path of one Shadow_renderer::render() drew and culled,
 // per shadow pass: one entry per 2D shadow layer (indexed by
-// Light_projection_transforms::shadow_index) and one per point cube (by
-// point_shadow_index, the six faces summed), plus the total. Empty on the
-// bucket path. The vectors keep their capacity across frames.
+// Light_projection_transforms::shadow_index), one per point cube (by
+// point_shadow_index, the six faces summed) and one per cube face (by
+// point_shadow_index * 6 + face, faces in the order +X -X +Y -Y +Z -Z),
+// plus the total. Per cube, the faces that had no surviving caster after
+// culling and drew nothing (bit f for face f; all six bits: the whole cube
+// drew nothing). Empty on the bucket path. The vectors keep their capacity
+// across frames.
 class Shadow_draw_statistics
 {
 public:
@@ -90,6 +94,8 @@ public:
 
     std::vector<Draw_statistics> shadow_map_2d;
     std::vector<Draw_statistics> point_cubes;
+    std::vector<Draw_statistics> point_cube_faces;
+    std::vector<uint8_t>         point_cube_skipped_faces;
     Draw_statistics              total{};
 };
 

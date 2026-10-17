@@ -1,16 +1,20 @@
-# Deviceless: the membership and slot logic of Material_set is pure
+# Deviceless: the culling lanes (test_cull_lanes.cpp) are pure arithmetic over
+# arrays; the membership and slot logic of Material_set is pure
 # bookkeeping over shared_ptr<Material>, so it is tested with no window, no
 # device, no scene and no draw list (doc/erhe/draw_list_material_set.md R16).
 set(_target "erhe_scene_renderer_tests")
 add_executable(${_target}
     main.cpp
+    test_cull_lanes.cpp
     test_material_set.cpp
 )
 
 target_link_libraries(${_target}
     PRIVATE
         erhe::scene_renderer
+        erhe::math
         erhe::primitive
+        erhe::scene
         erhe::verify
         GTest::gtest
 )

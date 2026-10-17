@@ -46,9 +46,9 @@ enum class Cull_view : uint16_t
     none = 0xffffu
 };
 
-// The range sphere of a point light (Draw_list_scene::add_cull_view() of a
-// cube face): the first test of the face's view, so an entry whose box lies
-// wholly outside the sphere is outside the view whatever its planes say.
+// The range sphere of a point light (Draw_list_scene::add_point_light_cull_views()):
+// the light's position and range, the first test of its six cube face views,
+// so an entry whose box lies wholly outside the sphere is outside every face.
 class Cull_sphere
 {
 public:
