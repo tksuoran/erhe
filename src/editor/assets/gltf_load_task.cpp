@@ -65,6 +65,7 @@ void Gltf_load_task::notify_done()
     on_done.swap(m_on_done);
     on_done(
         Asset_load_result{
+            .state          = m_handle->get_state(),
             .scene_root     = m_scene_root,
             .foreign_gltf   = m_foreign_gltf,
             .prepared_parse = m_prepared_parse
@@ -323,11 +324,17 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
                 notify_done();
                 return Asset_load_state::failed;
             }
-            m_mode = m_scan_result->is_erhe_scene ? Mode::open_erhe_scene : Mode::open_foreign_gltf;
+            const bool open_as_erhe_scene =
+                m_scan_result->is_erhe_scene &&
+                (m_request.erhe_scene_open == Erhe_scene_open::full_scene);
+            m_mode = open_as_erhe_scene ? Mode::open_erhe_scene : Mode::open_foreign_gltf;
             if (m_mode == Mode::open_foreign_gltf) {
                 log_parsers->info(
-                    "async load '{}': not an erhe-authored scene - loading for import",
-                    erhe::file::to_string(m_handle->get_path())
+                    "async load '{}': {} - loading for import",
+                    erhe::file::to_string(m_handle->get_path()),
+                    m_scan_result->is_erhe_scene
+                        ? "erhe-authored scene opened as foreign glTF"
+                        : "not an erhe-authored scene"
                 );
                 m_foreign_gltf = true;
             }

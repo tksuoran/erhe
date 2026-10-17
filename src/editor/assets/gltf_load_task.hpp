@@ -55,6 +55,8 @@ class Scene_root;
 //                      Scene_open_operation that consumes it. The operation
 //                      stays synchronous and cheap, which is what plan 2.8
 //                      asks for - only the loading is async.
+// Asset_load_request::erhe_scene_open = Erhe_scene_open::as_foreign_gltf
+// forces open_foreign_gltf even for a file that carries ERHE_scene.
 //
 // Record adoption (plan 2.8): when Asset_manager already holds a container
 // record for this path there is nothing to parse. An erhe scene then runs the

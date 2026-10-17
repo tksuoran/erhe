@@ -800,9 +800,9 @@ auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bo
 {
     std::string open_label = fmt::format("Load '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(open_label.c_str())) {
-        m_context.operation_stack->queue(
-            std::make_shared<Scene_open_operation>(*gltf->get_source_path())
-        );
+        // Undoable open as a new scene, loaded asynchronously: the scene
+        // appears when the parse a worker runs is done.
+        queue_open_scene_gltf(m_context, *gltf->get_source_path(), Erhe_scene_open::as_foreign_gltf);
         return true;
     }
     return false;

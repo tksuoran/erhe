@@ -1060,52 +1060,14 @@ Operations::Operations(
                 // extensionsUsed) opens as a full scene with its saved
                 // editor state; any other glTF opens as a foreign scene
                 // (Scene_open_operation: undoable, own new viewport).
-                //
-                // Asynchronous path (doc/editor/async_asset_loading_design.md step 6):
-                // the task runs the scan AND the parse on workers and spreads
-                // residency over frames, so nothing here reads the file on
-                // the main thread. The erhe-vs-foreign decision comes back
-                // through the completion callback. queue_load returns null
-                // when async_gltf_load is off; then the blocking path below
-                // runs, scan included.
-                const std::filesystem::path load_path = message.path;
-                if (m_context.asset_manager != nullptr) {
-                    std::shared_ptr<Asset_load_handle> handle = m_context.asset_manager->queue_load(
-                        load_path,
-                        [this, load_path](const Asset_load_result& result) {
-                            if (result.foreign_gltf) {
-                                log_operations->info(
-                                    "Load Scene: '{}' is not an erhe-authored scene - opening as foreign glTF{}",
-                                    erhe::file::to_string(load_path),
-                                    result.prepared_parse ? " (parse already done)" : ""
-                                );
-                                m_context.operation_stack->queue(
-                                    std::make_shared<Scene_open_operation>(load_path, result.prepared_parse)
-                                );
-                                return;
-                            }
-                            if (result.scene_root) {
-                                on_scene_opened(result.scene_root);
-                            }
-                        }
-                    );
-                    if (handle) {
-                        return;
+                queue_open_scene_gltf(
+                    m_context,
+                    message.path,
+                    Erhe_scene_open::full_scene,
+                    [this](const std::shared_ptr<Scene_root>& scene_root) {
+                        on_scene_opened(scene_root);
                     }
-                }
-                const Gltf_scan_summary summary = editor::scan_gltf(message.path);
-                if (!is_erhe_scene(summary.extensions_used)) {
-                    log_operations->info(
-                        "Load Scene: '{}' is not an erhe-authored scene - opening as foreign glTF",
-                        erhe::file::to_string(message.path)
-                    );
-                    m_context.operation_stack->queue(std::make_shared<Scene_open_operation>(message.path));
-                    return;
-                }
-                std::shared_ptr<Scene_root> scene_root = editor::open_scene_gltf(m_context, message.path);
-                if (scene_root) {
-                    on_scene_opened(scene_root);
-                }
+                );
             } catch (...) {
                 log_operations->error("exception: load scene");
             }

@@ -1871,6 +1871,9 @@ TEST_F(Mcp_test, undo_of_open_scene_clears_the_animation_target)
 
     client.call_tool("open_scene", json{{"path", c_undo_ref_gltf}});
     advance_frames(client, 10);
+    // open_scene scans and parses on workers: the scene exists once the
+    // load and the Scene_open_operation it queues have settled.
+    ASSERT_TRUE(wait_until_idle(client, 60000));
 
     std::string scene;
     for (const std::string& name : scene_names(client)) {
