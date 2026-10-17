@@ -243,11 +243,18 @@ auto Buffer_pool::create_new_block(const std::size_t min_capacity_bytes) -> bool
 
 auto Buffer_pool::allocate(const std::size_t element_count) -> erhe::primitive::Buffer_sink_allocation
 {
-    log_mesh_memory->trace(
-        "Buffer_pool::allocate(element_count = {}) {}",
-        element_count,
-        describe()
-    );
+    // Guarded: describe() formats strings (std::stringstream, which takes
+    // the global locale lock on MSVC) and this runs inside the
+    // buffer_mesh_allocation_mutex() transaction of every mesh build, so an
+    // unguarded call serializes the parallel import builds on string
+    // formatting even with trace logging off.
+    if (log_mesh_memory->should_log(spdlog::level::trace)) {
+        log_mesh_memory->trace(
+            "Buffer_pool::allocate(element_count = {}) {}",
+            element_count,
+            describe()
+        );
+    }
 
     const std::size_t element_size = m_index_format == erhe::dataformat::Format::format_undefined
         ? m_vertex_stream.stride

@@ -537,12 +537,16 @@ auto Mesh_memory::allocate_vertex_buffer_range(
     const std::size_t                      vertex_count
 ) -> erhe::primitive::Buffer_sink_allocation
 {
-    log_mesh_memory->trace(
-        "Mesh_memory::allocate_vertex_buffer_range(vertex_stream = {}, vertex_count = {}) pool_id = {}",
-        vertex_stream.to_string(),
-        vertex_count,
-        m_vertex_pools.size()
-    );
+    // Guarded: to_string() builds a std::stringstream, and this runs inside
+    // the buffer_mesh_allocation_mutex() transaction (see Buffer_pool::allocate).
+    if (log_mesh_memory->should_log(spdlog::level::trace)) {
+        log_mesh_memory->trace(
+            "Mesh_memory::allocate_vertex_buffer_range(vertex_stream = {}, vertex_count = {}) pool_id = {}",
+            vertex_stream.to_string(),
+            vertex_count,
+            m_vertex_pools.size()
+        );
+    }
     for (Buffer_pool& pool : m_vertex_pools) {
         if (pool.is_compatible(vertex_stream)) {
             return pool.allocate(vertex_count);
