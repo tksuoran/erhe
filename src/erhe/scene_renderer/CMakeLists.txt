@@ -58,6 +58,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/texel_renderer.cpp
     erhe_scene_renderer/texel_renderer.hpp
 
+    erhe_scene_renderer/cull_lanes.cpp
+    erhe_scene_renderer/cull_lanes.hpp
     erhe_scene_renderer/draw_list_entry.cpp
     erhe_scene_renderer/draw_list_entry.hpp
     erhe_scene_renderer/draw_list_key.cpp

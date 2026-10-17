@@ -233,11 +233,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `excluded_item_type_bits`; `erhe::usd`: the same on `Usd_save_arguments`.
 - `erhe::scene_renderer`: `Primitive_interface_settings::hovered_flag_bits` /
   `active_item_flag_bits`.
-- `erhe::scene_renderer`: `Cull_sphere` (`draw_list.hpp`) and the
-  `Draw_list_scene::add_cull_view(frame_index, purpose, planes,
-  range_sphere)` overload: a culling view whose first test is a range
-  sphere (point light cube faces). `Draw_list_bounds::is_bounded()` is
-  replaced by the static `get_unbounded_flag(extent_x)`.
+- `erhe::scene_renderer`: `Cull_sphere` (`draw_list.hpp`) and
+  `Draw_list_scene::add_point_light_cull_views(frame_index, purpose,
+  range_sphere)`: the six cube face views of a point light (range sphere,
+  then the face's octant). `Draw_list_scene::has_cull_view_survivors()`
+  (does a view keep any entry) and `get_filtered_entry_count()`.
+  `Shadow_draw_statistics` gains `point_cube_faces` (per face counts) and
+  `point_cube_skipped_faces` (per cube, the faces that drew nothing).
+  `Draw_list_bounds::is_bounded()` is replaced by the static
+  `get_unbounded_flag(extent_x)`.
 
 ### Changed
 

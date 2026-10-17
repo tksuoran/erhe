@@ -128,13 +128,13 @@ Each phase lands on its own, verified, before the next starts.
    loop keeps the expressions and evaluation order of
    `aabb_in_convex_volume()`, so its decisions are the phase 1 decisions.
    A point light's six faces carry its range sphere
-   (`add_cull_view(..., Cull_sphere)`, `Cull_view_kind::sphere_and_planes`);
-   the sphere test (squared box distance against the squared range, one
-   loop per axis) runs once per light per list and seeds the faces'
-   inside flags. It rejects boxes in the cube corners beyond the range that
-   the face frusta (far plane at the range along the face axis) keep: on
-   the heavy scene the two shadowed point lights draw 654 and 843 entries
-   over their six faces instead of 961 and 938; every other pass count and
+   (`add_point_light_cull_views()`, `Cull_view_kind::cube_face`); the
+   sphere test (squared box distance against the squared range, one loop
+   per axis) runs once per light per list and seeds the faces' inside
+   flags. It rejects boxes in the cube corners beyond the range that the
+   face frusta (far plane at the range along the face axis) keep: on the
+   heavy scene the two shadowed point lights draw 654 and 843 entries over
+   their six faces instead of 961 and 938; every other pass count and
    the images (default, heavy, draws scenes; both render thread modes) are
    identical to phase 1, since a caster beyond the range only shadows
    receivers where the range attenuation is zero. Vectorization, verified
@@ -153,8 +153,50 @@ Each phase lands on its own, verified, before the next starts.
 3. **Point cube faces by octant.** A face's four side planes through the light
    are fixed in light space, so a box's face set is a sign and magnitude test
    on its min and max relative to the light; faces and whole cubes with no
-   survivors begin no render pass. Takes over the "skip empty faces and
+   survivors begin no draws. Takes over the "skip empty faces and
    lights" and "range cull" items of [shadows.md](shadows.md).
+   Done: `Draw_list_scene::add_point_light_cull_views()` adds the six faces
+   of a light as consecutive `Cull_view_kind::cube_face` views (the plane
+   views and the `add_cull_view(..., Cull_sphere)` overload of phase 2 are
+   gone). Per list the light's sphere test runs once and keeps the per-axis
+   gaps `d_k = max(|o_k| - e_k, 0)` (`o = c - light`); each face is one
+   lane loop, face +X keeping `o_x + e_x >= max(d_y, d_z)` and -X `e_x -
+   o_x >= max(d_y, d_z)`, the other axes alike. The test is exact for the
+   octant, so a box it rejects covers no texel of the face; the near plane
+   is not tested. The lanes live in `cull_lanes.hpp/.cpp`;
+   `test_cull_lanes.cpp` checks on 12000 seeded random boxes around three
+   lights (seam-straddling and light-containing boxes included) that every
+   box the phase 2 face planes (near plane excluded) keep, the octant keeps,
+   and that the sphere test matches the brute-force box-sphere distance,
+   plus hand-written cases per face. The bit write also sums each view's
+   survivors (entries with the bit set) and `has_cull_view_survivors()`
+   reads the sum. An empty face's
+   render pass still begins and ends: the face must hold the clear value
+   for the forward pass, and the pass's load action is the clear (the
+   graphics layer's `Command_buffer::clear_texture()` clears a whole
+   texture or view, and on Metal it stages a buffer per call, so a per-face
+   clear would need six texture views per cube and a new backend
+   operation). Everything else of the face is skipped: buffer, pipeline and
+   material binds, camera and control blocks, the record and command
+   writes. So "begin no render pass" is "begin no draws": the cube face
+   passes begun per frame are unchanged. `Shadow_draw_statistics` keeps
+   per face drawn / culled counts (a skipped face reports as culled the
+   entries its filter passes, counted once per render) and the skipped
+   faces per cube, which MCP `get_scene_lights` reports as
+   `shadow_cube_faces` and `shadow_cube_skipped`. Images byte-identical to
+   phase 2 (default, heavy, draws scenes; heavy with a point light moved
+   out of every caster's reach; both render thread modes), per face counts
+   identical to phase 2's planes on the heavy scene (the near plane never
+   decided there); the +Y face of both shadowed point lights and the +Z
+   face of one are skipped (the moved light: all six). Vectorization from
+   the compiler reports: clang-cl (AVX2) and MSVC (SSE2) vectorize the new
+   face loop and the fused bit write and survivor count, and all phase 2
+   loops still. Heavy
+   scene, Release MSVC, Intel iGPU, pipelined, 900 frames, two runs each:
+   the shadow batch's classification (median per frame) 46 / 48 us -> 27 /
+   27 us, the whole classification per frame 53 / 57 us -> 35 / 35 us,
+   `draw_shadow` per frame 560 / 560 us -> 532 / 526 us at 18 -> 15 calls
+   per frame.
 4. **Shared records, per-pass commands.** The shadow passes' primitive records
    do not depend on the light: upload one record block per list per frame
    and let each pass's commands name their record through the command's
@@ -201,3 +243,8 @@ measured on the GPU timers.
   them be culled.
 - The directional fit culls casters against its own volume before the pass
   frustum exists; the two sets differ and both stay.
+- The survivor count behind `has_cull_view_survivors()` is purpose-wide:
+  every layer, every flag bit, and a skinned list counts every entry. A cube
+  face with any skinned shadow list, or with an entry in range that the
+  shadow filter rejects (not a caster), is never skipped. A per-pass caster
+  mask applied to the count is the fix if it matters.

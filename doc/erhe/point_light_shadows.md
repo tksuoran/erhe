@@ -85,7 +85,14 @@ Two traps follow from that:
   The caster fragment writes the distance of "Stored distance" to the R32F
   face. Scissor covers the full face, so faces meet seamlessly. A shared 2D
   depth scratch is reused for every face, for rasterization only (store
-  `DONT_CARE`).
+  `DONT_CARE`). On the draw list path each face draws the casters that
+  reach into the light's range sphere and the face's octant
+  ([draw_list_renderer.md](draw_list_renderer.md) Q6); a face with none
+  begins and ends its render pass, whose load action clears it to `1e30`
+  ("no occluder", lit), and skips its binds, blocks and draws.
+  `Shadow_draw_statistics` reports per face what was drawn and culled and
+  which faces were skipped (MCP `get_scene_lights`: `shadow_cube_faces`,
+  `shadow_cube_skipped`).
 - **Receiver.** `sample_point_light_visibility()` (`res/shaders/erhe_light.glsl`)
   fetches the texel that contains the receiver direction at its centre and
   compares the receiver plane's distance on that texel's centre ray, moved

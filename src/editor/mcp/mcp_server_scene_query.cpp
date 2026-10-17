@@ -1276,6 +1276,26 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
         light_json["shadow_draw_list_entry_count"]  = slots[slot].entry_count;
         light_json["shadow_draw_list_culled_count"] = slots[slot].culled_count;
     };
+    // Per cube face (+X -X +Y -Y +Z -Z) of a point light: entries drawn and
+    // culled, and whether the face had no surviving caster and drew nothing
+    // (doc/plans/culling.md phase 3); shadow_cube_skipped when all six did.
+    const auto add_cube_face_statistics = [](json& light_json, const erhe::scene_renderer::Shadow_draw_statistics& statistics, const std::size_t cube) {
+        if (((cube * 6) + 6) > statistics.point_cube_faces.size()) {
+            return;
+        }
+        const uint8_t skipped_faces = (cube < statistics.point_cube_skipped_faces.size()) ? statistics.point_cube_skipped_faces[cube] : uint8_t{0};
+        json faces = json::array();
+        for (std::size_t face = 0; face < 6; ++face) {
+            const erhe::scene_renderer::Draw_statistics& face_statistics = statistics.point_cube_faces[(cube * 6) + face];
+            faces.push_back(json{
+                {"entry_count",  face_statistics.entry_count},
+                {"culled_count", face_statistics.culled_count},
+                {"skipped",      ((skipped_faces >> face) & 1u) != 0}
+            });
+        }
+        light_json["shadow_cube_faces"]   = faces;
+        light_json["shadow_cube_skipped"] = (skipped_faces == 0x3fu);
+    };
 
     json lights = json::array();
     for (const auto& ll : sr->get_scene().get_light_layers()) {
@@ -1311,6 +1331,7 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                     light_json["point_shadow_index"] = transforms->point_shadow_index;
                     if (draw_statistics != nullptr) {
                         add_draw_statistics(light_json, draw_statistics->point_cubes, transforms->point_shadow_index);
+                        add_cube_face_statistics(light_json, *draw_statistics, transforms->point_shadow_index);
                     }
                 }
             }

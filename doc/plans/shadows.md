@@ -87,21 +87,18 @@ the receiver hulls still show in a profile. The library is vendored in
 
 ## Point-light cube shadow budget
 
-The culling items below are phases 2 and 3 of [culling.md](culling.md); the
-depth scratch and resolution items stay here.
-
 Every shadow-casting point light renders its six faces. On the draw list path
-each face culls the entries against its own 90-degree frustum (the six planes
-of the face `clip_from_world`, `Draw_list_scene::draw_shadow`); the bucket
-path (`Shadow_renderer::draw_shadow_casters`, callers without a
+the range sphere and octant culling and the skipping of empty faces are
+[culling.md](culling.md) phases 2 and 3; the bucket path
+(`Shadow_renderer::draw_shadow_casters`, callers without a
 `Draw_list_scene`) draws every caster into every face. What is left of the
 budget is below.
 
-- **Skip empty faces and lights.** A face (or a whole cube) with no surviving
-  casters can clear only; a light whose range sphere contains no casters needs
-  no cube at all.
-- **Range and contribution cull.** Casters fully outside the light range, or
-  whose shadow cannot reach any receiver, never need rasterizing.
+- **Contribution cull.** Casters whose shadow cannot reach any receiver never
+  need rasterizing.
+- **No cube for an empty light.** A cube with no surviving caster in any face
+  still begins its six render passes for their clears; a light whose cube
+  stays empty could keep its faces cleared from an earlier frame instead.
 - **Per-cube or per-face depth.** The six faces share one 2D depth scratch, so
   the passes serialize on a write-after-write barrier; separate depth lets them
   overlap, at a memory cost.

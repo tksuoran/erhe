@@ -1,4 +1,5 @@
 #include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_scene_renderer/cull_lanes.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -1679,95 +1680,6 @@ void Draw_list_scene::draw_list_chunks(
 
 namespace {
 
-// Culling classification lanes (doc/erhe/draw_list_renderer.md Q6): each is
-// one branch-free loop over the entries' SoA bounds, the shape the compiler
-// vectorizes without intrinsics (x86 and NEON). The flags are written with
-// a conditional expression of two constants: MSVC vectorizes that, but not
-// a cast of a negated comparison.
-
-// unbounded[i] = 1 for an entry without bounds (negative extent sentinel,
-// Draw_list_bounds::get_unbounded_flag()).
-void mark_unbounded_lanes(const Draw_list_bounds& bounds, const std::size_t count, uint32_t* const unbounded)
-{
-    const float* const ex = bounds.extent_x.data();
-    for (std::size_t i = 0; i < count; ++i) {
-        unbounded[i] = Draw_list_bounds::get_unbounded_flag(ex[i]);
-    }
-}
-
-// One axis of the range sphere test: adds the squared gap along the axis
-// from the sphere center coordinate to the box (zero where the center
-// coordinate lies within the box's interval) to distance2[i]. |c - s| - e is
-// written as the larger of the two signed gaps (the same bits) so the loop
-// holds only selects.
-void sphere_axis_lanes(const float* const center, const float* const extent, const float sphere_center, const std::size_t count, float* const distance2)
-{
-    for (std::size_t i = 0; i < count; ++i) {
-        const float offset = center[i] - sphere_center;
-        const float below  = (-offset) - extent[i];
-        const float above  = offset - extent[i];
-        const float gap    = (below > above) ? below : above;
-        const float d      = (gap > 0.0f) ? gap : 0.0f;
-        distance2[i] += d * d;
-    }
-}
-
-// Range sphere: inside[i] = 0 where the squared distance from the sphere
-// center to the box exceeds the squared radius (the box lies wholly outside
-// the sphere), 1 otherwise. One loop per axis: MSVC does not vectorize the
-// three axes in one loop.
-void sphere_lanes(const Cull_sphere& sphere, const Draw_list_bounds& bounds, const std::size_t count, float* const distance2, uint32_t* const inside)
-{
-    std::fill(distance2, distance2 + count, 0.0f);
-    sphere_axis_lanes(bounds.center_x.data(), bounds.extent_x.data(), sphere.center.x, count, distance2);
-    sphere_axis_lanes(bounds.center_y.data(), bounds.extent_y.data(), sphere.center.y, count, distance2);
-    sphere_axis_lanes(bounds.center_z.data(), bounds.extent_z.data(), sphere.center.z, count, distance2);
-    const float r2 = sphere.radius * sphere.radius;
-    for (std::size_t i = 0; i < count; ++i) {
-        inside[i] = (distance2[i] > r2) ? 0u : 1u;
-    }
-}
-
-// One plane: d = n . c + w + |n| . e (the expressions and the evaluation
-// order of erhe::math::aabb_in_convex_volume()), inside[i] cleared where
-// d < 0.
-void plane_lanes(const glm::vec4& plane, const Draw_list_bounds& bounds, const std::size_t count, uint32_t* const inside)
-{
-    const float nx = plane.x;
-    const float ny = plane.y;
-    const float nz = plane.z;
-    const float w  = plane.w;
-    const float ax = std::abs(nx);
-    const float ay = std::abs(ny);
-    const float az = std::abs(nz);
-    const float* const cx = bounds.center_x.data();
-    const float* const cy = bounds.center_y.data();
-    const float* const cz = bounds.center_z.data();
-    const float* const ex = bounds.extent_x.data();
-    const float* const ey = bounds.extent_y.data();
-    const float* const ez = bounds.extent_z.data();
-    for (std::size_t i = 0; i < count; ++i) {
-        const float center_distance  = (((nx * cx[i]) + (ny * cy[i])) + (nz * cz[i])) + w;
-        const float projected_extent = ((ax * ex[i]) + (ay * ey[i])) + (az * ez[i]);
-        inside[i] &= ((center_distance + projected_extent) < 0.0f) ? 0u : 1u;
-    }
-}
-
-// The view's bit of every entry inside the view or without bounds.
-void write_view_bit_lanes(const uint32_t* const inside, const uint32_t* const unbounded, const std::size_t count, uint64_t* const masks, const uint32_t bit_index)
-{
-    for (std::size_t i = 0; i < count; ++i) {
-        masks[i] |= static_cast<uint64_t>(inside[i] | unbounded[i]) << bit_index;
-    }
-}
-
-void set_view_bit_lanes(uint64_t* const masks, const std::size_t count, const uint64_t bit)
-{
-    for (std::size_t i = 0; i < count; ++i) {
-        masks[i] |= bit;
-    }
-}
-
 [[nodiscard]] auto same_sphere(const Cull_sphere& lhs, const Cull_sphere& rhs) -> bool
 {
     // Bitwise per float (like the planes), never the vec3 object's bytes.
@@ -1783,73 +1695,108 @@ void set_view_bit_lanes(uint64_t* const masks, const std::size_t count, const ui
 
 } // anonymous namespace
 
+void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
+{
+    // A new frame starts a new view set; the frame's classifications write
+    // the masks from zero.
+    if (m_cull_frame_started && (m_cull_frame_index == frame_index)) {
+        return;
+    }
+    m_cull_frame_started         = true;
+    m_cull_frame_index           = frame_index;
+    m_cull_views.clear();
+    m_cull_view_survivors.clear();
+    m_classified_cull_view_count = 0;
+    for (std::vector<uint64_t>& masks : m_cull_masks) {
+        masks.clear();
+    }
+}
+
+auto Draw_list_scene::append_cull_view(const Draw_purpose purpose, const Cull_view_kind kind) -> Cull_view_tests&
+{
+    ERHE_VERIFY(m_cull_views.size() < static_cast<std::size_t>(Cull_view::none));
+    Cull_view_tests& view = m_cull_views.emplace_back();
+    view.purpose = purpose;
+    view.kind    = kind;
+    m_cull_view_survivors.push_back(0);
+    return view;
+}
+
 auto Draw_list_scene::add_cull_view(
     const uint64_t                   frame_index,
     const Draw_purpose               purpose,
     const std::span<const glm::vec4> planes
 ) -> Cull_view
 {
-    return insert_cull_view(frame_index, purpose, Cull_view_kind::planes, planes, Cull_sphere{});
-}
-
-auto Draw_list_scene::add_cull_view(
-    const uint64_t                   frame_index,
-    const Draw_purpose               purpose,
-    const std::span<const glm::vec4> planes,
-    const Cull_sphere&               range_sphere
-) -> Cull_view
-{
-    return insert_cull_view(frame_index, purpose, Cull_view_kind::sphere_and_planes, planes, range_sphere);
-}
-
-auto Draw_list_scene::insert_cull_view(
-    const uint64_t                   frame_index,
-    const Draw_purpose               purpose,
-    const Cull_view_kind             kind,
-    const std::span<const glm::vec4> planes,
-    const Cull_sphere&               sphere
-) -> Cull_view
-{
     assert_render_phase();
     ERHE_VERIFY(planes.size() <= 6);
-    // A range sphere of zero radius would cull every caster (a point light
-    // with range <= 0 has no shadow, Light::is_active()).
-    ERHE_VERIFY((kind != Cull_view_kind::sphere_and_planes) || (sphere.radius > 0.0f));
     if (planes.empty()) {
         return Cull_view::none;
     }
-    // A new frame starts a new view set; the frame's classifications write
-    // the masks from zero.
-    if (!m_cull_frame_started || (m_cull_frame_index != frame_index)) {
-        m_cull_frame_started         = true;
-        m_cull_frame_index           = frame_index;
-        m_cull_views.clear();
-        m_classified_cull_view_count = 0;
-        for (std::vector<uint64_t>& masks : m_cull_masks) {
-            masks.clear();
-        }
-    }
+    begin_cull_frame(frame_index);
     // The passes of one viewport share its camera: one view for all of them.
     for (std::size_t i = 0, end = m_cull_views.size(); i < end; ++i) {
         const Cull_view_tests& view = m_cull_views[i];
         if (
             (view.purpose == purpose) &&
-            (view.kind == kind) &&
+            (view.kind == Cull_view_kind::planes) &&
             (view.plane_count == planes.size()) &&
-            (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0) &&
-            ((kind == Cull_view_kind::planes) || same_sphere(view.sphere, sphere))
+            (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0)
         ) {
             return static_cast<Cull_view>(i);
         }
     }
-    ERHE_VERIFY(m_cull_views.size() < static_cast<std::size_t>(Cull_view::none));
-    Cull_view_tests& view = m_cull_views.emplace_back();
-    view.purpose     = purpose;
-    view.kind        = kind;
+    Cull_view_tests& view = append_cull_view(purpose, Cull_view_kind::planes);
     view.plane_count = static_cast<uint32_t>(planes.size());
     std::copy(planes.begin(), planes.end(), view.planes.begin());
-    view.sphere      = sphere;
     return static_cast<Cull_view>(m_cull_views.size() - 1);
+}
+
+auto Draw_list_scene::add_point_light_cull_views(
+    const uint64_t     frame_index,
+    const Draw_purpose purpose,
+    const Cull_sphere& range_sphere
+) -> std::array<Cull_view, 6>
+{
+    assert_render_phase();
+    // A range sphere of zero radius would cull every caster (a point light
+    // with range <= 0 has no shadow, Light::is_active()).
+    ERHE_VERIFY(range_sphere.radius > 0.0f);
+    begin_cull_frame(frame_index);
+    std::array<Cull_view, 6> views{};
+    // The six faces of a light are appended together, face 0 first.
+    for (std::size_t i = 0, end = m_cull_views.size(); i < end; ++i) {
+        const Cull_view_tests& view = m_cull_views[i];
+        if (
+            (view.purpose == purpose) &&
+            (view.kind == Cull_view_kind::cube_face) &&
+            (view.cube_face == 0) &&
+            same_sphere(view.sphere, range_sphere)
+        ) {
+            ERHE_VERIFY((i + 6) <= end);
+            for (std::size_t face = 0; face < 6; ++face) {
+                views[face] = static_cast<Cull_view>(i + face);
+            }
+            return views;
+        }
+    }
+    for (std::size_t face = 0; face < 6; ++face) {
+        Cull_view_tests& view = append_cull_view(purpose, Cull_view_kind::cube_face);
+        view.sphere    = range_sphere;
+        view.cube_face = static_cast<uint32_t>(face);
+        views[face]    = static_cast<Cull_view>(m_cull_views.size() - 1);
+    }
+    return views;
+}
+
+auto Draw_list_scene::has_cull_view_survivors(const uint64_t frame_index, const Cull_view cull_view) -> bool
+{
+    assert_render_phase();
+    if (cull_view == Cull_view::none) {
+        return true;
+    }
+    classify_cull_views(frame_index, cull_view);
+    return m_cull_view_survivors[static_cast<std::size_t>(cull_view)] > 0;
 }
 
 void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull_view cull_view)
@@ -1903,7 +1850,8 @@ void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull
                 if (m_cull_views[view_index].purpose != purpose) {
                     continue;
                 }
-                set_view_bit_lanes(masks.data() + ((view_index / 64) * entry_count), entry_count, uint64_t{1} << (view_index % 64));
+                cull_lanes::set_view_bit_lanes(masks.data() + ((view_index / 64) * entry_count), entry_count, uint64_t{1} << (view_index % 64));
+                m_cull_view_survivors[view_index] += entry_count;
             }
             continue;
         }
@@ -1916,34 +1864,58 @@ void Draw_list_scene::classify_cull_views(const uint64_t frame_index, const Cull
         m_cull_inside.resize(entry_count);
         m_cull_sphere_inside.resize(entry_count);
         m_cull_sphere_distance2.resize(entry_count);
-        uint32_t* const unbounded        = m_cull_unbounded.data();
-        uint32_t* const inside           = m_cull_inside.data();
-        uint32_t* const sphere_inside    = m_cull_sphere_inside.data();
-        float* const    sphere_distance2 = m_cull_sphere_distance2.data();
-        mark_unbounded_lanes(bounds, entry_count, unbounded);
+        m_cull_sphere_gap_x.resize(entry_count);
+        m_cull_sphere_gap_y.resize(entry_count);
+        m_cull_sphere_gap_z.resize(entry_count);
+        uint32_t* const              unbounded        = m_cull_unbounded.data();
+        uint32_t* const   inside           = m_cull_inside.data();
+        uint32_t* const   sphere_inside    = m_cull_sphere_inside.data();
+        float* const      sphere_distance2 = m_cull_sphere_distance2.data();
+        const cull_lanes::Sphere_gaps sphere_gaps{
+            .x = m_cull_sphere_gap_x.data(),
+            .y = m_cull_sphere_gap_y.data(),
+            .z = m_cull_sphere_gap_z.data()
+        };
+        cull_lanes::mark_unbounded_lanes(bounds, entry_count, unbounded);
 
-        // The range sphere result in sphere_inside belongs to this view's
-        // sphere (the faces of one point light follow each other, so their
-        // shared sphere is tested once per list).
+        // The range sphere result in sphere_inside and the gaps belong to
+        // this view's sphere (the six faces of one point light follow each
+        // other, so their shared sphere is tested once per list).
         const Cull_view_tests* sphere_view = nullptr;
         for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
             const Cull_view_tests& view = m_cull_views[view_index];
             if (view.purpose != purpose) {
                 continue;
             }
-            if (view.kind == Cull_view_kind::sphere_and_planes) {
+            if (view.kind == Cull_view_kind::cube_face) {
                 if ((sphere_view == nullptr) || !same_sphere(sphere_view->sphere, view.sphere)) {
-                    sphere_lanes(view.sphere, bounds, entry_count, sphere_distance2, sphere_inside);
+                    cull_lanes::sphere_lanes(view.sphere, bounds, entry_count, sphere_gaps, sphere_distance2, sphere_inside);
                     sphere_view = &view;
                 }
-                std::copy(sphere_inside, sphere_inside + entry_count, inside);
+                // Face f looks along axis f / 2, toward + for even f.
+                const uint32_t    axis      = view.cube_face / 2;
+                const float       direction = ((view.cube_face % 2) == 0) ? 1.0f : -1.0f;
+                const float*      gaps[3]   {sphere_gaps.x, sphere_gaps.y, sphere_gaps.z};
+                const float*      centers[3]{bounds.center_x.data(), bounds.center_y.data(), bounds.center_z.data()};
+                const float*      extents[3]{bounds.extent_x.data(), bounds.extent_y.data(), bounds.extent_z.data()};
+                cull_lanes::cube_face_lanes(
+                    centers[axis],
+                    extents[axis],
+                    view.sphere.center[static_cast<glm::length_t>(axis)],
+                    direction,
+                    gaps[(axis + 1) % 3],
+                    gaps[(axis + 2) % 3],
+                    sphere_inside,
+                    entry_count,
+                    inside
+                );
             } else {
                 std::fill(inside, inside + entry_count, uint32_t{1});
+                for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
+                    cull_lanes::plane_lanes(view.planes[plane_index], bounds, entry_count, inside);
+                }
             }
-            for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
-                plane_lanes(view.planes[plane_index], bounds, entry_count, inside);
-            }
-            write_view_bit_lanes(inside, unbounded, entry_count, masks.data() + ((view_index / 64) * entry_count), static_cast<uint32_t>(view_index % 64));
+            m_cull_view_survivors[view_index] += cull_lanes::write_view_bit_lanes(inside, unbounded, entry_count, masks.data() + ((view_index / 64) * entry_count), static_cast<uint32_t>(view_index % 64));
         }
     }
 }
@@ -1974,6 +1946,29 @@ auto Draw_list_scene::has_drawable_entries(
         }
     }
     return false;
+}
+
+auto Draw_list_scene::get_filtered_entry_count(
+    const uint64_t                               frame_index,
+    const Draw_purpose                           purpose,
+    const std::span<const erhe::scene::Layer_id> layers,
+    const erhe::Item_filter&                     filter
+) const -> std::size_t
+{
+    assert_render_phase();
+    std::size_t count = 0;
+    for (const Draw_list& draw_list : get_published_draw_lists(frame_index)) {
+        const Draw_list_key& key = draw_list.key;
+        if ((key.purpose != purpose) || !layer_selected(layers, key.layer_id)) {
+            continue;
+        }
+        for (const Draw_list_entry& entry : draw_list.entries) {
+            if (filter(entry.flag_bits)) {
+                ++count;
+            }
+        }
+    }
+    return count;
 }
 
 auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Draw_statistics
