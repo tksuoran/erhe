@@ -53,8 +53,13 @@ frame is an overshoot, the sleep is halved every frame, and the servo is
 inert. Tier S as designed only paces loads lighter than the refresh period.
 
 **Status 2026-10-18.** Items 1 and 2 landed: the servo paces against the
-tracked plant loop period (`Slop_servo_pacer`, claim C19b) and the editor
-polls input again after the pacing sleep. Measured on the scene above: the
+tracked plant loop period (`Slop_servo_pacer`, claim C19b) and the editor's
+single input poll per frame follows the pacing wait (`run()` runs the frame
+start, then polls, then `frame()`). A second poll inside `frame()` was tried
+first and dropped: `poll_events` publishes a new event batch, so the second
+poll discarded the first poll's events (mouse button events were lost), and
+a modal resize loop entered from a poll inside `frame()` refuses the
+live-resize redraws. Measured on the scene above: the
 sleep settles near the former slot wait, the slot fence wait falls from
 about 20 ms to under 1 ms, the GPU stays saturated and the cadence stays at
 three periods, the GPU end-to-end interval loses its alternation (lag-1

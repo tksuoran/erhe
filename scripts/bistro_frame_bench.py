@@ -247,7 +247,9 @@ def analyze(capture, csvexport, frame_count, settle_window_s, gpu_rows_wanted=Tr
         window = max(((a[1], b[0]) for a, b in zip(tail, tail[1:])), key=lambda w: w[1] - w[0])
     else:
         window = (frames[-1][1] - int(settle_window_s * 1e9), frames[-1][1])
-    window_frames = [f for f in frames if (f[0] >= window[0]) and (f[1] <= window[1])]
+    # A tick is one `frame` zone start to the next: the frame start (the
+    # pacing wait) and the input poll lie between the zones, in run().
+    window_frames = [(a[0], b[0], a[2]) for a, b in zip(frames, frames[1:]) if (a[0] >= window[0]) and (b[0] <= window[1])]
     print(f"capture: {capture}")
     print(f"frames in capture: {len(frames)}; quiet window {us(window[1] - window[0]) / 1000:.1f} ms with {len(window_frames)} complete frames (no MCP traffic)")
     if len(window_frames) < frame_count:
@@ -277,7 +279,7 @@ def analyze(capture, csvexport, frame_count, settle_window_s, gpu_rows_wanted=Tr
     # Per-frame picture of the last `frame_count` frames of the window.
     picked = window_frames[-frame_count:]
     print()
-    print(f"per-frame picture of the last {len(picked)} quiet frames (us; frame = main-thread tick):")
+    print(f"per-frame picture of the last {len(picked)} quiet frames (us; tick = frame start to next frame start):")
     header = f"{'#':>3} {'start_ms':>10} {'tick':>8} {'M1':>8} {'M2':>8} {'M3':>8} {'kick':>8} {'join':>8} {'R(start)':>10} {'R':>8} {'R_gap':>8}"
     print(header)
     render_sorted = sorted(render_zones)
@@ -320,13 +322,15 @@ def analyze(capture, csvexport, frame_count, settle_window_s, gpu_rows_wanted=Tr
         r_in_fence = sum(overlap_ns(r[0], r[1], fence) for r in renders_in_window)
         r_in_m2 = sum(overlap_ns(r[0], r[1], prepares) for r in renders_in_window) - r_in_fence
         r_blocked = sum(overlap_ns(r[0], r[1], blocks) for r in renders_in_window)
-        r_working = r_in_phases - r_in_sleep - r_in_fence
+        r_working = r_in_phases - r_in_fence # the pacing sleep is outside the phases
         tick_total = sum(f[1] - f[0] for f in window_frames)
         r_idle = sum((f[1] - f[0]) - overlap_ns(f[0], f[1], render_sorted) for f in window_frames)
         pacing_total = sum(overlap_ns(f[0], f[1], pacing) for f in window_frames)
         fence_total = sum(overlap_ns(f[0], f[1], fence) for f in window_frames)
         blocked_total = sum(overlap_ns(f[0], f[1], blocks) for f in window_frames)
-        main_busy_total = sum(overlap_ns(f[0], f[1], main_work) for f in window_frames) - pacing_total - fence_total
+        # The pacing sleep lies outside the phases (run()'s frame start);
+        # the slot fence wait is inside M2.
+        main_busy_total = sum(overlap_ns(f[0], f[1], main_work) for f in window_frames) - fence_total
         n = len(window_frames)
         print()
         print(f"thread overlap over the quiet window ({n} ticks, {r_count} render phases; render thread {'dedicated' if render_thread != main_thread else 'inline'}):")

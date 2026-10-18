@@ -59,7 +59,7 @@ Serial (pipelining off): M1 of the next frame still overlaps R, but the
 main thread joins R(N) at the end of M1(N+1), before M2(N+1):
 
 ```
-main:   | M2(N) | kick | M3(N) | publish | poll_events, M1(N+1) | join R(N) | M2(N+1) | kick |
+main:   | M2(N) | kick | M3(N) | publish | start(N+1), poll_events, M1(N+1) | join R(N) | M2(N+1) | kick |
 render: |              R(N): scene ...        | wait | ImGui hosts, submit |   idle   | R(N+1)
 ```
 
@@ -101,13 +101,19 @@ render thread) M3 runs before the kick and the frame is serial.
 (`Frame_activity`: `hidden` while the session is locked, while an unfocused
 window is fullscreen, or with `power_save` while the window is not visible;
 `unfocused` with `power_save` while it is not focused; never throttled under
-OpenXR), polls window events with the wait time that activity implies
-(`hidden_fps` / `unfocused_fps`), marks the queued input events for dispatch
-and calls `frame()`. On Android a paused activity sleeps 50 ms instead of
-running a frame. `quit_after_frames` ends the loop after that many frames.
-When the loop ends, `run()` joins the last kicked frame and flushes the
-settings. The live-resize redraw callback calls `frame()` too, except while a
-frame is in progress (`m_in_tick`).
+OpenXR), runs the frame start (`start_frame()`: `Device::wait_for_frame_start()`
+and the frame pacing steps of M1, so the pacing wait precedes the poll),
+polls window events with the wait time that activity implies (`hidden_fps` /
+`unfocused_fps`), marks the queued input events for dispatch and calls
+`frame()`. The poll is the only one per frame and the last thing before the
+frame, so the input M2 dispatches is the newest; a frame started before a
+poll that ran no frame is kept for the next iteration (on Android a paused
+activity sleeps 50 ms instead of running a frame). `quit_after_frames` ends
+the loop after that many frames. When the loop ends, `run()` joins the last
+kicked frame and flushes the settings. The live-resize redraw callback calls
+`frame()` too, except while a frame is in progress (`m_in_tick`); the first
+of its frames takes the frame start `run()` made before the poll, the later
+ones make their own.
 
 **`frame()`** runs M1, then (serial) joins the frame kicked by the previous
 `frame()`, runs M2, then kicks R and runs M3 (the ImGui overlap) or runs M3
@@ -186,9 +192,10 @@ the render thread. The results:
 **M1** writes nothing R reads; what R needs from it travels in the packet.
 In order:
 
-1. `Device::wait_for_frame_start()`, the pacing half of the device frame
-   start (in the position of `xrWaitFrame`); the packet gets the device frame
-   id. Then the frame pacing steps of M1 (`frame_start_pacing()`: observer
+1. The frame start, when `run()` has not made it before its poll
+   (`start_frame()`): `Device::wait_for_frame_start()`, the pacing half of
+   the device frame start (in the position of `xrWaitFrame`); the packet
+   gets the device frame id. Then the frame pacing steps (`frame_start_pacing()`: observer
    tick, FR2 release gate, tier S slop servo, FR4 display advance; the FR3
    target and holdback deadline go into the packet, and so does the FR5
    present-wait id when pacing is enforced (it reads the main-thread
