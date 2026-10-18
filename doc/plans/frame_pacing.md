@@ -104,6 +104,47 @@ move into R behind an upload command pool ring one deeper than the frame
 slots, which would let M2 never block on the GPU; it buys nothing while
 item 1 is missing and is not needed once it exists.
 
+## Tier W on Linux: open findings
+
+Measured 2026-10-18 with `scripts/bistro_frame_bench.py` (windowed Release
+editor, Bistro, NVIDIA proprietary driver on X11, a 240 Hz display, tier W,
+`FIFO_LATEST_READY`, the pipelined render thread). The run found and fixed
+one defect (eeb5d595a: the GPU frame bracket end was queued after the
+present holdback, so the pacer's `gpu_duration` carried its own holdback and
+the cadence climbed to the 200 ms holdback cap). What remains:
+
+1. **No presentation feedback.** `vkGetPastPresentationTimingEXT` never
+   returns a completed primary-stage timing on this path ("First present
+   timing feedback" is never logged), so `achieved_present_time` stays 0,
+   the grid phase is never anchored (`grid_phase` 0.0), FR4 predictions are
+   unanchored and the C15 holdback paces against an assumed phase. Find out
+   whether the driver reports the stage on X11 at all (the surface's
+   stage-query mask is 0x5: queue-ops-end and first-pixel-out), whether the
+   request is suppressed, or whether the time-domain conversion rejects the
+   sample; log the raw feedback once at startup so the three cases are
+   distinguishable from `logs/log.txt`.
+2. **The upload-to-frame bubble inflates `g_k`.** The bracket begins at the
+   frame's first command buffer (the M2 upload cb, submitted at the start of
+   R) and the frame cb follows after R's CPU recording (about 2 ms here), so
+   the span reads about 10.8 ms for 8.1 ms of timed GPU passes, with a q95
+   near 15 ms. At 240 Hz that is the difference between 4 and 5 vsyncs per
+   frame; the pacer settled at N=5 (48 fps) for a GPU that finishes the
+   frame in about 9 ms. inputs.md 3.3 accepts the overestimate as
+   conservative; at high refresh rates it is not cheap. Options: begin the
+   bracket at the frame cb when the upload cb is empty or trivially short,
+   or measure the two submits as separate spans and sum them.
+3. **The holdback blocks R.** `submit_command_buffers` sleeps the holdback
+   on the render thread before `vkQueuePresentKHR` (11-12 ms per frame at
+   N=5), so R is busy for the whole hold and the next frame's R cannot
+   start; with frame pipelining the main thread does not wait, but the
+   render thread's own next frame does. A deferred present (the
+   "Asynchronous present" section below) removes this.
+4. **Observer summaries are debug-only.** `Frame_pacing_observer`'s cadence
+   change and summary lines reach the log only when `editor.frame_pacing`
+   is at debug level (`config/editor/logging.json` says info), so a
+   production log shows the holdback-cap warnings but not the N they came
+   from. Log cadence changes at info.
+
 ## Tier A: Android Vulkan backend
 
 The pacer core, the frame records and the tier resolution are
