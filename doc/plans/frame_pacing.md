@@ -8,6 +8,88 @@ companion documents does not do yet. The pacer itself, its capability tiers,
 its verification UI and its measured behavior are described there; only the
 open items live here.
 
+## Tier S in the GPU-bound regime
+
+Measured 2026-10-18 with `scripts/bistro_frame_bench.py` (windowed Release
+editor, Bistro, a 120 Hz display, tier S, plain FIFO with 2 swapchain
+images, the pipelined render thread). The device's own frame records
+(`get_frame_pacing_frames`: GPU bracket, slot fence wait, submit and present
+times) give the picture; Tracy's GPU zones on this device sit a few
+milliseconds off the CPU clock and cover only the timed passes.
+
+**What happens.** The scene is GPU-bound: the GPU bracket runs back to back
+(gap between frames about 0.1 ms) whether vsync is on or off. With IMMEDIATE
+present the bracket is the pure work (about 21.5 ms here) and the tick is
+steady. With FIFO the bracket grows by about one third of a refresh period
+and locks to three periods (25 ms): the frame command buffer waits for the
+swapchain image at `COLOR_ATTACHMENT_OUTPUT`, a submit-wide stage, so the
+shadow and viewport passes wait for the image too, and the image of a
+2-image FIFO swapchain is released only at the vblank that displays the
+previous frame. The GPU frame start is therefore vblank-locked, which is
+also what makes the cadence steady on screen. The main thread's "alternating
+slow and fast frames" is the CPU tick differencing the GPU end jitter on
+that locked grid: tick(N) = 25 ms + w(N) - w(N-1) with w the per-frame GPU
+duration jitter, which gives the measured lag-1 autocorrelation near -0.5
+while the present interval stays at three periods. It is a readout
+artefact, not a control loop oscillating.
+
+**Where the main thread blocks.** `Device::acquire_frame_slot` in M2 waits
+for the GPU frame two ids back (`vkWaitSemaphores`, about 20 ms per frame
+here). Moving that wait later would change nothing in this regime: the GPU
+queue is already full, so throughput is set by the GPU and the wait only
+decides where the CPU parks. What the position does cost is latency: the
+frame is released at the earliest possible moment (the slot's previous use
+retired), so its work sits in the queue behind a whole GPU frame; input to
+display is about three frame periods. In a CPU-bound regime the wait never
+blocks, so its position does not matter there either.
+
+**Why the slop servo did not pace.** Two defects, the first fixed
+(88b03400a): a device without the present timing capability never set the
+display refresh period, so the observer created no pacer (no decisions, no
+Frame Pacing capture) and the servo kept its construction constant. The
+second is structural: the servo's overshoot test compares the loop period
+with one refresh period, so at any cadence above one vsync per frame every
+frame is an overshoot, the sleep is halved every frame, and the servo is
+inert. Tier S as designed only paces loads lighter than the refresh period.
+
+**Proposed, in order, keeping two frames in flight:**
+
+1. **Cadence-aware slop servo.** Measure the achieved cadence N as the loop
+   period rounded to refresh periods (FIFO backpressure makes it a whole
+   number) and use N x T as the overshoot reference; servo the sleep so the
+   residual involuntary blocking (slot fence wait plus present blocking)
+   settles at the headroom. The sleep then replaces the 20 ms slot wait,
+   the frame is released just in time for its GPU slot, latency drops by
+   about one frame of queueing at the same throughput, and the tick becomes
+   steady because the sleep absorbs the GPU end jitter. The hard waits stay
+   where they are as the safety net. Verify with the benchmark: fence wait
+   near the headroom, GPU gap unchanged, present interval unchanged, tick
+   lag-1 autocorrelation near zero, input-to-GPU-begin shorter.
+2. **Poll input after the release sleep.** `run()` polls events before M1,
+   so events arriving during the sleep wait a whole frame; with a sleep of
+   most of the frame this is the dominant input latency. Poll after the
+   pacing wait (or poll again there) and dispatch in M2 as now.
+3. **Stop gating the off-screen passes on the swapchain image.** Acquire
+   the image lazily before the swapchain pass or split the submit so only
+   the swapchain pass waits on the acquire semaphore. This returns the
+   image-wait third of a refresh period to the GPU per frame (about 14 %
+   here). On its own it also removes the vblank lock of the GPU start, so
+   it must land together with item 1 holding the cadence, or the display
+   interval alternates between two and three periods; with item 1 the
+   recovered time becomes latency reduction and headroom against the
+   occasional slot miss (GPU brackets above three periods were observed).
+4. **Report the pacing metric, not the tick.** The frame log and status
+   readout show the CPU tick; add the GPU end-to-end and present intervals
+   from the frame records so a vblank-locked steady display reads as
+   steady.
+
+Not proposed: a third frame in flight (adds a frame of latency for no
+throughput, the queue is already full) and FIFO_LATEST_READY or mailbox
+(drops the backpressure tier S senses). The main thread's slot wait could
+move into R behind an upload command pool ring one deeper than the frame
+slots, which would let M2 never block on the GPU; it buys nothing while
+item 1 is missing and is not needed once it exists.
+
 ## Tier A: Android Vulkan backend
 
 The pacer core, the frame records and the tier resolution are
