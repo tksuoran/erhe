@@ -357,6 +357,51 @@ def analyze(capture, csvexport, frame_count, settle_window_s, gpu_rows_wanted=Tr
     return 0
 
 
+def analyze_pacing_records(pacing_path, frame_count):
+    """Per-frame picture from the editor's own Frame_time_records (all times
+    in the recorder's clock, seconds): the GPU bracket (first render pass
+    begin to last render pass end, calibrated), the slot fence wait, the
+    submit and the present call, so GPU busy time, the GPU gap between
+    frames and the present interval come from the device, not from Tracy's
+    GPU clock alignment."""
+    if not os.path.isfile(pacing_path):
+        return
+    with open(pacing_path, encoding="utf-8") as f:
+        pacing = json.load(f)
+    frames = [fr for fr in pacing.get("frames", []) if fr.get("gpu_end", 0.0) > 0.0 and fr.get("gpu_begin", 0.0) > 0.0]
+    if len(frames) < 3:
+        print(f"\nframe pacing records: {len(frames)} frames with a GPU bracket; nothing to analyse")
+        return
+    frames.sort(key=lambda fr: fr["frame_id"])
+    # Steady-state subset: drop the first quarter as warm-up of the window.
+    used = frames[len(frames) // 4:]
+    gpu_spans = [(fr["gpu_end"] - fr["gpu_begin"]) * 1e3 for fr in used]
+    gpu_gaps = [(b["gpu_begin"] - a["gpu_end"]) * 1e3 for a, b in zip(used, used[1:])]
+    present_intervals = [(b["present_request_time"] - a["present_request_time"]) * 1e3 for a, b in zip(used, used[1:]) if a.get("present_request_time", 0.0) > 0.0 and b.get("present_request_time", 0.0) > 0.0]
+    gpu_end_intervals = [(b["gpu_end"] - a["gpu_end"]) * 1e3 for a, b in zip(used, used[1:])]
+    print()
+    print(f"frame pacing records over {len(used)} frames (refresh period {pacing.get('refresh_period', 0.0) * 1e3:.3f} ms):")
+    print(f"  GPU span      mean {statistics.fmean(gpu_spans):7.2f} ms  min {min(gpu_spans):7.2f}  max {max(gpu_spans):7.2f}  (first render pass begin to last render pass end)")
+    print(f"  GPU gap       mean {statistics.fmean(gpu_gaps):7.2f} ms  min {min(gpu_gaps):7.2f}  max {max(gpu_gaps):7.2f}  (previous frame's GPU end to this frame's GPU begin)")
+    print(f"  GPU end to end mean {statistics.fmean(gpu_end_intervals):6.2f} ms  stdev {statistics.pstdev(gpu_end_intervals):5.2f}  lag-1 autocorrelation {lag1_autocorrelation(gpu_end_intervals):+.2f}")
+    if present_intervals:
+        print(f"  present call interval mean {statistics.fmean(present_intervals):6.2f} ms  stdev {statistics.pstdev(present_intervals):5.2f}  lag-1 autocorrelation {lag1_autocorrelation(present_intervals):+.2f}")
+    picked = used[-frame_count:]
+    t0 = picked[0]["cpu_slot_begin"]
+    print(f"  last {len(picked)} frames (ms relative to the first one's cpu_slot_begin):")
+    print(f"  {'frame':>7} {'slot_begin':>10} {'fence_ms':>8} {'submit':>8} {'gpu_begin':>9} {'gpu_end':>8} {'gpu_ms':>7} {'gap_ms':>7} {'acq_ms':>7} {'present':>8} {'pres_blk':>8} {'pacer_ms':>8}")
+    previous_end = None
+    for fr in picked:
+        rel = lambda key: (fr.get(key, 0.0) - t0) * 1e3 if fr.get(key, 0.0) > 0.0 else float("nan")
+        gap = ((fr["gpu_begin"] - previous_end) * 1e3) if previous_end is not None else float("nan")
+        previous_end = fr["gpu_end"]
+        acquire = (fr.get("acquire_end", 0.0) - fr.get("acquire_begin", 0.0)) * 1e3
+        present_block = (fr.get("present_return_time", 0.0) - fr.get("present_request_time", 0.0)) * 1e3
+        pacer = (fr.get("pacer_wait_end", 0.0) - fr.get("pacer_wait_begin", 0.0)) * 1e3
+        print(f"  {fr['frame_id']:7d} {rel('cpu_slot_begin'):10.2f} {fr.get('fence_wait_ms', 0.0):8.2f} {rel('submit_time'):8.2f} {rel('gpu_begin'):9.2f} {rel('gpu_end'):8.2f} "
+              f"{(fr['gpu_end'] - fr['gpu_begin']) * 1e3:7.2f} {gap:7.2f} {acquire:7.2f} {rel('present_request_time'):8.2f} {present_block:8.2f} {pacer:8.2f}")
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -375,6 +420,7 @@ def main():
     parser.add_argument("--tracy-dir", default=os.environ.get("ERHE_TRACY_DIR", ""), help="directory with tracy-capture and tracy-csvexport (default ERHE_TRACY_DIR)")
     parser.add_argument("--out", default=os.path.join(REPO_ROOT, "logs", "bistro_frames.tracy"), help="capture file")
     parser.add_argument("--port", type=int, default=None, help="preferred MCP port (ERHE_MCP_PORT)")
+    parser.add_argument("--graphics-override", action="append", default=[], metavar="KEY=JSON", help="top-level erhe_graphics.json value for this run, e.g. force_disable_vsync=true (the file is restored at exit)")
     parser.add_argument("--analyze-only", action="store_true", help="skip the editor run; analyse --out")
     parser.add_argument("--keep-running", action="store_true", help="leave the editor running after the measurement (the capture is then analysed only after the editor exits by itself)")
     args = parser.parse_args()
@@ -387,7 +433,9 @@ def main():
         sys.exit(f"tracy-capture / tracy-csvexport not found in {args.tracy_dir}")
 
     if args.analyze_only:
-        return analyze(args.out, csvexport_exe, args.frames, args.measure_s)
+        result = analyze(args.out, csvexport_exe, args.frames, args.measure_s)
+        analyze_pacing_records(args.out + ".pacing.json", args.frames)
+        return result
 
     editor = args.editor if os.path.isabs(args.editor) else os.path.join(REPO_ROOT, args.editor)
     if not os.path.isfile(editor):
@@ -397,6 +445,26 @@ def main():
     if os.path.exists(args.out):
         os.remove(args.out)
 
+    graphics_json = os.path.join(REPO_ROOT, "config", "editor", "erhe_graphics.json")
+    graphics_backup = None
+    if args.graphics_override:
+        with open(graphics_json, encoding="utf-8", newline="") as f:
+            graphics_backup = f.read()
+        values = json.loads(graphics_backup)
+        for spec in args.graphics_override:
+            key, _sep, value = spec.partition("=")
+            values[key] = json.loads(value)
+        with open(graphics_json, "w", encoding="utf-8", newline="") as f:
+            f.write(json.dumps(values, indent=4) + "\n")
+    try:
+        return run_and_analyze(args, capture_exe, csvexport_exe, editor)
+    finally:
+        if graphics_backup is not None:
+            with open(graphics_json, "w", encoding="utf-8", newline="") as f:
+                f.write(graphics_backup)
+
+
+def run_and_analyze(args, capture_exe, csvexport_exe, editor):
     capture_process = subprocess.Popen([capture_exe, "-o", args.out, "-f"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.0)
 
@@ -450,12 +518,23 @@ def main():
     print(f"settling {args.settle_s:.0f} s without MCP traffic, then measuring {args.measure_s:.0f} s")
     log_offset = len(read_log())
     time.sleep(args.settle_s)
-    # One last MCP call marks the start of the quiet window in the capture.
-    mcp(port, "get_async_status")
+    # One last MCP call marks the start of the quiet window in the capture;
+    # it also restarts the frame pacing capture (the Frame_time_record of
+    # every frame: fence wait, GPU bracket, submit, present), read back after
+    # the window.
+    mcp(port, "set_frame_pacing_capture", {"clear": True, "max_frames": 0})
     time.sleep(args.measure_s)
     status = mcp(port, "get_frame_pacing_status")
     if isinstance(status, dict):
         print(f"frame pacing: tier {status.get('tier')}, refresh {status.get('display_refresh_period_ms')} ms, enforce {status.get('frame_pacing_enforce')}")
+    pacing = mcp(port, "get_frame_pacing_frames", {"count": 2000})
+    pacing_path = args.out + ".pacing.json"
+    if isinstance(pacing, dict) and ("frames" in pacing):
+        with open(pacing_path, "w", encoding="utf-8", newline="") as f:
+            f.write(json.dumps(pacing, indent=1) + "\n")
+        print(f"frame pacing records: {len(pacing['frames'])} frames -> {pacing_path}")
+    else:
+        print(f"frame pacing records unavailable: {str(pacing)[:200]}")
     rows = phase_lines(read_log()[log_offset:])
     if rows:
         print(f"phase log lines during settle + measure ({len(rows)}):")
@@ -477,7 +556,9 @@ def main():
     except subprocess.TimeoutExpired:
         capture_process.kill()
     print()
-    return analyze(args.out, csvexport_exe, args.frames, args.measure_s)
+    result = analyze(args.out, csvexport_exe, args.frames, args.measure_s)
+    analyze_pacing_records(args.out + ".pacing.json", args.frames)
+    return result
 
 
 if __name__ == "__main__":
