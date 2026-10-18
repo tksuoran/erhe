@@ -240,7 +240,11 @@ def analyze(capture, csvexport, frame_count, settle_window_s, gpu_rows_wanted=Tr
     # building), so the request frames are the zones above the threshold.
     mcp_zones = [z for z in zones.get(MCP_ZONE, []) if (z[1] - z[0]) >= MCP_REQUEST_THRESHOLD_NS]
     if len(mcp_zones) >= 2:
-        window = (mcp_zones[-2][1], mcp_zones[-1][0])
+        # The quiet window is the longest gap between consecutive requests
+        # among the last few (the measurement window; the reads of the
+        # records and the exit request follow it closely).
+        tail = mcp_zones[-6:]
+        window = max(((a[1], b[0]) for a, b in zip(tail, tail[1:])), key=lambda w: w[1] - w[0])
     else:
         window = (frames[-1][1] - int(settle_window_s * 1e9), frames[-1][1])
     window_frames = [f for f in frames if (f[0] >= window[0]) and (f[1] <= window[1])]
@@ -296,6 +300,43 @@ def analyze(capture, csvexport, frame_count, settle_window_s, gpu_rows_wanted=Tr
         print(f"{index:3d} {us(start) / 1000:10.3f} {us(end - start):8.0f} {us(values['frame_overlap_phase']):8.0f} {us(values['frame_prepare_phase']):8.0f} "
               f"{us(values['frame_imgui_phase']):8.0f} {us(values['kick']):8.0f} {us(values['join']):8.0f} "
               f"{(us(render[0]) / 1000) if render else 0:10.3f} {us(r_len):8.0f} {us(r_gap):8.0f}")
+
+    # Thread overlap over the quiet window: how much of each R the main
+    # thread was busy (and of that, in M2), how much it spent blocked (the
+    # kick's join of the previous R with pipelining, join without it), and
+    # how much of each tick the render thread was idle; plus the main
+    # thread's waits per tick (pacing sleep, slot fence wait).
+    main_work = sorted(sum((zones.get(name, []) for name in ("frame_overlap_phase", "frame_prepare_phase", "frame_imgui_phase")), []))
+    prepares = zones.get("frame_prepare_phase", [])
+    blocks = sorted(zones.get("kick", []) + zones.get("join", []))
+    pacing = zones.get("frame pacing", [])
+    fence = zones.get("acquire_frame_slot: vkWaitSemaphores", [])
+    renders_in_window = [r for r in render_sorted if (r[0] >= window[0]) and (r[1] <= window[1])]
+    if renders_in_window and window_frames:
+        r_count = len(renders_in_window)
+        r_total = sum(r[1] - r[0] for r in renders_in_window)
+        r_in_phases = sum(overlap_ns(r[0], r[1], main_work) for r in renders_in_window)
+        r_in_sleep = sum(overlap_ns(r[0], r[1], pacing) for r in renders_in_window)
+        r_in_fence = sum(overlap_ns(r[0], r[1], fence) for r in renders_in_window)
+        r_in_m2 = sum(overlap_ns(r[0], r[1], prepares) for r in renders_in_window) - r_in_fence
+        r_blocked = sum(overlap_ns(r[0], r[1], blocks) for r in renders_in_window)
+        r_working = r_in_phases - r_in_sleep - r_in_fence
+        tick_total = sum(f[1] - f[0] for f in window_frames)
+        r_idle = sum((f[1] - f[0]) - overlap_ns(f[0], f[1], render_sorted) for f in window_frames)
+        pacing_total = sum(overlap_ns(f[0], f[1], pacing) for f in window_frames)
+        fence_total = sum(overlap_ns(f[0], f[1], fence) for f in window_frames)
+        blocked_total = sum(overlap_ns(f[0], f[1], blocks) for f in window_frames)
+        main_busy_total = sum(overlap_ns(f[0], f[1], main_work) for f in window_frames) - pacing_total - fence_total
+        n = len(window_frames)
+        print()
+        print(f"thread overlap over the quiet window ({n} ticks, {r_count} render phases; render thread {'dedicated' if render_thread != main_thread else 'inline'}):")
+        print(f"  R per tick                 {us(r_total / r_count):8.0f} us")
+        print(f"  R while main works         {us(r_working / r_count):8.0f} us ({100.0 * r_working / r_total:5.1f}% of R; in M2 {us(r_in_m2 / r_count):.0f} us)")
+        print(f"  R while main sleeps (pacer){us(r_in_sleep / r_count):8.0f} us ({100.0 * r_in_sleep / r_total:5.1f}% of R)")
+        print(f"  R while main in fence wait {us(r_in_fence / r_count):8.0f} us ({100.0 * r_in_fence / r_total:5.1f}% of R)")
+        print(f"  R while main blocked on R  {us(r_blocked / r_count):8.0f} us ({100.0 * r_blocked / r_total:5.1f}% of R; kick/join)")
+        print(f"  R idle per tick            {us(r_idle / n):8.0f} us ({100.0 * r_idle / tick_total:5.1f}% of tick)")
+        print(f"  main per tick: work {us(main_busy_total / n):.0f} us, pacing sleep {us(pacing_total / n):.0f} us, slot fence wait {us(fence_total / n):.0f} us, blocked on R {us(blocked_total / n):.0f} us")
 
     # Which zones fill the main thread and the render thread in those frames,
     # per frame: every zone whose start lies in the frame (main thread) or in
