@@ -158,23 +158,47 @@ the cadence climbed to the 200 ms holdback cap). What remains:
    `erhe::graphics::Display_refresh_resolver` (inputs.md 3.1): the window's
    display mode, the query (with `refreshInterval` and the timing properties
    counter), and an init calibration from displayed times that verifies
-   both. Left: the init calibration runs once per display; a second
-   calibration pass after a display change waits for the next presents like
-   the first, and a VRR display is still paced on the minimum cycle.
+   both (a dedicated clear-only swapchain at device init: free run, then
+   plain FIFO, GPU frame end deltas). Left: the calibration runs once, at
+   device init, for the display the window starts on; after a move to
+   another display its result is dropped and the queried sources decide
+   (re-running it would need the application's swapchain gone), and a VRR
+   display is still paced on the minimum cycle.
+
+   **What the calibration found (2026-10-18).** On the Intel path the
+   plain-FIFO lock measured 8.55 ms (30 of 32 deltas), confirming the
+   120 Hz window mode. On the NVIDIA/X11 path, for the same window on the
+   120 Hz display, the lock measured 4.19 ms (32 of 32 deltas): the
+   presentation engine releases swapchain images at the 240 Hz builtin
+   panel's vblank, so `refreshDuration` = 4.167 ms was true about the
+   engine all along, and the display the window is on shows every other
+   engine tick. The resolver takes the measured engine cadence (confirmed
+   by the query) and warns that the window mode disagrees. Open policy
+   decision: the pacer's grid is the engine's (4.17 ms here), but visible
+   refreshes come at 8.33 ms, so at N=1 half the presents are never seen
+   and FR4 predictions describe engine ticks, not displayed frames.
+   Options: pace on the engine grid with `N_min` raised to the ratio of
+   window mode to engine period (2 here), so every present is a visible
+   frame; or pace on the window mode when the engine cadence is an integer
+   multiple faster, accepting an unknown half-tick phase against the
+   visible display. Either needs presentation feedback to anchor the
+   phase, which this path does not deliver (item 1). Also observed on this
+   grid without feedback: at N=4 the pacer's present-request holdback
+   alternated between 14 and 60 ms (present intervals 16.7 / 62 ms), the
+   no-feedback slot assignment flipping between consecutive and
+   recomputed slots; investigate with the pacing records.
 6. **`vkWaitForPresentKHR` is not a display-time source on this driver.**
-   On the NVIDIA/X11 path the wait on the previous present returns 0.3 to
-   2 ms after that present was queued (32 samples, median 0.5 ms), so it
-   completes at queue processing, not at scanout; the calibration's
-   fast-frame gate rejects these and the run stays "unverified". On the
-   Intel/Mesa path the same wait wakes on the vblank cadence with about 5 %
-   jitter in the median (8.8 to 8.9 ms on a 120 Hz display), which the 10 %
-   confirmation tolerance absorbs. Two consequences to follow up: the FR5
+   Found while the calibration still sampled it (it now uses GPU frame end
+   timestamps under FIFO backpressure instead): on the NVIDIA/X11 path the
+   wait on the previous present returned 0.3 to 2 ms after that present was
+   queued (32 samples, median 0.5 ms), so it completes at queue processing,
+   not at scanout; on the Intel/Mesa path it woke on the vblank cadence with
+   about 5 % jitter in the median. Two consequences to follow up: the FR5
    present-wait clamp cannot clamp anything on the NVIDIA path, and the
    clamp's wait on the main thread overlaps the render thread's
    `vkQueuePresentKHR` on the same swapchain, which the specification marks
    externally synchronized (`vk.xml` `externsync="true"` on the swapchain
-   parameter); the calibration keeps the clamp off while it runs for that
-   reason, the steady state does not.
+   parameter).
 
 ## Tier A: Android Vulkan backend
 

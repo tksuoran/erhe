@@ -16,10 +16,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Device::get_display_refresh_report()`): resolves the display refresh
   period the frame pacer runs on from the window's display mode, the
   swapchain timing query (`refreshDuration` / `refreshInterval`, re-read on
-  a timing properties counter change) and an init calibration from the
-  displayed times of the first presents, logging every source
+  a timing properties counter change) and an init calibration that measures
+  the display with a dedicated clear-only swapchain at device init (free
+  run, then plain FIFO; GPU frame end deltas), logging every source
   (`erhe.graphics.display_refresh`). `Device::set_display_refresh_duration_seconds`
-  is the resolver's output, no longer set by the swapchain directly.
+  is the resolver's output, no longer set by the swapchain directly;
+  `Device::is_display_refresh_calibrating()` reports a running calibration.
 - `erhe::window`: `Context_window::get_display_refresh_period_seconds()`,
   `get_display_name()` and `register_display_changed_callback()` (SDL:
   called on `SDL_EVENT_WINDOW_DISPLAY_CHANGED` and the display mode change

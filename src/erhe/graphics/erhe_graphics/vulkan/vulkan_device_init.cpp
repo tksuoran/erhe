@@ -2703,6 +2703,17 @@ Device_impl::Device_impl(
         }
     }
 
+    // Display refresh init calibration: a dedicated clear-only swapchain on
+    // the window surface, before the application's swapchain exists
+    // (Swapchain_impl creates its VkSwapchainKHR at the first frame), so the
+    // measured cadence is the display's alone and the real swapchain is
+    // created afterwards in its tier's present mode untouched
+    // (vulkan_device_display_refresh_calibration.cpp).
+    if (!headless && (m_surface != nullptr)) {
+        ERHE_PROFILE_SCOPE("Display refresh calibration");
+        run_display_refresh_calibration(m_surface->get_impl());
+    }
+
     // Shader hot-reload. Started here, before any shader stages exist:
     // Shader_monitor::add() registers nothing while the monitor is not
     // running.

@@ -400,16 +400,6 @@ auto Device::make_display_refresh_resolver() -> std::unique_ptr<Display_refresh_
             set_display_refresh_duration_seconds(period_seconds);
         }
     );
-    resolver->set_frame_work_lookup(
-        [this](const std::int64_t frame_id) -> double {
-            erhe::frame_pacing::Frame_time_record record{};
-            if (!m_frame_time_recorder->get(frame_id, record)) {
-                return 0.0;
-            }
-            const double gpu_span = (record.gpu_frame_end > record.gpu_frame_begin) ? (record.gpu_frame_end - record.gpu_frame_begin) : 0.0;
-            return std::max(gpu_span, record.cpu_service_time());
-        }
-    );
     return resolver;
 }
 

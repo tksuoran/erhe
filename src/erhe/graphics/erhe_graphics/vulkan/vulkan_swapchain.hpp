@@ -222,9 +222,6 @@ private:
     // refreshDuration / refreshInterval + the timing properties counter, to
     // the Display_refresh_resolver; at init and on a counter change.
     void query_swapchain_timing_properties     ();
-    // Init calibration samples for the Display_refresh_resolver (the
-    // displayed time of the present just made), while it is calibrating.
-    void calibrate_display_refresh             (uint64_t frame_id, bool presented);
     // Drains available past-presentation timings into the device's frame
     // time recorder (achieved present time per frame id).
     void poll_present_timing                   (uint64_t frame_id);

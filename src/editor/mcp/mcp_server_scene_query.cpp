@@ -2633,11 +2633,14 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
             {"vulkan_refresh_duration_ms",    refresh.vulkan_refresh_duration_seconds * 1000.0},
             {"vulkan_refresh_interval_ms",    refresh.vulkan_refresh_interval_seconds * 1000.0},
             {"vulkan_mode",                   erhe::graphics::c_str(refresh.vulkan_mode)},
+            {"calibration_phase",             erhe::graphics::c_str(refresh.calibration_phase)},
             {"calibration_done",              refresh.calibration_done},
-            {"calibration_source",            erhe::graphics::c_str(refresh.calibration_source)},
-            {"calibration_period_ms",         refresh.calibration_period_seconds * 1000.0},
-            {"calibration_sample_count",      refresh.calibration_sample_count},
-            {"calibration_rejected_count",    refresh.calibration_rejected_count},
+            {"calibration_verified",          refresh.calibration_verified},
+            {"calibration_production_ms",     refresh.free_run_period_seconds * 1000.0},
+            {"calibration_production_deltas", refresh.free_run_delta_count},
+            {"calibration_locked_ms",         refresh.locked_period_seconds * 1000.0},
+            {"calibration_locked_deltas",     refresh.locked_delta_count},
+            {"calibration_locked_cluster",    refresh.locked_cluster_count},
             {"resolved_period_ms",            refresh.resolved_period_seconds * 1000.0},
             {"resolved_source",               erhe::graphics::c_str(refresh.resolved_source)}
         };

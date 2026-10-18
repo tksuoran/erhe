@@ -1229,8 +1229,7 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
         // display refresh period (the servo's overshoot reference and the
         // observer's grid seed) comes from the window's display mode, which
         // Device_impl feeds to the Display_refresh_resolver, verified by
-        // the init calibration from the vkQueuePresentKHR return cadence
-        // (plain FIFO backpressure, see present()).
+        // the init calibration swapchain (Display_refresh_calibration).
         log_swapchain->info(
             "present timing not enabled: frame pacing tier {} does not use it",
             (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::slop_servo) ? "S" : "OFF"
@@ -1638,12 +1637,6 @@ void Swapchain_impl::poll_present_timing(const uint64_t frame_id)
         const std::int64_t feedback_frame_id = static_cast<std::int64_t>(timing.presentId) - 1;
         erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl.get_frame_time_recorder();
         recorder.set(feedback_frame_id, &erhe::frame_pacing::Frame_time_record::achieved_present_time, achieved_seconds);
-        // Init calibration of the display refresh period: the displayed
-        // times of consecutive presents, best source.
-        Display_refresh_resolver& resolver = m_device_impl.get_device().get_display_refresh_resolver();
-        if (resolver.wants_sample(Display_time_sample_source::present_feedback)) {
-            resolver.add_display_time_sample(Display_time_sample_source::present_feedback, feedback_frame_id, achieved_seconds);
-        }
         if (queue_ops_time != 0) {
             const double queue_ops_seconds = stage_time_to_seconds(
                 queue_ops_time, m_timing_calibration_queue_ops_valid, m_timing_calibration_queue_ops_value
@@ -1894,31 +1887,6 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
         present_info.pNext = &timings_info;
     }
 
-    // Display refresh init calibration, present-wait source: the time the
-    // PREVIOUS present was displayed, taken on this thread right before
-    // this present goes out. This frame's GPU work is already submitted, so
-    // the wait overlaps it and the present cadence stays the display's;
-    // waiting for the present just made (after it) would serialize the next
-    // frame behind the display and read back "latency + one frame" instead
-    // (measured: two refresh periods). The swapchain is externally
-    // synchronized for vkWaitForPresentKHR, hence this thread, and the FR5
-    // clamp on the main thread stays off while the calibration runs
-    // (Device::wait_for_displayed_frame).
-    {
-        Display_refresh_resolver& resolver = m_device_impl.get_device().get_display_refresh_resolver();
-        if ((frame_id >= 1) && (present_id_value != 0) && resolver.wants_sample(Display_time_sample_source::present_wait)) {
-            constexpr uint64_t s_calibration_wait_timeout_ns = 100'000'000; // a timeout just loses the sample
-            const Present_wait_result wait_result = wait_for_displayed_frame(static_cast<std::int64_t>(frame_id) - 1, s_calibration_wait_timeout_ns);
-            if (wait_result == Present_wait_result::displayed) {
-                resolver.add_display_time_sample(
-                    Display_time_sample_source::present_wait,
-                    static_cast<std::int64_t>(frame_id) - 1,
-                    erhe::frame_pacing::Frame_time_recorder::now()
-                );
-            }
-        }
-    }
-
     ERHE_VULKAN_TRACE(
         "vkQueuePresentKHR image_index={} present_sem=0x{:x} swapchain=0x{:x}",
         index,
@@ -2012,33 +1980,8 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
     add_present_to_history(frame_id, index, present_fence);
     cleanup_present_history();
     poll_present_timing(frame_id);
-    calibrate_display_refresh(frame_id, (result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR));
 
     return result;
-}
-
-void Swapchain_impl::calibrate_display_refresh(const uint64_t frame_id, const bool presented)
-{
-    // Init calibration of the display refresh period (display_refresh_resolver.hpp):
-    // for the first presents of the process, the time each present was
-    // displayed, from the best source this platform offers. Presentation
-    // feedback is fed by poll_present_timing() as it completes; the
-    // present-wait source is sampled in present() before each present (the
-    // previous present's displayed time); without either, under plain FIFO,
-    // vkQueuePresentKHR returns on the vblank cadence once the queue is
-    // full, so its return times carry the period.
-    Display_refresh_resolver& resolver = m_device_impl.get_device().get_display_refresh_resolver();
-    if (!resolver.is_calibrating() || !presented) {
-        return;
-    }
-    if ((m_surface_impl.get_present_mode() == VK_PRESENT_MODE_FIFO_KHR) && resolver.wants_sample(Display_time_sample_source::present_return)) {
-        resolver.add_display_time_sample(
-            Display_time_sample_source::present_return,
-            static_cast<std::int64_t>(frame_id),
-            erhe::frame_pacing::Frame_time_recorder::now()
-        );
-    }
-    resolver.note_present();
 }
 
 auto Swapchain_impl::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
