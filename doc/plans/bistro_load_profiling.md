@@ -301,6 +301,60 @@ leak check line (`scene-close check: all N tracked items ... released`)
 unchanged; `mcp_server_tests` `*close_scene*` and `*undo*` pass; render of
 a second open byte-identical.
 
+**Step 7a result (a7079e847, 8327108d7).** The measurement (Tracy, first
+Bistro close, 7.06 s inside `~Scene_root`) cleared every suspect: all the
+`set_parent` bookkeeping together (sanity checks, inheritance snapshot,
+re-derive, remove_child, depth) is under 10 ms for 3397 calls. Two real
+terms:
+
+- `Scene::unregister_node` 0.93 s (2782 calls): its `#if !defined(NDEBUG)`
+  whole-scene `sanity_check()` ran in Release because
+  `cmake/JoltPhysicsCompatibility.cmake` replaced the MSVC Release flags
+  without `/DNDEBUG` (only Jolt's consumers got the define). Fixed in cmake;
+  3.7 ms after. The same commit found the codegen tests doing their work
+  inside `assert()`, now `CODEGEN_TEST_CHECK`.
+- Payload release when a leaf's last reference drops, about 5 s, still on
+  the main thread: `Geometry` destruction 4.75 s (`m_vertex_pair_to_edge`
+  `unordered_map` 1.0 s; the `GEO::Mesh` plus `Mesh_attributes` remainder
+  3.75 s), `Primitive_raytrace` 0.57 s, `Element_mappings` 0.42 s,
+  `Triangle_soup` 0.16 s. `Buffer_mesh` and the dependency objects are
+  negligible.
+
+After 7a the close is about 5 s (watchdog still reports the stall); render
+and leak check unchanged.
+
+**Step 7b: payload release.** Two parts, in this order. First, a Tracy
+breakdown of the `Geometry` destruction: which attribute stores and which
+member containers take the 3.75 s for 2727 geometries (1.4 ms each, which
+is far more than freeing a few large blocks should cost) and whether any
+term is a wasteful structure that also costs at load, e.g. the
+node-per-edge `unordered_map` (a flat sorted or open-addressed map, or
+building the lookup only when an edge query needs it). Those are fixed at
+the root. Second, the residual release is bulk and off the main thread:
+the close detaches and unregisters the items on the main thread (fast now),
+and the payload that would be freed by the last reference drop
+(`Geometry`, `Primitive_raytrace`, `Element_mappings`, `Triangle_soup`,
+anything else measured) is handed to one worker task that destroys it,
+with the main thread never waiting for it. Constraints: deferred-finalize
+tasks still running hold their own references, so nothing is freed under
+them; GPU-side resources (`Buffer_mesh` allocations, textures) keep their
+current main-thread path unless the device API is verified thread-safe for
+that release; editor exit joins the pending release before the device is
+destroyed; the scene-close leak check tracks `Item_base` objects only, so
+it is unaffected, and its line must still read "all N tracked items
+released". Same gate as above.
+
+**Arena (long-term form, from the user 2026-10-18).** If the nodes,
+hierarchy items and their payload lived in a per-scene arena, closing a
+scene would release the arena instead of destroying every object through
+its destructor chain, and most of the per-object work could be bypassed
+outright. For Bistro the measured node and hierarchy bookkeeping is under
+10 ms, so an arena for the items alone would not move the close; the cost
+is the geometry payload memory, which is where an arena or bulk allocator
+for attribute storage and the edge map would apply. Not started under this
+plan; 7b's worker release is the form that does not need the allocator
+change.
+
 ## Plan
 
 1. Done: wall time of the open in Release and Debug, both entry points,
