@@ -24,7 +24,11 @@ if (MSVC)
     # Set compiler flags for various configurations
     # erhe: Added debug symbols
     set(CMAKE_CXX_FLAGS_DEBUG   "/GS /Od /Ob0 /RTC1 /Zi")
-    set(CMAKE_CXX_FLAGS_RELEASE "/GS- /Gy /O2 /Oi /Ot")
+    # erhe: Added /DNDEBUG. Jolt defines NDEBUG only on its own target (and
+    # PUBLIC to its consumers); without it here, every other Release target
+    # compiles its #ifndef NDEBUG debug checks and assert()s, and NDEBUG
+    # differs between targets that share headers.
+    set(CMAKE_CXX_FLAGS_RELEASE "/GS- /Gy /O2 /Oi /Ot /DNDEBUG")
 
     # Jolt has /SUBSYSTEM:WINDOWS
     set(CMAKE_EXE_LINKER_FLAGS "/ignore:4221")

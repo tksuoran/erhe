@@ -404,6 +404,7 @@ void Xformable::handle_item_host_update(erhe::Item_host* const old_item_host, er
     auto* new_scene_host = dynamic_cast<Scene_host*>(new_item_host);
 
     if (old_scene_host != nullptr) {
+        ERHE_PROFILE_SCOPE("Xformable unregister_node");
         old_scene_host->unregister_node(shared_this);
     }
     if (new_scene_host != nullptr) {

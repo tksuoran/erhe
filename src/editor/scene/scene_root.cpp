@@ -370,6 +370,7 @@ void Scene_root::on_items_removed(const Removed_items& removed)
 
 Scene_root::~Scene_root() noexcept
 {
+    ERHE_PROFILE_FUNCTION();
     if (m_is_registered) {
         unregister_from_editor_scenes(*m_app_scenes);
     }
