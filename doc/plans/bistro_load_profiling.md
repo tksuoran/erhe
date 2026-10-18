@@ -1,8 +1,9 @@
 # Bistro load time: profile and optimization candidates
 
-Status: in progress (picked steps 1-4, 6, 7 done 2026-10-18; open decisions below)
+Status: in progress
 
-Result on the Release build, File > Load Scene, one process, headless: the
+Picked steps 1-4, 6 and 7 are done (2026-10-18). Result on the Release
+build, File > Load Scene, one process, headless: the
 scene is listed 13.8 s to about 2.8-3.7 s after the request, idle at 20.6 s
 to 5.2-7 s (cold optimizer cache 7 s, warm 5.2-6 s), close stalls the main
 thread 10 s to 0.2 s, renders byte-identical throughout. Open decisions for
