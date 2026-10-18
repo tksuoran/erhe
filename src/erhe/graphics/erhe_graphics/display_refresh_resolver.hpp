@@ -48,7 +48,17 @@ enum class Display_refresh_source : unsigned int {
     none = 0,
     window_mode,    // the window's display mode (SDL)
     vulkan_timing,  // VK_EXT_present_timing swapchain timing properties
-    calibration     // vblank cadence measured at init
+    calibration,    // vblank cadence measured at init
+    override_rate   // display_refresh_override_hz from the graphics config
+};
+
+// How the resolved period is chosen (graphics config display_refresh_source).
+enum class Display_refresh_policy : unsigned int {
+    automatic = 0,   // weigh the sources (the default)
+    window_mode,     // force the window's display mode
+    vulkan_timing,   // force the swapchain timing query
+    calibration,     // force the measured cadence
+    override_rate    // force display_refresh_override_hz
 };
 
 // What VK_EXT_present_timing says about the refresh cycle.
@@ -75,12 +85,20 @@ enum class Display_refresh_present_kind : unsigned int {
 };
 
 [[nodiscard]] auto c_str(Display_refresh_source            value) -> const char*;
+[[nodiscard]] auto c_str(Display_refresh_policy            value) -> const char*;
+// Parses the graphics config string ("auto", "window", "vulkan",
+// "calibration", "override"); false for an unknown string.
+[[nodiscard]] auto parse_display_refresh_policy(const std::string& text, Display_refresh_policy& out_policy) -> bool;
 [[nodiscard]] auto c_str(Display_refresh_mode              value) -> const char*;
 [[nodiscard]] auto c_str(Display_refresh_calibration_phase value) -> const char*;
 
 class Display_refresh_report
 {
 public:
+    Display_refresh_policy            policy                         {Display_refresh_policy::automatic};
+    double                            override_period_seconds        {0.0}; // 0 = none
+    std::size_t                       display_count                  {0};   // displays the window system reports; 0 = unknown
+    bool                              sources_disagree               {false}; // two known sources differ beyond tolerance
     double                            window_period_seconds          {0.0}; // 0 = unknown
     double                            vulkan_refresh_duration_seconds{0.0}; // 0 = unknown
     double                            vulkan_refresh_interval_seconds{0.0}; // 0 = unknown or variable (see vulkan_mode)
@@ -106,10 +124,16 @@ public:
 
     void set_apply_callback(Apply_callback callback);
 
-    // The window's display mode period (0 = unknown). A change of value
+    // The graphics config choice: which source decides, and the override
+    // rate (seconds per refresh; 0 = none). A forced source that is not
+    // available falls back to automatic with a warning.
+    void set_policy(Display_refresh_policy policy, double override_period_seconds);
+
+    // The window's display mode period (0 = unknown), the display's name
+    // and how many displays the window system reports. A change of value
     // after the init calibration drops its result: the window moved to
     // another display, and the cadence measured described the old one.
-    void set_window_period(double period_seconds, const char* display_name);
+    void set_window_period(double period_seconds, const char* display_name, std::size_t display_count);
 
     // VK_EXT_present_timing swapchain timing properties, at swapchain
     // creation and whenever the timing properties counter changes.
@@ -183,8 +207,13 @@ private:
     mutable std::mutex              m_mutex;
     Apply_callback                  m_apply_callback;
 
+    Display_refresh_policy m_policy{Display_refresh_policy::automatic};
+    double                 m_override_period{0.0};
+    bool                   m_policy_fallback_logged{false};
     double      m_window_period{0.0};
     std::string m_window_display_name;
+    std::size_t m_display_count{0};
+    bool        m_sources_disagree{false};
     uint64_t    m_vulkan_refresh_duration_ns{0};
     uint64_t    m_vulkan_refresh_interval_ns{0};
     bool        m_vulkan_known{false};

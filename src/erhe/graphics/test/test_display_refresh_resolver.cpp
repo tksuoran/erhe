@@ -20,6 +20,7 @@ using erhe::graphics::Display_refresh_source;
 using erhe::graphics::Display_refresh_mode;
 using erhe::graphics::Display_refresh_calibration_phase;
 using erhe::graphics::Display_refresh_present_kind;
+using erhe::graphics::Display_refresh_policy;
 
 constexpr double   period_120_hz = 1.0 / 120.0;
 constexpr double   period_240_hz = 1.0 / 240.0;
@@ -79,7 +80,7 @@ auto near(const double a, const double b) -> bool
 TEST(Display_refresh_resolver, window_mode_alone_is_used)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
@@ -89,7 +90,7 @@ TEST(Display_refresh_resolver, window_mode_alone_is_used)
 TEST(Display_refresh_resolver, agreeing_sources_take_the_vulkan_value)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_vulkan_timing(ns_120_hz, ns_120_hz);
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_120_hz) * 1e-9));
@@ -102,7 +103,7 @@ TEST(Display_refresh_resolver, disagreeing_sources_take_the_window_until_calibra
     // The measured case: a window on a 120 Hz display, the swapchain query
     // answering with the other display's 240 Hz.
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
     Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
@@ -124,7 +125,7 @@ TEST(Display_refresh_resolver, disagreeing_sources_take_the_window_until_calibra
 TEST(Display_refresh_resolver, calibration_overrides_both_sources_when_neither_matches)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(1.0 / 60.0, "panel");
+    f.resolver.set_window_period(1.0 / 60.0, "panel", 2);
     f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
     f.calibrate(0.002, period_120_hz);
     const Display_refresh_report r = f.resolver.get_report();
@@ -141,7 +142,7 @@ TEST(Display_refresh_resolver, production_near_the_cadence_proves_nothing)
     // cadence, so the calibration stays unverified and the queried decision
     // stands.
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
     f.calibrate(0.015, 2.0 * period_120_hz);
     const Display_refresh_report r = f.resolver.get_report();
@@ -157,7 +158,7 @@ TEST(Display_refresh_resolver, jittered_cadence_confirms_the_nearby_source)
     // Locked deltas 3 % off the nominal: within the tolerance, so the exact
     // window mode is kept rather than the measurement.
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.calibrate(0.002, period_120_hz * 1.03);
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(r.calibration_verified);
@@ -168,7 +169,7 @@ TEST(Display_refresh_resolver, jittered_cadence_confirms_the_nearby_source)
 TEST(Display_refresh_resolver, outliers_do_not_anchor_the_cluster)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_calibration_modes(true, true);
     f.present(static_cast<int>(Display_refresh_resolver::s_free_run_skip + Display_refresh_resolver::s_free_run_deltas) + 1, 0.002);
     // Settle, then mostly one-period deltas with a few doubled ones.
@@ -186,7 +187,7 @@ TEST(Display_refresh_resolver, outliers_do_not_anchor_the_cluster)
 TEST(Display_refresh_resolver, no_fifo_ends_the_calibration_at_once)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_calibration_modes(true, false);
     EXPECT_FALSE(f.resolver.is_calibrating());
     const Display_refresh_report r = f.resolver.get_report();
@@ -198,7 +199,7 @@ TEST(Display_refresh_resolver, no_fifo_ends_the_calibration_at_once)
 TEST(Display_refresh_resolver, no_free_run_mode_leaves_the_result_unverified)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_calibration_modes(false, true);
     EXPECT_EQ(f.resolver.get_calibration_phase(), Display_refresh_calibration_phase::locked);
     f.present(static_cast<int>(Display_refresh_resolver::s_locked_settle + Display_refresh_resolver::s_locked_deltas) + 1, period_120_hz);
@@ -212,7 +213,7 @@ TEST(Display_refresh_resolver, no_free_run_mode_leaves_the_result_unverified)
 TEST(Display_refresh_resolver, present_bound_ends_a_calibration_that_never_locks)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_calibration_modes(true, true);
     // Frames presented, but no GPU frame end ever harvested (no bracket).
     for (std::size_t i = 0; i < Display_refresh_resolver::s_max_presents; ++i) {
@@ -240,17 +241,66 @@ TEST(Display_refresh_resolver, variable_and_decoupled_modes)
 TEST(Display_refresh_resolver, window_display_change_drops_the_calibration_result)
 {
     Resolver_fixture f;
-    f.resolver.set_window_period(period_120_hz, "Dell");
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
     f.calibrate(0.002, period_120_hz);
     EXPECT_FALSE(f.resolver.is_calibrating());
     EXPECT_TRUE(f.resolver.get_report().calibration_verified);
     // The window moves to the 240 Hz panel: the measured 120 Hz cadence no
     // longer applies; the window mode and the query now agree.
-    f.resolver.set_window_period(period_240_hz, "panel");
+    f.resolver.set_window_period(period_240_hz, "panel", 2);
     EXPECT_FALSE(f.resolver.is_calibrating());
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_FALSE(r.calibration_verified);
     EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::vulkan_timing);
+}
+
+TEST(Display_refresh_resolver, override_policy_wins_over_everything)
+{
+    Resolver_fixture f;
+    f.resolver.set_policy(Display_refresh_policy::override_rate, 1.0 / 90.0);
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
+    f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
+    f.calibrate(0.002, period_120_hz);
+    const Display_refresh_report r = f.resolver.get_report();
+    EXPECT_TRUE(near(r.resolved_period_seconds, 1.0 / 90.0));
+    EXPECT_EQ(r.resolved_source, Display_refresh_source::override_rate);
+    EXPECT_TRUE(r.sources_disagree);
+    EXPECT_EQ(r.display_count, 2u);
+}
+
+TEST(Display_refresh_resolver, forced_source_is_used_when_available)
+{
+    Resolver_fixture f;
+    f.resolver.set_policy(Display_refresh_policy::vulkan_timing, 0.0);
+    f.resolver.set_window_period(period_120_hz, "Dell", 2);
+    f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
+    Display_refresh_report r = f.resolver.get_report();
+    EXPECT_EQ(r.resolved_source, Display_refresh_source::vulkan_timing);
+    // The calibration contradicts the forced query; the policy still holds.
+    f.calibrate(0.002, period_120_hz);
+    r = f.resolver.get_report();
+    EXPECT_EQ(r.resolved_source, Display_refresh_source::vulkan_timing);
+    EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
+    EXPECT_TRUE(r.sources_disagree);
+}
+
+TEST(Display_refresh_resolver, unavailable_forced_source_falls_back_to_automatic)
+{
+    Resolver_fixture f;
+    f.resolver.set_policy(Display_refresh_policy::calibration, 0.0);
+    f.resolver.set_window_period(period_120_hz, "Dell", 1);
+    // GPU-bound startup: the calibration cannot verify, so the forced
+    // source is unavailable and the automatic decision (window mode) serves.
+    f.calibrate(0.015, 2.0 * period_120_hz);
+    const Display_refresh_report r = f.resolver.get_report();
+    EXPECT_FALSE(r.calibration_verified);
+    EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
+    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
+
+    Display_refresh_policy parsed = Display_refresh_policy::automatic;
+    EXPECT_TRUE(erhe::graphics::parse_display_refresh_policy("override", parsed));
+    EXPECT_EQ(parsed, Display_refresh_policy::override_rate);
+    EXPECT_FALSE(erhe::graphics::parse_display_refresh_policy("bogus", parsed));
 }

@@ -22,10 +22,19 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   (`erhe.graphics.display_refresh`). `Device::set_display_refresh_duration_seconds`
   is the resolver's output, no longer set by the swapchain directly;
   `Device::is_display_refresh_calibrating()` reports a running calibration.
+  `Display_refresh_policy` with `Display_refresh_resolver::set_policy()` and
+  `parse_display_refresh_policy()`: the graphics config keys
+  `display_refresh_source` (auto, window, vulkan, calibration, override) and
+  `display_refresh_override_hz` choose the deciding source or an explicit
+  rate (`Graphics_config` version 2). One warning whenever two known sources
+  disagree beyond tolerance.
 - `erhe::window`: `Context_window::get_display_refresh_period_seconds()`,
-  `get_display_name()` and `register_display_changed_callback()` (SDL:
+  `get_display_name()`, `register_display_changed_callback()` (SDL:
   called on `SDL_EVENT_WINDOW_DISPLAY_CHANGED` and the display mode change
-  events; GLFW and the null window report nothing).
+  events) and `enumerate_displays()` with `Display_info`
+  (`display_info.hpp`: every display, its current mode, the primary flag and
+  which one hosts the window; logged when the SDL window opens). GLFW and
+  the null window report nothing.
 
 - `erhe::frame_pacing`: `Slop_servo_pacer::get_cadence()` and
   `get_cadence_period()` (the loop period the servo paces against: the

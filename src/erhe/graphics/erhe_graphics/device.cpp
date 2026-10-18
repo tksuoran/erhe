@@ -51,7 +51,7 @@ Device::Device(
 )
     : m_device_message_callback{std::move(device_message_callback)}
     , m_frame_time_recorder{std::make_unique<erhe::frame_pacing::Frame_time_recorder>()}
-    , m_display_refresh_resolver{make_display_refresh_resolver()}
+    , m_display_refresh_resolver{make_display_refresh_resolver(graphics_config)}
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config, vulkan_external_creators)}
 #else
@@ -389,7 +389,7 @@ auto Device::get_display_refresh_duration_seconds() const -> double
     return m_frame_time_recorder->get_display_refresh_duration();
 }
 
-auto Device::make_display_refresh_resolver() -> std::unique_ptr<Display_refresh_resolver>
+auto Device::make_display_refresh_resolver(const Graphics_config& graphics_config) -> std::unique_ptr<Display_refresh_resolver>
 {
     // Called from the member-init list after m_frame_time_recorder and
     // before m_impl; the callbacks run later, on the resolver's callers'
@@ -400,6 +400,16 @@ auto Device::make_display_refresh_resolver() -> std::unique_ptr<Display_refresh_
             set_display_refresh_duration_seconds(period_seconds);
         }
     );
+    Display_refresh_policy policy = Display_refresh_policy::automatic;
+    if (!parse_display_refresh_policy(graphics_config.display_refresh_source, policy)) {
+        log_display_refresh->warn(
+            "display refresh: unknown display_refresh_source '{}' in the graphics config (auto, window, vulkan, calibration, override); using auto",
+            graphics_config.display_refresh_source
+        );
+        policy = Display_refresh_policy::automatic;
+    }
+    const double override_hz = static_cast<double>(graphics_config.display_refresh_override_hz);
+    resolver->set_policy(policy, (override_hz > 0.0) ? (1.0 / override_hz) : 0.0);
     return resolver;
 }
 

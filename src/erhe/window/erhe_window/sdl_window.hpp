@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_window/window_event_handler.hpp"
+#include "erhe_window/display_info.hpp"
 #include "erhe_window/window_configuration.hpp"
 
 #include <glm/glm.hpp>
@@ -166,6 +167,11 @@ public:
     // the display it is on changed mode: the refresh rate above may have
     // changed.
     void register_display_changed_callback(std::function<void()> callback);
+    // Every display the window system reports, with its current mode and
+    // which one hosts the window; empty when unknown.
+    [[nodiscard]] auto enumerate_displays() const -> std::vector<Display_info>;
+    // Logs enumerate_displays() under erhe.window; called when the window opens.
+    void log_displays() const;
 
 private:
 #if defined(ERHE_GRAPHICS_API_OPENGL)

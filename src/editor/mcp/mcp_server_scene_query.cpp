@@ -2629,6 +2629,10 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
         // the init calibration from displayed times.
         const erhe::graphics::Display_refresh_report refresh = m_context.graphics_device->get_display_refresh_report();
         result["display_refresh"] = {
+            {"policy",                        erhe::graphics::c_str(refresh.policy)},
+            {"override_period_ms",            refresh.override_period_seconds * 1000.0},
+            {"display_count",                 refresh.display_count},
+            {"sources_disagree",              refresh.sources_disagree},
             {"window_mode_period_ms",         refresh.window_period_seconds * 1000.0},
             {"vulkan_refresh_duration_ms",    refresh.vulkan_refresh_duration_seconds * 1000.0},
             {"vulkan_refresh_interval_ms",    refresh.vulkan_refresh_interval_seconds * 1000.0},

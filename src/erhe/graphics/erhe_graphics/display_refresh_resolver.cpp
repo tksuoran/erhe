@@ -1,6 +1,7 @@
 #include "erhe_graphics/display_refresh_resolver.hpp"
 
 #include <spdlog/spdlog.h>
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <cmath>
@@ -15,8 +16,31 @@ auto c_str(const Display_refresh_source value) -> const char*
         case Display_refresh_source::window_mode:   return "window display mode";
         case Display_refresh_source::vulkan_timing: return "VK_EXT_present_timing";
         case Display_refresh_source::calibration:   return "init calibration";
+        case Display_refresh_source::override_rate: return "config override";
         default:                                    return "?";
     }
+}
+
+auto c_str(const Display_refresh_policy value) -> const char*
+{
+    switch (value) {
+        case Display_refresh_policy::automatic:     return "auto";
+        case Display_refresh_policy::window_mode:   return "window";
+        case Display_refresh_policy::vulkan_timing: return "vulkan";
+        case Display_refresh_policy::calibration:   return "calibration";
+        case Display_refresh_policy::override_rate: return "override";
+        default:                                    return "?";
+    }
+}
+
+auto parse_display_refresh_policy(const std::string& text, Display_refresh_policy& out_policy) -> bool
+{
+    if (text == "auto")        { out_policy = Display_refresh_policy::automatic;     return true; }
+    if (text == "window")      { out_policy = Display_refresh_policy::window_mode;   return true; }
+    if (text == "vulkan")      { out_policy = Display_refresh_policy::vulkan_timing; return true; }
+    if (text == "calibration") { out_policy = Display_refresh_policy::calibration;   return true; }
+    if (text == "override")    { out_policy = Display_refresh_policy::override_rate; return true; }
+    return false;
 }
 
 auto c_str(const Display_refresh_mode value) -> const char*
@@ -143,7 +167,28 @@ void Display_refresh_resolver::restart_calibration_locked()
     }
 }
 
-void Display_refresh_resolver::set_window_period(const double period_seconds, const char* display_name)
+void Display_refresh_resolver::set_policy(const Display_refresh_policy policy, const double override_period_seconds)
+{
+    Apply_callback callback;
+    double         period_to_apply = 0.0;
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        m_policy          = policy;
+        m_override_period = (override_period_seconds > 0.0) ? override_period_seconds : 0.0;
+        const double before = m_resolved_period;
+        resolve_locked();
+        log_sources_locked("config");
+        if (m_resolved_period != before) {
+            callback        = m_apply_callback;
+            period_to_apply = m_resolved_period;
+        }
+    }
+    if (callback && (period_to_apply > 0.0)) {
+        callback(period_to_apply);
+    }
+}
+
+void Display_refresh_resolver::set_window_period(const double period_seconds, const char* display_name, const std::size_t display_count)
 {
     Apply_callback callback;
     double         period_to_apply = 0.0;
@@ -152,6 +197,7 @@ void Display_refresh_resolver::set_window_period(const double period_seconds, co
         const bool changed = (period_seconds != m_window_period) && !agree(period_seconds, m_window_period);
         m_window_period       = (period_seconds > 0.0) ? period_seconds : 0.0;
         m_window_display_name = (display_name != nullptr) ? display_name : "";
+        m_display_count       = display_count;
         if (changed && m_modes_known) {
             // The window is on another display now: the cadence measured at
             // init described the old one. The calibration swapchain ran at
@@ -399,6 +445,64 @@ void Display_refresh_resolver::resolve_locked()
     const double vulkan   = vulkan_vblank_period_locked();
     const double measured = m_calibration_verified ? m_locked_period : 0.0;
 
+    // Any two known sources disagreeing beyond tolerance is worth a warning
+    // whatever the policy picks (log_sources_locked).
+    m_sources_disagree =
+        ((window > 0.0) && (vulkan > 0.0) && !agree(window, vulkan)) ||
+        ((measured > 0.0) && (window > 0.0) && !confirms(measured, window)) ||
+        ((measured > 0.0) && (vulkan > 0.0) && !confirms(measured, vulkan));
+
+    // A forced source, when it is there.
+    switch (m_policy) {
+        case Display_refresh_policy::override_rate: {
+            if (m_override_period > 0.0) {
+                m_resolved_period = m_override_period;
+                m_resolved_source = Display_refresh_source::override_rate;
+                return;
+            }
+            break;
+        }
+        case Display_refresh_policy::window_mode: {
+            if (window > 0.0) {
+                m_resolved_period = window;
+                m_resolved_source = Display_refresh_source::window_mode;
+                return;
+            }
+            break;
+        }
+        case Display_refresh_policy::vulkan_timing: {
+            if (vulkan > 0.0) {
+                m_resolved_period = vulkan;
+                m_resolved_source = Display_refresh_source::vulkan_timing;
+                return;
+            }
+            break;
+        }
+        case Display_refresh_policy::calibration: {
+            if (measured > 0.0) {
+                m_resolved_period = measured;
+                m_resolved_source = Display_refresh_source::calibration;
+                return;
+            }
+            // Pending: the automatic decision serves until the calibration
+            // ends; unverified: it stays, with the warning below.
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    if ((m_policy != Display_refresh_policy::automatic) && !m_calibrating && !m_policy_fallback_logged) {
+        m_policy_fallback_logged = true;
+        m_logger->warn(
+            "display refresh: configured source '{}' is not available ({}); using the automatic decision",
+            c_str(m_policy),
+            (m_policy == Display_refresh_policy::override_rate) ? "display_refresh_override_hz is not positive" :
+            (m_policy == Display_refresh_policy::calibration)   ? "the init calibration did not verify a cadence" :
+                                                                  "the source reported nothing"
+        );
+    }
+
     if (measured > 0.0) {
         // The measured cadence vetoes queried values it contradicts and
         // confirms the one it matches, which is then taken (an exact
@@ -459,10 +563,14 @@ void Display_refresh_resolver::log_sources_locked(const char* reason) const
                                                                                      Display_refresh_mode::decoupled;
     }
     m_logger->info(
-        "display refresh ({}): window mode {:.3f} ms ({:.2f} Hz{}{}); VK_EXT_present_timing refreshDuration {:.3f} ms ({:.2f} Hz) refreshInterval {:.3f} ms, {}; init calibration {}: production {:.3f} ms, locked {:.3f} ms ({:.2f} Hz; {} of {} deltas in the cluster); resolved {:.3f} ms ({:.2f} Hz) from {}",
+        "display refresh ({}): policy {}{}; window mode {:.3f} ms ({:.2f} Hz{}{}{}{}); VK_EXT_present_timing refreshDuration {:.3f} ms ({:.2f} Hz) refreshInterval {:.3f} ms, {}; init calibration {}: production {:.3f} ms, locked {:.3f} ms ({:.2f} Hz; {} of {} deltas in the cluster); resolved {:.3f} ms ({:.2f} Hz) from {}",
         reason,
+        c_str(m_policy),
+        (m_policy == Display_refresh_policy::override_rate) ? fmt::format(" ({:.3f} ms, {:.2f} Hz)", m_override_period * 1000.0, hz(m_override_period)) : std::string{},
         m_window_period * 1000.0, hz(m_window_period),
         m_window_display_name.empty() ? "" : ", display ", m_window_display_name,
+        (m_display_count > 1) ? fmt::format(", {} displays", m_display_count) : std::string{},
+        (m_display_count == 1) ? ", 1 display" : "",
         vulkan_duration * 1000.0, hz(vulkan_duration),
         vulkan_interval * 1000.0, c_str(mode),
         m_calibrating ? "pending" : (m_calibration_verified ? "verified" : "unverified"),
@@ -470,24 +578,16 @@ void Display_refresh_resolver::log_sources_locked(const char* reason) const
         m_locked_period * 1000.0, hz(m_locked_period), m_locked_cluster_count, m_locked_delta_count,
         m_resolved_period * 1000.0, hz(m_resolved_period), c_str(m_resolved_source)
     );
-    if (m_calibration_verified) {
-        const double vulkan = vulkan_vblank_period_locked();
-        if ((vulkan > 0.0) && !confirms(m_locked_period, vulkan)) {
-            m_logger->warn(
-                "display refresh: VK_EXT_present_timing reports {:.3f} ms but the display ran at {:.3f} ms per vblank at init; the query is not used",
-                vulkan * 1000.0, m_locked_period * 1000.0
-            );
-        }
-        if ((m_window_period > 0.0) && !confirms(m_locked_period, m_window_period)) {
-            m_logger->warn(
-                "display refresh: the window display mode says {:.3f} ms but the display ran at {:.3f} ms per vblank at init; the mode is not used",
-                m_window_period * 1000.0, m_locked_period * 1000.0
-            );
-        }
-    } else if ((m_window_period > 0.0) && (vulkan_vblank_period_locked() > 0.0) && !agree(m_window_period, vulkan_vblank_period_locked())) {
+    if (m_sources_disagree) {
+        const double vulkan   = vulkan_vblank_period_locked();
+        const double measured = m_calibration_verified ? m_locked_period : 0.0;
+        std::string known;
+        if (m_window_period > 0.0) { known += fmt::format(" window mode {:.3f} ms;", m_window_period * 1000.0); }
+        if (vulkan > 0.0)          { known += fmt::format(" VK_EXT_present_timing {:.3f} ms;", vulkan * 1000.0); }
+        if (measured > 0.0)        { known += fmt::format(" measured vblank cadence {:.3f} ms;", measured * 1000.0); }
         m_logger->warn(
-            "display refresh: VK_EXT_present_timing reports {:.3f} ms, the window display mode {:.3f} ms; the window mode is used{}",
-            vulkan_vblank_period_locked() * 1000.0, m_window_period * 1000.0,
+            "display refresh: the sources disagree:{} using {:.3f} ms from {}{}",
+            known, m_resolved_period * 1000.0, c_str(m_resolved_source),
             m_calibrating ? " until the init calibration decides" : ""
         );
     }
@@ -500,6 +600,10 @@ auto Display_refresh_resolver::get_report() const -> Display_refresh_report
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     Display_refresh_report report{};
+    report.policy                          = m_policy;
+    report.override_period_seconds         = m_override_period;
+    report.display_count                   = m_display_count;
+    report.sources_disagree                = m_sources_disagree;
     report.window_period_seconds           = m_window_period;
     report.vulkan_refresh_duration_seconds = static_cast<double>(m_vulkan_refresh_duration_ns) * 1e-9;
     report.vulkan_refresh_interval_seconds =
