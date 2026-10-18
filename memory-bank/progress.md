@@ -12,7 +12,8 @@
 ✓remeasure-after-step-3{listed-3.3s:parse-1.7s(images=basis-transcode-1.0s)+build-1.0s-serial-one-worker+residency-0.45s+op-0.15s;finalize-144ms=old-step-4-moot}
 ✓step-4{14f05e4b6+dc6ea1bd5+405183e2a+2516f9f50;parallel-build-per-unique-shape;build-952->158-245ms;listed-2.7-3.7s;idle-9.6-10.6s;image-identical;fable-review:future.get-exception-fix+staging-move}
 ✗step-5{KTX2-transcode;not-picked-2026-10-18}
-⚡step-7{scene-close-stall-~10s;measure-set_parent-terms-then-root-cause;gate:close<1s,no-STALLED,leak-check-unchanged}
+✓step-7a{a7079e847+8327108d7;set_parent-terms<10ms;Release-built-without-NDEBUG(Jolt-cmake)->unregister_node-sanity-walk-0.93s->3.7ms;close-~7->~5s;codegen-tests-no-longer-vacuous;fable-review:no-blockers}
+⚡step-7b{payload-release-~5s-on-main:Geometry-4.75s+raytrace+mappings;measure-breakdown->fix-wasteful-structures(edge-unordered_map)->bulk-release-on-worker;gate:close<1s,no-STALLED,leak-check-unchanged,image-identical}
 ?step-6{deferred-phase:mesh_optimize_cache-replay+capture;after-step-7}
 
 [TASK::culling]{started-2026-10-17;branch=render-thread;via-harness;doc/plans/culling.md}
