@@ -242,13 +242,20 @@ their per-slot state by the frame id of the command buffer that drives them
   the swapchain bridge fence slot on it; performs any CPU-side
   `vkWaitForFences` for registered `wait_for_cpu_completion_of`
   dependencies, splices all wait/signal semaphores into one
-  `VkSubmitInfo2`, runs `vkQueueSubmit2`, then drives `vkQueuePresentKHR`
-  for every swapchain a command buffer engaged via `begin_swapchain`.
+  `VkSubmitInfo2`, appends the device-owned frame-end command buffer (the
+  frame bracket end timestamp) when a command buffer engaged a swapchain,
+  runs `vkQueueSubmit2`, then drives `vkQueuePresentKHR` for every swapchain
+  a command buffer engaged via `begin_swapchain`. The bracket end rides on
+  the presenting submit because the present-request holdback and
+  `vkQueuePresentKHR` that follow block the thread before `end_frame` runs;
+  a bracket end queued after them would read that wait back as GPU time and
+  the frame pacer would raise its cadence to fit its own holdback.
 - **`end_frame(frame_id)`** -- verifies `frame_id == m_render_frame_id` and
   that its slot is open, then signals the device timeline semaphore at
   `frame_id` via a `vkQueueSubmit2` that carries only the device-owned
   frame-end command buffer (the frame bracket end timestamp, when the
-  bracket is running; no command buffer otherwise), advances
+  bracket is running and no presenting submit of the frame carried it: hidden
+  ticks, OpenXR frames; no command buffer otherwise), advances
   `m_render_frame_id` and returns the slot to idle. It submits no caller
   command buffer and does not present. `end_frame()` ends
   `m_render_frame_id`.

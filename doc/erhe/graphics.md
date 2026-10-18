@@ -208,8 +208,10 @@ The contract for each entry point:
 - `end_frame(frame_id)` -- **end the oldest open frame. That is the entire
   contract.** Verifies that `frame_id` is the oldest open frame. Does not
   submit, does not present. Mechanically it signals the device timeline
-  semaphore at `frame_id` in a `vkQueueSubmit2` that carries only the
-  device-owned frame-end command buffer (`doc/erhe/vulkan_backend.md` "Frame
+  semaphore at `frame_id` in a `vkQueueSubmit2` that carries at most the
+  device-owned frame-end command buffer (the GPU frame bracket end, when the
+  frame's presenting submit did not already carry it;
+  `doc/erhe/vulkan_backend.md` "Frame
   lifecycle and command buffers"), so `acquire_frame_slot` of frame
   `frame_id + N` can consume that value, and makes the next frame the
   oldest open one. `end_frame()` without an argument ends the oldest open
