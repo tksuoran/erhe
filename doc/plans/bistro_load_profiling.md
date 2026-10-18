@@ -1,6 +1,16 @@
 # Bistro load time: profile and optimization candidates
 
-Status: in progress
+Status: picked steps done (1-4, 6, 7; 2026-10-18); open decisions below
+
+Result on the Release build, File > Load Scene, one process, headless: the
+scene is listed 13.8 s to about 2.8-3.7 s after the request, idle at 20.6 s
+to 5.2-7 s (cold optimizer cache 7 s, warm 5.2-6 s), close stalls the main
+thread 10 s to 0.2 s, renders byte-identical throughout. Open decisions for
+the user: step 5 (KTX2 transcode, 1 s of the 1.5 s parse), step 7c (lazy
+attribute stores, 1.3 GB of empty stores per Bistro load and close), the
+geogram `colocate()` serialization in the fork (the deferred-phase floor),
+and whether the reopen cost of the worker payload release is acceptable
+until 7c lands.
 
 Profile what the editor spends while opening
 `res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf` (2782
@@ -278,6 +288,37 @@ is worth doing. Gate: idle on the second open in the same process at least
 2 s earlier than the first; render byte-identical; `cache/mesh_optimizer`
 populated by the first open and replayed by the second (`replayed from
 cache` count in the script's log summary equals the primitive count).
+
+**Step 6 result (d2bdc6a45, 633e4c7ee, 3ce2fa457).** The capture of the
+deferred phase (4.8 s, workers saturated) showed 73 worker-seconds in
+`prepare_real_raytrace`, 59 of them waiting on `geogram_lock`: the
+soup-to-`Geometry` conversion held the lock for the whole conversion, so
+the 3852 conversions ran one after another. The lock now covers
+`GEO::Geom::colocate()` only (deferred phase 4.8 to 3.9 s, first-open idle
+7.8 to 6.4 s). The geometry-path optimizer had no disk cache at all
+(`mesh_optimize_cache` only gated the soup path, which step 2 skips), so
+nothing could replay; `optimize_indexed_mesh_cached()` now serves both
+paths with an entry of two remap tables, and the committed
+`mesh_memory.json` turns the cache on. A writer race on the temp file name
+(two writers of one key, rename fails on Windows, entry never stored) was
+found and fixed. With the cache: 3852 of 3852 replayed at about 0.5 ms
+each, deferred phase 3.3 to 1.9 s, idle 6.9 to 6.0 s in-process and 5.2 s
+in a fresh process, cache 62 MB on disk, renders byte-identical, no stall.
+The literal gate ("second open idle at least 2 s earlier than the first")
+reads 1.0 to 1.3 s because the lock fix also took 1.4 s off the first open;
+against the 8 s first open the gate was written for, the step lands at
+5.2 to 6.0 s. The floor of the deferred phase is now the serial
+`colocate()` under the global lock: 1.84 s of locked work per open, about
+15 worker-seconds waiting.
+
+Remaining in the deferred phase, measured and not done: `colocate()`
+serialization (the fix is in the geogram fork: a sequential colocate entry
+point, or a `parallel_for` thread manager safe for concurrent use; then
+the conversion needs no lock and the phase drops to about 1 s warm); the
+full buffer build in the finalize, about 14 worker-seconds (fills,
+snapshot, build context, bounding volumes, some of which the worker build
+phase of step 4 already produced; unquantified); BVH cache load 6 to 7
+worker-seconds; the slower parse of an in-process reopen (1.45 to 2.0 s).
 
 ### Step 7 (picked 2026-10-18, before step 6): scene close stall
 
