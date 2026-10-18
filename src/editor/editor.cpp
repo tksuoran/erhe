@@ -444,12 +444,12 @@ public:
     //
     // m1_us / m2_us / render_us bracket frame_overlap_phase(),
     // frame_prepare_phase() and frame_render_phase()
-    // (doc/editor/render_thread.md section 2.1); run()'s poll_events wait is
-    // outside frame() entirely.
+    // (doc/editor/render_thread.md section 2.1); run()'s frame start and
+    // poll_events wait are outside frame() entirely.
     struct Phase_timing {
-        double frame_start_wait_us {0.0}; // Device::wait_for_frame_start + frame pacing waits (part of M1)
+        double frame_start_wait_us {0.0}; // Device::wait_for_frame_start + frame pacing waits (start_frame(), before run()'s poll)
         double slot_acquire_us     {0.0}; // Device::acquire_frame_slot alone (part of M2)
-        double m1_us               {0.0}; // M1 overlap (includes frame_start_wait_us)
+        double m1_us               {0.0}; // M1 overlap (frame_start_wait_us is outside it unless frame() made its own frame start)
         double m2_us               {0.0}; // M2 prepare (includes slot_acquire_us); the sum of the m2_*_us terms below
         double m2_start_us         {0.0}; // input dispatch, acquire_frame_slot
         double m2_upload_us        {0.0}; // scene commit flush, asset and texture file load ticks
@@ -815,7 +815,6 @@ public:
         packet.present_hold_until  = 0.0;
         packet.present_wait_id     = -1;
         int64_t display_advance_ns = -1;
-        m_phase_timing_pacer_slept = false;
 
         // Frame pacing observer (P2.1): feed the pacer with the frame time
         // records and log its decisions. The decision is for the frame just
@@ -868,7 +867,6 @@ public:
                 recorder.set(pacing_decision.frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_begin, erhe::frame_pacing::Frame_time_recorder::now());
                 m_pacer_release_timer.wait_for(release_wait_s);
                 recorder.set(pacing_decision.frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_end, erhe::frame_pacing::Frame_time_recorder::now());
-                m_phase_timing_pacer_slept = true;
             }
             if ((pacing_decision.target_time > 0.0) && (pacing_decision.frame_id == frame_id)) {
                 packet.present_target_time = pacing_decision.target_time;
@@ -936,20 +934,11 @@ public:
                 recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_begin, erhe::frame_pacing::Frame_time_recorder::now());
                 m_pacer_release_timer.wait_for(sleep_seconds);
                 recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_end, erhe::frame_pacing::Frame_time_recorder::now());
-                m_phase_timing_pacer_slept = true;
             }
             m_last_predicted_display_time = 0.0;
         } else {
             m_slop_servo_last_tick_time   = 0.0;
             m_last_predicted_display_time = 0.0;
-        }
-        // Input polled after the pacing wait: run() polled before M1, so an
-        // event that arrived during a sleep of most of the frame would wait
-        // for the next frame's poll. The events join the queue M2
-        // dispatches (m_input_events_pending is set by run()).
-        if (m_window && (m_phase_timing_pacer_slept)) {
-            ERHE_PROFILE_SCOPE("poll events after pacing wait");
-            m_window->poll_events(0.0f);
         }
         if (m_frame_pacing_observer.get_pacer() != nullptr) {
             // With a pacer the observer decided for the frame just started:
@@ -1018,6 +1007,34 @@ public:
     // of the body activation callbacks are queued for M2. M2 iterates the
     // same per-frame step list again for the node-writing fixed-step
     // updates.
+    // The frame start: Device::wait_for_frame_start(), in the position of
+    // xrWaitFrame (doc/editor/render_thread.md section 2.3), opens the
+    // frame's time record and returns its device frame id, then the frame
+    // pacer decides the frame's schedule and waits for its release time
+    // (frame_start_pacing(); the FR4 display advance it computes feeds
+    // Time::prepare_update). run() runs it before its input poll, so the
+    // poll is the last thing before the frame's body and the events that
+    // arrive during the pacing wait reach M2 without waiting a frame;
+    // m_frame_started marks the started frame awaiting its frame(). A
+    // frame() that finds no started frame makes its own (the live-resize
+    // redraw callback's frames, run from inside the poll: the first of them
+    // takes the one run() started). The resource half (acquire_frame_slot)
+    // is in M2, after the join.
+    void start_frame()
+    {
+        if (m_frame_started) {
+            return;
+        }
+        ERHE_PROFILE_SCOPE("frame start");
+        Frame_packet& packet = m_frame_packet;
+        erhe::log::set_breadcrumb("tick: wait_for_frame_start");
+        const std::chrono::steady_clock::time_point frame_start_begin = std::chrono::steady_clock::now();
+        packet.device_frame_id    = m_graphics_device->wait_for_frame_start();
+        packet.display_advance_ns = frame_start_pacing(packet);
+        m_phase_timing.frame_start_wait_us += elapsed_us(frame_start_begin, std::chrono::steady_clock::now());
+        m_frame_started = true;
+    }
+
     void frame_overlap_phase(Frame_packet& packet)
     {
         ERHE_PROFILE_FUNCTION();
@@ -1029,18 +1046,9 @@ public:
         // (doc/editor/render_thread.md section 2.3).
         ERHE_VERIFY(m_app_context.current_command_buffer == nullptr);
 
-        // The device frame start, in the position of xrWaitFrame
-        // (doc/editor/render_thread.md section 2.3): opens this frame's time
-        // record and returns its device frame id, then the frame pacer
-        // decides this frame's schedule and waits for its release time. The
-        // FR4 display advance it computes feeds this frame's
-        // Time::prepare_update. The resource half (acquire_frame_slot) is in
-        // M2, after the join.
-        erhe::log::set_breadcrumb("tick: wait_for_frame_start");
-        const std::chrono::steady_clock::time_point frame_start_begin = std::chrono::steady_clock::now();
-        packet.device_frame_id    = m_graphics_device->wait_for_frame_start();
-        packet.display_advance_ns = frame_start_pacing(packet);
-        m_phase_timing.frame_start_wait_us += elapsed_us(frame_start_begin, std::chrono::steady_clock::now());
+        // The frame start run() made before its poll, or this frame's own.
+        start_frame();
+        m_frame_started = false;
         frame_pacing_window_update();
 
         // The simulation clock advances next, so the fixed step count is
@@ -4970,6 +4978,11 @@ public:
                     wait_time = 1.0f / static_cast<float>(fps);
                 }
             }
+            // The frame start (device frame start, pacing wait) precedes
+            // the poll: the poll is the last thing before frame(), so the
+            // input M2 dispatches is the newest. A paused Android loop
+            // iteration keeps the started frame for the next one.
+            start_frame();
             m_window->poll_events(wait_time);
 #if defined(ERHE_OS_ANDROID)
             // Skip render while the activity is in the background. SDL's
@@ -5156,7 +5169,7 @@ public:
     // measured backpressure blocking. Period corrected each tick from the
     // swapchain timing query.
     erhe::frame_pacing::Slop_servo_pacer                     m_slop_servo{erhe::frame_pacing::Slop_servo_tunables{}, 1.0 / 60.0};
-    bool                                                     m_phase_timing_pacer_slept{false}; // this frame's M1 pacing step waited: input is polled again after it
+    bool                                                     m_frame_started{false}; // start_frame() ran for the frame the next frame() runs
     double                                                   m_slop_servo_last_tick_time{0.0};
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;

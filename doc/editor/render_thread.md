@@ -80,7 +80,7 @@ main thread joins R(N) at the end of M1(N+1), before M2(N+1), so M2 and R
 never overlap.
 
 ```
-main:   | M2(N) | kick | M3(N) | publish | poll_events, M1(N+1) | join R(N) | M2(N+1) | kick |
+main:   | M2(N) | kick | M3(N) | publish | start(N+1), poll_events, M1(N+1) | join R(N) | M2(N+1) | kick |
 render: |              R(N): scene ...        | wait | ImGui hosts, submit |   idle   | R(N+1)
 ```
 
