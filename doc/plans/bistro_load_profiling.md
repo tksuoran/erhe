@@ -344,6 +344,40 @@ destroyed; the scene-close leak check tracks `Item_base` objects only, so
 it is unaffected, and its line must still read "all N tracked items
 released". Same gate as above.
 
+**Step 7b result (4ad4d0150, 05a241d67, 29d04b34b).** Breakdown of the
+Geometry destruction (Tracy, main thread, first close): facet and corner
+attribute stores 1.43 s, vertex stores 0.63 s, the node-per-edge map
+(since removed) 0.83 s, connectivity vectors 0.34 s, edge stores 0.08 s.
+Fixed at the root: the edge map (build_edges 2531 to 668 ms summed at
+load; Geometry destruction 3.4 to 1.8 s), and a latent use-after-free in
+the defaulted `Primitive_raytrace` move assignment that the measurement
+crashed on. The residual payload is released by `Scene_payload_release`
+on one worker task. Gate: close 0.17 s (was about 5 s), no watchdog
+stall, leak check line unchanged, renders byte-identical, first open
+unchanged (listed 2.8 s, idle 8.1 s). Caveat measured: a reopen started
+while the worker is still freeing contends on the process heap: second
+open listed 3.3 to 8.9 s, idle 9.3 to 16.2 s, the release itself 7.4 s
+idle and 12 to 14.5 s contended (8 tasks instead of 1 was slower still).
+A close on its own is instant; close plus immediate reopen is slower end
+to end than before.
+
+**Step 7c (proposed, needs a decision): lazy attribute stores.** The
+remaining payload is mostly empty: every `Mesh_attributes` binds all 33
+attributes plus their 33 `present_*` stores, each sized to the element
+count, so Bistro allocates and zero-fills about 1.94 GB of attribute
+memory at load of which about 1.3 GB belongs to attributes that never
+hold a value, then frees it at close. Creating a store on first write
+removes that at both ends (and shrinks the reopen contention of 7b). It is
+blocked by an invariant: several `Mesh_attributes` instances over one
+`GEO::Mesh` share its stores, and shape builders, `bone_visualization`,
+`rendertarget_mesh` and `transform_mesh` write through temporary
+instances, so the `Geometry`'s own instance would read a store created by
+another instance as absent. The decision is how instances learn about
+stores created elsewhere (bind on access through the mesh's attribute
+manager instead of caching a bound store, or one `Mesh_attributes` per
+mesh that every writer borrows). Wide change to `erhe::geometry`; not
+started.
+
 **Arena (long-term form, from the user 2026-10-18).** If the nodes,
 hierarchy items and their payload lived in a per-scene arena, closing a
 scene would release the arena instead of destroying every object through
