@@ -443,11 +443,10 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
         if (list_entry_count == 0) {
             continue;
         }
-        Cull_classification_list_check list_check{
-            .list_index  = static_cast<uint32_t>(list_index),
-            .purpose     = check.list_purposes[list_index],
-            .entry_count = list_entry_count
-        };
+        Cull_classification_list_check list_check{};
+        list_check.list_index  = static_cast<uint32_t>(list_index);
+        list_check.purpose     = check.list_purposes[list_index];
+        list_check.entry_count = list_entry_count;
         const std::vector<uint64_t>& cpu_masks = check.cpu_masks[list_index];
         // A list with entries means the frame had entries: one dispatch.
         ERHE_VERIFY((check.dispatch_count == 1) || (check.view_count == 0));
