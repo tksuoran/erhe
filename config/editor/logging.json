@@ -76,6 +76,7 @@
     "erhe.graphics.buffer": "info",
     "erhe.graphics.context": "info",
     "erhe.graphics.debug": "info",
+    "erhe.graphics.display_refresh": "info",
     "erhe.graphics.fragment_outputs": "info",
     "erhe.graphics.framebuffer": "info",
     "erhe.graphics.glsl": "info",

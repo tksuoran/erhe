@@ -9,6 +9,22 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Display_refresh_resolver` (`display_refresh_resolver.hpp`)
+  with `Display_refresh_report`, `Display_refresh_source`,
+  `Display_refresh_mode` and `Display_time_sample_source`, owned by `Device`
+  (`Device::get_display_refresh_resolver()`,
+  `Device::get_display_refresh_report()`): resolves the display refresh
+  period the frame pacer runs on from the window's display mode, the
+  swapchain timing query (`refreshDuration` / `refreshInterval`, re-read on
+  a timing properties counter change) and an init calibration from the
+  displayed times of the first presents, logging every source
+  (`erhe.graphics.display_refresh`). `Device::set_display_refresh_duration_seconds`
+  is the resolver's output, no longer set by the swapchain directly.
+- `erhe::window`: `Context_window::get_display_refresh_period_seconds()`,
+  `get_display_name()` and `register_display_changed_callback()` (SDL:
+  called on `SDL_EVENT_WINDOW_DISPLAY_CHANGED` and the display mode change
+  events; GLFW and the null window report nothing).
+
 - `erhe::frame_pacing`: `Slop_servo_pacer::get_cadence()` and
   `get_cadence_period()` (the loop period the servo paces against: the
   tracked plant loop period, at least one refresh period) and

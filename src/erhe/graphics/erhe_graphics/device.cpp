@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
 
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
@@ -49,12 +50,13 @@ Device::Device(
     const Vulkan_external_creators* vulkan_external_creators
 )
     : m_device_message_callback{std::move(device_message_callback)}
+    , m_frame_time_recorder{std::make_unique<erhe::frame_pacing::Frame_time_recorder>()}
+    , m_display_refresh_resolver{make_display_refresh_resolver()}
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config, vulkan_external_creators)}
 #else
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config)}
 #endif
-    , m_frame_time_recorder{std::make_unique<erhe::frame_pacing::Frame_time_recorder>()}
 #if defined(ERHE_SPIRV)
     , m_spirv_cache{std::make_unique<Spirv_cache>(std::filesystem::path{"spirv_cache"})}
 #endif
@@ -387,8 +389,52 @@ auto Device::get_display_refresh_duration_seconds() const -> double
     return m_frame_time_recorder->get_display_refresh_duration();
 }
 
+auto Device::make_display_refresh_resolver() -> std::unique_ptr<Display_refresh_resolver>
+{
+    // Called from the member-init list after m_frame_time_recorder and
+    // before m_impl; the callbacks run later, on the resolver's callers'
+    // threads, and touch only the recorder (which locks).
+    std::unique_ptr<Display_refresh_resolver> resolver = std::make_unique<Display_refresh_resolver>(log_display_refresh);
+    resolver->set_apply_callback(
+        [this](const double period_seconds) {
+            set_display_refresh_duration_seconds(period_seconds);
+        }
+    );
+    resolver->set_frame_work_lookup(
+        [this](const std::int64_t frame_id) -> double {
+            erhe::frame_pacing::Frame_time_record record{};
+            if (!m_frame_time_recorder->get(frame_id, record)) {
+                return 0.0;
+            }
+            const double gpu_span = (record.gpu_frame_end > record.gpu_frame_begin) ? (record.gpu_frame_end - record.gpu_frame_begin) : 0.0;
+            return std::max(gpu_span, record.cpu_service_time());
+        }
+    );
+    return resolver;
+}
+
+auto Device::get_display_refresh_resolver() -> Display_refresh_resolver&
+{
+    return *m_display_refresh_resolver;
+}
+
+auto Device::get_display_refresh_report() const -> Display_refresh_report
+{
+    return m_display_refresh_resolver->get_report();
+}
+
+auto Device::is_display_refresh_calibrating() const -> bool
+{
+    return m_display_refresh_resolver->is_calibrating();
+}
+
 auto Device::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
 {
+    if (m_display_refresh_resolver->is_calibrating()) {
+        // The calibration waits on the presenting thread; see
+        // is_display_refresh_calibrating().
+        return Present_wait_result::unsupported;
+    }
     return m_impl->wait_for_displayed_frame(frame_id, timeout_ns);
 }
 

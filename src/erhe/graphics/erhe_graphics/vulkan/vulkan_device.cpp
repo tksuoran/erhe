@@ -1673,7 +1673,13 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         const double release_time = (m_present_target_frame_id == record_id)
             ? m_present_target_hold_until_seconds
             : 0.0;
-        if ((target_seconds > 0.0) && (release_time > 0.0) && get_graphics_config().frame_pacing_present_holdback) {
+        // No holdback while the display refresh init calibration runs: it
+        // measures the display's cadence from these presents, and a hold
+        // would be read back as it (Device::is_display_refresh_calibrating).
+        if (
+            (target_seconds > 0.0) && (release_time > 0.0) && get_graphics_config().frame_pacing_present_holdback &&
+            !m_device.is_display_refresh_calibrating()
+        ) {
             double wait_seconds = release_time - erhe::frame_pacing::Frame_time_recorder::now();
             // Runaway sanity cap only (in the spirit of the release-gate
             // and clamp caps). A LEGITIMATE hold spans up to ~N*T of the

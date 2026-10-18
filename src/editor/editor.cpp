@@ -833,7 +833,11 @@ public:
         }
 
         const std::int64_t frame_id = static_cast<std::int64_t>(packet.device_frame_id);
-        if (is_frame_pacing_enforced(erhe::graphics::Frame_pacing_tier::full)) {
+        // The actuators stay idle while the device's display refresh init
+        // calibration runs (the first presents): a cadence they imposed
+        // would be measured as the display's
+        // (erhe::graphics::Device::is_display_refresh_calibrating).
+        if (is_frame_pacing_enforced(erhe::graphics::Frame_pacing_tier::full) && !m_graphics_device->is_display_refresh_calibrating()) {
             // Frame pacing actuation (steps P2.2 + P2.3), before per-frame work:
             // 1. release gating (FR2): high-resolution timer wait until the
             //    pacer's release time (P0.5: the waitable timer is the only wait
@@ -897,7 +901,7 @@ public:
             } else {
                 m_last_predicted_display_time = 0.0;
             }
-        } else if (is_frame_pacing_enforced(erhe::graphics::Frame_pacing_tier::slop_servo)) {
+        } else if (is_frame_pacing_enforced(erhe::graphics::Frame_pacing_tier::slop_servo) && !m_graphics_device->is_display_refresh_calibrating()) {
             // Tier S (P4.1/P4.2): slop-servo fallback. No display-time
             // sensing, no grid, no cadence - measure the involuntary
             // blocking ("slop") the loop experienced since the previous

@@ -7,6 +7,7 @@ std::shared_ptr<spdlog::logger> log_buffer                   ;
 std::shared_ptr<spdlog::logger> log_context                  ;
 std::shared_ptr<spdlog::logger> log_swapchain                ;
 std::shared_ptr<spdlog::logger> log_debug                    ;
+std::shared_ptr<spdlog::logger> log_display_refresh          ;
 std::shared_ptr<spdlog::logger> log_framebuffer              ;
 std::shared_ptr<spdlog::logger> log_fragment_outputs         ;
 std::shared_ptr<spdlog::logger> log_glsl                     ;
@@ -33,6 +34,7 @@ void initialize_logging()
     log_context                   = make_logger      ("erhe.graphics.context"         );
     log_swapchain                 = make_logger      ("erhe.graphics.swapchain"       );
     log_debug                     = make_logger      ("erhe.graphics.debug"           );
+    log_display_refresh           = make_logger      ("erhe.graphics.display_refresh" );
     log_framebuffer               = make_logger      ("erhe.graphics.framebuffer"     );
     log_fragment_outputs          = make_logger      ("erhe.graphics.fragment_outputs");
     log_glsl                      = make_logger      ("erhe.graphics.glsl"            );

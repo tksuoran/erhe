@@ -508,6 +508,48 @@ auto Context_window::get_display_refresh_rate() const -> float
     return mode->refresh_rate;
 }
 
+auto Context_window::get_display_refresh_period_seconds() const -> double
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return 0.0;
+    }
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+    if (display == 0) {
+        return 0.0;
+    }
+    const SDL_DisplayMode* const mode = SDL_GetCurrentDisplayMode(display);
+    if (mode == nullptr) {
+        return 0.0;
+    }
+    if ((mode->refresh_rate_numerator > 0) && (mode->refresh_rate_denominator > 0)) {
+        return static_cast<double>(mode->refresh_rate_denominator) / static_cast<double>(mode->refresh_rate_numerator);
+    }
+    if (mode->refresh_rate > 0.0f) {
+        return 1.0 / static_cast<double>(mode->refresh_rate);
+    }
+    return 0.0;
+}
+
+auto Context_window::get_display_name() const -> std::string
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return {};
+    }
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+    if (display == 0) {
+        return {};
+    }
+    const char* const name = SDL_GetDisplayName(display);
+    return (name != nullptr) ? std::string{name} : std::string{};
+}
+
+void Context_window::register_display_changed_callback(std::function<void()> callback)
+{
+    m_display_changed_callback = std::move(callback);
+}
+
 void Context_window::register_redraw_callback(std::function<void()> callback)
 {
     m_redraw_callback = callback;
@@ -1122,6 +1164,18 @@ void Context_window::handle_sdl_event(void* sdl_event)
                 // pixel extent (the editor re-queries get_width()/get_height()).
                 //// log_window_event->info("SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED {} x {}", poll_event.window.data1, poll_event.window.data2);
                 handle_window_resize_event(timestamp, poll_event.window.data1, poll_event.window.data2);
+                break;
+            }
+            case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+            case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
+            case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED: {
+                // The window is on another display, or its display changed
+                // mode: the refresh rate the frame pacer runs on may differ.
+                // The mode events arrive for every display; the callback
+                // re-reads the window's own display and decides.
+                if (m_display_changed_callback) {
+                    m_display_changed_callback();
+                }
                 break;
             }
             case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {

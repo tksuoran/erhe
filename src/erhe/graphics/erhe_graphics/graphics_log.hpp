@@ -16,6 +16,7 @@ extern std::shared_ptr<spdlog::logger> log_buffer;
 extern std::shared_ptr<spdlog::logger> log_context;
 extern std::shared_ptr<spdlog::logger> log_swapchain;
 extern std::shared_ptr<spdlog::logger> log_debug;
+extern std::shared_ptr<spdlog::logger> log_display_refresh;
 extern std::shared_ptr<spdlog::logger> log_framebuffer;
 extern std::shared_ptr<spdlog::logger> log_fragment_outputs;
 extern std::shared_ptr<spdlog::logger> log_glsl;

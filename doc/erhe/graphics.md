@@ -140,6 +140,15 @@ in the frame the calling role works on: the main thread touches only the
 slot of the frame it prepares, the render thread only the slot of the frame
 it renders. `get_command_buffer` verifies this at the allocation site.
 
+The display refresh period the frame pacer runs on
+(`get_display_refresh_duration_seconds()`) is resolved by the device's
+`Display_refresh_resolver` (`display_refresh_resolver.hpp`,
+`get_display_refresh_resolver()` / `get_display_refresh_report()`) from the
+window's display mode, the backend's swapchain timing query and an init
+calibration from displayed times; `doc/frame_pacing/inputs.md` section 3.1
+states the sources and the decision. The resolver applies its decision to
+the frame time recorder, from which the pacing observer reads it.
+
 The contract for each entry point:
 
 - `wait_for_frame_start() -> uint64_t` -- the pacing half: advance the

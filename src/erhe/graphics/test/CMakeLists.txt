@@ -6,6 +6,7 @@ include(GoogleTest)
 set(_deviceless_target "erhe_graphics_tests")
 add_executable(${_deviceless_target}
     main.cpp
+    test_display_refresh_resolver.cpp
     test_shader_resource_size.cpp
 )
 

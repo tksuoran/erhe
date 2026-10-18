@@ -152,9 +152,20 @@ public:
     // WM_WTSSESSION_CHANGE bookkeeping would miss). Other platforms: false.
     [[nodiscard]] auto is_session_locked() const -> bool;
     // Current display mode refresh rate in Hz for the display the window is
-    // on; 0.0 when unknown. Fallback refresh source for frame pacing tier S
-    // (P4.2), where present timing (and its refreshDuration query) is off.
+    // on; 0.0 when unknown. Frame pacing's window-side refresh source
+    // (erhe::graphics::Display_refresh_resolver).
     [[nodiscard]] auto get_display_refresh_rate() const -> float;
+    // The same as an exact period in seconds (from the mode's refresh rate
+    // numerator / denominator when the platform reports them, e.g.
+    // 1001/120000 s for 119.88 Hz); 0.0 when unknown.
+    [[nodiscard]] auto get_display_refresh_period_seconds() const -> double;
+    // Name of the display the window is on (platform string); empty when
+    // unknown.
+    [[nodiscard]] auto get_display_name() const -> std::string;
+    // Called from poll_events() when the window moved to another display or
+    // the display it is on changed mode: the refresh rate above may have
+    // changed.
+    void register_display_changed_callback(std::function<void()> callback);
 
 private:
 #if defined(ERHE_GRAPHICS_API_OPENGL)
@@ -195,6 +206,7 @@ private:
     std::thread                m_joystick_scan_task;
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
     std::function<void()>      m_redraw_callback;
+    std::function<void()>      m_display_changed_callback;
 
     // Set by sdl_event_filter from the watch thread; read on the main
     // thread between frames. Atomic primitives only, not lock-free

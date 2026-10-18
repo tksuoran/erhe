@@ -1055,6 +1055,9 @@ auto Context_window::is_visible  () const -> bool { return true;  }
 auto Context_window::is_fullscreen() const -> bool { return false; }
 auto Context_window::is_session_locked() const -> bool { return false; }
 auto Context_window::get_display_refresh_rate() const -> float { return 0.0f; }
+auto Context_window::get_display_refresh_period_seconds() const -> double { return 0.0; }
+auto Context_window::get_display_name() const -> std::string { return {}; }
+void Context_window::register_display_changed_callback(std::function<void()> callback) { static_cast<void>(callback); }
 
 void Context_window::get_extensions()
 {

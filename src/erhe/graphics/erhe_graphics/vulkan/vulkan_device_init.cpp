@@ -8,6 +8,7 @@
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture_heap.hpp"   // max_texture_heap_size
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/vulkan_external_creators.hpp"
@@ -649,6 +650,22 @@ Device_impl::Device_impl(
     if (m_context_window != nullptr) {
         surface_impl   = std::make_unique<Surface_impl>(*this, surface_create_info, headless);
         vulkan_surface = surface_impl->get_vulkan_surface();
+
+        // The window-side display refresh source: the display the window is
+        // on, now and whenever the window moves or that display changes
+        // mode (display_refresh_resolver.hpp). The swapchain adds the
+        // VK_EXT_present_timing source and the init calibration samples.
+        erhe::window::Context_window* const context_window = m_context_window;
+        Device* const                       device         = &m_device;
+        const auto feed_window_period = [context_window, device]() {
+            const std::string display_name = context_window->get_display_name();
+            device->get_display_refresh_resolver().set_window_period(
+                context_window->get_display_refresh_period_seconds(),
+                display_name.c_str()
+            );
+        };
+        feed_window_period();
+        m_context_window->register_display_changed_callback(feed_window_period);
     }
 
     std::vector<const char*> device_extensions_c_str{};

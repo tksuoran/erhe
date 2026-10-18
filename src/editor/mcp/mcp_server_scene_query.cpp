@@ -30,6 +30,7 @@
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -2622,6 +2623,24 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
     json result;
     if (m_context.graphics_device != nullptr) {
         result["display_refresh_period_ms"] = m_context.graphics_device->get_display_refresh_duration_seconds() * 1000.0;
+        // Every source of the refresh period and the resolver's decision
+        // (erhe::graphics::Display_refresh_resolver): the window's display
+        // mode, VK_EXT_present_timing's refreshDuration / refreshInterval,
+        // the init calibration from displayed times.
+        const erhe::graphics::Display_refresh_report refresh = m_context.graphics_device->get_display_refresh_report();
+        result["display_refresh"] = {
+            {"window_mode_period_ms",         refresh.window_period_seconds * 1000.0},
+            {"vulkan_refresh_duration_ms",    refresh.vulkan_refresh_duration_seconds * 1000.0},
+            {"vulkan_refresh_interval_ms",    refresh.vulkan_refresh_interval_seconds * 1000.0},
+            {"vulkan_mode",                   erhe::graphics::c_str(refresh.vulkan_mode)},
+            {"calibration_done",              refresh.calibration_done},
+            {"calibration_source",            erhe::graphics::c_str(refresh.calibration_source)},
+            {"calibration_period_ms",         refresh.calibration_period_seconds * 1000.0},
+            {"calibration_sample_count",      refresh.calibration_sample_count},
+            {"calibration_rejected_count",    refresh.calibration_rejected_count},
+            {"resolved_period_ms",            refresh.resolved_period_seconds * 1000.0},
+            {"resolved_source",               erhe::graphics::c_str(refresh.resolved_source)}
+        };
         const erhe::graphics::Frame_pacing_tier tier = m_context.graphics_device->get_frame_pacing_tier();
         result["tier"] =
             (tier == erhe::graphics::Frame_pacing_tier::full)       ? "W" :
