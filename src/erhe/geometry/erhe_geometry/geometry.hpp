@@ -1047,18 +1047,6 @@ private:
     Index_lists                            m_vertex_to_edges;
     std::vector<GEO::index_t>              m_corner_to_edge; // build_edges(): edge of the facet edge starting at each corner
 
-    struct Edge_hash
-    {
-        std::size_t operator()(const std::pair<GEO::index_t, GEO::index_t>& edge) const
-        {
-            return
-                std::hash<GEO::index_t>()(edge.first) ^
-                std::hash<GEO::index_t>()(edge.second ^ 0xcafecafe);
-        }
-    };
-
-    std::unordered_map<std::pair<GEO::index_t, GEO::index_t>, GEO::index_t, Edge_hash> m_vertex_pair_to_edge;
-
     // build_edges() scratch preserving edge sharpness values across the edge
     // store rebuild: (lo vertex, hi vertex, sharpness). Cleared (capacity
     // kept) at the start of every build_edges() call.

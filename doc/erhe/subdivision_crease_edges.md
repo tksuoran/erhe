@@ -73,8 +73,7 @@ scene save/load.
   means smooth; values are unclamped floats >= 0, and
   `std::numeric_limits<float>::infinity()` means infinitely sharp.
 - `Geometry::get_edge_sharpness(v0, v1)` / `set_edge_sharpness(v0, v1, s)`
-  canonicalize the vertex pair and resolve the edge through
-  `m_vertex_pair_to_edge`.
+  canonicalize the vertex pair and resolve the edge through `get_edge()`.
 - **`build_edges()` preserves edge attributes.** Geogram's `edges.clear()`
   keeps attribute bindings but wipes values, so `build_edges()` snapshots the
   present sharpness values keyed by canonical vertex pair before clearing and

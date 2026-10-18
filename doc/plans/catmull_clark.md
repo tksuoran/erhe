@@ -39,7 +39,8 @@ subdivide loop (and a weak xor `pair_hash`). Build a flat
 `corner_to_edge_midpoint[corner]` during the edge pass (that pass already
 iterates `get_edge_facets` and can resolve the corner), then index it directly
 in the subdivide loop - no hashing, no per-key vector. Alternatively reuse
-`Geometry::m_vertex_pair_to_edge` plus a flat `edge_to_midpoint[edge]`. Gain:
+`Geometry::get_edge()` (a scan of the lower vertex's edge list) plus a flat
+`edge_to_midpoint[edge]`. Gain:
 medium. Risk: medium - orientation and corner pairing must be exact; CC-local,
 so no blast radius. Stopgap: `reserve()` the map and use a stronger hash (low
 risk, partial gain).

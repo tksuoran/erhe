@@ -78,7 +78,8 @@ Facts the optimization items rely on:
 - `get_vertex_corners` / `get_corner_facet` / `get_edge_facets` are O(1)
   lookups into tables precomputed in `process()`; the list-valued ones return
   a `std::span` into `Index_lists` storage (see `doc/erhe/geometry.md`).
-- `Geometry` already maintains `m_vertex_pair_to_edge` (`get_edge(v0,v1)`).
+- `Geometry::get_edge(v0, v1)` resolves a vertex pair by scanning the lower
+  vertex's `get_vertex_edges()` list (its valence).
 - `interpolate_attribute` only early-outs when `interpolation_mode == none`;
   otherwise it iterates every destination element even for unbound channels.
 
