@@ -373,12 +373,20 @@ public:
     // acquire_frame_slot, polled non-blocking by wait_for_frame_start,
     // calibrated into the reference clock.
     // The begin timestamp is recorded at the vkBeginCommandBuffer of the
-    // frame's first command buffer; the end timestamp is recorded by
-    // end_frame into the device-owned frame-end command buffer, which rides
-    // on the frame's final (timeline-signal) submit - so the bracket spans
-    // every submit of the frame on the queue, whichever cb ends first.
+    // frame's first command buffer; the end timestamp is recorded into the
+    // device-owned frame-end command buffer, which rides on the frame's
+    // last work submit: the presenting submit_command_buffers when a cb
+    // engaged a swapchain (queued BEFORE the present-request holdback and
+    // vkQueuePresentKHR, which block the submitting thread for up to N
+    // refresh periods), else end_frame's timeline-signal submit. The
+    // bracket thus measures the frame's GPU execution span, which is what
+    // the frame pacer's gpu_duration input must be
+    // (doc/frame_pacing/inputs.md section 3.3): a bracket end queued after
+    // the holdback reads back the holdback as GPU time, and the pacer
+    // raises its cadence to fit the time its own holdback produced.
     // record_frame_bracket_end returns that recorded cb, or VK_NULL_HANDLE
-    // when the bracket is off or no cb began this frame.
+    // when the bracket is off, no cb began this frame, or the end was
+    // already recorded for this frame.
     void               record_frame_bracket_begin   (VkCommandBuffer cb, uint64_t frame_id);
     [[nodiscard]] auto record_frame_bracket_end     (uint64_t frame_id) -> VkCommandBuffer;
     void               reset_frame_end_command_pool (std::size_t in_flight_slot);
@@ -832,9 +840,10 @@ private:
 
     // Frame-spanning GPU timestamp bracket state (step P0.3). The query
     // pools and m_frame_bracket_frame_id are main role only (acquire_frame_slot,
-    // wait_for_frame_start); m_frame_bracket_begun is per frame-in-flight slot
-    // (acquire_frame_slot resets it, the first command buffer begun for the
-    // frame sets it, end_frame reads it). One pool of
+    // wait_for_frame_start); m_frame_bracket_begun and m_frame_bracket_ended
+    // are per frame-in-flight slot (acquire_frame_slot resets them, the
+    // first command buffer begun for the frame sets begun, the presenting
+    // submit or end_frame sets ended). One pool of
     // two queries (begin, end) per ring slot: acquire_frame_slot host-resets the
     // slot it is about to reuse, and a host reset is only valid once every
     // submitted command buffer referencing that pool has completed - with
@@ -848,6 +857,9 @@ private:
     // Per frame-in-flight slot: the frame's bracket begin timestamp was
     // recorded (by the first cb of that frame to begin).
     std::array<bool, s_number_of_frames_in_flight> m_frame_bracket_begun{};
+    // Per frame-in-flight slot: the frame's bracket end timestamp was
+    // recorded (by the presenting submit, else by end_frame).
+    std::array<bool, s_number_of_frames_in_flight> m_frame_bracket_ended{};
     bool         m_host_query_reset   {false};
     bool         m_report_address_binding{false};
     // GPU clock calibration and host time domain offsets: written by

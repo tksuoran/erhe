@@ -1579,6 +1579,26 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
 #endif
     }
 
+    // A presenting submit is the frame's last work submit: the frame bracket
+    // end timestamp rides on it, after the caller's cbs, so it lands when the
+    // frame's GPU work completes. The present-request holdback and
+    // vkQueuePresentKHR below block this thread for up to N refresh periods
+    // before end_frame runs; a bracket end queued by end_frame would read
+    // back that wait as GPU time (see record_frame_bracket_end).
+    if (!submit_info_aggregate.swapchains_to_present.empty()) {
+        const VkCommandBuffer frame_end_command_buffer = record_frame_bracket_end(frame_id);
+        if (frame_end_command_buffer != VK_NULL_HANDLE) {
+            submit_info_aggregate.command_buffers.push_back(
+                VkCommandBufferSubmitInfo{
+                    .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                    .pNext         = nullptr,
+                    .commandBuffer = frame_end_command_buffer,
+                    .deviceMask    = 0,
+                }
+            );
+        }
+    }
+
     const VkSubmitInfo2 submit_info{
         .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
         .pNext                    = nullptr,
@@ -1857,6 +1877,7 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
         vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[bracket_slot], 0, 2);
         m_frame_bracket_frame_id[bracket_slot] = static_cast<std::int64_t>(frame_id);
         m_frame_bracket_begun[slot] = false;
+        m_frame_bracket_ended[slot] = false;
     }
 
     // Per-(frame_in_flight, thread) command pool reset, gated on the
@@ -2091,10 +2112,11 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
     // CONTRACT: end_frame ends the oldest open frame. That is its ONLY job.
     //
     // It submits no caller command buffer and presents no swapchain
-    // image; the only GPU work it issues is the device-owned frame-end cb
-    // (the frame bracket end timestamp, when the bracket is running) in
-    // the submit that signals the device timeline semaphore in
-    // update_frame_completion. Callers must have already submitted every cb they
+    // image; the only GPU work it may issue is the device-owned frame-end cb
+    // (the frame bracket end timestamp, when the bracket is running and the
+    // frame's presenting submit did not carry it) in the submit that signals
+    // the device timeline semaphore in update_frame_completion. Callers must
+    // have already submitted every cb they
     // recorded via Device::submit_command_buffers (which presents
     // implicitly when a cb engaged a swapchain via begin_swapchain).
     //
@@ -2229,9 +2251,10 @@ void Device_impl::update_frame_completion(const uint64_t frame_id)
     VkResult result = VK_SUCCESS;
 
     // The frame's final submit: the timeline signal, plus the frame-end cb
-    // carrying the frame bracket end timestamp when the bracket is running.
-    // Being last on the queue, its bottom-of-pipe timestamp lands after
-    // every earlier submit of the frame.
+    // carrying the frame bracket end timestamp when the bracket is running
+    // and no presenting submit of this frame carried it already (hidden
+    // ticks, OpenXR frames, the init pump). Being last on the queue, its
+    // bottom-of-pipe timestamp lands after every earlier submit of the frame.
     const VkCommandBuffer frame_end_command_buffer = record_frame_bracket_end(frame_id);
     const VkCommandBufferSubmitInfo frame_end_command_buffer_info{
         .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
@@ -3155,9 +3178,10 @@ void Device_impl::record_frame_bracket_begin(VkCommandBuffer cb, const uint64_t 
 auto Device_impl::record_frame_bracket_end(const uint64_t frame_id) -> VkCommandBuffer
 {
     const std::size_t in_flight_slot = get_frame_slot_index(frame_id);
-    if (!m_frame_bracket_enabled || !m_frame_bracket_begun[in_flight_slot]) {
+    if (!m_frame_bracket_enabled || !m_frame_bracket_begun[in_flight_slot] || m_frame_bracket_ended[in_flight_slot]) {
         return VK_NULL_HANDLE;
     }
+    m_frame_bracket_ended[in_flight_slot] = true;
     // acquire_frame_slot reset this frame-in-flight slot's frame-end pool, so the
     // cb is in the initial state.
     const VkCommandBuffer cb             = m_frame_end_command_buffers[in_flight_slot];
