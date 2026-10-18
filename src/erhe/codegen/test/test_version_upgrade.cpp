@@ -3,7 +3,7 @@
 
 #include <erhe_codegen/migration.hpp>
 
-#include <cassert>
+#include "test_check.hpp"
 #include <cstdio>
 #include <string>
 
@@ -17,9 +17,9 @@ auto params_upgrade_flag(const std::string& json) -> bool
     simdjson::ondemand::parser parser;
     simdjson::padded_string padded(json.data(), json.size());
     simdjson::ondemand::document doc;
-    assert(!parser.iterate(padded).get(doc));
+    CODEGEN_TEST_CHECK(!parser.iterate(padded).get(doc));
     simdjson::ondemand::object obj;
-    assert(!doc.get_object().get(obj));
+    CODEGEN_TEST_CHECK(!doc.get_object().get(obj));
     erhe::codegen::clear_deserialized_old_version_flag();
     Demo_params out{};
     deserialize(obj, out);
@@ -31,9 +31,9 @@ auto slot_upgrade_flag(const std::string& json) -> bool
     simdjson::ondemand::parser parser;
     simdjson::padded_string padded(json.data(), json.size());
     simdjson::ondemand::document doc;
-    assert(!parser.iterate(padded).get(doc));
+    CODEGEN_TEST_CHECK(!parser.iterate(padded).get(doc));
     simdjson::ondemand::object obj;
-    assert(!doc.get_object().get(obj));
+    CODEGEN_TEST_CHECK(!doc.get_object().get(obj));
     erhe::codegen::clear_deserialized_old_version_flag();
     Demo_slot out{};
     deserialize(obj, out);
@@ -44,7 +44,7 @@ auto slot_upgrade_flag(const std::string& json) -> bool
 void test_old_version_sets_flag()
 {
     std::printf("test_old_version_sets_flag... ");
-    assert(params_upgrade_flag(R"({ "_version": 1, "scale": 1.5 })") == true);
+    CODEGEN_TEST_CHECK(params_upgrade_flag(R"({ "_version": 1, "scale": 1.5 })") == true);
     std::printf("PASSED\n");
 }
 
@@ -53,8 +53,8 @@ void test_old_version_sets_flag()
 void test_current_version_no_flag()
 {
     std::printf("test_current_version_no_flag... ");
-    assert(params_upgrade_flag(R"({ "_version": 2, "scale": 1.5 })") == false);
-    assert(params_upgrade_flag(R"({ "scale": 1.5 })") == true);
+    CODEGEN_TEST_CHECK(params_upgrade_flag(R"({ "_version": 2, "scale": 1.5 })") == false);
+    CODEGEN_TEST_CHECK(params_upgrade_flag(R"({ "scale": 1.5 })") == true);
     std::printf("PASSED\n");
 }
 
@@ -63,8 +63,8 @@ void test_current_version_no_flag()
 void test_nested_old_version_sets_flag()
 {
     std::printf("test_nested_old_version_sets_flag... ");
-    assert(slot_upgrade_flag(R"({ "params": { "_version": 1, "scale": 1.5 } })") == true);
-    assert(slot_upgrade_flag(R"({ "params": { "_version": 2, "scale": 1.5 } })") == false);
+    CODEGEN_TEST_CHECK(slot_upgrade_flag(R"({ "params": { "_version": 1, "scale": 1.5 } })") == true);
+    CODEGEN_TEST_CHECK(slot_upgrade_flag(R"({ "params": { "_version": 2, "scale": 1.5 } })") == false);
     std::printf("PASSED\n");
 }
 

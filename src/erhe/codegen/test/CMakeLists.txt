@@ -8,6 +8,7 @@ erhe_target_sources_grouped(
     test_migration.cpp
     test_omit_defaults.cpp
     test_version_upgrade.cpp
+    test_check.hpp
 )
 
 # Generated sources (listed explicitly so CMake knows about them)
