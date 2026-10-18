@@ -104,23 +104,29 @@ def summarize_log(text, marker_offset):
     optimize_ms = 0.0
     optimize_count = 0
     replayed = 0
+    replayed_ms = 0.0
     bvh_build_ms = 0
     bvh_build_count = 0
     bvh_save_failed = 0
     for line in lines:
-        m = re.search(r"mesh optimize .*?, ([0-9.]+) ms$", line)
+        # Per-primitive lines only: the "mesh optimize totals:" summary also
+        # says "replayed from cache" and must not count as a replay.
+        m = re.search(r"mesh optimize (?!totals:).*, replayed from cache(?: in ([0-9.]+) ms)?$", line)
         if m:
-            optimize_ms += float(m.group(1))
-            optimize_count += 1
-        elif "replayed from cache" in line:
             replayed += 1
+            replayed_ms += float(m.group(1) or 0.0)
+        else:
+            m = re.search(r"mesh optimize (?!totals:).*?, ([0-9.]+) ms$", line)
+            if m:
+                optimize_ms += float(m.group(1))
+                optimize_count += 1
         m = re.search(r"BVH build .* in (\d+) ms", line)
         if m:
             bvh_build_ms += int(m.group(1))
             bvh_build_count += 1
         if "BVH save failed" in line:
             bvh_save_failed += 1
-    print(f"  log: mesh optimize {optimize_count} meshes, {optimize_ms:.0f} ms summed; {replayed} replayed from cache")
+    print(f"  log: mesh optimize {optimize_count} meshes, {optimize_ms:.0f} ms summed; {replayed} replayed from cache, {replayed_ms:.0f} ms summed")
     print(f"  log: BVH build {bvh_build_count} geometries, {bvh_build_ms} ms summed; {bvh_save_failed} save failures")
     for line in lines:
         if re.search(r"(parse_gltf|Gltf|gltf).*\b(ms|s)\b", line) and re.search(r"\d+(\.\d+)? ?(ms|s)\b", line):
@@ -198,6 +204,7 @@ def main():
             })
             print(f"  render: {image_path} {'ok' if os.path.isfile(image_path) else 'FAILED: ' + str(render)[:200]}")
         if (open_index < args.opens) or not args.keep_open:
+            close_log_offset = len(read_log())
             for name in (scene_names(port) or []):
                 if os.path.basename(scene_path) in name:
                     mcp(port, "close_scene", {"scene_name": name})
@@ -212,6 +219,18 @@ def main():
             # The close runs on the main thread; a stalled main loop delays the
             # list_scenes reply, so this is the user-visible close time.
             print(f"close {open_index}: scene gone after {gone_s:.2f} s" if gone_s is not None else f"close {open_index}: scene still listed after 120 s")
+            # The closed scene's mesh payload is freed by a worker task
+            # (Scene_payload_release) that runs for seconds after the close and
+            # contends with a reopen on the process heap. Wait for its log line
+            # so the next open measures the caches, not that contention.
+            freed_s = None
+            while (time.time() - close_start) < 300.0:
+                m = re.search(r"scene payload release: .* released in (\d+) ms", read_log()[close_log_offset:])
+                if m:
+                    freed_s = time.time() - close_start
+                    break
+                time.sleep(0.25)
+            print(f"release {open_index}: payload freed after {freed_s:.2f} s" if freed_s is not None else f"release {open_index}: no payload release line after 300 s")
             time.sleep(1.0)
 
     mcp(port, "request_exit")
