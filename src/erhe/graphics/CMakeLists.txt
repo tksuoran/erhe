@@ -402,6 +402,7 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_debug.hpp
         erhe_graphics/vulkan/vulkan_metal_layer_mac.hpp
         erhe_graphics/vulkan/vulkan_device.cpp
+        erhe_graphics/vulkan/vulkan_device_display_refresh_calibration.cpp
         erhe_graphics/vulkan/vulkan_device_debug.cpp
         erhe_graphics/vulkan/vulkan_device_init.cpp
         erhe_graphics/vulkan/vulkan_device.hpp

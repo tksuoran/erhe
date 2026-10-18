@@ -387,6 +387,11 @@ public:
     // record_frame_bracket_end returns that recorded cb, or VK_NULL_HANDLE
     // when the bracket is off, no cb began this frame, or the end was
     // already recorded for this frame.
+    // Display refresh init calibration (vulkan_device_display_refresh_calibration.cpp):
+    // a dedicated clear-only swapchain on the surface, run at device init
+    // before the application's swapchain exists; feeds the device's
+    // Display_refresh_resolver.
+    void               run_display_refresh_calibration(Surface_impl& surface_impl);
     void               record_frame_bracket_begin   (VkCommandBuffer cb, uint64_t frame_id);
     [[nodiscard]] auto record_frame_bracket_end     (uint64_t frame_id) -> VkCommandBuffer;
     void               reset_frame_end_command_pool (std::size_t in_flight_slot);

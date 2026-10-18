@@ -653,16 +653,15 @@ command pool) is the slot of that id (`get_slot_index(frame_id)`):
 into the submit, `acquire_swapchain_framebuffer` and `record_capture` (from
 the swapchain render pass), and `present` (from
 `Device_impl::submit_command_buffers`), with the present history entry, the
-present id (frame id + 1), the present target, the present timing
-calibration it keys, and the display refresh init calibration sample
-(`present` / `calibrate_display_refresh`: the displayed time from the
-presentation feedback, else `vkWaitForPresentKHR` on the previous present
-right before this one goes out, else the `vkQueuePresentKHR` return under
-plain FIFO, for the device's `Display_refresh_resolver` while it
-calibrates). `init_present_timing` /
-`query_swapchain_timing_properties` feed the same resolver the swapchain's
-`refreshDuration` / `refreshInterval`, re-queried when `poll_present_timing`
-sees the timing properties counter change. `wait_frame` records the frame id of the open
+present id (frame id + 1), the present target and the present timing
+calibration it keys. `init_present_timing` /
+`query_swapchain_timing_properties` feed the device's
+`Display_refresh_resolver` the swapchain's `refreshDuration` /
+`refreshInterval`, re-queried when `poll_present_timing` sees the timing
+properties counter change; the display refresh init calibration itself runs
+on its own clear-only swapchain inside device init
+(`Device_impl::run_display_refresh_calibration`), before this swapchain's
+`VkSwapchainKHR` exists. `wait_frame` records the frame id of the open
 swapchain frame and the later entry points verify it, so one frame drives
 the swapchain from its wait to its present. `read_back_capture`, called by
 the main thread, ages the capture against the main role's
