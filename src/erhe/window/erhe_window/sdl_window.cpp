@@ -550,6 +550,60 @@ void Context_window::register_display_changed_callback(std::function<void()> cal
     m_display_changed_callback = std::move(callback);
 }
 
+auto Context_window::enumerate_displays() const -> std::vector<Display_info>
+{
+    std::vector<Display_info> displays;
+    int display_count = 0;
+    SDL_DisplayID* const display_ids = SDL_GetDisplays(&display_count);
+    if (display_ids == nullptr) {
+        return displays;
+    }
+    ERHE_DEFER( SDL_free(display_ids); );
+    auto* const         window         = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    const SDL_DisplayID window_display = (window != nullptr) ? SDL_GetDisplayForWindow(window) : 0;
+    const SDL_DisplayID primary        = SDL_GetPrimaryDisplay();
+    displays.reserve(static_cast<std::size_t>(display_count));
+    for (int i = 0; i < display_count; ++i) {
+        const SDL_DisplayID    id   = display_ids[i];
+        const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(id);
+        const char* const      name = SDL_GetDisplayName(id);
+        Display_info info{};
+        info.name         = (name != nullptr) ? name : "";
+        info.primary      = (id == primary);
+        info.hosts_window = (id == window_display);
+        if (mode != nullptr) {
+            info.width        = mode->w;
+            info.height       = mode->h;
+            info.refresh_rate = mode->refresh_rate;
+            if ((mode->refresh_rate_numerator > 0) && (mode->refresh_rate_denominator > 0)) {
+                info.refresh_period_seconds = static_cast<double>(mode->refresh_rate_denominator) / static_cast<double>(mode->refresh_rate_numerator);
+            } else if (mode->refresh_rate > 0.0f) {
+                info.refresh_period_seconds = 1.0 / static_cast<double>(mode->refresh_rate);
+            }
+        }
+        displays.push_back(info);
+    }
+    return displays;
+}
+
+void Context_window::log_displays() const
+{
+    const std::vector<Display_info> displays = enumerate_displays();
+    log_window->info("Displays: {}", displays.size());
+    for (const Display_info& display : displays) {
+        log_window->info(
+            "  '{}' {}x{} @ {:.3f} Hz ({:.3f} ms){}{}",
+            display.name, display.width, display.height,
+            display.refresh_rate, display.refresh_period_seconds * 1000.0,
+            display.primary      ? ", primary" : "",
+            display.hosts_window ? ", hosts the window" : ""
+        );
+    }
+    if (displays.size() > 1) {
+        log_window->info("Multiple displays: the frame pacer's refresh period follows the display that hosts the window (erhe.graphics.display_refresh)");
+    }
+}
+
 void Context_window::register_redraw_callback(std::function<void()> callback)
 {
     m_redraw_callback = callback;
@@ -915,6 +969,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE,  &blue_size);
     m_pixel_density = SDL_GetWindowPixelDensity(sdl_window);
     const float display_scale = SDL_GetWindowDisplayScale(sdl_window);
+    log_displays();
     log_window->info("Window color depth red = {}, green = {}, blue = {}", red_size, green_size, blue_size);
     log_window->info("Window pixel density = {}, display scale = {}", m_pixel_density, display_scale);
 

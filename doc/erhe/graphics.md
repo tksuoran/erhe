@@ -145,9 +145,11 @@ The display refresh period the frame pacer runs on
 `Display_refresh_resolver` (`display_refresh_resolver.hpp`,
 `get_display_refresh_resolver()` / `get_display_refresh_report()`) from the
 window's display mode, the backend's swapchain timing query and an init
-calibration from displayed times; `doc/frame_pacing/inputs.md` section 3.1
-states the sources and the decision. The resolver applies its decision to
-the frame time recorder, from which the pacing observer reads it.
+calibration on a dedicated swapchain; `doc/frame_pacing/inputs.md` section
+3.1 states the sources and the decision, and the graphics config keys
+`display_refresh_source` / `display_refresh_override_hz` choose the deciding
+source or an explicit rate. The resolver applies its decision to the frame
+time recorder, from which the pacing observer reads it.
 
 The contract for each entry point:
 

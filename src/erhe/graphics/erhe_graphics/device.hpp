@@ -796,7 +796,7 @@ public:
     [[nodiscard]] auto get_native_handles                 () const -> Native_device_handles;
 
 private:
-    [[nodiscard]] auto make_display_refresh_resolver() -> std::unique_ptr<Display_refresh_resolver>;
+    [[nodiscard]] auto make_display_refresh_resolver(const Graphics_config& graphics_config) -> std::unique_ptr<Display_refresh_resolver>;
 
     Device_message_callback      m_device_message_callback{};
     // Owned through unique_ptr so this header forward-declares their

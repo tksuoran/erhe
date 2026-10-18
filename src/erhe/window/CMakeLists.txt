@@ -13,6 +13,7 @@ erhe_target_sources_grouped(
     erhe_window/window.hpp
     erhe_window/window_event_handler.cpp
     erhe_window/window_event_handler.hpp
+    erhe_window/display_info.hpp
     erhe_window/window_configuration.hpp
 )
 

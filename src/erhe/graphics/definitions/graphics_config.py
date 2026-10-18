@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Graphics_config",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="Graphics Settings",
     long_desc="",
     developer=False,
@@ -114,6 +114,26 @@ struct("Graphics_config",
             default='"auto"',
             short_desc="Frame Pacing Capability Tier",
             long_desc="Which frame pacing method to use (doc/frame_pacing/capability_tiers.md). 'auto' resolves the best available tier: W (full pacer; needs present id + wait + timing + calibrated timestamps, Vulkan) else S (slop-servo fallback; needs only plain-FIFO backpressure). 'w' forces tier W (downgrades with a warning if the capabilities are missing), 's' forces the slop-servo fallback, 'off' disables pacing. The resolved tier owns the swapchain configuration: tier W selects fifo_latest_ready, tier S selects plain FIFO with minimum image count (the servo needs backpressure; on latest_ready superseded images drop instead of blocking and the servo winds to nothing, claim C21a). Change requires restart (the swapchain is created from the resolved tier).",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "display_refresh_source",
+            String,
+            added_in=2,
+            default='"auto"',
+            short_desc="Display Refresh Period Source",
+            long_desc="Which source the frame pacer's display refresh period comes from (erhe::graphics::Display_refresh_resolver; every source is logged under erhe.graphics.display_refresh). 'auto' weighs them: the init calibration (a dedicated swapchain at device init measures the presentation engine's vblank cadence) confirms or vetoes the window's display mode and the VK_EXT_present_timing refreshDuration query, and the window mode wins over a query disagreeing with it when the calibration could not decide. 'window' forces the current mode of the display the window is on, 'vulkan' the swapchain timing query, 'calibration' the measured cadence (each falls back to 'auto' with a warning when that source is unavailable), 'override' uses display_refresh_override_hz.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "display_refresh_override_hz",
+            Float,
+            added_in=2,
+            default="0.0f",
+            short_desc="Display Refresh Override (Hz)",
+            long_desc="The display refresh rate the frame pacer runs on when display_refresh_source is 'override', in Hz (e.g. 120.0). Ignored for the other sources; 0 or less with 'override' falls back to 'auto' with a warning.",
             visible=True,
             developer=False
         ),

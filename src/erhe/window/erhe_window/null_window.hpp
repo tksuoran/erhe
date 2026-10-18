@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_window/window_event_handler.hpp"
+#include "erhe_window/display_info.hpp"
 #include "erhe_window/window_configuration.hpp"
 
 #include <functional>
@@ -70,6 +71,9 @@ public:
     [[nodiscard]] auto get_display_refresh_period_seconds() const -> double;
     [[nodiscard]] auto get_display_name() const -> std::string;
     void register_display_changed_callback(std::function<void()> callback);
+    // Every display the window system reports, with its current mode and
+    // which one hosts the window; empty when unknown.
+    [[nodiscard]] auto enumerate_displays() const -> std::vector<Display_info>;
 
     void register_redraw_callback(std::function<void()> callback);
 

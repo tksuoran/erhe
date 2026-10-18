@@ -661,7 +661,8 @@ Device_impl::Device_impl(
             const std::string display_name = context_window->get_display_name();
             device->get_display_refresh_resolver().set_window_period(
                 context_window->get_display_refresh_period_seconds(),
-                display_name.c_str()
+                display_name.c_str(),
+                context_window->enumerate_displays().size()
             );
         };
         feed_window_period();
