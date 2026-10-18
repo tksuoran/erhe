@@ -455,7 +455,11 @@ for frames 1 to 12; run scripts wait for frame 12.
   zones above a threshold on both threads and the GPU zones, plus the
   tick's lag-1 autocorrelation (an alternating slow/fast pattern shows as
   a negative value). `--analyze-only` re-reads a saved capture; the
-  csvexport output is cached next to the capture.
+  csvexport output is cached next to the capture. The default scene is
+  not in the repository: when it is missing the script downloads the
+  `bistro_lights_compressed` archive from its Google Drive share into
+  `res/editor/assets/`; `--test-download` exercises that download into a
+  temporary directory while a local copy exists.
   `scripts/perfetto_system_trace.py` and `scripts/tracy_to_perfetto.py`
   put a system trace and a Tracy capture side by side in Perfetto. The
   scenes are `config/editor/commands_bench_heavy.json` (about 1500 static

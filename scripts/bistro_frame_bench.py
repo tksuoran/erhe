@@ -31,19 +31,31 @@ Examples:
 
 import argparse
 import base64
+import http.cookiejar
 import json
 import os
 import re
+import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
+import urllib.parse
+import urllib.request
+import zipfile
 from collections import defaultdict
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_PATH = os.path.join(REPO_ROOT, "logs", "log.txt")
 READY_LINE = "Main loop: completed frame 12"
 DEFAULT_SCENE = "res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf"
+# The default scene is not in the repository (res/editor/assets/ is
+# ignored): a zip of the bistro_lights_compressed folder (268 MB; the
+# folder's parent is the extraction root) is downloaded from Google Drive
+# when the scene file is missing.
+DEFAULT_SCENE_ARCHIVE_DRIVE_ID = "1GlmOPAURKOgwAshlP8hhiUwg-US-l9JI"
+DEFAULT_SCENE_ARCHIVE_ROOT = "res/editor/assets"
 
 # The user's session on 2026-10-18 (queried over MCP with get_node_details):
 # the viewport camera and the glTF import root (Y-up conversion).
@@ -57,6 +69,92 @@ MAIN_PHASES = ["frame_overlap_phase", "frame_prepare_phase", "frame_imgui_phase"
 RENDER_PHASE = "frame_render_phase"
 MCP_ZONE = "MCP server"
 MCP_REQUEST_THRESHOLD_NS = 60_000
+
+
+def download_google_drive_file(file_id, target_path):
+    """Downloads a shared Google Drive file to target_path. A large file
+    first answers with the virus-scan warning page, whose form carries the
+    confirm token and a uuid; its action URL with those fields is the
+    download. Returns the file name from the Content-Disposition header."""
+    cookies = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    response = opener.open(url, timeout=120)
+    content_type = response.headers.get("Content-Type", "")
+    if content_type.startswith("text/html"):
+        page = response.read().decode("utf-8", errors="replace")
+        response.close()
+        action = re.search(r'action="([^"]+)"', page)
+        fields = dict(re.findall(r'name="([a-z]+)" value="([^"]*)"', page))
+        if (action is None) or ("confirm" not in fields):
+            sys.exit(f"Google Drive did not offer a download for {file_id}: {page[:200]}")
+        url = action.group(1) + "?" + urllib.parse.urlencode(fields)
+        response = opener.open(url, timeout=120)
+    name = re.search(r'filename="([^"]+)"', response.headers.get("Content-Disposition", ""))
+    total = int(response.headers.get("Content-Length", "0") or 0)
+    done = 0
+    next_report = 0.1
+    start = time.time()
+    with open(target_path, "wb") as f:
+        while True:
+            chunk = response.read(1 << 20)
+            if not chunk:
+                break
+            f.write(chunk)
+            done += len(chunk)
+            if total and (done >= next_report * total):
+                print(f"  {100.0 * done / total:3.0f}% of {total / 1e6:.0f} MB ({time.time() - start:.0f} s)")
+                next_report += 0.1
+    response.close()
+    return name.group(1) if name else os.path.basename(target_path)
+
+
+def extract_scene_archive(archive_path, extraction_root, scene_relative_path):
+    """Extracts the archive into extraction_root; the archive must hold
+    scene_relative_path (relative to that root) and no entry may escape
+    it. Returns the number of entries extracted."""
+    root = os.path.abspath(extraction_root)
+    with zipfile.ZipFile(archive_path) as archive:
+        names = archive.namelist()
+        if scene_relative_path.replace(os.sep, "/") not in names:
+            sys.exit(f"{archive_path} does not contain {scene_relative_path}; entries: {names[:5]}")
+        for entry in names:
+            if not os.path.abspath(os.path.join(root, entry)).startswith(root + os.sep):
+                sys.exit(f"{archive_path}: entry {entry} escapes {root}")
+        os.makedirs(root, exist_ok=True)
+        archive.extractall(root)
+    return len(names)
+
+
+def ensure_scene(scene_path, drive_id, archive_root, test_download):
+    """The scene file is present, or is fetched: the Google Drive archive
+    is downloaded and extracted under archive_root (repo-root relative).
+    With test_download the download and the archive check run even when
+    the scene is present, into a temporary directory that is removed
+    again, so the download path can be verified without touching the
+    local assets."""
+    scene_absolute = os.path.join(REPO_ROOT, scene_path)
+    present = os.path.isfile(scene_absolute)
+    print(f"scene {scene_path}: {'present' if present else 'missing'}")
+    if present and not test_download:
+        return
+    if drive_id is None:
+        sys.exit(f"scene not found: {scene_absolute} (no download source for this scene)")
+    scene_in_archive = os.path.relpath(scene_absolute, os.path.join(REPO_ROOT, archive_root)).replace(os.sep, "/")
+    temp_dir = tempfile.mkdtemp(prefix="bistro_scene_")
+    try:
+        archive_path = os.path.join(temp_dir, "scene.zip")
+        print(f"downloading Google Drive file {drive_id}")
+        name = download_google_drive_file(drive_id, archive_path)
+        print(f"downloaded {name}: {os.path.getsize(archive_path) / 1e6:.1f} MB")
+        extraction_root = os.path.join(temp_dir, "extracted") if present else os.path.join(REPO_ROOT, archive_root)
+        count = extract_scene_archive(archive_path, extraction_root, scene_in_archive)
+        extracted_scene = os.path.join(extraction_root, scene_in_archive)
+        print(f"extracted {count} entries to {extraction_root}; scene file {os.path.getsize(extracted_scene) / 1e6:.1f} MB")
+        if present:
+            print("download test passed (the local scene was left untouched)")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def read_log():
@@ -468,7 +566,13 @@ def main():
     parser.add_argument("--graphics-override", action="append", default=[], metavar="KEY=JSON", help="top-level erhe_graphics.json value for this run, e.g. force_disable_vsync=true (the file is restored at exit)")
     parser.add_argument("--analyze-only", action="store_true", help="skip the editor run; analyse --out")
     parser.add_argument("--keep-running", action="store_true", help="leave the editor running after the measurement (the capture is then analysed only after the editor exits by itself)")
+    parser.add_argument("--test-download", action="store_true", help="download and verify the default scene archive even when the scene is present (into a temporary directory), then exit")
     args = parser.parse_args()
+
+    drive_id = DEFAULT_SCENE_ARCHIVE_DRIVE_ID if (args.scene == DEFAULT_SCENE) else None
+    if args.test_download:
+        ensure_scene(args.scene, drive_id, DEFAULT_SCENE_ARCHIVE_ROOT, test_download=True)
+        return 0
 
     if not args.tracy_dir:
         sys.exit("set ERHE_TRACY_DIR or pass --tracy-dir (directory with tracy-capture and tracy-csvexport)")
@@ -485,6 +589,7 @@ def main():
     editor = args.editor if os.path.isabs(args.editor) else os.path.join(REPO_ROOT, args.editor)
     if not os.path.isfile(editor):
         sys.exit(f"editor not found: {editor}")
+    ensure_scene(args.scene, drive_id, DEFAULT_SCENE_ARCHIVE_ROOT, test_download=False)
     if os.path.exists(LOG_PATH):
         os.remove(LOG_PATH)
     if os.path.exists(args.out):
