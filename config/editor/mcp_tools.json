@@ -4047,7 +4047,7 @@
           "type": "string"
         },
         "shader_debug": {
-          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (at the color_format precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions).",
+          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (at the color_format precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions). 37 base_color: the resolved base color the BxDF receives (material input source, factor, vertex color and base color texture multiplied), unlit, in linear space.",
           "type": "integer"
         },
         "shadow_debug_light": {
