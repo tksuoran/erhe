@@ -447,6 +447,15 @@ for frames 1 to 12; run scripts wait for frame 12.
   GPU. `scripts/tracy_zone_summary.py` lists the hot CPU and GPU zones and
   the phase picture of a capture: how much of R the main thread was busy
   (and of that, in M2) versus blocked, and how much of the tick R was idle.
+  `scripts/bistro_frame_bench.py` reproduces a windowed user session on
+  the Bistro scene (open over MCP, the session's camera and import root
+  transforms, deferred loads settled, a quiet window with no MCP traffic)
+  under a Tracy capture and prints the per-frame picture of consecutive
+  quiet frames: tick, M1/M2/M3/kick/join, the R each tick kicked, the
+  zones above a threshold on both threads and the GPU zones, plus the
+  tick's lag-1 autocorrelation (an alternating slow/fast pattern shows as
+  a negative value). `--analyze-only` re-reads a saved capture; the
+  csvexport output is cached next to the capture.
   `scripts/perfetto_system_trace.py` and `scripts/tracy_to_perfetto.py`
   put a system trace and a Tracy capture side by side in Perfetto. The
   scenes are `config/editor/commands_bench_heavy.json` (about 1500 static

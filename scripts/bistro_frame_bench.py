@@ -1,0 +1,484 @@
+#!/usr/bin/env python3
+"""Steady-state frame benchmark of the windowed editor on the Bistro scene.
+
+Reproduces a user session: the windowed editor is launched from the repo root
+with --no-scene and ERHE_AI_DRIVER=1 (the working copy's config/ applies, no
+config file is written), bistro_lights_c.gltf is opened over MCP, the scene's
+Camera and import root are set to the given transforms, the deferred loading
+tasks settle (get_async_status idle, then --settle-s seconds with no MCP
+traffic), and a quiet measurement window of --measure-s seconds follows during
+which the script makes no MCP call at all. The editor is then asked to exit.
+
+The whole run is recorded with tracy-capture (the editor must be built with
+ERHE_PROFILE_LIBRARY=tracy; ERHE_TRACY_ON_DEMAND=ON works because the capture
+tool connects before the editor starts). The capture is exported with
+tracy-csvexport and the frames of the quiet window are analysed per frame:
+the main-thread phases (M1, M2, M3, kick, join), the render thread's R, the
+device waits inside them, and the GPU zones, so an alternating slow / fast
+frame pattern shows up as such and the wait that carries it is named.
+
+The quiet window is found in the capture itself: every MCP request runs in
+the "MCP server" zone, so the frames between the last settle poll and the
+request_exit call are the ones with no MCP traffic.
+
+The analysis step can be re-run on a saved capture with --analyze-only.
+
+Examples:
+  set ERHE_TRACY_DIR=<tracy tools directory with tracy-capture.exe and tracy-csvexport.exe>
+  py -3 scripts/bistro_frame_bench.py --editor build_vs2026_vulkan/bin/Release/editor.exe
+  py -3 scripts/bistro_frame_bench.py --analyze-only --out logs/bistro_frames.tracy --frames 6
+"""
+
+import argparse
+import base64
+import json
+import os
+import re
+import statistics
+import subprocess
+import sys
+import time
+from collections import defaultdict
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOG_PATH = os.path.join(REPO_ROOT, "logs", "log.txt")
+READY_LINE = "Main loop: completed frame 12"
+DEFAULT_SCENE = "res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf"
+
+# The user's session on 2026-10-18 (queried over MCP with get_node_details):
+# the viewport camera and the glTF import root (Y-up conversion).
+DEFAULT_CAMERA_TRANSLATION = [-29.2810115814209, 9.677236557006836, -16.337175369262695]
+DEFAULT_CAMERA_ROTATION = [-0.03749912232160568, -0.9181863069534302, -0.08965181559324265, 0.3840445876121521]
+DEFAULT_ROOT_TRANSLATION = [0.0, 0.0, 0.0]
+DEFAULT_ROOT_ROTATION = [-0.7071068286895752, 0.0, 0.0, 0.7071068286895752]
+
+SEP = "|"
+MAIN_PHASES = ["frame_overlap_phase", "frame_prepare_phase", "frame_imgui_phase", "kick", "join"]
+RENDER_PHASE = "frame_render_phase"
+MCP_ZONE = "MCP server"
+MCP_REQUEST_THRESHOLD_NS = 60_000
+
+
+def read_log():
+    try:
+        with open(LOG_PATH, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def mcp(port, tool, arguments=None):
+    encoded = "b64:" + base64.b64encode(json.dumps(arguments or {}).encode("utf-8")).decode("ascii")
+    result = subprocess.run(
+        [sys.executable, os.path.join(REPO_ROOT, "scripts", "mcp_call.py"), tool, encoded, "--port", str(port)],
+        cwd=REPO_ROOT, capture_output=True, text=True, errors="replace"
+    )
+    text = result.stdout.strip()
+    try:
+        reply = json.loads(text)
+    except ValueError:
+        return text
+    content = reply.get("result", reply).get("content", []) if isinstance(reply, dict) else []
+    for item in content:
+        if item.get("type") == "text":
+            try:
+                return json.loads(item["text"])
+            except ValueError:
+                return item["text"]
+    return reply
+
+
+def wait_for_ready(editor_process, timeout_s):
+    start = time.time()
+    while ((time.time() - start) < timeout_s) and (editor_process.poll() is None):
+        text = read_log()
+        if READY_LINE in text:
+            port = re.search(r"MCP server: listening on 127\.0\.0\.1:(\d+)", text)
+            if port:
+                return int(port.group(1)), time.time() - start
+        time.sleep(0.1)
+    return None, None
+
+
+def scene_names(port):
+    reply = mcp(port, "list_scenes")
+    if isinstance(reply, dict) and ("scenes" in reply):
+        return [scene.get("name", "") for scene in reply.get("scenes", [])]
+    return None
+
+
+def wait_until_settled(port, scene_file, timeout_s):
+    start = time.time()
+    listed = False
+    while (time.time() - start) < timeout_s:
+        status = mcp(port, "get_async_status")
+        if not listed and any(scene_file in name for name in (scene_names(port) or [])):
+            listed = True
+        if listed and isinstance(status, dict) and status.get("idle"):
+            return time.time() - start
+        time.sleep(0.5)
+    return None
+
+
+def find_tool(tracy_dir, name):
+    for candidate in (os.path.join(tracy_dir, name + ".exe"), os.path.join(tracy_dir, name)):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def phase_lines(text):
+    rows = []
+    pair_re = re.compile(r"([A-Za-z_][A-Za-z0-9_ ]*?) (-?\d+\.\d+)")
+    for line in text.splitlines():
+        m = re.search(r"Phase timing \(us/frame, avg of (\d+) frames\): (.*)$", line)
+        if m:
+            row = {}
+            for name, value in pair_re.findall(m.group(2)):
+                row[name.strip()] = float(value)
+            rows.append(row)
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Capture analysis
+
+
+def export(csvexport, capture, extra):
+    """tracy-csvexport rows of the capture; the export is cached next to the
+    capture (<capture>.<flags>.csv) because exporting a large capture takes
+    minutes and the analysis is re-run with different frame counts."""
+    cache = capture + "." + "".join(flag.strip("-") for flag in extra) + ".csv"
+    if os.path.isfile(cache) and (os.path.getmtime(cache) >= os.path.getmtime(capture)):
+        with open(cache, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    else:
+        out = subprocess.run([csvexport, "-s", SEP, *extra, capture], capture_output=True, text=True, check=True)
+        text = out.stdout
+        with open(cache, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+    lines = text.splitlines()
+    if not lines:
+        return []
+    header = lines[0].split(SEP)
+    rows = []
+    for line in lines[1:]:
+        parts = line.split(SEP)
+        if len(parts) != len(header):
+            continue
+        rows.append(dict(zip(header, parts)))
+    return rows
+
+
+def zone_intervals(rows):
+    """{name: [(start, end, thread)]} sorted by start, for every CPU zone.
+
+    ERHE_PROFILE_FUNCTION names a zone after the function: a bare name with
+    GCC and Clang (`frame_prepare_phase`), the qualified name with MSVC
+    (`editor::Editor::frame_prepare_phase`). The phase zones are looked up
+    under the bare name, so the qualified names are stored under both.
+    """
+    result = defaultdict(list)
+    for row in rows:
+        start = int(row["ns_since_start"])
+        name = row["name"]
+        entry = (start, start + int(row["exec_time_ns"]), row["thread"])
+        result[name].append(entry)
+        if "::" in name:
+            bare = name.rsplit("::", 1)[1]
+            if bare in ("frame", *MAIN_PHASES, RENDER_PHASE):
+                result[bare].append(entry)
+    for intervals in result.values():
+        intervals.sort()
+    return result
+
+
+def overlap_ns(a_start, a_end, intervals):
+    total = 0
+    for start, end, _thread in intervals:
+        if end <= a_start:
+            continue
+        if start >= a_end:
+            break
+        total += min(end, a_end) - max(start, a_start)
+    return total
+
+
+def inside(window, intervals):
+    return [iv for iv in intervals if (iv[0] >= window[0]) and (iv[0] < window[1])]
+
+
+def us(ns):
+    return ns / 1000.0
+
+
+def lag1_autocorrelation(values):
+    if len(values) < 3:
+        return 0.0
+    mean = statistics.fmean(values)
+    num = sum((values[i] - mean) * (values[i + 1] - mean) for i in range(len(values) - 1))
+    den = sum((v - mean) ** 2 for v in values)
+    return (num / den) if den > 0 else 0.0
+
+
+def analyze(capture, csvexport, frame_count, settle_window_s, gpu_rows_wanted=True):
+    rows = export(csvexport, capture, ["-u"])
+    if not rows:
+        print("no zones exported")
+        return 1
+    zones = zone_intervals(rows)
+    frames = zones.get("frame", [])
+    if not frames:
+        print("no `frame` zones in the capture")
+        return 1
+
+    # The quiet window: between the last MCP request before the exit request
+    # and the exit request itself (the last MCP zone of the capture). Without
+    # MCP zones the final --measure-s seconds of frames are used instead.
+    # The MCP server zone runs every frame (it polls the request queue); a
+    # frame that served a request spends far longer in it (JSON reply
+    # building), so the request frames are the zones above the threshold.
+    mcp_zones = [z for z in zones.get(MCP_ZONE, []) if (z[1] - z[0]) >= MCP_REQUEST_THRESHOLD_NS]
+    if len(mcp_zones) >= 2:
+        window = (mcp_zones[-2][1], mcp_zones[-1][0])
+    else:
+        window = (frames[-1][1] - int(settle_window_s * 1e9), frames[-1][1])
+    window_frames = [f for f in frames if (f[0] >= window[0]) and (f[1] <= window[1])]
+    print(f"capture: {capture}")
+    print(f"frames in capture: {len(frames)}; quiet window {us(window[1] - window[0]) / 1000:.1f} ms with {len(window_frames)} complete frames (no MCP traffic)")
+    if len(window_frames) < frame_count:
+        print("quiet window shorter than the requested frame count; analysing what there is")
+
+    # Thread names: the render phase thread versus the frame (main) thread.
+    main_thread = frames[0][2]
+    render_zones = zones.get(RENDER_PHASE, [])
+    render_thread = render_zones[0][2] if render_zones else "?"
+
+    # Whole-window statistics of the tick and the phases.
+    ticks = [f[1] - f[0] for f in window_frames]
+    print()
+    print(f"tick over the quiet window: n={len(ticks)} mean {us(statistics.fmean(ticks)):.0f} us  median {us(statistics.median(ticks)):.0f}  "
+          f"min {us(min(ticks)):.0f}  max {us(max(ticks)):.0f}  stdev {us(statistics.pstdev(ticks)):.0f}  lag-1 autocorrelation {lag1_autocorrelation(ticks):+.2f}")
+    odd = ticks[0::2]
+    even = ticks[1::2]
+    if odd and even:
+        print(f"  alternate frames: mean {us(statistics.fmean(odd)):.0f} us vs {us(statistics.fmean(even)):.0f} us "
+              f"(a negative lag-1 autocorrelation with these apart = slow/fast alternation)")
+    runs = []
+    if len(ticks) >= 2:
+        above = [t > statistics.median(ticks) for t in ticks]
+        flips = sum(1 for i in range(1, len(above)) if above[i] != above[i - 1])
+        print(f"  median crossings: {flips} of {len(ticks) - 1} transitions ({100.0 * flips / (len(ticks) - 1):.0f}%; ~100% = strict alternation, ~50% = random)")
+
+    # Per-frame picture of the last `frame_count` frames of the window.
+    picked = window_frames[-frame_count:]
+    print()
+    print(f"per-frame picture of the last {len(picked)} quiet frames (us; frame = main-thread tick):")
+    header = f"{'#':>3} {'start_ms':>10} {'tick':>8} {'M1':>8} {'M2':>8} {'M3':>8} {'kick':>8} {'join':>8} {'R(start)':>10} {'R':>8} {'R_gap':>8}"
+    print(header)
+    render_sorted = sorted(render_zones)
+    previous_render_end = None
+    for index, frame in enumerate(picked):
+        start, end, _thread = frame
+        values = {}
+        for name in MAIN_PHASES:
+            values[name] = overlap_ns(start, end, zones.get(name, []))
+        # The R that this tick kicked: the first R starting after the kick
+        # begins (with pipelining the kick joins the previous R first).
+        kicks = inside((start, end), zones.get("kick", []))
+        kick_start = kicks[0][0] if kicks else start
+        renders = [r for r in render_sorted if r[0] >= kick_start]
+        render = renders[0] if renders else None
+        r_len = (render[1] - render[0]) if render else 0
+        r_gap = (render[0] - previous_render_end) if (render and previous_render_end is not None) else 0
+        if render:
+            previous_render_end = render[1]
+        print(f"{index:3d} {us(start) / 1000:10.3f} {us(end - start):8.0f} {us(values['frame_overlap_phase']):8.0f} {us(values['frame_prepare_phase']):8.0f} "
+              f"{us(values['frame_imgui_phase']):8.0f} {us(values['kick']):8.0f} {us(values['join']):8.0f} "
+              f"{(us(render[0]) / 1000) if render else 0:10.3f} {us(r_len):8.0f} {us(r_gap):8.0f}")
+
+    # Which zones fill the main thread and the render thread in those frames,
+    # per frame: every zone whose start lies in the frame (main thread) or in
+    # the R that the frame kicked (render thread), above a threshold, grouped
+    # by name so the wait that carries the alternation shows up.
+    threshold_ns = 200_000
+    skip = {"frame", RENDER_PHASE, *MAIN_PHASES}
+    skip.update(name for name in zones if ("::" in name) and (name.rsplit("::", 1)[1] in skip))
+    print()
+    print(f"zones >= {threshold_ns / 1000:.0f} us per frame (main thread {main_thread}, render thread {render_thread}); sums per name:")
+    previous_render_end = None
+    for index, frame in enumerate(picked):
+        start, end, _thread = frame
+        kicks = inside((start, end), zones.get("kick", []))
+        kick_start = kicks[0][0] if kicks else start
+        renders = [r for r in render_sorted if r[0] >= kick_start]
+        render = renders[0] if renders else None
+        main_sums = defaultdict(int)
+        render_sums = defaultdict(int)
+        for name, intervals in zones.items():
+            if name in skip:
+                continue
+            for z_start, z_end, thread in intervals:
+                if z_end <= start:
+                    continue
+                if (z_start >= end) and ((render is None) or (z_start >= render[1])):
+                    break
+                if (thread == main_thread) and (z_start >= start) and (z_start < end):
+                    main_sums[name] += z_end - z_start
+                elif render and (thread == render_thread) and (z_start >= render[0]) and (z_start < render[1]):
+                    render_sums[name] += z_end - z_start
+        main_text = ", ".join(f"{name} {us(v):.0f}" for name, v in sorted(main_sums.items(), key=lambda item: -item[1]) if v >= threshold_ns)
+        render_text = ", ".join(f"{name} {us(v):.0f}" for name, v in sorted(render_sums.items(), key=lambda item: -item[1]) if v >= threshold_ns)
+        print(f"  frame {index} tick {us(end - start):.0f}:")
+        print(f"    main:   {main_text or '-'}")
+        print(f"    render: {render_text or '-'}")
+
+    # GPU zones per frame: total GPU time of the zones that start inside each
+    # frame's R (by GPU timestamp, which Tracy aligns to the CPU clock).
+    if gpu_rows_wanted:
+        gpu_rows = export(csvexport, capture, ["-g"])
+        if gpu_rows:
+            gpu = []
+            for row in gpu_rows:
+                g_start = int(row["Time from start of program"])
+                gpu.append((g_start, g_start + int(row["GPU execution time"]), row["name"]))
+            gpu.sort()
+            print()
+            print("GPU zones per frame (zone starts inside the frame's tick, by Tracy's GPU-to-CPU alignment; us):")
+            for index, frame in enumerate(picked):
+                start, end, _thread = frame
+                sums = defaultdict(int)
+                for g_start, g_end, name in gpu:
+                    if (g_start >= start) and (g_start < end):
+                        sums[name] += g_end - g_start
+                total = sum(sums.values())
+                top = ", ".join(f"{name} {us(v):.0f}" for name, v in sorted(sums.items(), key=lambda item: -item[1])[:6])
+                print(f"  frame {index}: total {us(total):.0f}: {top or '-'}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--editor", default="build_vs2026_vulkan/bin/Release/editor.exe", help="editor executable (relative to the repo root or absolute)")
+    parser.add_argument("--scene", default=DEFAULT_SCENE, help="scene file to open (repo-root relative)")
+    parser.add_argument("--camera-translation", default=json.dumps(DEFAULT_CAMERA_TRANSLATION), help="JSON [x,y,z] world translation for the scene's Camera node")
+    parser.add_argument("--camera-rotation", default=json.dumps(DEFAULT_CAMERA_ROTATION), help="JSON [x,y,z,w] world rotation for the scene's Camera node")
+    parser.add_argument("--root-translation", default=json.dumps(DEFAULT_ROOT_TRANSLATION), help="JSON [x,y,z] world translation for the import root node")
+    parser.add_argument("--root-rotation", default=json.dumps(DEFAULT_ROOT_ROTATION), help="JSON [x,y,z,w] world rotation for the import root node")
+    parser.add_argument("--settle-s", type=float, default=10.0, help="seconds of no MCP traffic after the editor reports idle, before the measurement window")
+    parser.add_argument("--measure-s", type=float, default=3.0, help="seconds of the quiet measurement window (no MCP traffic)")
+    parser.add_argument("--frames", type=int, default=6, help="consecutive frames shown in the per-frame picture (the last ones of the quiet window)")
+    parser.add_argument("--timeout", type=float, default=900.0, help="seconds to wait for the scene open to settle")
+    parser.add_argument("--tracy-dir", default=os.environ.get("ERHE_TRACY_DIR", ""), help="directory with tracy-capture and tracy-csvexport (default ERHE_TRACY_DIR)")
+    parser.add_argument("--out", default=os.path.join(REPO_ROOT, "logs", "bistro_frames.tracy"), help="capture file")
+    parser.add_argument("--port", type=int, default=None, help="preferred MCP port (ERHE_MCP_PORT)")
+    parser.add_argument("--analyze-only", action="store_true", help="skip the editor run; analyse --out")
+    parser.add_argument("--keep-running", action="store_true", help="leave the editor running after the measurement (the capture is then analysed only after the editor exits by itself)")
+    args = parser.parse_args()
+
+    if not args.tracy_dir:
+        sys.exit("set ERHE_TRACY_DIR or pass --tracy-dir (directory with tracy-capture and tracy-csvexport)")
+    capture_exe = find_tool(args.tracy_dir, "tracy-capture")
+    csvexport_exe = find_tool(args.tracy_dir, "tracy-csvexport")
+    if (capture_exe is None) or (csvexport_exe is None):
+        sys.exit(f"tracy-capture / tracy-csvexport not found in {args.tracy_dir}")
+
+    if args.analyze_only:
+        return analyze(args.out, csvexport_exe, args.frames, args.measure_s)
+
+    editor = args.editor if os.path.isabs(args.editor) else os.path.join(REPO_ROOT, args.editor)
+    if not os.path.isfile(editor):
+        sys.exit(f"editor not found: {editor}")
+    if os.path.exists(LOG_PATH):
+        os.remove(LOG_PATH)
+    if os.path.exists(args.out):
+        os.remove(args.out)
+
+    capture_process = subprocess.Popen([capture_exe, "-o", args.out, "-f"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.0)
+
+    env = dict(os.environ, ERHE_AI_DRIVER="1")
+    if args.port is not None:
+        env["ERHE_MCP_PORT"] = str(args.port)
+    creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    editor_process = subprocess.Popen(
+        [editor, "--no-scene"], cwd=REPO_ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        creationflags=creation_flags
+    )
+    port, ready_s = wait_for_ready(editor_process, 600.0)
+    if port is None:
+        capture_process.kill()
+        sys.exit(f"editor did not reach frame 12 (exit code {editor_process.poll()}); see logs/log.txt")
+    print(f"editor ready in {ready_s:.1f} s, MCP port {port}")
+
+    scene_file = os.path.basename(args.scene)
+    start = time.time()
+    reply = mcp(port, "open_scene", {"path": args.scene})
+    idle_s = wait_until_settled(port, scene_file, args.timeout)
+    if idle_s is None:
+        print(f"open_scene did not settle in {args.timeout:.0f} s: {str(reply)[:200]}")
+    else:
+        print(f"open: idle after {idle_s:.1f} s")
+    scene_name = next((name for name in (scene_names(port) or []) if scene_file in name), None)
+    if scene_name is None:
+        sys.exit("scene not listed")
+    # The editor's own session state: the scene's camera and the glTF import
+    # root (set_node_transform is absolute, world space).
+    for node_name, translation, rotation in (
+        ("Camera", json.loads(args.camera_translation), json.loads(args.camera_rotation)),
+        (scene_name, json.loads(args.root_translation), json.loads(args.root_rotation)),
+    ):
+        reply = mcp(port, "set_node_transform", {
+            "scene_name": scene_name, "node_name": node_name, "space": "world",
+            "translation": translation, "rotation_xyzw": rotation,
+        })
+        if not (isinstance(reply, dict) and not reply.get("isError")):
+            print(f"set_node_transform {node_name}: {str(reply)[:300]}")
+    viewports = mcp(port, "get_viewports")
+    if isinstance(viewports, dict):
+        for viewport in viewports.get("viewports", []):
+            print(f"viewport '{viewport.get('title')}': scene {viewport.get('scene')!r} camera {viewport.get('camera')!r} "
+                  f"{viewport.get('width')}x{viewport.get('height')}")
+    else:
+        print(f"get_viewports: {str(viewports)[:300]}")
+    # Any deferred work the transform change queued (lightmap / BVH / draw
+    # list rebuilds) settles before the silence.
+    wait_until_settled(port, scene_file, args.timeout)
+    print(f"settling {args.settle_s:.0f} s without MCP traffic, then measuring {args.measure_s:.0f} s")
+    log_offset = len(read_log())
+    time.sleep(args.settle_s)
+    # One last MCP call marks the start of the quiet window in the capture.
+    mcp(port, "get_async_status")
+    time.sleep(args.measure_s)
+    status = mcp(port, "get_frame_pacing_status")
+    if isinstance(status, dict):
+        print(f"frame pacing: tier {status.get('tier')}, refresh {status.get('display_refresh_period_ms')} ms, enforce {status.get('frame_pacing_enforce')}")
+    rows = phase_lines(read_log()[log_offset:])
+    if rows:
+        print(f"phase log lines during settle + measure ({len(rows)}):")
+        for row in rows:
+            print("  " + " ".join(f"{k} {v:.0f}" for k, v in row.items() if k in ("full tick", "M1", "frame_start_wait", "M2", "slot_acquire", "scene", "M3", "R", "swapchain", "join_wait")))
+
+    if args.keep_running:
+        print(f"editor left running on port {port}; analyse later with --analyze-only once it has exited")
+        capture_process.wait()
+        return analyze(args.out, csvexport_exe, args.frames, args.measure_s)
+
+    mcp(port, "request_exit")
+    try:
+        editor_process.wait(120)
+    except subprocess.TimeoutExpired:
+        editor_process.kill()
+    try:
+        capture_process.wait(300)
+    except subprocess.TimeoutExpired:
+        capture_process.kill()
+    print()
+    return analyze(args.out, csvexport_exe, args.frames, args.measure_s)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
