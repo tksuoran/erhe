@@ -71,7 +71,9 @@ cost is small. Lock order: it is the innermost lock - never acquire a scene
 
 Guarded choke points (each takes the lock internally):
 
-- `erhe::primitive::mesh_from_triangle_soup()` (colocate)
+- `erhe::primitive::mesh_from_triangle_soup()`: only its `GEO::Geom::colocate()`
+  call; the rest of the conversion is element and attribute construction and
+  runs unlocked, so conversions of different soups overlap
 - `erhe::geometry::make_convex_hull()` (Delaunay branch)
 - `operation::Repair/Weld/Remesh/Decimate/Smooth::build()` (mesh_repair,
   MeshSurfaceIntersection, CVT remesh/decimate/smooth)
