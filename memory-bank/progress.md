@@ -13,8 +13,9 @@
 ✓step-4{14f05e4b6+dc6ea1bd5+405183e2a+2516f9f50;parallel-build-per-unique-shape;build-952->158-245ms;listed-2.7-3.7s;idle-9.6-10.6s;image-identical;fable-review:future.get-exception-fix+staging-move}
 ✗step-5{KTX2-transcode;not-picked-2026-10-18}
 ✓step-7a{a7079e847+8327108d7;set_parent-terms<10ms;Release-built-without-NDEBUG(Jolt-cmake)->unregister_node-sanity-walk-0.93s->3.7ms;close-~7->~5s;codegen-tests-no-longer-vacuous;fable-review:no-blockers}
-⚡step-7b{payload-release-~5s-on-main:Geometry-4.75s+raytrace+mappings;measure-breakdown->fix-wasteful-structures(edge-unordered_map)->bulk-release-on-worker;gate:close<1s,no-STALLED,leak-check-unchanged,image-identical}
-?step-6{deferred-phase:mesh_optimize_cache-replay+capture;after-step-7}
+✓step-7b{4ad4d0150+05a241d67+29d04b34b;Geometry-dtor-breakdown:facet+corner-stores-1.43s/vertex-0.63/edge-map-0.83/connectivity-0.34;edge-map-dropped;raytrace-move-UAF-fixed;Scene_payload_release-one-worker-task;close-0.17s-0-STALLED-leak-check-ok-image-identical;fable-review:get_edge-uses-has_edge_connectivity+nits;caveat:reopen-during-release-slower(heap-contention)}
+?step-7c{lazy-attribute-stores;1.3GB-empty-stores-at-load+close;needs-user-decision-on-Mesh_attributes-store-sharing}
+⚡step-6{deferred-phase:mesh_optimize_cache-replay+capture;script-waits-for-payload-release-before-open-2;gate:idle-open-2>=2s-earlier,image-identical,replayed==primitive-count}
 
 [TASK::culling]{started-2026-10-17;branch=render-thread;via-harness;doc/plans/culling.md}
 ✓phase-1{6846081f4;SoA-bounds+view-set+masks;scalar;identical-images+counts;review-fixes:purpose-skip+negative-extent-sentinel+null-scene-guard}
