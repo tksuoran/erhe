@@ -966,6 +966,68 @@ TEST(Frame_pacer_claims, c19_slop_servo_equilibrium)
     EXPECT_GE(slot_gap_exact_fraction(records, 300), 0.99) << "throughput must be kept";
 }
 
+TEST(Frame_pacer_claims, c19b_slop_servo_cadence_above_one_vsync)
+{
+    // A GPU-bound load on a 120 Hz plain-FIFO plant settles on a cadence
+    // of several refresh periods per frame. The servo must read the
+    // cadence from the loop and pace against N * T: the blocking turns
+    // into pre-input sleep, the cadence (throughput) is kept, and latency
+    // is trimmed by about the sleep - as C19 states for the one-vsync case.
+    const auto make_scenario = [](const bool servo_on) {
+        Scenario scenario;
+        scenario.frame_count  = 1500;
+        scenario.plant.tunables.refresh_period = 1.0 / 120.0;
+        scenario.cpu_duration = make_gauss(1911, 6.0, 0.4);
+        scenario.gpu_duration = make_gauss(1912, 20.0, 0.6);
+        scenario.fifo_images  = 2;
+        scenario.slop_servo   = servo_on;
+        scenario.unpaced      = !servo_on;
+        scenario.inert_target = true;
+        return scenario;
+    };
+
+    Scenario base_scenario = make_scenario(false);
+    Frame_pacer base_pacer{base_scenario.plant.tunables};
+    const std::vector<Frame_record> base_records = run_scenario(base_scenario, base_pacer);
+
+    Scenario scenario = make_scenario(true);
+    Frame_pacer pacer{scenario.plant.tunables};
+    const std::vector<Frame_record> records = run_scenario(scenario, pacer);
+
+    const double headroom = scenario.servo_tunables.headroom;
+    std::vector<double> slops;
+    std::vector<double> sleeps;
+    std::vector<double> latencies;
+    std::vector<double> base_latencies;
+    std::vector<double> gaps;
+    std::vector<double> base_gaps;
+    for (std::size_t i = 400; i < records.size(); ++i) {
+        slops.push_back(records[i].slop);
+        sleeps.push_back(records[i].sleep);
+        latencies.push_back(records[i].display_time - records[i].release);
+        base_latencies.push_back(base_records[i].display_time - base_records[i].release);
+        if (i + 1 < records.size()) {
+            gaps.push_back(static_cast<double>(records[i + 1].display_slot - records[i].display_slot));
+            base_gaps.push_back(static_cast<double>(base_records[i + 1].display_slot - base_records[i].display_slot));
+        }
+    }
+    const double base_gap = median_of(base_gaps);
+    EXPECT_GE(base_gap, 3.0) << "the plant must be GPU-bound above one vsync per frame";
+    const double sleep_median = median_of(sleeps);
+    EXPECT_GE(sleep_median, 4.0 * ms) << "the servo must engage at a cadence above one vsync";
+    EXPECT_LE(median_of(slops), 3.0 * headroom) << "residual blocking must converge to ~headroom";
+    EXPECT_EQ(median_of(gaps), base_gap) << "the cadence must be kept";
+    std::size_t kept = 0;
+    for (const double gap : gaps) {
+        if (gap == base_gap) {
+            ++kept;
+        }
+    }
+    EXPECT_GE(static_cast<double>(kept) / static_cast<double>(gaps.size()), 0.97) << "throughput must be kept frame by frame";
+    EXPECT_LE(median_of(latencies), median_of(base_latencies) - (0.5 * sleep_median))
+        << "input-poll latency must be trimmed by ~the sleep";
+}
+
 TEST(Frame_pacer_claims, c20_slop_servo_overshoot_backoff)
 {
     // A load spike that overshoots the refresh period backs the sleep off

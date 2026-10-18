@@ -448,7 +448,8 @@ class ServoTunables:
     headroom:       float = 0.001  # target residual blocking per frame [s]
     gain:           float = 0.1    # additive sleep correction per unit slop error
     backoff:        float = 0.5    # multiplicative sleep back-off on overshoot
-    overshoot_frac: float = 0.10   # loop duration > T*(1+this) counts as overshoot
+    overshoot_frac: float = 0.10   # loop duration > cadence period*(1+this) counts as overshoot
+    cadence_smoothing: float = 0.1 # weight of one loop period in the cadence estimate
 
 
 class SlopServo:
@@ -456,17 +457,52 @@ class SlopServo:
         self.tun = tun
         self.T = T
         self.sleep = 0.0
+        self.loop_period_estimate = 0.0  # EWMA of the loop periods the plant produced
+
+    def set_refresh_period(self, T: float):
+        # Display change; a call with the current period is a no-op.
+        if T == self.T:
+            return
+        self.T = T
+        self.loop_period_estimate = 0.0
+        self.sleep = min(self.sleep, self.cadence_period() - self.tun.headroom)
+
+    def cadence_period(self) -> float:
+        # The loop period the plant produced, never less than one refresh
+        # period: a loop faster than the display is paced by the display.
+        return max(self.loop_period_estimate, self.T)
+
+    def track_cadence(self, loop_duration: float):
+        if self.loop_period_estimate <= 0.0:
+            self.loop_period_estimate = loop_duration
+        else:
+            self.loop_period_estimate += self.tun.cadence_smoothing * (loop_duration - self.loop_period_estimate)
 
     def update(self, slop: float, loop_duration: float):
         t = self.tun
-        if loop_duration > self.T * (1.0 + t.overshoot_frac):
-            # Overshot the refresh period: the sleep ate into the frame
-            # budget - back off multiplicatively (the fast lane; the additive
-            # branch alone would bleed headroom for many frames).
+        # Backpressure still absorbed the sleep when the loop blocked for
+        # more than the headroom: the loop period is then the plant's and
+        # enters the cadence estimate. A loop that did not block is sleep
+        # plus work, longer than the plant period: it only bounds the
+        # estimate from above.
+        bound = slop > t.headroom
+        if bound:
+            self.track_cadence(loop_duration)
+        elif self.loop_period_estimate > loop_duration:
+            self.loop_period_estimate = loop_duration
+        overshoot = loop_duration > self.cadence_period() * (1.0 + t.overshoot_frac)
+        if overshoot and not bound and self.sleep > 0.0:
+            # Overshot the cadence period without blocking: the sleep ate
+            # into the frame budget - back off multiplicatively (the fast
+            # lane; the additive branch alone would bleed headroom for many
+            # frames).
             self.sleep *= t.backoff
         else:
             self.sleep += t.gain * (slop - t.headroom)
-        self.sleep = min(max(self.sleep, 0.0), self.T - t.headroom)
+        self.sleep = min(max(self.sleep, 0.0), self.cadence_period() - t.headroom)
+        if self.sleep < 0.0005:
+            # Below the release timer's resolution.
+            self.sleep = 0.0
 
 
 # ---------------------------------------------------------------------------

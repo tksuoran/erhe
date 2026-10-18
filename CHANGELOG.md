@@ -9,6 +9,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: `Slop_servo_pacer::get_cadence()` and
+  `get_cadence_period()` (the loop period the servo paces against: the
+  tracked plant loop period, at least one refresh period) and
+  `Slop_servo_tunables::cadence_smoothing`. The overshoot reference and the
+  sleep clamp are the cadence period instead of one refresh period, so the
+  servo also paces loads heavier than a refresh period;
+  `set_refresh_period()` restarts the cadence estimate.
+
 - `erhe::primitive`: `optimize_indexed_mesh_cached(streams, indices,
   vertex_format, options, cache_directory, result)`, the filesystem-cached
   form of `optimize_indexed_mesh()` (a hit replays the stored remaps into the
