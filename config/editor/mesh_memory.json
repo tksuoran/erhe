@@ -5,6 +5,6 @@
     "edge_line_vertex_pool_block_size_mb": 8,
     "quantize_vertex_positions": true,
     "optimize_meshes": true,
-    "mesh_optimize_cache": false,
+    "mesh_optimize_cache": true,
     "max_buffers_per_pool": 64
 }

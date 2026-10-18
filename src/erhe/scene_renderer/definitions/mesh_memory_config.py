@@ -67,7 +67,7 @@ struct("Mesh_memory_config",
             added_in=3,
             default="false",
             short_desc="Mesh Optimization Cache",
-            long_desc="Cache mesh optimization results on disk, keyed by source content hash, so repeated loads of the same asset skip the optimization passes. Applies to imported glTF meshes only; procedural and geometry path builds are not cached. No effect unless Optimize Meshes is enabled.",
+            long_desc="Cache mesh optimization results on disk (cache/mesh_optimizer), keyed by source content hash, so repeated loads of the same asset skip the optimization passes. Applies to imported meshes: their optimization at load and the one in the deferred finalize that follows; procedural and edited geometry is not cached. No effect unless Optimize Meshes is enabled.",
             visible=True,
             developer=True
         ),

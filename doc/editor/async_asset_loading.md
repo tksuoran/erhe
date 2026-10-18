@@ -191,9 +191,21 @@ draws its source build. Every other primitive (eager mode, a `Geometry`
 restored from the ERHE_geometry extension with edges, no worker contexts) is
 optimized at load time, before its first draw list registration.
 
+Both optimizations of an imported mesh go through the mesh optimizer's
+filesystem cache when `mesh_optimize_cache` is on (the committed
+`config/editor/mesh_memory.json` turns it on):
+`get_import_mesh_optimize_cache_directory()` names `cache/mesh_optimizer`,
+`attach_optimized_render_shape` passes it to the soup path, and
+`Async_raytrace_kickoff_operation` puts it on the deferred task's
+`Buffer_info::mesh_optimize_cache_directory`, so a load of an asset that was
+loaded before (in this process or an earlier one) replays every
+geometry-path optimization from disk instead of running the meshoptimizer
+passes. The re-optimize that `kickoff_deferred_finalize` dispatches after an
+edit commit runs uncached: edited geometry is new content every time.
+
 Two process-wide serialization points exist because the work is concurrent:
 the soup-to-`Geometry` conversion takes `erhe::geometry::geogram_lock()`
-(doc/erhe/geogram.md), and the multi-stream buffer-mesh allocation groups and the
+around its `GEO::Geom::colocate()` call only (doc/erhe/geogram.md), and the multi-stream buffer-mesh allocation groups and the
 `Buffer_mesh` free paths take
 `erhe::primitive::buffer_mesh_allocation_mutex()`, because the per-stream
 vertex pools of a format must see identical allocation and free histories or

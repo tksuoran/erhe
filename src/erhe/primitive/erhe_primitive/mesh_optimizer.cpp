@@ -400,37 +400,9 @@ auto optimize_indexed_mesh(
 
 auto optimize_triangle_soup(const Triangle_soup& source, const Mesh_optimize_options& options) -> Mesh_optimize_result
 {
-    ERHE_PROFILE_FUNCTION();
-
-    Mesh_optimize_result result{};
-
-    // Match Triangle_soup::get_vertex_count() and mesh_from_triangle_soup(),
-    // which both assume the soup has exactly one stream, bound at 0.
-    const erhe::dataformat::Vertex_stream* stream = source.vertex_format.get_stream(0);
-    if ((source.vertex_format.streams.size() != 1) || (stream == nullptr)) {
-        return result;
-    }
-    if (source.primitive_type != Primitive_type::triangles) {
-        return result;
-    }
-
-    // Everything else the optimizer refuses - stride, vertex counts, index
-    // range - is checked by optimize_indexed_mesh(), which is the one place
-    // those rules live.
-    std::vector<Mesh_optimize_stream> streams;
-    streams.push_back(Mesh_optimize_stream{.data = source.vertex_data, .stride = stream->stride});
-    std::vector<uint32_t> indices = source.index_data;
-    if (!optimize_indexed_mesh(streams, indices, source.vertex_format, options, result)) {
-        return Mesh_optimize_result{};
-    }
-
-    std::shared_ptr<Triangle_soup> optimized = std::make_shared<Triangle_soup>();
-    optimized->vertex_format  = source.vertex_format;
-    optimized->primitive_type = source.primitive_type;
-    optimized->vertex_data    = std::move(streams.front().data);
-    optimized->index_data     = std::move(indices);
-    result.triangle_soup      = std::move(optimized);
-    return result;
+    // An empty cache directory bypasses the cache; the soup wrapping (one
+    // stream bound at 0, triangles only) lives in optimize_triangle_soup_cached().
+    return optimize_triangle_soup_cached(source, options, std::filesystem::path{});
 }
 
 namespace {
@@ -613,7 +585,16 @@ auto make_optimized_render_shape_from_staged_build(
     const erhe::dataformat::Vertex_format& vertex_format = *buffer_info.optimized_vertex_format;
 
     Mesh_optimize_result optimization{};
-    if (!optimize_indexed_mesh(streams, fill_indices, vertex_format, buffer_info.mesh_optimize_options, optimization)) {
+    if (
+        !optimize_indexed_mesh_cached(
+            streams,
+            fill_indices,
+            vertex_format,
+            buffer_info.mesh_optimize_options,
+            buffer_info.mesh_optimize_cache_directory,
+            optimization
+        )
+    ) {
         return {};
     }
     log_mesh_optimize_statistics(name, optimization.statistics);
@@ -940,14 +921,15 @@ void log_mesh_optimize_statistics(const std::string_view name, const Mesh_optimi
         // figures to report. Saying so beats printing zeroes that read like an
         // optimization that did nothing.
         log_primitive->info(
-            "mesh optimize {}: {} triangles, vertices {} -> {} ({:+.1f}%), replayed from cache",
+            "mesh optimize {}: {} triangles, vertices {} -> {} ({:+.1f}%), replayed from cache in {:.1f} ms",
             name,
             statistics.triangle_count,
             statistics.vertex_count_before,
             statistics.vertex_count_after,
             (statistics.vertex_count_before > 0)
                 ? 100.0f * (static_cast<float>(statistics.vertex_count_after) - static_cast<float>(statistics.vertex_count_before)) / static_cast<float>(statistics.vertex_count_before)
-                : 0.0f
+                : 0.0f,
+            1000.0f * statistics.elapsed_seconds
         );
         return;
     }
