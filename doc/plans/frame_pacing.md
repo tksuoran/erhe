@@ -107,8 +107,13 @@ item 1 is missing and is not needed once it exists.
 ## Tier W on Linux: open findings
 
 Measured 2026-10-18 with `scripts/bistro_frame_bench.py` (windowed Release
-editor, Bistro, NVIDIA proprietary driver on X11, a 240 Hz display, tier W,
-`FIFO_LATEST_READY`, the pipelined render thread). The run found and fixed
+editor, Bistro, NVIDIA proprietary driver on X11, the window on a 120 Hz
+external display, tier W, `FIFO_LATEST_READY`, the pipelined render thread).
+The machine also has a 240 Hz builtin panel, and the swapchain's
+`refreshDuration` query reported that panel's 4.17 ms, not the 8.33 ms of
+the display the window is on (item 5 below); because no feedback arrives
+(item 1) nothing re-seeds the period, so every "vsync" the pacer counts in
+these numbers is half a real refresh. The run found and fixed
 one defect (eeb5d595a: the GPU frame bracket end was queued after the
 present holdback, so the pacer's `gpu_duration` carried its own holdback and
 the cadence climbed to the 200 ms holdback cap). What remains:
@@ -127,10 +132,11 @@ the cadence climbed to the 200 ms holdback cap). What remains:
    frame's first command buffer (the M2 upload cb, submitted at the start of
    R) and the frame cb follows after R's CPU recording (about 2 ms here), so
    the span reads about 10.8 ms for 8.1 ms of timed GPU passes, with a q95
-   near 15 ms. At 240 Hz that is the difference between 4 and 5 vsyncs per
-   frame; the pacer settled at N=5 (48 fps) for a GPU that finishes the
-   frame in about 9 ms. inputs.md 3.3 accepts the overestimate as
-   conservative; at high refresh rates it is not cheap. Options: begin the
+   near 15 ms. On the pacer's 4.17 ms grid that is the difference between
+   4 and 5 slots per frame; the pacer settled at N=5 (20.8 ms, 48 fps, two
+   and a half real 120 Hz refreshes) for a GPU that finishes the frame in
+   about 9 ms. inputs.md 3.3 accepts the overestimate as conservative; at
+   short grid periods it is not cheap. Options: begin the
    bracket at the frame cb when the upload cb is empty or trivially short,
    or measure the two submits as separate spans and sum them.
 3. **The holdback blocks R.** `submit_command_buffers` sleeps the holdback
@@ -144,6 +150,16 @@ the cadence climbed to the 200 ms holdback cap). What remains:
    is at debug level (`config/editor/logging.json` says info), so a
    production log shows the holdback-cap warnings but not the N they came
    from. Log cadence changes at info.
+5. **`refreshDuration` follows the wrong display.** With two displays (a
+   240 Hz builtin panel and a 120 Hz external one) the swapchain of a window
+   on the 120 Hz display reports 4.17 ms. The tier doc already treats the
+   query as a hint (driver report issue #2) and relies on the C16 re-seed
+   from feedback deltas, which item 1 disables here, so the pacer runs on a
+   grid twice too fine: N=5 on it is 2.5 real refreshes, and the display
+   alternates between 2 and 3 refresh periods per frame. Candidate
+   cross-check: the window's own display mode (SDL reports the refresh rate
+   of the display a window is on), which tier S already uses as its
+   fallback.
 
 ## Tier A: Android Vulkan backend
 
