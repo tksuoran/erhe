@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <cstring>
+#include <filesystem>
 #include <vector>
 
 // Contract tests for optimize_triangle_soup(). The passes themselves are
@@ -569,4 +570,106 @@ TEST(Mesh_optimizer, the_multi_stream_core_refuses_streams_that_disagree)
         EXPECT_EQ(streams[i].data, before[i].data);
     }
     EXPECT_EQ(indices, indices_before);
+}
+
+// --- optimize_indexed_mesh_cached(), the filesystem cache -------------------
+// A hit must reproduce exactly what the uncached core produces - the geometry
+// path renders the replayed streams directly, and composes Element_mappings
+// through the replayed remaps - and anything wrong with an entry must degrade
+// to an optimize, never to a wrong mesh.
+
+namespace {
+
+using erhe::primitive::optimize_indexed_mesh_cached;
+
+class Scoped_cache_directory
+{
+public:
+    explicit Scoped_cache_directory(const char* name)
+        : path{std::filesystem::temp_directory_path() / name}
+    {
+        std::error_code discard;
+        std::filesystem::remove_all(path, discard);
+    }
+    ~Scoped_cache_directory() noexcept
+    {
+        std::error_code discard;
+        std::filesystem::remove_all(path, discard);
+    }
+    Scoped_cache_directory(const Scoped_cache_directory&) = delete;
+    auto operator=(const Scoped_cache_directory&) -> Scoped_cache_directory& = delete;
+
+    std::filesystem::path path;
+};
+
+class Cached_run
+{
+public:
+    bool                              ok{false};
+    std::vector<Mesh_optimize_stream> streams;
+    std::vector<uint32_t>             indices;
+    Mesh_optimize_result              result{};
+};
+
+[[nodiscard]] auto run_cached(const Triangle_soup& soup, const std::filesystem::path& cache_directory) -> Cached_run
+{
+    Cached_run run{};
+    run.streams = make_split_streams(soup);
+    run.indices = soup.index_data;
+    run.ok      = optimize_indexed_mesh_cached(run.streams, run.indices, make_split_vertex_format(), Mesh_optimize_options{}, cache_directory, run.result);
+    return run;
+}
+
+void expect_same_output(const Cached_run& a, const Cached_run& b)
+{
+    ASSERT_EQ(a.streams.size(), b.streams.size());
+    for (std::size_t i = 0; i < a.streams.size(); ++i) {
+        EXPECT_EQ(a.streams[i].data, b.streams[i].data);
+    }
+    EXPECT_EQ(a.indices,                            b.indices);
+    EXPECT_EQ(a.result.vertex_remap,                b.result.vertex_remap);
+    EXPECT_EQ(a.result.triangle_permutation,        b.result.triangle_permutation);
+    EXPECT_EQ(a.result.statistics.vertex_count_after, b.result.statistics.vertex_count_after);
+}
+
+} // anonymous namespace
+
+TEST(Mesh_optimizer, a_cache_hit_reproduces_the_uncached_output_exactly)
+{
+    const Scoped_cache_directory cache{"erhe_test_mesh_optimizer_cache_hit"};
+    const Triangle_soup          soup{make_unwelded_grid(7)};
+
+    const Cached_run uncached = run_cached(soup, std::filesystem::path{});
+    const Cached_run miss     = run_cached(soup, cache.path);
+    const Cached_run hit      = run_cached(soup, cache.path);
+    ASSERT_TRUE(uncached.ok);
+    ASSERT_TRUE(miss.ok);
+    ASSERT_TRUE(hit.ok);
+
+    EXPECT_TRUE (miss.result.statistics.measured);  // the miss optimized and stored
+    EXPECT_FALSE(hit .result.statistics.measured);  // the hit replayed
+    expect_same_output(uncached, miss);
+    expect_same_output(uncached, hit);
+}
+
+TEST(Mesh_optimizer, a_corrupt_cache_entry_degrades_to_an_optimize)
+{
+    const Scoped_cache_directory cache{"erhe_test_mesh_optimizer_cache_corrupt"};
+    const Triangle_soup          soup{make_unwelded_grid(5)};
+
+    const Cached_run uncached = run_cached(soup, std::filesystem::path{});
+    ASSERT_TRUE(run_cached(soup, cache.path).ok);
+
+    // Truncate every entry to its header plus a few bytes.
+    std::size_t entry_count = 0;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator{cache.path}) {
+        std::filesystem::resize_file(entry.path(), 40);
+        ++entry_count;
+    }
+    ASSERT_EQ(entry_count, 1u);
+
+    const Cached_run after = run_cached(soup, cache.path);
+    ASSERT_TRUE(after.ok);
+    EXPECT_TRUE(after.result.statistics.measured);
+    expect_same_output(uncached, after);
 }

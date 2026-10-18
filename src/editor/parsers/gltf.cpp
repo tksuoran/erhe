@@ -604,6 +604,14 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
 
 }
 
+auto get_import_mesh_optimize_cache_directory(const App_context& context) -> std::filesystem::path
+{
+    if ((context.mesh_memory_config == nullptr) || !context.mesh_memory_config->mesh_optimize_cache) {
+        return {};
+    }
+    return std::filesystem::path{"cache"} / "mesh_optimizer";
+}
+
 auto make_import_build_info(
     App_context&                              context,
     const erhe::scene_renderer::Mesh_memory_queue queue
@@ -786,11 +794,7 @@ void attach_optimized_render_shape(
     }
     ERHE_PROFILE_FUNCTION();
 
-    // Cache directory is cwd-relative, which is writable on Android too (main.cpp
-    // chdir's to the per-app internal storage). Empty bypasses the cache.
-    const std::filesystem::path cache_directory = context.mesh_memory_config->mesh_optimize_cache
-        ? std::filesystem::path{"cache"} / "mesh_optimizer"
-        : std::filesystem::path{};
+    const std::filesystem::path cache_directory = get_import_mesh_optimize_cache_directory(context);
 
     // The variant is a second build of the same data, so it takes the same
     // buffer_info - and therefore the same vertex format - as the source

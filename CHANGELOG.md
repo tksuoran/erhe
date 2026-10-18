@@ -9,6 +9,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `optimize_indexed_mesh_cached(streams, indices,
+  vertex_format, options, cache_directory, result)`, the filesystem-cached
+  form of `optimize_indexed_mesh()` (a hit replays the stored remaps into the
+  same streams, indices and remaps without running meshoptimizer), and
+  `Buffer_info::mesh_optimize_cache_directory` (empty by default), through
+  which the geometry-path optimized variant of
+  `make_optimized_render_shape_from_staged_build()` is cached.
+  `optimize_triangle_soup_cached()` now uses the same cache; its entries
+  are format version 3, so older entries miss once and are rewritten.
+
 - `erhe::graphics`: `Render_command_encoder::multi_draw_indexed_primitives_indirect_count(
   primitive_type, index_type, indirect_offset, count_buffer, count_offset,
   max_draw_count, stride)` (the multi-draw with a GPU-read draw count: Vulkan

@@ -127,6 +127,15 @@ void import_gltf(
     erhe::scene_renderer::Mesh_memory_queue   queue = erhe::scene_renderer::Mesh_memory_queue::interactive
 ) -> erhe::primitive::Build_info;
 
+// The mesh optimizer cache directory of imported meshes: cache/mesh_optimizer
+// under the working directory (writable on Android too, main.cpp chdir's to
+// the per-app internal storage) when Mesh_memory_config::mesh_optimize_cache
+// is on, empty (no cache) otherwise. Used by the soup-path optimization at
+// parse and by the geometry-path optimization of the deferred finalize an
+// import kicks off (Async_raytrace_kickoff_operation); builds of procedural
+// or edited geometry run uncached.
+[[nodiscard]] auto get_import_mesh_optimize_cache_directory(const App_context& context) -> std::filesystem::path;
+
 // Make freshly parsed glTF meshes renderable: build geometry edges +
 // smooth vertex normals, allocate GPU buffers in Mesh_memory (skinned
 // meshes get the skinned vertex format), and update raytrace primitives.

@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "operations/mesh_operation.hpp"
+#include "parsers/gltf.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "scene/scene_root.hpp"
 
@@ -39,6 +40,17 @@ Async_raytrace_kickoff_operation::~Async_raytrace_kickoff_operation() noexcept =
 
 namespace {
 
+// Whether the geometry-path optimizer passes of a deferred finalize go through
+// the import mesh optimizer cache (get_import_mesh_optimize_cache_directory()).
+// An import's finalize does: the same asset loads again and replays. The edit
+// commits' re-optimize does not: every edited mesh is new content that would
+// only grow the cache.
+enum class Mesh_optimize_cache_use : unsigned int
+{
+    uncached = 0,
+    import_cache
+};
+
 // Deferred per-mesh finalize, running on a tf::Executor worker
 // (doc/editor/async_asset_loading.md): builds the Geometry (edges, smooth
 // normals), the real triangle raytrace and - when the load path deferred it -
@@ -50,16 +62,24 @@ namespace {
 // produced the result, so this also covers the deferred_raytrace /
 // deferred_edge_lines = false configurations, where it degenerates to the
 // pre-existing "ensure raytrace exists" behavior.
-void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const std::shared_ptr<Scene_root>& scene_root)
+void deferred_finalize_mesh_items(
+    Mesh_operation_parameters&&        parameters,
+    const std::shared_ptr<Scene_root>& scene_root,
+    const Mesh_optimize_cache_use      cache_use
+)
 {
     ERHE_PROFILE_FUNCTION();
 
     App_context& context = parameters.context;
     ERHE_VERIFY(context.scene_commit_queue != nullptr);
 
+    if (cache_use == Mesh_optimize_cache_use::import_cache) {
+        parameters.build_info.buffer_info.mesh_optimize_cache_directory = get_import_mesh_optimize_cache_directory(context);
+    }
+
     // Same Build_info variant selection as finalize_imported_meshes():
     // skinned meshes need joint attributes in the GPU vertex buffer.
-    const erhe::primitive::Build_info skinned_build_info{
+    erhe::primitive::Build_info skinned_build_info{
         .primitive_types = parameters.build_info.primitive_types,
         .buffer_info     = context.mesh_memory->make_skinned_primitive_buffer_info(),
         .constant_color  = parameters.build_info.constant_color,
@@ -68,6 +88,7 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
         .vertex_id_vec3  = parameters.build_info.vertex_id_vec3,
         .autocolor       = parameters.build_info.autocolor
     };
+    skinned_build_info.buffer_info.mesh_optimize_cache_directory = parameters.build_info.buffer_info.mesh_optimize_cache_directory;
 
     for (const std::shared_ptr<erhe::Item_base>& item : parameters.items) {
         std::shared_ptr<erhe::scene::Mesh> scene_mesh = erhe::scene::get_mesh(item);
@@ -295,7 +316,7 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
             single_item,
             [scene_root](Mesh_operation_parameters&& mesh_operation_parameters)
             {
-                deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root);
+                deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache);
             },
             // The finalize manages its own NARROW worker-context scope
             // around the GPU build only (the BVH build is CPU-heavy and
@@ -333,7 +354,7 @@ void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe:
         single_item,
         [scene_root](Mesh_operation_parameters&& mesh_operation_parameters)
         {
-            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root);
+            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::uncached);
         },
         // The finalize manages its own narrow worker-context scope.
         /*op_builds_gpu_meshes=*/false

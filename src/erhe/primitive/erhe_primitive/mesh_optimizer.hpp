@@ -130,31 +130,47 @@ public:
     Mesh_optimize_result&                  result
 ) -> bool;
 
+// optimize_indexed_mesh() through a filesystem cache keyed by the source
+// content (every stream's stride and bytes, the indices, the vertex format and
+// the options). Optimizing a large primitive costs on the order of 100 ms, and
+// an import re-does that on every load of the same asset, so the derivation is
+// stored and replayed instead.
+//
+// What is stored is the two REMAPS, not the optimized streams: they fully
+// determine them (scatter every source vertex to the slot the forward remap
+// names, rebuild indices as permutation-ordered source triples mapped through
+// it) and they are what Element_mappings composition needs anyway. A hit
+// therefore rewrites `streams` and `indices` to the bytes optimize_indexed_mesh()
+// would have produced and fills `result` with the same remaps, without calling
+// meshoptimizer at all; the entry stays small - two uint32 tables rather than
+// whole vertex data. A hit's statistics have measured == false and carry the
+// replay's elapsed time.
+//
+// The cache never fails a build. A missing, corrupt, truncated, mismatched or
+// unwritable entry degrades to a plain optimize (and a rewrite attempt).
+// `cache_directory` is created if needed; pass an empty path to bypass the
+// cache entirely. Input optimize_indexed_mesh() refuses is never looked up.
+//
+// Concurrency: loader workers can race on the same entry. Writes go to a
+// temporary file that is renamed into place, so a reader sees either the old
+// entry or the new one, never a half-written one.
+[[nodiscard]] auto optimize_indexed_mesh_cached(
+    std::vector<Mesh_optimize_stream>&     streams,
+    std::vector<uint32_t>&                 indices,
+    const erhe::dataformat::Vertex_format& vertex_format,
+    const Mesh_optimize_options&           options,
+    const std::filesystem::path&           cache_directory,
+    Mesh_optimize_result&                  result
+) -> bool;
+
 [[nodiscard]] auto optimize_triangle_soup(
     const Triangle_soup&         source,
     const Mesh_optimize_options& options
 ) -> Mesh_optimize_result;
 
-// optimize_triangle_soup() through a filesystem cache keyed by the source
-// content. Optimizing a large primitive costs on the order of 100 ms, and an
-// import re-does that on every load of the same asset, so the derivation is
-// stored and replayed instead.
-//
-// What is stored is the two REMAPS, not the optimized soup: they fully
-// determine it (gather vertices through the remap, rebuild indices as
-// permutation-ordered source triples mapped through it) and they are what
-// Element_mappings composition needs anyway. A hit therefore reproduces a
-// bit-identical Mesh_optimize_result without calling meshoptimizer at all, and
-// the entry stays small - two uint32 tables rather than whole vertex data.
-//
-// The cache never fails a load. A missing, corrupt, truncated, mismatched or
-// unwritable entry degrades to a plain optimize (and a rewrite attempt), with
-// at most a warning. `cache_directory` is created if needed; pass an empty path
-// to bypass the cache entirely.
-//
-// Concurrency: loader workers can race on the same entry. Writes go to a
-// uniquely named temporary file and are renamed into place, so a reader sees
-// either the old entry or the new one, never a half-written one.
+// optimize_triangle_soup() through the cache of optimize_indexed_mesh_cached(),
+// with the soup's single stream as the one stream. Empty `cache_directory`
+// bypasses the cache.
 [[nodiscard]] auto optimize_triangle_soup_cached(
     const Triangle_soup&         source,
     const Mesh_optimize_options& options,
@@ -252,6 +268,9 @@ public:
 // `source_buffer_mesh` supplies the bounding volumes and the per-joint bounding
 // boxes. Reordering and welding move no vertex, so they are the same for both
 // builds and are copied rather than recomputed.
+//
+// The passes go through optimize_indexed_mesh_cached() with
+// buffer_info.mesh_optimize_cache_directory (empty: uncached).
 //
 // Returns null when there is nothing to attach: an input optimize_indexed_mesh()
 // refuses, or an allocation that failed. There is no half-built state to unwind

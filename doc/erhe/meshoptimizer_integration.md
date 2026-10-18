@@ -5,8 +5,7 @@ Stability: stable
 The mesh-optimization subsystem is built on
 [zeux/meshoptimizer](https://github.com/zeux/meshoptimizer) (vanilla
 upstream, pinned via CPM). `optimize_meshes` defaults to **true** in
-`config/editor/mesh_memory.json`; `mesh_optimize_cache` defaults to
-**false**.
+`config/editor/mesh_memory.json`, and so does `mesh_optimize_cache`.
 
 ## Requirements
 
@@ -21,8 +20,8 @@ User-confirmed; the first is a hard requirement.
    before/after `meshopt_analyze*` statistics. LOD and meshlets are
    explicitly future work -- seams left, nothing implemented.
 3. Config: `optimize_meshes` and `mesh_optimize_cache` in the code-generated
-   `Mesh_memory_config`. `optimize_meshes` is on by default in the editor
-   config; the cache is off. The filesystem cache must work on Android/Quest.
+   `Mesh_memory_config`. Both are on in the editor config. The filesystem
+   cache must work on Android/Quest.
 4. **Shared primitives are optimized once, as one** -- glTF import dedups
    `Primitive` slots and brushes share `Primitive` objects; instances reuse
    the shared variant.
@@ -153,8 +152,7 @@ itself stays ignorant of optimization; `src/example` stays unoptimized by
 design.
 
 The soup path covers soup-only consumers and the load-time window of
-primitives that are not rebuilt, and feeds the cache; the durable win is the
-geometry path.
+primitives that are not rebuilt; the durable win is the geometry path.
 
 ### The geometry path (the steady-state win)
 
@@ -187,9 +185,13 @@ construction, which is where the headline numbers come from.
   route). The **geometry path passes the build's own mappings** to
   `compose_element_mappings()` -- same function as the soup path, opposite
   rule.
-- **No disk cache on this path** -- deliberate: the passes are fast
-  relative to the geometry build itself and finalize is already deferred /
-  async. Extend the cache here only if profiling disagrees.
+- **The passes go through the filesystem cache** when the build's
+  `Buffer_info::mesh_optimize_cache_directory` is set
+  (`optimize_indexed_mesh_cached()`, below). The editor sets it for the
+  deferred finalize of an import only, so a reload of the same asset replays
+  every geometry-path optimization (Bistro: 3852 primitives, ~27
+  worker-seconds of passes replaced by ~1.7 worker-seconds of hashing, reading
+  and replay); procedural builds and edit re-optimizations run uncached.
 - Both entry points -- synchronous `make_buffer_mesh(Build_info)` and the
   deferred prepare/commit import flow -- build every variant the
   `Build_info` requests; the deferred flow prepares all variants on the
@@ -197,21 +199,28 @@ construction, which is where the headline numbers come from.
   builders that discard the shape on return do not build the variant at
   all.
 
-### The filesystem cache (soup path only)
+### The filesystem cache
 
-`optimize_triangle_soup_cached()`: key is `erhe::hash::hash` (runtime
-FNV-1a -- NOT `erhe_hash/xxhash.hpp`, which is a compile-time string hash)
-over source index data + vertex data + vertex-format description + options
-+ a format-version constant; entries live in `cache/mesh_optimizer/` under
-the cwd (works on Quest via the Android chdir). An entry stores the
-**remap pair**, not the optimized soup -- the pair fully determines it
-(gather vertices through the derived output-to-source table, rebuild
-indices as permutation-ordered triples through the forward remap), so a hit
-runs no meshopt calls and the same pair feeds the mappings composition.
-Writes are temp-file + rename (concurrent loader workers); any mismatch,
-truncation or I/O error degrades to a miss with a warning -- **never a
-failed load**. Content addressing dedups identical geometry across distinct
-glTF meshes. Unbounded growth is accepted for v1.
+`optimize_indexed_mesh_cached()` is the cached form of the multi-stream core
+and serves both paths: the geometry path calls it with the staged streams,
+`optimize_triangle_soup_cached()` with the soup's single stream. Key is
+`erhe::hash::hash` (runtime FNV-1a -- NOT `erhe_hash/xxhash.hpp`, which is a
+compile-time string hash) over the vertex-format description + every
+stream's stride and bytes + the index data, and separately the options + a
+format-version constant; entries live in `cache/mesh_optimizer/` under the
+cwd (works on Quest via the Android chdir). An entry stores the **remap
+pair**, not the optimized streams -- the pair fully determines them (scatter
+each source vertex to the slot the forward remap names, rebuild indices as
+permutation-ordered source triples through the forward remap; exact because
+the reordering passes never rotate a triple and welded vertices are bitwise
+equal), so a hit runs no meshopt calls, yields the same bytes and the same
+pair feeds the mappings composition. Writes go to a per-thread temporary
+file renamed into place (concurrent loader workers store identical meshes
+under one key at the same moment); any mismatch, truncation or I/O error
+degrades to a miss -- **never a failed build**. Content addressing dedups
+identical geometry across distinct glTF meshes (a first Bistro load already
+replays ~600 of its 3852 primitives). Bistro's entries take ~62 MB.
+Unbounded growth is accepted for v1.
 
 ### The edit bracket (invalidate at start, hold, re-optimize at end)
 
