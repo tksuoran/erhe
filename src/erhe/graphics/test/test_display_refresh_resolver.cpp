@@ -70,7 +70,7 @@ public:
     double                   gpu_end{1.0};
 };
 
-auto near(const double a, const double b) -> bool
+auto is_near(const double a, const double b) -> bool
 {
     return std::abs(a - b) <= 1e-6;
 }
@@ -82,7 +82,7 @@ TEST(Display_refresh_resolver, window_mode_alone_is_used)
     Resolver_fixture f;
     f.resolver.set_window_period(period_120_hz, "Dell", 2);
     const Display_refresh_report r = f.resolver.get_report();
-    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, period_120_hz));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
     ASSERT_EQ(f.applied.size(), 1u);
 }
@@ -93,7 +93,7 @@ TEST(Display_refresh_resolver, agreeing_sources_take_the_vulkan_value)
     f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_vulkan_timing(ns_120_hz, ns_120_hz);
     const Display_refresh_report r = f.resolver.get_report();
-    EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_120_hz) * 1e-9));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, static_cast<double>(ns_120_hz) * 1e-9));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::vulkan_timing);
     EXPECT_EQ(r.vulkan_mode, Display_refresh_mode::fixed);
 }
@@ -106,7 +106,7 @@ TEST(Display_refresh_resolver, disagreeing_sources_take_the_window_until_calibra
     f.resolver.set_window_period(period_120_hz, "Dell", 2);
     f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
     Display_refresh_report r = f.resolver.get_report();
-    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, period_120_hz));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
     EXPECT_FALSE(r.calibration_done);
 
@@ -116,9 +116,9 @@ TEST(Display_refresh_resolver, disagreeing_sources_take_the_window_until_calibra
     r = f.resolver.get_report();
     EXPECT_TRUE(r.calibration_done);
     EXPECT_TRUE(r.calibration_verified);
-    EXPECT_TRUE(near(r.locked_period_seconds, period_120_hz));
-    EXPECT_TRUE(near(r.free_run_period_seconds, 0.002));
-    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.locked_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.free_run_period_seconds, 0.002));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, period_120_hz));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
 }
 
@@ -131,8 +131,8 @@ TEST(Display_refresh_resolver, calibration_overrides_both_sources_when_neither_m
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(r.calibration_verified);
     EXPECT_EQ(r.resolved_source, Display_refresh_source::calibration);
-    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
-    EXPECT_TRUE(near(f.applied.back(), period_120_hz));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(f.applied.back(), period_120_hz));
 }
 
 TEST(Display_refresh_resolver, production_near_the_cadence_proves_nothing)
@@ -148,9 +148,9 @@ TEST(Display_refresh_resolver, production_near_the_cadence_proves_nothing)
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(r.calibration_done);
     EXPECT_FALSE(r.calibration_verified);
-    EXPECT_TRUE(near(r.locked_period_seconds, 2.0 * period_120_hz));
+    EXPECT_TRUE(is_near(r.locked_period_seconds, 2.0 * period_120_hz));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
-    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, period_120_hz));
 }
 
 TEST(Display_refresh_resolver, jittered_cadence_confirms_the_nearby_source)
@@ -162,7 +162,7 @@ TEST(Display_refresh_resolver, jittered_cadence_confirms_the_nearby_source)
     f.calibrate(0.002, period_120_hz * 1.03);
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(r.calibration_verified);
-    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, period_120_hz));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
 }
 
@@ -180,7 +180,7 @@ TEST(Display_refresh_resolver, outliers_do_not_anchor_the_cluster)
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(r.calibration_done);
     EXPECT_TRUE(r.calibration_verified);
-    EXPECT_TRUE(near(r.locked_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.locked_period_seconds, period_120_hz));
     EXPECT_EQ(r.locked_cluster_count, 28u);
 }
 
@@ -206,7 +206,7 @@ TEST(Display_refresh_resolver, no_free_run_mode_leaves_the_result_unverified)
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_TRUE(r.calibration_done);
     EXPECT_FALSE(r.calibration_verified);
-    EXPECT_TRUE(near(r.locked_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.locked_period_seconds, period_120_hz));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
 }
 
@@ -229,13 +229,13 @@ TEST(Display_refresh_resolver, variable_and_decoupled_modes)
     f.resolver.set_vulkan_timing(ns_120_hz, std::numeric_limits<uint64_t>::max());
     Display_refresh_report r = f.resolver.get_report();
     EXPECT_EQ(r.vulkan_mode, Display_refresh_mode::variable);
-    EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_120_hz) * 1e-9));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, static_cast<double>(ns_120_hz) * 1e-9));
 
     // Images visible for 2 vblank intervals: the grid counts the vblank.
     f.resolver.set_vulkan_timing(2 * ns_240_hz, ns_240_hz);
     r = f.resolver.get_report();
     EXPECT_EQ(r.vulkan_mode, Display_refresh_mode::decoupled);
-    EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
 }
 
 TEST(Display_refresh_resolver, window_display_change_drops_the_calibration_result)
@@ -252,7 +252,7 @@ TEST(Display_refresh_resolver, window_display_change_drops_the_calibration_resul
     EXPECT_FALSE(f.resolver.is_calibrating());
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_FALSE(r.calibration_verified);
-    EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::vulkan_timing);
 }
 
@@ -264,7 +264,7 @@ TEST(Display_refresh_resolver, override_policy_wins_over_everything)
     f.resolver.set_vulkan_timing(ns_240_hz, ns_240_hz);
     f.calibrate(0.002, period_120_hz);
     const Display_refresh_report r = f.resolver.get_report();
-    EXPECT_TRUE(near(r.resolved_period_seconds, 1.0 / 90.0));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, 1.0 / 90.0));
     EXPECT_EQ(r.resolved_source, Display_refresh_source::override_rate);
     EXPECT_TRUE(r.sources_disagree);
     EXPECT_EQ(r.display_count, 2u);
@@ -282,7 +282,7 @@ TEST(Display_refresh_resolver, forced_source_is_used_when_available)
     f.calibrate(0.002, period_120_hz);
     r = f.resolver.get_report();
     EXPECT_EQ(r.resolved_source, Display_refresh_source::vulkan_timing);
-    EXPECT_TRUE(near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, static_cast<double>(ns_240_hz) * 1e-9));
     EXPECT_TRUE(r.sources_disagree);
 }
 
@@ -297,7 +297,7 @@ TEST(Display_refresh_resolver, unavailable_forced_source_falls_back_to_automatic
     const Display_refresh_report r = f.resolver.get_report();
     EXPECT_FALSE(r.calibration_verified);
     EXPECT_EQ(r.resolved_source, Display_refresh_source::window_mode);
-    EXPECT_TRUE(near(r.resolved_period_seconds, period_120_hz));
+    EXPECT_TRUE(is_near(r.resolved_period_seconds, period_120_hz));
 
     Display_refresh_policy parsed = Display_refresh_policy::automatic;
     EXPECT_TRUE(erhe::graphics::parse_display_refresh_policy("override", parsed));
