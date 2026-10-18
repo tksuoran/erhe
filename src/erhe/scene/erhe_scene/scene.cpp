@@ -264,6 +264,8 @@ void Scene::sanity_check() const
 
 void Scene::sever_host()
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Detach all scene content from the host's resources -- host registration,
     // raytrace scene, physics world -- THROUGH THE NORMAL ORPHAN PATH, while
     // those resources are still alive. recursive_remove() reparents every child

@@ -179,6 +179,11 @@ disabling unused features and selecting different backends.
 **ERHE_PHYSICS_LIBRARY** -- The main backend is `jolt`. `box3d` selects the Box3D
 backend, which the editor also runs on; its deferred and unsupported features are
 tabulated in `doc/erhe/physics.md`. Set to `none` to disable physics.
+With `jolt` under MSVC, `cmake/JoltPhysicsCompatibility.cmake` sets the
+Release compiler flags of the whole tree to Jolt's (`/GS- /Gy /O2 /Oi /Ot`)
+plus `/DNDEBUG`, so every Release target compiles with `NDEBUG` defined and
+the `#ifndef NDEBUG` checks - for example the whole-scene
+`Scene::sanity_check()` after each node unregistration - run in Debug only.
 
 **ERHE_RAYTRACE_LIBRARY** -- The main backend is `bvh`, used for mouse picking in 3D viewports. When set to `none`, mouse picking uses GPU ID buffer rendering instead.
 
