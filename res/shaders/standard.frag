@@ -1108,6 +1108,13 @@ void main()
         // (render_scene_image output "linear") returns v_position.xyz as
         // stored by the fp16 color target.
         out_color.rgb = v_position.xyz;
+#  elif ERHE_SHADER_DEBUG == 37 // base_color
+        // The resolved base color the BxDF receives: the material's input
+        // source selection applied, the material factor times the vertex
+        // color times the base color texture sample (mode 9 shows the
+        // texture-fed value alone and black without a texture). Written in
+        // linear space as-is, the unlit look of the surface.
+        out_color.rgb = base_color;
 #  elif ERHE_SHADER_DEBUG == 34 // joint_weight_ramp
         // Blender-style single-joint weight ramp: hue sweeps 240deg (blue)
         // -> 0deg (red) with weight, brightness 0.5 -> 1.0 through a gamma

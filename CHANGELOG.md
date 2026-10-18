@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Shader_debug::base_color` (37, "Base Color
+  (resolved)"): the resolved base color the BxDF receives (material input
+  source, factor, vertex color and base color texture multiplied), unlit.
 - `erhe::graphics`: `Display_refresh_resolver` (`display_refresh_resolver.hpp`)
   with `Display_refresh_report`, `Display_refresh_source`,
   `Display_refresh_mode` and `Display_time_sample_source`, owned by `Device`
