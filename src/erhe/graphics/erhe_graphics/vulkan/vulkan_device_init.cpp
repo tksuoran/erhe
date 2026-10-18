@@ -656,10 +656,10 @@ Device_impl::Device_impl(
         // mode (display_refresh_resolver.hpp). The swapchain adds the
         // VK_EXT_present_timing source and the init calibration samples.
         erhe::window::Context_window* const context_window = m_context_window;
-        Device* const                       device         = &m_device;
-        const auto feed_window_period = [context_window, device]() {
+        Device* const                       owner_device   = &m_device;
+        const auto feed_window_period = [context_window, owner_device]() {
             const std::string display_name = context_window->get_display_name();
-            device->get_display_refresh_resolver().set_window_period(
+            owner_device->get_display_refresh_resolver().set_window_period(
                 context_window->get_display_refresh_period_seconds(),
                 display_name.c_str(),
                 context_window->enumerate_displays().size()
