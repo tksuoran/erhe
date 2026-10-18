@@ -2,6 +2,7 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
@@ -150,15 +151,30 @@ private:
         // slot to the used slot of its representative (old_to_new).
         GEO::vector<GEO::index_t> old_to_new(static_cast<GEO::index_t>(used_count), GEO::NO_INDEX);
         const double tolerance = 0.00001; // 0.01mm if node has scale = 1.0, 1mm if node scale is 100.0
-        const GEO::index_t point_count = GEO::Geom::colocate(
-            m_vertex_positions.data()->data(),                    // const double* points,
-            3,                                                    // coord_index_t dim,
-            static_cast<GEO::index_t>(m_vertex_positions.size()), // index_t nb_points,
-            old_to_new,                                           // vector<index_t>& old2new,
-            tolerance,                                            // double tolerance,
-            3,                                                    // index_t stride,
-            "default"                                             // const std::string& nn_algo
-        );
+        // See erhe::geometry::geogram_lock(): colocate() is a geogram
+        // algorithm (kd-tree + parallel_for) and must not run concurrently
+        // with another geogram algorithm invocation. Only this call is
+        // guarded; everything else this builder does is mesh-local element and
+        // attribute construction, which the threading contract leaves
+        // unguarded (doc/erhe/geogram.md), so conversions of different soups
+        // run in parallel and serialize on colocate() alone.
+        GEO::index_t point_count = 0;
+        {
+            ERHE_PROFILE_SCOPE("colocate"); // includes the wait for the lock
+            const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
+            {
+                ERHE_PROFILE_SCOPE("colocate locked");
+                point_count = GEO::Geom::colocate(
+                    m_vertex_positions.data()->data(),                    // const double* points,
+                    3,                                                    // coord_index_t dim,
+                    static_cast<GEO::index_t>(m_vertex_positions.size()), // index_t nb_points,
+                    old_to_new,                                           // vector<index_t>& old2new,
+                    tolerance,                                            // double tolerance,
+                    3,                                                    // index_t stride,
+                    "default"                                             // const std::string& nn_algo
+                );
+            }
+        }
         GEO::vector<GEO::index_t> representatives = old_to_new;
         std::sort(representatives.begin(), representatives.end());
         representatives.erase(std::unique(representatives.begin(), representatives.end()), representatives.end());
@@ -479,11 +495,10 @@ void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh
     ERHE_VERIFY(element_mappings.mesh_corner_to_vertex_buffer_index.empty());
     ERHE_VERIFY(element_mappings.triangle_to_mesh_facet.empty());
 
-    // See erhe::geometry::geogram_lock(): the vertex welding uses
-    // GEO::Geom::colocate() (geogram parallel_for), which must not run
-    // concurrently with other geogram algorithm invocations.
-    const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
+    ERHE_PROFILE_FUNCTION();
 
+    // No geogram_lock() here: the builder takes it around the one geogram
+    // algorithm it calls (colocate() in make_vertices()).
     Mesh_from_triangle_soup builder{mesh, triangle_soup, element_mappings};
     builder.build();
 }
