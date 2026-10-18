@@ -2,7 +2,7 @@
 
 #include <erhe_codegen/migration.hpp>
 
-#include <cassert>
+#include "test_check.hpp"
 #include <cmath>
 #include <cstdio>
 
@@ -52,33 +52,33 @@ void test_migration_from_v2()
     simdjson::padded_string padded(json, std::strlen(json));
     simdjson::ondemand::document doc;
     auto error = parser.iterate(padded).get(doc);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     simdjson::ondemand::object obj;
     error = doc.get_object().get(obj);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     Settings settings{};
     migration_was_called = false;
     error = deserialize(obj, settings);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     // Verify fields were deserialized correctly
-    assert(settings.window_width == 1280);
-    assert(settings.window_height == 720);
-    assert(settings.fullscreen == true);
-    assert(std::abs(settings.render_scale - 0.75f) < 0.001f);
-    assert(settings.username == "testuser");
+    CODEGEN_TEST_CHECK(settings.window_width == 1280);
+    CODEGEN_TEST_CHECK(settings.window_height == 720);
+    CODEGEN_TEST_CHECK(settings.fullscreen == true);
+    CODEGEN_TEST_CHECK(std::abs(settings.render_scale - 0.75f) < 0.001f);
+    CODEGEN_TEST_CHECK(settings.username == "testuser");
 
     // Verify deprecated gamma field was read (active in v2)
-    assert(std::abs(settings.gamma - 2.5f) < 0.001f);
+    CODEGEN_TEST_CHECK(std::abs(settings.gamma - 2.5f) < 0.001f);
 
     // Verify migration callback was called
-    assert(migration_was_called);
+    CODEGEN_TEST_CHECK(migration_was_called);
 
     // Verify migration transformed the struct: gamma 2.5 * 40 = 100.0
-    assert(settings.custom_dpi.has_value());
-    assert(std::abs(settings.custom_dpi.value() - 100.0f) < 0.001f);
+    CODEGEN_TEST_CHECK(settings.custom_dpi.has_value());
+    CODEGEN_TEST_CHECK(std::abs(settings.custom_dpi.value() - 100.0f) < 0.001f);
 
     std::printf("PASSED\n");
 }
@@ -101,35 +101,35 @@ void test_migration_from_v1()
     simdjson::padded_string padded(json, std::strlen(json));
     simdjson::ondemand::document doc;
     auto error = parser.iterate(padded).get(doc);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     simdjson::ondemand::object obj;
     error = doc.get_object().get(obj);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     Settings settings{};
     migration_was_called = false;
     error = deserialize(obj, settings);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     // Verify v1 fields
-    assert(settings.window_width == 800);
-    assert(settings.window_height == 600);
-    assert(settings.fullscreen == false);
-    assert(settings.username == "olduser");
+    CODEGEN_TEST_CHECK(settings.window_width == 800);
+    CODEGEN_TEST_CHECK(settings.window_height == 600);
+    CODEGEN_TEST_CHECK(settings.fullscreen == false);
+    CODEGEN_TEST_CHECK(settings.username == "olduser");
 
     // render_scale was not in v1, should keep default
-    assert(std::abs(settings.render_scale - 1.0f) < 0.001f);
+    CODEGEN_TEST_CHECK(std::abs(settings.render_scale - 1.0f) < 0.001f);
 
     // gamma was read (active in v1)
-    assert(std::abs(settings.gamma - 1.8f) < 0.001f);
+    CODEGEN_TEST_CHECK(std::abs(settings.gamma - 1.8f) < 0.001f);
 
     // Migration ran
-    assert(migration_was_called);
+    CODEGEN_TEST_CHECK(migration_was_called);
 
     // gamma 1.8 * 40 = 72.0
-    assert(settings.custom_dpi.has_value());
-    assert(std::abs(settings.custom_dpi.value() - 72.0f) < 0.001f);
+    CODEGEN_TEST_CHECK(settings.custom_dpi.has_value());
+    CODEGEN_TEST_CHECK(std::abs(settings.custom_dpi.value() - 72.0f) < 0.001f);
 
     std::printf("PASSED\n");
 }
@@ -154,29 +154,29 @@ void test_no_migration_for_current_version()
     simdjson::padded_string padded(json, std::strlen(json));
     simdjson::ondemand::document doc;
     auto error = parser.iterate(padded).get(doc);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     simdjson::ondemand::object obj;
     error = doc.get_object().get(obj);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     Settings settings{};
     migration_was_called = false;
     error = deserialize(obj, settings);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     // Migration should NOT have been called (version matches current)
-    assert(!migration_was_called);
+    CODEGEN_TEST_CHECK(!migration_was_called);
 
     // Verify fields
-    assert(settings.window_width == 1920);
-    assert(settings.window_height == 1080);
-    assert(std::abs(settings.render_scale - 1.0f) < 0.001f);
-    assert(settings.username == "user3");
-    assert(settings.custom_dpi.has_value());
-    assert(std::abs(settings.custom_dpi.value() - 96.0f) < 0.001f);
-    assert(settings.display_name.has_value());
-    assert(settings.display_name.value() == "User Three");
+    CODEGEN_TEST_CHECK(settings.window_width == 1920);
+    CODEGEN_TEST_CHECK(settings.window_height == 1080);
+    CODEGEN_TEST_CHECK(std::abs(settings.render_scale - 1.0f) < 0.001f);
+    CODEGEN_TEST_CHECK(settings.username == "user3");
+    CODEGEN_TEST_CHECK(settings.custom_dpi.has_value());
+    CODEGEN_TEST_CHECK(std::abs(settings.custom_dpi.value() - 96.0f) < 0.001f);
+    CODEGEN_TEST_CHECK(settings.display_name.has_value());
+    CODEGEN_TEST_CHECK(settings.display_name.value() == "User Three");
 
     std::printf("PASSED\n");
 }
@@ -198,23 +198,23 @@ void test_no_version_key_defaults_to_v1()
     simdjson::padded_string padded(json, std::strlen(json));
     simdjson::ondemand::document doc;
     auto error = parser.iterate(padded).get(doc);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     simdjson::ondemand::object obj;
     error = doc.get_object().get(obj);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     Settings settings{};
     migration_was_called = false;
     error = deserialize(obj, settings);
-    assert(!error);
+    CODEGEN_TEST_CHECK(!error);
 
     // Migration should have been called (default v1 != current v3)
-    assert(migration_was_called);
+    CODEGEN_TEST_CHECK(migration_was_called);
 
     // gamma 2.2 * 40 = 88.0
-    assert(settings.custom_dpi.has_value());
-    assert(std::abs(settings.custom_dpi.value() - 88.0f) < 0.001f);
+    CODEGEN_TEST_CHECK(settings.custom_dpi.has_value());
+    CODEGEN_TEST_CHECK(std::abs(settings.custom_dpi.value() - 88.0f) < 0.001f);
 
     std::printf("PASSED\n");
 }
