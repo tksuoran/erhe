@@ -602,7 +602,24 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
 
 Primitive_raytrace::Primitive_raytrace(Primitive_raytrace&&) noexcept = default;
 
-Primitive_raytrace& Primitive_raytrace::operator=(Primitive_raytrace&&) noexcept = default;
+Primitive_raytrace& Primitive_raytrace::operator=(Primitive_raytrace&& other) noexcept
+{
+    // Not defaulted: a defaulted move assignment assigns in declaration order,
+    // replacing m_rt_vertex_buffer / m_rt_index_buffer (freeing them when this
+    // held the last reference) while m_rt_mesh still holds allocations owned
+    // by their allocators. Release in destruction order instead: the mesh
+    // allocations first, then the IGeometry reading the buffers, then the
+    // buffers.
+    if (this != &other) {
+        m_rt_mesh                = std::move(other.m_rt_mesh);
+        m_rt_geometry            = std::move(other.m_rt_geometry);
+        m_rt_index_buffer        = std::move(other.m_rt_index_buffer);
+        m_rt_vertex_buffer       = std::move(other.m_rt_vertex_buffer);
+        m_triangle_to_mesh_facet = std::move(other.m_triangle_to_mesh_facet);
+        m_is_proxy               = other.m_is_proxy;
+    }
+    return *this;
+}
 
 Primitive_raytrace::~Primitive_raytrace() noexcept = default;
 #pragma endregion Primitive_raytrace
