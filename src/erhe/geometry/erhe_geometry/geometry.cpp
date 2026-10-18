@@ -1230,7 +1230,6 @@ void Geometry::copy_with_transform(const Geometry& source, const GEO::mat4f& tra
         m_corner_to_facet     = source.m_corner_to_facet;
         m_edge_to_facets      = source.m_edge_to_facets;
         m_vertex_to_edges     = source.m_vertex_to_edges;
-        m_vertex_pair_to_edge = source.m_vertex_pair_to_edge;
     }
 }
 
@@ -1326,9 +1325,19 @@ auto Geometry::get_edge(const GEO::index_t v0, const GEO::index_t v1) const -> G
     ERHE_VERIFY(v0 != v1);
     const GEO::index_t lo = std::min(v0, v1);
     const GEO::index_t hi = std::max(v0, v1);
-    const auto i = m_vertex_pair_to_edge.find({lo, hi});
-    if (i != m_vertex_pair_to_edge.end()) {
-        return i->second;
+    // build_edges() lists every edge at both of its vertices, so the edge of
+    // the pair is the edge of vertex lo whose other end is hi; the list holds
+    // that vertex's own edges only (its valence). Before build_edges(), or
+    // once the mesh has changed under the tables, there is no edge to find.
+    if (!has_edge_connectivity()) {
+        return GEO::NO_EDGE;
+    }
+    for (const GEO::index_t edge : m_vertex_to_edges.get(lo)) {
+        const GEO::index_t e0 = m_mesh.edges.vertex(edge, 0);
+        const GEO::index_t e1 = m_mesh.edges.vertex(edge, 1);
+        if (((e0 == lo) && (e1 == hi)) || ((e0 == hi) && (e1 == lo))) {
+            return edge;
+        }
     }
     return GEO::NO_EDGE;
 }
@@ -1397,89 +1406,127 @@ void Geometry::build_edges()
 
     m_mesh.edges.clear();
 
-    GEO::index_t facet_edge_count = 0;
-
-    m_vertex_pair_to_edge.clear();
-
-    // First pass - shared edges: one edge per vertex pair that some facet
-    // traverses from the lower to the higher vertex, numbered in order of
-    // first appearance. Two facets traversing a pair in the same direction
-    // (a winding flip between them, e.g. after flipping one facet) share the
-    // one edge.
+    // Edge numbering: first the shared edges - one per vertex pair that some
+    // facet traverses from the lower to the higher vertex - in order of their
+    // first such traversal; then the remaining pairs (traversed only from the
+    // higher to the lower vertex) in order of their first traversal. Two
+    // facets traversing a pair in the same direction (a winding flip between
+    // them) share the one edge.
+    //
+    // The facet edges are enumerated once in facet / corner order, grouped by
+    // their lower vertex with a stable counting sort (a vertex's bucket keeps
+    // traversal order), and the equal vertex pairs of a bucket are found by a
+    // scan of the bucket, which holds that vertex's facet edges only. Nothing
+    // is allocated per edge and nothing is kept beyond the edge tables:
+    // get_edge() searches m_vertex_to_edges.
+    const GEO::index_t vertex_count = m_mesh.vertices.nb();
+    const GEO::index_t corner_count = m_mesh.facet_corners.nb();
+    std::vector<GEO::index_t> facet_edge_lo;      // per facet edge, in traversal order
+    std::vector<GEO::index_t> facet_edge_hi;
+    std::vector<GEO::index_t> facet_edge_corner;  // the corner the facet edge starts at
+    std::vector<uint8_t>      facet_edge_forward; // 1 when traversed from lo to hi
+    std::vector<GEO::index_t> bucket_offsets;     // vertex_count + 1
+    std::vector<GEO::index_t> bucket_entries;     // facet edge indices, grouped by lo
+    std::vector<GEO::index_t> facet_edge_group;   // per facet edge: its vertex pair group
+    std::vector<GEO::index_t> group_lo;           // per group (unique vertex pair)
+    std::vector<GEO::index_t> group_hi;
+    std::vector<GEO::index_t> group_edge;
     {
-    ERHE_PROFILE_SCOPE("build_edges: first pass");
-    // The shared edges are numbered first and created in one call:
-    // create_edge() resizes every edge attribute store once per edge.
-    GEO::index_t shared_edge_count = 0;
-    m_vertex_pair_to_edge.reserve(m_mesh.facet_corners.nb() / 2);
-    for (GEO::index_t facet : m_mesh.facets) {
-        const GEO::index_t facet_corner_count = m_mesh.facets.nb_corners(facet);
-        for (GEO::index_t local_facet_corner = 0; local_facet_corner < facet_corner_count; ++local_facet_corner) {
-            const GEO::index_t corner      = m_mesh.facets.corner(facet, local_facet_corner);
-            const GEO::index_t next_corner = m_mesh.facets.corner(facet, (local_facet_corner + 1) % facet_corner_count);
-            ERHE_VERIFY(next_corner == m_mesh.facets.next_corner_around_facet(facet, corner));
-            const GEO::index_t a           = m_mesh.facet_corners.vertex(corner);
-            const GEO::index_t b           = m_mesh.facet_corners.vertex(next_corner);
-            ++facet_edge_count;
-            ERHE_VERIFY(a != b);
-            if (a < b) {
-                const std::pair<GEO::index_t, GEO::index_t> key{a, b};
-                if (m_vertex_pair_to_edge.insert({key, shared_edge_count}).second) {
-                    ++shared_edge_count;
-                }
-            }
-        }
-    }
-    // The edges were cleared above, so the new ones start at index 0.
-    const GEO::index_t first_shared_edge = (shared_edge_count > 0) ? m_mesh.edges.create_edges(shared_edge_count) : 0;
-    ERHE_VERIFY(first_shared_edge == 0);
-    for (const std::pair<const std::pair<GEO::index_t, GEO::index_t>, GEO::index_t>& entry : m_vertex_pair_to_edge) {
-        m_mesh.edges.set_vertex(entry.second, 0, entry.first.first);
-        m_mesh.edges.set_vertex(entry.second, 1, entry.first.second);
-    }
-    }
-
-    // Second pass - non-shared edges wrong direction or non-manifold wrong direction
-    {
-    ERHE_PROFILE_SCOPE("build_edges: second pass");
+        ERHE_PROFILE_SCOPE("build_edges: enumerate");
+        facet_edge_lo     .reserve(corner_count);
+        facet_edge_hi     .reserve(corner_count);
+        facet_edge_corner .reserve(corner_count);
+        facet_edge_forward.reserve(corner_count);
         for (GEO::index_t facet : m_mesh.facets) {
             const GEO::index_t facet_corner_count = m_mesh.facets.nb_corners(facet);
             for (GEO::index_t local_facet_corner = 0; local_facet_corner < facet_corner_count; ++local_facet_corner) {
                 const GEO::index_t corner      = m_mesh.facets.corner(facet, local_facet_corner);
                 const GEO::index_t next_corner = m_mesh.facets.corner(facet, (local_facet_corner + 1) % facet_corner_count);
+                ERHE_VERIFY(next_corner == m_mesh.facets.next_corner_around_facet(facet, corner));
                 const GEO::index_t a           = m_mesh.facet_corners.vertex(corner);
                 const GEO::index_t b           = m_mesh.facet_corners.vertex(next_corner);
-            const GEO::index_t lo          = std::min(a, b);
-            const GEO::index_t hi          = std::max(a, b);
-            ERHE_VERIFY(lo != hi);
-            const std::pair<GEO::index_t, GEO::index_t> key{lo, hi};
-            const auto i = m_vertex_pair_to_edge.find(key);
-            if (i != m_vertex_pair_to_edge.end()) {
-                //const GEO::index_t edge = i->second;
-                //erhe::geometry::log_geometry->info(
-                //    "pass 2: found existing edge {} from facet {} corners {} and {} - vertices {} and {}",
-                //    edge, facet, corner, next_corner, a, b
-                //);
-                continue;
+                ERHE_VERIFY(a != b);
+                facet_edge_lo     .push_back(std::min(a, b));
+                facet_edge_hi     .push_back(std::max(a, b));
+                facet_edge_corner .push_back(corner);
+                facet_edge_forward.push_back((a < b) ? uint8_t{1} : uint8_t{0});
             }
-            const GEO::index_t edge = m_mesh.edges.create_edge(lo, hi);
-            m_vertex_pair_to_edge.insert({key, edge});
-
-            //erhe::geometry::log_geometry->info(
-            //    "pass 2: created edge {} from facet {} corners {} and {} - vertices {} and {}",
-            //    edge, facet, corner, next_corner, a, b
-            //);
         }
     }
-
+    const GEO::index_t facet_edge_count = static_cast<GEO::index_t>(facet_edge_lo.size());
+    {
+        ERHE_PROFILE_SCOPE("build_edges: group pairs");
+        bucket_offsets.assign(static_cast<std::size_t>(vertex_count) + 1, 0);
+        for (GEO::index_t i = 0; i < facet_edge_count; ++i) {
+            ++bucket_offsets[static_cast<std::size_t>(facet_edge_lo[i]) + 1];
+        }
+        for (GEO::index_t v = 0; v < vertex_count; ++v) {
+            bucket_offsets[static_cast<std::size_t>(v) + 1] += bucket_offsets[v];
+        }
+        bucket_entries.resize(facet_edge_count);
+        {
+            std::vector<GEO::index_t> cursors{bucket_offsets.begin(), bucket_offsets.end() - 1};
+            for (GEO::index_t i = 0; i < facet_edge_count; ++i) {
+                bucket_entries[cursors[facet_edge_lo[i]]++] = i;
+            }
+        }
+        facet_edge_group.resize(facet_edge_count);
+        group_lo.reserve((facet_edge_count / 2) + 1);
+        group_hi.reserve((facet_edge_count / 2) + 1);
+        for (GEO::index_t v = 0; v < vertex_count; ++v) {
+            const GEO::index_t begin       = bucket_offsets[v];
+            const GEO::index_t end         = bucket_offsets[static_cast<std::size_t>(v) + 1];
+            const GEO::index_t first_group = static_cast<GEO::index_t>(group_hi.size());
+            for (GEO::index_t slot = begin; slot < end; ++slot) {
+                const GEO::index_t facet_edge = bucket_entries[slot];
+                const GEO::index_t hi         = facet_edge_hi[facet_edge];
+                GEO::index_t       group      = GEO::NO_INDEX;
+                for (GEO::index_t g = first_group, g_end = static_cast<GEO::index_t>(group_hi.size()); g < g_end; ++g) {
+                    if (group_hi[g] == hi) {
+                        group = g;
+                        break;
+                    }
+                }
+                if (group == GEO::NO_INDEX) {
+                    group = static_cast<GEO::index_t>(group_hi.size());
+                    group_lo.push_back(v);
+                    group_hi.push_back(hi);
+                }
+                facet_edge_group[facet_edge] = group;
+            }
+        }
+    }
+    const GEO::index_t edge_count = static_cast<GEO::index_t>(group_hi.size());
+    {
+        ERHE_PROFILE_SCOPE("build_edges: number edges");
+        group_edge.assign(edge_count, GEO::NO_EDGE);
+        GEO::index_t next_edge = 0;
+        for (GEO::index_t i = 0; i < facet_edge_count; ++i) {
+            const GEO::index_t group = facet_edge_group[i];
+            if ((facet_edge_forward[i] != 0) && (group_edge[group] == GEO::NO_EDGE)) {
+                group_edge[group] = next_edge++;
+            }
+        }
+        for (GEO::index_t i = 0; i < facet_edge_count; ++i) {
+            const GEO::index_t group = facet_edge_group[i];
+            if (group_edge[group] == GEO::NO_EDGE) {
+                group_edge[group] = next_edge++;
+            }
+        }
+        ERHE_VERIFY(next_edge == edge_count);
+        // The edges were cleared above, so the new ones start at index 0;
+        // one create call resizes every edge attribute store once.
+        const GEO::index_t first_edge = (edge_count > 0) ? m_mesh.edges.create_edges(edge_count) : 0;
+        ERHE_VERIFY(first_edge == 0);
+        for (GEO::index_t group = 0; group < edge_count; ++group) {
+            m_mesh.edges.set_vertex(group_edge[group], 0, group_lo[group]);
+            m_mesh.edges.set_vertex(group_edge[group], 1, group_hi[group]);
+        }
     }
     {
     ERHE_PROFILE_SCOPE("build_edges: edge_to_facets");
-    // Edges were created in index order, and each one was appended to the
-    // lists of its two vertices as it was created: the same lists come out
-    // of one walk over the edges.
-    const GEO::index_t edge_count = m_mesh.edges.nb();
-    m_vertex_to_edges.begin_count(m_mesh.vertices.nb());
+    // Each vertex lists its edges in edge index order.
+    m_vertex_to_edges.begin_count(vertex_count);
     for (GEO::index_t edge = 0; edge < edge_count; ++edge) {
         m_vertex_to_edges.count(m_mesh.edges.vertex(edge, 0));
         m_vertex_to_edges.count(m_mesh.edges.vertex(edge, 1));
@@ -1490,27 +1537,12 @@ void Geometry::build_edges()
         m_vertex_to_edges.add(m_mesh.edges.vertex(edge, 1), edge);
     }
 
-    // The edge of every facet edge is looked up once, while counting.
-    m_corner_to_edge.resize(m_mesh.facet_corners.nb()); // capacity kept
+    m_corner_to_edge.resize(corner_count); // capacity kept
     m_edge_to_facets.begin_count(edge_count);
-    for (GEO::index_t facet : m_mesh.facets) {
-        const GEO::index_t facet_corner_count = m_mesh.facets.nb_corners(facet);
-        for (GEO::index_t local_facet_corner = 0; local_facet_corner < facet_corner_count; ++local_facet_corner) {
-            const GEO::index_t corner      = m_mesh.facets.corner(facet, local_facet_corner);
-            const GEO::index_t next_corner = m_mesh.facets.corner(facet, (local_facet_corner + 1) % facet_corner_count);
-            const GEO::index_t a           = m_mesh.facet_corners.vertex(corner);
-            const GEO::index_t b           = m_mesh.facet_corners.vertex(next_corner);
-            const GEO::index_t lo          = std::min(a, b);
-            const GEO::index_t hi          = std::max(a, b);
-            ERHE_VERIFY(lo != hi);
-            const std::pair<GEO::index_t, GEO::index_t> key{lo, hi};
-            const auto edge_i = m_vertex_pair_to_edge.find(key);
-            ERHE_VERIFY(edge_i != m_vertex_pair_to_edge.end());
-            const GEO::index_t edge = edge_i->second;
-            ERHE_VERIFY(edge < edge_count);
-            m_corner_to_edge[corner] = edge;
-            m_edge_to_facets.count(edge);
-        }
+    for (GEO::index_t i = 0; i < facet_edge_count; ++i) {
+        const GEO::index_t edge = group_edge[facet_edge_group[i]];
+        m_corner_to_edge[facet_edge_corner[i]] = edge;
+        m_edge_to_facets.count(edge);
     }
     m_edge_to_facets.begin_fill();
     for (GEO::index_t facet : m_mesh.facets) {
@@ -1524,9 +1556,9 @@ void Geometry::build_edges()
     // An edge whose vertex pair no longer exists (facet changes between
     // build_edges() calls) silently drops its value.
     for (const std::tuple<GEO::index_t, GEO::index_t, float>& entry : m_edge_sharpness_scratch) {
-        const auto i = m_vertex_pair_to_edge.find({std::get<0>(entry), std::get<1>(entry)});
-        if (i != m_vertex_pair_to_edge.end()) {
-            m_attributes.edge_sharpness.set(i->second, std::get<2>(entry));
+        const GEO::index_t edge = get_edge(std::get<0>(entry), std::get<1>(entry));
+        if (edge != GEO::NO_EDGE) {
+            m_attributes.edge_sharpness.set(edge, std::get<2>(entry));
         }
     }
 }
