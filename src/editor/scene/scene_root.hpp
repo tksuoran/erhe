@@ -84,6 +84,7 @@ class Ray_trace_scene;
 class App_context;
 class App_message_bus;
 class App_scenes;
+class Scene_payload_release;
 class App_settings;
 class Item_tree_window;
 class Draw_mode_system;
@@ -602,6 +603,10 @@ public:
 private:
     void add_trigger_event(bool enter, const erhe::physics::Trigger_event& event);
 
+    // Destructor step: appends the primitive of every mesh primitive slot of
+    // every mesh layer (duplicates kept: a reference per slot).
+    void collect_mesh_primitives(std::vector<std::shared_ptr<erhe::primitive::Primitive>>& out_primitives);
+
     // Queues Scene_lighting_changed_message (app_message.hpp): a content
     // mesh or a light entered or left this scene. Any thread (the Scene_host
     // hooks run on worker threads during async loads).
@@ -664,6 +669,10 @@ private:
     // take part in editor messaging (previews, the tool scene).
     App_message_bus*                                m_app_message_bus{nullptr};
     App_scenes*                                     m_app_scenes{nullptr};
+    // Set at registration and kept after unregistration: the destructor
+    // hands the mesh payload to it (scene/scene_payload_release.hpp). It
+    // outlives every Scene_root (an Editor member declared before the parts).
+    Scene_payload_release*                          m_payload_release{nullptr};
     std::shared_ptr<Content_library>                m_content_library;
     std::filesystem::path                           m_source_path;
     Scene_source_format                             m_source_format{Scene_source_format::none};

@@ -45,6 +45,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
+#include "scene/scene_payload_release.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "scene/node_raytrace.hpp"
@@ -62,6 +63,7 @@
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -391,6 +393,16 @@ Scene_root::~Scene_root() noexcept
     // m_raytrace_scene and m_physics_world are still alive, so the later teardown
     // does not dereference freed state (see node_sanity_check,
     // Mesh::detach_rt_from_scene, Node_physics world removal).
+    //
+    // The primitives of the scene's meshes are collected first: the meshes
+    // the sever releases then only drop references, and the payload whose
+    // last reference this host held (Geometry, triangle soup, raytrace,
+    // Buffer_mesh) is destroyed by one worker task instead of here
+    // (scene/scene_payload_release.hpp).
+    std::vector<std::shared_ptr<erhe::primitive::Primitive>> released_primitives;
+    if (m_scene && (m_payload_release != nullptr)) {
+        collect_mesh_primitives(released_primitives);
+    }
     if (m_scene) {
         m_scene->sever_host();
         // The Scene may outlive this host, so the node systems this host owns
@@ -422,6 +434,34 @@ Scene_root::~Scene_root() noexcept
     // so no item keeps a dangling Item_host pointer.
     if (m_content_library) {
         m_content_library->set_owner(nullptr, {});
+    }
+
+    if (m_payload_release != nullptr) {
+        m_payload_release->release(std::move(released_primitives), get_name());
+    }
+}
+
+void Scene_root::collect_mesh_primitives(std::vector<std::shared_ptr<erhe::primitive::Primitive>>& out_primitives)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Deferred finalize commits swap mesh primitives under item_host_mutex.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
+    std::size_t count = 0;
+    for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : m_scene->get_mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+            count += mesh->get_primitives().size();
+        }
+    }
+    out_primitives.reserve(out_primitives.size() + count);
+    for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : m_scene->get_mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                if (mesh_primitive.primitive) {
+                    out_primitives.push_back(mesh_primitive.primitive);
+                }
+            }
+        }
     }
 }
 
@@ -1383,6 +1423,7 @@ void Scene_root::register_to_editor_scenes(App_scenes& app_scenes)
     ERHE_VERIFY(m_is_registered == false);
     ERHE_VERIFY(m_app_scenes == nullptr);
     m_app_scenes = &app_scenes;
+    m_payload_release = app_scenes.get_scene_payload_release();
     app_scenes.register_scene_root(shared_from_this());
     m_is_registered = true;
 }
