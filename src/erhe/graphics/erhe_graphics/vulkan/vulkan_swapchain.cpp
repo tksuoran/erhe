@@ -2,6 +2,7 @@
 #include "erhe_graphics/vulkan/vulkan_device_sync_pool.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
@@ -1226,18 +1227,14 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
         // (observed live: session lock -> QUEUE_FULL every present with
         // tier "off"). Without the refreshDuration timing query, the
         // display refresh period (the servo's overshoot reference and the
-        // observer's grid seed) comes from the window's display mode.
+        // observer's grid seed) comes from the window's display mode, which
+        // Device_impl feeds to the Display_refresh_resolver, verified by
+        // the init calibration from the vkQueuePresentKHR return cadence
+        // (plain FIFO backpressure, see present()).
         log_swapchain->info(
             "present timing not enabled: frame pacing tier {} does not use it",
             (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::slop_servo) ? "S" : "OFF"
         );
-        erhe::window::Context_window* const context_window = m_device_impl.get_context_window();
-        if (context_window != nullptr) {
-            const float refresh_rate = context_window->get_display_refresh_rate();
-            if (refresh_rate > 0.0f) {
-                m_device_impl.get_device().set_display_refresh_duration_seconds(1.0 / static_cast<double>(refresh_rate));
-            }
-        }
         return;
     }
     if ((vkSetSwapchainPresentTimingQueueSizeEXT == nullptr) ||
@@ -1256,20 +1253,7 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
         return;
     }
 
-    VkSwapchainTimingPropertiesEXT timing_properties{
-        .sType           = VK_STRUCTURE_TYPE_SWAPCHAIN_TIMING_PROPERTIES_EXT,
-        .pNext           = nullptr,
-        .refreshDuration = 0,
-        .refreshInterval = 0
-    };
-    uint64_t timing_properties_counter = 0;
-    result = vkGetSwapchainTimingPropertiesEXT(vulkan_device, m_vulkan_swapchain, &timing_properties, &timing_properties_counter);
-    if (result == VK_SUCCESS) {
-        m_refresh_duration_ns = timing_properties.refreshDuration;
-        m_device_impl.get_device().set_display_refresh_duration_seconds(
-            static_cast<double>(m_refresh_duration_ns) * 1e-9
-        );
-    }
+    query_swapchain_timing_properties();
 
     // Time domains: two-call pattern; pick the calibrated host domain when
     // offered so feedback lands directly on the reference clock.
@@ -1393,14 +1377,48 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
 
     m_present_timing_active = true;
     log_swapchain->info(
-        "Present timing enabled: refresh_duration={} ns time_domain={} time_domain_id={} stage=0x{:x} target_absolute={} target_relative={}",
+        "Present timing enabled: refresh_duration={} ns refresh_interval={} ns time_domain={} time_domain_id={} stage=0x{:x} target_absolute={} target_relative={}",
         m_refresh_duration_ns,
+        m_refresh_interval_ns,
         static_cast<int32_t>(m_timing_time_domain),
         m_timing_time_domain_id,
         static_cast<uint32_t>(m_present_stage_queries),
         m_present_at_absolute_time,
         m_present_at_relative_time
     );
+}
+
+void Swapchain_impl::query_swapchain_timing_properties()
+{
+    // refreshDuration / refreshInterval describe "the presentation engine"
+    // of this swapchain (fixed, variable or decoupled refresh), and change
+    // at run time without notice: the counter the query returns, and
+    // every vkGetPastPresentationTimingEXT reports, identifies the state.
+    // The values go to the Display_refresh_resolver, which weighs them
+    // against the window's display mode and the init calibration: the
+    // specification does not tie them to the display the window is on.
+    if (vkGetSwapchainTimingPropertiesEXT == nullptr) {
+        return;
+    }
+    VkSwapchainTimingPropertiesEXT timing_properties{
+        .sType           = VK_STRUCTURE_TYPE_SWAPCHAIN_TIMING_PROPERTIES_EXT,
+        .pNext           = nullptr,
+        .refreshDuration = 0,
+        .refreshInterval = 0
+    };
+    uint64_t counter = 0;
+    const VkResult result = vkGetSwapchainTimingPropertiesEXT(m_device_impl.get_vulkan_device(), m_vulkan_swapchain, &timing_properties, &counter);
+    if (result != VK_SUCCESS) {
+        log_swapchain->warn(
+            "vkGetSwapchainTimingPropertiesEXT() failed with {} {}",
+            static_cast<int32_t>(result), c_str(result)
+        );
+        return;
+    }
+    m_refresh_duration_ns         = timing_properties.refreshDuration;
+    m_refresh_interval_ns         = timing_properties.refreshInterval;
+    m_timing_properties_counter   = counter;
+    m_device_impl.get_device().get_display_refresh_resolver().set_vulkan_timing(m_refresh_duration_ns, m_refresh_interval_ns);
 }
 
 void Swapchain_impl::update_present_timing_calibration(const uint64_t frame_id)
@@ -1547,6 +1565,15 @@ void Swapchain_impl::poll_present_timing(const uint64_t frame_id)
     if ((result != VK_SUCCESS) && (result != VK_INCOMPLETE)) {
         return;
     }
+    if (properties.timingPropertiesCounter != m_timing_properties_counter) {
+        // The presentation engine changed its refresh cycle (power saving,
+        // mode change, the window on another display): re-query.
+        log_swapchain->info(
+            "swapchain timing properties counter {} -> {}; re-querying refresh duration",
+            m_timing_properties_counter, properties.timingPropertiesCounter
+        );
+        query_swapchain_timing_properties();
+    }
     for (uint32_t i = 0; i < properties.presentationTimingCount; ++i) {
         const VkPastPresentationTimingEXT& timing = m_past_timings[i];
         if (timing.presentId == 0) {
@@ -1611,6 +1638,12 @@ void Swapchain_impl::poll_present_timing(const uint64_t frame_id)
         const std::int64_t feedback_frame_id = static_cast<std::int64_t>(timing.presentId) - 1;
         erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl.get_frame_time_recorder();
         recorder.set(feedback_frame_id, &erhe::frame_pacing::Frame_time_record::achieved_present_time, achieved_seconds);
+        // Init calibration of the display refresh period: the displayed
+        // times of consecutive presents, best source.
+        Display_refresh_resolver& resolver = m_device_impl.get_device().get_display_refresh_resolver();
+        if (resolver.wants_sample(Display_time_sample_source::present_feedback)) {
+            resolver.add_display_time_sample(Display_time_sample_source::present_feedback, feedback_frame_id, achieved_seconds);
+        }
         if (queue_ops_time != 0) {
             const double queue_ops_seconds = stage_time_to_seconds(
                 queue_ops_time, m_timing_calibration_queue_ops_valid, m_timing_calibration_queue_ops_value
@@ -1861,6 +1894,31 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
         present_info.pNext = &timings_info;
     }
 
+    // Display refresh init calibration, present-wait source: the time the
+    // PREVIOUS present was displayed, taken on this thread right before
+    // this present goes out. This frame's GPU work is already submitted, so
+    // the wait overlaps it and the present cadence stays the display's;
+    // waiting for the present just made (after it) would serialize the next
+    // frame behind the display and read back "latency + one frame" instead
+    // (measured: two refresh periods). The swapchain is externally
+    // synchronized for vkWaitForPresentKHR, hence this thread, and the FR5
+    // clamp on the main thread stays off while the calibration runs
+    // (Device::wait_for_displayed_frame).
+    {
+        Display_refresh_resolver& resolver = m_device_impl.get_device().get_display_refresh_resolver();
+        if ((frame_id >= 1) && (present_id_value != 0) && resolver.wants_sample(Display_time_sample_source::present_wait)) {
+            constexpr uint64_t s_calibration_wait_timeout_ns = 100'000'000; // a timeout just loses the sample
+            const Present_wait_result wait_result = wait_for_displayed_frame(static_cast<std::int64_t>(frame_id) - 1, s_calibration_wait_timeout_ns);
+            if (wait_result == Present_wait_result::displayed) {
+                resolver.add_display_time_sample(
+                    Display_time_sample_source::present_wait,
+                    static_cast<std::int64_t>(frame_id) - 1,
+                    erhe::frame_pacing::Frame_time_recorder::now()
+                );
+            }
+        }
+    }
+
     ERHE_VULKAN_TRACE(
         "vkQueuePresentKHR image_index={} present_sem=0x{:x} swapchain=0x{:x}",
         index,
@@ -1954,8 +2012,33 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
     add_present_to_history(frame_id, index, present_fence);
     cleanup_present_history();
     poll_present_timing(frame_id);
+    calibrate_display_refresh(frame_id, (result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR));
 
     return result;
+}
+
+void Swapchain_impl::calibrate_display_refresh(const uint64_t frame_id, const bool presented)
+{
+    // Init calibration of the display refresh period (display_refresh_resolver.hpp):
+    // for the first presents of the process, the time each present was
+    // displayed, from the best source this platform offers. Presentation
+    // feedback is fed by poll_present_timing() as it completes; the
+    // present-wait source is sampled in present() before each present (the
+    // previous present's displayed time); without either, under plain FIFO,
+    // vkQueuePresentKHR returns on the vblank cadence once the queue is
+    // full, so its return times carry the period.
+    Display_refresh_resolver& resolver = m_device_impl.get_device().get_display_refresh_resolver();
+    if (!resolver.is_calibrating() || !presented) {
+        return;
+    }
+    if ((m_surface_impl.get_present_mode() == VK_PRESENT_MODE_FIFO_KHR) && resolver.wants_sample(Display_time_sample_source::present_return)) {
+        resolver.add_display_time_sample(
+            Display_time_sample_source::present_return,
+            static_cast<std::int64_t>(frame_id),
+            erhe::frame_pacing::Frame_time_recorder::now()
+        );
+    }
+    resolver.note_present();
 }
 
 auto Swapchain_impl::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result

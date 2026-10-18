@@ -219,6 +219,12 @@ private:
     // time domains, and pick the present stage to query. Called after every
     // (re)creation so the refresh period is re-queried per swapchain.
     void init_present_timing                   (const Vulkan_swapchain_create_info& swapchain_create_info);
+    // refreshDuration / refreshInterval + the timing properties counter, to
+    // the Display_refresh_resolver; at init and on a counter change.
+    void query_swapchain_timing_properties     ();
+    // Init calibration samples for the Display_refresh_resolver (the
+    // displayed time of the present just made), while it is calibrating.
+    void calibrate_display_refresh             (uint64_t frame_id, bool presented);
     // Drains available past-presentation timings into the device's frame
     // time recorder (achieved present time per frame id).
     void poll_present_timing                   (uint64_t frame_id);
@@ -271,6 +277,8 @@ private:
     // in achieved_queue_ops_time as a queue-vs-scanout diagnostic.
     VkPresentStageFlagsEXT m_present_stage_queries_mask{0};
     uint64_t               m_refresh_duration_ns    {0};
+    uint64_t               m_refresh_interval_ns    {0};
+    uint64_t               m_timing_properties_counter{0};
     bool                   m_present_feedback_logged{false};
     // FR3 target-time request modes (step P2.3): device feature AND surface
     // capability. The development machine reports absolute unsupported on

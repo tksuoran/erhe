@@ -150,16 +150,31 @@ the cadence climbed to the 200 ms holdback cap). What remains:
    is at debug level (`config/editor/logging.json` says info), so a
    production log shows the holdback-cap warnings but not the N they came
    from. Log cadence changes at info.
-5. **`refreshDuration` follows the wrong display.** With two displays (a
-   240 Hz builtin panel and a 120 Hz external one) the swapchain of a window
-   on the 120 Hz display reports 4.17 ms. The tier doc already treats the
-   query as a hint (driver report issue #2) and relies on the C16 re-seed
-   from feedback deltas, which item 1 disables here, so the pacer runs on a
-   grid twice too fine: N=5 on it is 2.5 real refreshes, and the display
-   alternates between 2 and 3 refresh periods per frame. Candidate
-   cross-check: the window's own display mode (SDL reports the refresh rate
-   of the display a window is on), which tier S already uses as its
-   fallback.
+5. **`refreshDuration` follows the wrong display** - addressed. With two
+   displays (a 240 Hz builtin panel and a 120 Hz external one) the swapchain
+   of a window on the 120 Hz display reported 4.17 ms, and with item 1 the
+   C16 re-seed could not correct it, so the pacer ran on a grid twice too
+   fine (N=5 on it was 2.5 real refreshes). The period now comes from
+   `erhe::graphics::Display_refresh_resolver` (inputs.md 3.1): the window's
+   display mode, the query (with `refreshInterval` and the timing properties
+   counter), and an init calibration from displayed times that verifies
+   both. Left: the init calibration runs once per display; a second
+   calibration pass after a display change waits for the next presents like
+   the first, and a VRR display is still paced on the minimum cycle.
+6. **`vkWaitForPresentKHR` is not a display-time source on this driver.**
+   On the NVIDIA/X11 path the wait on the previous present returns 0.3 to
+   2 ms after that present was queued (32 samples, median 0.5 ms), so it
+   completes at queue processing, not at scanout; the calibration's
+   fast-frame gate rejects these and the run stays "unverified". On the
+   Intel/Mesa path the same wait wakes on the vblank cadence with about 5 %
+   jitter in the median (8.8 to 8.9 ms on a 120 Hz display), which the 10 %
+   confirmation tolerance absorbs. Two consequences to follow up: the FR5
+   present-wait clamp cannot clamp anything on the NVIDIA path, and the
+   clamp's wait on the main thread overlaps the render thread's
+   `vkQueuePresentKHR` on the same swapchain, which the specification marks
+   externally synchronized (`vk.xml` `externsync="true"` on the swapchain
+   parameter); the calibration keeps the clamp off while it runs for that
+   reason, the steady state does not.
 
 ## Tier A: Android Vulkan backend
 

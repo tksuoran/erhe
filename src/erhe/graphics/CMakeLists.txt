@@ -283,6 +283,7 @@ erhe_target_sources_grouped(
     erhe_graphics/compute_command_encoder.cpp
     erhe_graphics/compute_pipeline_state.cpp
     erhe_graphics/device.cpp
+    erhe_graphics/display_refresh_resolver.cpp
     erhe_graphics/gpu_timer.cpp
     erhe_graphics/native_format.cpp
     erhe_graphics/render_command_encoder.cpp

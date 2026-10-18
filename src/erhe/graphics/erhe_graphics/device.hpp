@@ -21,6 +21,9 @@ namespace erhe::window       { class Context_window; }
 
 namespace erhe::graphics {
 
+class Display_refresh_report;
+class Display_refresh_resolver;
+
 class Format_properties
 {
 public:
@@ -744,10 +747,22 @@ public:
     // storage filled by the backend and read by the app (observer mode,
     // step P2.1). Thread-safe (the recorder locks every access).
     [[nodiscard]] auto get_frame_time_recorder            () -> erhe::frame_pacing::Frame_time_recorder&;
-    // Display refresh duration from the swapchain timing query (seconds);
-    // 0.0 while unknown / unsupported. Set by the backend swapchain.
+    // Display refresh period (seconds) of the display the window is on; 0.0
+    // while unknown. Resolved by the Display_refresh_resolver from the
+    // window's display mode, the swapchain timing query and the init
+    // calibration (display_refresh_resolver.hpp); the resolver applies its
+    // decision here, backends and the window feed the resolver.
     void               set_display_refresh_duration_seconds(double seconds);
     [[nodiscard]] auto get_display_refresh_duration_seconds() const -> double;
+    [[nodiscard]] auto get_display_refresh_resolver         () -> Display_refresh_resolver&;
+    [[nodiscard]] auto get_display_refresh_report           () const -> Display_refresh_report;
+    // True while the resolver's init calibration measures the display's
+    // own cadence. The frame pacing actuators (release gate, present-request
+    // holdback, present-wait clamp) stay idle meanwhile: a cadence they
+    // imposed would be read back as the display's, and the clamp's
+    // vkWaitForPresentKHR from another thread would race the calibration's
+    // on the swapchain (externally synchronized).
+    [[nodiscard]] auto is_display_refresh_calibrating       () const -> bool;
     // Present-wait clamp (frame pacing FR5, implementation plan step P2.2):
     // block until the frame with the given device frame index has been
     // displayed, bounded by timeout_ns. Safe to call speculatively: returns
@@ -781,12 +796,17 @@ public:
     [[nodiscard]] auto get_native_handles                 () const -> Native_device_handles;
 
 private:
+    [[nodiscard]] auto make_display_refresh_resolver() -> std::unique_ptr<Display_refresh_resolver>;
+
     Device_message_callback      m_device_message_callback{};
-    std::unique_ptr<Device_impl> m_impl;
     // Owned through unique_ptr so this header forward-declares their
     // types: Frame_time_recorder brings <chrono>, the caches <filesystem>
     // and <map>, into every translation unit that includes device.hpp.
+    // Declared before m_impl: the backend's init feeds the resolver (the
+    // window's display mode) and the resolver applies to the recorder.
     std::unique_ptr<erhe::frame_pacing::Frame_time_recorder> m_frame_time_recorder;
+    std::unique_ptr<Display_refresh_resolver>                 m_display_refresh_resolver;
+    std::unique_ptr<Device_impl> m_impl;
     // Started-frame counter (wait_for_frame_start); touched only by the
     // thread that starts frames, never by end_frame().
     uint64_t                     m_next_frame_start_id{0};
