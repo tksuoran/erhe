@@ -75,10 +75,13 @@ def wait_for_ready(editor_process, timeout_s):
 
 
 def scene_names(port):
+    """Names of the listed scenes, or None when list_scenes did not answer
+    (the request expires while the main thread is stalled, e.g. inside a
+    long scene close; an expired reply must not read as "no scenes")."""
     reply = mcp(port, "list_scenes")
-    if isinstance(reply, dict):
+    if isinstance(reply, dict) and ("scenes" in reply):
         return [scene.get("name", "") for scene in reply.get("scenes", [])]
-    return []
+    return None
 
 
 def wait_until_settled(port, scene_path, timeout_s):
@@ -88,7 +91,7 @@ def wait_until_settled(port, scene_path, timeout_s):
     scene_file = os.path.basename(scene_path)
     while (time.time() - start) < timeout_s:
         status = mcp(port, "get_async_status")
-        if (listed_s is None) and any(scene_file in name for name in scene_names(port)):
+        if (listed_s is None) and any(scene_file in name for name in (scene_names(port) or [])):
             listed_s = time.time() - start
         if isinstance(status, dict) and status.get("idle") and (listed_s is not None):
             return listed_s, time.time() - start
@@ -195,13 +198,14 @@ def main():
             })
             print(f"  render: {image_path} {'ok' if os.path.isfile(image_path) else 'FAILED: ' + str(render)[:200]}")
         if (open_index < args.opens) or not args.keep_open:
-            for name in scene_names(port):
+            for name in (scene_names(port) or []):
                 if os.path.basename(scene_path) in name:
                     mcp(port, "close_scene", {"scene_name": name})
             close_start = time.time()
             gone_s = None
             while (time.time() - close_start) < 120.0:
-                if not any(os.path.basename(scene_path) in name for name in scene_names(port)):
+                names = scene_names(port)
+                if (names is not None) and not any(os.path.basename(scene_path) in name for name in names):
                     gone_s = time.time() - close_start
                     break
                 time.sleep(0.25)
