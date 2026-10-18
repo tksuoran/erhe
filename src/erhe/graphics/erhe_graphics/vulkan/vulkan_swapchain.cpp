@@ -1205,10 +1205,14 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
     m_present_stage_queries_mask         = 0;
     m_timing_calibration_valid           = false;
     m_timing_calibration_queue_ops_valid = false;
-    if (!m_device_impl.get_capabilities().m_present_timing) {
-        return;
-    }
-    if (m_device_impl.get_frame_pacing_tier() != Frame_pacing_tier::full) {
+    // A device without the present timing capability resolves to tier S
+    // or OFF (capability_tiers.md section 2), so it takes the branch below
+    // and gets the display refresh period from the window like any other
+    // tier S device.
+    if (
+        !m_device_impl.get_capabilities().m_present_timing ||
+        (m_device_impl.get_frame_pacing_tier() != Frame_pacing_tier::full)
+    ) {
         // Only tier W (P4.2) uses present timing. Tier S runs WITHOUT it:
         // the slop servo senses backpressure only, and chaining timing
         // requests on a plain-FIFO swapchain fills the per-swapchain timing
