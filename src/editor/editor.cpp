@@ -113,6 +113,7 @@
 #include "prefabs/prefab_library.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commit_queue.hpp"
+#include "scene/scene_payload_release.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -3881,6 +3882,11 @@ public:
         if (m_executor) {
             m_executor->wait_for_all();
         }
+        // wait_for_all() has run every closed scene's payload release task;
+        // a scene root destroyed during the rest of the teardown releases its
+        // payload on this thread.
+        m_scene_payload_release.wait_idle();
+        m_scene_payload_release.set_executor(nullptr);
         m_item_task_guard.clear();
         // Commits the drained workers left behind own scene roots / shapes;
         // drop them now, while mesh memory and scenes are still alive.
@@ -3910,6 +3916,8 @@ public:
 
         m_app_context.executor                 = m_executor.get();
         m_app_context.scene_commit_queue       = &m_scene_commit_queue;
+        m_app_context.scene_payload_release    = &m_scene_payload_release;
+        m_scene_payload_release.set_executor(m_executor.get());
 
         m_app_context.commands                 = m_commands              .get();
         m_app_context.graphics_device          = m_graphics_device       .get();
@@ -5058,6 +5066,7 @@ public:
     std::unique_ptr<tf::Executor>       m_executor;
     Item_async_task_guard               m_item_task_guard; // destroyed before m_executor
     Scene_commit_queue                  m_scene_commit_queue; // cleared in shutdown after m_executor->wait_for_all()
+    Scene_payload_release               m_scene_payload_release; // declared before the parts: outlives every Scene_root; executor detached in shutdown
 
     App_context                         m_app_context;
 

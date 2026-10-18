@@ -63,6 +63,11 @@ App_scenes::~App_scenes() noexcept
     }
 }
 
+auto App_scenes::get_scene_payload_release() const -> Scene_payload_release*
+{
+    return m_context.scene_payload_release;
+}
+
 void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_root)
 {
     {

@@ -125,6 +125,7 @@ class Scale_tool;
 class Scene_builder;
 class Scene_commands;
 class Scene_commit_queue;
+class Scene_payload_release;
 class Bone_visualization;
 class Weight_display;
 class Weight_paint_tool;
@@ -189,6 +190,9 @@ public:
     // Worker-produced scene mutations waiting for the main thread; applied
     // once per tick by Editor::tick() (see scene/scene_commit_queue.hpp).
     Scene_commit_queue*                     scene_commit_queue    {nullptr};
+    // Destroys the mesh payload of closed scenes on a worker
+    // (see scene/scene_payload_release.hpp).
+    Scene_payload_release*                  scene_payload_release {nullptr};
 
     // Async work that has not yet landed in a scene: worker tasks pending
     // or running, operations queued for the main thread, scene commits
