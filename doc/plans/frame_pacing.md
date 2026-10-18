@@ -52,6 +52,15 @@ with one refresh period, so at any cadence above one vsync per frame every
 frame is an overshoot, the sleep is halved every frame, and the servo is
 inert. Tier S as designed only paces loads lighter than the refresh period.
 
+**Status 2026-10-18.** Items 1 and 2 landed: the servo paces against the
+tracked plant loop period (`Slop_servo_pacer`, claim C19b) and the editor
+polls input again after the pacing sleep. Measured on the scene above: the
+sleep settles near the former slot wait, the slot fence wait falls from
+about 20 ms to under 1 ms, the GPU stays saturated and the cadence stays at
+three periods, the GPU end-to-end interval loses its alternation (lag-1
+autocorrelation near zero), and release-to-GPU-end latency falls by about
+one frame of queueing. Items 3 and 4 are open.
+
 **Proposed, in order, keeping two frames in flight:**
 
 1. **Cadence-aware slop servo.** Measure the achieved cadence N as the loop

@@ -815,6 +815,7 @@ public:
         packet.present_hold_until  = 0.0;
         packet.present_wait_id     = -1;
         int64_t display_advance_ns = -1;
+        m_phase_timing_pacer_slept = false;
 
         // Frame pacing observer (P2.1): feed the pacer with the frame time
         // records and log its decisions. The decision is for the frame just
@@ -867,6 +868,7 @@ public:
                 recorder.set(pacing_decision.frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_begin, erhe::frame_pacing::Frame_time_recorder::now());
                 m_pacer_release_timer.wait_for(release_wait_s);
                 recorder.set(pacing_decision.frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_end, erhe::frame_pacing::Frame_time_recorder::now());
+                m_phase_timing_pacer_slept = true;
             }
             if ((pacing_decision.target_time > 0.0) && (pacing_decision.frame_id == frame_id)) {
                 packet.present_target_time = pacing_decision.target_time;
@@ -934,11 +936,20 @@ public:
                 recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_begin, erhe::frame_pacing::Frame_time_recorder::now());
                 m_pacer_release_timer.wait_for(sleep_seconds);
                 recorder.set(frame_id, &erhe::frame_pacing::Frame_time_record::pacer_wait_end, erhe::frame_pacing::Frame_time_recorder::now());
+                m_phase_timing_pacer_slept = true;
             }
             m_last_predicted_display_time = 0.0;
         } else {
             m_slop_servo_last_tick_time   = 0.0;
             m_last_predicted_display_time = 0.0;
+        }
+        // Input polled after the pacing wait: run() polled before M1, so an
+        // event that arrived during a sleep of most of the frame would wait
+        // for the next frame's poll. The events join the queue M2
+        // dispatches (m_input_events_pending is set by run()).
+        if (m_window && (m_phase_timing_pacer_slept)) {
+            ERHE_PROFILE_SCOPE("poll events after pacing wait");
+            m_window->poll_events(0.0f);
         }
         if (m_frame_pacing_observer.get_pacer() != nullptr) {
             // With a pacer the observer decided for the frame just started:
@@ -5145,6 +5156,7 @@ public:
     // measured backpressure blocking. Period corrected each tick from the
     // swapchain timing query.
     erhe::frame_pacing::Slop_servo_pacer                     m_slop_servo{erhe::frame_pacing::Slop_servo_tunables{}, 1.0 / 60.0};
+    bool                                                     m_phase_timing_pacer_slept{false}; // this frame's M1 pacing step waited: input is polled again after it
     double                                                   m_slop_servo_last_tick_time{0.0};
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
