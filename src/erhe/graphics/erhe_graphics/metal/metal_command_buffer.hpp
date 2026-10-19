@@ -50,6 +50,7 @@ public:
     // The device frame this cb was obtained for; stamped by
     // Device_impl::get_command_buffer.
     [[nodiscard]] auto get_frame_id   () const noexcept -> std::uint64_t;
+    [[nodiscard]] auto get_completion_frame_index() const noexcept -> std::uint64_t;
     void               set_frame_id   (std::uint64_t frame_id) noexcept;
 
     void begin();
@@ -128,6 +129,10 @@ private:
     Device*                    m_device{nullptr};
     erhe::utility::Debug_label m_debug_label;
     std::uint64_t              m_frame_id{0};
+    // The device frame begin() counted this command buffer against (its
+    // completion handler reports it); submit_command_buffers() counts the
+    // commit against the same frame.
+    std::uint64_t              m_completion_frame_index{0};
     MTL::CommandBuffer*        m_mtl_command_buffer{nullptr};
     MTL::Fence*                m_inter_encoder_fence{nullptr};
     MTL::Event*                m_implicit_gpu_event{nullptr};

@@ -328,7 +328,6 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
 
 void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_after)
 {
-    static_cast<void>(command_buffer);
     static_cast<void>(render_pass_after);
 
     if (m_mtl_encoder != nullptr) {
@@ -356,7 +355,7 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
         // the freshly composited drawable into the capture buffer while
         // this frame still owns it (before presentDrawable at submit).
         // No-op when headless (nothing is ever armed there).
-        swapchain_impl.record_capture(m_command_buffer);
+        swapchain_impl.record_capture(command_buffer.get_frame_id(), m_command_buffer);
     }
 
     // The MTL::CommandBuffer is owned by the user's Command_buffer; we

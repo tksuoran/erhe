@@ -306,10 +306,14 @@ Device_impl::~Device_impl() noexcept
     // queued completion handler unconditionally. Mirrors the Vulkan
     // ~Device_impl() teardown order.
     wait_idle();
-    for (const Completion_handler& entry : m_completion_handlers) {
+    {
+        std::lock_guard<std::mutex> lock{m_completion_handler_mutex};
+        m_completion_handler_scratch.swap(m_completion_handlers);
+    }
+    for (const Completion_handler& entry : m_completion_handler_scratch) {
         entry.callback(*this);
     }
-    m_completion_handlers.clear();
+    m_completion_handler_scratch.clear();
 
     if (m_mtl_log_state != nullptr) {
         m_mtl_log_state->release();
@@ -345,6 +349,7 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
 {
     // Order rule (doc/erhe/graphics.md "Frame lifecycle"): frames are
     // acquired strictly in id order, at most N open.
+    const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
     ERHE_VERIFY(frame_id == m_prepare_frame_id + 1);
     ERHE_VERIFY(frame_id >= m_render_frame_id);
     ERHE_VERIFY(frame_id - m_render_frame_id < static_cast<uint64_t>(s_max_frames_in_flight));
@@ -358,7 +363,7 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
     return true;
 }
 
-void Device_impl::drain_completed_frames()
+void Device_impl::drain_completed_frames(const Gpu_queue_state gpu_queue_state)
 {
     // Drain frames whose cbs have signalled GPU completion via
     // Command_buffer_impl's addCompletedHandler. Ring buffer ranges
@@ -375,23 +380,37 @@ void Device_impl::drain_completed_frames()
     // crashing on the freed Command_buffer). Deferred entries stay
     // pending and retire on the first drain after end_frame advances
     // the index.
-    std::vector<uint64_t> drained;
+    //
+    // A frame retires once it has ended (frame < m_render_frame_id) and
+    // every command buffer committed for it has completed, in frame id
+    // order: the first frame still waiting on the GPU stops the walk.
+    const std::lock_guard<std::mutex> run_lock{m_completion_run_mutex};
+    uint64_t render_frame_id = 0;
+    {
+        const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
+        render_frame_id = m_render_frame_id;
+    }
+    m_retired_frames_scratch.clear();
     {
         std::lock_guard<std::mutex> lock{m_completion_mutex};
-        const auto keep_begin = std::partition(
-            m_pending_completed_frames.begin(),
-            m_pending_completed_frames.end(),
-            [this](const uint64_t frame) { return frame < m_render_frame_id; }
-        );
-        drained.assign(m_pending_completed_frames.begin(), keep_begin);
-        m_pending_completed_frames.erase(m_pending_completed_frames.begin(), keep_begin);
-    }
-    for (const uint64_t completed_frame : drained) {
-        // Frames go to one queue and so complete in submission order; taking
-        // the maximum therefore claims nothing that is not already done.
-        if (completed_frame + 1 > m_latest_completed_frame) {
-            m_latest_completed_frame = completed_frame + 1;
+        while (m_latest_completed_frame < render_frame_id) {
+            const uint64_t frame = m_latest_completed_frame;
+            const auto i = std::find_if(
+                m_frame_command_buffer_counts.begin(),
+                m_frame_command_buffer_counts.end(),
+                [frame](const Frame_command_buffer_count& entry) { return entry.frame_index == frame; }
+            );
+            if (i != m_frame_command_buffer_counts.end()) {
+                if ((gpu_queue_state == Gpu_queue_state::running) && (i->completed < i->committed)) {
+                    break;
+                }
+                m_frame_command_buffer_counts.erase(i);
+            }
+            m_retired_frames_scratch.push_back(frame);
+            m_latest_completed_frame = frame + 1;
         }
+    }
+    for (const uint64_t completed_frame : m_retired_frames_scratch) {
         m_ring_buffer_pool.frame_completed(completed_frame);
         frame_completed(completed_frame);
     }
@@ -404,7 +423,7 @@ auto Device_impl::begin_frame() -> bool
     ERHE_VERIFY(slot.state == Device_frame_state::waited);
     ERHE_VERIFY(slot.frame_id == m_render_frame_id);
 
-    drain_completed_frames();
+    drain_completed_frames(Gpu_queue_state::running);
 
     slot.state = Device_frame_state::recording;
     return true;
@@ -448,9 +467,12 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
     // completion-handler queue (and m_pending_completed_frames) grow
     // unbounded and GPU->CPU readbacks (e.g. Id_renderer picking) never
     // complete.
-    drain_completed_frames();
+    drain_completed_frames(Gpu_queue_state::running);
 
-    ++m_render_frame_id;
+    {
+        const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
+        ++m_render_frame_id;
+    }
     slot.state = Device_frame_state::idle;
     return true;
 }
@@ -621,6 +643,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         }
         impl.clear_swapchain_used();
 
+        note_command_buffer_committed(impl.get_completion_frame_index());
         mtl_cb->commit();
 
         // Drop our reference now that the cb is committed: Metal keeps the
@@ -653,24 +676,32 @@ void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
 
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
-    m_completion_handlers.emplace_back(get_frame_index(), std::move(callback));
+    const uint64_t frame_index = get_frame_index();
+    std::lock_guard<std::mutex> lock{m_completion_handler_mutex};
+    m_completion_handlers.emplace_back(frame_index, std::move(callback));
 }
 
 void Device_impl::frame_completed(const uint64_t completed_frame)
 {
-    for (const Completion_handler& entry : m_completion_handlers) {
-        if (entry.frame_number == completed_frame) {
-            entry.callback(*this);
+    // Called under m_completion_run_mutex, so the scratch is this call's.
+    // Handlers of frames up to this one: frames retire in order, so an
+    // earlier frame's handler is due as well.
+    {
+        std::lock_guard<std::mutex> lock{m_completion_handler_mutex};
+        for (Completion_handler& entry : m_completion_handlers) {
+            if (entry.frame_number <= completed_frame) {
+                m_completion_handler_scratch.push_back(std::move(entry));
+            }
         }
+        std::erase_if(
+            m_completion_handlers,
+            [completed_frame](const Completion_handler& entry) { return entry.frame_number <= completed_frame; }
+        );
     }
-    auto i = std::remove_if(
-        m_completion_handlers.begin(),
-        m_completion_handlers.end(),
-        [completed_frame](const Completion_handler& entry) { return entry.frame_number == completed_frame; }
-    );
-    if (i != m_completion_handlers.end()) {
-        m_completion_handlers.erase(i, m_completion_handlers.end());
+    for (const Completion_handler& entry : m_completion_handler_scratch) {
+        entry.callback(*this);
     }
+    m_completion_handler_scratch.clear();
 
     // Drop Command_buffers whose frame has retired on the GPU. Releasing
     // our std::unique_ptr only drops our retain on MTL::CommandBuffer;
@@ -690,10 +721,37 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
     }
 }
 
+void Device_impl::note_command_buffer_committed(const uint64_t frame_index)
+{
+    std::lock_guard<std::mutex> lock{m_completion_mutex};
+    if (frame_index < m_latest_completed_frame) {
+        // Begun in a frame that has retired already (a long-lived recording
+        // committed late): wait_idle and the next retirements cover it.
+        return;
+    }
+    const auto i = std::find_if(
+        m_frame_command_buffer_counts.begin(),
+        m_frame_command_buffer_counts.end(),
+        [frame_index](const Frame_command_buffer_count& entry) { return entry.frame_index == frame_index; }
+    );
+    if (i != m_frame_command_buffer_counts.end()) {
+        ++i->committed;
+    } else {
+        m_frame_command_buffer_counts.push_back(Frame_command_buffer_count{.frame_index = frame_index, .committed = 1, .completed = 0});
+    }
+}
+
 void Device_impl::notify_command_buffer_completed(const uint64_t frame_index)
 {
     std::lock_guard<std::mutex> lock{m_completion_mutex};
-    m_pending_completed_frames.push_back(frame_index);
+    const auto i = std::find_if(
+        m_frame_command_buffer_counts.begin(),
+        m_frame_command_buffer_counts.end(),
+        [frame_index](const Frame_command_buffer_count& entry) { return entry.frame_index == frame_index; }
+    );
+    if (i != m_frame_command_buffer_counts.end()) {
+        ++i->completed;
+    }
 }
 
 auto Device_impl::wait_for_presented_frame_slot() -> bool
@@ -770,22 +828,14 @@ void Device_impl::wait_idle()
         command_buffer->waitUntilCompleted();
     }
 
-    // Every command buffer submitted so far has completed, so everything
-    // before the frame still being recorded is retired - the same statement
-    // the GL backend makes after glFinish(), and what keeps
-    // Device::is_frame_completed() moving for a consumer whose frames produce
-    // no completion callbacks of their own.
-    if (m_render_frame_id > m_latest_completed_frame) {
-        m_latest_completed_frame = m_render_frame_id;
-    }
-
-    // All prior cbs (including device-frame cbs) have now completed on
-    // the GPU. Drain any pending frame-completion enqueues and flush
-    // their frame_completed callbacks so staging buffers / ring buffer
-    // ranges are released before wait_idle returns (used by the editor
-    // ctor's init-frame flow). Frames still open keep pending - see
+    // Every command buffer submitted so far has completed, so every ended
+    // frame is retired - the same statement the GL backend makes after
+    // glFinish() - even where the completion callbacks of its command
+    // buffers have not run yet. Its ring buffer ranges and completion
+    // handlers are released before wait_idle returns (used by the editor
+    // ctor's init-frame flow). Frames still open stay - see
     // drain_completed_frames.
-    drain_completed_frames();
+    drain_completed_frames(Gpu_queue_state::idle);
 }
 
 void Device_impl::on_thread_enter()
@@ -842,7 +892,16 @@ auto Device_impl::get_frame_index() const -> uint64_t
     if (erhe::utility::Thread_roles::is_render_role()) {
         return m_render_frame_id;
     }
+    const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
     return std::max(m_prepare_frame_id, m_render_frame_id);
+}
+
+auto Device_impl::is_frame_ended(const uint64_t frame) const -> bool
+{
+    // m_render_frame_id is the oldest open frame (or the next one to be
+    // acquired): every frame before it has ended.
+    const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
+    return frame < m_render_frame_id;
 }
 
 auto Device_impl::get_number_of_frames_in_flight() const -> std::size_t
@@ -852,6 +911,7 @@ auto Device_impl::get_number_of_frames_in_flight() const -> std::size_t
 
 auto Device_impl::is_frame_completed(const uint64_t frame) const -> bool
 {
+    std::lock_guard<std::mutex> lock{m_completion_mutex};
     return frame < m_latest_completed_frame;
 }
 
