@@ -2192,12 +2192,19 @@ private:
     // Dedup cache slot for primitives sharing the same accessors: the first
     // parse_mesh task to claim a key builds the geometry; concurrent tasks
     // for the same key wait on `ready` instead of building a duplicate.
+    // The key fields are written once, at insertion under
+    // m_primitive_entries_mutex, and compared under it; the payload is
+    // written by the claiming task only and read by the others after ready.
     class Primitive_entry_slot
     {
     public:
-        Primitive_entry          entry; // key fields valid from insertion; payload valid once ready
-        std::promise<void>       promise;
-        std::shared_future<void> ready;
+        std::size_t                                     index_accessor;
+        std::vector<std::size_t>                        attribute_accessors;
+        bool                                            tangent_frame_needed;
+        std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup;
+        std::shared_ptr<erhe::primitive::Primitive>     primitive;
+        std::promise<void>                              promise;
+        std::shared_future<void>                        ready;
     };
     std::vector<std::shared_ptr<Primitive_entry_slot>> m_primitive_entries;
     ERHE_PROFILE_MUTEX(std::mutex, m_primitive_entries_mutex);
@@ -2549,9 +2556,9 @@ private:
             const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_primitive_entries_mutex};
 
             for (const auto& old_slot : m_primitive_entries) {
-                if (old_slot->entry.index_accessor != primitive_entry.index_accessor) continue;
-                if (old_slot->entry.attribute_accessors != primitive_entry.attribute_accessors) continue;
-                if (old_slot->entry.tangent_frame_needed != primitive_entry.tangent_frame_needed) continue;
+                if (old_slot->index_accessor != primitive_entry.index_accessor) continue;
+                if (old_slot->attribute_accessors != primitive_entry.attribute_accessors) continue;
+                if (old_slot->tangent_frame_needed != primitive_entry.tangent_frame_needed) continue;
                 // Found existing (possibly still building) entry: wait for it
                 // outside the lock instead of building a duplicate.
                 slot = old_slot;
@@ -2559,9 +2566,9 @@ private:
             }
             if (!slot) {
                 slot = std::make_shared<Primitive_entry_slot>();
-                slot->entry.index_accessor       = primitive_entry.index_accessor;
-                slot->entry.attribute_accessors  = primitive_entry.attribute_accessors;
-                slot->entry.tangent_frame_needed = primitive_entry.tangent_frame_needed;
+                slot->index_accessor       = primitive_entry.index_accessor;
+                slot->attribute_accessors  = primitive_entry.attribute_accessors;
+                slot->tangent_frame_needed = primitive_entry.tangent_frame_needed;
                 slot->ready = slot->promise.get_future().share();
                 m_primitive_entries.push_back(slot);
                 claimed = true;
@@ -2570,13 +2577,15 @@ private:
 
         if (!claimed) {
             slot->ready.wait();
-            primitive_entry = slot->entry;
+            primitive_entry.triangle_soup = slot->triangle_soup;
+            primitive_entry.primitive     = slot->primitive;
             return;
         }
 
         // This task claimed the slot; build outside the lock and publish.
         load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
-        slot->entry = primitive_entry;
+        slot->triangle_soup = primitive_entry.triangle_soup;
+        slot->primitive     = primitive_entry.primitive;
         slot->promise.set_value();
     }
 
