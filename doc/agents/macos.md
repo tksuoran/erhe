@@ -25,6 +25,22 @@ cmake --build build_xcode_vulkan --target editor --config Debug
 Executables land in `<build>/bin/<Config>/`. The headless Metal build is
 described in `doc/erhe/metal_headless.md`.
 
+## Vulkan drivers
+
+The Vulkan build runs on MoltenVK or on Mesa's KosmicKrisp, whichever ICD the
+loader picks; select one explicitly for `ctest` or the editor with
+`VK_DRIVER_FILES=<ICD directory>/MoltenVK_icd.json` or
+`VK_DRIVER_FILES=<ICD directory>/libkosmickrisp_icd.json`. Run both drivers
+when verifying Vulkan changes on macOS: they differ in limits
+(`maxPerSetDescriptors`), in `VK_KHR_portability_subset` (MoltenVK only) and in
+timestamp behavior (`doc/erhe/vulkan_backend.md` "Texture heap" and
+"Portability subset", `doc/erhe/graphics.md` `Gpu_timer`).
+
+Run tests and the editor without sourcing the Vulkan SDK's `setup-env.sh`
+(the configure script sources it for itself): with that environment, SDL's
+Cocoa Vulkan surface creation calls MoltenVK's `vkGetInstanceProcAddr`
+directly and every windowed process segfaults at surface creation.
+
 ## Building and diagnostics through Xcode
 
 Invoke the **`erhe-macos-xcode`** skill for building and reading diagnostics
