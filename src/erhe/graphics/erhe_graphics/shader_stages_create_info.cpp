@@ -455,8 +455,8 @@ auto Shader_stages_create_info::final_source(
         sb << "layout(push_constant) uniform Erhe_draw_id_block { int ERHE_DRAW_ID; };\n";
     }
     // ERHE_PRIMITIVE_INDEX (doc/erhe/graphics.md "Draw records"): the Metal
-    // device names records by position (Record_indexing::draw_position); the
-    // instance index would carry first_instance through SPIRV-Cross.
+    // device names records by first_instance; SPIRV-Cross lowers
+    // gl_InstanceIndex to [[instance_id]], which includes the base instance.
     if (graphics_device.get_info().record_indexing == Record_indexing::first_instance) {
         sb << "#define ERHE_PRIMITIVE_INDEX gl_InstanceIndex\n";
     } else {

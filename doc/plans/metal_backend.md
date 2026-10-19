@@ -41,11 +41,15 @@ new size.
   depth-only, then higher precision; `vulkan_device.cpp`), filtered by the
   capabilities in `metal_pixel_format_table.cpp`.
 
-## 6. Multi-draw indirect on the GPU
+## 6. GPU-read draw count
 
-Multi-draw indirect loops on the CPU over `drawIndexedPrimitives`, reading
-the draw commands back from the indirect buffer (`doc/erhe/metal_backend.md`
-"Multi-Draw Indirect"). Replace the loop with an indirect command buffer
-(`MTL::IndirectCommandBuffer`) encoded by a compute pass from the same draw
-commands, so the draw count and the draw parameters never round-trip
-through the CPU.
+Multi-draw indirect issues one indirect `drawIndexedPrimitives` per command
+over a CPU-side draw count (`doc/erhe/metal_backend.md` "Multi-Draw
+Indirect"); records are named by `first_instance`. What is missing is a
+draw count the GPU writes (`Device_info::use_draw_indirect_count`, which
+the GPU culling of `doc/erhe/draw_list_renderer.md` needs): encode the
+commands into an `MTL::IndirectCommandBuffer` from a compute kernel that
+reads the count (a hand-written MSL kernel; the GLSL path cannot express an
+indirect command buffer) and execute it with
+`executeCommandsInBuffer` over an indirect range, then enable
+`Draw_indirect_test.draw_indexed_indirect_count` and `_count_zero`.

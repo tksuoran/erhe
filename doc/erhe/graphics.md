@@ -476,10 +476,13 @@ final_source()`) defines two names for the index:
     `gl_BaseInstanceARB + gl_InstanceID`. Vulkan takes it when
     `drawIndirectFirstInstance` is enabled (`use_base_instance`), GL when it
     has base instance (4.2 / `ARB_base_instance`) and the shader built-in
-    (GLSL 4.60 / `ARB_shader_draw_parameters`).
+    (GLSL 4.60 / `ARB_shader_draw_parameters`). Metal takes it always: each
+    command is an indirect `drawIndexedPrimitives` that reads its base
+    instance, and SPIRV-Cross lowers `gl_InstanceIndex` to `[[instance_id]]`,
+    which includes it.
   - `Record_indexing::draw_position`: `ERHE_DRAW_ID`, and every command's
-    `first_instance` stays 0. Metal and the null device, and Vulkan / GL
-    devices without the capabilities above.
+    `first_instance` stays 0. The null device, and Vulkan / GL devices
+    without the capabilities above.
 
 A command can then name any record of the bound range, so passes that draw
 different subsets of the same records can share one upload
