@@ -21,7 +21,7 @@
 @frame-pacing+acquire-zones-2026-10-11::DONE{8c02f41aa-frame_pacing_tier-auto(was-off;this-GPU-lacks-present_timing->tier-S);2ec2635cc-Tracy-zones-begin_swapchain+vkAcquireNextImageKHR(was-~2.3ms/frame-self-time-of-frame_render_phase);built-ninja-win-vulkan;earlier-user-capture-predates-both}
 @metal-gpu-timers::DONE-2026-10-19{926fe35f3;state->memory-bank/topics/metal.md}
 @metal-thread-safety-audit::DONE-2026-10-19{aab7b6e97+a03f87890;state->memory-bank/topics/metal.md}
-NEXT=prompt_queue.txt{written-2026-10-19-on-macOS;1=Metal(doc/plans/metal_backend.md-items-1,3-7);2-5=carried-over{Quest-3-performance;Tracy-threaded-rendering-analysis;scene-roundtrip-failures;audit-follow-ups-pick}}+other-open{Metal-MTLBinaryArchive;mesh-modeling-remaining:doc/plans/mesh_modeling.md;RC-remaining:doc/plans/radiance_cascades.md;shadow-future:Metal(full-shadow_verify-run;head-on-MCP-tests-pass-2026-10-19)+G7}
+NEXT=prompt_queue.txt{written-2026-10-19-on-macOS;1=Metal(doc/plans/metal_backend.md-items-3-7);2-5=carried-over{Quest-3-performance;Tracy-threaded-rendering-analysis;scene-roundtrip-failures;audit-follow-ups-pick}}+other-open{Metal-MTLBinaryArchive;mesh-modeling-remaining:doc/plans/mesh_modeling.md;RC-remaining:doc/plans/radiance_cascades.md;shadow-future:Metal(full-shadow_verify-run;head-on-MCP-tests-pass-2026-10-19)+G7}
 [TOPICS]{memory-bank/topics/<name>.md;¬auto-loaded;read-the-ones-matching-the-session;DONE-work+traps+open-items-per-topic}
 usd::USD compatibility: LightUSD fork, import/export, composition arcs, DrawModes, USD physics/animation, WG asset survey
 property_system::erhe::property dependency properties: node values, styles, folders, migrations, Properties window
