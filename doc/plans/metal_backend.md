@@ -38,7 +38,7 @@ tier W (`doc/frame_pacing/capability_tiers.md`), which also needs a target
 present time, presentation feedback and a GPU to reference clock
 calibration. The Metal mapping, to decide which tier to build:
 
-- Tier S needs only FIFO backpressure: `CAMetalLayer.displaySyncEnabled`
+- Tier S (the smaller step, recommended first) needs only FIFO backpressure: `CAMetalLayer.displaySyncEnabled`
   on and a small `maximumDrawableCount`; the blocking it senses is the
   `nextDrawable` / presented-frame wait in `begin_swapchain`. Smallest step.
 - Tier W: present wait from `MTL::Drawable::addPresentedHandler` (presented
@@ -67,7 +67,7 @@ The kernel must run in a compute encoder before the render encoder that
 draws, but `Render_command_encoder::multi_draw_indexed_primitives_indirect_count`
 is called inside the render pass. The options, to decide before building:
 
-- A preparation hook: the count draws of a pass are declared before the pass
+- A preparation hook (recommended): the count draws of a pass are declared before the pass
   starts (command buffer, offset, count buffer, maximum), the backend encodes
   their indirect command buffers in one compute encoder ahead of the pass,
   and the in-pass call executes the prepared one. Fits the GPU culling,
