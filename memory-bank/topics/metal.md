@@ -22,6 +22,9 @@
 >a03f87890::gltf-primitive-dedup-slot-race{key-fields-written-once-under-mutex;payload-separate}
 >AppleClang-ERHE_USE_TSAN{doc/agents/macos.md"ThreadSanitizer"};gates:image-4-configs-identical+TSan-0-reports
 
+[VERIFIED_2026-10-19]
+@ring-buffer-pool-on-Metal::Bistro-load-spills(3x5.6MB-main+render-4MB)+idle-reclaim-back-to-warm(main-1)+render-steady-plateau-~11x4MiB(8-buffer-warning-fires-but-no-growth-after-load){Vulkan-comparison-not-run-here}->plan-item-1-removed
+
 [TRAPS]
 !AutoreleasePool::per-thread-stack{drain-on-opening-thread;reverse-order}→¬span-device-frame
 !retained-cb-still-in-pool::queue-slot(64)-freed-only-on-dealloc→create-in-local-pool+retain
@@ -43,4 +46,4 @@ cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permane
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{items-1,3-7}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{items-3-7}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}

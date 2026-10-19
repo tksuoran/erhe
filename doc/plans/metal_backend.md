@@ -7,16 +7,6 @@ backend still differs from Vulkan; each is verified on macOS with the
 Xcode build (`doc/agents/macos.md`) and, where a GPU test covers it, with
 `erhe_graphics_gpu_tests` on Metal.
 
-## 1. Compile and run the backend-shared changes
-
-`Ring_buffer_pool` (`doc/erhe/ring_buffer_memory.md`) replaced the Metal
-backend's own ring-buffer allocator, and `Scoped_debug_group` takes its label
-as a `std::string_view`. Both Metal edits were written on a machine without
-the Metal toolchain: build the editor and `erhe_graphics_gpu_tests` on
-macOS, start the editor, and confirm that the pool spills and reclaims
-(`doc/erhe/ring_buffer_memory.md` describes the log lines and the memory
-bound).
-
 ## 3. `blit_framebuffer`
 
 `Blit_command_encoder_impl::blit_framebuffer` (`metal_blit_command_encoder.cpp`)
