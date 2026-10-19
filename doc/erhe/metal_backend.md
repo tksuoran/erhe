@@ -162,11 +162,14 @@ The texture heap manages Path A samplers through Metal argument buffers.
   layout. Dedicated samplers are skipped -- they are bound via
   `set_sampled_image` instead.
 - Argument buffer uses ring buffer allocation (fresh region per encode, no
-  aliasing across render passes).
+  aliasing across render passes). A ring buffer range stays valid only
+  through the frame that allocated it, so the argument buffer is encoded
+  again in every frame that binds the heap, not only when its slots change.
 - `allocate(texture, sampler)` returns a material index into the
   texture-heap sampler's array; the shader reads this index from the
   material UBO and samples via `s_textures[index]` / equivalent.
-- `bind()` encodes if dirty, then calls `setFragmentBuffer` +
+- `bind()` encodes when the slots changed or the current argument buffer
+  was encoded in an earlier frame, then calls `setFragmentBuffer` +
   `useResource(Read | Sample)`.
 - No pipeline change detection or re-encoding -- layout is fixed at
   construction.
