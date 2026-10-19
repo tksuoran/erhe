@@ -1,4 +1,5 @@
 #include "erhe_graphics/null/null_device.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_graphics/null/null_command_buffer.hpp"
 #include "erhe_graphics/null/null_surface.hpp"
 #include "erhe_graphics/command_buffer.hpp"
@@ -52,6 +53,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.max_array_texture_layers                 = 2048;
     m_info.max_uniform_block_size                   = 65536;
     m_info.max_per_stage_descriptor_samplers        = 16;
+    m_info.texture_heap_size = max_texture_heap_size;
     m_info.max_compute_workgroup_count[0]           = 65535;
     m_info.max_compute_workgroup_count[1]           = 65535;
     m_info.max_compute_workgroup_count[2]           = 65535;

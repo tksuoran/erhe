@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal/metal_device.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
 #include "erhe_graphics/metal/metal_gpu_timer.hpp"
@@ -235,6 +236,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.max_uniform_block_size                   = 65536;
     m_info.use_texture_view                         = true;
     m_info.max_per_stage_descriptor_samplers        = 256; // Tier 2 argument buffers remove per-stage limit
+    m_info.texture_heap_size = max_texture_heap_size;
     m_info.texture_heap_path                       = Texture_heap_path::metal_argument_buffer;
     m_info.max_compute_workgroup_count[0]           = 65535;
     m_info.max_compute_workgroup_count[1]           = 65535;

@@ -45,13 +45,13 @@ Texture_heap_impl::Texture_heap_impl(
     , m_bind_group_layout     {bind_group_layout}
     , m_fallback_texture      {fallback_texture}
     , m_fallback_sampler      {fallback_sampler}
-    , m_max_textures          {max_textures}
+    , m_max_textures          {std::min<std::size_t>(max_textures, m_device_impl.get_texture_heap_size())}
 {
-    // The set-1 layout was created with max_texture_heap_size descriptors
-    // (vulkan_device_init.cpp); a heap that asked for more would allocate a
-    // variable descriptor count the layout cannot satisfy.
+    // The set-1 layout was created with get_texture_heap_size() descriptors
+    // (vulkan_device_init.cpp), the device's bound on max_texture_heap_size;
+    // a heap asking for more is capped to it, as it could not allocate a
+    // larger variable descriptor count from that layout.
     ERHE_VERIFY(m_max_textures >= 1);
-    ERHE_VERIFY(m_max_textures <= max_texture_heap_size);
     // The texture heap is the bindless color sampled-image array (set 1,
     // binding 0). The shader accesses it via sampler2D / sampler2D_array,
     // which can only commit to a single image aspect, so all textures stored
@@ -77,7 +77,7 @@ Texture_heap_impl::Texture_heap_impl(
     // different descriptorCount is not compatible with the pipeline layout, and
     // vkCmdBindDescriptorSets rejects it (VUID-...-pDescriptorSets-00358) -
     // even though the set's own variable count may legitimately be smaller.
-    // So the LAYOUT is always max_texture_heap_size wide, and m_max_textures
+    // So the LAYOUT is always get_texture_heap_size() wide, and m_max_textures
     // caps only the variable count this heap allocates and the slots it hands
     // out.
     const VkDescriptorBindingFlags binding_flags =
@@ -96,7 +96,7 @@ Texture_heap_impl::Texture_heap_impl(
         .binding            = 0,
         .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         // The layout's maximum, NOT this heap's cap - see above.
-        .descriptorCount    = static_cast<uint32_t>(max_texture_heap_size),
+        .descriptorCount    = m_device_impl.get_texture_heap_size(),
         // COMPUTE included because the ray_trace compute shader samples the
         // heap (VUID-VkComputePipelineCreateInfo-layout-07988). Must stay in
         // sync with the set-1 layout in Device_impl (vulkan_device_init.cpp).

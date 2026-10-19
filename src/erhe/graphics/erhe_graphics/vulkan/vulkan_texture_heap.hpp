@@ -70,10 +70,9 @@ protected:
     VkImageView                        m_fallback_view{VK_NULL_HANDLE};
     VkSampler                          m_fallback_vk_sampler{VK_NULL_HANDLE};
     std::vector<VkDescriptorImageInfo> m_scratch_image_infos; // batched fallback writes; capacity kept
-    // Bounded by max_texture_heap_size (texture_heap.hpp), the descriptor
-    // count of the set-1 layout this heap allocates from; the constructor
-    // verifies it.
-    std::size_t                        m_max_textures{max_texture_heap_size};
+    // Capped by the constructor to Device_impl::get_texture_heap_size(), the
+    // descriptor count of the set-1 layout this heap allocates from.
+    std::size_t                        m_max_textures{0};
 };
 
 } // namespace erhe::graphics

@@ -765,9 +765,18 @@ Device_impl::Device_impl(
     // unconditionally on a 1.1+ device. Kept local: spliced into the local
     // physical_device_properties2.pNext, not into the m_driver_properties
     // member, so its address does not outlive this function scope.
+    // The descriptor limits that bound the texture heap layout (set 1); read
+    // where that layout is sized below. Maintenance3 is core in Vulkan 1.1,
+    // descriptor indexing in 1.2 (and required by the texture heap).
+    VkPhysicalDeviceMaintenance3Properties query_maintenance3_properties{};
+    query_maintenance3_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES;
+    query_maintenance3_properties.pNext = &m_driver_properties;
+    VkPhysicalDeviceDescriptorIndexingProperties query_descriptor_indexing_properties{};
+    query_descriptor_indexing_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+    query_descriptor_indexing_properties.pNext = &query_maintenance3_properties;
     VkPhysicalDeviceMultiviewProperties query_multiview_properties{
         .sType                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES,
-        .pNext                     = &m_driver_properties,
+        .pNext                     = &query_descriptor_indexing_properties,
         .maxMultiviewViewCount     = 0,
         .maxMultiviewInstanceIndex = 0,
     };
@@ -1711,6 +1720,16 @@ Device_impl::Device_impl(
         if (set_vulkan_11_features.shaderDrawParameters               == VK_TRUE) log_debug->debug("Enabled feature shaderDrawParameters");
     }
 
+    // A portability-subset device (MoltenVK) treats every portability feature
+    // not enabled here as unsupported; enable each one the device reports.
+    VkPhysicalDevicePortabilitySubsetFeaturesKHR set_portability_subset_features = m_portability_subset_features;
+    set_portability_subset_features.pNext = nullptr;
+    if (m_device_extensions.m_VK_KHR_portability_subset) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_portability_subset_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        log_debug->debug("Enabled portability subset features as queried");
+    }
+
     VkPhysicalDeviceVulkan13Features set_vulkan_13_features{
         .sType                                              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .pNext                                              = nullptr,
@@ -2210,6 +2229,7 @@ Device_impl::Device_impl(
     m_info.use_persistent_buffers      = true;
     m_info.use_clip_distance           = (qf.shaderClipDistance == VK_TRUE);
     m_info.use_depth_clamp             = (qf.depthClamp         == VK_TRUE);
+    m_info.use_constant_alpha_color_blend_factors = (m_portability_subset_features.constantAlphaColorBlendFactors == VK_TRUE);
     m_info.shader_float16              = (set_shader_float16_int8_features.shaderFloat16 == VK_TRUE);
     m_info.shader_int8                 = (set_shader_float16_int8_features.shaderInt8    == VK_TRUE);
     m_info.shader_relaxed_extended_instruction =
@@ -2409,6 +2429,20 @@ Device_impl::Device_impl(
         // Create a second descriptor set layout for texture heap (set 1)
         // This uses descriptor indexing for a large array of combined image samplers
         {
+            // The heap is the only binding of set 1, so maxPerSetDescriptors
+            // bounds it directly (MoltenVK reports 1212). The update-after-bind
+            // sampler / sampled image / resource limits it also counts against
+            // have a spec minimum of 500000, far above max_texture_heap_size.
+            m_texture_heap_size = std::min(max_texture_heap_size, query_maintenance3_properties.maxPerSetDescriptors);
+            m_info.texture_heap_size = m_texture_heap_size;
+            log_context->info(
+                "Texture heap size = {} (max_texture_heap_size = {}, maxPerSetDescriptors = {}, maxPerStageDescriptorUpdateAfterBindSamplers = {})",
+                m_texture_heap_size,
+                max_texture_heap_size,
+                query_maintenance3_properties.maxPerSetDescriptors,
+                query_descriptor_indexing_properties.maxPerStageDescriptorUpdateAfterBindSamplers
+            );
+
             const VkDescriptorBindingFlags texture_binding_flags =
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
                 VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
@@ -2424,7 +2458,7 @@ Device_impl::Device_impl(
             const VkDescriptorSetLayoutBinding texture_binding{
                 .binding            = 0,
                 .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount    = max_texture_heap_size,
+                .descriptorCount    = m_texture_heap_size,
                 // COMPUTE included because the ray_trace compute shader
                 // samples the heap. Must stay in sync with the layout in
                 // Texture_heap_impl (vulkan_texture_heap.cpp).
@@ -2487,10 +2521,10 @@ Device_impl::Device_impl(
                     if (result == VK_SUCCESS) {
                         m_texture_heap_variable_count_minimum = 1;
                     } else {
-                        m_texture_heap_variable_count_minimum = max_texture_heap_size;
+                        m_texture_heap_variable_count_minimum = m_texture_heap_size;
                         log_context->warn(
                             "Driver refused a texture heap set with variable descriptor count 1 ({}); every heap set is allocated {} wide",
-                            static_cast<int32_t>(result), max_texture_heap_size
+                            static_cast<int32_t>(result), m_texture_heap_size
                         );
                     }
                     vkDestroyDescriptorPool(m_vulkan_device, probe_pool, nullptr);
