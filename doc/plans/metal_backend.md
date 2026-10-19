@@ -57,3 +57,15 @@ the draw commands back from the indirect buffer (`doc/erhe/metal_backend.md`
 (`MTL::IndirectCommandBuffer`) encoded by a compute pass from the same draw
 commands, so the draw count and the draw parameters never round-trip
 through the CPU.
+
+## 7. Headless frame pacing
+
+`Device_impl::acquire_frame_slot` does not wait for frame `frame_id - N` to
+complete on the GPU (`doc/erhe/metal_backend.md` "Thread safety"). Windowed,
+`begin_swapchain` bounds the presented frames in flight; headless, nothing
+bounds how far the CPU runs ahead of a GPU-bound frame, and the ring buffer
+pool spills instead. Wait in `acquire_frame_slot` until every command buffer
+committed for frame `frame_id - N` has completed (the per-frame counts the
+completion handlers already maintain, with a condition variable), and
+verify with a GPU-bound headless scene that the frame count in flight stays
+at N and the pool stops growing.

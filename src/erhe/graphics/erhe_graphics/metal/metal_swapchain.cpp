@@ -8,6 +8,7 @@
 #include <QuartzCore/QuartzCore.hpp>
 
 #include <cstring>
+#include <optional>
 
 namespace erhe::graphics {
 
@@ -213,13 +214,18 @@ auto Swapchain_impl::get_current_color_texture() const -> MTL::Texture*
     return m_current_drawable->texture();
 }
 
-void Swapchain_impl::mark_render_pass_recorded()
+void Swapchain_impl::mark_render_pass_recorded(const uint64_t frame_id)
 {
     if (!is_headless()) {
         return;
     }
-    m_last_composited_index = m_emulated_index;
-    m_have_composited       = true;
+    const std::lock_guard<std::mutex> lock{m_composited_mutex};
+    if (m_composited[0].valid && (m_composited[0].frame_id == frame_id)) {
+        m_composited[0].texture_index = m_emulated_index;
+        return;
+    }
+    m_composited[1] = m_composited[0];
+    m_composited[0] = Composited_frame{.frame_id = frame_id, .texture_index = m_emulated_index, .valid = true};
 }
 
 auto Swapchain_impl::is_capture_supported() const -> bool
@@ -343,10 +349,25 @@ void Swapchain_impl::convert_capture_buffer(std::vector<std::byte>& out_rgba8) c
 auto Swapchain_impl::read_back_emulated(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool
 {
     Scoped_transient_object_pool object_pool{}; // drains the cb, encoder and other autoreleased objects created here
-    if (!m_have_composited || (m_last_composited_index >= m_emulated_textures.size())) {
+
+    // The newest composited frame that has ended: its command buffers are
+    // committed, so the blit below, committed after them on the same queue,
+    // reads the finished frame. A frame still recording (the render
+    // thread's, with frame pipelining) composites into another ring texture.
+    std::optional<std::size_t> texture_index{};
+    {
+        const std::lock_guard<std::mutex> lock{m_composited_mutex};
+        for (const Composited_frame& composited : m_composited) {
+            if (composited.valid && m_device_impl.is_frame_ended(composited.frame_id)) {
+                texture_index = composited.texture_index;
+                break;
+            }
+        }
+    }
+    if (!texture_index.has_value() || (texture_index.value() >= m_emulated_textures.size())) {
         return false;
     }
-    MTL::Texture* const texture = m_emulated_textures[m_last_composited_index];
+    MTL::Texture* const texture = m_emulated_textures[texture_index.value()];
     if (texture == nullptr) {
         return false;
     }
