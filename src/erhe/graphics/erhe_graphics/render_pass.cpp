@@ -254,23 +254,28 @@ void Render_pass::start_render_pass(Command_buffer& command_buffer, Render_pass*
         const Scoped_framebuffer scoped_framebuffer{m_device, *this};
         static_cast<void>(scoped_framebuffer);
     }
-    m_impl->start_render_pass(command_buffer, render_pass_before, render_pass_after);
-    m_active_command_buffer = &command_buffer;
+    // The timers' timestamps are written outside the render pass: a Vulkan
+    // driver on a tiling GPU may sample timestamps only at pass boundaries
+    // (KosmicKrisp returns the same value for every timestamp written inside
+    // one render pass). Metal begins a pending range at the pass's encoder.
     for (Gpu_timer* timer : m_gpu_timers) {
         timer->write_begin_timestamp(command_buffer);
     }
+    m_impl->start_render_pass(command_buffer, render_pass_before, render_pass_after);
+    m_active_command_buffer = &command_buffer;
 }
 
 void Render_pass::end_render_pass(Render_pass* const render_pass_after)
 {
     ERHE_VERIFY(m_active_command_buffer != nullptr);
     Command_buffer& command_buffer = *m_active_command_buffer;
-    for (Gpu_timer* timer : m_gpu_timers) {
-        timer->write_end_timestamp(command_buffer);
-    }
     m_active_command_buffer = nullptr;
     m_impl->end_render_pass(command_buffer, render_pass_after);
     command_buffer.set_active_render_pass(nullptr);
+    // Outside the render pass; see start_render_pass().
+    for (Gpu_timer* timer : m_gpu_timers) {
+        timer->write_end_timestamp(command_buffer);
+    }
 }
 
 

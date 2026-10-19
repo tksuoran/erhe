@@ -7,9 +7,10 @@
 //  - free run (IMMEDIATE, else MAILBOX): no backpressure, so consecutive
 //    frame ends are one production interval apart - the cost of a clear and
 //    a present on this device;
-//  - locked (plain FIFO, two images): once the queue is full the frame's
-//    clear waits for the swapchain image the display releases at each
-//    vblank, so consecutive frame ends are one refresh period apart.
+//  - locked (plain FIFO, the fewest images the surface allows): once the
+//    queue is full the frame's clear waits for the swapchain image the
+//    display releases at each vblank, so consecutive frame ends are one
+//    refresh period apart.
 // The resolver accepts the locked cadence as the display's only when the
 // production interval was at most half of it. The present mode switches per
 // present through VkSwapchainPresentModeInfoKHR when the surface reports the
@@ -117,7 +118,6 @@ void Device_impl::run_display_refresh_calibration(Surface_impl& surface_impl)
         return;
     }
     const VkSurfaceFormatKHR surface_format = surface_impl.get_surface_format();
-    const uint32_t           image_count    = std::max(2u, surface_capabilities.minImageCount);
     VkCompositeAlphaFlagBitsKHR composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     if ((surface_capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) == 0) {
         composite_alpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
@@ -161,6 +161,40 @@ void Device_impl::run_display_refresh_calibration(Surface_impl& surface_impl)
         if (std::find(compatible.begin(), compatible.end(), VK_PRESENT_MODE_FIFO_KHR) != compatible.end()) {
             switchable_modes = {free_mode, VK_PRESENT_MODE_FIFO_KHR};
         }
+    }
+    // Image count: two (the locked phase's cadence), raised to the surface's
+    // minimum for every present mode this swapchain presents with. With
+    // VK_KHR/EXT_surface_maintenance1 the minimum is per present mode
+    // (VUID-VkSwapchainCreateInfoKHR-presentMode-02839); MoltenVK requires
+    // more images for some modes than its mode-less query reports.
+    uint32_t image_count = std::max(2u, surface_capabilities.minImageCount);
+    if (m_capabilities.m_surface_maintenance1 && m_capabilities.m_surface_capabilities2) {
+        for (const VkPresentModeKHR mode : {free_mode, VK_PRESENT_MODE_FIFO_KHR}) {
+            if (!supported(mode)) {
+                continue;
+            }
+            VkSurfaceCapabilities2KHR mode_capabilities{
+                .sType               = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
+                .pNext               = nullptr,
+                .surfaceCapabilities = {}
+            };
+            VkSurfacePresentModeKHR present_mode{
+                .sType       = VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_KHR,
+                .pNext       = nullptr,
+                .presentMode = mode
+            };
+            const VkPhysicalDeviceSurfaceInfo2KHR mode_surface_info{
+                .sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
+                .pNext   = &present_mode,
+                .surface = surface
+            };
+            if (vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_vulkan_physical_device, &mode_surface_info, &mode_capabilities) == VK_SUCCESS) {
+                image_count = std::max(image_count, mode_capabilities.surfaceCapabilities.minImageCount);
+            }
+        }
+    }
+    if (surface_capabilities.maxImageCount != 0) {
+        image_count = std::min(image_count, surface_capabilities.maxImageCount);
     }
     log_display_refresh->info(
         "display refresh calibration: swapchain {}x{} {} images, free-running mode {}, plain FIFO {}, mode switch per present {}",
@@ -382,7 +416,10 @@ void Device_impl::run_display_refresh_calibration(Surface_impl& surface_impl)
             .image               = current.images[image_index],
             .subresourceRange    = whole_image
         };
-        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_transfer);
+        // Source stage = the acquire semaphore's wait stage (wait_stage below),
+        // so the layout transition is ordered after the presentation engine's
+        // read of the image (SYNC-HAZARD-WRITE-AFTER-READ with TOP_OF_PIPE).
+        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_transfer);
         const VkClearColorValue black{ .float32 = {0.0f, 0.0f, 0.0f, 1.0f} };
         vkCmdClearColorImage(cb, current.images[image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &whole_image);
         VkImageMemoryBarrier to_present{
