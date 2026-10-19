@@ -253,8 +253,8 @@ auto Socket::send_pending() -> bool
         std::size_t          can_send_byte_count_before_wrap{0};
         std::size_t          can_send_byte_count_after_wrap {0};
         const uint8_t* const read_pointer    = m_send_buffer->begin_consume(can_send_byte_count_before_wrap, can_send_byte_count_after_wrap);
-        const int            send_result     = ::send(m_socket, reinterpret_cast<const char*>(read_pointer), static_cast<int>(can_send_byte_count_before_wrap), 0);
-        const int            sent_byte_count = (std::max)(0, send_result);
+        const Socket_io_result send_result     = ::send(m_socket, reinterpret_cast<const char*>(read_pointer), static_cast<int>(can_send_byte_count_before_wrap), 0);
+        const int              sent_byte_count = static_cast<int>((std::max)(Socket_io_result{0}, send_result));
         if (can_send_byte_count_after_wrap > 0) {
             log_socket->info("send() before wrap {} bytes, after wrap {} bytes", can_send_byte_count_before_wrap, can_send_byte_count_after_wrap);
         }
@@ -351,8 +351,8 @@ auto Socket::recv() -> bool
         std::size_t    can_receive_byte_count_before_wrap{0};
         std::size_t    can_receive_byte_count_after_wrap {0};
         uint8_t* const write_pointer       = m_receive_buffer->begin_produce(can_receive_byte_count_before_wrap, can_receive_byte_count_after_wrap);
-        const int      recv_result         = ::recv(m_socket, reinterpret_cast<char*>(write_pointer), static_cast<int>(can_receive_byte_count_before_wrap), 0);
-        const int      received_byte_count = (std::max)(0, recv_result);
+        const Socket_io_result recv_result         = ::recv(m_socket, reinterpret_cast<char*>(write_pointer), static_cast<int>(can_receive_byte_count_before_wrap), 0);
+        const int              received_byte_count = static_cast<int>((std::max)(Socket_io_result{0}, recv_result));
         if (recv_result < 0) {
             m_receive_buffer->end_produce(0);
             const int error_code = get_net_last_error();

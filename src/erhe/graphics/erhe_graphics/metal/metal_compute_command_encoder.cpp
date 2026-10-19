@@ -97,6 +97,7 @@ void Compute_command_encoder_impl::set_buffer(
     const std::uintptr_t index
 )
 {
+    static_cast<void>(buffer_target);
     static_cast<void>(length);
     if (buffer == nullptr) {
         return;
@@ -112,6 +113,7 @@ void Compute_command_encoder_impl::set_buffer(
 
 void Compute_command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* const buffer)
 {
+    static_cast<void>(buffer_target);
     if (buffer == nullptr) {
         return;
     }

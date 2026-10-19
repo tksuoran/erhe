@@ -982,6 +982,11 @@ CPMAddPackage(
            "TF_BUILD_TESTS OFF"
         "TF_BUILD_EXAMPLES OFF"
 )
+# Treat taskflow's interface include dir as SYSTEM (as VulkanMemoryAllocator
+# above): its headers are not clean at the warning level erhe targets compile
+# at with ERHE_WARNINGS_AS_ERRORS (Xcode 27: -Wshorten-64-to-32 in tfprof.hpp).
+get_target_property(_taskflow_interface_includes Taskflow INTERFACE_INCLUDE_DIRECTORIES)
+set_target_properties(Taskflow PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_taskflow_interface_includes}")
 
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     # Pinned to the last commit (2023-03-18) before cpp-terminal replaced
