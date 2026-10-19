@@ -7,6 +7,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
@@ -72,6 +73,7 @@ void Blit_command_encoder_impl::blit_framebuffer(const Render_pass&, glm::ivec2,
 
 void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, const glm::ivec3 source_size, const Texture_location& destination)
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     const Texture* const source_texture      = source.texture;
     const std::uintptr_t source_slice        = source.slice;
     const std::uintptr_t source_level        = source.level;
@@ -124,6 +126,7 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
 
 void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& source, const glm::ivec3 source_size, const Texture_location& destination)
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     const Buffer* const  source_buffer          = source.buffer;
     const std::uintptr_t source_offset          = source.offset;
     const std::uintptr_t source_bytes_per_row   = source.bytes_per_row;
@@ -172,6 +175,7 @@ void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& so
 
 void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, const glm::ivec3 source_size, const Buffer_texel_location& destination)
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     const Texture* const source_texture              = source.texture;
     const std::uintptr_t source_slice                = source.slice;
     const std::uintptr_t source_level                = source.level;
@@ -220,6 +224,7 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
 
 void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     if (texture == nullptr) {
         return;
     }
@@ -245,6 +250,7 @@ void Blit_command_encoder_impl::fill_buffer(
     const uint8_t        value
 )
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     if (buffer == nullptr) {
         return;
     }
@@ -330,6 +336,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
     const std::uintptr_t size
 )
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     if ((source_buffer == nullptr) || (destination_buffer == nullptr)) {
         return;
     }

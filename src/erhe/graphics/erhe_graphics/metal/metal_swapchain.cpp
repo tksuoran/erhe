@@ -2,6 +2,7 @@
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/metal/metal_surface.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
@@ -157,6 +158,7 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
     // (presentDrawable), and holding it explicitly keeps it alive
     // independently of which autorelease pool happens to be open.
     clear_current_drawable();
+    Scoped_transient_object_pool object_pool{};
     m_current_drawable = layer->nextDrawable();
     if (m_current_drawable != nullptr) {
         m_current_drawable->retain();
@@ -259,6 +261,7 @@ auto Swapchain_impl::ensure_capture_buffer(const std::size_t byte_count) -> bool
 
 void Swapchain_impl::record_capture(MTL::CommandBuffer* command_buffer)
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     if (!m_capture_requested) {
         return;
     }
@@ -338,6 +341,7 @@ void Swapchain_impl::convert_capture_buffer(std::vector<std::byte>& out_rgba8) c
 
 auto Swapchain_impl::read_back_emulated(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool
 {
+    Scoped_transient_object_pool object_pool{}; // drains the cb, encoder and other autoreleased objects created here
     if (!m_have_composited || (m_last_composited_index >= m_emulated_textures.size())) {
         return false;
     }

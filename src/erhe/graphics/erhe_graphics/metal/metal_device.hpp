@@ -114,8 +114,11 @@ public:
     void start_frame_capture       ();
     void end_frame_capture         ();
 
-    // Active render pass tracking
-    static Render_pass_impl* s_active_render_pass;
+    // Active render pass of the calling thread. Per thread: each thread
+    // records into its own command buffer (the editor's main thread and
+    // render thread record render passes concurrently), and a draw or debug
+    // group must reach the encoder of its own thread's pass.
+    static thread_local Render_pass_impl* s_active_render_pass;
     [[nodiscard]] auto get_command_buffer(unsigned int thread_slot) -> Command_buffer&;
     void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
     void submit_command_buffer_and_wait(Command_buffer& command_buffer);
@@ -262,13 +265,6 @@ private:
     static constexpr int     s_max_frames_in_flight{3};
 
     std::array<Device_frame_slot, s_max_frames_in_flight> m_frame_slots{};
-    // Autorelease pool covering one device frame, per frame slot: opened by
-    // acquire_frame_slot(), drained by end_frame() of that frame. Every
-    // command buffer, command encoder and drawable metal-cpp hands out
-    // during the frame is autoreleased into it; without it they are never
-    // deallocated and the command queue runs out of in-flight slots (see
-    // Scoped_transient_object_pool).
-    std::array<std::optional<Scoped_transient_object_pool>, s_max_frames_in_flight> m_frame_object_pools;
     std::mutex               m_presented_frames_mutex;
     std::condition_variable  m_presented_frames_cv;
     int                      m_presented_frames_in_flight{0};

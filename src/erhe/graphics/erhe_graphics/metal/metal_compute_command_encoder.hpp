@@ -43,7 +43,8 @@ public:
     [[nodiscard]] static auto get_active_mtl_encoder() noexcept -> MTL::ComputeCommandEncoder*;
 
 private:
-    static Compute_command_encoder_impl* s_active_encoder;
+    // Per thread, as Device_impl::s_active_render_pass.
+    static thread_local Compute_command_encoder_impl* s_active_encoder;
 
     MTL::ComputeCommandEncoder*  m_encoder             {nullptr};
     const Bind_group_layout*     m_bind_group_layout   {nullptr};

@@ -16,9 +16,18 @@ namespace erhe::graphics {
 // -[_MTLCommandBuffer initWithQueue:retainedReferences:] while loading a
 // large glTF scene.
 //
-// So: every thread that records GPU work must have one of these covering it.
-// The device frame keeps one open between wait_frame() and end_frame(); code
-// that submits outside a device frame (glTF texture uploads on a loader
+// Pools are a per-thread stack: one is drained on the thread that opened
+// it, in reverse opening order. A pool therefore never spans a device frame
+// (frames overlap, and with a render thread a frame is acquired on one
+// thread and ended on another).
+//
+// The Metal backend opens one around each call that creates such objects
+// and takes its own reference to the ones it keeps (command buffers,
+// drawables, compute and render command encoders), so their lifetime does
+// not depend on the caller's pools. A thread that calls into the device
+// repeatedly still opens one per loop iteration (the editor's main loop and
+// render thread) to drain whatever else the driver autoreleases there; code
+// that submits outside such a loop (glTF texture uploads on a loader
 // thread) opens its own.
 //
 // Backends other than Metal have no such objects, and this is an empty no-op

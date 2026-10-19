@@ -11,6 +11,7 @@
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
@@ -18,7 +19,7 @@
 
 namespace erhe::graphics {
 
-Render_pass_impl*              Device_impl::s_active_render_pass{nullptr};
+thread_local Render_pass_impl* Device_impl::s_active_render_pass{nullptr};
 
 Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor& render_pass_descriptor)
     : m_device              {device}
@@ -163,6 +164,7 @@ void configure_color_attachment(
 
 void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
+    Scoped_transient_object_pool object_pool{}; // the encoder is retained below; the pool drains the autoreleased reference
     // Metal handles most cross-pass synchronization automatically via
     // its hazard tracking, so these hints are ignored. The per-cb
     // inter-encoder fence (set up in begin()) handles the cases hazard
@@ -295,6 +297,9 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
 
     m_mtl_encoder = m_command_buffer->renderCommandEncoder(render_pass_desc);
     render_pass_desc->release();
+    if (m_mtl_encoder != nullptr) {
+        m_mtl_encoder->retain();
+    }
 
     // Serialize against prior encoders on this cb. Metal's automatic
     // hazard tracking does not catch aliased-view reads of parent-
@@ -336,6 +341,7 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
             );
         }
         m_mtl_encoder->endEncoding();
+        m_mtl_encoder->release();
         m_mtl_encoder = nullptr;
     }
 
