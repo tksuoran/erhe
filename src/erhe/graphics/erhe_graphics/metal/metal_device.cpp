@@ -1124,10 +1124,48 @@ void Device_impl::sort_depth_stencil_formats(
     const int                              requested_sample_count
 ) const
 {
-    static_cast<void>(formats);
-    static_cast<void>(sort_flags);
-    static_cast<void>(requested_sample_count);
-    // TODO Implement Metal format sorting
+    // Drop the formats this device cannot use as asked (get_format_properties
+    // reads the capabilities of metal_pixel_format_table.cpp), then order as
+    // the Vulkan backend does: depth+stencil before depth-only, then higher
+    // precision (more depth + stencil bits) first.
+    const bool require_depth   = (sort_flags & format_flag_require_depth)   != 0;
+    const bool require_stencil = (sort_flags & format_flag_require_stencil) != 0;
+    std::erase_if(
+        formats,
+        [&](const erhe::dataformat::Format format) -> bool {
+            const Format_properties properties = get_format_properties(format);
+            if (!properties.supported) {
+                return true;
+            }
+            if (require_depth && !properties.depth_renderable) {
+                return true;
+            }
+            if (require_stencil && !properties.stencil_renderable) {
+                return true;
+            }
+            if (requested_sample_count > 1) {
+                const std::vector<int>& counts = properties.texture_2d_sample_counts;
+                if (std::find(counts.begin(), counts.end(), requested_sample_count) == counts.end()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    );
+    std::stable_sort(
+        formats.begin(),
+        formats.end(),
+        [](const erhe::dataformat::Format lhs, const erhe::dataformat::Format rhs) {
+            const std::size_t lhs_stencil = erhe::dataformat::get_stencil_size_bits(lhs);
+            const std::size_t rhs_stencil = erhe::dataformat::get_stencil_size_bits(rhs);
+            if ((lhs_stencil > 0) != (rhs_stencil > 0)) {
+                return lhs_stencil > 0;
+            }
+            const std::size_t lhs_bits = erhe::dataformat::get_depth_size_bits(lhs) + lhs_stencil;
+            const std::size_t rhs_bits = erhe::dataformat::get_depth_size_bits(rhs) + rhs_stencil;
+            return lhs_bits > rhs_bits;
+        }
+    );
 }
 
 auto Device_impl::choose_depth_stencil_format(const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format
