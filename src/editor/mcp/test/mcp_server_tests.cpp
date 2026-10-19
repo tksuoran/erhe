@@ -160,6 +160,17 @@ void advance_frames(Mcp_client& client, int frames);
 constexpr const char* c_textured_gltf      = "res/editor/assets/SM_Deccer_Cubes_Textured.glb";
 constexpr const char* c_test_material_name = "MCP test material";
 
+// The modifier that triggers an ImGui ImGuiMod_Ctrl shortcut (and ImGui's
+// Ctrl+click text input). With io.ConfigMacOSXBehaviors, on by default on
+// Apple platforms, ImGui swaps Cmd and Ctrl in AddKeyEvent, so there those
+// are Cmd ("super") chords. erhe's own command bindings see the physical
+// modifier and keep "ctrl" on every platform.
+#if defined(__APPLE__)
+constexpr const char* c_imgui_shortcut_modifier = "super";
+#else
+constexpr const char* c_imgui_shortcut_modifier = "ctrl";
+#endif
+
 // Single shared client across all tests, plus the scene/material each test
 // runs in. The client connects once; every test then starts from a reset
 // editor (reset_editor_state) and gets a scene of its own from prepare().
@@ -5118,7 +5129,7 @@ TEST_F(Mcp_test, key_press_ctrl_a_selects_the_focused_tree)
 
     Mcp_client::Tool_result key = client.call_tool("key_press", json{
         {"key",       "a"},
-        {"modifiers", json::array({"ctrl"})}
+        {"modifiers", json::array({c_imgui_shortcut_modifier})}
     });
     ASSERT_FALSE(key.is_error) << key.text;
     advance_frames(client, 3);
@@ -5591,7 +5602,7 @@ TEST_F(Mcp_test, property_row_is_addressable_by_its_label)
     Mcp_client::Tool_result click = client.call_tool("mouse_click", json{
         {"x",         row.value("center_x", 0.0f)},
         {"y",         row.value("center_y", 0.0f)},
-        {"modifiers", json::array({"ctrl"})}
+        {"modifiers", json::array({c_imgui_shortcut_modifier})}
     });
     ASSERT_FALSE(click.is_error) << click.text;
 
