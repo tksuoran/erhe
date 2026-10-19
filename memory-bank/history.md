@@ -255,3 +255,14 @@ none
 >layout-tracking-follow-ups::e35933c80{clear_texture-view-range;stencil-only-resolve-driver;make_view-base-level/layer;3-gpu-tests}✓
 >handoff::prompt_queue.txt{1:erhe_graphics-interface/backend-split}
 >audit-item-12-split::5342524d6+b9eb1061b{erhe_graphics_interface-OBJECT+erhe_graphics-backend;3-Linux-trees-verified(Vk-Debug-185-gpu-tests,GL-Debug,API=none-Debug);null-backend-Buffer-fwd-decl-fix;finding:null-editor-crash-get_command_buffer-stub->followups-doc}✓
+
+[2026-10-19]
+>macOS-new-machine::xcode-select->Xcode.app{CLT-was-active;configure_xcode_metal.sh-found-no-compiler}
+>xcode-27-build::8191db333{sdl_window-get_device_pointer-missing-return;erhe_net-Socket_io_result;taskflow-SYSTEM-includes;Metal-unused-params+useResource-stages}✓
+>metal-autorelease+encoders::fabb99c76{per-frame-slot-pools-popped-cross-thread(d49944525)->local-pools+explicit-retains+per-iteration-loop-pools;thread_local-active-render-pass/compute-encoder}✓{editor-ran-on-Metal-first-time-since-render-thread}
+>mcp-tests-macOS::a45c59fe7{Cmd-for-ImGui-shortcuts;SIGPIPE-ignored}✓
+>metal-frame-retirement::01a871927{all-cbs-of-frame;handler/frame-id/capture-mutexes;cb-error-log}✓
+>metal-gpu-page-fault::294aecb56{texture-heap-argument-buffer-stale-ring-range;repro-10/15->0/15}✓
+>doc-mergetool-leftovers::2f27d7aa2{committed-in-a91828fcd}✓
+>results::Metal-ctest-1657/1658{aa_cost_benchmark=Gpu_timer-stub}+editor-MCP-95/95
+
