@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -24,6 +25,15 @@ auto env_or_int(const char* name, int fallback) -> int
 
 int main(int argc, char** argv)
 {
+#if !defined(_WIN32)
+    // This process is an HTTP client only. cpp-httplib ignores SIGPIPE in
+    // its Server constructor but sends without MSG_NOSIGNAL on the client
+    // side, so a write to a connection the editor has already closed (what
+    // Mcp_test.queue_overflow_returns_busy_error provokes) would kill the
+    // process. Ignored, the write fails with EPIPE and the request reports
+    // failure like any other dropped connection.
+    std::signal(SIGPIPE, SIG_IGN);
+#endif
     for (int i = 1; i < argc; ++i) {
         // The FIXTURES_SETUP / FIXTURES_CLEANUP steps of the ctest fixtures
         // (CMakeLists.txt). ERHE_MCP_TEST_TOKEN_FILE names the token file of
