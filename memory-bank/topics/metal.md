@@ -25,6 +25,13 @@
 [VERIFIED_2026-10-19]
 @ring-buffer-pool-on-Metal::Bistro-load-spills(3x5.6MB-main+render-4MB)+idle-reclaim-back-to-warm(main-1)+render-steady-plateau-~11x4MiB(8-buffer-warning-fires-but-no-growth-after-load){Vulkan-comparison-not-run-here}->plan-item-1-removed
 
+[LANDED_2026-10-19d]
+>c69aa5f4c::acquire_frame_slot-waits-frame-F-N-GPU{headless-Bistro-pool-138->15-buffers}
+>c1d758f02::resize:SDL-Metal-view-keeps-drawableSize;dead-resize_swapchain_to_window-removed(Metal+GL+null)
+>dd4f554df::sort_depth_stencil_formats{capability-filter+Vulkan-order}
+>13f6b0b73::Record_indexing::first_instance+use_base_instance{MSL-instance_id-includes-base;gpu-tests-187;Bistro-image-identical}
+>f91f47572::plan-items-5+6-need-decision{6:ICB-must-be-encoded-before-render-encoder-but-count-draw-is-in-pass}
+
 [TRAPS]
 !AutoreleasePool::per-thread-stack{drain-on-opening-thread;reverse-order}→¬span-device-frame
 !retained-cb-still-in-pool::queue-slot(64)-freed-only-on-dealloc→create-in-local-pool+retain
@@ -46,4 +53,4 @@ cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permane
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{items-3-7}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{3-with-Vulkan;4-interactive;5+6-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
