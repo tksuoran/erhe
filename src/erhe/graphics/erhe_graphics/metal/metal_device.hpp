@@ -95,6 +95,10 @@ public:
     // (texture and buffer releases, ring buffer ranges) must wait for all.
     void note_command_buffer_committed  (uint64_t frame_index);
     void notify_command_buffer_completed(uint64_t frame_index);
+    // Blocks until every command buffer committed for frame_index has
+    // completed on the GPU. The frame must have ended (all its command
+    // buffers committed).
+    void wait_for_frame_gpu_completion  (uint64_t frame_index);
 
     // Presented-frame throttle. A command buffer that presents a drawable
     // does not complete until the compositor has consumed that drawable, so
@@ -303,6 +307,7 @@ private:
     };
     mutable std::mutex                      m_completion_mutex;
     std::vector<Frame_command_buffer_count> m_frame_command_buffer_counts;
+    std::condition_variable                 m_command_buffer_completed; // with m_completion_mutex
     // One past the highest frame retired (same meaning as the Vulkan
     // backend's watermark); under m_completion_mutex. Only ever moves
     // forward.
