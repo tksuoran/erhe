@@ -5,32 +5,32 @@
 
 [STATE_2026-10-19]
 @editor-runs-on-Metal::windowed+render-thread+pipelining{before:crashed-first-frame}
-@tests{build_xcode_metal,Debug,M4-Pro}::ctest-1753/1753{2026-10-19-after-926fe35f3;aa_cost_benchmark-passes}+editor-MCP-95/95{0-cb-errors}
+@tests{build_xcode_metal,Debug,M4-Pro}::ctest-1753/1753{2026-10-19-after-d32fb2bb7;aa_cost_benchmark-passes}+editor-MCP-95/95{0-cb-errors}
 @shadow-head-on-tests::pass-fresh+warm-editor{earlier-acne-reading=GPU-fault-artifact}
 
 [LANDED_2026-10-19]
->fabb99c76::autorelease-pools-per-call+per-iteration{¬per-frame-slot-pool(d49944525-regression:acquire-on-main+end_frame-on-render=cross-thread-pop)}+cb/encoder/drawable-explicit-retain+thread_local-s_active_render_pass+s_active_encoder
->01a871927::frame-retires-when-ALL-committed-cbs-completed{¬first-cb}+completion-handler-mutex+frame-id-mutex+is_frame_ended+capture-protocol-as-Vulkan{m_capture_mutex;frame-id-of-carrying-cb}+cb-error-logging
->294aecb56::texture-heap-argument-buffer-re-encoded-every-frame-that-binds{ring-range-valid-only-its-frame;stale-range->garbage-texture->page-fault}
->a45c59fe7::tests:c_imgui_shortcut_modifier{super-on-Apple}+SIGPIPE-ignored-in-test-client
+>b37c3050d::autorelease-pools-per-call+per-iteration{¬per-frame-slot-pool(d49944525-regression:acquire-on-main+end_frame-on-render=cross-thread-pop)}+cb/encoder/drawable-explicit-retain+thread_local-s_active_render_pass+s_active_encoder
+>2842713c7::frame-retires-when-ALL-committed-cbs-completed{¬first-cb}+completion-handler-mutex+frame-id-mutex+is_frame_ended+capture-protocol-as-Vulkan{m_capture_mutex;frame-id-of-carrying-cb}+cb-error-logging
+>051f28688::texture-heap-argument-buffer-re-encoded-every-frame-that-binds{ring-range-valid-only-its-frame;stale-range->garbage-texture->page-fault}
+>be00d4361::tests:c_imgui_shortcut_modifier{super-on-Apple}+SIGPIPE-ignored-in-test-client
 
 [LANDED_2026-10-19b]
->926fe35f3::Gpu_timer-on-Metal{stage-boundary-only-sampling(M4:draw/dispatch/blit-unsupported);encoder-start/end-via-sampleBufferAttachments;Gpu_timer_sample_pool{4096-sample-cap-per-buffer;256-sample-chunk-per-cb};resolve-in-cb-completion-handler;Ddgi-blend/relocate-own-encoders;doc/erhe/metal_backend.md"GPU-timers"}
+>d32fb2bb7::Gpu_timer-on-Metal{stage-boundary-only-sampling(M4:draw/dispatch/blit-unsupported);encoder-start/end-via-sampleBufferAttachments;Gpu_timer_sample_pool{4096-sample-cap-per-buffer;256-sample-chunk-per-cb};resolve-in-cb-completion-handler;Ddgi-blend/relocate-own-encoders;doc/erhe/metal_backend.md"GPU-timers"}
 
 [LANDED_2026-10-19c]
->aab7b6e97::thread-safety-audit{table->doc/erhe/metal_backend.md"Thread-safety";fixed:wait_idle-retired-frames-ended-during-wait(bound-now-read-before)+end_frame-slot-idle-under-frame_id_mutex+headless-capture-reads-newest-ENDED-composited-frame+role-asserts;open:headless-pacing->plan-item-7}
->a03f87890::gltf-primitive-dedup-slot-race{key-fields-written-once-under-mutex;payload-separate}
+>9d8e64b28::thread-safety-audit{table->doc/erhe/metal_backend.md"Thread-safety";fixed:wait_idle-retired-frames-ended-during-wait(bound-now-read-before)+end_frame-slot-idle-under-frame_id_mutex+headless-capture-reads-newest-ENDED-composited-frame+role-asserts;open:headless-pacing->plan-item-7}
+>ddc5a5923::gltf-primitive-dedup-slot-race{key-fields-written-once-under-mutex;payload-separate}
 >AppleClang-ERHE_USE_TSAN{doc/agents/macos.md"ThreadSanitizer"};gates:image-4-configs-identical+TSan-0-reports
 
 [VERIFIED_2026-10-19]
 @ring-buffer-pool-on-Metal::Bistro-load-spills(3x5.6MB-main+render-4MB)+idle-reclaim-back-to-warm(main-1)+render-steady-plateau-~11x4MiB(8-buffer-warning-fires-but-no-growth-after-load){Vulkan-comparison-not-run-here}->plan-item-1-removed
 
 [LANDED_2026-10-19d]
->c69aa5f4c::acquire_frame_slot-waits-frame-F-N-GPU{headless-Bistro-pool-138->15-buffers}
->c1d758f02::resize:SDL-Metal-view-keeps-drawableSize;dead-resize_swapchain_to_window-removed(Metal+GL+null)
->dd4f554df::sort_depth_stencil_formats{capability-filter+Vulkan-order}
->13f6b0b73::Record_indexing::first_instance+use_base_instance{MSL-instance_id-includes-base;gpu-tests-187;Bistro-image-identical}
->f91f47572::plan-items-5+6-need-decision{6:ICB-must-be-encoded-before-render-encoder-but-count-draw-is-in-pass}
+>7aac22819::acquire_frame_slot-waits-frame-F-N-GPU{headless-Bistro-pool-138->15-buffers}
+>6da8cf158::resize:SDL-Metal-view-keeps-drawableSize;dead-resize_swapchain_to_window-removed(Metal+GL+null)
+>1dd1f1f57::sort_depth_stencil_formats{capability-filter+Vulkan-order}
+>034514447::Record_indexing::first_instance+use_base_instance{MSL-instance_id-includes-base;gpu-tests-187;Bistro-image-identical}
+>a6cc14cc0::plan-items-5+6-need-decision{6:ICB-must-be-encoded-before-render-encoder-but-count-draw-is-in-pass}
 
 [TRAPS]
 !AutoreleasePool::per-thread-stack{drain-on-opening-thread;reverse-order}→¬span-device-frame
