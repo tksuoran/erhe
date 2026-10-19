@@ -17,6 +17,11 @@
 [LANDED_2026-10-19b]
 >926fe35f3::Gpu_timer-on-Metal{stage-boundary-only-sampling(M4:draw/dispatch/blit-unsupported);encoder-start/end-via-sampleBufferAttachments;Gpu_timer_sample_pool{4096-sample-cap-per-buffer;256-sample-chunk-per-cb};resolve-in-cb-completion-handler;Ddgi-blend/relocate-own-encoders;doc/erhe/metal_backend.md"GPU-timers"}
 
+[LANDED_2026-10-19c]
+>aab7b6e97::thread-safety-audit{table->doc/erhe/metal_backend.md"Thread-safety";fixed:wait_idle-retired-frames-ended-during-wait(bound-now-read-before)+end_frame-slot-idle-under-frame_id_mutex+headless-capture-reads-newest-ENDED-composited-frame+role-asserts;open:headless-pacing->plan-item-7}
+>a03f87890::gltf-primitive-dedup-slot-race{key-fields-written-once-under-mutex;payload-separate}
+>AppleClang-ERHE_USE_TSAN{doc/agents/macos.md"ThreadSanitizer"};gates:image-4-configs-identical+TSan-0-reports
+
 [TRAPS]
 !AutoreleasePool::per-thread-stack{drain-on-opening-thread;reverse-order}→¬span-device-frame
 !retained-cb-still-in-pool::queue-slot(64)-freed-only-on-dealloc→create-in-local-pool+retain
@@ -30,9 +35,12 @@
 !CounterSampleBuffer::max-32KiB{4096-timestamps}+empty-encoder-samples-read-0
 !timers-inside-one-compute-encoder::all-read-whole-encoder→one-encoder-per-timed-pass
 
+!TSan-macOS::symbolizes-itself->race:-suppressions-match;pending-report->SIGABRT-at-exit(__tsan::finalize)¬editor-crash;windowed-capture_screenshot-exceeds-MCP-request-timeout-under-TSan(still-processed)
+!Metal-completion-blocks::TSan-false-positive(ordering-inside-Metal)->suppressed
+
 [DIAGNOSIS_RECIPE]
 cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permanent}
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{render-thread-thread-safety-audit;items-1,3-6}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{items-1,3-7}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
