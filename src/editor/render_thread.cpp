@@ -2,6 +2,7 @@
 
 #include "editor_log.hpp"
 
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
@@ -190,6 +191,9 @@ void Render_thread::thread_main()
         // kick() reading the result).
         m_result.kick_latency_us = std::chrono::duration<double, std::micro>{std::chrono::steady_clock::now() - m_kick_time}.count();
         try {
+            // Drains what this frame's render phase autoreleased (Metal; a
+            // no-op elsewhere). See Scoped_transient_object_pool.
+            erhe::graphics::Scoped_transient_object_pool object_pool{};
             m_render_phase(m_packet, m_result);
         } catch (const std::exception& e) {
             log_frame->critical("Render thread: exception in render phase of frame {}: {}", m_packet.frame_number, e.what());

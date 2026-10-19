@@ -4,6 +4,7 @@
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
@@ -201,6 +202,7 @@ Acceleration_structure_impl::~Acceleration_structure_impl() noexcept
 
 void Acceleration_structure_impl::record_build(Command_buffer& command_buffer)
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     Command_buffer_impl& cb_impl = command_buffer.get_impl();
     MTL::CommandBuffer*  mtl_cb  = cb_impl.get_mtl_command_buffer();
     ERHE_VERIFY(mtl_cb != nullptr);

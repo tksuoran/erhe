@@ -11,6 +11,7 @@
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -132,6 +133,7 @@ void Command_buffer_impl::set_frame_id(const std::uint64_t frame_id) noexcept
 
 void Command_buffer_impl::begin()
 {
+    Scoped_transient_object_pool object_pool{}; // the cb is retained below; the pool drains the autoreleased reference
     ERHE_VERIFY(m_device != nullptr);
     ERHE_VERIFY(m_mtl_command_buffer == nullptr);
 
@@ -300,6 +302,7 @@ void Command_buffer_impl::upload_to_texture(
     int                      row_stride
 )
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     if ((data == nullptr) || (width <= 0) || (height <= 0)) {
         return;
     }
@@ -391,6 +394,7 @@ void Command_buffer_impl::upload_to_texture(
 
 void Command_buffer_impl::clear_texture(const Texture& texture, std::array<double, 4> clear_value)
 {
+    Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     ERHE_VERIFY(m_device != nullptr);
     ERHE_VERIFY(m_mtl_command_buffer != nullptr);
 

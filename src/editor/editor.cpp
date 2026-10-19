@@ -181,6 +181,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -4940,6 +4941,10 @@ public:
         //  - Count number of swapbuffers
         //  - Wait to avoid presenting frames faster than display refreshrate
         while (!m_close_requested && !m_app_context.close_requested) {
+            // Drains what the main thread autoreleased during this iteration
+            // (Metal; a no-op elsewhere). See Scoped_transient_object_pool.
+            erhe::graphics::Scoped_transient_object_pool object_pool{};
+
             // Classify window activity for power saving and derive the
             // poll_events wait timeout. While unfocused or not visible we block
             // on events with a timeout instead of busy-spinning, which caps the

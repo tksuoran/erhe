@@ -16,13 +16,14 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
 
 namespace erhe::graphics {
 
-Compute_command_encoder_impl* Compute_command_encoder_impl::s_active_encoder{nullptr};
+thread_local Compute_command_encoder_impl* Compute_command_encoder_impl::s_active_encoder{nullptr};
 
 auto Compute_command_encoder_impl::get_active_mtl_encoder() noexcept -> MTL::ComputeCommandEncoder*
 {
@@ -41,8 +42,15 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
     m_inter_encoder_fence = cb_impl.get_inter_encoder_fence();
     ERHE_VERIFY(m_mtl_command_buffer != nullptr);
 
-    m_encoder = m_mtl_command_buffer->computeCommandEncoder();
-    ERHE_VERIFY(m_encoder != nullptr);
+    // The encoder is autoreleased: take a reference, and drain the
+    // autoreleased one right here, so the encoder's lifetime does not depend
+    // on which autorelease pool the calling thread has open.
+    {
+        Scoped_transient_object_pool object_pool{};
+        m_encoder = m_mtl_command_buffer->computeCommandEncoder();
+        ERHE_VERIFY(m_encoder != nullptr);
+        m_encoder->retain();
+    }
     s_active_encoder = this;
 
     // Serialize against prior encoders on this cb via the cb's
@@ -63,6 +71,7 @@ Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
             m_encoder->updateFence(m_inter_encoder_fence);
         }
         m_encoder->endEncoding();
+        m_encoder->release();
         m_encoder = nullptr;
     }
     // The cb is owned by Command_buffer, not by this encoder; nothing

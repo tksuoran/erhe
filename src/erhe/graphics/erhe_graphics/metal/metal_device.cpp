@@ -352,14 +352,6 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
     Device_frame_slot& slot       = m_frame_slots[slot_index];
     ERHE_VERIFY(slot.state == Device_frame_state::idle);
 
-    // Open the frame's autorelease pool. Everything metal-cpp hands out
-    // autoreleased from here on - command buffers, command encoders,
-    // drawables - is drained by the matching end_frame(). Without this the
-    // command queue's in-flight slots are never recycled and commandBuffer()
-    // eventually blocks forever.
-    ERHE_VERIFY(!m_frame_object_pools[slot_index].has_value());
-    m_frame_object_pools[slot_index].emplace();
-
     m_prepare_frame_id = frame_id;
     slot.frame_id      = frame_id;
     slot.state         = Device_frame_state::waited;
@@ -460,10 +452,6 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
 
     ++m_render_frame_id;
     slot.state = Device_frame_state::idle;
-
-    // Drain the frame's autorelease pool last: the completion handlers
-    // above may still touch Metal objects that belong to it.
-    m_frame_object_pools[slot_index].reset();
     return true;
 }
 
@@ -582,6 +570,7 @@ auto Device_impl::get_command_buffer(const unsigned int thread_slot) -> Command_
 
 void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
 {
+    Scoped_transient_object_pool object_pool{}; // drains what commit / presentDrawable autorelease
     if (command_buffers.empty()) {
         return;
     }
@@ -771,8 +760,7 @@ void Device_impl::wait_idle()
         return;
     }
     {
-        // The cb below is autoreleased; wait_idle is also called outside
-        // device frames (editor init), so it cannot rely on the frame pool.
+        // The cb below is autoreleased and not retained: drain it here.
         Scoped_transient_object_pool object_pool{};
         MTL::CommandBuffer* command_buffer = m_mtl_command_queue->commandBuffer();
         if (command_buffer == nullptr) {
