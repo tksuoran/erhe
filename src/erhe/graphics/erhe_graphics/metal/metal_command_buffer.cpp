@@ -54,6 +54,7 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     : m_device                          {other.m_device}
     , m_debug_label                     {std::move(other.m_debug_label)}
     , m_frame_id                        {other.m_frame_id}
+    , m_completion_frame_index          {other.m_completion_frame_index}
     , m_mtl_command_buffer              {other.m_mtl_command_buffer}
     , m_inter_encoder_fence             {other.m_inter_encoder_fence}
     , m_implicit_gpu_event              {other.m_implicit_gpu_event}
@@ -95,6 +96,7 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_device                          = other.m_device;
     m_debug_label                     = std::move(other.m_debug_label);
     m_frame_id                        = other.m_frame_id;
+    m_completion_frame_index          = other.m_completion_frame_index;
     m_mtl_command_buffer              = other.m_mtl_command_buffer;
     m_inter_encoder_fence             = other.m_inter_encoder_fence;
     m_implicit_gpu_event              = other.m_implicit_gpu_event;
@@ -126,6 +128,11 @@ auto Command_buffer_impl::get_frame_id() const noexcept -> std::uint64_t
     return m_frame_id;
 }
 
+auto Command_buffer_impl::get_completion_frame_index() const noexcept -> std::uint64_t
+{
+    return m_completion_frame_index;
+}
+
 void Command_buffer_impl::set_frame_id(const std::uint64_t frame_id) noexcept
 {
     m_frame_id = frame_id;
@@ -147,22 +154,42 @@ void Command_buffer_impl::begin()
         return;
     }
     m_mtl_command_buffer->retain();
+    if (!m_debug_label.empty()) {
+        m_mtl_command_buffer->setLabel(NS::String::string(m_debug_label.data(), NS::UTF8StringEncoding));
+    }
 
     MTL::Device* mtl_device = device_impl.get_mtl_device();
     if ((mtl_device != nullptr) && (m_inter_encoder_fence == nullptr)) {
         m_inter_encoder_fence = mtl_device->newFence();
     }
 
-    // Drive the existing per-frame completion plumbing: when the GPU
-    // finishes consuming this cb, mark the cb's frame index as completed
-    // so the next begin_frame() can recycle ring-buffer ranges pinned to
-    // that frame. The handler runs on an arbitrary Metal dispatch
-    // thread, so Device_impl::notify_command_buffer_completed takes the
-    // completion mutex itself.
+    // Per-frame completion accounting (Device_impl::
+    // note_command_buffer_committed): when the GPU finishes this cb, count
+    // its completion against the frame it was begun in; the frame retires
+    // once every cb committed for it has completed. The handler runs on an
+    // arbitrary Metal dispatch thread, so
+    // Device_impl::notify_command_buffer_completed takes the completion
+    // mutex itself.
     const uint64_t frame_index_for_handler = device_impl.get_frame_index();
+    m_completion_frame_index = frame_index_for_handler;
     Device_impl* device_impl_ptr = &device_impl;
     m_mtl_command_buffer->addCompletedHandler(
-        [device_impl_ptr, frame_index_for_handler](MTL::CommandBuffer*) {
+        [device_impl_ptr, frame_index_for_handler](MTL::CommandBuffer* completed_command_buffer) {
+            // A command buffer that faulted on the GPU completes with an
+            // error and nothing else reports it. After repeated faults Metal
+            // ignores the process's later submissions ("Ignored (for causing
+            // prior/excessive GPU errors)") and rendering silently stops, so
+            // the first error is the one worth seeing.
+            if (completed_command_buffer->status() == MTL::CommandBufferStatusError) {
+                const NS::String* const label = completed_command_buffer->label();
+                const NS::Error*  const error = completed_command_buffer->error();
+                log_context->error(
+                    "Metal command buffer '{}' of frame {} failed: {}",
+                    (label != nullptr) ? label->utf8String() : "",
+                    frame_index_for_handler,
+                    (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error object)"
+                );
+            }
             device_impl_ptr->notify_command_buffer_completed(frame_index_for_handler);
         }
     );

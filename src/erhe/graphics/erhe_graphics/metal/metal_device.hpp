@@ -83,11 +83,16 @@ public:
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
 
-    // Called from MTL::CommandBuffer addCompletedHandler lambdas (which
-    // run on an arbitrary Metal dispatch thread) to enqueue a frame
-    // index for completion processing. end_frame() (and begin_frame())
-    // drain the queue under m_completion_mutex and recycle ring buffer
-    // ranges pinned to those frames.
+    // Per-frame command buffer accounting (any thread, under
+    // m_completion_mutex). submit_command_buffers() counts each command
+    // buffer it commits against the frame the command buffer was begun in;
+    // the command buffer's addCompletedHandler (an arbitrary Metal dispatch
+    // thread) counts its completion. A frame retires once it has ended and
+    // every command buffer committed for it has completed - not when the
+    // first one does: a frame has several (uploads, render-to-texture
+    // passes, the swapchain pass), and the releases its completion runs
+    // (texture and buffer releases, ring buffer ranges) must wait for all.
+    void note_command_buffer_committed  (uint64_t frame_index);
     void notify_command_buffer_completed(uint64_t frame_index);
 
     // Presented-frame throttle. A command buffer that presents a drawable
@@ -137,8 +142,14 @@ public:
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
-    // The frame of the calling role (Device::get_frame_index()).
+    // The frame of the calling role (Device::get_frame_index()). The render
+    // role gets m_render_frame_id (which only it writes, so it reads it
+    // without a lock), every other caller reads under m_frame_id_mutex.
     [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
+    // True once end_frame() ended the frame (every command buffer of it is
+    // submitted; the GPU may still run it). Any thread: reads
+    // m_render_frame_id under m_frame_id_mutex.
+    [[nodiscard]] auto is_frame_ended                     (uint64_t frame) const -> bool;
     [[nodiscard]] auto get_number_of_frames_in_flight     () const -> std::size_t;
     // Conservative: see Device::is_frame_completed().
     [[nodiscard]] auto is_frame_completed                 (uint64_t frame) const -> bool;
@@ -191,15 +202,25 @@ public:
 private:
     void frame_completed(uint64_t completed_frame);
 
-    // Drain m_pending_completed_frames (frame indices reported done by
-    // MTL::CommandBuffer addCompletedHandler) and run frame_completed()
-    // for each. Called every frame from end_frame() -- mirroring the
+    // running: retire ended frames whose committed command buffers have all
+    // completed. idle: the caller has drained the queue (wait_idle), so every
+    // ended frame is retired, whether or not its completion callbacks have
+    // run yet.
+    enum class Gpu_queue_state : unsigned int
+    {
+        running = 0,
+        idle    = 1
+    };
+
+    // Retire the ended frames whose command buffers have completed (see
+    // note_command_buffer_committed) and run frame_completed() for each,
+    // in frame id order. Called every frame from end_frame() -- mirroring the
     // Vulkan backend, whose end_frame()/update_frame_completion() drives
     // frame_completed() -- and also from begin_frame() for contract
     // symmetry. The editor's per-frame loop calls end_frame() but not
     // begin_frame(), so the end_frame() drain is the one that actually
     // recycles ring buffers and fires completion handlers per frame.
-    void drain_completed_frames();
+    void drain_completed_frames(Gpu_queue_state gpu_queue_state);
 
     class Completion_handler
     {
@@ -239,26 +260,48 @@ private:
     // Queried once and applied on top of the table in get_format_properties().
     bool                             m_supports_32bit_float_filtering{false};
     [[nodiscard]] auto get_frame_slot_index(uint64_t frame_id) const -> std::size_t;
+    // Frame ids, as in the Vulkan backend: m_frame_id_mutex guards every
+    // write of the two and every read by a thread that does not write the
+    // member (the main thread acquires frames, the render thread ends them).
+    mutable std::mutex               m_frame_id_mutex;
     // The oldest open frame (end_frame() ends it), or the next frame to be
-    // acquired when none is open. Frame ids start at 1.
+    // acquired when none is open. Frame ids start at 1. Written by the role
+    // that ends frames.
     uint64_t                         m_render_frame_id{1};
-    // The newest acquired frame (0: none yet).
+    // The newest acquired frame (0: none yet). Written by acquire_frame_slot.
     uint64_t                         m_prepare_frame_id{0};
+    // Serializes drain_completed_frames() (the render role's end_frame and
+    // wait_idle on any thread). Lock order: m_completion_run_mutex, then
+    // m_completion_mutex / m_completion_handler_mutex / m_frame_id_mutex.
+    std::mutex                       m_completion_run_mutex;
+    // add_completion_handler() runs on any thread (main thread in M2, the
+    // render thread, loaders); frame_completed() moves the due entries to
+    // m_completion_handler_scratch under the lock and runs them outside it,
+    // since a callback may register a handler itself (a texture release).
+    std::mutex                       m_completion_handler_mutex;
     std::vector<Completion_handler>  m_completion_handlers;
-    // GPU-completion tracking driven by MTL::CommandBuffer
-    // addCompletedHandler callbacks (which run on an arbitrary Metal
-    // dispatch thread). Each frame that successfully commits its
-    // device cb enqueues its frame index here; end_frame() drains the
-    // list and calls frame_completed() on each, which recycles the
-    // ring buffer ranges pinned to that frame. Replaces the previous
-    // "2-frame delay" heuristic that assumed frame N-2 was GPU-done.
-    std::mutex                       m_completion_mutex;
-    std::vector<uint64_t>            m_pending_completed_frames;
-    // One past the highest frame the GPU has retired (same meaning as the
-    // Vulkan backend's watermark). Frames are submitted to one queue and so
-    // complete in submission order; drain_completed_frames() advances this as
-    // it retires them. Only ever moves forward.
-    uint64_t                         m_latest_completed_frame{0};
+    std::vector<Completion_handler>  m_completion_handler_scratch;
+    std::vector<uint64_t>            m_retired_frames_scratch;
+    // GPU-completion tracking (note_command_buffer_committed /
+    // notify_command_buffer_completed), guarded by m_completion_mutex: per
+    // frame with committed command buffers not yet retired, how many were
+    // committed and how many have completed. drain_completed_frames()
+    // retires frames in id order and calls frame_completed() on each, which
+    // recycles the ring buffer ranges pinned to that frame and runs its
+    // completion handlers.
+    class Frame_command_buffer_count
+    {
+    public:
+        uint64_t frame_index{0};
+        uint32_t committed  {0};
+        uint32_t completed  {0};
+    };
+    mutable std::mutex                      m_completion_mutex;
+    std::vector<Frame_command_buffer_count> m_frame_command_buffer_counts;
+    // One past the highest frame retired (same meaning as the Vulkan
+    // backend's watermark); under m_completion_mutex. Only ever moves
+    // forward.
+    uint64_t                                m_latest_completed_frame{0};
 
     // Frames that presented a drawable and have not completed yet. See
     // wait_for_presented_frame_slot().

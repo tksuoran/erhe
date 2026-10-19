@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace CA  { class MetalDrawable; }
@@ -66,8 +67,14 @@ public:
     // calls record_capture(), which blits the freshly composited drawable
     // texture into a persistent shared MTL::Buffer on the frame's own
     // command buffer (before presentDrawable) and keeps a reference to
-    // that command buffer; read_back_capture() waits for it to complete,
-    // then returns the pixels as tightly packed opaque RGBA8. Supported
+    // that command buffer; read_back_capture() collects the capture once
+    // that frame has ended, waits for the command buffer to complete, then
+    // returns the pixels as tightly packed opaque RGBA8.
+    // request_capture() and read_back_capture() run on the main thread,
+    // record_capture() on the render thread, which with frame pipelining
+    // records the next frame meanwhile: the capture state is guarded by
+    // m_capture_mutex, and no new capture is armed while one waits to be
+    // collected (as in the Vulkan swapchain). Supported
     // whenever the layer hands out readable drawables (Surface_impl sets
     // framebufferOnly = false on the layer for this).
     //
@@ -77,7 +84,7 @@ public:
     // texture on a fresh command buffer and waits for it, synchronously.
     [[nodiscard]] auto is_capture_supported() const -> bool;
     void               request_capture();
-    void               record_capture(MTL::CommandBuffer* command_buffer);
+    void               record_capture(uint64_t frame_id, MTL::CommandBuffer* command_buffer);
     [[nodiscard]] auto read_back_capture(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool;
 
 private:
@@ -111,6 +118,7 @@ private:
     uint32_t                   m_emulated_width       {0};
     uint32_t                   m_emulated_height      {0};
 
+    mutable std::mutex  m_capture_mutex;
     bool                m_capture_requested     {false};
     MTL::Buffer*        m_capture_buffer        {nullptr}; // shared storage, width * height * 4 bytes
     MTL::CommandBuffer* m_capture_command_buffer{nullptr}; // retained until read back

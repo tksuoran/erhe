@@ -238,6 +238,12 @@ void Swapchain_impl::request_capture()
         // read_back_capture() collects the last composited frame directly.
         return;
     }
+    const std::lock_guard<std::mutex> lock{m_capture_mutex};
+    // A recorded capture not yet collected keeps its buffer: a new copy into
+    // it could land while read_back_capture() reads it.
+    if (m_capture_command_buffer != nullptr) {
+        return;
+    }
     m_capture_requested = true;
 }
 
@@ -259,9 +265,10 @@ auto Swapchain_impl::ensure_capture_buffer(const std::size_t byte_count) -> bool
     return true;
 }
 
-void Swapchain_impl::record_capture(MTL::CommandBuffer* command_buffer)
+void Swapchain_impl::record_capture(const uint64_t frame_id, MTL::CommandBuffer* command_buffer)
 {
     Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
+    const std::lock_guard<std::mutex> lock{m_capture_mutex};
     if (!m_capture_requested) {
         return;
     }
@@ -286,12 +293,6 @@ void Swapchain_impl::record_capture(MTL::CommandBuffer* command_buffer)
         return;
     }
 
-    // A previous capture that was never collected: drop it, its buffer is
-    // about to be overwritten anyway.
-    if (m_capture_command_buffer != nullptr) {
-        m_capture_command_buffer->release();
-        m_capture_command_buffer = nullptr;
-    }
     if (!ensure_capture_buffer(byte_count)) {
         return;
     }
@@ -318,7 +319,7 @@ void Swapchain_impl::record_capture(MTL::CommandBuffer* command_buffer)
     m_capture_width        = width;
     m_capture_height       = height;
     m_capture_pixel_format = static_cast<unsigned long>(pixel_format);
-    m_capture_frame_index  = m_device_impl.get_frame_index();
+    m_capture_frame_index  = frame_id;
 }
 
 void Swapchain_impl::convert_capture_buffer(std::vector<std::byte>& out_rgba8) const
@@ -411,13 +412,23 @@ auto Swapchain_impl::read_back_capture(uint32_t& out_width, uint32_t& out_height
         return read_back_emulated(out_width, out_height, out_rgba8);
     }
 
+    const std::lock_guard<std::mutex> lock{m_capture_mutex};
     if ((m_capture_command_buffer == nullptr) || (m_capture_buffer == nullptr)) {
+        return false;
+    }
+    // The frame that recorded the copy may still be recording (frame
+    // pipelining: the render thread records it while the main thread
+    // prepares the next frame); collect once it has been submitted.
+    if (!m_device_impl.is_frame_ended(m_capture_frame_index)) {
         return false;
     }
 
     // Reject a stale capture whose collector went away: the caller re-arms
-    // and gets a current frame instead. The normal arm -> render -> collect
-    // cycle sees an age of 1.
+    // and gets a current frame instead. Reached from the main thread only
+    // (Device::capture_last_frame, the MCP capture_screenshot in M2), so the
+    // role-keyed device frame index is the frame the main thread prepares,
+    // one past the frame that recorded the capture in the normal
+    // arm -> render -> collect cycle.
     const uint64_t age = m_device_impl.get_frame_index() - m_capture_frame_index;
     if (age > 2) {
         m_capture_command_buffer->release();
