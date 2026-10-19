@@ -1,6 +1,7 @@
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
+#include "erhe_graphics/metal/metal_gpu_timer.hpp"
 #include "erhe_graphics/metal/metal_scoped_debug_group.hpp"
 #include "erhe_graphics/metal/metal_helpers.hpp"
 #include "erhe_graphics/metal/metal_surface.hpp"
@@ -63,6 +64,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     }
 
     m_mtl_device = MTL::CreateSystemDefaultDevice();
+    m_gpu_timer_sample_pool = std::make_unique<Gpu_timer_sample_pool>(m_mtl_device);
     if (m_mtl_device == nullptr) {
         log_startup->error("Failed to create Metal device");
         return;
@@ -643,6 +645,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         }
         impl.clear_swapchain_used();
 
+        impl.add_gpu_timer_completion_handler();
         note_command_buffer_committed(impl.get_completion_frame_index());
         mtl_cb->commit();
 
@@ -1149,6 +1152,11 @@ auto Device_impl::get_mtl_command_queue() const -> MTL::CommandQueue*
 auto Device_impl::get_default_sampler_state() const -> MTL::SamplerState*
 {
     return m_default_sampler_state;
+}
+
+auto Device_impl::get_gpu_timer_sample_pool() -> Gpu_timer_sample_pool&
+{
+    return *m_gpu_timer_sample_pool;
 }
 
 auto Device_impl::get_texture_argument_encoder() const -> MTL::ArgumentEncoder*

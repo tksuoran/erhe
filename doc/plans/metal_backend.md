@@ -17,16 +17,6 @@ macOS, start the editor, and confirm that the pool spills and reclaims
 (`doc/erhe/ring_buffer_memory.md` describes the log lines and the memory
 bound).
 
-## 2. GPU timers
-
-`Gpu_timer_impl` (`metal_gpu_timer.cpp`) records nothing and reads 0, so the
-DDGI / radiance cascades timings and every other `Gpu_timer` consumer show 0
-on Metal. Implement it with `MTL::CounterSampleBuffer` timestamp sampling at
-the stage boundaries the device supports
-(`MTL::Device::supportsCounterSampling`), resolved after the command buffer
-completes, and convert GPU ticks to nanoseconds with
-`MTL::Device::sampleTimestamps` calibration.
-
 ## 3. `blit_framebuffer`
 
 `Blit_command_encoder_impl::blit_framebuffer` (`metal_blit_command_encoder.cpp`)

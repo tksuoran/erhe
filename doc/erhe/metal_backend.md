@@ -48,7 +48,7 @@ All Metal-specific code lives in `src/erhe/graphics/erhe_graphics/metal/`:
 | `metal_helpers.cpp/hpp` | Enum conversion utilities |
 | `metal_debug.cpp` | Debug labels |
 | `metal_scoped_debug_group.cpp/hpp` | Scoped debug groups (pushDebugGroup/popDebugGroup) |
-| `metal_gpu_timer.cpp/hpp` | `Gpu_timer` backend; not implemented, every timer reads 0 |
+| `metal_gpu_timer.cpp/hpp` | `Gpu_timer` backend: counter sample buffer pool, per-command-buffer timestamp records |
 | `metal_surface.hpp/mm` | CAMetalLayer integration with SDL |
 | `metal_swapchain.cpp/hpp` | Swapchain with app-managed depth texture |
 | `metal_implementation.mm` | metal-cpp implementation defines |
@@ -278,6 +278,38 @@ returning the frame synchronously on the first call.
 
 Metal does not support `glMultiDrawElementsIndirect`. The implementation loops over individual `drawIndexedPrimitives` calls, reading draw commands from the indirect buffer on the CPU side. Push constant index 15 carries the draw ID for vertex/compute shaders; fragment shaders receive draw ID via an interpolated varying (Metal does not support push constants in fragment).
 
+### GPU timers
+
+Apple GPUs sample timestamps only at stage boundaries
+(`MTL::CounterSamplingPointAtStageBoundary`; draw, dispatch and blit
+boundaries are unsupported), so a timestamp is taken at the start or the end
+of an encoder through the `sampleBufferAttachments` of the pass descriptor the
+encoder is created from. While any `Gpu_timer` exists, every render pass
+(start of vertex, end of fragment) and every compute encoder (start and end
+of encoder) samples both boundaries into the command buffer's chunk of a
+`MTL::CounterSampleBuffer` owned by `Gpu_timer_sample_pool` on `Device_impl`.
+A sample buffer holds at most 32 KiB (4096 timestamps); the pool splits each
+into chunks of 256 samples, one chunk per command buffer, and adds buffers on
+demand up to eight.
+
+A timer's `begin` resolves to the start of the encoder open on the command
+buffer, or, with none open, the start of the next sampled encoder; its `end`
+to the end of the open encoder, or, with none open, the end of the last
+sampled encoder that ended. A render-pass bound timer is therefore exact.
+An explicit range measures the whole encoders it brackets, so ranges inside
+one compute encoder all read that encoder's time: code that times passes
+separately gives each timed pass its own encoder (`Ddgi_renderer` blend and
+relocate). An encoder without work samples nothing (reads 0); its timer keeps
+its previous result.
+
+`Device_impl::submit_command_buffers` hands the command buffer's records to a
+completion handler, which resolves the chunk (`resolveCounterRange`) on a
+Metal dispatch thread, stores each duration into its timer (looked up by
+serial in the pool's registry, so a timer destroyed meanwhile is skipped) and
+returns the chunk. GPU ticks convert to nanoseconds by the ratio of
+`MTL::Device::sampleTimestamps` CPU and GPU deltas since the pool was created
+(1:1 on Apple silicon).
+
 ### Deferred GPU Resource Destruction
 
 Metal resources (buffers, textures, samplers, render pipelines, depth-stencil
@@ -291,4 +323,4 @@ crashes.
 
 ## Future work
 
-- [plans/metal_backend.md](../plans/metal_backend.md): GPU timers, `blit_framebuffer`, swapchain resize, present wait, format sorting, GPU multi-draw indirect
+- [plans/metal_backend.md](../plans/metal_backend.md): `blit_framebuffer`, swapchain resize, present wait, format sorting, GPU multi-draw indirect

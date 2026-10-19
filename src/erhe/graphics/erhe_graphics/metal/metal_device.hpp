@@ -34,6 +34,7 @@ namespace erhe::graphics {
 
 class Frame_state;
 class Frame_end_info;
+class Gpu_timer_sample_pool;
 class Render_pass_impl;
 class Ring_buffer_client;
 class Surface;
@@ -179,6 +180,7 @@ public:
     [[nodiscard]] auto get_mtl_device              () const -> MTL::Device*;
     [[nodiscard]] auto get_mtl_command_queue       () const -> MTL::CommandQueue*;
     [[nodiscard]] auto get_default_sampler_state   () const -> MTL::SamplerState*;
+    [[nodiscard]] auto get_gpu_timer_sample_pool   () -> Gpu_timer_sample_pool&;
 
     // Texture argument buffer support
     [[nodiscard]] auto get_texture_argument_encoder() const -> MTL::ArgumentEncoder*;
@@ -318,6 +320,9 @@ private:
     MTL::ArgumentEncoder*    m_texture_argument_encoder{nullptr};
     Texture_arg_buffer_layout m_texture_arg_buffer_layout;
     Ring_buffer_pool         m_ring_buffer_pool{m_device, 4 * 1024 * 1024};
+    // Declared before the command buffers: a cb destroyed unsubmitted
+    // returns its sample chunk to the pool.
+    std::unique_ptr<Gpu_timer_sample_pool> m_gpu_timer_sample_pool;
 
     // Per-thread Command_buffer storage. get_command_buffer(slot)
     // allocates a Command_buffer here; frame_completed sweeps entries

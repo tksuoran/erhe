@@ -83,8 +83,8 @@ and "Follow-ups found by review"; the next pick is a new selection from
 - Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
   (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
   opt-in); needs a macOS session to build and verify.
-- Item 6, Metal half: GPU timers (read 0), `blit_framebuffer` (fatal) and
-  swapchain resize on Metal; needs a macOS session.
+- Item 6, Metal half: `blit_framebuffer` (fatal) and swapchain resize on
+  Metal; needs a macOS session.
 - Item 17, GPU tests in CI: `erhe_graphics_gpu_tests` on Linux under
   lavapipe (`doc/erhe/graphics_test_coverage.md`), with a tolerance profile
   per driver where the goldens need one; and LeakSanitizer on the sanitizer

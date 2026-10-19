@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/metal/metal_gpu_timer.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <array>
@@ -125,6 +126,17 @@ public:
     [[nodiscard]] auto get_swapchain_used() const noexcept -> Swapchain_impl*;
     void               clear_swapchain_used() noexcept;
 
+    // Gpu_timer measurements recorded on this cb (metal_gpu_timer.hpp).
+    // Encoders sample their start / end through it; Gpu_timer_impl records
+    // begin / end against it.
+    [[nodiscard]] auto get_gpu_timer_samples() noexcept -> Gpu_timer_command_buffer_samples&;
+    [[nodiscard]] auto get_gpu_timer_sample_pool() const noexcept -> Gpu_timer_sample_pool*;
+
+    // Called by Device_impl::submit_command_buffers before commit: hands the
+    // timer samples to a completion handler that resolves them once the GPU
+    // has finished this cb.
+    void add_gpu_timer_completion_handler();
+
 private:
     Device*                    m_device{nullptr};
     erhe::utility::Debug_label m_debug_label;
@@ -165,6 +177,11 @@ private:
     // presentDrawable runs. Mirrors Vulkan_command_buffer's
     // m_swapchain_used.
     Swapchain_impl* m_swapchain_used{nullptr};
+
+    // Held directly: ~Device tears down Device_impl (and its per-thread
+    // cbs) after Device's impl pointer has been reset.
+    Gpu_timer_sample_pool*           m_gpu_timer_sample_pool{nullptr};
+    Gpu_timer_command_buffer_samples m_gpu_timer_samples;
 };
 
 } // namespace erhe::graphics
