@@ -19,13 +19,15 @@ blitting between two render passes of different sizes.
 
 ## 4. Swapchain resize
 
-`Device_impl::resize_swapchain_to_window()` (`metal_device.cpp`) is empty.
-Windowed: set the `CAMetalLayer` `drawableSize` from the window's pixel size
-and recreate the app-managed depth-stencil texture at that size. Headless:
-recreate the emulated backbuffer ring at the new
-`Context_window::get_width/get_height`. Verify by resizing the window (and,
-headless, by changing the window size through the MCP server) and reading
-back a frame at the new size.
+Windowed resize relies on SDL's Metal view keeping the layer's
+`drawableSize` current (`doc/erhe/metal_backend.md` "Swapchain"); it has
+not been exercised with a live resize. Interactive check (an agent cannot
+resize the window: there is no MCP tool for it, and scripting System Events
+needs the Accessibility permission): with the windowed Metal editor,
+drag-resize the window larger and smaller, also across displays of
+different scale, and confirm the viewports and ImGui fill the window
+without stretching or clipping and that `capture_screenshot` returns the
+new size.
 
 ## 5. Present wait and format sorting
 

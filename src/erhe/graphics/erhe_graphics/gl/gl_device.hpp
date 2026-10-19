@@ -100,7 +100,6 @@ public:
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
 
-    void resize_swapchain_to_window();
     void start_frame_capture       ();
     void end_frame_capture         ();
 

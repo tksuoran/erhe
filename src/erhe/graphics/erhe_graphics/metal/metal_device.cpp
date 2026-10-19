@@ -575,11 +575,6 @@ auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
     return Frame_pacing_tier::off;
 }
 
-void Device_impl::resize_swapchain_to_window()
-{
-    // TODO Implement Metal swapchain resize
-}
-
 auto Device_impl::get_command_buffer(const unsigned int thread_slot) -> Command_buffer&
 {
     ERHE_VERIFY(thread_slot < s_number_of_thread_slots);

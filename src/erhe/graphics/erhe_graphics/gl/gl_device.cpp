@@ -834,11 +834,6 @@ auto Device_impl::get_native_handles() const -> Native_device_handles
     return handles;
 }
 
-void Device_impl::resize_swapchain_to_window()
-{
-    // NOP for GL backend
-}
-
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     if (m_info.texture_heap_path == Texture_heap_path::opengl_bindless_textures) {
