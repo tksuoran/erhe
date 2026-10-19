@@ -325,12 +325,12 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
         }
         MTL::Texture* mtl_texture = texture->get_impl().get_mtl_texture();
         if (mtl_texture != nullptr) {
-            render_encoder->useResource(mtl_texture, MTL::ResourceUsageRead | MTL::ResourceUsageSample);
+            render_encoder->useResource(mtl_texture, MTL::ResourceUsageRead | MTL::ResourceUsageSample, MTL::RenderStageFragment);
         }
     }
     MTL::Texture* fallback_mtl = m_fallback_texture.get_impl().get_mtl_texture();
     if (fallback_mtl != nullptr) {
-        render_encoder->useResource(fallback_mtl, MTL::ResourceUsageRead | MTL::ResourceUsageSample);
+        render_encoder->useResource(fallback_mtl, MTL::ResourceUsageRead | MTL::ResourceUsageSample, MTL::RenderStageFragment);
     }
 
     return m_used_slot_count;

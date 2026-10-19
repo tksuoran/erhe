@@ -1803,10 +1803,11 @@ auto Context_window::get_device_pointer() const -> void*
     ERHE_FATAL("TODO");
     return nullptr; // TODO
 # endif
-#endif
-
-#if defined(ERHE_GRAPHICS_API_VULKAN)
+#elif defined(ERHE_GRAPHICS_API_VULKAN)
     return nullptr; // TODO
+#else
+    // Metal and null backends have no device pointer to expose here
+    return nullptr;
 #endif
 }
 

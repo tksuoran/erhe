@@ -6,6 +6,7 @@
 #   include <winsock2.h>
 #   include <ws2tcpip.h>
 using socklen_t = int;
+using Socket_io_result = int; // send() / recv() return type
 
 static constexpr int ERHE_NET_ERROR_CODE_CONNECTED = WSAEISCONN;
 #endif
@@ -25,6 +26,7 @@ static constexpr int ERHE_NET_ERROR_CODE_CONNECTED = WSAEISCONN;
 using SOCKET = int;          // windows uses unsigned
 using FD_SET = fd_set;
 using PCSTR  = const char*;
+using Socket_io_result = ssize_t; // send() / recv() return type
 static constexpr int    ERHE_NET_ERROR_CODE_CONNECTED = EISCONN;
 static constexpr SOCKET INVALID_SOCKET = -1;
 static constexpr int    SOCKET_ERROR   = -1;
