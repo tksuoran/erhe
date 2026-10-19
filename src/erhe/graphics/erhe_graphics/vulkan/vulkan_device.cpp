@@ -440,6 +440,11 @@ auto Device_impl::get_texture_set_layout() const -> VkDescriptorSetLayout
     return m_texture_set_layout;
 }
 
+auto Device_impl::get_texture_heap_size() const -> uint32_t
+{
+    return m_texture_heap_size;
+}
+
 auto Device_impl::get_texture_heap_variable_count_minimum() const -> uint32_t
 {
     return m_texture_heap_variable_count_minimum;

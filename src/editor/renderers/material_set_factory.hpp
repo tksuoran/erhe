@@ -42,7 +42,8 @@ public:
     void operator=       (const Material_set_factory&) = delete;
 
     // max_textures is a HARD limit on Vulkan, where it sizes the variable
-    // descriptor count, so it is the sizing that matters: the full 4096 for
+    // descriptor count, so it is the sizing that matters: the full heap
+    // (max_texture_heap_size, capped to Device_info::texture_heap_size) for
     // the sets of roots that render content, a small value for the previews,
     // the BRDF slice and the empty set. initial_material_count only decides
     // how much the buffer reserves up front; it grows past it on demand.

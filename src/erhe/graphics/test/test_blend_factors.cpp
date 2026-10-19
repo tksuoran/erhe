@@ -455,6 +455,9 @@ TEST_F(Blend_factor_test, factor_constant_color)
 // erhe-only: S * C.a + D.
 TEST_F(Blend_factor_test, factor_constant_alpha)
 {
+    if (!device().get_info().use_constant_alpha_color_blend_factors) {
+        GTEST_SKIP() << "device does not support constant alpha color blend factors (Device_info::use_constant_alpha_color_blend_factors)";
+    }
     check_source_factor(
         erhe::graphics::Blending_factor::constant_alpha,
         [](const glm::vec4& s, const glm::vec4& d) { return (s * c_blend_constant.a) + d; },

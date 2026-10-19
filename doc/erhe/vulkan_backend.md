@@ -87,8 +87,8 @@ and an optional `Vulkan_external_creators` (the OpenXR hook, see
    queue-family suitability.
 4. Property + feature queries via `vkGetPhysicalDeviceProperties2` /
    `vkGetPhysicalDeviceFeatures2` (driver properties, depth/stencil resolve
-   properties, multiview properties, portability subset, descriptor indexing,
-   16-bit storage, float16/int8, timeline semaphore, Vulkan 1.1 / 1.3 features).
+   properties, multiview properties, portability subset, descriptor indexing
+   properties, maintenance3 properties, 16-bit storage, float16/int8, timeline semaphore, Vulkan 1.1 / 1.3 features).
 5. `vkCreateDevice` with a single graphics queue (plus a present queue when a
    surface exists).
 6. VMA allocator creation (`vmaImportVulkanFunctionsFromVolk`).
@@ -179,7 +179,11 @@ capped at `INT_MAX` before being stored in signed fields (drivers report
 ### Portability subset (MoltenVK)
 
 When `VK_KHR_portability_subset` is advertised, its feature and property structs
-are queried and stored. When it is not advertised the device is treated as fully
+are queried and stored, and `vkCreateDevice` enables every portability feature
+the device reports (a portability-subset device treats a feature it was not
+created with as unsupported). Only MoltenVK advertises the extension;
+KosmicKrisp does not. `Device_info::use_constant_alpha_color_blend_factors`
+mirrors `constantAlphaColorBlendFactors`. When it is not advertised the device is treated as fully
 featured: every portability feature flag is forced to `VK_TRUE` and properties
 are set to non-constraining defaults (e.g. `minVertexInputBindingStrideAlignment = 1`),
 so call sites can read these structs unconditionally. MoltenVK also forces the
@@ -326,10 +330,14 @@ MoltenVK requires for comparison samplers
 
 `Texture_heap_impl` (`vulkan_texture_heap.cpp`) is a descriptor-indexing array
 at set 1. The device creates `m_texture_set_layout` as a single binding of
-`max_texture_heap_size` (`texture_heap.hpp`: 4096, 1024 on Android) combined
-image samplers with `PARTIALLY_BOUND | UPDATE_AFTER_BIND |
-VARIABLE_DESCRIPTOR_COUNT`. Each heap allocates its sets with a variable
-count of its own `max_textures`, raised to the device's
+`get_texture_heap_size()` combined image samplers with `PARTIALLY_BOUND |
+UPDATE_AFTER_BIND | VARIABLE_DESCRIPTOR_COUNT`: `max_texture_heap_size`
+(`texture_heap.hpp`: 4096, 1024 on Android) bounded by `maxPerSetDescriptors`
+(MoltenVK: 1212), published as `Device_info::texture_heap_size` and logged at
+device init with the limits it was derived from. The update-after-bind
+sampler and resource limits are not a bound (spec minimum 500000). Each heap
+caps its `max_textures` to that size and allocates its sets with a variable
+count of it, raised to the device's
 `get_texture_heap_variable_count_minimum()`: at device init a probe allocates
 one set with variable count 1, and a driver that refuses it (Adreno on Quest 3
 returns `VK_ERROR_OUT_OF_POOL_MEMORY` for every variable count below half the

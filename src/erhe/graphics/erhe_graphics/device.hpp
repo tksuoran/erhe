@@ -208,6 +208,11 @@ public:
     // depthClamp device feature (enabled whenever the physical device has it);
     // OpenGL (core since 3.2) and Metal always support it.
     bool use_depth_clamp             {true};
+    // Blending_factor::constant_alpha / one_minus_constant_alpha are valid as
+    // color (rgb) blend factors. Vulkan: false only on a portability-subset
+    // device whose constantAlphaColorBlendFactors feature is false (MoltenVK);
+    // OpenGL and Metal always support them.
+    bool use_constant_alpha_color_blend_factors{true};
     erhe::math::Coordinate_conventions coordinate_conventions;
     bool use_direct_state_access     {false};
     bool use_binary_shaders          {false};
@@ -386,6 +391,11 @@ public:
 
     uint32_t max_per_stage_descriptor_samplers   {0};
     int max_combined_texture_image_units         {0};  // combined across all shader stages
+    // Upper bound on any Texture_heap's max_textures: max_texture_heap_size
+    // (texture_heap.hpp) bounded by the device's descriptor limits (Vulkan:
+    // maxPerSetDescriptors). Equal to max_texture_heap_size where the heap
+    // is not a descriptor array (OpenGL, Metal, null).
+    uint32_t texture_heap_size                   {0};
     int max_uniform_block_size                   {0};
     int max_shader_storage_buffer_bindings       {0};
     int max_uniform_buffer_bindings              {0};

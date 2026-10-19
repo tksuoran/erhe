@@ -17,10 +17,12 @@ class Sampler;
 class Shader_resource;
 class Texture;
 
-// Descriptor count of the combined-image-sampler array every texture heap
-// binds into (Vulkan: set 1, built in vulkan_device_init.cpp). It is the upper
-// bound on any one heap's max_textures, because a heap allocates a variable
-// descriptor count out of that layout. Desktop: sized for texture-heavy scenes
+// Requested descriptor count of the combined-image-sampler array every texture
+// heap binds into (Vulkan: set 1, built in vulkan_device_init.cpp). The device
+// bounds it by its descriptor limits (Vulkan: maxPerSetDescriptors; MoltenVK
+// reports 1212) into Device_info::texture_heap_size, the upper bound on any
+// one heap's max_textures, because a heap allocates a variable descriptor
+// count out of that layout. Desktop: sized for texture-heavy scenes
 // (niagara_bistro references 343 material textures) and well below the
 // update-after-bind minimum limits (500k). Android: smaller, for the mobile
 // drivers' per-set descriptor memory.
@@ -44,8 +46,9 @@ public:
         const Bind_group_layout* bind_group_layout = nullptr,
         // Upper bound on how many distinct texture/sampler pairs this heap can
         // hold. Meaningful on Vulkan, where it sizes the variable descriptor
-        // count each of this heap's descriptor sets is allocated with, and must
-        // stay <= max_texture_heap_size in the set-1 pipeline layout. It does
+        // count each of this heap's descriptor sets is allocated with, and is
+        // capped to Device_info::texture_heap_size, the descriptor count of
+        // the set-1 pipeline layout. It does
         // NOT size the descriptor set LAYOUT: that has to stay identically
         // defined to the one in the pipeline layout or the set cannot be bound
         // at all. The OpenGL sampler-array path sizes itself from the device's

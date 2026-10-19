@@ -478,8 +478,11 @@ public:
     [[nodiscard]] auto get_descriptor_set_layout        () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto has_push_descriptor              () const -> bool;
     [[nodiscard]] auto get_texture_set_layout           () const -> VkDescriptorSetLayout;
+    // Descriptor count of the texture heap set layout (set 1):
+    // max_texture_heap_size bounded by the device's maxPerSetDescriptors.
+    [[nodiscard]] auto get_texture_heap_size            () const -> uint32_t;
     // Smallest variable descriptor count a texture heap set is allocated
-    // with: 1 where the driver honours variable counts, max_texture_heap_size
+    // with: 1 where the driver honours variable counts, get_texture_heap_size()
     // where the start-up probe found it refusing small counts (Adreno; see
     // doc/erhe/vulkan_backend.md "Texture heap").
     [[nodiscard]] auto get_texture_heap_variable_count_minimum() const -> uint32_t;
@@ -813,6 +816,7 @@ private:
     VkPipelineCache                               m_pipeline_cache           {VK_NULL_HANDLE};
     VkDescriptorSetLayout                         m_descriptor_set_layout    {VK_NULL_HANDLE};
     VkDescriptorSetLayout                         m_texture_set_layout       {VK_NULL_HANDLE};
+    uint32_t                                      m_texture_heap_size{0};
     uint32_t                                      m_texture_heap_variable_count_minimum{1};
     // Fallback descriptor pools (no push descriptors), one per frame in
     // flight; see allocate_descriptor_set.

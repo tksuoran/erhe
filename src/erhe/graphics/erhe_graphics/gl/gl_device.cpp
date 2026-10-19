@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/gl/gl_device.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
 #include "erhe_graphics/gl/gl_command_buffer.hpp"
 #include "erhe_graphics/gl/gl_gpu_timer.hpp"
@@ -277,6 +278,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         int max_texture_image_units{0};
         gl::get_integer_v(gl::Get_p_name::max_texture_image_units,          &max_texture_image_units);
         m_info.max_per_stage_descriptor_samplers = static_cast<uint32_t>(max_texture_image_units);
+        m_info.texture_heap_size = max_texture_heap_size;
         gl::get_integer_v(gl::Get_p_name::max_combined_texture_image_units, &m_info.max_combined_texture_image_units);
 
         // GL 3.0 introduced context flags

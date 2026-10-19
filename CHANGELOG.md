@@ -9,6 +9,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Device_info::texture_heap_size`, the descriptor count of
+  the texture heap array: `max_texture_heap_size` bounded by the device's
+  descriptor limits (Vulkan: `maxPerSetDescriptors`). `Texture_heap` caps its
+  `max_textures` to it (it was required to be `<= max_texture_heap_size`).
+- `erhe::graphics`: `Device_info::use_constant_alpha_color_blend_factors`:
+  `Blending_factor::constant_alpha` / `one_minus_constant_alpha` are valid as
+  rgb blend factors (Vulkan portability subset `constantAlphaColorBlendFactors`).
+
 - `erhe::scene_renderer`: `Shader_debug::base_color` (37, "Base Color
   (resolved)"): the resolved base color the BxDF receives (material input
   source, factor, vertex color and base color texture multiplied), unlit.
