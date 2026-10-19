@@ -287,7 +287,17 @@ and waits for it, returning the frame synchronously on the first call.
 
 ### Multi-Draw Indirect
 
-Metal does not support `glMultiDrawElementsIndirect`. The implementation loops over individual `drawIndexedPrimitives` calls, reading draw commands from the indirect buffer on the CPU side. Push constant index 15 carries the draw ID for vertex/compute shaders; fragment shaders receive draw ID via an interpolated varying (Metal does not support push constants in fragment).
+Metal has no multi-draw indirect call. `multi_draw_indexed_primitives_indirect`
+loops on the CPU over the draw count and issues one indirect
+`drawIndexedPrimitives` per command, which reads that command's parameters
+(index count, first index, base vertex, instance count, base instance) from the
+indirect buffer on the GPU. Records are named by `Record_indexing::first_instance`
+(`gl_InstanceIndex`, MSL `[[instance_id]]`, includes the base instance), so
+`use_base_instance` is set. Push constant index 15 still carries `ERHE_DRAW_ID`
+(the command's position) for vertex/compute shaders that read it; fragment
+shaders receive it via an interpolated varying (Metal does not support push
+constants in fragment). There is no GPU-read draw count
+(`use_draw_indirect_count` is false; `doc/plans/metal_backend.md` item 6).
 
 ### GPU timers
 

@@ -939,8 +939,9 @@ at construction from `Primitive_interface::record_indexing`:
   draw the commands the GPU generated for their view and chunk with the
   count draw: they name the same records through the same `first_instance`,
   so the record upload is unchanged and the pass writes no commands.
-- Shadow passes under `Record_indexing::draw_position` (Metal, null device,
-  devices without base instance) write their records per pass like the color
+- Shadow passes under `Record_indexing::draw_position` (null device, devices
+  without base instance) and on devices without a GPU-read draw count
+  (Metal) write their records per pass like the color
   passes.
 
 ### 9.3 Scene-side hooks and the threading contract

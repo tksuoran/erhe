@@ -169,9 +169,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.api_info                                 = fmt::format("Metal ({})", m_mtl_device->name()->utf8String());
     m_info.max_texture_size                         = 16384;
     m_info.sub_pixel_precision_bits                 = 0; // Metal does not report it
-    // The multi-draw emulation pushes the draw index and issues draws with
-    // base instance 0: records are named by position.
-    m_info.record_indexing                          = Record_indexing::draw_position;
+    // Each multi-draw command is an indirect drawIndexedPrimitives that
+    // reads its base instance from the command, and MSL's [[instance_id]]
+    // (SPIRV-Cross's gl_InstanceIndex) includes the base instance: records
+    // are named by first_instance, as on Vulkan.
+    m_info.record_indexing                          = Record_indexing::first_instance;
+    // Base vertex and base instance in (indirect) draws: every Metal 3 GPU
+    // (Apple3+ and Mac2 families) supports them.
+    m_info.use_base_instance                        = true;
     m_info.max_samples                              = max_samples;
     m_info.max_color_texture_samples                = max_samples;
     m_info.max_depth_texture_samples                = max_samples;
