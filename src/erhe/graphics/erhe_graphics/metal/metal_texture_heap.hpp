@@ -60,7 +60,15 @@ private:
     bool                             m_reported_full{false};
 
     // Per-frame state
+    // The argument buffer lives in a ring buffer range, which stays valid
+    // only through the frame that allocated it: the ring reclaims by frame,
+    // and once later ranges of that ring retire, the space is reused. So the
+    // argument buffer is encoded again in every frame that binds the heap
+    // (m_argument_buffer_frame), not only when the slots change (m_dirty).
+    // Reusing an older frame's range read whatever the ring wrote there
+    // since: a garbage texture reference and a GPU address fault.
     Ring_buffer_range                m_argument_buffer_range;
+    uint64_t                         m_argument_buffer_frame{0};
     bool                             m_dirty{true};
 };
 

@@ -230,6 +230,7 @@ void Texture_heap_impl::encode_argument_buffer()
 
     // Release previous range before acquiring a new one
     m_argument_buffer_range.release();
+    m_argument_buffer_frame = m_device.get_frame_index();
 
     NS::UInteger encoded_length = m_argument_encoder->encodedLength();
     m_argument_buffer_range = m_device.allocate_ring_buffer_entry(
@@ -297,7 +298,7 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
         return m_used_slot_count;
     }
 
-    if (m_dirty) {
+    if (m_dirty || (m_argument_buffer_frame != m_device.get_frame_index())) {
         encode_argument_buffer();
         m_dirty = false;
     }
@@ -352,7 +353,7 @@ auto Texture_heap_impl::bind(Compute_command_encoder& encoder) -> std::size_t
         return m_used_slot_count;
     }
 
-    if (m_dirty) {
+    if (m_dirty || (m_argument_buffer_frame != m_device.get_frame_index())) {
         encode_argument_buffer();
         m_dirty = false;
     }

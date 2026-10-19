@@ -67,22 +67,3 @@ the draw commands back from the indirect buffer (`doc/erhe/metal_backend.md`
 (`MTL::IndirectCommandBuffer`) encoded by a compute pass from the same draw
 commands, so the draw count and the draw parameters never round-trip
 through the CPU.
-
-## 7. GPU address fault in the viewport pass
-
-A freshly started windowed editor driven by a short MCP test sequence
-(`ctest -R "key_press_ctrl_a_selects_the_focused_tree|imgui_click_double|capture_screenshot_annotates_imgui_items"`
-from `build_xcode_metal`) faults on the GPU in about two runs of three:
-the command buffer completes with `kIOGPUCommandBufferCallbackErrorPageFault`
-(logged as "Metal command buffer '...' of frame N failed"), and after a
-second fault Metal ignores every later submission of the process
-(`kIOGPUCommandBufferCallbackErrorSubmissionsIgnored`), so the editor stops
-rendering - screenshots and `render_scene_image` then time out or come
-back empty. Creating the command buffer with
-`MTL::CommandBufferErrorOptionEncoderExecutionStatus` names the faulting
-encoder: "Viewport window renderpass", in the first test's frames (around
-frame 140). The fault does not occur under `MTL_DEBUG_LAYER=1
-MTL_SHADER_VALIDATION=1`, and a full editor-suite run usually avoids it,
-which points at a GPU resource released while a later frame still binds it
-rather than an out-of-range index in a shader. Find the stale binding with
-a Metal GPU capture of a faulting frame.
