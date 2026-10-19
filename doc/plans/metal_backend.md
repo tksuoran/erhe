@@ -29,17 +29,26 @@ different scale, and confirm the viewports and ImGui fill the window
 without stretching or clipping and that `capture_screenshot` returns the
 new size.
 
-## 5. Present wait and format sorting
+## 5. Present wait
 
-- `Device_impl::wait_for_displayed_frame` returns
-  `Present_wait_result::unsupported` and `get_frame_pacing_tier` returns
-  `off`. Implement present wait with `MTL::Drawable::addPresentedHandler`
-  (presented time per frame id), which lets the frame pacing tiers of
-  `doc/frame_pacing/` run on Metal.
-- `Device_impl::sort_depth_stencil_formats` (`metal_device.cpp`) leaves the
-  list unsorted. Apply the Vulkan backend's ordering (depth+stencil before
-  depth-only, then higher precision; `vulkan_device.cpp`), filtered by the
-  capabilities in `metal_pixel_format_table.cpp`.
+`Device_impl::wait_for_displayed_frame` returns
+`Present_wait_result::unsupported` and `get_frame_pacing_tier` returns
+`off`. Present wait alone would have no caller: it is the FR5 clamp of
+tier W (`doc/frame_pacing/capability_tiers.md`), which also needs a target
+present time, presentation feedback and a GPU to reference clock
+calibration. The Metal mapping, to decide which tier to build:
+
+- Tier S needs only FIFO backpressure: `CAMetalLayer.displaySyncEnabled`
+  on and a small `maximumDrawableCount`; the blocking it senses is the
+  `nextDrawable` / presented-frame wait in `begin_swapchain`. Smallest step.
+- Tier W: present wait from `MTL::Drawable::addPresentedHandler` (presented
+  time per frame id, condition variable per id), target present time from
+  `presentDrawable:atTime:` (CoreVideo host time), feedback from
+  `MTLDrawable.presentedTime`, and calibration between the `CACurrentMediaTime`
+  host clock and the `Frame_time_recorder` reference clock. The display
+  refresh comes from `CAMetalDisplayLink` / `NSScreen`.
+
+Depth-stencil format sorting is done (`sort_depth_stencil_formats`).
 
 ## 6. GPU-read draw count
 
@@ -47,9 +56,31 @@ Multi-draw indirect issues one indirect `drawIndexedPrimitives` per command
 over a CPU-side draw count (`doc/erhe/metal_backend.md` "Multi-Draw
 Indirect"); records are named by `first_instance`. What is missing is a
 draw count the GPU writes (`Device_info::use_draw_indirect_count`, which
-the GPU culling of `doc/erhe/draw_list_renderer.md` needs): encode the
-commands into an `MTL::IndirectCommandBuffer` from a compute kernel that
-reads the count (a hand-written MSL kernel; the GLSL path cannot express an
-indirect command buffer) and execute it with
-`executeCommandsInBuffer` over an indirect range, then enable
-`Draw_indirect_test.draw_indexed_indirect_count` and `_count_zero`.
+the GPU culling of `doc/erhe/draw_list_renderer.md` needs).
+
+Metal has no indirect-count draw. The GPU-side form is an
+`MTL::IndirectCommandBuffer` (inherited pipeline state and buffers) whose
+draws a compute kernel encodes from the commands and the count (a
+hand-written MSL kernel: the GLSL path cannot express an indirect command
+buffer), executed with `executeCommandsInBuffer` over the encoded range.
+The kernel must run in a compute encoder before the render encoder that
+draws, but `Render_command_encoder::multi_draw_indexed_primitives_indirect_count`
+is called inside the render pass. The options, to decide before building:
+
+- A preparation hook: the count draws of a pass are declared before the pass
+  starts (command buffer, offset, count buffer, maximum), the backend encodes
+  their indirect command buffers in one compute encoder ahead of the pass,
+  and the in-pass call executes the prepared one. Fits the GPU culling,
+  whose commands are produced by `cull_compact.comp` before the shadow
+  passes; needs an `erhe::graphics` API addition the other backends treat as
+  a no-op.
+- End and reopen the render encoder around an in-pass compute encode: no
+  API change, but every call stores and reloads the attachments (a tile
+  flush on Apple GPUs).
+- Encode `max_draw_count` indirect draws on the CPU after a compute pass
+  zeroes the commands past the count: the same ordering problem, plus CPU
+  encode cost proportional to the maximum.
+
+Verification: `Draw_indirect_test.draw_indexed_indirect_count` and
+`_count_zero`, then the GPU culling gates of `doc/plans/culling.md` with
+`culling_classification` `gpu` on Metal.
