@@ -334,7 +334,7 @@ buffer and its encoders are recorded by one thread.
 
 | Entry point | Members touched | Guard |
 |---|---|---|
-| `acquire_frame_slot` (main, M2) | `m_prepare_frame_id` (write), `m_render_frame_id` (read), the slot's state | `m_frame_id_mutex`; asserts the main thread |
+| `acquire_frame_slot` (main, M2) | `m_prepare_frame_id` (write), `m_render_frame_id` (read), the slot's state; waits for frame `frame_id - N` on the GPU | `m_frame_id_mutex`; `m_completion_mutex` + `m_command_buffer_completed` for the wait (no lock held across it otherwise); asserts the main thread |
 | `begin_frame`, `end_frame` (render, R) | the slot's state, `m_render_frame_id` (write) | asserts the render thread; the slot turns idle and the id advances together under `m_frame_id_mutex` (the render role reads its own id unlocked) |
 | frame retirement (`end_frame`; `wait_idle`) | `m_frame_command_buffer_counts`, `m_latest_completed_frame`; ring buffer pool; completion handlers; the retired frames' `Command_buffer`s | `m_completion_run_mutex` (one retiring thread); `m_completion_mutex`; the pool's mutex; `m_completion_handler_mutex`, released while handlers run; `m_per_thread_mutex`. `wait_idle` retires only the frames that had ended before its wait (bound read before the wait) |
 | command buffer completion handlers (Metal dispatch threads) | per-frame completed counts; presented-frame count; GPU timer results | `m_completion_mutex`; `m_presented_frames_mutex` (+ condition variable); `Gpu_timer_sample_pool::m_mutex` |
@@ -358,12 +358,14 @@ mutex, a ring buffer's mutex, then the leaves (`m_completion_mutex`,
 `m_frame_id_mutex`, `Gpu_timer_sample_pool::m_mutex` before
 `Gpu_timer_impl::m_result_mutex`).
 
-`acquire_frame_slot` does not wait for frame `frame_id - N` on the GPU (the
-Vulkan timeline wait): Metal has no per-slot command pools to reset, GPU
-memory is reused through completion-tracked ring buffers and
-`is_frame_completed`, and the CPU is paced by the presented-frame bound in
-`begin_swapchain`. The headless build has no such bound
-(`doc/plans/metal_backend.md` item 7).
+`acquire_frame_slot(frame_id)` waits, before taking `m_frame_id_mutex`,
+until every command buffer committed for frame `frame_id - N` has completed
+on the GPU (the per-frame counts the completion handlers maintain, with
+`m_command_buffer_completed`), as the Vulkan timeline wait does. That frame
+has ended, so all its command buffers are committed. This is what bounds
+the CPU's lead over a GPU-bound frame when no drawable is presented
+(headless): a headless Bistro load without it grew the ring buffer pool to
+138 buffers (579 MB), with it to 15 (63 MB).
 
 ## Future work
 

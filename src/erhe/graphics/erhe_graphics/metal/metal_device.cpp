@@ -352,6 +352,18 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
     // Order rule (doc/erhe/graphics.md "Frame lifecycle"): frames are
     // acquired strictly in id order, at most N open.
     erhe::utility::Thread_roles::assert_main_thread();
+
+    // Pacing: the frame that last used this slot, frame_id - N, has ended
+    // (at most N frames are open, verified below), so every command buffer
+    // of it is committed; wait until the GPU has completed them all, as the
+    // Vulkan timeline wait does. Without it nothing bounds how far the CPU
+    // runs ahead of a GPU-bound frame when no drawable is presented
+    // (headless), and the ring buffer pool spills instead.
+    const uint64_t frames_in_flight = static_cast<uint64_t>(s_max_frames_in_flight);
+    if (frame_id > frames_in_flight) {
+        wait_for_frame_gpu_completion(frame_id - frames_in_flight);
+    }
+
     const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
     ERHE_VERIFY(frame_id == m_prepare_frame_id + 1);
     ERHE_VERIFY(frame_id >= m_render_frame_id);
@@ -746,15 +758,35 @@ void Device_impl::note_command_buffer_committed(const uint64_t frame_index)
 
 void Device_impl::notify_command_buffer_completed(const uint64_t frame_index)
 {
-    std::lock_guard<std::mutex> lock{m_completion_mutex};
-    const auto i = std::find_if(
-        m_frame_command_buffer_counts.begin(),
-        m_frame_command_buffer_counts.end(),
-        [frame_index](const Frame_command_buffer_count& entry) { return entry.frame_index == frame_index; }
-    );
-    if (i != m_frame_command_buffer_counts.end()) {
-        ++i->completed;
+    {
+        std::lock_guard<std::mutex> lock{m_completion_mutex};
+        const auto i = std::find_if(
+            m_frame_command_buffer_counts.begin(),
+            m_frame_command_buffer_counts.end(),
+            [frame_index](const Frame_command_buffer_count& entry) { return entry.frame_index == frame_index; }
+        );
+        if (i != m_frame_command_buffer_counts.end()) {
+            ++i->completed;
+        }
     }
+    m_command_buffer_completed.notify_all();
+}
+
+void Device_impl::wait_for_frame_gpu_completion(const uint64_t frame_index)
+{
+    // A frame without an entry committed nothing, or has been retired.
+    std::unique_lock<std::mutex> lock{m_completion_mutex};
+    m_command_buffer_completed.wait(
+        lock,
+        [this, frame_index]() {
+            const auto i = std::find_if(
+                m_frame_command_buffer_counts.begin(),
+                m_frame_command_buffer_counts.end(),
+                [frame_index](const Frame_command_buffer_count& entry) { return entry.frame_index == frame_index; }
+            );
+            return (i == m_frame_command_buffer_counts.end()) || (i->completed >= i->committed);
+        }
+    );
 }
 
 auto Device_impl::wait_for_presented_frame_slot() -> bool
