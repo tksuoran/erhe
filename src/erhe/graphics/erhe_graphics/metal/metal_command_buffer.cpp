@@ -25,13 +25,19 @@
 namespace erhe::graphics {
 
 Command_buffer_impl::Command_buffer_impl(Device& device, erhe::utility::Debug_label debug_label)
-    : m_device     {&device}
-    , m_debug_label{std::move(debug_label)}
+    : m_device               {&device}
+    , m_debug_label          {std::move(debug_label)}
+    , m_gpu_timer_sample_pool{&device.get_impl().get_gpu_timer_sample_pool()}
 {
 }
 
 Command_buffer_impl::~Command_buffer_impl() noexcept
 {
+    // A cb dropped without submit still holds its timer sample chunk.
+    if ((m_gpu_timer_sample_pool != nullptr) && m_gpu_timer_samples.has_chunk()) {
+        m_gpu_timer_sample_pool->release_chunk(m_gpu_timer_samples.chunk_index);
+        m_gpu_timer_samples.chunk_index = -1;
+    }
     if (m_inter_encoder_fence != nullptr) {
         m_inter_encoder_fence->release();
         m_inter_encoder_fence = nullptr;
@@ -66,7 +72,10 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     , m_signal_own_cpu_completion       {other.m_signal_own_cpu_completion}
     , m_signal_own_cpu_completion_value {other.m_signal_own_cpu_completion_value}
     , m_swapchain_used                  {other.m_swapchain_used}
+    , m_gpu_timer_sample_pool           {other.m_gpu_timer_sample_pool}
+    , m_gpu_timer_samples               {other.m_gpu_timer_samples}
 {
+    other.m_gpu_timer_samples.chunk_index = -1;
     other.m_device              = nullptr;
     other.m_mtl_command_buffer  = nullptr;
     other.m_inter_encoder_fence = nullptr;
@@ -92,6 +101,9 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     if (m_implicit_cpu_event != nullptr) {
         m_implicit_cpu_event->release();
     }
+    if ((m_gpu_timer_sample_pool != nullptr) && m_gpu_timer_samples.has_chunk()) {
+        m_gpu_timer_sample_pool->release_chunk(m_gpu_timer_samples.chunk_index);
+    }
 
     m_device                          = other.m_device;
     m_debug_label                     = std::move(other.m_debug_label);
@@ -108,7 +120,10 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_signal_own_cpu_completion       = other.m_signal_own_cpu_completion;
     m_signal_own_cpu_completion_value = other.m_signal_own_cpu_completion_value;
     m_swapchain_used                  = other.m_swapchain_used;
+    m_gpu_timer_sample_pool           = other.m_gpu_timer_sample_pool;
+    m_gpu_timer_samples               = other.m_gpu_timer_samples;
 
+    other.m_gpu_timer_samples.chunk_index = -1;
     other.m_device              = nullptr;
     other.m_mtl_command_buffer  = nullptr;
     other.m_inter_encoder_fence = nullptr;
@@ -703,6 +718,33 @@ auto Command_buffer_impl::get_swapchain_used() const noexcept -> Swapchain_impl*
 void Command_buffer_impl::clear_swapchain_used() noexcept
 {
     m_swapchain_used = nullptr;
+}
+
+auto Command_buffer_impl::get_gpu_timer_samples() noexcept -> Gpu_timer_command_buffer_samples&
+{
+    return m_gpu_timer_samples;
+}
+
+auto Command_buffer_impl::get_gpu_timer_sample_pool() const noexcept -> Gpu_timer_sample_pool*
+{
+    return m_gpu_timer_sample_pool;
+}
+
+void Command_buffer_impl::add_gpu_timer_completion_handler()
+{
+    if ((m_gpu_timer_sample_pool == nullptr) || (m_mtl_command_buffer == nullptr) || !m_gpu_timer_samples.has_chunk()) {
+        return;
+    }
+    // The handler owns the chunk from here on; this Command_buffer_impl may
+    // be destroyed before the GPU completes the cb.
+    Gpu_timer_sample_pool* const           pool    = m_gpu_timer_sample_pool;
+    const Gpu_timer_command_buffer_samples samples = m_gpu_timer_samples;
+    m_gpu_timer_samples = Gpu_timer_command_buffer_samples{};
+    m_mtl_command_buffer->addCompletedHandler(
+        [pool, samples](MTL::CommandBuffer*) {
+            pool->resolve_command_buffer_samples(samples);
+        }
+    );
 }
 
 } // namespace erhe::graphics

@@ -47,7 +47,22 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
     // on which autorelease pool the calling thread has open.
     {
         Scoped_transient_object_pool object_pool{};
-        m_encoder = m_mtl_command_buffer->computeCommandEncoder();
+        // Gpu_timer samples (metal_gpu_timer.hpp) at the start and end of
+        // the encoder.
+        MTL::CounterSampleBuffer* sample_buffer = nullptr;
+        std::size_t               start_sample  = 0;
+        std::size_t               end_sample    = 0;
+        Gpu_timer_sample_pool* const pool = cb_impl.get_gpu_timer_sample_pool();
+        if ((pool != nullptr) && cb_impl.get_gpu_timer_samples().begin_encoder(*pool, sample_buffer, start_sample, end_sample)) {
+            MTL::ComputePassDescriptor* const descriptor = MTL::ComputePassDescriptor::computePassDescriptor();
+            MTL::ComputePassSampleBufferAttachmentDescriptor* const attachment = descriptor->sampleBufferAttachments()->object(0);
+            attachment->setSampleBuffer            (sample_buffer);
+            attachment->setStartOfEncoderSampleIndex(start_sample);
+            attachment->setEndOfEncoderSampleIndex  (end_sample);
+            m_encoder = m_mtl_command_buffer->computeCommandEncoder(descriptor);
+        } else {
+            m_encoder = m_mtl_command_buffer->computeCommandEncoder();
+        }
         ERHE_VERIFY(m_encoder != nullptr);
         m_encoder->retain();
     }
@@ -73,6 +88,7 @@ Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
         m_encoder->endEncoding();
         m_encoder->release();
         m_encoder = nullptr;
+        m_command_buffer.get_impl().get_gpu_timer_samples().end_encoder();
     }
     // The cb is owned by Command_buffer, not by this encoder; nothing
     // to commit here. submit_command_buffers takes care of commit.

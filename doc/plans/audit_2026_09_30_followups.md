@@ -83,8 +83,8 @@ and "Follow-ups found by review"; the next pick is a new selection from
 - Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
   (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
   opt-in); needs a macOS session to build and verify.
-- Item 6, Metal half: GPU timers (read 0), `blit_framebuffer` (fatal) and
-  swapchain resize on Metal; needs a macOS session.
+- Item 6, Metal half: `blit_framebuffer` (fatal) and swapchain resize on
+  Metal; needs a macOS session.
 - Item 17, GPU tests in CI: the job runs the `gpu` label on lavapipe under
   the latest SDK's validation layer (`doc/testing.md` "CI"); its first run
   on a GitHub runner is outstanding. The goldens needed no per-driver

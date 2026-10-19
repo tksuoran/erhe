@@ -1925,9 +1925,11 @@ void Ddgi_renderer::tick_field(erhe::graphics::Command_buffer& command_buffer, S
     command_buffer.transition_texture_layout(*m_irradiance_texture, Image_layout::general);
     command_buffer.transition_texture_layout(*m_distance_texture,   Image_layout::general);
     {
-        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        // One encoder per timed pass: Metal takes GPU timestamps only at
+        // encoder boundaries (doc/erhe/metal_backend.md "GPU timers").
         const auto blend = [&](const Blend_pass& pass, const std::shared_ptr<Texture>& atlas, const Ddgi_pass timed_pass) {
-            const Scoped_gpu_timer blend_timer{pass_timer(timed_pass), command_buffer};
+            const Scoped_gpu_timer  blend_timer{pass_timer(timed_pass), command_buffer};
+            Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
             encoder.set_bind_group_layout(pass.bind_group_layout.get());
             encoder.set_compute_pipeline(*pass.pipeline);
             m_control_buffer->bind(encoder, control_range);
@@ -1941,7 +1943,8 @@ void Ddgi_renderer::tick_field(erhe::graphics::Command_buffer& command_buffer, S
         // Relocation / classification reads the same ray data, and writes
         // only the probe data texture the blend passes never touch, so it
         // needs no barrier against them.
-        const Scoped_gpu_timer relocate_timer{pass_timer(Ddgi_pass::relocate), command_buffer};
+        const Scoped_gpu_timer  relocate_timer{pass_timer(Ddgi_pass::relocate), command_buffer};
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_relocate_bind_group_layout.get());
         encoder.set_compute_pipeline(*m_relocate_pipeline);
         m_control_buffer->bind(encoder, control_range);

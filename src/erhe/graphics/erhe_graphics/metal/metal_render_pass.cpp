@@ -295,6 +295,23 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         }
     }
 
+    // Gpu_timer samples (metal_gpu_timer.hpp): start of vertex and end of
+    // fragment work bracket the pass.
+    {
+        MTL::CounterSampleBuffer* sample_buffer = nullptr;
+        std::size_t               start_sample  = 0;
+        std::size_t               end_sample    = 0;
+        Gpu_timer_sample_pool* const pool = cb_impl.get_gpu_timer_sample_pool();
+        if ((pool != nullptr) && cb_impl.get_gpu_timer_samples().begin_encoder(*pool, sample_buffer, start_sample, end_sample)) {
+            MTL::RenderPassSampleBufferAttachmentDescriptor* const attachment = render_pass_desc->sampleBufferAttachments()->object(0);
+            attachment->setSampleBuffer               (sample_buffer);
+            attachment->setStartOfVertexSampleIndex   (start_sample);
+            attachment->setEndOfVertexSampleIndex     (MTL::CounterDontSample);
+            attachment->setStartOfFragmentSampleIndex (MTL::CounterDontSample);
+            attachment->setEndOfFragmentSampleIndex   (end_sample);
+        }
+    }
+
     m_mtl_encoder = m_command_buffer->renderCommandEncoder(render_pass_desc);
     render_pass_desc->release();
     if (m_mtl_encoder != nullptr) {
@@ -342,6 +359,7 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
         m_mtl_encoder->endEncoding();
         m_mtl_encoder->release();
         m_mtl_encoder = nullptr;
+        command_buffer.get_impl().get_gpu_timer_samples().end_encoder();
     }
 
     if ((m_swapchain != nullptr) && (m_command_buffer != nullptr)) {
