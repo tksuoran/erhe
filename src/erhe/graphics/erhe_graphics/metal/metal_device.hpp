@@ -120,7 +120,6 @@ public:
     void               note_presented_frame_submitted();
     void               note_presented_frame_completed();
 
-    void resize_swapchain_to_window();
     void start_frame_capture       ();
     void end_frame_capture         ();
 

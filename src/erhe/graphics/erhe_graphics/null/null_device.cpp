@@ -202,11 +202,6 @@ auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
     return Frame_pacing_tier::off;
 }
 
-void Device_impl::resize_swapchain_to_window()
-{
-    // No-op for null backend
-}
-
 void Device_impl::memory_barrier(const Memory_barrier_mask barriers)
 {
     static_cast<void>(barriers);

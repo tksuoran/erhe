@@ -245,7 +245,17 @@ enum (`sample_zero` / `average` / `min` / `max`) maps to these filters.
 
 ### Swapchain
 
-Metal swapchain provides only a color texture (from CAMetalLayer's nextDrawable). The depth-stencil texture is app-managed, created alongside the swapchain and recreated on resize.
+The Metal swapchain provides only a color texture (from CAMetalLayer's
+`nextDrawable`) and no depth-stencil texture (`has_depth()` is false); the
+swapchain render pass composites the window without depth.
+
+Windowed resize needs no backend code: SDL's Metal view sets the layer's
+`drawableSize` from the view's backing size on every resize
+(`SDL_cocoametalview.m`, `updateDrawableSize`), the swapchain render pass
+takes its size from the frame's drawable texture, and the editor sizes its
+render targets from the window size the frame packet carries. The headless
+window never changes size (as with Vulkan's `Emulated_swapchain_impl`), so
+the emulated ring is created once.
 
 `Swapchain_impl` serves both window configurations. With `ERHE_WINDOW_LIBRARY=sdl`
 the context window hands out an SDL Metal view, `Surface_impl` owns the
@@ -270,9 +280,10 @@ a drawable cannot be read after presentation, so capture is armed
 (`Device::request_frame_capture`) and the swapchain render pass epilogue blits
 the composited drawable into a persistent shared buffer on the frame's own
 command buffer. Headless, the ring textures stay owned and readable, so
-`request_frame_capture` is a no-op and `capture_last_frame` blits the most
-recently composited ring texture on a fresh command buffer and waits for it,
-returning the frame synchronously on the first call.
+`request_frame_capture` is a no-op and `capture_last_frame` blits the ring
+texture of the newest composited frame that has ended (frame pipelining may
+have the render thread compositing the next one) on a fresh command buffer
+and waits for it, returning the frame synchronously on the first call.
 
 ### Multi-Draw Indirect
 
