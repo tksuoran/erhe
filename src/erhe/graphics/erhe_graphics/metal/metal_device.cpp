@@ -351,6 +351,7 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
 {
     // Order rule (doc/erhe/graphics.md "Frame lifecycle"): frames are
     // acquired strictly in id order, at most N open.
+    erhe::utility::Thread_roles::assert_main_thread();
     const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
     ERHE_VERIFY(frame_id == m_prepare_frame_id + 1);
     ERHE_VERIFY(frame_id >= m_render_frame_id);
@@ -365,7 +366,7 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
     return true;
 }
 
-void Device_impl::drain_completed_frames(const Gpu_queue_state gpu_queue_state)
+void Device_impl::drain_completed_frames(const Gpu_queue_state gpu_queue_state, const uint64_t ended_frame_bound)
 {
     // Drain frames whose cbs have signalled GPU completion via
     // Command_buffer_impl's addCompletedHandler. Ring buffer ranges
@@ -383,19 +384,14 @@ void Device_impl::drain_completed_frames(const Gpu_queue_state gpu_queue_state)
     // pending and retire on the first drain after end_frame advances
     // the index.
     //
-    // A frame retires once it has ended (frame < m_render_frame_id) and
+    // A frame retires once it has ended (frame < ended_frame_bound) and
     // every command buffer committed for it has completed, in frame id
     // order: the first frame still waiting on the GPU stops the walk.
     const std::lock_guard<std::mutex> run_lock{m_completion_run_mutex};
-    uint64_t render_frame_id = 0;
-    {
-        const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
-        render_frame_id = m_render_frame_id;
-    }
     m_retired_frames_scratch.clear();
     {
         std::lock_guard<std::mutex> lock{m_completion_mutex};
-        while (m_latest_completed_frame < render_frame_id) {
+        while (m_latest_completed_frame < ended_frame_bound) {
             const uint64_t frame = m_latest_completed_frame;
             const auto i = std::find_if(
                 m_frame_command_buffer_counts.begin(),
@@ -420,12 +416,13 @@ void Device_impl::drain_completed_frames(const Gpu_queue_state gpu_queue_state)
 
 auto Device_impl::begin_frame() -> bool
 {
+    erhe::utility::Thread_roles::assert_render_thread();
     // The legacy shim acts on the oldest open frame.
     Device_frame_slot& slot = m_frame_slots[get_frame_slot_index(m_render_frame_id)];
     ERHE_VERIFY(slot.state == Device_frame_state::waited);
     ERHE_VERIFY(slot.frame_id == m_render_frame_id);
 
-    drain_completed_frames(Gpu_queue_state::running);
+    drain_completed_frames(Gpu_queue_state::running, m_render_frame_id);
 
     slot.state = Device_frame_state::recording;
     return true;
@@ -451,6 +448,7 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
     // doc/erhe/graphics.md ("Frame lifecycle") and the Vulkan
     // implementation, whose end_frame()/update_frame_completion() does the
     // same, for the rationale.
+    erhe::utility::Thread_roles::assert_render_thread();
     ERHE_VERIFY(frame_id == m_render_frame_id);
     const std::size_t  slot_index = get_frame_slot_index(frame_id);
     Device_frame_slot& slot       = m_frame_slots[slot_index];
@@ -468,14 +466,16 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
     // which drives frame_completed() the same way. Without this the
     // completion-handler queue (and m_pending_completed_frames) grow
     // unbounded and GPU->CPU readbacks (e.g. Id_renderer picking) never
-    // complete.
-    drain_completed_frames(Gpu_queue_state::running);
+    // complete. The render role reads its own frame id unlocked.
+    drain_completed_frames(Gpu_queue_state::running, frame_id);
 
     {
+        // The slot is idle before the frame id advances: once it has, the
+        // main thread may acquire the slot for frame_id + N.
         const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
+        slot.state = Device_frame_state::idle;
         ++m_render_frame_id;
     }
-    slot.state = Device_frame_state::idle;
     return true;
 }
 
@@ -820,6 +820,16 @@ void Device_impl::wait_idle()
     if (m_mtl_command_queue == nullptr) {
         return;
     }
+    // m_render_frame_id is the oldest open frame (or the next one); frames
+    // before it have ended, so every command buffer of theirs is committed.
+    // Read before the wait: a frame the render thread ends during the wait
+    // may have committed command buffers after the wait's own one, which
+    // are still running when the wait returns.
+    uint64_t render_frame_id = 0;
+    {
+        const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
+        render_frame_id = m_render_frame_id;
+    }
     {
         // The cb below is autoreleased and not retained: drain it here.
         Scoped_transient_object_pool object_pool{};
@@ -831,14 +841,14 @@ void Device_impl::wait_idle()
         command_buffer->waitUntilCompleted();
     }
 
-    // Every command buffer submitted so far has completed, so every ended
-    // frame is retired - the same statement the GL backend makes after
-    // glFinish() - even where the completion callbacks of its command
-    // buffers have not run yet. Its ring buffer ranges and completion
-    // handlers are released before wait_idle returns (used by the editor
-    // ctor's init-frame flow). Frames still open stay - see
+    // Every command buffer submitted before the wait has completed, so every
+    // frame that had ended before it is retired - the same statement the GL
+    // backend makes after glFinish() - even where the completion callbacks
+    // of its command buffers have not run yet. Its ring buffer ranges and
+    // completion handlers are released before wait_idle returns (used by
+    // the editor ctor's init-frame flow). Frames still open stay - see
     // drain_completed_frames.
-    drain_completed_frames(Gpu_queue_state::idle);
+    drain_completed_frames(Gpu_queue_state::idle, render_frame_id);
 }
 
 void Device_impl::on_thread_enter()

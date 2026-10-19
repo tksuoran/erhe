@@ -34,6 +34,29 @@ through Apple's Xcode MCP server (`mcp__xcode__*`; always call
 cannot select schemes or run destinations, and cannot launch or drive the
 editor. When no Xcode window is open, build with the wrappers above.
 
+## ThreadSanitizer
+
+`ERHE_USE_TSAN` works with AppleClang (`doc/building.md`). Configure a
+separate tree the way `scripts/configure_xcode_metal.sh` does, with `-B
+build_xcode_metal_tsan`, `-DERHE_BUILD_TESTS=OFF` and `-DERHE_USE_TSAN=ON`,
+build the `editor` target and run it with the overlap and the pipelining on:
+
+```bash
+TSAN_OPTIONS="suppressions=$PWD/scripts/tsan_suppressions.txt log_path=$PWD/logs/tsan history_size=4" \
+ERHE_AI_DRIVER=1 ERHE_RENDER_THREAD=1 ERHE_IMGUI_OVERLAP=1 ERHE_FRAME_PIPELINING=1 \
+build_xcode_metal_tsan/bin/Debug/editor
+```
+
+macOS symbolizes the reports itself, so function-name suppressions
+(`race:`) match; Metal's command buffer completion blocks are suppressed
+that way (the ordering through `commit` and completion is inside the
+uninstrumented framework). Reports land in `logs/tsan.<pid>`; with any
+report pending TSan aborts the process at exit (SIGABRT from
+`__tsan::finalize`), which is not an editor crash. MCP requests that span
+frames (`capture_screenshot` in the windowed build) can exceed the MCP
+server's request timeout under TSan's slowdown and reply "Request timed
+out" although they complete (the log says "processed").
+
 ## Debugging
 
 Invoke the **`erhe-cpp-debugging`** skill: it is the lldb run-book (Python SB

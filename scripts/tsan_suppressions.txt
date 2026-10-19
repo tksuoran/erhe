@@ -43,3 +43,9 @@ called_from_lib:libxcb-xfixes.so
 called_from_lib:libwayland-client.so
 called_from_lib:libdbus-1.so
 called_from_lib:libsystemd.so
+# macOS / Metal: a command buffer completion block is copied on the recording
+# thread and runs on a Metal dispatch thread after the GPU completes the
+# command buffer. The ordering goes through Metal's commit and completion
+# inside the uninstrumented framework, so TSan reports the block's captures
+# as a race. macOS symbolizes TSan reports, so the function name matches.
+race:MTL::CommandBuffer::addCompletedHandler

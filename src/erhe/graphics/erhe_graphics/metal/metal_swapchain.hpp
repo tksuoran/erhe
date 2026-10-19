@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/swapchain.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -48,10 +49,11 @@ public:
     [[nodiscard]] auto get_current_color_texture() const -> MTL::Texture*;
 
     // Called by Render_pass_impl::end_render_pass once the swapchain render
-    // pass has been recorded: the current texture now holds the fully
-    // composited frame, which is what the headless readback path reads.
-    // Mirrors Emulated_swapchain_impl::mark_render_pass_recorded().
-    void mark_render_pass_recorded();
+    // pass of device frame frame_id has been recorded: the current texture
+    // holds the fully composited frame once that frame's command buffer is
+    // submitted, and the headless readback path reads it after the frame
+    // has ended. Mirrors Emulated_swapchain_impl::mark_render_pass_recorded().
+    void mark_render_pass_recorded(uint64_t frame_id);
 
     // Releases the reference taken in begin_frame(). Called by
     // Device_impl::submit_command_buffers once presentDrawable has been
@@ -80,8 +82,9 @@ public:
     //
     // Headless: the emulated ring textures stay owned by this class and
     // stay readable, so there is nothing to arm - request_capture() is a
-    // no-op and read_back_capture() blits the most recently composited ring
-    // texture on a fresh command buffer and waits for it, synchronously.
+    // no-op and read_back_capture() blits the ring texture of the newest
+    // composited frame that has ended on a fresh command buffer and waits
+    // for it, synchronously.
     [[nodiscard]] auto is_capture_supported() const -> bool;
     void               request_capture();
     void               record_capture(uint64_t frame_id, MTL::CommandBuffer* command_buffer);
@@ -103,8 +106,9 @@ private:
     // RGBA8.
     void convert_capture_buffer(std::vector<std::byte>& out_rgba8) const;
 
-    // Headless readback: blit m_emulated_textures[m_last_composited_index]
-    // into the capture buffer on a fresh command buffer and wait for it.
+    // Headless readback: blit the ring texture of the newest composited
+    // frame that has ended into the capture buffer on a fresh command
+    // buffer and wait for it.
     [[nodiscard]] auto read_back_emulated(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool;
 
     Device_impl&        m_device_impl;
@@ -113,8 +117,20 @@ private:
 
     std::vector<MTL::Texture*> m_emulated_textures;      // empty unless headless
     std::size_t                m_emulated_index      {0};
-    std::size_t                m_last_composited_index{0};
-    bool                       m_have_composited      {false};
+
+    // The two newest composited frames, newest first. Written by the render
+    // thread, read by the main thread (capture_last_frame), which with frame
+    // pipelining runs while the render thread records the next frame into
+    // another ring texture.
+    class Composited_frame
+    {
+    public:
+        uint64_t    frame_id     {0};
+        std::size_t texture_index{0};
+        bool        valid        {false};
+    };
+    std::mutex                      m_composited_mutex;
+    std::array<Composited_frame, 2> m_composited{};
     uint32_t                   m_emulated_width       {0};
     uint32_t                   m_emulated_height      {0};
 

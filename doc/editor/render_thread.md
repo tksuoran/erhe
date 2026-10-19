@@ -429,7 +429,8 @@ for frames 1 to 12; run scripts wait for frame 12.
   the overlap and the pipelining on, driving the image gate, four view with
   splitter drags, glTF churn, a lightmap bake, DDGI and radiance cascades,
   the developer windows, a soak and exit: zero reports from the main,
-  ImGui or render phases (`doc/agents/linux.md` "ThreadSanitizer"). Two
+  ImGui or render phases (`doc/agents/linux.md` "ThreadSanitizer";
+  macOS: `doc/agents/macos.md` "ThreadSanitizer"). Two
   startup and shutdown reports come from uninstrumented third-party code
   (SDL's libdbus mutex, the Vulkan loader in `vkDestroyDevice`).
 - **Tests.** `erhe_graphics_gpu_tests` covers two open device frames;
@@ -491,9 +492,13 @@ for frames 1 to 12; run scripts wait for frame 12.
   render thread once (`Context_window::make_current`), the GL worker
   context pool unchanged. The pacing half of the frame start stays on the
   main thread.
-- **Metal.** The Metal backend takes the dedicated thread and pipelining
-  defaults but its `Device_impl` has not been audited against the "Thread
-  safety" table; a macOS run of the image and race gates is pending.
+- **Metal.** The Metal backend runs the dedicated thread and pipelining
+  defaults; its thread-safety table is `doc/erhe/metal_backend.md` "Thread
+  safety". On macOS the image gate (default scene, two cameras) is
+  byte-identical across the four configurations and the race gate (scene
+  renders, screenshots, DDGI and radiance cascades, two glTF opens, soak,
+  exit) reports nothing. The bake, wide-line, skinned and four-view cases
+  of the gate have not been run on Metal.
 - **Measurements still open.** The windowed frame pacer check with the
   present-timing tiers; a CPU-bound measurement on a GPU with a lower floor
   than the ones measured (every measured scene is GPU-bound, so the R3

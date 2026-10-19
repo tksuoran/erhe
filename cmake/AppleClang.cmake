@@ -25,6 +25,15 @@ if (ERHE_USE_UBSAN)
     add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer -g)
     add_link_options(-fsanitize=undefined)
 endif ()
+# ERHE_USE_TSAN: the race gate of doc/editor/render_thread.md section 3.4.
+# Apple's TSan runtime is a dylib already, so no -shared-libsan.
+if (ERHE_USE_TSAN)
+    if (ERHE_USE_ASAN)
+        message(FATAL_ERROR "ERHE_USE_TSAN and ERHE_USE_ASAN are exclusive")
+    endif ()
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=thread)
+endif ()
 
 set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 

@@ -157,7 +157,7 @@ attempt and the launch must be retried.
 | `ERHE_BUILD_TESTS` | Build the `erhe_<name>_tests` gtest targets | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_UBSAN` | UndefinedBehaviorSanitizer (Clang, GCC, AppleClang; ignored on MSVC) | `ON`, `OFF` | `OFF` |
-| `ERHE_USE_TSAN` | ThreadSanitizer (Clang, GCC; exclusive with `ERHE_USE_ASAN`, ignored on MSVC and AppleClang) | `ON`, `OFF` | `OFF` |
+| `ERHE_USE_TSAN` | ThreadSanitizer (Clang, GCC, AppleClang; exclusive with `ERHE_USE_ASAN`, ignored on MSVC) | `ON`, `OFF` | `OFF` |
 | `ERHE_WARNINGS_AS_ERRORS` | Warnings as errors on every erhe target (`-Werror`, `/WX`); the CPM dependencies keep their own policy | `ON`, `OFF` | `ON` |
 | `ERHE_USE_FPNG` | Build the fpng image writer (fast PNG save) | `ON`, `OFF` | `ON` |
 | `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` | `OFF` |
@@ -213,8 +213,8 @@ tree. UBSan is the default check set with recovery on: a report is printed
 and the program continues unless the `UBSAN_OPTIONS=halt_on_error=1`
 runtime option is set, which is what the CI sanitizer entry does
 (`doc/testing.md` "CI"). The Windows `*_asan.bat` wrappers below set
-`ERHE_USE_ASAN`. `ERHE_USE_TSAN` adds ThreadSanitizer the same way (Clang
-and GCC; exclusive with ASan): the race gate of the editor's render thread
+`ERHE_USE_ASAN`. `ERHE_USE_TSAN` adds ThreadSanitizer the same way (Clang,
+GCC and AppleClang; exclusive with ASan): the race gate of the editor's render thread
 (`doc/editor/editor.md` "Frame phases and the render thread"); run the
 editor with `TSAN_OPTIONS` naming a suppressions file for the GPU driver
 and windowing libraries, which are not instrumented.

@@ -279,7 +279,8 @@ frame that held it ended (ordered by the caller's handoff); or one owning
 role. The roles are `erhe::utility::Thread_roles` (`doc/erhe/utility.md`);
 the role asserts are no-ops while the roles are unset (init, tests,
 examples). The table is the Vulkan backend's; the OpenGL and null backends
-render inline (one thread), and the Metal backend has not been audited.
+render inline (one thread); the Metal backend's table is in
+`doc/erhe/metal_backend.md` "Thread safety".
 
 | Entry point | Members touched | Guard |
 |---|---|---|

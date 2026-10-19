@@ -367,7 +367,7 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
 
         // The current backbuffer now holds the composited frame; the
         // headless readback path reads exactly this one.
-        swapchain_impl.mark_render_pass_recorded();
+        swapchain_impl.mark_render_pass_recorded(command_buffer.get_frame_id());
 
         // Armed screenshot capture (Device::request_frame_capture): blit
         // the freshly composited drawable into the capture buffer while

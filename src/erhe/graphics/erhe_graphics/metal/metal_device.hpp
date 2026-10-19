@@ -222,7 +222,10 @@ private:
     // symmetry. The editor's per-frame loop calls end_frame() but not
     // begin_frame(), so the end_frame() drain is the one that actually
     // recycles ring buffers and fires completion handlers per frame.
-    void drain_completed_frames(Gpu_queue_state gpu_queue_state);
+    // Retires, in id order, the frames before ended_frame_bound (frames
+    // that have ended) whose command buffers have all completed - or, with
+    // Gpu_queue_state::idle, every one of them.
+    void drain_completed_frames(Gpu_queue_state gpu_queue_state, uint64_t ended_frame_bound);
 
     class Completion_handler
     {

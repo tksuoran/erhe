@@ -321,6 +321,50 @@ shuts down. Releasing a resource that an in-flight command buffer still
 references is what this prevents - it shows up as intermittent shutdown
 crashes.
 
+### Thread safety
+
+The dedicated render thread and frame pipelining (`doc/editor/render_thread.md`)
+run M2 of frame N+1 on the main thread while the render thread records,
+submits, presents and ends frame N. Every Metal `Device_impl` entry point
+both roles reach has the guards of `doc/erhe/graphics.md` "Thread safety":
+a mutex held only for bookkeeping (none across a GPU wait), a split per
+frame or command buffer, or one owning role. Metal's `MTL::Device`,
+`MTL::CommandQueue` creation calls and `commit` are thread-safe; a command
+buffer and its encoders are recorded by one thread.
+
+| Entry point | Members touched | Guard |
+|---|---|---|
+| `acquire_frame_slot` (main, M2) | `m_prepare_frame_id` (write), `m_render_frame_id` (read), the slot's state | `m_frame_id_mutex`; asserts the main thread |
+| `begin_frame`, `end_frame` (render, R) | the slot's state, `m_render_frame_id` (write) | asserts the render thread; the slot turns idle and the id advances together under `m_frame_id_mutex` (the render role reads its own id unlocked) |
+| frame retirement (`end_frame`; `wait_idle`) | `m_frame_command_buffer_counts`, `m_latest_completed_frame`; ring buffer pool; completion handlers; the retired frames' `Command_buffer`s | `m_completion_run_mutex` (one retiring thread); `m_completion_mutex`; the pool's mutex; `m_completion_handler_mutex`, released while handlers run; `m_per_thread_mutex`. `wait_idle` retires only the frames that had ended before its wait (bound read before the wait) |
+| command buffer completion handlers (Metal dispatch threads) | per-frame completed counts; presented-frame count; GPU timer results | `m_completion_mutex`; `m_presented_frames_mutex` (+ condition variable); `Gpu_timer_sample_pool::m_mutex` |
+| `get_frame_index`, `is_frame_ended`, `is_frame_completed` (any) | frame ids; `m_latest_completed_frame` | role-keyed as Vulkan; `m_frame_id_mutex`; `m_completion_mutex` |
+| `add_completion_handler` (any) | `m_completion_handlers` | `m_completion_handler_mutex`; stamped with the calling role's frame |
+| `get_command_buffer` (both) | `m_per_thread_command_buffers` | `m_per_thread_mutex`; a fresh `MTL::CommandBuffer` per call |
+| `submit_command_buffers`, `submit_command_buffer_and_wait` (both) | the cbs' sync registrations; the presented-frame count; per-frame committed counts | per command buffer; `m_presented_frames_mutex`; `m_completion_mutex`. Queue order follows commit order across threads |
+| encoders (`Render_pass_impl`, `Compute_command_encoder_impl`) | the active render pass / compute encoder | `thread_local` trackers (`s_active_render_pass`, `s_active_encoder`); per command buffer state |
+| `allocate_ring_buffer_entry`, `Ring_buffer_client::acquire` | `Ring_buffer_pool` | the pool's mutex and per-role lists (`doc/erhe/ring_buffer_memory.md`) |
+| `Texture_heap` bind | the heap's argument encoder and argument buffer | one role per heap (per-frame material set heaps; text, ImGui and texel renderer heaps bind in R) |
+| `Gpu_timer` create, record, resolve, destroy | sample chunks, timer registry, calibration; the timer's result | `Gpu_timer_sample_pool::m_mutex` ("GPU timers"); records per command buffer; `Gpu_timer_impl::m_result_mutex` |
+| swapchain (`begin_swapchain`, drawable, present) | `Swapchain_impl` drawable and emulated ring index | render role only |
+| `capture_last_frame` / `request_frame_capture` (main) | windowed: the capture request, buffer and carrying cb; headless: the composited frame list | `m_capture_mutex`; `m_composited_mutex`. Headless reads the newest composited frame that has ended |
+| pipeline states, depth-stencil states, samplers, textures, buffers | new Metal objects | created per call (no backend caches); destruction deferred with `add_completion_handler` |
+| `get_info`, format queries | device properties | written during construction only |
+
+Lock order, outermost first: `m_completion_run_mutex`, the ring buffer pool's
+mutex, a ring buffer's mutex, then the leaves (`m_completion_mutex`,
+`m_completion_handler_mutex`, `m_frame_id_mutex`, `m_per_thread_mutex`,
+`m_presented_frames_mutex`, `m_capture_mutex`, `m_composited_mutex` before
+`m_frame_id_mutex`, `Gpu_timer_sample_pool::m_mutex` before
+`Gpu_timer_impl::m_result_mutex`).
+
+`acquire_frame_slot` does not wait for frame `frame_id - N` on the GPU (the
+Vulkan timeline wait): Metal has no per-slot command pools to reset, GPU
+memory is reused through completion-tracked ring buffers and
+`is_frame_completed`, and the CPU is paced by the presented-frame bound in
+`begin_swapchain`. The headless build has no such bound
+(`doc/plans/metal_backend.md` item 7).
+
 ## Future work
 
 - [plans/metal_backend.md](../plans/metal_backend.md): `blit_framebuffer`, swapchain resize, present wait, format sorting, GPU multi-draw indirect
