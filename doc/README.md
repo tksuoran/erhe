@@ -437,6 +437,7 @@ flowchart TD
 - [plans/editor.md](plans/editor.md) (proposed): Editor: outstanding feature work
 - [plans/editor_improvements.md](plans/editor_improvements.md) (proposed): Prioritized backlog of editor architecture improvements
 - [plans/frame_pacing.md](plans/frame_pacing.md) (proposed): Frame pacing: outstanding work
+- [plans/frame_pacing_metal.md](plans/frame_pacing_metal.md) (in progress): Frame pacing on Metal: tier M to a reliable default
 - [plans/geometry_graph/attribute_projection.md](plans/geometry_graph/attribute_projection.md) (proposed): project_attribute geometry-graph node: design research
 - [plans/geometry_graph/creation_tools.md](plans/geometry_graph/creation_tools.md) (in progress): AI creation tools and geometry-graph follow-ups
 - [plans/geometry_graph/geometry_nodes.md](plans/geometry_graph/geometry_nodes.md) (proposed): Geometry nodes: field system and further node types

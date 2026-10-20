@@ -1226,3 +1226,42 @@ TEST(Frame_pacer_claims, c22b_deadline_estimate_stays_put_on_direct_path)
     static_cast<void>(records);
     EXPECT_DOUBLE_EQ(pacer.get_deadline_offset(), scenario.plant.tunables.deadline_offset_initial);
 }
+
+TEST(Frame_pacer_claims, c23_upshift_under_gpu_clock_scaling)
+{
+    // Measured on the Apple GPU (doc/erhe/metal_backend.md "Frame pacing"):
+    // at N=2 the GPU clocks down and a tail of frames grows past the N=1
+    // budget ((N - 1) * T - H = 7.5 ms at 120 Hz; p95 7.6 ms at N=2 against
+    // 6.0 ms at N=1). A startup spike downshifts to N=2; with a 12 percent
+    // tail a per-frame upshift test (upshift_quantile 1.0) does not complete
+    // its dwell within the run, the q90 test does.
+    Scenario scenario;
+    scenario.frame_count                   = 2400;
+    scenario.plant.tunables.refresh_period = 1.0 / 120.0;
+    scenario.cpu_duration                  = make_gauss(2301, 2.0, 0.2);
+    auto engine = std::make_shared<std::mt19937>(2302);
+    scenario.gpu_duration_at_cadence = [engine](const std::int64_t k, const int vsyncs) mutable -> double {
+        std::uniform_real_distribution<double> uniform{0.0, 1.0};
+        std::normal_distribution<double>       base{5.8, 0.15};
+        if ((k >= 100) && (k < 130)) {
+            return 20.0 * ms; // startup spike (scene load)
+        }
+        if ((vsyncs >= 2) && (uniform(*engine) < 0.12)) {
+            return 7.9 * ms; // clocked-down tail at the longer cadence
+        }
+        return std::max(0.5, base(*engine)) * ms;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    const std::vector<Frame_record> records = run_scenario(scenario, pacer);
+
+    std::size_t at_two = 0;
+    for (std::size_t i = 130; i < 400; ++i) {
+        if (records[i].vsyncs >= 2) {
+            ++at_two;
+        }
+    }
+    EXPECT_GT(at_two, 0u) << "the spike must downshift (scenario premise)";
+    EXPECT_EQ(vsync_values(records, 1200), (std::set<int>{1})) << "the cadence must return to N=1 and stay";
+    const int misses = count_self_misses(records, 1200, records.size());
+    EXPECT_LE(misses, static_cast<int>((records.size() - 1200) / 100)) << "miss rate must be <= 1 percent";
+}

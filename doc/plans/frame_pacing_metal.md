@@ -1,0 +1,161 @@
+# Frame pacing on Metal: tier M to a reliable default
+
+Status: in progress
+
+Make frame pacing tier M (`doc/erhe/metal_backend.md` "Frame pacing") good
+enough to be the `auto` tier on Metal, by iterating between the pacer
+simulation and live measurements until both agree and the live gate passes.
+The pacer algorithm is `doc/frame_pacing/algorithm.md`; its executable models
+are `scripts/frame_pacing_sim.py` and `erhe_frame_pacing_tests`
+(`src/erhe/frame_pacing/test/`), which must both stay green.
+`doc/plans/metal_backend.md` item 5 holds the Metal API probe this builds on.
+
+## Goal and gate
+
+The live gate (`scripts/frame_pacing_live_gate.py`, below) on the windowed
+Metal editor, default scene, external 120 Hz display, window visible:
+
+- Tier M at N=1 in 10 of 10 fresh launches, in each of the default
+  threading, `ERHE_RENDER_THREAD=0` and `ERHE_FRAME_PIPELINING=0`, in Debug
+  and in Release.
+- At most 1 % of the sampled frames displayed for two or more refreshes.
+- Release-to-display median below tier S in the same build (tier S measures
+  29-30 ms in Debug; tier M at N=1 measured 19.4-20.2 ms).
+- Both pacer suites green, including a claim whose plant reproduces each
+  live failure found on the way.
+
+When the gate passes: `auto` resolves to tier M in
+`Device_impl::init_frame_pacing` (`metal_device.cpp`, `frame_pacing_tier`
+"w" selects it until then), and `doc/erhe/metal_backend.md` states the
+result.
+
+## Metal presentation, as the pacer sees it
+
+From the macOS 27 SDK headers (`QuartzCore/CAMetalLayer.h`,
+`CAMetalDisplayLink.h`, `Metal/MTLDrawable.h`, `MTLCommandBuffer.h`):
+
+- Default pacing comes for free: `CAMetalLayer.displaySyncEnabled` (default
+  YES) synchronizes presents to the display's vsync, and the swap queue of
+  `maximumDrawableCount` (2 or 3) drawables makes `nextDrawable` block until
+  one is free - the backpressure tier OFF and tier S live on (tier OFF
+  measured 6.9 ms per frame inside `nextDrawable`).
+  `allowsNextDrawableTimeout` (default YES) bounds that wait to 1 s.
+- Application pacing: `presentDrawable:atTime:` / `presentAtTime:` (absolute
+  host time; measured honored windowed), `presentDrawable:afterMinimumDuration:`
+  (the previous frame stays on screen at least that long - a cadence of N
+  refreshes without a grid estimate; untested), `addPresentedHandler` with
+  `presentedTime` (feedback; 0 when not displayed). An application that
+  releases its frames late enough never blocks in `nextDrawable` (tier M
+  measures 0.01 ms there).
+- OS pacing: `CAMetalDisplayLink` (macOS 14) calls its delegate with the
+  drawable, `targetTimestamp` (when the frame's work must be submitted) and
+  `targetPresentationTimestamp`; `preferredFrameLatency` and
+  `preferredFrameRateRange` set latency and cadence. The application gives
+  up its own loop timing - it inverts erhe's M1 -> M2 -> R control flow - but
+  the two timestamps state the system's own presentation deadline, a
+  reference for `delta_pe` and for the latency the pacer should match.
+- Command buffer completion is at GPU end; `GPUStartTime` / `GPUEndTime` are
+  host time. A drawable must be complete about one refresh period plus
+  1.5 ms before its vsync windowed (claim C22).
+
+## What is known (2026-10-20, Debug, M4 Pro)
+
+- Tier M holds N=1 when it starts there: 348/348 one-refresh frames,
+  release-to-display 19.4-20.2 ms, deadline offset estimate ~9.1-9.3 ms.
+- A startup downshift (scene load) to N=2 can lock it there. Live outcome
+  varied between batches: 4/4 runs returned to N=1 in one batch, 0/5 in
+  another, 1/2 in a control with the pre-fix anchor - conditions outside the
+  editor (other processes, GPU state) move it.
+- The GPU cost is not a fixed input: the presenting command buffer's span
+  depends on the cadence and on where in the refresh period its GPU work
+  starts (phase 0 = a display time, gate script "span by start phase"):
+
+  | case | start phase | median span | spans > T |
+  |---|---|---|---|
+  | tier M, N=1 | 0.75-0.875 | 5.5-6.2 ms | 0 % |
+  | tier S, N=1 | 0.25-0.5 | 5.4 ms | 0 % |
+  | tier M, N=2 locked | 0.125-0.375 | ~9.5 ms in the worst bins | 34-68 % of those bins |
+  | tier M, N=2 locked | 0.875 | | 0-12 % |
+  | tier M, N=2 pinned, after 15 s | 0.375-0.625 | 4.9 ms | 0 % |
+
+  The per-pass GPU timers grow with the span (real GPU time, not a wait
+  outside the passes). A Metal System Trace shows WindowServer GPU work
+  overlapping 2-3.5 ms of each editor command buffer, but Instruments
+  induces a fixed GPU performance state while recording, which hides any
+  frequency effect - use untraced frame records for the cost model, the
+  trace only for overlap structure. Leading hypothesis: at N=2 the GPU idles
+  half the time and clocks down, and work starting shortly after a display
+  time also contends with the compositor; neither happens at N=1.
+- The simulator's plant takes stage durations as fixed inputs; C23 stands in
+  with a fixed 12 % tail at 7.9 ms, which the band allowance handles, while
+  the live tail reaches 10-14 ms (beyond the period), which it cannot.
+- Pacer state at the start of this plan: the deadline offset estimator
+  (C22), the in-flight anchor fix (deviation 16), the hysteresis-band upshift
+  allowance (deviation 15, C23); Python model 81/81, C++ 28/28.
+
+## Iteration
+
+Each iteration runs these steps in order and appends one entry to the log
+below (what changed, sim results, gate results, the next hypothesis):
+
+1. Measure. Run the gate for the failing configuration with `--out` and
+   reduce the records to a plant property: GPU cost against cadence and
+   start phase, the deadline (C22), whatever the failure exposes. Isolate
+   one variable per experiment: pin the cadence with `--pin-min-vsyncs`,
+   compare tiers with `--graphics frame_pacing_tier=...`, compare threading
+   modes with `--env`. Never trust a single launch - outcomes vary between
+   batches; 5 runs minimum per configuration.
+2. Model. Extend the plant of both suites with that property, calibrated
+   from step 1 (first iteration: GPU duration as a function of cadence and
+   start phase - the start phase is known to the plant from the true grid),
+   and add or revise a claim that reproduces the live failure with the
+   current pacer. The claim must fail before the pacer change.
+3. Pacer. Change the pacer against that claim, root cause first. Candidates
+   in order: (a) upshift probing with backoff - at N > N_min, after a quiet
+   interval and with the median stage time within the next period, try N-1;
+   a probe reverted by pressure doubles the interval (the C10 backoff);
+   (b) cost samples per cadence - judge an upshift by the stage times last
+   measured at N-1; (c) a schedule phase that keeps the GPU work out of the
+   costly window, if step 1 shows the phase, not the cadence, is the cause;
+   (d) `presentDrawable:afterMinimumDuration:` for N>1. Every change keeps
+   C1-C23 green in both suites; a claim that has to change states why in
+   `doc/frame_pacing/algorithm.md`.
+4. Gate. Build, run the gate in all configurations; append the result. A
+   failure goes back to step 1 with the new evidence.
+
+Before the first iteration (optional, one experiment): a measurement-only
+`CAMetalDisplayLink` probe that logs `targetPresentationTimestamp -
+targetTimestamp` and the achieved cadence for the default scene - the
+system's deadline and the latency reference.
+
+## Tools
+
+- `scripts/frame_pacing_live_gate.py` - fresh launches, settle, sample,
+  table; config overrides restored afterwards. Example:
+  `python3 scripts/frame_pacing_live_gate.py --editor build_xcode_metal/bin/Debug/editor --runs 5 --graphics 'frame_pacing_tier="w"' --out <scratch>`.
+- `scripts/frame_pacing_summary.py` - one running editor, loop / acquire /
+  cadence medians.
+- MCP: `get_frame_pacing_status` (`pacer.vsyncs_per_frame`,
+  `deadline_offset_ms`), `get_frame_pacing_frames` (per frame records incl.
+  `gpu_begin` / `gpu_end` / `achieved_present_time` / `planned_vsyncs`),
+  `set_frame_pacing_min_vsyncs`, `get_gpu_timers` (latest per-pass GPU
+  times).
+- `editor.frame_pacing` at debug level in `config/editor/logging.json`
+  logs cadence changes and a summary every 600 frames (restore the file).
+- Metal System Trace: `xcrun xctrace record --template 'Metal System Trace'
+  --attach <pid> --time-limit 3s --output <file>.trace`, then `xcrun xctrace
+  export --input <file>.trace --xpath '/trace-toc/run[@number="1"]/data/table[@schema="metal-gpu-intervals"]'`
+  (rows use id/ref-compressed XML; per command buffer group by
+  `cmdbuffer-id`, other processes by `process`); also
+  `gpu-performance-state-intervals`.
+- Python model: `python3 scripts/frame_pacing_sim.py` (about 5 minutes);
+  single scenarios by importing it (`Scenario`, `Tunables`, `run`).
+
+Traps: an occluded editor window gets `presentedTime` 0 and no feedback
+(the log says "drawables were not displayed"; the gate flags it); unfocused
+fullscreen counts as hidden; an agent-launched editor has no focus.
+
+## Log
+
+- 2026-10-20, iteration 0 (state at plan start): see "What is known". Gate
+  not yet run in Release or with 10 launches per configuration.

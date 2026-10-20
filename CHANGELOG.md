@@ -16,6 +16,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   feedback and present wait, `presentDrawable:atTime:` targets, the GPU frame
   bracket) for `frame_pacing_tier` "w", and returns true there; elsewhere
   false.
+- `erhe::frame_pacing`: `Frame_pacer_tunables::upshift_quantile` (0.9): the
+  upshift dwell allows that share's complement of its frames inside the
+  hysteresis band below the next cadence's period. The in-flight anchor now
+  follows the in-flight frames' target slots (bounded by their cadence),
+  removing a slot-collision limit cycle after a cold-start miss.
 - `erhe::frame_pacing`: `Deadline_offset_source` (`fixed`, `estimated`) and
   the `Frame_pacer_tunables` that drive the estimated presentation deadline
   offset (`deadline_offset_source`, `deadline_offset_max_frac`,

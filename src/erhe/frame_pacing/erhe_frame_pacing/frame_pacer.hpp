@@ -53,6 +53,7 @@ public:
     double      guard             {0.001};      // jitter allowance / near-miss band
     double      hysteresis_frac   {0.10};       // H, fraction of T
     double      upshift_dwell_time{0.5};        // T_up
+    double      upshift_quantile  {0.9};        // q_up: share of the dwell's frames that must have headroom
     int         reactive_miss_threshold{2};     // M consecutive observed self-misses
     double      margin_initial_frac{0.20};      // m0
     double      margin_min_frac   {0.02};
@@ -193,6 +194,7 @@ private:
     [[nodiscard]] auto find_entry           (std::int64_t frame_id) const -> const Frame_entry*;
     void               change_cadence       (int new_vsyncs, bool is_upshift);
     void               on_pressure_downshift(double gpu_end_time);
+    void               reset_dwell          ();
     void               update_deadline_offset(std::int64_t frame_id, double achieved_present_time, double previous_display_time);
     [[nodiscard]] auto deadline_evidence    () -> double;
 
@@ -231,6 +233,8 @@ private:
     int    m_vsyncs      {1};   // N
     int    m_min_vsyncs  {1};   // application-set floor
     double m_dwell       {0.0}; // accumulated upshift headroom time
+    std::size_t m_dwell_frames         {0}; // frames of the current dwell
+    std::size_t m_dwell_frames_loaded  {0}; // of them without upshift headroom
     int    m_consecutive_misses{0};
     double m_streak_attribution{0.0}; // min over streak of max(c, g); +inf when no streak
     std::int64_t m_last_pressure_frame{-1000000000}; // completed-count of last (near-)miss

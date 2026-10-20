@@ -114,16 +114,9 @@ at N=1. A run that downshifted to N=2 at startup stayed there (below), so
 
 Open, in order:
 
-1. The N=2 lock: at N=2 the Apple GPU clocks down and the presenting command
-   buffer's GPU span grows (p95 7.6 ms pipelined, 11.6 ms with
-   `ERHE_FRAME_PIPELINING=0`, against 6.0 ms at N=1), so the pacer's
-   upshift test - every frame's `max(cpu, gpu)` within `(N - 1) * T - H`
-   (7.5 ms at 120 Hz) for `T_up` - never completes its dwell after a
-   startup downshift. The upshift test assumes stage times do not depend on
-   the cadence; GPU frequency scaling breaks that. A pacer change (outer
-   loop, claims C3 / C8 / C10) - decide the approach with the user, then
-   `auto` -> M if tier M holds N=1. `ERHE_RENDER_THREAD=0` held N=1
-   (0 two-refresh frames of 348, 19.6 ms).
+1. The N=2 lock and making tier M the `auto` tier: iterative plan in
+   [frame_pacing_metal.md](frame_pacing_metal.md) (simulator plant, pacer,
+   live gate).
 2. A Release build and the threading modes (`ERHE_RENDER_THREAD=0`,
    `ERHE_FRAME_PIPELINING=0`), and a heavier scene: the Debug pipelined
    frame spans 18 ms from release to commit, which the pacer's latency
