@@ -33,8 +33,7 @@ Objective-C++ (`metal_surface.mm` is).
 Tier M is tier W's algorithm on these inputs, keeping erhe's own loop in
 control: `presentDrawable:atTime:` for targets, `wait_for_displayed_frame`
 on the presented handler, `GPUStartTime` / `GPUEndTime` for the frame
-bracket. It is selected with `frame_pacing_tier` "w"; `auto` switches to it
-after open item 1 below, without a startup probe: the measurement
+bracket. It resolves for `auto` without a startup probe: the measurement
 below showed targets honored, and the presented handler logs a warning when
 more than a tenth of the first 240 targeted frames display a refresh before
 their target. The C15 holdback is not used. Open: a `CADisplayLink` /
@@ -101,31 +100,38 @@ pacer's deadline offset estimator with the deadline-aware FR5 clamp
 suite and `scripts/frame_pacing_sim.py`), enabled through
 `Device::is_present_target_time_honored`.
 
-Measured live before the estimator (Debug windowed, default scene, 3 x 120
-frames after 15 s): tier M ran N=1 with achieved == predicted to 1 us on
+Measured live (Debug windowed, default scene, 3 x 120 frames after 15 s):
+before the estimator tier M ran N=1 with achieved == predicted to 1 us on
 on-time frames, but 40 % of the frames displayed two refreshes (timing-only
 misses: the compositor deadline) and release-to-display was 41.8 ms median
-against tier S's 28.9 ms. Tier S itself shows an exact 8.34 ms achieved
-cadence.
+against tier S's 28.9 ms. With the estimator: 1 two-refresh frame of 348,
+release-to-display 19.8 ms against tier S's 29.6 ms, learned offset 9.19 ms
+(table in `doc/erhe/metal_backend.md` "Frame pacing") - when the pacer stays
+at N=1. A run that downshifted to N=2 at startup stayed there (below), so
+`auto` stays tier S. An occluded window gets `presentedTime` 0 and no feedback
+(logged "drawables were not displayed"); tier M then runs without feedback
+(N=2 observed), which nobody sees.
 
 Open, in order:
 
-1. Live run of tier M (`frame_pacing_tier` "w") with the estimator, then
-   `auto` -> M in `Device_impl::init_frame_pacing` if it beats tier S:
-   `scripts/frame_pacing_summary.py`
-   plus `get_frame_pacing_status` (`pacer.deadline_offset_ms`); compare
-   release-to-display latency and refreshes per frame against tier S
-   (`frame_pacing_tier` "s") in the same build. Needs the editor window
-   visible on the display: an occluded window gets `presentedTime` 0, no
-   feedback (logged "drawables were not displayed"), and the pacer runs
-   without feedback - which blocked this run on 2026-10-20 after the
-   estimator was built. Also a Release build, where the frame's CPU span is
-   shorter (the Debug pipelined frame spans two loop periods from release to
-   commit, 18 ms, which the pacer's latency budget prices in).
-2. Fullscreen (question 2): the editor treats unfocused fullscreen as hidden,
+1. The N=2 lock: at N=2 the Apple GPU clocks down and the presenting command
+   buffer's GPU span grows (p95 7.6 ms pipelined, 11.6 ms with
+   `ERHE_FRAME_PIPELINING=0`, against 6.0 ms at N=1), so the pacer's
+   upshift test - every frame's `max(cpu, gpu)` within `(N - 1) * T - H`
+   (7.5 ms at 120 Hz) for `T_up` - never completes its dwell after a
+   startup downshift. The upshift test assumes stage times do not depend on
+   the cadence; GPU frequency scaling breaks that. A pacer change (outer
+   loop, claims C3 / C8 / C10) - decide the approach with the user, then
+   `auto` -> M if tier M holds N=1. `ERHE_RENDER_THREAD=0` held N=1
+   (0 two-refresh frames of 348, 19.6 ms).
+2. A Release build and the threading modes (`ERHE_RENDER_THREAD=0`,
+   `ERHE_FRAME_PIPELINING=0`), and a heavier scene: the Debug pipelined
+   frame spans 18 ms from release to commit, which the pacer's latency
+   budget prices in.
+3. Fullscreen (question 2): the editor treats unfocused fullscreen as hidden,
    so a focused, user-run editor.
-3. Question 6 (ProMotion / VRR) on the built-in display.
-4. A presentation-derived refresh source for `Display_refresh_resolver`
+4. Question 6 (ProMotion / VRR) on the built-in display.
+5. A presentation-derived refresh source for `Display_refresh_resolver`
    (`presentedTime` deltas or `CADisplayLink`): the window display mode says
    8.333 ms, the display runs 8.344 ms; the pacer's grid period tracker
    absorbs the 0.13 % today.
