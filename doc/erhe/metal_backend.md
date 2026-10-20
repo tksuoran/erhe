@@ -322,16 +322,61 @@ that carries the drawable:
   compositor showed no frame of an occluded window, or the display sleeps)
   gives no feedback; 30 in a row are logged.
 - `presentDrawable:atTime:` with the frame's target present time
-  (`set_present_target_time`) a quarter period early: the drawable shows at
-  the first refresh at or after the requested time, and the bias keeps a
-  target on the pacer's grid from rounding up across a small grid phase
-  error. The C15 holdback deadline is ignored: targets are honored, and the
-  presenting commit also carries the frame's GPU work.
+  (`set_present_target_time`) minus the calibrated request offset (below),
+  or a quarter period without a calibration. The C15 holdback deadline is
+  ignored: targets are honored, and the presenting commit also carries the
+  frame's GPU work.
 - The completion handler writes `gpu_frame_begin` / `gpu_frame_end` from
   `GPUStartTime` / `GPUEndTime`.
 - `Device::is_present_target_time_honored` is true in tier M, so the editor
   gives the pacer an estimated deadline offset
   (`doc/frame_pacing/algorithm.md` section 3.3).
+
+Tier M runs the present calibration (`Device_impl::run_present_calibration`,
+`metal_device_present_calibration.cpp`) at the end of `init_frame_pacing`,
+before the application's first frame, because the compositor's timing
+depends on the display mode. Clear-only drawables on the window's layer:
+
+1. Grid: plain presents until 30 consecutive ones are displayed (bounded at
+   2 s; the main run loop is serviced between them through
+   `Surface_impl::service_main_run_loop`, since a window ordered on screen
+   during init is composited only once a Core Animation commit runs) give
+   the period and the grid.
+2. Request window: probes complete 3.5 periods ahead and request at the
+   target minus 0 ... 2.5 T in T/4 steps, three passes; the request offset
+   is the middle of the longest run of offsets whose every probe displayed
+   on target.
+3. Deadline: probes request at that offset and commit 0.5 ... 3 T before
+   the target in T/8 steps, then twice more around the split; the deadline
+   is the completion margin (target minus `GPUEndTime`) that best separates
+   late from on-target probes, plus 1 ms.
+
+The probes run as a steady stream, one every second vsync, so a probe a
+refresh off does not take its neighbour's slot; probes presented one at a
+time, each after its predecessor's display, met a compositor returning
+from idle and displayed late at any margin. The result
+(`erhe::graphics::Present_calibration`, `Device::get_present_calibration`)
+sets the request offset, and the editor gives the pacer the deadline as its
+initial deadline offset and floor, with the estimate ceiling half a period
+above (`erhe::frame_pacing::Deadline_offset_setup`; used while the refresh
+period matches the calibrated one). It is logged
+(`erhe.graphics.display_refresh`) and reported with every probe by MCP
+`get_frame_pacing_status` `present_calibration`. Without feedback (an
+occluded window) or without an on-target request offset it logs why and
+tier M keeps the quarter period and the estimator's 2.5 ms start.
+
+Measured on the built-in panel of an M4 Pro (Debug, default scene):
+
+| display mode | request window | request offset | deadline | duration |
+|---|---|---|---|---|
+| fixed 60 Hz | 0 ... 0.75 T (1.0 T: a refresh early) | 0.38-0.5 T | 17.6-17.8 ms (1.06 T) | 2.9 s |
+| ProMotion 120 Hz | 1.0 ... 1.75 T (0.75 T: a refresh late) | 1.38 T | 17.3-17.9 ms (2.1 T) | 1.5 s |
+
+A ProMotion panel is the fixed-rate compositor with one more period of
+pipeline. With the fixed quarter-period request every ProMotion frame
+displayed a refresh late and the pacer locked at N=2 with about 80 ms
+release to display; calibrated, 270 of 272 frames display on target at
+35 ms (still N=2: the GPU span tail, below).
 
 Measured with a probe (Debug windowed editor, M4 Pro, external 120 Hz
 display; the answers are in `doc/plans/metal_backend.md` item 5):

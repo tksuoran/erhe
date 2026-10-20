@@ -107,6 +107,7 @@ Equilibrium near-miss rate = `delta_dec / Delta_inc` (AIMD fixed point). Default
 - `delta_pe` rises at once to the evidence (a too-small offset displays frames late) and decays by `decay` per sample toward it (a too-large one only costs latency), clamped to `[deadline_offset_initial, 2*T]`. Once the late samples leave the window the decay probes downward; two late frames below the true deadline raise it again (C22: 4 slips in 11400 frames).
 - The FR5 clamp counts the images the deadline holds in the queue by itself: `wait_id = frame_id - 1 - Q* - floor(delta_pe / (N * period))`. A frame must complete `delta_pe` before its vsync, so with `delta_pe` of a period or more it is released before frame `k - 1 - Q*` can have displayed, and the plain clamp would hold it past its deadline. With `delta_pe` below one cadence period the term is 0.
 - Swapchain recreation resets the estimate (the presentation path may change).
+- A host that measured the deadline (the Metal present calibration, [../erhe/metal_backend.md](../erhe/metal_backend.md) "Frame pacing") gives it as `deadline_offset_initial`, which is also the floor, and the ceiling as `deadline_offset_max` (the calibrated deadline plus T/2) instead of `2*T`; a ProMotion panel's deadline (about 2T + 1 ms) lies beyond the `2*T` ceiling.
 
 ## 4. Miss classification and attribution
 

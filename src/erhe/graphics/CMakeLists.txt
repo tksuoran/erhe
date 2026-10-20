@@ -67,6 +67,7 @@ erhe_target_sources_grouped(
     erhe_graphics/multi_copy_buffer.cpp
     erhe_graphics/multi_copy_buffer.hpp
     erhe_graphics/native_format.hpp
+    erhe_graphics/present_calibration.hpp
     erhe_graphics/render_command_encoder.hpp
     erhe_graphics/render_pass.hpp
     erhe_graphics/render_pipeline.hpp
@@ -488,6 +489,7 @@ if (ERHE_GRAPHICS_API_METAL)
         erhe_graphics/metal/metal_scoped_debug_group.hpp
         erhe_graphics/metal/metal_device.cpp
         erhe_graphics/metal/metal_device.hpp
+        erhe_graphics/metal/metal_device_present_calibration.cpp
         erhe_graphics/metal/metal_pixel_format_table.cpp
         erhe_graphics/metal/metal_pixel_format_table.hpp
         erhe_graphics/metal/metal_gpu_timer.cpp

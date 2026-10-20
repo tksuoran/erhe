@@ -69,6 +69,7 @@ public:
     // (completion margin, displayed late) samples of the last `history`
     // frames with presentation feedback.
     double      deadline_offset_max_frac{2.0};  // estimate ceiling, fraction of T
+    double      deadline_offset_max{0.0};       // estimate ceiling (s), measured by the host (present calibration); 0.0: deadline_offset_max_frac * T
     std::size_t deadline_evidence_band{4};      // samples (by margin) in a deadline band
     std::size_t deadline_evidence_min_late{2};  // late frames a deadline band needs
     double      deadline_offset_decay{0.0000001};// decay per feedback toward the evidence (s)

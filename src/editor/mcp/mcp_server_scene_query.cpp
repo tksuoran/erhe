@@ -32,6 +32,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/present_calibration.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "grid/grid.hpp"
@@ -2648,6 +2649,33 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
             {"resolved_period_ms",            refresh.resolved_period_seconds * 1000.0},
             {"resolved_source",               erhe::graphics::c_str(refresh.resolved_source)}
         };
+        // The present calibration (erhe::graphics::Present_calibration) with
+        // every raw sample: the compositor's request window and deadline
+        // for this display mode, the simulator plant's calibration input.
+        const erhe::graphics::Present_calibration& calibration = m_context.graphics_device->get_present_calibration();
+        if (calibration.done) {
+            json samples = json::array();
+            for (const erhe::graphics::Present_calibration_sample& sample : calibration.samples) {
+                samples.push_back(json{
+                    {"phase",          erhe::graphics::c_str(sample.phase)},
+                    {"target_time",    sample.target_time},
+                    {"parameter_ms",   sample.parameter * 1000.0},
+                    {"completion_margin_ms", sample.completion_margin * 1000.0},
+                    {"presented_time", sample.presented_time},
+                    {"slot_offset",    sample.slot_offset}
+                });
+            }
+            result["present_calibration"] = {
+                {"valid",              calibration.valid},
+                {"status",             calibration.status},
+                {"period_ms",          calibration.period * 1000.0},
+                {"request_offset_ms",  calibration.request_offset * 1000.0},
+                {"request_min_ms",     calibration.request_min * 1000.0},
+                {"request_max_ms",     calibration.request_max * 1000.0},
+                {"deadline_offset_ms", calibration.deadline_offset * 1000.0},
+                {"samples",            std::move(samples)}
+            };
+        }
         const erhe::graphics::Frame_pacing_tier tier = m_context.graphics_device->get_frame_pacing_tier();
         result["tier"] =
             (tier == erhe::graphics::Frame_pacing_tier::full)       ? "W" :
