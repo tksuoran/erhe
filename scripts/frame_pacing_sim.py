@@ -32,6 +32,7 @@ class Tunables:
     guard:      float = 0.001       # actuation/scheduling jitter allowance [s]
     H_frac:     float = 0.10        # hysteresis width H, fraction of T
     T_up:       float = 0.5         # upshift confirmation (dwell) time [s]
+    q_up:       float = 0.9         # share of the dwell's frames that must have upshift headroom
     M:          int   = 2           # reactive downshift: consecutive self-misses
     m0_frac:    float = 0.20        # initial margin, fraction of T
     m_min_frac: float = 0.02
@@ -107,7 +108,7 @@ class FramePacer:
         self.L_win = {}                   # cadence N -> deque of latency samples
         self.j_next = None                # next target slot (None until engaged)
         self.last_slot = -1
-        self.dwell = 0.0
+        self._reset_dwell()
         self.consec_miss = 0
         self.streak_attr = float('inf')   # min over streak of max(c,g)
         self.last_pressure = -10**9       # completed-count of last (near-)miss
@@ -194,7 +195,7 @@ class FramePacer:
         self.last_fb = None
         self.consec_miss = 0
         self.streak_attr = float('inf')
-        self.dwell = 0.0
+        self._reset_dwell()
         # The deadline offset belongs to the presentation path, which a
         # recreation may change (model section 9).
         self.dpe = self.tun.dpe_hat
@@ -218,9 +219,18 @@ class FramePacer:
                 # j_next ratchet ahead of reality without correction when the
                 # app runs unpaced (observer mode finding, step P2.1).
                 fb_id, achieved = self.last_fb
+                # Each in-flight frame displays at its own target slot, but no
+                # earlier than one slot after the frame before it (FIFO) and
+                # no later than its cadence after it (a target further ahead
+                # ratchets the cursor on a dropping path, C13); +N per
+                # in-flight frame re-created a cold-start slot collision every
+                # few frames (C10, deviation 16).
                 anchor = achieved
                 for i in range(fb_id + 1, frame_id):
-                    anchor += self.frame_N.get(i, self.N)
+                    if i in self.frame_slot:
+                        anchor = max(anchor + 1, min(self.frame_slot[i], anchor + self.frame_N.get(i, self.N)))
+                    else:
+                        anchor += self.frame_N.get(i, self.N)
                 anchor += self.N
                 # The last_slot+1 floor must NOT apply here (deviation 11):
                 # on a dropping presentation path (fifo_latest_ready) an app
@@ -354,14 +364,37 @@ class FramePacer:
             # margin AIMD surfaces overload as near-misses well before drops.
             self._on_pressure_downshift(gpu_end)
             self._change_cadence(n_req)
-        elif (self.N > self.N_min_app
-                and max(c, g) <= (self.N - 1) * self.period - t.H):
-            self.dwell += elapsed                # upshift headroom sustained
-            if self.dwell >= self.dwell_required:
-                self._change_cadence(self.N - 1, upshift=True)
-                self.upshift_time = gpu_end
+        elif self.N > self.N_min_app:
+            # Upshift headroom (deviation 15, C23): the q_up quantile of the
+            # dwell's frames' max(c, g) within the next cadence's budget - at
+            # most a 1 - q_up share of the frames since the dwell started
+            # lack headroom. A per-frame test never completes its dwell when
+            # the GPU clocks down at the longer cadence; the whole window
+            # stays stale ~2 s after a load drop (C3).
+            # Frames beyond the next cadence's period reset the dwell; frames
+            # in the hysteresis band below it count against the 1 - q_up
+            # allowance (a heavy tail past the period keeps the longer
+            # cadence, C10).
+            stage = max(c, g)
+            next_period = (self.N - 1) * self.period
+            beyond = stage > next_period
+            self.dwell_frames += 1
+            if not beyond and stage > next_period - t.H:
+                self.dwell_loaded += 1
+            if beyond or self.dwell_loaded > math.floor((1.0 - t.q_up) * self.dwell_frames):
+                self._reset_dwell()
+            else:
+                self.dwell += elapsed
+                if self.dwell >= self.dwell_required:
+                    self._change_cadence(self.N - 1, upshift=True)
+                    self.upshift_time = gpu_end
         else:
-            self.dwell = 0.0
+            self._reset_dwell()
+
+    def _reset_dwell(self):
+        self.dwell = 0.0
+        self.dwell_frames = 0
+        self.dwell_loaded = 0
 
     def _on_pressure_downshift(self, gpu_end):
         # A pressure-driven downshift shortly after an upshift means the
@@ -380,7 +413,7 @@ class FramePacer:
             return
         old = self.N
         self.N = n_new
-        self.dwell = 0.0
+        self._reset_dwell()
         win = self.L_win.get(n_new)
         if not win:
             carry = self._q(self.L_win.get(old), 0.0)
@@ -573,6 +606,7 @@ class Scenario:
     tun:         Tunables = field(default_factory=Tunables)
     true_phase:  float = 0.0031          # real grid phase (pacer starts at 0)
     dpe_true:    float = 0.0015          # real presentation deadline offset
+    g_at_cadence_fn: object = None       # C23: (k, N) -> GPU duration; replaces g_fn
     forced_range: tuple = None           # (first, last) frames with corruption
     recreate_at: int = None              # swapchain recreation at this frame
     lazy_gpu:    bool = False            # C9: GPU measurements delivered via the
@@ -756,7 +790,8 @@ def run(sc: Scenario):
                 r_eff = max(decision_t, wait_t)       # P2.2: clamp enforced, release not
             else:
                 r_eff = max(dec.release, decision_t, wait_t)
-        c, g = sc.c_fn(k), sc.g_fn(k)
+        c = sc.c_fn(k)
+        g = sc.g_at_cadence_fn(k, dec.N) if sc.g_at_cadence_fn is not None else sc.g_fn(k)
         cpu_start = max(r_eff, gpu_end.get(k - t.F, 0.0))
         if sc.fifo_images > 0:
             # Plain-FIFO backpressure (P4.1): with M swapchain images, the
@@ -1734,6 +1769,35 @@ def c22_compositor_deadline_estimation():
           f"delta_pe estimate {dpe*1000:.2f} ms, true {dpe_true*1000:.2f} ms")
 
 
+def c23_upshift_under_gpu_clock_scaling():
+    print("C23 upshift under GPU clock scaling")
+    # Measured on the Apple GPU: at N=2 the GPU clocks down and a tail of
+    # frames grows past the N=1 budget (7.5 ms at 120 Hz). A startup spike
+    # downshifts to N=2; a per-frame upshift test (q_up = 1.0) does not
+    # complete its dwell with a 12 % tail, the q90 test does.
+    def arm(q_up):
+        tun = Tunables(T=1.0 / 120.0, q_up=q_up)
+        rng = random.Random(2301)
+        rg = random.Random(2302)
+        def g(k, n):
+            if 100 <= k < 130:
+                return 20.0 * MS
+            if n >= 2 and rg.random() < 0.12:
+                return 7.9 * MS
+            return max(0.5, rg.gauss(5.8, 0.15)) * MS
+        sc = Scenario("c23", 2400, gauss_fn(rng, 2.0, 0.2), None, tun=tun, g_at_cadence_fn=g)
+        recs, _ = run(sc)
+        down = sum(1 for r in recs[130:400] if r.N >= 2)
+        return down, {r.N for r in recs[1200:]}, sum(1 for r in recs[1200:] if r.self_miss)
+    down_p, n_p, _ = arm(1.0)
+    down, n_vals, misses = arm(0.9)
+    check("C23 per-frame test stays at the longer cadence", down_p > 0 and n_p != {1},
+          f"q_up 1.0: N values after frame 1200: {n_p}")
+    check("C23 spike downshifts", down > 0, f"{down} frames at N>=2 after the spike")
+    check("C23 quantile test returns to N=1", n_vals == {1}, f"q_up 0.9: N values after frame 1200: {n_vals}")
+    check("C23 miss rate", misses <= 12, f"{misses}/1200 self-misses")
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -1757,6 +1821,7 @@ def main():
     c20_slop_servo_overshoot()
     c21_slop_servo_failure_modes()
     c22_compositor_deadline_estimation()
+    c23_upshift_under_gpu_clock_scaling()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")

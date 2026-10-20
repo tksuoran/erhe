@@ -201,7 +201,7 @@ void Frame_pacer::notify_swapchain_recreated(const double nominal_grid_phase)
     m_deadline_sample_count = 0;
     m_consecutive_misses  = 0;
     m_streak_attribution  = std::numeric_limits<double>::infinity();
-    m_dwell               = 0.0;
+    reset_dwell();
 }
 
 auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Schedule_decision
@@ -221,10 +221,22 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
             // Using it as a mere lower bound lets the cursor ratchet ahead of
             // reality without correction when the app runs unpaced (observer
             // mode finding, step P2.1; claim C11).
+            // Each in-flight frame displays at its own target slot, but no
+            // earlier than one slot after the frame before it (FIFO) and no
+            // later than its cadence after it: a target further ahead comes
+            // from an earlier schedule, and on a dropping path (latest_ready)
+            // taking it would ratchet the cursor (C13). Adding N per
+            // in-flight frame regardless of the target assumed every
+            // in-flight frame sits N slots after its predecessor: once two
+            // frames shared a slot (a cold-start miss), that rule re-created
+            // the collision every few frames - a limit cycle of late
+            // displays and a margin pinned at its maximum (C10, deviation 16).
             std::int64_t anchor = m_feedback_slot;
             for (std::int64_t i = m_feedback_frame_id + 1; i < frame_id; ++i) {
                 const Frame_entry* entry = find_entry(i);
-                anchor += (entry != nullptr) ? entry->vsyncs : m_vsyncs;
+                anchor = (entry != nullptr)
+                    ? std::max(anchor + 1, std::min(entry->target_slot, anchor + entry->vsyncs))
+                    : (anchor + m_vsyncs);
             }
             anchor += m_vsyncs;
             // The last_slot+1 floor must NOT apply here (deviation 11): on a
@@ -403,19 +415,45 @@ void Frame_pacer::on_gpu_done(
         // AIMD surfaces overload as near-misses well before drops.
         on_pressure_downshift(gpu_end_time);
         change_cadence(required_vsyncs, false);
-    } else if (
-        (m_vsyncs > m_min_vsyncs) &&
-        (std::max(cpu_duration, gpu_duration) <= ((static_cast<double>(m_vsyncs - 1) * m_grid_period) - m_hysteresis))
-    ) {
-        m_dwell += elapsed; // upshift headroom sustained this frame
-        if (m_dwell >= m_dwell_required) {
-            change_cadence(m_vsyncs - 1, true);
-            m_has_upshift_time = true;
-            m_upshift_time     = gpu_end_time;
+    } else if (m_vsyncs > m_min_vsyncs) {
+        // Upshift headroom (deviation 15): a frame beyond the next cadence's
+        // period resets the dwell; a frame inside the hysteresis band below
+        // it (past the budget (N - 1) * period - H) is allowed for a
+        // 1 - q_up share of the frames since the dwell started. A GPU that
+        // clocks down at the longer cadence (Apple GPUs) pushes a tail of
+        // frames into that band, and a per-frame test then never completes
+        // its dwell (C23); a heavy tail beyond the period still keeps the
+        // longer cadence (C10). The frames of the dwell, not the window:
+        // the window stays stale for ~2 s after a load drop (C3).
+        const double stage_time     = std::max(cpu_duration, gpu_duration);
+        const double next_period    = static_cast<double>(m_vsyncs - 1) * m_grid_period;
+        const bool   beyond_period  = stage_time > next_period;
+        const bool   in_band        = !beyond_period && (stage_time > (next_period - m_hysteresis));
+        ++m_dwell_frames;
+        if (in_band) {
+            ++m_dwell_frames_loaded;
+        }
+        const double allowed_loaded = std::floor((1.0 - m_tunables.upshift_quantile) * static_cast<double>(m_dwell_frames));
+        if (beyond_period || (static_cast<double>(m_dwell_frames_loaded) > allowed_loaded)) {
+            reset_dwell();
+        } else {
+            m_dwell += elapsed;
+            if (m_dwell >= m_dwell_required) {
+                change_cadence(m_vsyncs - 1, true);
+                m_has_upshift_time = true;
+                m_upshift_time     = gpu_end_time;
+            }
         }
     } else {
-        m_dwell = 0.0;
+        reset_dwell();
     }
+}
+
+void Frame_pacer::reset_dwell()
+{
+    m_dwell               = 0.0;
+    m_dwell_frames        = 0;
+    m_dwell_frames_loaded = 0;
 }
 
 void Frame_pacer::on_pressure_downshift(const double gpu_end_time)
@@ -438,7 +476,7 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     }
     const int old_vsyncs = m_vsyncs;
     m_vsyncs = clamped;
-    m_dwell  = 0.0;
+    reset_dwell();
     Sample_window& window = m_latency_windows[static_cast<std::size_t>(m_vsyncs)];
     if (window.empty()) {
         // Seed the new cadence's latency estimate: carry-over is a safe

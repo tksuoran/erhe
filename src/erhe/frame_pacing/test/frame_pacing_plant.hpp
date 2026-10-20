@@ -41,6 +41,10 @@ public:
     std::size_t                             frame_count{0};
     std::function<double(std::int64_t)>     cpu_duration; // service time [s]
     std::function<double(std::int64_t)>     gpu_duration; // service time [s]
+    // Claim C23: GPU service time that depends on the cadence the frame was
+    // scheduled at (a GPU that clocks down at longer cadences); replaces
+    // gpu_duration when set.
+    std::function<double(std::int64_t, int)> gpu_duration_at_cadence;
     Plant_parameters                        plant{};
     // Claim C6: frames in [forced_first, forced_last] run with latency
     // estimate and margin forced to zero.
@@ -274,7 +278,9 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
         }
 
         const double cpu_dur = scenario.cpu_duration(k);
-        const double gpu_dur = scenario.gpu_duration(k);
+        const double gpu_dur = scenario.gpu_duration_at_cadence
+            ? scenario.gpu_duration_at_cadence(k, decision.vsyncs_per_frame)
+            : scenario.gpu_duration(k);
 
         double cpu_start = release_effective;
         if (k >= fif) {
