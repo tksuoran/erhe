@@ -30,6 +30,8 @@ namespace erhe::dataformat {
     enum class Format : unsigned int;
 }
 
+namespace erhe::window { class Context_window; }
+
 namespace erhe::graphics {
 
 class Frame_state;
@@ -256,7 +258,12 @@ private:
 
     static constexpr unsigned int s_number_of_thread_slots = 8;
 
+    // Feeds the window-side display refresh source to the resolver and
+    // resolves m_frame_pacing_tier; constructor tail, after the surface.
+    void init_frame_pacing(erhe::window::Context_window* context_window);
+
     Device&                          m_device;
+    Frame_pacing_tier                m_frame_pacing_tier{Frame_pacing_tier::off};
     std::unique_ptr<Surface>         m_surface;
     Shader_monitor                   m_shader_monitor;
     Device_info                      m_info;
