@@ -73,6 +73,30 @@ frames (`capture_screenshot` in the windowed build) can exceed the MCP
 server's request timeout under TSan's slowdown and reply "Request timed
 out" although they complete (the log says "processed").
 
+## Tracy and frame-time measurement
+
+The configure wrappers pass `-DERHE_PROFILE_LIBRARY=none` after `"$@"`, so
+a Tracy tree is configured with the wrapper's cmake line run by hand, the
+way the ThreadSanitizer tree is: `-B build_xcode_<api>_tracy`,
+`-DERHE_PROFILE_LIBRARY=tracy -DERHE_TRACY_CALLSTACK_DEPTH=0
+-DERHE_BUILD_TESTS=OFF`, then `cmake --build <tree> --config Release
+--target editor`. Build `tracy-capture` and `tracy-csvexport` from a Tracy
+checkout at the version `CMakeLists.txt` pins (`capture/` and `csvexport/`,
+plain CMake); `scripts/render_thread_bench.py` and
+`scripts/tracy_zone_summary.py` find them in `$HOME/git/tracy`.
+
+Unpaced frame times need the headless Metal tree
+(`scripts/configure_xcode_metal_headless.sh`): the windowed Metal build is
+display-paced in `nextDrawable` even with `force_disable_vsync`, and the
+windowed Vulkan drivers are bound by the presenting submit
+(`doc/reference/render_thread_measurements_2026_10.md` section 4). Pass
+`--config Release` (or `Debug`) to the bench for the Xcode trees' `bin/<config>/`.
+GPU cost on the Apple GPU comes from a Metal System Trace (`xcrun xctrace
+record --template 'Metal System Trace' --launch -- <editor> ...`, then
+`xcrun xctrace export --xpath` of the `metal-gpu-intervals` table): the
+backend emits no Tracy GPU zones, and MoltenVK's timestamp queries do not
+time render passes on this GPU.
+
 ## Debugging
 
 Invoke the **`erhe-cpp-debugging`** skill: it is the lldb run-book (Python SB

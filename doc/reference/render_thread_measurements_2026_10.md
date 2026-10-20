@@ -1,4 +1,4 @@
-# Render thread frame-time measurements (2026-10-10 and 2026-10-11)
+# Render thread frame-time measurements (2026-10-10 to 2026-10-20)
 
 The frame-time measurements taken while the editor's render thread
 (`doc/editor/render_thread.md`) was built, kept to interpret a future re-run
@@ -139,3 +139,88 @@ about 1.2 ms) plus the handoff, is well under the GPU floor, so these runs
 cannot show the pipelining gain in the tick; the Tracy picture shows the
 schedule itself: R runs while M2 runs. A GPU with a lower floor is needed
 to measure the gain (`doc/editor/render_thread.md` section 4).
+
+## 4. Apple M4 Pro, macOS (2026-10-20)
+
+Release and Debug Xcode trees, Tracy with `ERHE_TRACY_CALLSTACK_DEPTH=0`,
+window 960x540, viewport 320x200, 720 frames, 3 runs per configuration,
+medians. Three drivers: native Metal through the headless tree (emulated
+swapchain, no display involved), and Vulkan through MoltenVK and KosmicKrisp
+on the windowed tree.
+
+Two bench defects were fixed first. Since the frame pacing tier defaults to
+`auto`, a device without present timing runs tier S, whose slop servo
+sleeps about 4 ms in the frame start even with vsync forced off (and the
+present mode `IMMEDIATE`); that sleep is `frame_start_wait`, outside the
+phase log's full tick, so the "unpaced" runs reported a 1.2 ms tick for a
+5.3 ms loop period. The bench now also sets `frame_pacing_tier=off`. And
+tracy-capture started before the editor dropped the connection in the
+handshake on macOS; it now connects after the readiness marker.
+
+Release, headless Metal:
+
+| Scene | inline | dedicated | overlap | pipelined | R | `slot_acquire` inline / pipelined |
+|---|---|---|---|---|---|---|
+| default | 535 | 534 | 534 | 534 | 203-214 | 263 / 456 |
+| draws | 1467 | 1469 | 1470 | 1468 | 654-689 | 620 / 1255 |
+| heavy | 6392 | 6390 | 6388 | 6388 | 2524-2584 | 3539 / 6069 |
+| draws, preset Low | 1309 | | | 1311 | 544-574 | 601 / 1130 |
+| heavy, preset Low | 4139 | | | 4136 | 1731-1802 | 2156 / 3872 |
+
+Every scene is GPU-bound, at the small viewport too. A Metal System Trace
+(`xcrun xctrace record --template 'Metal System Trace'`, the
+`metal-gpu-intervals` table) of draws, inline, shows the GPU busy 93% of
+the time: the viewport render pass about 0.6 ms per frame, vertex-bound
+(1500 instances, 4x MSAA, independent of the viewport size), the shadow
+pass about 0.18 ms. The Low preset (1024 shadow maps, 2x MSAA) moves heavy
+from 6.4 to 4.1 ms and draws only from 1.47 to 1.31 ms. With pipelining the
+main thread's wait moves from `join_wait` to `slot_acquire`, the tick does
+not change, and the Tracy phase picture is the designed one: R while main
+busy 99.7% (draws) and 99.8% (heavy), kick 2-4 us, join wait 0.
+
+Debug, headless Metal (CPU-bound: `slot_acquire` about 0.1 us), 480
+frames, 2 runs:
+
+| Scene | inline | dedicated | overlap | pipelined | M1 + M2 + M3 | R |
+|---|---|---|---|---|---|---|
+| default | 1379 | 1355 | 949 | 871 | 520 | 847-867 |
+| draws | 10197 | 9862 | 9440 | 7852 | 2220 | 7719-8004 |
+
+Reading: this is the first measurement in which the CPU bounds the frame,
+and every configuration's tick is its predicted sum. Inline is M1 + M2 +
+M3 + R; dedicated serial is the same minus M1; the ImGui overlap hides M3
+(draws: 9862 - 9440 = 422 = M3); pipelined is max(M1 + M2 + M3, R) plus
+the handoff (draws: max(2.2, 7.85) = 7.85 ms measured 7.85; default:
+max(0.52, 0.86) measured 0.87). R overlapped with M2 is about 1.6% slower
+than R alone; the kick costs 4 us. R3 holds on Metal.
+
+Windowed Vulkan (MoltenVK, KosmicKrisp) does not measure the schedule:
+
+| Scene, driver | inline | dedicated | overlap | pipelined |
+|---|---|---|---|---|
+| draws, MoltenVK, per run | 3073 / 2902 / 2978 | 1914 / 1677 / 3394 | 3146 / 1997 / 2578 | 3182 / 3211 / 3178 |
+| heavy, MoltenVK | 6232 | 6249 | 6250 | 6250 |
+| draws, KosmicKrisp | 5973 | 5815 | 6169 | 5493 |
+| heavy, KosmicKrisp | 7789 | 7360 | 7924 | 8192 |
+
+The draws tick on MoltenVK jumps between about 1.8 and 3.2 ms from run to
+run in the serial configurations. R is dominated by
+`submit_command_buffers`, bimodal per call (median 0.4-0.6 ms, p90
+3.4-3.7 ms), with the timed GPU work at about 0.5 ms; the Tracy captures
+of dedicated and pipelined have the same tick (3.28 and 3.32 ms). The long
+submit is consistent with the presenting submit waiting for a
+`CAMetalLayer` drawable (about three frames per 8.33 ms display refresh),
+not verified. The KosmicKrisp spread between configurations is of the
+same size as its run-to-run spread.
+
+Also found on this machine:
+
+- MoltenVK's Vulkan timestamp queries do not time render passes on this
+  GPU (counters are sampled at stage boundaries only): Tracy reports the
+  main pass of draws as 2.5 us, the Metal System Trace as about 0.6 ms.
+  Read GPU cost on Apple GPUs from a Metal System Trace.
+- The Metal backend emits no Tracy GPU zones.
+- The windowed Metal build is paced by the display with
+  `force_disable_vsync` (`displaySyncEnabled = NO` on the layer):
+  `nextDrawable` waits about 8.3 ms per frame on a 120 Hz display.
+
