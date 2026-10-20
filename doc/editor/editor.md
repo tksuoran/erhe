@@ -858,6 +858,8 @@ Input handling uses `erhe::commands::Commands`. Tools register `Command` objects
 
 Geometry operations can run asynchronously via `tf::Executor`. `async_for_nodes_with_mesh()` in `items.cpp` manages a global map of per-item async tasks, chaining dependent operations. `App_context::pending_async_ops` and `running_async_ops` are atomic counters displayed in the status bar.
 
+The status bar (`Window_imgui_host::set_status_bar_callback`, a child of the root window under the dockspace) insets its content horizontally by one bar height, because the bottom corners of a macOS window are rounded and clip glyphs at the edges. Its frame time is `Time::get_frame_time_average_ms`, an exponential moving average of the host frame duration whose weight follows the elapsed time (`1 - exp(-dt / 0.25 s)`), so it settles within about a second at any frame rate.
+
 ### Initialization Order
 
 Initialization is serial: `Editor::Editor()` constructs the parts in 25 named steps (`ERHE_INIT_STEP_BEGIN("<name>")` / `ERHE_INIT_STEP_END`), each a profile scope and a line on the init status display. Restoring parallel construction is planned (`doc/plans/parallel_editor_init.md`).

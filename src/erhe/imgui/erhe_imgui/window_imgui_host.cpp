@@ -232,7 +232,16 @@ void Window_imgui_host::begin_imgui_frame()
 
     // Status bar
     ImGui::SetCursorPos(ImVec2{0.0f, viewport->Size.y - status_bar_height});
-    ImGui::BeginChild("StatusBar", ImVec2{viewport->Size.x, status_bar_height}, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    // Inset the content horizontally by one bar height: the bottom corners
+    // of a macOS window are rounded and clip glyphs placed at the edges.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{status_bar_height, 0.0f});
+    ImGui::BeginChild(
+        "StatusBar",
+        ImVec2{viewport->Size.x, status_bar_height},
+        ImGuiChildFlags_AlwaysUseWindowPadding,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+    );
+    ImGui::PopStyleVar();
     if (m_status_bar_callback) {
         m_status_bar_callback(*this);
     }

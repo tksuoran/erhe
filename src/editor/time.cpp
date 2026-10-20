@@ -8,6 +8,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace editor {
 
@@ -27,20 +28,21 @@ void Time::prepare_update(bool advance_simulation, int64_t simulation_advance_ns
     int64_t host_system_frame_duration_ns   = host_system_frame_start_time_ns - m_host_system_last_frame_start_time;
     int64_t simulation_frame_duration_ns    = (simulation_advance_ns >= 0) ? simulation_advance_ns : host_system_frame_duration_ns;
 
-    constexpr std::size_t frame_time_window_size = 200;
-    if (!m_frame_start_times.empty()) {
-        const std::size_t oldest_index = (m_frame_start_times.size() < frame_time_window_size) ? 0 : m_frame_start_time_index;
-        const int64_t average_frametime_duration_ns = host_system_frame_start_time_ns - m_frame_start_times[oldest_index];
-        const int64_t average_frametime_ns          = average_frametime_duration_ns / static_cast<int64_t>(m_frame_start_times.size());
-        const double  average_frametime_ms          = static_cast<double>(average_frametime_ns) / 1'000'000.0;
-        m_frame_time_average_ms = static_cast<float>(average_frametime_ms);
-    }
-    if (m_frame_start_times.size() < frame_time_window_size) {
-        m_frame_start_times.reserve(frame_time_window_size); // no-op after the first frame
-        m_frame_start_times.push_back(host_system_frame_start_time_ns);
-    } else {
-        m_frame_start_times[m_frame_start_time_index] = host_system_frame_start_time_ns;
-        m_frame_start_time_index = (m_frame_start_time_index + 1) % frame_time_window_size;
+    // Frame time average for the status bar: an exponential moving average
+    // whose weight follows the elapsed time (time constant
+    // s_frame_time_average_tau_s), so it settles within about a second at
+    // any frame rate - a sample window of N frames takes N frames to follow
+    // a change.
+    if ((m_host_system_last_frame_start_time != 0) && (host_system_frame_duration_ns > 0)) {
+        const double frame_ms = static_cast<double>(host_system_frame_duration_ns) / 1'000'000.0;
+        if (m_frame_time_average_ms <= 0.0f) {
+            m_frame_time_average_ms = static_cast<float>(frame_ms);
+        } else {
+            const double dt_s   = frame_ms / 1000.0;
+            const double weight = 1.0 - std::exp(-dt_s / s_frame_time_average_tau_s);
+            const double average = static_cast<double>(m_frame_time_average_ms);
+            m_frame_time_average_ms = static_cast<float>(average + (weight * (frame_ms - average)));
+        }
     }
 
     m_host_system_last_frame_duration_ns = host_system_frame_duration_ns;
