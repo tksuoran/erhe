@@ -108,8 +108,7 @@ private:
     ERHE_PROFILE_MUTEX(std::mutex,         m_mutex);
     std::vector<Time_context>              m_this_frame_fixed_steps;
     std::vector<Transform_animation_entry> m_transform_animations;
-    std::vector<int64_t>                   m_frame_start_times;         // ring buffer of recent frame start times
-    std::size_t                            m_frame_start_time_index{0}; // oldest entry / next slot to overwrite once full
+    static constexpr double                s_frame_time_average_tau_s{0.25}; // status bar average time constant
     float                                  m_frame_time_average_ms{0.0f};
 };
 
