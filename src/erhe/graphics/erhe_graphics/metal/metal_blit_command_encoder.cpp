@@ -2,15 +2,20 @@
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
+#include "erhe_graphics/metal/metal_swapchain.hpp"
 #include "erhe_graphics/metal/metal_texture.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
+
+#include <algorithm>
 
 namespace erhe::graphics {
 
@@ -66,9 +71,152 @@ Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device, Command_buf
 
 Blit_command_encoder_impl::~Blit_command_encoder_impl() noexcept = default;
 
-void Blit_command_encoder_impl::blit_framebuffer(const Render_pass&, glm::ivec2, glm::ivec2, const Render_pass&, glm::ivec2)
+namespace {
+
+// Color attachment 0 of a render pass as the blit sees it: the current
+// drawable (or emulated ring) texture of a swapchain render pass, otherwise
+// the attachment texture at its level and layer.
+class Blit_attachment
 {
-    ERHE_FATAL("Metal: blit_framebuffer not implemented");
+public:
+    MTL::Texture* texture{nullptr};
+    NS::UInteger  level  {0};
+    NS::UInteger  slice  {0};
+};
+
+[[nodiscard]] auto get_blit_attachment(const Render_pass& render_pass) -> Blit_attachment
+{
+    Swapchain* const swapchain = render_pass.get_swapchain();
+    if (swapchain != nullptr) {
+        return Blit_attachment{.texture = swapchain->get_impl().get_current_color_texture()};
+    }
+    const Render_pass_attachment_descriptor& attachment = render_pass.get_descriptor().color_attachments[0];
+    return Blit_attachment{
+        .texture = (attachment.texture != nullptr) ? attachment.texture->get_impl().get_mtl_texture() : nullptr,
+        .level   = static_cast<NS::UInteger>(attachment.texture_level),
+        .slice   = static_cast<NS::UInteger>(attachment.texture_layer)
+    };
+}
+
+[[nodiscard]] auto get_level_extent(const Blit_attachment& attachment) -> glm::ivec2
+{
+    return glm::ivec2{
+        std::max(1, static_cast<int>(attachment.texture->width ()) >> static_cast<int>(attachment.level)),
+        std::max(1, static_cast<int>(attachment.texture->height()) >> static_cast<int>(attachment.level))
+    };
+}
+
+} // anonymous namespace
+
+void Blit_command_encoder_impl::blit_framebuffer(
+    const Render_pass& source_renderpass,
+    const glm::ivec2   source_origin,
+    const glm::ivec2   source_size,
+    const Render_pass& destination_renderpass,
+    const glm::ivec2   destination_origin
+)
+{
+    Scoped_transient_object_pool object_pool{}; // drains the encoders, descriptor and other autoreleased objects created here
+
+    // A swapchain render pass needs its frame's drawable: blit after
+    // begin_swapchain, before the frame is submitted.
+    const Blit_attachment source      = get_blit_attachment(source_renderpass);
+    const Blit_attachment destination = get_blit_attachment(destination_renderpass);
+    ERHE_VERIFY((source.texture != nullptr) && (destination.texture != nullptr));
+    ERHE_VERIFY((source.texture->sampleCount() == 1) && (destination.texture->sampleCount() == 1));
+
+    const Blit_framebuffer_region region = clip_blit_framebuffer_region(
+        source_origin,
+        source_size,
+        get_level_extent(source),
+        destination_origin,
+        get_level_extent(destination)
+    );
+    if ((region.size.x <= 0) || (region.size.y <= 0)) {
+        return;
+    }
+
+    Command_buffer_impl&      cb_impl             = m_command_buffer.get_impl();
+    MTL::CommandBuffer* const mtl_command_buffer  = cb_impl.get_mtl_command_buffer();
+    MTL::Fence* const         inter_encoder_fence = cb_impl.get_inter_encoder_fence();
+    ERHE_VERIFY(mtl_command_buffer != nullptr);
+
+    // Same format: a texel copy on a blit encoder.
+    if (source.texture->pixelFormat() == destination.texture->pixelFormat()) {
+        MTL::BlitCommandEncoder* const blit_encoder = mtl_command_buffer->blitCommandEncoder();
+        ERHE_VERIFY(blit_encoder != nullptr);
+        if (inter_encoder_fence != nullptr) {
+            blit_encoder->waitForFence(inter_encoder_fence);
+        }
+        blit_encoder->copyFromTexture(
+            source.texture, source.slice, source.level,
+            MTL::Origin{static_cast<NS::UInteger>(region.source_origin.x), static_cast<NS::UInteger>(region.source_origin.y), 0},
+            MTL::Size  {static_cast<NS::UInteger>(region.size.x),          static_cast<NS::UInteger>(region.size.y),          1},
+            destination.texture, destination.slice, destination.level,
+            MTL::Origin{static_cast<NS::UInteger>(region.destination_origin.x), static_cast<NS::UInteger>(region.destination_origin.y), 0}
+        );
+        if (inter_encoder_fence != nullptr) {
+            blit_encoder->updateFence(inter_encoder_fence);
+        }
+        blit_encoder->endEncoding();
+        return;
+    }
+
+    // Different formats: Metal copies convert nothing, so draw the
+    // rectangle with a pipeline whose color attachment converts.
+    MTL::RenderPipelineState* const pipeline = m_device.get_impl().get_blit_framebuffer_pipeline(
+        static_cast<unsigned long>(destination.texture->pixelFormat())
+    );
+    ERHE_VERIFY(pipeline != nullptr);
+
+    // A 2D view of the one source subresource: the shader reads
+    // texture2d, whatever the source's type, level count or layer count.
+    MTL::Texture* const source_view = source.texture->newTextureView(
+        source.texture->pixelFormat(),
+        MTL::TextureType2D,
+        NS::Range{source.level, 1},
+        NS::Range{source.slice, 1}
+    );
+    ERHE_VERIFY(source_view != nullptr);
+
+    MTL::RenderPassDescriptor* const pass_descriptor = MTL::RenderPassDescriptor::renderPassDescriptor();
+    MTL::RenderPassColorAttachmentDescriptor* const color_attachment = pass_descriptor->colorAttachments()->object(0);
+    color_attachment->setTexture    (destination.texture);
+    color_attachment->setLevel      (destination.level);
+    color_attachment->setSlice      (destination.slice);
+    color_attachment->setLoadAction (MTL::LoadActionLoad);
+    color_attachment->setStoreAction(MTL::StoreActionStore);
+
+    MTL::RenderCommandEncoder* const render_encoder = mtl_command_buffer->renderCommandEncoder(pass_descriptor);
+    ERHE_VERIFY(render_encoder != nullptr);
+    if (inter_encoder_fence != nullptr) {
+        render_encoder->waitForFence(inter_encoder_fence, MTL::RenderStageVertex);
+    }
+    render_encoder->setRenderPipelineState(pipeline);
+    render_encoder->setViewport(
+        MTL::Viewport{
+            static_cast<double>(region.destination_origin.x), static_cast<double>(region.destination_origin.y),
+            static_cast<double>(region.size.x),               static_cast<double>(region.size.y),
+            0.0, 1.0
+        }
+    );
+    render_encoder->setScissorRect(
+        MTL::ScissorRect{
+            static_cast<NS::UInteger>(region.destination_origin.x), static_cast<NS::UInteger>(region.destination_origin.y),
+            static_cast<NS::UInteger>(region.size.x),               static_cast<NS::UInteger>(region.size.y)
+        }
+    );
+    const glm::ivec2 offset = region.source_origin - region.destination_origin;
+    render_encoder->setFragmentTexture(source_view, 0);
+    render_encoder->setFragmentBytes(&offset, sizeof(offset), 0);
+    render_encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger{0}, NS::UInteger{3});
+    if (inter_encoder_fence != nullptr) {
+        render_encoder->updateFence(inter_encoder_fence, MTL::RenderStageFragment);
+    }
+    render_encoder->endEncoding();
+
+    // The command buffer retains the view it references.
+    source_view->release();
 }
 
 void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, const glm::ivec3 source_size, const Texture_location& destination)

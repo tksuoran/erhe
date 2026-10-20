@@ -369,6 +369,14 @@ Device_impl::~Device_impl() noexcept
     // argument encoder), so we need to drain *after* this point.
     m_surface.reset();
     m_ring_buffer_pool.clear();
+    for (Blit_framebuffer_pipeline& entry : m_blit_framebuffer_pipelines) {
+        entry.pipeline->release();
+    }
+    m_blit_framebuffer_pipelines.clear();
+    if (m_blit_framebuffer_library != nullptr) {
+        m_blit_framebuffer_library->release();
+        m_blit_framebuffer_library = nullptr;
+    }
     if (m_texture_argument_encoder != nullptr) {
         m_texture_argument_encoder->release();
         m_texture_argument_encoder = nullptr;
@@ -651,6 +659,96 @@ void Device_impl::set_present_target_time(const std::int64_t frame_id, const dou
 auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
 {
     return m_frame_pacing_tier;
+}
+
+namespace {
+
+// blit_framebuffer between formats: a full-screen triangle over the
+// destination rectangle (the viewport), each fragment reading the source
+// texel at its own framebuffer position plus the source - destination
+// origin offset. read() returns the source in the float domain, and the
+// pipeline's color attachment converts to the destination format.
+constexpr const char* c_blit_framebuffer_msl = R"(
+#include <metal_stdlib>
+using namespace metal;
+
+struct Blit_vertex_out
+{
+    float4 position [[position]];
+};
+
+vertex Blit_vertex_out blit_framebuffer_vs(uint vertex_id [[vertex_id]])
+{
+    const float2 uv = float2((vertex_id << 1) & 2, vertex_id & 2);
+    Blit_vertex_out out;
+    out.position = float4(uv * 2.0 - 1.0, 0.0, 1.0);
+    return out;
+}
+
+fragment float4 blit_framebuffer_fs(
+    Blit_vertex_out                in     [[stage_in]],
+    texture2d<float, access::read> source [[texture(0)]],
+    constant int2&                 offset [[buffer(0)]]
+)
+{
+    return source.read(uint2(int2(in.position.xy) + offset));
+}
+)";
+
+} // anonymous namespace
+
+auto Device_impl::get_blit_framebuffer_pipeline(const unsigned long destination_pixel_format) -> MTL::RenderPipelineState*
+{
+    const std::lock_guard<std::mutex> lock{m_blit_framebuffer_mutex};
+    for (const Blit_framebuffer_pipeline& entry : m_blit_framebuffer_pipelines) {
+        if (entry.destination_pixel_format == destination_pixel_format) {
+            return entry.pipeline;
+        }
+    }
+
+    Scoped_transient_object_pool object_pool{}; // drains the strings and errors created here
+    NS::Error* error = nullptr;
+    if (m_blit_framebuffer_library == nullptr) {
+        m_blit_framebuffer_library = m_mtl_device->newLibrary(
+            NS::String::string(c_blit_framebuffer_msl, NS::UTF8StringEncoding),
+            nullptr,
+            &error
+        );
+        if (m_blit_framebuffer_library == nullptr) {
+            log_context->error(
+                "blit_framebuffer: shader library compile failed: {}",
+                (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)"
+            );
+            return nullptr;
+        }
+    }
+    MTL::Function* const vertex_function   = m_blit_framebuffer_library->newFunction(NS::String::string("blit_framebuffer_vs", NS::UTF8StringEncoding));
+    MTL::Function* const fragment_function = m_blit_framebuffer_library->newFunction(NS::String::string("blit_framebuffer_fs", NS::UTF8StringEncoding));
+    MTL::RenderPipelineDescriptor* const descriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+    descriptor->setLabel(NS::String::string("blit_framebuffer", NS::UTF8StringEncoding));
+    descriptor->setVertexFunction  (vertex_function);
+    descriptor->setFragmentFunction(fragment_function);
+    descriptor->colorAttachments()->object(0)->setPixelFormat(static_cast<MTL::PixelFormat>(destination_pixel_format));
+    MTL::RenderPipelineState* const pipeline = m_mtl_device->newRenderPipelineState(descriptor, &error);
+    descriptor->release();
+    if (fragment_function != nullptr) {
+        fragment_function->release();
+    }
+    if (vertex_function != nullptr) {
+        vertex_function->release();
+    }
+    if (pipeline == nullptr) {
+        log_context->error(
+            "blit_framebuffer: pipeline for pixel format {} failed: {}",
+            destination_pixel_format,
+            (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)"
+        );
+        return nullptr;
+    }
+    m_blit_framebuffer_pipelines.push_back(
+        Blit_framebuffer_pipeline{.destination_pixel_format = destination_pixel_format, .pipeline = pipeline}
+    );
+    return pipeline;
 }
 
 auto Device_impl::get_command_buffer(const unsigned int thread_slot) -> Command_buffer&

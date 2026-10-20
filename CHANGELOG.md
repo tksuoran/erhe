@@ -9,6 +9,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Blit_framebuffer_region` and
+  `clip_blit_framebuffer_region()`. `Blit_command_encoder::blit_framebuffer`
+  now has one contract on every backend: an unscaled copy of `source_size`
+  texels at `source_origin` to `destination_origin`, clipped to both
+  attachments, converting between their formats. Implemented on Metal (copy,
+  or a draw between formats) and on Vulkan for offscreen render passes
+  (`vkCmdBlitImage`); OpenGL passed `source_size` as the end coordinates and
+  now uses the clipped rectangle.
 - `erhe::graphics`: `Display_refresh_resolver::skip_calibration()`: ends the
   init calibration before it starts for a backend without one (logged at
   info level; `abort_calibration()` stays the failure path). The Metal

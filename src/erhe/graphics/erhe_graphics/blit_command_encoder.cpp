@@ -13,7 +13,30 @@
 # include "erhe_graphics/null/null_blit_command_encoder.hpp"
 #endif
 
+
 namespace erhe::graphics {
+
+auto clip_blit_framebuffer_region(
+    const glm::ivec2 source_origin,
+    const glm::ivec2 source_size,
+    const glm::ivec2 source_extent,
+    const glm::ivec2 destination_origin,
+    const glm::ivec2 destination_extent
+) -> Blit_framebuffer_region
+{
+    // The copy as a rectangle of offsets d in [0, source_size): clip d to
+    // where both source_origin + d and destination_origin + d are inside.
+    const glm::ivec2 d_begin = glm::max(glm::ivec2{0, 0}, glm::max(-source_origin, -destination_origin));
+    const glm::ivec2 d_end   = glm::min(source_size, glm::min(source_extent - source_origin, destination_extent - destination_origin));
+    if ((d_end.x <= d_begin.x) || (d_end.y <= d_begin.y)) {
+        return Blit_framebuffer_region{};
+    }
+    return Blit_framebuffer_region{
+        .source_origin      = source_origin + d_begin,
+        .destination_origin = destination_origin + d_begin,
+        .size               = d_end - d_begin
+    };
+}
 
 Blit_command_encoder::Blit_command_encoder(Device& device, Command_buffer& command_buffer)
     : m_impl{device, command_buffer}

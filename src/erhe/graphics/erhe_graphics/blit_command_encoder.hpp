@@ -39,6 +39,30 @@ public:
     std::uintptr_t bytes_per_image{0};
 };
 
+// The texel rectangle a Blit_command_encoder::blit_framebuffer copies, after
+// clipping: size texels from source_origin to destination_origin. size is
+// (0, 0) when nothing of the requested rectangle lies inside both
+// attachments.
+class Blit_framebuffer_region
+{
+public:
+    glm::ivec2 source_origin     {0, 0};
+    glm::ivec2 destination_origin{0, 0};
+    glm::ivec2 size              {0, 0};
+};
+
+// Clips the unscaled copy of source_size texels at source_origin to
+// destination_origin against both attachments (source_extent and
+// destination_extent texels, origin at 0), moving both origins together so
+// the source texel at source_origin + d still lands at destination_origin + d.
+[[nodiscard]] auto clip_blit_framebuffer_region(
+    glm::ivec2 source_origin,
+    glm::ivec2 source_size,
+    glm::ivec2 source_extent,
+    glm::ivec2 destination_origin,
+    glm::ivec2 destination_extent
+) -> Blit_framebuffer_region;
+
 class Blit_command_encoder_impl;
 class Blit_command_encoder final : public Command_encoder
 {
@@ -52,6 +76,15 @@ public:
 
     void set_buffer       (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
     void set_buffer       (Buffer_target buffer_target, const Buffer* buffer) override;
+    // Copies color attachment 0 of source_renderpass to color attachment 0
+    // of destination_renderpass (the attachment's level and layer; the
+    // current window image for a swapchain render pass): source_size texels
+    // at source_origin land at destination_origin, unscaled, nearest, with a
+    // format conversion between the two attachment formats, clipped to both
+    // attachments (clip_blit_framebuffer_region). Origins are texel
+    // coordinates of the attachments, row 0 first in memory. Neither render
+    // pass may be active. Vulkan does not support a swapchain render pass
+    // here (doc/plans/xr.md "Desktop mirror").
     void blit_framebuffer (const Render_pass& source_renderpass, glm::ivec2 source_origin, glm::ivec2 source_size, const Render_pass& destination_renderpass, glm::ivec2 destination_origin);
     void copy_from_texture(const Texture_location&      source, glm::ivec3 source_size, const Texture_location&      destination);
     void copy_from_buffer (const Buffer_texel_location& source, glm::ivec3 source_size, const Texture_location&      destination);

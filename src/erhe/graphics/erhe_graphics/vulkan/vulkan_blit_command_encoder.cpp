@@ -7,6 +7,8 @@
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -67,9 +69,10 @@ auto get_subresource(const Texture_impl& texture_impl, const std::uintptr_t leve
     };
 }
 
-// Returns a copy source to the layout it had before the copy, so a copy does
-// not move the image into a layout its usage flags forbid. A source that was
-// UNDEFINED stays in TRANSFER_SRC_OPTIMAL (no transition to UNDEFINED exists).
+// Returns a copy source (or a blit_framebuffer destination) to the layout it
+// had before the copy, so a copy does not move the image into a layout its
+// usage flags forbid. An image that was UNDEFINED stays in the transfer
+// layout (no transition to UNDEFINED exists).
 void restore_source_layout(
     const VkCommandBuffer          command_buffer,
     const Texture_impl&            texture_impl,
@@ -113,30 +116,74 @@ void Blit_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Bu
 
 void Blit_command_encoder_impl::blit_framebuffer(
     const Render_pass& source_renderpass,
-    glm::ivec2         source_origin,
-    glm::ivec2         source_size,
+    const glm::ivec2   source_origin,
+    const glm::ivec2   source_size,
     const Render_pass& destination_renderpass,
-    glm::ivec2         destination_origin
+    const glm::ivec2   destination_origin
 )
 {
-    // For Vulkan, blit between render pass color attachments.
-    // Both render passes must have a color attachment with a texture that has an image.
-    const Render_pass_impl& src_impl = source_renderpass.get_impl();
-    const Render_pass_impl& dst_impl = destination_renderpass.get_impl();
-
-    // For swapchain render passes, we cannot directly access the swapchain image here.
-    // This operation is primarily used for XR framebuffer mirroring.
+    // A swapchain render pass has no texture: its image is acquired, owned
+    // and layout-tracked by the swapchain for the frame being recorded.
     if ((source_renderpass.get_swapchain() != nullptr) || (destination_renderpass.get_swapchain() != nullptr)) {
-        log_texture->warn("blit_framebuffer: swapchain render pass blit not yet supported for Vulkan");
+        log_texture->error("blit_framebuffer: a swapchain render pass is not supported on Vulkan (doc/plans/xr.md \"Desktop mirror\")");
         return;
     }
 
-    log_texture->warn("blit_framebuffer: not yet fully implemented for Vulkan (non-swapchain)");
-    static_cast<void>(source_origin);
-    static_cast<void>(source_size);
-    static_cast<void>(destination_origin);
-    static_cast<void>(src_impl);
-    static_cast<void>(dst_impl);
+    const Render_pass_attachment_descriptor& source_attachment      = source_renderpass     .get_descriptor().color_attachments[0];
+    const Render_pass_attachment_descriptor& destination_attachment = destination_renderpass.get_descriptor().color_attachments[0];
+    ERHE_VERIFY((source_attachment.texture != nullptr) && (destination_attachment.texture != nullptr));
+
+    const Texture_impl&     source_impl             = source_attachment.texture->get_impl();
+    const Texture_impl&     destination_impl        = destination_attachment.texture->get_impl();
+    const Image_subresource source_subresource      = get_subresource(source_impl,      source_attachment.texture_level,      source_attachment.texture_layer);
+    const Image_subresource destination_subresource = get_subresource(destination_impl, destination_attachment.texture_level, destination_attachment.texture_layer);
+
+    const Blit_framebuffer_region region = clip_blit_framebuffer_region(
+        source_origin,
+        source_size,
+        glm::ivec2{source_attachment.texture->get_width(source_attachment.texture_level), source_attachment.texture->get_height(source_attachment.texture_level)},
+        destination_origin,
+        glm::ivec2{destination_attachment.texture->get_width(destination_attachment.texture_level), destination_attachment.texture->get_height(destination_attachment.texture_level)}
+    );
+    if ((region.size.x <= 0) || (region.size.y <= 0)) {
+        return;
+    }
+
+    Recording_scope scope{m_device.get_impl(), m_command_buffer};
+
+    // From the tracked layouts, not UNDEFINED: the destination keeps its
+    // texels outside the copied rectangle. Both are returned to the layout
+    // they had (a render pass begins from the tracked layout either way).
+    const VkImageLayout source_layout      = source_impl     .get_layout(source_subresource.range.base_level,      source_subresource.range.base_layer);
+    const VkImageLayout destination_layout = destination_impl.get_layout(destination_subresource.range.base_level, destination_subresource.range.base_layer);
+    source_impl     .transition_layout(scope.cb, source_subresource.range,      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    destination_impl.transition_layout(scope.cb, destination_subresource.range, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // vkCmdBlitImage, not vkCmdCopyImage: it converts between the two
+    // formats (RGBA8 to BGRA8, for example) where a copy reinterprets bits.
+    // Equal extents, so nothing is scaled.
+    const VkImageBlit blit_region{
+        .srcSubresource = {source_subresource.aspect_mask, source_subresource.image_level, source_subresource.image_layer, 1},
+        .srcOffsets     = {
+            VkOffset3D{region.source_origin.x,                 region.source_origin.y,                 0},
+            VkOffset3D{region.source_origin.x + region.size.x, region.source_origin.y + region.size.y, 1}
+        },
+        .dstSubresource = {destination_subresource.aspect_mask, destination_subresource.image_level, destination_subresource.image_layer, 1},
+        .dstOffsets     = {
+            VkOffset3D{region.destination_origin.x,                 region.destination_origin.y,                 0},
+            VkOffset3D{region.destination_origin.x + region.size.x, region.destination_origin.y + region.size.y, 1}
+        }
+    };
+    vkCmdBlitImage(
+        scope.cb,
+        source_impl.get_vk_image(),      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        destination_impl.get_vk_image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &blit_region,
+        VK_FILTER_NEAREST
+    );
+
+    restore_source_layout(scope.cb, source_impl,      source_subresource.range,      source_layout);
+    restore_source_layout(scope.cb, destination_impl, destination_subresource.range, destination_layout);
 }
 
 void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source, glm::ivec3 source_size, const Texture_location& destination)
