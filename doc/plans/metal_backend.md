@@ -7,18 +7,6 @@ backend still differs from Vulkan; each is verified on macOS with the
 Xcode build (`doc/agents/macos.md`) and, where a GPU test covers it, with
 `erhe_graphics_gpu_tests` on Metal.
 
-## 4. Swapchain resize
-
-Windowed resize relies on SDL's Metal view keeping the layer's
-`drawableSize` current (`doc/erhe/metal_backend.md` "Swapchain"); it has
-not been exercised with a live resize. Interactive check (an agent cannot
-resize the window: there is no MCP tool for it, and scripting System Events
-needs the Accessibility permission): with the windowed Metal editor,
-drag-resize the window larger and smaller, also across displays of
-different scale, and confirm the viewports and ImGui fill the window
-without stretching or clipping and that `capture_screenshot` returns the
-new size.
-
 ## 5. Display-time pacing tier
 
 Tier S is built (`doc/erhe/metal_backend.md` "Frame pacing"). With three

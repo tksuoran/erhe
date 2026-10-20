@@ -253,7 +253,13 @@ Windowed resize needs no backend code: SDL's Metal view sets the layer's
 `drawableSize` from the view's backing size on every resize
 (`SDL_cocoametalview.m`, `updateDrawableSize`), the swapchain render pass
 takes its size from the frame's drawable texture, and the editor sizes its
-render targets from the window size the frame packet carries. The headless
+render targets from the window size the frame packet carries. Verified
+interactively (windowed Debug editor, tier S): drag-resizing larger, smaller
+and in quick succession, moving between a 2x external display and the 2x
+built-in one (the display refresh resolver re-fed on each move), and
+switching the external display between 2x and 1x modes under the running
+editor - the viewports and ImGui filled the window at the right scale
+throughout and `capture_screenshot` returned each new size. The headless
 window never changes size (as with Vulkan's `Emulated_swapchain_impl`), so
 the emulated ring is created once.
 
