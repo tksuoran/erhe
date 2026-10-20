@@ -33,6 +33,8 @@ class Tunables:
     H_frac:     float = 0.10        # hysteresis width H, fraction of T
     T_up:       float = 0.5         # upshift confirmation (dwell) time [s]
     q_up:       float = 0.9         # share of the dwell's frames that must have upshift headroom
+    cadence_min_samples: int = 30   # stage samples at the current cadence the predictive downshift needs (C24)
+    cadence_scoped: bool = True     # C24: predictive downshift on the current cadence's samples (False: the whole window, pre-C24)
     M:          int   = 2           # reactive downshift: consecutive self-misses
     m0_frac:    float = 0.20        # initial margin, fraction of T
     m_min_frac: float = 0.02
@@ -48,6 +50,13 @@ class Tunables:
     # present times and takes an image at its GPU end - Metal tier M).
     dpe_source: str   = 'fixed'
     dpe_max_frac: float = 2.0       # estimate ceiling, fraction of T
+    dpe_max:    float = 0.0         # estimate ceiling [s] measured by the host (present calibration); 0: dpe_max_frac * T
+    # Presentation queue (C24): 'dropping' - a newer image ready for the same
+    # vsync supersedes an older one (fifo_latest_ready), so an in-flight
+    # target further ahead than its cadence must not move the cursor (C13);
+    # 'fifo' - every queued image displays, at its target or later (Metal
+    # tier M), so the cursor follows every in-flight target.
+    present_queue: str = 'dropping'
     dpe_band:   int   = 4           # samples (by completion margin) in a deadline band
     dpe_min_late: int = 2           # late frames a deadline band needs
     dpe_decay:  float = 1e-7        # decay per feedback toward the evidence [s]
@@ -105,6 +114,12 @@ class FramePacer:
         self.m = tun.m0
         self.c_win = deque(maxlen=tun.history)
         self.g_win = deque(maxlen=tun.history)
+        # Stage times of frames scheduled at the current cadence (C24): the
+        # GPU cost depends on the cadence (an Apple GPU clocks down at N=2),
+        # so the predictive downshift judges a cadence by its own samples.
+        self.c_cad = deque(maxlen=tun.history)
+        self.g_cad = deque(maxlen=tun.history)
+        self.cadence_pressure = False     # a (near-)miss at the current cadence
         self.L_win = {}                   # cadence N -> deque of latency samples
         self.j_next = None                # next target slot (None until engaged)
         self.last_slot = -1
@@ -178,6 +193,9 @@ class FramePacer:
     def _W(self):
         return max(self._q(self.c_win, 0.0), self._q(self.g_win, 0.0)) + self.tun.guard
 
+    def _W_cadence(self):
+        return max(self._q(self.c_cad, 0.0), self._q(self.g_cad, 0.0)) + self.tun.guard
+
     def set_min_vsyncs(self, n):
         self.N_min_app = max(1, n)
         if self.N < self.N_min_app:
@@ -225,10 +243,17 @@ class FramePacer:
                 # ratchets the cursor on a dropping path, C13); +N per
                 # in-flight frame re-created a cold-start slot collision every
                 # few frames (C10, deviation 16).
+                # On a FIFO queue every in-flight target holds (C24): a target
+                # the reachability test skipped forward lies beyond its
+                # cadence, and capping it there gave the next frame the same
+                # slot - a late display on a path that drops nothing.
                 anchor = achieved
                 for i in range(fb_id + 1, frame_id):
                     if i in self.frame_slot:
-                        anchor = max(anchor + 1, min(self.frame_slot[i], anchor + self.frame_N.get(i, self.N)))
+                        if t.present_queue == 'fifo':
+                            anchor = max(anchor + 1, self.frame_slot[i])
+                        else:
+                            anchor = max(anchor + 1, min(self.frame_slot[i], anchor + self.frame_N.get(i, self.N)))
                     else:
                         anchor += self.frame_N.get(i, self.N)
                 anchor += self.N
@@ -295,6 +320,9 @@ class FramePacer:
         self.g_win.append(g)
         n_used = self.frame_N.get(frame_id, self.N)
         self.L_win.setdefault(n_used, deque(maxlen=t.history)).append(L)
+        if n_used == self.N:
+            self.c_cad.append(c)
+            self.g_cad.append(g)
         self.frame_gpu_end[frame_id] = gpu_end
         d = self.V(self.frame_slot[frame_id]) - self.dpe
         s = d - gpu_end
@@ -312,6 +340,8 @@ class FramePacer:
                 self.m = max(t.m_min, self.m - t.d_dec)
         if s < t.guard:
             self.last_pressure = self.completed  # deadline pressure evidence
+            if n_used == self.N:
+                self.cadence_pressure = True
 
         # Miss streak with throughput attribution: the streak is attributed to
         # load only if EVERY missed frame's own stage time exceeds the budget
@@ -337,6 +367,19 @@ class FramePacer:
         # guard stays below the inflated nominal budget).
         n_req = max(self.N_min_app,
                     min(t.N_max, math.ceil(W / self.period)))
+        # The predictive downshift judges the current cadence by its own
+        # stage times and pressure (C24): after an upshift the window still
+        # holds the longer cadence's slower GPU frames and near-misses, and
+        # judged by those the pacer went straight back. The reactive path
+        # guards the transition meanwhile.
+        if t.cadence_scoped:
+            cadence_known = len(self.g_cad) >= t.cadence_min_samples
+            n_req_cadence = max(self.N_min_app, min(t.N_max, math.ceil(self._W_cadence() / self.period))) \
+                if cadence_known else self.N
+            pressure_here = self.cadence_pressure
+        else:
+            n_req_cadence = n_req
+            pressure_here = True
         # Upshift survival: no pressure-driven revert for 4*T_up after an
         # upshift means the new cadence holds - future upshifts are cheap.
         if (self.upshift_time is not None
@@ -350,10 +393,11 @@ class FramePacer:
             # frames' own stage times (attribution excludes timing-only misses
             # and cascades behind a single spike).
             self._on_pressure_downshift(gpu_end)
-            self._change_cadence(max(self.N + 1, n_req))
+            self._change_cadence(max(self.N + 1, n_req_cadence))
             self.consec_miss = 0
             self.streak_attr = float('inf')
-        elif (n_req > self.N
+        elif (n_req_cadence > self.N
+                and pressure_here
                 and (self.completed - self.last_pressure) <= t.history):
             # Predictive downshift needs PRESSURE evidence (a recent miss or
             # near-miss), not the quantile alone: heavy-tailed load whose
@@ -363,7 +407,7 @@ class FramePacer:
             # upshift path. Misses/near-misses are the honest signal; the
             # margin AIMD surfaces overload as near-misses well before drops.
             self._on_pressure_downshift(gpu_end)
-            self._change_cadence(n_req)
+            self._change_cadence(n_req_cadence)
         elif self.N > self.N_min_app:
             # Upshift headroom (deviation 15, C23): the q_up quantile of the
             # dwell's frames' max(c, g) within the next cadence's budget - at
@@ -414,6 +458,9 @@ class FramePacer:
         old = self.N
         self.N = n_new
         self._reset_dwell()
+        self.c_cad.clear()
+        self.g_cad.clear()
+        self.cadence_pressure = False
         win = self.L_win.get(n_new)
         if not win:
             carry = self._q(self.L_win.get(old), 0.0)
@@ -508,7 +555,8 @@ class FramePacer:
         for i, (margin, late) in enumerate(ordered):
             if late and sum(1 for _, l in ordered[max(0, i - t.dpe_band + 1):i + 1] if l) >= t.dpe_min_late:
                 evidence = margin + t.guard
-        evidence = min(max(evidence, t.dpe_hat), max(t.dpe_hat, t.dpe_max_frac * t.T))
+        ceiling = t.dpe_max if t.dpe_max > 0.0 else t.dpe_max_frac * t.T
+        evidence = min(max(evidence, t.dpe_hat), max(t.dpe_hat, ceiling))
         if evidence > self.dpe:
             self.dpe = evidence
         else:
@@ -685,6 +733,16 @@ class Scenario:
                                          # has DISPLAYED - the queue-full
                                          # blocking the slop servo senses.
                                          # (0 = unmodeled, pre-P4.1 plants.)
+    drawable_pool: int = 0               # C24: Metal CAMetalLayer drawable
+                                         # pool (3). > 0: frame k's drawable
+                                         # acquire (at the END of its CPU work,
+                                         # where the editor acquires) blocks
+                                         # until the compositor latches frame
+                                         # k-(pool-1), pool_latch_lead before
+                                         # its display (measured: 15.7 ms on a
+                                         # ProMotion panel); the blocked CPU
+                                         # also delays the next decision.
+    pool_latch_lead: float = 0.0
     slop_servo: bool = False             # C19..C21: release comes from the
                                          # tier S slop-servo sleep instead of
                                          # the FramePacer decision; the
@@ -804,6 +862,8 @@ def run(sc: Scenario):
             # fence wait during frame k's CPU start, not when the GPU finished.
             push(cpu_start, 'gpu', pending_gpu.pop(k - t.F))
         ce = cpu_start + c
+        if sc.drawable_pool > 0 and (k - (sc.drawable_pool - 1)) in disp_time:
+            ce = max(ce, disp_time[k - (sc.drawable_pool - 1)] - sc.pool_latch_lead)
         cpu_end[k] = ce
         push(ce, 'cpu', (k, c))
         gs = max(ce, gpu_end.get(k - 1, 0.0))
@@ -1788,14 +1848,61 @@ def c23_upshift_under_gpu_clock_scaling():
         sc = Scenario("c23", 2400, gauss_fn(rng, 2.0, 0.2), None, tun=tun, g_at_cadence_fn=g)
         recs, _ = run(sc)
         down = sum(1 for r in recs[130:400] if r.N >= 2)
-        return down, {r.N for r in recs[1200:]}, sum(1 for r in recs[1200:] if r.self_miss)
-    down_p, n_p, _ = arm(1.0)
-    down, n_vals, misses = arm(0.9)
-    check("C23 per-frame test stays at the longer cadence", down_p > 0 and n_p != {1},
-          f"q_up 1.0: N values after frame 1200: {n_p}")
+        back = next((r.k for r in recs[130:] if r.N == 1), len(recs))
+        return down, {r.N for r in recs[1200:]}, sum(1 for r in recs[1200:] if r.self_miss), back
+    down_p, n_p, _, back_p = arm(1.0)
+    down, n_vals, misses, back = arm(0.9)
+    # The per-frame test completes a dwell only by luck (no tail frame for
+    # T_up); before the cadence-scoped predictive test (C24) the window's
+    # N=2 tail reverted such an upshift at once.
+    check("C23 per-frame test returns much later", back_p > back + 120,
+          f"first N=1 frame after the spike: q_up 1.0 at {back_p}, q_up 0.9 at {back}")
     check("C23 spike downshifts", down > 0, f"{down} frames at N>=2 after the spike")
     check("C23 quantile test returns to N=1", n_vals == {1}, f"q_up 0.9: N values after frame 1200: {n_vals}")
     check("C23 miss rate", misses <= 12, f"{misses}/1200 self-misses")
+
+
+def c24_fifo_upshift_promotion():
+    print("C24 FIFO target-honoring path, ProMotion deadline: upshift holds")
+    # Measured live (Metal tier M, built-in ProMotion panel): the compositor
+    # needs an image 2T + ~1 ms before its vsync, frees a drawable when it
+    # latches the frame two after it (pool of 3) and displays every queued
+    # image (FIFO); the GPU span at N=2 has a tail beyond T (an Apple GPU
+    # clocking down; ~15 % of the frames 9-14 ms) while at N=1 it stays near
+    # 6 ms. After a startup spike the pacer upshifted to N=1 and went
+    # straight back: the window still held the N=2 tail (q95 > T) and the
+    # N=2 tail's near-misses counted as pressure, so the predictive test
+    # judged N=1 by N=2's cost. Live, the in-flight cap of a dropping queue
+    # (C13) also gave a frame its predecessor's slot after a skipped-forward
+    # target (two late displays, a reactive downshift).
+    def arm(queue, scoped, seed):
+        T = 1.0 / 120.0
+        dpe_true = 2.0 * T + 1.0 * MS
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_true + 0.5 * MS,
+                       dpe_max=dpe_true + 0.5 * MS + 0.5 * T, present_queue=queue, cadence_scoped=scoped)
+        rng = random.Random(seed)
+        rg = random.Random(seed + 1)
+        def g(k, n):
+            if 100 <= k < 130:
+                return 20.0 * MS
+            if n >= 2 and rg.random() < 0.15:
+                return rg.uniform(9.0, 14.0) * MS
+            return max(0.5, rg.gauss(6.0, 0.3)) * MS
+        sc = Scenario("c24-" + queue, 3000, gauss_fn(rng, 3.0, 0.6), None, tun=tun, g_at_cadence_fn=g,
+                      dpe_true=dpe_true, drawable_pool=3, pool_latch_lead=dpe_true - 1.8 * MS)
+        recs, _ = run(sc)
+        tail = recs[1500:]
+        collisions = sum(1 for a, b in zip(recs[130:], recs[131:]) if b.target_time <= a.target_time + 0.5 * T)
+        return ({r.N for r in tail}, sum(1 for r in tail if r.slipped), collisions,
+                sum(1 for r in recs[130:400] if r.N >= 2))
+    n_o, slips_o, coll_o, _ = arm('dropping', False, 2401)
+    n_f, slips_f, coll_f, down_f = arm('fifo', True, 2401)
+    check("C24 pre-C24 pacer stays at N=2 (the live failure)", n_o != {1},
+          f"N after frame 1500: {n_o}, {coll_o} slot collisions, {slips_o} slips")
+    check("C24 spike downshifts", down_f > 0, f"{down_f} frames at N>=2 after the spike")
+    check("C24 cadence-scoped predictive test, FIFO anchor: N=1 after the spike", n_f == {1}, f"N after frame 1500: {n_f}")
+    check("C24 FIFO anchor: no slot collisions", coll_f == 0, f"{coll_f} collisions")
+    check("C24 slips", slips_f <= 15, f"{slips_f}/1500 slipped")
 
 
 def main():
@@ -1822,6 +1929,7 @@ def main():
     c21_slop_servo_failure_modes()
     c22_compositor_deadline_estimation()
     c23_upshift_under_gpu_clock_scaling()
+    c24_fifo_upshift_promotion()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")

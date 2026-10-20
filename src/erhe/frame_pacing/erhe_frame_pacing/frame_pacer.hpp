@@ -26,6 +26,18 @@
 
 namespace erhe::frame_pacing {
 
+// How the presentation queue treats images (doc/frame_pacing/algorithm.md
+// section 3.1, claims C13 and C24).
+enum class Present_queue_kind : unsigned int {
+    // A newer image ready for the same vsync supersedes an older one
+    // (VK_KHR_present_mode_fifo_latest_ready): an in-flight target further
+    // ahead than its cadence must not move the slot cursor (C13).
+    dropping = 0,
+    // Every queued image displays, at its target or later (Metal tier M):
+    // the slot cursor follows every in-flight target (C24).
+    fifo
+};
+
 // Where the pacer's presentation deadline offset delta_pe comes from
 // (doc/frame_pacing/algorithm.md "Deadline offset estimation").
 enum class Deadline_offset_source : unsigned int {
@@ -54,6 +66,7 @@ public:
     double      hysteresis_frac   {0.10};       // H, fraction of T
     double      upshift_dwell_time{0.5};        // T_up
     double      upshift_quantile  {0.9};        // q_up: share of the dwell's frames that must have headroom
+    std::size_t cadence_min_samples{30};        // stage samples at the current cadence the predictive downshift needs (C24)
     int         reactive_miss_threshold{2};     // M consecutive observed self-misses
     double      margin_initial_frac{0.20};      // m0
     double      margin_min_frac   {0.02};
@@ -64,6 +77,7 @@ public:
     std::size_t cold_start_seed_frames{8};      // K
     double      deadline_offset_initial{0.0025};// assumed presentation deadline offset (delta_pe floor)
     Deadline_offset_source deadline_offset_source{Deadline_offset_source::fixed};
+    Present_queue_kind present_queue{Present_queue_kind::dropping};
     // delta_pe estimator (doc/frame_pacing/algorithm.md "Deadline offset
     // estimation"), Deadline_offset_source::estimated only: learned from
     // (completion margin, displayed late) samples of the last `history`
@@ -250,6 +264,13 @@ private:
     double        m_margin{0.0};
     Sample_window m_cpu_window;
     Sample_window m_gpu_window;
+    // Stage times of the frames scheduled at the current cadence (C24): the
+    // GPU cost depends on the cadence (an Apple GPU clocks down at N=2), so
+    // the predictive downshift judges a cadence by its own samples and its
+    // own (near-)misses. Cleared on every cadence change.
+    Sample_window m_cadence_cpu_window;
+    Sample_window m_cadence_gpu_window;
+    bool          m_cadence_pressure{false};
     std::vector<Sample_window> m_latency_windows; // per cadence N, index 0..max_vsyncs
 
     // Slot cursor and anchoring.

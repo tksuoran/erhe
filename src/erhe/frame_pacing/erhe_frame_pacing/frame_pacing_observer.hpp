@@ -37,6 +37,7 @@ class Deadline_offset_setup
 {
 public:
     Deadline_offset_source source{Deadline_offset_source::fixed};
+    Present_queue_kind     present_queue{Present_queue_kind::dropping};
     // A deadline the host measured (present calibration), for the display
     // whose refresh period is calibrated_period: the initial offset and
     // floor, with the estimate ceiling at maximum. Used only while the

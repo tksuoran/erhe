@@ -204,6 +204,16 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   Built the present calibration. Calibrated on ProMotion: 270/272 frames on
   target, 35 ms, still N=2 - GPU span p90 9-10.7 ms beyond T (the C23
   tail); at fixed 60 Hz also N=2 (span median 12-15 ms, p90 21-24 ms).
-  Next: step 1 measurement of GPU span vs cadence and start phase on
-  ProMotion with the calibration in place, then the plant (C23 with a
-  cadence-dependent cost) and the upshift change.
+  Then: startup histories showed tier M did upshift to N=1 and returned
+  within 2-3 frames - first through a slot collision (the dropping-queue
+  anchor cap after a skipped-forward target), then, with a FIFO anchor,
+  through the predictive downshift judging N=1 by the window's N=2 GPU
+  tail and its near-misses. Pacer: FIFO anchor (deviation 18) and
+  cadence-scoped predictive downshift (deviation 17), claim C24 (plant:
+  drawable pool latched 2T - 0.8 ms before display, cadence-dependent GPU
+  tail); C23's control rephrased. Python 86/86, C++ 29/29.
+  Gate, Debug, ProMotion: N=1 in 10/10 (default), 10/10
+  (`ERHE_RENDER_THREAD=0`), 10/10 (`ERHE_FRAME_PIPELINING=0`); two-refresh
+  frames 1, 1 and 4 of 3450; release to display median 27.1-27.6,
+  28.3-28.8 and 27.3-28.6 ms (tier S 37.6 ms). Next: Release, then the
+  Dell at 120 Hz.

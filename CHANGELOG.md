@@ -21,6 +21,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   deadline offset and estimate ceiling for a given refresh period;
   `Frame_pacer_tunables::deadline_offset_max` (absolute ceiling, 0.0: the
   fraction of T).
+- `erhe::frame_pacing`: `Present_queue_kind` (`dropping`, `fifo`) and
+  `Frame_pacer_tunables::present_queue` / `Deadline_offset_setup::present_queue`:
+  on a FIFO queue the in-flight anchor follows every in-flight target.
+  `Frame_pacer_tunables::cadence_min_samples` (30): the predictive downshift
+  now judges the current cadence by the stage times and pressure of the
+  frames scheduled at it (cleared on each cadence change).
 - `erhe::graphics`: `Device::is_present_target_time_honored()`: true when the
   presentation path displays an image at the first refresh at or after its
   target present time and takes it at its GPU end. The Metal backend

@@ -85,6 +85,8 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
 
     m_cpu_window.init(m_tunables.history);
     m_gpu_window.init(m_tunables.history);
+    m_cadence_cpu_window.init(m_tunables.history);
+    m_cadence_gpu_window.init(m_tunables.history);
     m_period_sample_window.init(m_tunables.grid_reseed_window);
     m_deadline_samples.resize(m_tunables.history);
     m_deadline_samples_scratch.reserve(m_tunables.history);
@@ -234,12 +236,21 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
             // frames shared a slot (a cold-start miss), that rule re-created
             // the collision every few frames - a limit cycle of late
             // displays and a margin pinned at its maximum (C10, deviation 16).
+            // On a FIFO queue every in-flight target holds (C24): a target
+            // the reachability test skipped forward lies beyond its cadence,
+            // and capping it there gave the next frame the same slot - a
+            // late display on a path that drops nothing.
+            const bool   fifo   = (m_tunables.present_queue == Present_queue_kind::fifo);
             std::int64_t anchor = m_feedback_slot;
             for (std::int64_t i = m_feedback_frame_id + 1; i < frame_id; ++i) {
                 const Frame_entry* entry = find_entry(i);
-                anchor = (entry != nullptr)
-                    ? std::max(anchor + 1, std::min(entry->target_slot, anchor + entry->vsyncs))
-                    : (anchor + m_vsyncs);
+                if (entry == nullptr) {
+                    anchor += m_vsyncs;
+                } else if (fifo) {
+                    anchor = std::max(anchor + 1, entry->target_slot);
+                } else {
+                    anchor = std::max(anchor + 1, std::min(entry->target_slot, anchor + entry->vsyncs));
+                }
             }
             anchor += m_vsyncs;
             // The last_slot+1 floor must NOT apply here (deviation 11): on a
@@ -325,6 +336,10 @@ void Frame_pacer::on_gpu_done(
     const Frame_entry* scheduled = find_entry(frame_id);
     const int          n_used    = (scheduled != nullptr) ? scheduled->vsyncs : m_vsyncs;
     m_latency_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(latency);
+    if (n_used == m_vsyncs) {
+        m_cadence_cpu_window.push(cpu_duration);
+        m_cadence_gpu_window.push(gpu_duration);
+    }
 
     const std::int64_t target_slot = (scheduled != nullptr) ? scheduled->target_slot : m_last_slot;
     const double       deadline    = slot_time(target_slot) - m_deadline_offset;
@@ -348,6 +363,9 @@ void Frame_pacer::on_gpu_done(
     }
     if (slack < m_tunables.guard) {
         m_last_pressure_frame = m_completed_frames; // deadline pressure evidence
+        if (n_used == m_vsyncs) {
+            m_cadence_pressure = true;
+        }
     }
 
     // Miss streak with throughput attribution: the streak is attributed to
@@ -382,12 +400,23 @@ void Frame_pacer::on_gpu_done(
     // feasible at a cadence it cannot sustain - and the reactive path could
     // never attribute the resulting misses (streak_attr + guard stays below
     // the inflated nominal budget).
-    const int required_vsyncs = std::clamp(
-        static_cast<int>(std::ceil(w_statistic / m_grid_period)),
-        m_min_vsyncs,
-        m_tunables.max_vsyncs
-    );
     const double cadence_budget = static_cast<double>(m_vsyncs) * m_grid_period;
+    // The predictive downshift judges the current cadence by its own stage
+    // times and pressure (C24): after an upshift the window still holds the
+    // longer cadence's slower GPU frames and near-misses, and judged by
+    // those the pacer went straight back to the longer cadence. The reactive
+    // path guards the transition meanwhile.
+    int required_vsyncs_here = m_vsyncs;
+    if (m_cadence_gpu_window.count() >= m_tunables.cadence_min_samples) {
+        const double p = m_tunables.quantile_p;
+        const double w_here =
+            std::max(m_cadence_cpu_window.quantile(p, 0.0), m_cadence_gpu_window.quantile(p, 0.0)) + m_tunables.guard;
+        required_vsyncs_here = std::clamp(
+            static_cast<int>(std::ceil(w_here / m_grid_period)),
+            m_min_vsyncs,
+            m_tunables.max_vsyncs
+        );
+    }
 
     // Upshift survival: no pressure-driven revert for 4*T_up after an
     // upshift means the new cadence holds - future upshifts are cheap.
@@ -403,11 +432,12 @@ void Frame_pacer::on_gpu_done(
         // Reactive downshift: sustained overload evidenced by the missed
         // frames' own stage times.
         on_pressure_downshift(gpu_end_time);
-        change_cadence(std::max(m_vsyncs + 1, required_vsyncs), false);
+        change_cadence(std::max(m_vsyncs + 1, required_vsyncs_here), false);
         m_consecutive_misses = 0;
         m_streak_attribution = std::numeric_limits<double>::infinity();
     } else if (
-        (required_vsyncs > m_vsyncs) &&
+        (required_vsyncs_here > m_vsyncs) &&
+        m_cadence_pressure &&
         ((m_completed_frames - m_last_pressure_frame) <= static_cast<std::int64_t>(m_tunables.history))
     ) {
         // Predictive downshift needs PRESSURE evidence (a recent miss or
@@ -417,7 +447,7 @@ void Frame_pacer::on_gpu_done(
         // claim C10). Misses/near-misses are the honest signal; the margin
         // AIMD surfaces overload as near-misses well before drops.
         on_pressure_downshift(gpu_end_time);
-        change_cadence(required_vsyncs, false);
+        change_cadence(required_vsyncs_here, false);
     } else if (m_vsyncs > m_min_vsyncs) {
         // Upshift headroom (deviation 15): a frame beyond the next cadence's
         // period resets the dwell; a frame inside the hysteresis band below
@@ -480,6 +510,9 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     const int old_vsyncs = m_vsyncs;
     m_vsyncs = clamped;
     reset_dwell();
+    m_cadence_cpu_window.clear();
+    m_cadence_gpu_window.clear();
+    m_cadence_pressure = false;
     Sample_window& window = m_latency_windows[static_cast<std::size_t>(m_vsyncs)];
     if (window.empty()) {
         // Seed the new cadence's latency estimate: carry-over is a safe
