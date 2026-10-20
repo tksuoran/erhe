@@ -22,7 +22,9 @@ namespace MTL { class ArgumentEncoder; }
 namespace MTL { class Device; }
 namespace MTL { class CommandQueue; }
 namespace MTL { class Event; }
+namespace MTL { class Library; }
 namespace MTL { class LogState; }
+namespace MTL { class RenderPipelineState; }
 namespace MTL { class SamplerState; }
 namespace MTL { class SharedEvent; }
 
@@ -162,6 +164,12 @@ public:
     [[nodiscard]] auto wait_for_displayed_frame           (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
                   void set_present_target_time            (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
     [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
+    // The pipeline of a blit_framebuffer between attachments of different
+    // formats (Blit_command_encoder_impl): a full-screen triangle that reads
+    // the source texels, for a normalized or float destination format.
+    // Created on first use per destination MTL::PixelFormat; nullptr (logged)
+    // when the pipeline cannot be built.
+    [[nodiscard]] auto get_blit_framebuffer_pipeline      (unsigned long destination_pixel_format) -> MTL::RenderPipelineState*;
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
@@ -264,6 +272,16 @@ private:
 
     Device&                          m_device;
     Frame_pacing_tier                m_frame_pacing_tier{Frame_pacing_tier::off};
+
+    class Blit_framebuffer_pipeline
+    {
+    public:
+        unsigned long             destination_pixel_format{0};
+        MTL::RenderPipelineState* pipeline                {nullptr};
+    };
+    std::mutex                             m_blit_framebuffer_mutex;
+    MTL::Library*                          m_blit_framebuffer_library{nullptr};
+    std::vector<Blit_framebuffer_pipeline> m_blit_framebuffer_pipelines;
     std::unique_ptr<Surface>         m_surface;
     Shader_monitor                   m_shader_monitor;
     Device_info                      m_info;

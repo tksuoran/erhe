@@ -56,11 +56,12 @@ and `doc/erhe/multiview.md`.
 With `OpenXR_mirror`, `Headset_view` (`src/editor/xr/headset_view.cpp`) copies
 the first eye's render pass into the window's swapchain render pass with
 `Blit_command_encoder::blit_framebuffer`, centring and cropping by the size
-difference. Only the OpenGL backend implements that call: the Vulkan one
-logs a warning and copies nothing (`vulkan_blit_command_encoder.cpp`, both the
-swapchain and the offscreen case) and the Metal one is fatal. Implement it on
-Vulkan - the swapchain image of the destination render pass through
-`vkCmdBlitImage2` with the layout transitions around it, and the offscreen
-case the same way - and on Metal (`doc/plans/metal_backend.md` item 3), with
-a GPU test that blits between two render passes of different sizes and
-compares the backends' results.
+difference. OpenGL and Metal implement the swapchain destination (Metal
+blits into the frame's drawable texture); Vulkan implements offscreen render
+passes only (`vkCmdBlitImage`, covered by `Blit_framebuffer_test` on
+MoltenVK and KosmicKrisp) and logs an error for a swapchain render pass,
+whose image the swapchain acquires and layout-tracks. Remaining on Vulkan:
+blit into the acquired window image of the frame - after `begin_swapchain`,
+from the swapchain's tracked layout to `TRANSFER_DST_OPTIMAL` and back to
+the layout the mirror render pass begins from - and verify the mirror with a
+headset.

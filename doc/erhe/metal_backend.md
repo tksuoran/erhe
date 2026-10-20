@@ -327,6 +327,20 @@ about 5.6 ms of drawable wait remains: the third drawable is queue depth
 the servo cannot remove without presentation feedback. Frame pipelining on
 or off measures the same.
 
+### Framebuffer blit
+
+`Blit_command_encoder::blit_framebuffer` copies with `copyFromTexture` when
+the two color attachments share a pixel format. Otherwise Metal copies
+would reinterpret the bytes, so the blit draws instead: a full-screen
+triangle over the destination rectangle (viewport and scissor), reading a
+2D view of the source subresource with `texture2d::read` at the fragment
+position plus the origin offset, through a pipeline whose color attachment
+converts to the destination format. The MSL source is compiled at runtime
+once and its pipelines are cached per destination pixel format
+(`Device_impl::get_blit_framebuffer_pipeline`); this suits normalized and
+float formats. A swapchain render pass blits into the frame's drawable (or
+emulated ring) texture, so it must come after `begin_swapchain`.
+
 ### Multi-Draw Indirect
 
 Metal has no multi-draw indirect call. `multi_draw_indexed_primitives_indirect`
@@ -432,4 +446,4 @@ the CPU's lead over a GPU-bound frame when no drawable is presented
 
 ## Future work
 
-- [plans/metal_backend.md](../plans/metal_backend.md): `blit_framebuffer`, swapchain resize, a display-time pacing tier, GPU-read draw count
+- [plans/metal_backend.md](../plans/metal_backend.md): swapchain resize, a display-time pacing tier, GPU-read draw count

@@ -60,21 +60,34 @@ void Blit_command_encoder_impl::blit_framebuffer(
     const gl::Color_buffer src_buffer = src_name != 0 ? gl::Color_buffer::color_attachment0 : gl::Color_buffer::back;
     const gl::Color_buffer dst_buffer = dst_name != 0 ? gl::Color_buffer::color_attachment0 : gl::Color_buffer::back;
 
+    // The render target size is the attachment size, also for the default
+    // framebuffer (the window).
+    const Blit_framebuffer_region region = clip_blit_framebuffer_region(
+        source_origin,
+        source_size,
+        glm::ivec2{source_renderpass.get_render_target_width(), source_renderpass.get_render_target_height()},
+        destination_origin,
+        glm::ivec2{destination_renderpass.get_render_target_width(), destination_renderpass.get_render_target_height()}
+    );
+    if ((region.size.x <= 0) || (region.size.y <= 0)) {
+        return;
+    }
+
     gl::named_framebuffer_read_buffer (src_name, src_buffer);
     gl::named_framebuffer_draw_buffers(dst_name, 1, &dst_buffer);
     gl::blit_named_framebuffer(
-        src_name,                                // read framebuffer
-        dst_name,                                // draw framebuffer
-        source_origin.x,                         // src X0
-        source_origin.y,                         // src Y0
-        source_size.x,                           // src X1
-        source_size.y,                           // src Y1
-        destination_origin.x,                    // dst X0
-        destination_origin.y,                    // dst Y0
-        source_size.x,                           // dst X1
-        source_size.y,                           // dst Y1
-        gl::Clear_buffer_mask::color_buffer_bit, // mask
-        gl::Blit_framebuffer_filter::nearest     // filter
+        src_name,                                                 // read framebuffer
+        dst_name,                                                 // draw framebuffer
+        region.source_origin.x,                                   // src X0
+        region.source_origin.y,                                   // src Y0
+        region.source_origin.x + region.size.x,                   // src X1
+        region.source_origin.y + region.size.y,                   // src Y1
+        region.destination_origin.x,                              // dst X0
+        region.destination_origin.y,                              // dst Y0
+        region.destination_origin.x + region.size.x,              // dst X1
+        region.destination_origin.y + region.size.y,              // dst Y1
+        gl::Clear_buffer_mask::color_buffer_bit,                  // mask
+        gl::Blit_framebuffer_filter::nearest                      // filter
     );
 
     // Publication (gl-worker-thread-contexts.md, "Cross-context publication"): a worker-side blit writes the shared

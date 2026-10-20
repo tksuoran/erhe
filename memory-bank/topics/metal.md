@@ -38,6 +38,7 @@
 @tier-S-3-drawables::loop-8.58ms+sleep-7.2ms-at-clamp+nextDrawable-wait-5.6ms-left{queue-depth;needs-display-feedback}
 >research::item-5-native-pacing-APIs+item-6-Metal-4{no-count-draw;executeCommandsInBuffer:indirectBuffer:-GPU-range+MSL-ICB-encode-kernel}->doc/plans/metal_backend.md
 ©User-2026-10-20:item-5=tier-S-built+research;item-6=skipped-for-now+research
+>item-3-blit_framebuffer::DONE{one-contract-all-backends:clip_blit_framebuffer_region;Metal=copy|MSL-draw-between-formats;Vulkan=vkCmdBlitImage-offscreen-only(swapchain->doc/plans/xr.md);GL-end-coords-fixed(compile-unverified-no-GL-tree);Blit_framebuffer_test-3-pass-Metal+MoltenVK+KosmicKrisp}
 
 [TRAPS]
 !AutoreleasePool::per-thread-stack{drain-on-opening-thread;reverse-order}→¬span-device-frame
@@ -60,4 +61,4 @@ cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permane
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{3-with-Vulkan(this-Mac-runs-MoltenVK+KosmicKrisp-too);4-interactive;5-tier-M+6-option-A/B-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{4-interactive;5-tier-M+6-option-A/B-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
