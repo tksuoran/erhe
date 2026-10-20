@@ -73,6 +73,7 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_grid_period     = t;
     m_grid_period_ref = t;
     m_deadline_offset = m_tunables.deadline_offset_initial;
+    m_deadline_offset_max = std::max(m_tunables.deadline_offset_initial, m_tunables.deadline_offset_max_frac * t);
     m_vsyncs          = m_tunables.min_vsyncs;
     m_min_vsyncs      = m_tunables.min_vsyncs;
     m_margin          = m_tunables.margin_initial_frac * t;
@@ -82,6 +83,8 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_cpu_window.init(m_tunables.history);
     m_gpu_window.init(m_tunables.history);
     m_period_sample_window.init(m_tunables.grid_reseed_window);
+    m_deadline_samples.resize(m_tunables.history);
+    m_deadline_samples_scratch.reserve(m_tunables.history);
     m_latency_windows.resize(static_cast<std::size_t>(m_tunables.max_vsyncs) + 1);
     for (Sample_window& window : m_latency_windows) {
         window.init(m_tunables.history);
@@ -191,6 +194,11 @@ void Frame_pacer::notify_swapchain_recreated(const double nominal_grid_phase)
     m_period_sample_window.clear();
     m_has_next_slot       = false;
     m_has_feedback        = false;
+    // The deadline offset belongs to the presentation path, which a
+    // recreation may change (control_model.md section 9).
+    m_deadline_offset       = m_tunables.deadline_offset_initial;
+    m_deadline_sample_head  = 0;
+    m_deadline_sample_count = 0;
     m_consecutive_misses  = 0;
     m_streak_attribution  = std::numeric_limits<double>::infinity();
     m_dwell               = 0.0;
@@ -253,6 +261,7 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
 
     Frame_entry& entry = entry_for(frame_id);
     entry.target_slot = slot;
+    entry.target_time = slot_time(slot);
     entry.vsyncs      = m_vsyncs;
 
     Schedule_decision decision;
@@ -263,7 +272,14 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
     decision.predicted_display  = slot_time(slot);
     decision.predicted_duration = static_cast<double>(m_vsyncs) * m_grid_period;
     decision.vsyncs_per_frame   = m_vsyncs;
-    decision.wait_id            = frame_id - 1 - static_cast<std::int64_t>(m_tunables.target_queued_images);
+    // FR5 clamp: at most Q* images between completion and display, plus
+    // the images a deadline offset of one or more cadence periods holds in
+    // the queue by itself (each must be complete delta_pe before its vsync,
+    // so frame k is released before frame k - 1 - Q* can have displayed).
+    const std::int64_t deadline_images = static_cast<std::int64_t>(
+        std::floor(m_deadline_offset / (static_cast<double>(m_vsyncs) * m_grid_period))
+    );
+    decision.wait_id            = frame_id - 1 - static_cast<std::int64_t>(m_tunables.target_queued_images) - deadline_images;
     // Present-request holdback deadline (C15 mitigation): hold the request
     // into the target slot's cycle. Computed HERE so it uses the tracked
     // period (deviation 12). Deliberately NOT capped to the next frame's
@@ -335,11 +351,14 @@ void Frame_pacer::on_gpu_done(
     const double w_statistic = throughput_statistic();
 
     Frame_entry& entry      = entry_for(frame_id);
+    entry.has_gpu_end       = true;
+    entry.gpu_end           = gpu_end_time;
     entry.stats.valid       = true;
     entry.stats.self_miss   = self_miss;
     entry.stats.slack       = slack;
     entry.stats.w_statistic = w_statistic;
     entry.stats.margin      = m_margin;
+    entry.stats.deadline_offset = m_deadline_offset;
     entry.stats.vsyncs      = m_vsyncs;
 
     // Outer loop (FR1). Cadence budgets quantize by the TRACKED period, not
@@ -454,6 +473,10 @@ void Frame_pacer::on_present_feedback(const std::int64_t frame_id, const double 
     // median disagrees with the tracked period by far more than the clamp
     // band, re-seed the period and phase from the measurement and re-center
     // the clamp on the measured period.
+    // The newest display before this one, of any earlier frame (frames a
+    // latest_ready engine dropped give no feedback): the deadline estimator
+    // needs to know whether this frame's target slot was still free.
+    const double previous_display_time = m_has_raw_feedback ? m_raw_feedback_previous : 0.0;
     if (m_has_raw_feedback) {
         const double       dt = achieved_present_time - m_raw_feedback_previous;
         const std::int64_t dn = static_cast<std::int64_t>(std::round(dt / m_grid_period));
@@ -515,6 +538,84 @@ void Frame_pacer::on_present_feedback(const std::int64_t frame_id, const double 
         m_feedback_frame_id = frame_id;
         m_feedback_slot     = achieved_slot;
     }
+
+    update_deadline_offset(frame_id, achieved_present_time, previous_display_time);
+}
+
+void Frame_pacer::update_deadline_offset(const std::int64_t frame_id, const double achieved_present_time, const double previous_display_time)
+{
+    // delta_pe estimator (algorithm.md section 3.3), for a presentation path
+    // that honors target present times and takes an image at its GPU end. A
+    // frame displayed after its target although the slot was free (the
+    // newest earlier display lies before it) proves the image had to be
+    // complete more than its completion margin before the vsync. A late
+    // frame needs a second one nearby in margin (the evidence band) to count,
+    // so a single disturbance does not raise the offset.
+    if (m_tunables.deadline_offset_source != Deadline_offset_source::estimated) {
+        return;
+    }
+    Frame_entry& entry = m_frame_ring[static_cast<std::size_t>(frame_id) % s_frame_ring_size];
+    if ((entry.frame_id != frame_id) || !entry.has_gpu_end || entry.has_achieved) {
+        return;
+    }
+    entry.has_achieved  = true;
+    entry.achieved_time = achieved_present_time;
+
+    // Times, not slot indices: slot indices move with grid re-seeds.
+    const double half_period = 0.5 * m_grid_period;
+    if (previous_display_time > (entry.target_time - half_period)) {
+        return; // the target slot was taken: a cascade, not a deadline outcome
+    }
+
+    Deadline_sample& sample = m_deadline_samples[m_deadline_sample_head];
+    sample.completion_margin = entry.target_time - entry.gpu_end;
+    sample.late              = achieved_present_time > (entry.target_time + half_period);
+    m_deadline_sample_head   = (m_deadline_sample_head + 1) % m_deadline_samples.size();
+    m_deadline_sample_count  = std::min(m_deadline_sample_count + 1, m_deadline_samples.size());
+
+    // Raise at once to the evidence (a too-small offset displays frames
+    // late), decay slowly toward it (a too-large one only costs latency;
+    // conservative over-estimate preferred).
+    const double evidence = std::clamp(deadline_evidence(), m_tunables.deadline_offset_initial, m_deadline_offset_max);
+    if (evidence > m_deadline_offset) {
+        m_deadline_offset = evidence;
+    } else {
+        m_deadline_offset = std::max(evidence, m_deadline_offset - m_tunables.deadline_offset_decay);
+    }
+}
+
+auto Frame_pacer::deadline_evidence() -> double
+{
+    // The largest completion margin of a late frame whose band - it and the
+    // deadline_evidence_band - 1 samples of next smaller margin - holds at
+    // least deadline_evidence_min_late late frames; that margin plus guard.
+    // 0 without such a band. The band is local: frames late for a cause
+    // below the deadline (a GPU spike) must not lend their share to an
+    // uncorrelated late frame of a larger margin.
+    m_deadline_samples_scratch.clear();
+    for (std::size_t i = 0; i < m_deadline_sample_count; ++i) {
+        m_deadline_samples_scratch.push_back(m_deadline_samples[i]);
+    }
+    std::sort(
+        m_deadline_samples_scratch.begin(),
+        m_deadline_samples_scratch.end(),
+        [](const Deadline_sample& lhs, const Deadline_sample& rhs) { return lhs.completion_margin < rhs.completion_margin; }
+    );
+    const std::size_t band       = std::max<std::size_t>(1, m_tunables.deadline_evidence_band);
+    double            evidence   = 0.0;
+    std::size_t       late_count = 0; // late samples in [i - band + 1, i]
+    for (std::size_t i = 0; i < m_deadline_samples_scratch.size(); ++i) {
+        if (m_deadline_samples_scratch[i].late) {
+            ++late_count;
+        }
+        if ((i >= band) && m_deadline_samples_scratch[i - band].late) {
+            --late_count;
+        }
+        if (m_deadline_samples_scratch[i].late && (late_count >= m_tunables.deadline_evidence_min_late)) {
+            evidence = m_deadline_samples_scratch[i].completion_margin + m_tunables.guard;
+        }
+    }
+    return evidence;
 }
 
 } // namespace erhe::frame_pacing

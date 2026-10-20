@@ -9,9 +9,9 @@ Xcode build (`doc/agents/macos.md`) and, where a GPU test covers it, with
 
 ## 5. Display-time pacing tier
 
-Tier S is built (`doc/erhe/metal_backend.md` "Frame pacing"). With three
-drawables it keeps the 120 Hz cadence but runs its sleep at the clamp with
-about 5.6 ms of `nextDrawable` wait left: the queue depth needs display-time
+Tiers S and M are built (`doc/erhe/metal_backend.md` "Frame pacing"). Tier S
+with three drawables keeps the 120 Hz cadence but runs its sleep at the
+clamp with about 5.6 ms of `nextDrawable` wait left: the queue depth needs display-time
 sensing to remove. The native APIs of the macOS 27 SDK (headers of Xcode
 27.1; all times are CFTimeInterval seconds of host time, the
 `mach_absolute_time` / `CACurrentMediaTime` domain):
@@ -30,12 +30,15 @@ ordering, not timing. metal-cpp (`metal-cpp_27`) wraps everything above
 except `CAMetalDisplayLink` and the AppKit display links, which need
 Objective-C++ (`metal_surface.mm` is).
 
-The proposed tier ("M"): tier W's algorithm on these inputs, keeping erhe's
-own loop in control - `CADisplayLink` / `NSScreen` as a resolver source,
-`presentDrawable:atTime:` for targets, `wait_for_displayed_frame` on the
-presented handler, `GPUStartTime` / `GPUEndTime` for the frame bracket, the
-C15 holdback as the fallback, auto-selected only after a startup probe shows
-targets are honored (as the present-timing probe does). Driving frames from
+Tier M is tier W's algorithm on these inputs, keeping erhe's own loop in
+control: `presentDrawable:atTime:` for targets, `wait_for_displayed_frame`
+on the presented handler, `GPUStartTime` / `GPUEndTime` for the frame
+bracket. It is selected with `frame_pacing_tier` "w"; `auto` switches to it
+after open item 1 below, without a startup probe: the measurement
+below showed targets honored, and the presented handler logs a warning when
+more than a tenth of the first 240 targeted frames display a refresh before
+their target. The C15 holdback is not used. Open: a `CADisplayLink` /
+`NSScreen` resolver source. Driving frames from
 a `CAMetalDisplayLink` delegate inverts erhe's M1 -> M2 -> R control flow and
 bypasses the pacer; it is worth a measurement-only mode as the latency and
 judder reference the pacer should match. `preferredFrameRateRange` is the
@@ -58,48 +61,74 @@ To measure before building:
    `CADisplayLink.duration` report under VRR; which screen's link applies to
    a window spanning two?
 
-### Work order (item 5 picked by the user, 2026-10-20)
+Answers, measured 2026-10-20 with a temporary probe in
+`submit_command_buffers` (Debug windowed editor, default scene, M4 Pro, the
+external 120 Hz display, about 550 frames per configuration):
 
-Measure first: the six questions decide whether tier M is buildable and
-which form it takes, so each answer is recorded here before code that
-depends on it.
+1. Same clock: `Frame_time_recorder::now()` and `CACurrentMediaTime()`
+   sampled back-to-back differ by 0.04 us (the bracket of the two `now()`
+   calls is 0.08 us). Metal host times go into the frame records unconverted.
+2. Targets are honored windowed, with `displaySyncEnabled` YES and NO. A
+   target stepped by 2T from the previous one gives an achieved cadence of
+   16.685 ms (p5 to p95 within 1 us). A 1.5T step alternates 8.34 / 16.69 ms:
+   the drawable shows at the first refresh at or after the target, so a
+   target between refreshes rounds up. The achieved time lies 0.3 ms before
+   to 7.5 ms after the target. Fullscreen was not measured: the editor treats
+   unfocused fullscreen as hidden and does not render, and an
+   agent-launched editor has no focus (a user-run item, next to question 6).
+3. `presentedTime` is on the display's refresh grid: consecutive deltas are
+   8.344 ms with p5 to p95 within 1 us, while the window display mode
+   reports 120.00 Hz (8.333 ms; the pacer's grid period tracker absorbs the
+   0.13 % difference). One frame of 541 (the first) reported 0.
+   `presentedTime - commit` is 22.3 ms (about 2.7 refresh periods of queue)
+   under tier S.
+4. The presented handler runs on a Metal-internal thread (not the main
+   thread) 0.48 ms after `presentedTime` (p95 0.84 ms).
+5. A presenting command buffer completes at GPU end: its completion handler
+   runs 0.06 ms after `GPUEndTime` and 16.4 ms before `presentedTime`. The
+   presented-frame throttle (`wait_for_presented_frame_slot`) therefore
+   counts command buffers on the GPU, not drawables the compositor holds;
+   `nextDrawable` is the backpressure.
 
-1. Baseline. Windowed Metal editor (`doc/agents/macos.md`, `ERHE_AI_DRIVER=1`),
-   default scene, settled; `scripts/frame_pacing_summary.py` prints loop,
-   pacer sleep, acquire, fence wait and present cadence from
-   `get_frame_pacing_frames`. Tier S at 120 Hz measured loop 8.58 ms, sleep
-   7.2 ms (at its clamp), acquire 5.6 ms; tier OFF loop 8.34 ms, acquire
-   6.9 ms. `frame_pacing_tier` and `frame_pacing_enforce` in
-   `config/editor/erhe_graphics.json` switch configurations (restore the file
-   afterwards); `ERHE_FRAME_PIPELINING=0` measured the same.
-2. A measurement-only probe answers questions 1-5 before any pacer change:
-   in `Device_impl::submit_command_buffers` (`metal_device.cpp`, where
-   `presentDrawable` is encoded) add an `addPresentedHandler` on the drawable
-   that stores `presentedTime` / `drawableID` into the frame's record
-   (`Frame_time_record::achieved_present_time`, which the Vulkan swapchain
-   fills in `Swapchain_impl::poll_present_timing`), and stamp the presenting
-   command buffer's `GPUEndTime` and completion time. With that,
-   `frame_pacing_summary.py` shows achieved cadence and the
-   present-to-display latency; a temporary `presentDrawable:atTime:` with a
-   target of next-vblank + T/2 answers question 2 (honored targets move the
-   achieved time by half a period). Clock identity (question 1): compare
-   `Frame_time_recorder::now()` and `CACurrentMediaTime()` sampled
-   back-to-back at init and log the offset.
-3. Then, if targets are honored: tier M as `Frame_pacing_tier::full` on
-   Metal (the editor's `frame_start_pacing` already drives tier W through
-   `Device::set_present_target_time` / `wait_for_displayed_frame`, both
-   no-ops on Metal today): the present target in
-   `Device_impl::set_present_target_time` applied at `presentDrawable:atTime:`,
-   `wait_for_displayed_frame` on a condition variable signalled from the
-   presented handler, `GPUEndTime` as the GPU frame end, and a display-link
-   refresh source for `Display_refresh_resolver` next to the window mode
-   (the resolver's present-timing input is `set_vulkan_timing`; a Metal
-   source needs its own setter and `Display_refresh_source` value). If
-   targets are not honored, tier M is present wait + feedback with the C15
-   holdback as on the NVIDIA driver (`doc/frame_pacing/capability_tiers.md`
-   section 5).
-4. Question 6 (ProMotion / VRR) on the built-in display, which reports 120
-   Hz as its window mode today.
+### State (item 5 picked by the user, 2026-10-20)
+
+Built: tier M (`doc/erhe/metal_backend.md` "Frame pacing") - presented
+handler feedback and present wait, `presentDrawable:atTime:` targets,
+`GPUStartTime` / `GPUEndTime` frame bracket, `cpu_slot_end` in `end_frame`
+(Metal never stamped it, so the pacer had no CPU service times), and the
+pacer's deadline offset estimator with the deadline-aware FR5 clamp
+(`doc/frame_pacing/algorithm.md` section 3.3, claim C22 in both the C++
+suite and `scripts/frame_pacing_sim.py`), enabled through
+`Device::is_present_target_time_honored`.
+
+Measured live before the estimator (Debug windowed, default scene, 3 x 120
+frames after 15 s): tier M ran N=1 with achieved == predicted to 1 us on
+on-time frames, but 40 % of the frames displayed two refreshes (timing-only
+misses: the compositor deadline) and release-to-display was 41.8 ms median
+against tier S's 28.9 ms. Tier S itself shows an exact 8.34 ms achieved
+cadence.
+
+Open, in order:
+
+1. Live run of tier M (`frame_pacing_tier` "w") with the estimator, then
+   `auto` -> M in `Device_impl::init_frame_pacing` if it beats tier S:
+   `scripts/frame_pacing_summary.py`
+   plus `get_frame_pacing_status` (`pacer.deadline_offset_ms`); compare
+   release-to-display latency and refreshes per frame against tier S
+   (`frame_pacing_tier` "s") in the same build. Needs the editor window
+   visible on the display: an occluded window gets `presentedTime` 0, no
+   feedback (logged "drawables were not displayed"), and the pacer runs
+   without feedback - which blocked this run on 2026-10-20 after the
+   estimator was built. Also a Release build, where the frame's CPU span is
+   shorter (the Debug pipelined frame spans two loop periods from release to
+   commit, 18 ms, which the pacer's latency budget prices in).
+2. Fullscreen (question 2): the editor treats unfocused fullscreen as hidden,
+   so a focused, user-run editor.
+3. Question 6 (ProMotion / VRR) on the built-in display.
+4. A presentation-derived refresh source for `Display_refresh_resolver`
+   (`presentedTime` deltas or `CADisplayLink`): the window display mode says
+   8.333 ms, the display runs 8.344 ms; the pacer's grid period tracker
+   absorbs the 0.13 % today.
 
 ## 6. GPU-read draw count
 

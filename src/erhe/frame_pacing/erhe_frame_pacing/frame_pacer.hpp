@@ -26,6 +26,20 @@
 
 namespace erhe::frame_pacing {
 
+// Where the pacer's presentation deadline offset delta_pe comes from
+// (doc/frame_pacing/algorithm.md "Deadline offset estimation").
+enum class Deadline_offset_source : unsigned int {
+    // deadline_offset_initial throughout: presentation paths whose late
+    // displays are not deadline evidence (an engine that ignores target
+    // present times, paced by the C15 request holdback).
+    fixed = 0,
+    // Learned from presentation feedback: the engine honors target present
+    // times and takes an image when its GPU work ends, so a frame displayed
+    // after its free target slot proves the deadline lies before its
+    // completion (Metal tier M, the macOS compositor).
+    estimated
+};
+
 // All quantitative behavior knobs. Durations are in seconds, fractions are of
 // the display refresh period T. Defaults match the verified reference model.
 class Frame_pacer_tunables
@@ -47,7 +61,16 @@ public:
     double      margin_decay_frac {0.001};      // decay per frame with ample slack
     int         target_queued_images{1};        // Q*
     std::size_t cold_start_seed_frames{8};      // K
-    double      deadline_offset_initial{0.0025};// assumed presentation deadline offset
+    double      deadline_offset_initial{0.0025};// assumed presentation deadline offset (delta_pe floor)
+    Deadline_offset_source deadline_offset_source{Deadline_offset_source::fixed};
+    // delta_pe estimator (doc/frame_pacing/algorithm.md "Deadline offset
+    // estimation"), Deadline_offset_source::estimated only: learned from
+    // (completion margin, displayed late) samples of the last `history`
+    // frames with presentation feedback.
+    double      deadline_offset_max_frac{2.0};  // estimate ceiling, fraction of T
+    std::size_t deadline_evidence_band{4};      // samples (by margin) in a deadline band
+    std::size_t deadline_evidence_min_late{2};  // late frames a deadline band needs
+    double      deadline_offset_decay{0.0000001};// decay per feedback toward the evidence (s)
     double      grid_tracker_gain {0.2};        // vsync grid phase PLL gain
     double      grid_period_gain  {0.01};       // vsync grid period tracker gain (per cycle)
     double      grid_period_max_dev{0.005};     // tracked period clamp, fraction of the reference period
@@ -83,6 +106,7 @@ public:
     double slack      {0.0};
     double w_statistic{0.0};
     double margin     {0.0};
+    double deadline_offset{0.0}; // delta_pe estimate the frame was judged against
     int    vsyncs     {1};
 };
 
@@ -129,6 +153,7 @@ public:
     [[nodiscard]] auto get_margin          () const -> double { return m_margin; }
     [[nodiscard]] auto get_grid_phase      () const -> double { return m_grid_phase; }
     [[nodiscard]] auto get_grid_period     () const -> double { return m_grid_period; }
+    [[nodiscard]] auto get_deadline_offset () const -> double { return m_deadline_offset; }
     [[nodiscard]] auto get_frame_stats     (std::int64_t frame_id) const -> Frame_stats;
 
     // Test hook (claim C6): force latency estimate and margin to given values.
@@ -139,10 +164,24 @@ private:
     class Frame_entry
     {
     public:
-        std::int64_t frame_id   {-1};
-        std::int64_t target_slot{0};
-        int          vsyncs     {1};
-        Frame_stats  stats      {};
+        std::int64_t frame_id     {-1};
+        std::int64_t target_slot  {0};
+        double       target_time  {0.0};
+        int          vsyncs       {1};
+        Frame_stats  stats        {};
+        bool         has_gpu_end  {false};
+        double       gpu_end      {0.0};
+        bool         has_achieved {false};
+        double       achieved_time{0.0};
+    };
+
+    // One delta_pe estimator sample: how long before its target time the
+    // frame's GPU work ended, and whether it displayed after its target.
+    class Deadline_sample
+    {
+    public:
+        double completion_margin{0.0};
+        bool   late             {false};
     };
 
     [[nodiscard]] auto slot_time            (std::int64_t slot) const -> double;
@@ -154,6 +193,8 @@ private:
     [[nodiscard]] auto find_entry           (std::int64_t frame_id) const -> const Frame_entry*;
     void               change_cadence       (int new_vsyncs, bool is_upshift);
     void               on_pressure_downshift(double gpu_end_time);
+    void               update_deadline_offset(std::int64_t frame_id, double achieved_present_time, double previous_display_time);
+    [[nodiscard]] auto deadline_evidence    () -> double;
 
     Frame_pacer_tunables m_tunables;
 
@@ -180,6 +221,11 @@ private:
     bool         m_has_feedback_slot{false}; // period tracker: previous good feedback
     std::int64_t m_feedback_slot_previous{0};
     double m_deadline_offset{0.0}; // delta_pe estimate
+    double m_deadline_offset_max{0.0};
+    std::vector<Deadline_sample> m_deadline_samples;        // ring, capacity tunables.history
+    std::vector<Deadline_sample> m_deadline_samples_scratch; // sort scratch for deadline_evidence()
+    std::size_t                  m_deadline_sample_head {0};
+    std::size_t                  m_deadline_sample_count{0};
 
     // Outer loop state.
     int    m_vsyncs      {1};   // N

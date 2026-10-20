@@ -41,7 +41,15 @@ class Tunables:
     Q_star:     int   = 1           # target queued present images
     F:          int   = 2           # frames in flight (plant property, input)
     K_seed:     int   = 8           # cold start open-loop seed frames
-    dpe_hat:    float = 0.0025      # assumed presentation deadline offset [s]
+    dpe_hat:    float = 0.0025      # assumed presentation deadline offset [s] (estimate floor)
+    # Deadline offset source (C22): 'fixed' keeps dpe_hat; 'estimated' learns
+    # delta_pe from presentation feedback (an engine that honors target
+    # present times and takes an image at its GPU end - Metal tier M).
+    dpe_source: str   = 'fixed'
+    dpe_max_frac: float = 2.0       # estimate ceiling, fraction of T
+    dpe_band:   int   = 4           # samples (by completion margin) in a deadline band
+    dpe_min_late: int = 2           # late frames a deadline band needs
+    dpe_decay:  float = 1e-7        # decay per feedback toward the evidence [s]
     grid_gain:  float = 0.2         # vsync grid phase tracker gain
     grid_period_gain: float = 0.01  # vsync grid period tracker gain (per cycle)
     grid_period_max_dev: float = 0.005  # tracked period clamp, fraction of the reference period
@@ -115,6 +123,11 @@ class FramePacer:
         self.frame_N = {}                 # id -> cadence used at schedule time
         self.frame_slot = {}              # id -> target slot
         self.stats = {}                   # id -> dict(self_miss, s, W, m, N)
+        self.dpe = tun.dpe_hat            # delta_pe estimate (C22)
+        self.dpe_samples = deque(maxlen=tun.history)  # (completion margin, late)
+        self.frame_target_time = {}       # id -> V(target slot) at schedule time
+        self.frame_gpu_end = {}           # id -> gpu end
+        self.dpe_judged = set()           # ids already sampled
 
     # -- helpers ------------------------------------------------------------
 
@@ -182,6 +195,10 @@ class FramePacer:
         self.consec_miss = 0
         self.streak_attr = float('inf')
         self.dwell = 0.0
+        # The deadline offset belongs to the presentation path, which a
+        # recreation may change (model section 9).
+        self.dpe = self.tun.dpe_hat
+        self.dpe_samples.clear()
 
     # -- scheduling (inner loop, FR2) ---------------------------------------
 
@@ -228,13 +245,14 @@ class FramePacer:
             # that does miss slips one slot and re-anchors - bounded, and
             # priced by the margin AIMD.
             typical = self._L_typical() + self._margin()
-            while self.V(j) - t.dpe_hat - typical < now - t.guard:
+            while self.V(j) - self.dpe - typical < now - t.guard:
                 j += 1
-            release = max(now, self.V(j) - t.dpe_hat - budget)
+            release = max(now, self.V(j) - self.dpe - budget)
         self.j_next = j + self.N
         self.last_slot = j
         self.frame_N[frame_id] = self.N
         self.frame_slot[frame_id] = j
+        self.frame_target_time[frame_id] = self.V(j)
         # Present-request holdback deadline (C15 mitigation): hold the
         # request into the target slot's cycle. Computed HERE so it uses the
         # tracked period (deviation 12) - a holdback interval derived from a
@@ -251,7 +269,10 @@ class FramePacer:
             frame_id=frame_id, release=release, target_slot=j,
             target_time=self.V(j), pred_display=self.V(j),
             pred_dur=self.N * self.period, N=self.N,
-            wait_id=frame_id - 1 - t.Q_star,
+            # FR5 clamp: Q* images between completion and display, plus the
+            # images a deadline offset of one or more cadence periods holds
+            # in the queue by itself (C22).
+            wait_id=frame_id - 1 - t.Q_star - math.floor(self.dpe / (self.N * self.period)),
             hold_until=hold_until)
 
     # -- measurement feedback ----------------------------------------------
@@ -264,7 +285,8 @@ class FramePacer:
         self.g_win.append(g)
         n_used = self.frame_N.get(frame_id, self.N)
         self.L_win.setdefault(n_used, deque(maxlen=t.history)).append(L)
-        d = self.V(self.frame_slot[frame_id]) - t.dpe_hat
+        self.frame_gpu_end[frame_id] = gpu_end
+        d = self.V(self.frame_slot[frame_id]) - self.dpe
         s = d - gpu_end
         elapsed = 0.0
         if self.last_gpu_done is not None:
@@ -382,6 +404,7 @@ class FramePacer:
         # when their median disagrees with the tracked period by far more
         # than the clamp band, re-seed the period and phase from the
         # measurement and re-center the clamp on the measured period.
+        prev_display = self.fb_raw_prev  # newest earlier display (C22 cascade test)
         if self.fb_raw_prev is not None:
             dt = t_present - self.fb_raw_prev
             dn = round(dt / self.period)
@@ -425,6 +448,38 @@ class FramePacer:
         achieved = round((t_present - self.phase) / self.period)
         if self.last_fb is None or frame_id > self.last_fb[0]:
             self.last_fb = (frame_id, achieved)
+        self._update_dpe(frame_id, t_present, prev_display)
+
+    def _update_dpe(self, frame_id, t_present, prev_display):
+        # delta_pe estimator (C22, algorithm doc "Deadline offset estimation").
+        # A frame displayed after its target although its slot was free (the
+        # newest earlier display came before it) proves the image had to be
+        # complete more than its completion margin before the vsync.
+        t = self.tun
+        if t.dpe_source != 'estimated':
+            return
+        if (frame_id in self.dpe_judged or frame_id not in self.frame_gpu_end
+                or frame_id not in self.frame_target_time):
+            return
+        self.dpe_judged.add(frame_id)
+        target = self.frame_target_time[frame_id]
+        half = 0.5 * self.period
+        if prev_display is not None and prev_display > target - half:
+            return                       # slot taken: a cascade, not a deadline outcome
+        self.dpe_samples.append((target - self.frame_gpu_end[frame_id], t_present > target + half))
+        # Evidence: the largest margin of a late frame whose band (it and the
+        # dpe_band - 1 samples of next smaller margin) holds dpe_min_late late
+        # frames, plus guard. Raise at once, decay slowly toward it.
+        ordered = sorted(self.dpe_samples)
+        evidence = 0.0
+        for i, (margin, late) in enumerate(ordered):
+            if late and sum(1 for _, l in ordered[max(0, i - t.dpe_band + 1):i + 1] if l) >= t.dpe_min_late:
+                evidence = margin + t.guard
+        evidence = min(max(evidence, t.dpe_hat), max(t.dpe_hat, t.dpe_max_frac * t.T))
+        if evidence > self.dpe:
+            self.dpe = evidence
+        else:
+            self.dpe = max(evidence, self.dpe - t.dpe_decay)
 
 
 # ---------------------------------------------------------------------------
@@ -1646,6 +1701,39 @@ def c21_slop_servo_failure_modes():
           f"({100*w_misses/len(conv_w):.2f}%)")
 
 
+def c22_compositor_deadline_estimation():
+    print("C22 compositor deadline estimation")
+    # A composited path that honors targets (measured: the macOS compositor
+    # with Metal presentDrawable:atTime:) but needs an image about one refresh
+    # period plus 1.5 ms before its vsync - far beyond the 2.5 ms initial
+    # deadline offset. Fixed: frames finishing inside that band display a
+    # refresh late with positive slack (timing-only misses). Estimated: the
+    # pacer learns the deadline from those outcomes.
+    def arm(source, seed):
+        tun = Tunables(T=1.0 / 120.0, dpe_source=source)
+        rng = random.Random(seed)
+        sc = Scenario("c22-" + source, 12000, gauss_fn(rng, 2.0, 0.2), gauss_fn(rng, 5.5, 0.3),
+                      tun=tun, dpe_true=tun.T + 1.5 * MS)
+        recs, pacer = run(sc)
+        conv = recs[600:]
+        slips = sum(1 for r in conv if r.slipped)
+        durs = [recs[i + 1].disp_time - recs[i].disp_time for i in range(600, len(recs) - 1)]
+        exact = sum(1 for d in durs if abs(d - tun.T) < 1e-6)
+        n_vals = {r.N for r in conv}
+        return slips, exact, len(durs), n_vals, pacer.dpe, sc.dpe_true, tun
+    slips_f, exact_f, n_f, _, _, _, _ = arm('fixed', 2201)
+    slips, exact, n, n_vals, dpe, dpe_true, tun = arm('estimated', 2201)
+    check("C22 fixed offset slips (the failure the estimator removes)",
+          slips_f / n_f >= 0.2,
+          f"fixed: {slips_f}/{n_f} slipped, {exact_f}/{n_f} exact")
+    check("C22 estimated: cadence constant", n_vals == {1}, f"N values after conv: {n_vals}")
+    check("C22 estimated: slips", slips / n <= 0.01, f"{slips}/{n} slipped")
+    check("C22 estimated: visible duration", exact / n >= 0.99, f"{exact}/{n} frames visible exactly T")
+    check("C22 estimated: estimate near the true offset",
+          dpe_true - tun.guard <= dpe <= dpe_true + tun.T,
+          f"delta_pe estimate {dpe*1000:.2f} ms, true {dpe_true*1000:.2f} ms")
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -1668,6 +1756,7 @@ def main():
     c19_slop_servo_equilibrium()
     c20_slop_servo_overshoot()
     c21_slop_servo_failure_modes()
+    c22_compositor_deadline_estimation()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")

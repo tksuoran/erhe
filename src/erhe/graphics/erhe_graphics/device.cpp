@@ -448,6 +448,11 @@ auto Device::get_frame_pacing_tier() const -> Frame_pacing_tier
     return m_impl->get_frame_pacing_tier();
 }
 
+auto Device::is_present_target_time_honored() const -> bool
+{
+    return m_impl->is_present_target_time_honored();
+}
+
 auto Device::get_native_handles() const -> Native_device_handles
 {
     return m_impl->get_native_handles();

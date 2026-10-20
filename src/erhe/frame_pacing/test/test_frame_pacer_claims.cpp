@@ -1160,3 +1160,69 @@ TEST(Frame_pacer_claims, c21_slop_servo_failure_modes)
             << "the full pacer must absorb the same load";
     }
 }
+
+TEST(Frame_pacer_claims, c22_compositor_deadline_estimation)
+{
+    // A composited presentation path (measured on the macOS compositor with
+    // Metal presentDrawable:atTime:, doc/erhe/metal_backend.md "Frame
+    // pacing"): targets are honored, but an image must be complete about one
+    // refresh period plus 1.5 ms before its vsync - far beyond the 2.5 ms
+    // initial deadline offset. Without the delta_pe estimator every frame
+    // finishing inside that band displays a refresh late although its slack
+    // against the assumed deadline is positive (timing-only misses, behavior
+    // section 6b); the estimator learns the deadline from those outcomes.
+    // 12000 frames (100 s) include the slow decay probing below the
+    // learned deadline and the re-raise it triggers.
+    Scenario scenario;
+    scenario.frame_count                  = 12000;
+    scenario.plant.tunables.refresh_period = 1.0 / 120.0;
+    const double t = scenario.plant.tunables.refresh_period;
+    scenario.plant.true_deadline_offset   = t + (1.5 * ms);
+    scenario.plant.tunables.deadline_offset_source = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.cpu_duration                 = make_gauss(2201, 2.0, 0.2);
+    scenario.gpu_duration                 = make_gauss(2202, 5.5, 0.3);
+    Frame_pacer pacer{scenario.plant.tunables};
+    const std::vector<Frame_record> records = run_scenario(scenario, pacer);
+
+    const std::size_t from = 600;
+    EXPECT_EQ(vsync_values(records, from), (std::set<int>{1})) << "cadence must stay at one refresh per frame";
+
+    std::size_t slipped = 0;
+    std::size_t exact   = 0;
+    std::size_t total   = 0;
+    for (std::size_t i = from; i + 1 < records.size(); ++i) {
+        if (records[i].slipped) {
+            ++slipped;
+        }
+        const double duration = records[i + 1].display_time - records[i].display_time;
+        if (std::abs(duration - t) < 1e-6) {
+            ++exact;
+        }
+        ++total;
+    }
+    EXPECT_LE(slipped, total / 100) << "at most 1 percent of frames may display after their target";
+    EXPECT_GE(static_cast<double>(exact), 0.99 * static_cast<double>(total))
+        << "every frame must be visible exactly one refresh period";
+    // The estimate decays below the deadline it learned (probing) until
+    // late frames raise it again; the margin covers the difference.
+    EXPECT_GE(pacer.get_deadline_offset(), scenario.plant.true_deadline_offset - scenario.plant.tunables.guard)
+        << "the estimate must stay within one guard of the true deadline offset";
+    EXPECT_LE(pacer.get_deadline_offset(), scenario.plant.true_deadline_offset + t)
+        << "the estimate must stay within one refresh period of the true deadline offset";
+}
+
+TEST(Frame_pacer_claims, c22b_deadline_estimate_stays_put_on_direct_path)
+{
+    // Direct presentation (the plant's default 1.5 ms deadline offset, below
+    // the 2.5 ms initial value): no timing-only misses occur, so the estimate
+    // stays at its initial value and latency is not inflated.
+    Scenario scenario;
+    scenario.plant.tunables.deadline_offset_source = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.frame_count  = 1200;
+    scenario.cpu_duration = make_gauss(2211, 6.0, 0.4);
+    scenario.gpu_duration = make_gauss(2212, 8.0, 0.6);
+    Frame_pacer pacer{scenario.plant.tunables};
+    const std::vector<Frame_record> records = run_scenario(scenario, pacer);
+    static_cast<void>(records);
+    EXPECT_DOUBLE_EQ(pacer.get_deadline_offset(), scenario.plant.tunables.deadline_offset_initial);
+}

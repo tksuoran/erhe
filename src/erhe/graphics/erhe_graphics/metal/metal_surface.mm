@@ -88,13 +88,13 @@ auto Surface_impl::is_headless() const -> bool
 
 void Surface_impl::apply_frame_pacing_tier(const Frame_pacing_tier tier)
 {
-    if ((m_metal_layer == nullptr) || (tier != Frame_pacing_tier::slop_servo)) {
+    if ((m_metal_layer == nullptr) || (tier == Frame_pacing_tier::off)) {
         return;
     }
     CAMetalLayer* const layer = (CAMetalLayer*)m_metal_layer;
     layer.displaySyncEnabled   = YES;
     layer.maximumDrawableCount = 3;
-    log_startup->info("Metal layer: displaySyncEnabled, maximumDrawableCount 3 (frame pacing tier S needs backpressure)");
+    log_startup->info("Metal layer: displaySyncEnabled, maximumDrawableCount 3 (frame pacing tiers S and M)");
 }
 
 auto Surface_impl::get_backbuffer_width() const -> int

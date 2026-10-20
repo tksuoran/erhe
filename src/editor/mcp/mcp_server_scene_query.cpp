@@ -2664,6 +2664,9 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
                 {"vsyncs_per_frame", pacer->get_vsyncs_per_frame()},
                 {"min_vsyncs",       m_context.frame_pacing_observer->get_min_vsyncs()},
                 {"margin_ms",        pacer->get_margin() * 1000.0},
+                // Presentation deadline offset delta_pe (fixed, or estimated
+                // on a path that honors target present times).
+                {"deadline_offset_ms", pacer->get_deadline_offset() * 1000.0},
                 // Dynamic vsync grid (deviation 10): boundaries at
                 // grid_phase + n * grid_period; the tracked period deviates
                 // from the queried refresh period on real displays.

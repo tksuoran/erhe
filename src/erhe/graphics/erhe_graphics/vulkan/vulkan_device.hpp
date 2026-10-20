@@ -345,6 +345,7 @@ public:
     // frame_pacing_tier graphics config, resolved in the constructor BEFORE
     // the surface picks its present mode (the tier owns that decision).
     [[nodiscard]] auto get_frame_pacing_tier() const -> Frame_pacing_tier;
+    [[nodiscard]] auto is_present_target_time_honored() const -> bool;
 
     // GPU timer infrastructure. Backed by a single shared VkQueryPool sized
     // for s_max_gpu_timers timestamps per frame in flight. Slots are

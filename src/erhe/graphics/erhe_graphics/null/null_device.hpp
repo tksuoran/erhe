@@ -119,6 +119,7 @@ public:
     [[nodiscard]] auto wait_for_displayed_frame           (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
                   void set_present_target_time            (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
     [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
+    [[nodiscard]] auto is_present_target_time_honored     () const -> bool;
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
