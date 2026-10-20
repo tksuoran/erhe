@@ -510,6 +510,17 @@ for frames 1 to 12; run scripts wait for frame 12.
   thread headroom, not in the tick); the Vulkan schedule on macOS, where the
   windowed tick is bound by the presenting submit (section 4 of the
   measurements document).
+- **Measurement follow-ups** (measurements document section 4; each
+  needs a decision before it is built). Frame pacing with
+  `force_disable_vsync`: tier S is selected although the present mode is
+  `IMMEDIATE`, which has none of the plain-FIFO backpressure the servo
+  needs, and the servo sleeps about 4 ms per frame; resolve the tier to off
+  under `force_disable_vsync`, or warn. The phase log's full tick excludes
+  `frame_start_wait`; include it, or log the loop period beside it. Metal
+  Tracy GPU zones from the command buffers' `GPUStartTime` / `GPUEndTime`.
+  The windowed Metal build stays display-paced in `nextDrawable` with
+  `displaySyncEnabled = NO`. On windowed MoltenVK the presenting submit
+  takes 3-4 ms in some frames (a drawable wait, unverified).
 - **Render phase cost.** `Shadow_renderer::render` dominates R on scenes
   with many casters: the tight directional fit runs once per shadow-mapped
   directional light. Fitting several lights in parallel pays only with many
