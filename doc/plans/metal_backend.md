@@ -58,6 +58,49 @@ To measure before building:
    `CADisplayLink.duration` report under VRR; which screen's link applies to
    a window spanning two?
 
+### Work order (item 5 picked by the user, 2026-10-20)
+
+Measure first: the six questions decide whether tier M is buildable and
+which form it takes, so each answer is recorded here before code that
+depends on it.
+
+1. Baseline. Windowed Metal editor (`doc/agents/macos.md`, `ERHE_AI_DRIVER=1`),
+   default scene, settled; `scripts/frame_pacing_summary.py` prints loop,
+   pacer sleep, acquire, fence wait and present cadence from
+   `get_frame_pacing_frames`. Tier S at 120 Hz measured loop 8.58 ms, sleep
+   7.2 ms (at its clamp), acquire 5.6 ms; tier OFF loop 8.34 ms, acquire
+   6.9 ms. `frame_pacing_tier` and `frame_pacing_enforce` in
+   `config/editor/erhe_graphics.json` switch configurations (restore the file
+   afterwards); `ERHE_FRAME_PIPELINING=0` measured the same.
+2. A measurement-only probe answers questions 1-5 before any pacer change:
+   in `Device_impl::submit_command_buffers` (`metal_device.cpp`, where
+   `presentDrawable` is encoded) add an `addPresentedHandler` on the drawable
+   that stores `presentedTime` / `drawableID` into the frame's record
+   (`Frame_time_record::achieved_present_time`, which the Vulkan swapchain
+   fills in `Swapchain_impl::poll_present_timing`), and stamp the presenting
+   command buffer's `GPUEndTime` and completion time. With that,
+   `frame_pacing_summary.py` shows achieved cadence and the
+   present-to-display latency; a temporary `presentDrawable:atTime:` with a
+   target of next-vblank + T/2 answers question 2 (honored targets move the
+   achieved time by half a period). Clock identity (question 1): compare
+   `Frame_time_recorder::now()` and `CACurrentMediaTime()` sampled
+   back-to-back at init and log the offset.
+3. Then, if targets are honored: tier M as `Frame_pacing_tier::full` on
+   Metal (the editor's `frame_start_pacing` already drives tier W through
+   `Device::set_present_target_time` / `wait_for_displayed_frame`, both
+   no-ops on Metal today): the present target in
+   `Device_impl::set_present_target_time` applied at `presentDrawable:atTime:`,
+   `wait_for_displayed_frame` on a condition variable signalled from the
+   presented handler, `GPUEndTime` as the GPU frame end, and a display-link
+   refresh source for `Display_refresh_resolver` next to the window mode
+   (the resolver's present-timing input is `set_vulkan_timing`; a Metal
+   source needs its own setter and `Display_refresh_source` value). If
+   targets are not honored, tier M is present wait + feedback with the C15
+   holdback as on the NVIDIA driver (`doc/frame_pacing/capability_tiers.md`
+   section 5).
+4. Question 6 (ProMotion / VRR) on the built-in display, which reports 120
+   Hz as its window mode today.
+
 ## 6. GPU-read draw count
 
 Multi-draw indirect issues one indirect `drawIndexedPrimitives` per command
