@@ -56,6 +56,11 @@ public:
     // scenario 9). May be called from any thread; the request is applied to
     // the pacer at the next tick() and survives pacer recreation.
     void               request_min_vsyncs(int min_vsyncs);
+
+    // Where the pacer's deadline offset comes from (Frame_pacer_tunables);
+    // the host knows its presentation path. Main thread; a change recreates
+    // the pacer at the next tick().
+    void set_deadline_offset_source(Deadline_offset_source source);
     [[nodiscard]] auto get_min_vsyncs   () const -> int { return m_min_vsyncs_request.load(std::memory_order_relaxed); }
 
 private:
@@ -78,6 +83,8 @@ private:
 
     std::unique_ptr<Frame_pacer> m_pacer;
     double                       m_refresh_period{0.0};
+    Deadline_offset_source       m_deadline_offset_source       {Deadline_offset_source::fixed};
+    Deadline_offset_source       m_pacer_deadline_offset_source {Deadline_offset_source::fixed};
     Schedule_decision            m_last_decision{};
     std::atomic<int>             m_min_vsyncs_request{1};
     int                          m_min_vsyncs_applied{1};

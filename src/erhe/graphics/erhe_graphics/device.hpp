@@ -798,6 +798,14 @@ public:
     // minimum image count for backpressure), so it cannot change without a
     // swapchain-owning restart.
     [[nodiscard]] auto get_frame_pacing_tier                () const -> Frame_pacing_tier;
+    // True when the presentation path displays an image at the first refresh
+    // at or after its target present time and takes it when its GPU work
+    // ends (Metal tier M, measured on the macOS compositor): a frame then
+    // displayed after its target is evidence of the presentation deadline,
+    // so the frame pacer may estimate its deadline offset
+    // (erhe::frame_pacing::Deadline_offset_source::estimated). False where
+    // targets are ignored or unverified (the Vulkan tier W holdback path).
+    [[nodiscard]] auto is_present_target_time_honored       () const -> bool;
 
     // Returns the underlying GPU and OS-platform handles needed to populate
     // XrGraphicsBinding*KHR structs. Backend-neutral: Vulkan backend fills

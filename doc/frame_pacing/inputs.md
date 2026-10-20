@@ -41,7 +41,7 @@ Grouped by production site. "Consumer" names the pacer interface call ([algorith
 | Swapchain image count | - (fixed input, FR5) | Swapchain creation result | same | `vulkan_swapchain.cpp` | Static per swapchain |
 | Present mode in use | - | Present-mode selection (FIFO family; `fifo_latest_ready` preferred, already scored highest) | same | `vulkan_surface.cpp:557-567` | Static per swapchain |
 | Capability tier | - | Extension + feature probes | same | `check_device_extension` table and feature chains in `vulkan_device.cpp` / `vulkan_device_init.cpp`, covering `fifo_latest_ready`, `present_id`, `present_wait`, `present_timing` and `calibrated_timestamps` | Static per device |
-| Deadline offset initial | `delta_hat_pe` | Constant (2.5 ms), then refined from feedback (section 3.4) | `presentMargin` / `earliestPresentTime` from GOOGLE past timing | Pacer-internal | - |
+| Deadline offset initial | `delta_hat_pe` | Constant (2.5 ms); on a path that honors target present times, estimated from feedback ([algorithm.md](algorithm.md) section 3.3) | `presentMargin` / `earliestPresentTime` from GOOGLE past timing | Pacer-internal | - |
 | Application minimum cadence | `N_min` | Application | Application | App layer (e.g. paused-screen state in the editor) -> `set_min_vsyncs()` | On change |
 
 ### 3.2 Per-frame CPU events (reference clock, immediate)
@@ -81,7 +81,7 @@ Notes on `g_k` fidelity:
 | Input | Tier W source | Tier A source | Consumer | Latency |
 |---|---|---|---|---|
 | Achieved present time (per id) | Past-presentation timing (`VK_EXT_present_timing`), stage = latch / first-pixel-visible | `vkGetPastPresentationTimingGOOGLE` -> `actualPresentTime` | `on_present_feedback()` -> grid phase tracker, in-flight-aware anchor, `q` bookkeeping | 1-4 frames after display; polled once per frame at the schedule point |
-| `delta_hat_pe` refinement | Latch-stage timestamp vs. calibrated `gpu_end` for hit frames | `presentMargin` / `earliestPresentTime` directly | Pacer-internal estimator (conservative initial constant until enough samples) | trailing |
+| `delta_hat_pe` refinement | None: the fixed initial constant (the engine measured ignores target present times, so late displays are no deadline evidence). Tier M (Metal): completion margin `target - gpu_end` against displayed-late of frames whose target slot was free | `presentMargin` / `earliestPresentTime` directly | Pacer-internal estimator, `Deadline_offset_source::estimated` ([algorithm.md](algorithm.md) section 3.3) | trailing |
 | Presentation-path change hint (windowed <-> fullscreen) | Not directly queryable - appears as a level shift in `delta_hat_pe` residuals | n/a | Absorbed by the estimator; not a control input | trailing |
 
 ### 3.5 Actuators (decision outputs and their mechanisms)

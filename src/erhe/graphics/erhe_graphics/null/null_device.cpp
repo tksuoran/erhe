@@ -204,6 +204,11 @@ auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
     return Frame_pacing_tier::off;
 }
 
+auto Device_impl::is_present_target_time_honored() const -> bool
+{
+    return false;
+}
+
 void Device_impl::memory_barrier(const Memory_barrier_mask barriers)
 {
     static_cast<void>(barriers);

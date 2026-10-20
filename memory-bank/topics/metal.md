@@ -41,6 +41,14 @@
 >item-4-resize::DONE-2026-10-20{user-interactive:resize+display-move+2x/1x/2x-mode-switch;all-pass}
 >item-3-blit_framebuffer::DONE{one-contract-all-backends:clip_blit_framebuffer_region;Metal=copy|MSL-draw-between-formats;Vulkan=vkCmdBlitImage-offscreen-only(swapchain->doc/plans/xr.md);GL-end-coords-fixed(compile-unverified-no-GL-tree);Blit_framebuffer_test-3-pass-Metal+MoltenVK+KosmicKrisp}
 
+[LANDED_2026-10-20b]
+>item-5-tier-M-built{presented-handler->achieved_present_time+Present_feedback(shared_ptr;detach-at-teardown)+wait_for_displayed_frame;presentDrawableAtTime(target-T/4);GPUStart/EndTime->gpu_frame_begin/end;cpu_slot_end-in-end_frame(was-never-stamped);Device::is_present_target_time_honored}
+>pacer::Deadline_offset_source{fixed|estimated}+delta_pe-estimator+FR5-wait_id-minus-floor(dpe/NT){claim-C22-C++-and-sim.py;77/77+27/27}
+@probe-answers->doc/plans/metal_backend.md{clock-identical;targets-honored-windowed;presentedTime-on-grid-8.344ms;handler-0.48ms-off-main;presenting-cb-completes-at-GPU-end-16ms-before-display}
+!compositor-deadline::windowed-needs-drawable~T+1.5ms-before-vsync{fixed-2.5ms->40%-2-refresh-frames}
+@auto=S-until-live-run{frame_pacing_tier-"w"=M};open->plan-item-5-State
+!occluded-window->presentedTime-0->no-feedback{logged;blocked-live-run-2026-10-20}
+
 [TRAPS]
 !AutoreleasePool::per-thread-stack{drain-on-opening-thread;reverse-order}→¬span-device-frame
 !retained-cb-still-in-pool::queue-slot(64)-freed-only-on-dealloc→create-in-local-pool+retain
@@ -62,4 +70,4 @@ cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permane
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{5-tier-M=NEXT(©User-2026-10-20;plan-work-order;scripts/frame_pacing_summary.py-baseline)+6-option-A/B-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{5-tier-M-live-run-with-estimator=NEXT(window-visible;then-auto->M)+6-option-A/B-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}

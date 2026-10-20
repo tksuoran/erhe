@@ -9,6 +9,22 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Device::is_present_target_time_honored()`: true when the
+  presentation path displays an image at the first refresh at or after its
+  target present time and takes it at its GPU end. The Metal backend
+  resolves frame pacing tier M (`Frame_pacing_tier::full`: presented-handler
+  feedback and present wait, `presentDrawable:atTime:` targets, the GPU frame
+  bracket) for `frame_pacing_tier` "w", and returns true there; elsewhere
+  false.
+- `erhe::frame_pacing`: `Deadline_offset_source` (`fixed`, `estimated`) and
+  the `Frame_pacer_tunables` that drive the estimated presentation deadline
+  offset (`deadline_offset_source`, `deadline_offset_max_frac`,
+  `deadline_evidence_band`, `deadline_evidence_min_late`,
+  `deadline_offset_decay`); `Frame_pacer::get_deadline_offset()`,
+  `Frame_stats::deadline_offset`,
+  `Frame_pacing_observer::set_deadline_offset_source()`. The FR5 wait id
+  now also counts the images a deadline offset of one or more cadence
+  periods holds in the queue (unchanged with the fixed 2.5 ms offset).
 - `erhe::graphics`: `Blit_framebuffer_region` and
   `clip_blit_framebuffer_region()`. `Blit_command_encoder::blit_framebuffer`
   now has one contract on every backend: an unscaled copy of `source_size`

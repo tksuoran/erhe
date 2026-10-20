@@ -301,16 +301,57 @@ calibration is a Vulkan swapchain feature, and a resolver left calibrating
 keeps the pacer actuators idle. The window display mode is the only refresh
 source on Metal.
 
-The tier (`doc/frame_pacing/capability_tiers.md`) resolves to S (slop servo)
-for `auto`, `s` and `w` (warned: there is no tier W on Metal), and to OFF for
-`off`, headless (no layer, no presentation backpressure) and
-`force_disable_vsync`. `Surface_impl::apply_frame_pacing_tier` gives tier S a
-display-synced layer with three drawables. Two drawables, the analogue of
-the Vulkan tier S minimum image count, halve the windowed cadence: on a
-120 Hz display the editor ran at 60 Hz with the servo idle, because the
-compositor holds the displayed drawable until the next one replaces it.
+The tier (`doc/frame_pacing/capability_tiers.md`) resolves to M (full
+pacing, the editor's tier W path) for `w`, to S (slop servo) for `auto` and
+`s`, and to OFF for `off`, headless (no layer) and `force_disable_vsync`.
+`auto` becomes M once tier M with the estimated deadline offset has been
+measured live (`doc/plans/metal_backend.md` item 5).
+`Surface_impl::apply_frame_pacing_tier` gives tiers M and S a display-synced
+layer with three drawables. Two drawables, the analogue of the Vulkan tier S
+minimum image count, halve the windowed cadence: on a 120 Hz display the
+editor ran at 60 Hz with the servo idle, because the compositor holds the
+displayed drawable until the next one replaces it.
 
-The records the servo reads (`doc/frame_pacing/inputs.md` 3.2):
+Presentation, in `Device_impl::submit_command_buffers` for the command buffer
+that carries the drawable:
+
+- `Present_feedback` (shared with the drawable's presented handler, which
+  Metal runs on its own thread, possibly after the device is gone):
+  `presentedTime` becomes the frame record's `achieved_present_time`, and
+  `wait_for_displayed_frame` (the FR5 present wait) waits on its condition
+  variable until the frame's handler has run. A `presentedTime` of 0 (the
+  compositor showed no frame of an occluded window, or the display sleeps)
+  gives no feedback; 30 in a row are logged.
+- `presentDrawable:atTime:` with the frame's target present time
+  (`set_present_target_time`) a quarter period early: the drawable shows at
+  the first refresh at or after the requested time, and the bias keeps a
+  target on the pacer's grid from rounding up across a small grid phase
+  error. The C15 holdback deadline is ignored: targets are honored, and the
+  presenting commit also carries the frame's GPU work.
+- The completion handler writes `gpu_frame_begin` / `gpu_frame_end` from
+  `GPUStartTime` / `GPUEndTime`.
+- `Device::is_present_target_time_honored` is true in tier M, so the editor
+  gives the pacer an estimated deadline offset
+  (`doc/frame_pacing/algorithm.md` section 3.3).
+
+Measured with a probe (Debug windowed editor, M4 Pro, external 120 Hz
+display; the answers are in `doc/plans/metal_backend.md` item 5):
+`steady_clock` and `CACurrentMediaTime` are the same clock (offset 0.04 us),
+so host times go into the records unconverted; `presentedTime` lies on the
+refresh grid (deltas 8.344 ms, p5 to p95 within 1 us, against the 8.333 ms
+the window display mode reports); the presented handler runs 0.48 ms after
+`presentedTime`, off the main thread; a presenting command buffer completes
+at its GPU end, 16 ms before its drawable is displayed; targets are honored
+windowed with `displaySyncEnabled` YES and NO (a 2T target step gives a
+16.685 ms cadence). The windowed compositor needs a drawable about one
+refresh period plus 1.5 ms before its vsync: with frames finishing 7 to 9 ms
+before the target, 70 to 86 % displayed one refresh late, at 16 ms or more
+none did. The pacer's fixed 2.5 ms deadline offset made 40 % of the frames
+two refreshes long; the estimated offset removes that in the pacer
+simulation (claim C22). The live run with the estimate is open
+(`doc/plans/metal_backend.md` item 5).
+
+The records the tier S servo reads (`doc/frame_pacing/inputs.md` 3.2):
 
 - `acquire_begin` / `acquire_end`: around `wait_for_presented_frame_slot` and
   `nextDrawable` in `Command_buffer_impl::begin_swapchain`, where
@@ -319,8 +360,9 @@ The records the servo reads (`doc/frame_pacing/inputs.md` 3.2):
   `acquire_frame_slot`.
 - `present_request_time` / `present_return_time`: around the commit of the
   command buffer that carries `presentDrawable` (it does not block).
+- `cpu_slot_end`: in `end_frame`, as in the Vulkan backend.
 
-Measured on the windowed Debug editor, 120 Hz display, default scene:
+Tier S measured on the windowed Debug editor, 120 Hz display, default scene:
 
 | configuration | loop median | servo sleep | `nextDrawable` wait |
 |---|---|---|---|

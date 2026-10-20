@@ -32,6 +32,7 @@ namespace erhe::dataformat {
     enum class Format : unsigned int;
 }
 
+namespace erhe::frame_pacing { class Frame_time_recorder; }
 namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
@@ -62,6 +63,50 @@ class Device_frame_slot
 public:
     Device_frame_state state   {Device_frame_state::idle};
     uint64_t           frame_id{0};
+};
+
+// Presentation feedback of the drawables a device presents (frame pacing
+// tier M, doc/erhe/metal_backend.md "Frame pacing"): the presented handler
+// of each drawable writes the frame's achieved present time and wakes
+// present waits. Metal runs presented handlers on a thread of its own, up to
+// a few refresh periods after the presenting command buffer completed, so
+// possibly after the device is gone: the handlers share ownership of this
+// object, and detach() at device teardown cuts it from the frame time
+// recorder. Thread-safe: every member is under m_mutex.
+class Present_feedback
+{
+public:
+    explicit Present_feedback(erhe::frame_pacing::Frame_time_recorder& recorder);
+
+    // The presenting thread, before the commit that hands the drawable over.
+    void note_present(std::int64_t frame_id);
+
+    // The presented handler. presented_time is the drawable's presentedTime
+    // (0: never displayed); target_time the frame's target present time (0:
+    // none) and period the refresh period it was set for, to detect targets
+    // the system did not honor.
+    void on_presented(std::int64_t frame_id, double presented_time, double target_time, double period);
+
+    // Blocks until the presented handler of frame_id has run (the drawable
+    // was displayed or dropped). unsupported when frame_id never presented.
+    [[nodiscard]] auto wait_for_displayed(std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
+
+    void detach();
+
+private:
+    static constexpr std::size_t s_early_check_count = 240; // targeted frames before the honored-target check
+
+    std::mutex                               m_mutex;
+    std::condition_variable                  m_displayed;
+    erhe::frame_pacing::Frame_time_recorder* m_recorder           {nullptr};
+    std::int64_t                             m_newest_presented_id{-1}; // newest frame whose drawable was handed over
+    std::int64_t                             m_newest_displayed_id{-1}; // newest frame whose presented handler ran
+    std::size_t                              m_targeted_count     {0};
+    std::size_t                              m_early_count        {0};  // displayed a refresh or more before the target
+    // Consecutive drawables with presentedTime 0: the compositor shows no
+    // frame of an occluded window (and of none while the display sleeps).
+    static constexpr std::size_t s_undisplayed_log_count = 30;
+    std::size_t                              m_undisplayed_streak {0};
 };
 
 class Device;
@@ -105,10 +150,11 @@ public:
     void wait_for_frame_gpu_completion  (uint64_t frame_index);
 
     // Presented-frame throttle. A command buffer that presents a drawable
-    // does not complete until the compositor has consumed that drawable, so
-    // when presentation stalls these never retire. Without a bound the main
-    // loop keeps submitting frames until the command queue's in-flight limit
-    // (maxCommandBufferCount, 64) is reached, at which point
+    // normally completes at its GPU end (measured: 16 ms before the drawable
+    // is displayed), but when presentation stalls these never retire.
+    // Without a bound the main loop keeps submitting frames until the
+    // command queue's in-flight limit (maxCommandBufferCount, 64) is
+    // reached, at which point
     // MTL::CommandQueue::commandBuffer() blocks inside the driver and the
     // process is wedged until presentation resumes - observed live: a
     // presentation stall left the editor hung in Command_buffer::begin() for
@@ -164,6 +210,7 @@ public:
     [[nodiscard]] auto wait_for_displayed_frame           (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
                   void set_present_target_time            (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
     [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
+    [[nodiscard]] auto is_present_target_time_honored     () const -> bool;
     // The pipeline of a blit_framebuffer between attachments of different
     // formats (Blit_command_encoder_impl): a full-screen triangle that reads
     // the source texels, for a normalized or float destination format.
@@ -272,6 +319,13 @@ private:
 
     Device&                          m_device;
     Frame_pacing_tier                m_frame_pacing_tier{Frame_pacing_tier::off};
+    // Null without a CAMetalLayer (headless).
+    std::shared_ptr<Present_feedback> m_present_feedback;
+    // The FR3 target present time of one frame (set_present_target_time),
+    // applied when that frame's drawable is presented. Render thread only,
+    // like the Vulkan backend's.
+    std::int64_t                     m_present_target_frame_id    {-1};
+    double                           m_present_target_time_seconds{0.0};
 
     class Blit_framebuffer_pipeline
     {

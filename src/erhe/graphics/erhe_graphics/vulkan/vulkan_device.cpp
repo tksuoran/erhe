@@ -145,6 +145,13 @@ auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
     return m_frame_pacing_tier;
 }
 
+auto Device_impl::is_present_target_time_honored() const -> bool
+{
+    // Measured not honored on NVIDIA (doc/frame_pacing/capability_tiers.md
+    // section 5), unverified elsewhere: tier W paces through the C15 holdback.
+    return false;
+}
+
 auto Device_impl::get_context_window() const -> erhe::window::Context_window*
 {
     return m_context_window;

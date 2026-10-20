@@ -3118,6 +3118,14 @@ public:
                 m_app_context.lightmap_window         = m_lightmap_window.get();
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
+                // A presentation path that honors target present times shows
+                // its deadline offset in the feedback (Metal tier M);
+                // elsewhere the pacer keeps its fixed initial value.
+                m_frame_pacing_observer.set_deadline_offset_source(
+                    m_graphics_device->is_present_target_time_honored()
+                        ? erhe::frame_pacing::Deadline_offset_source::estimated
+                        : erhe::frame_pacing::Deadline_offset_source::fixed
+                );
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_logs                   = std::make_unique<erhe::imgui::Logs               >(*m_commands.get(),       *m_imgui_renderer.get(), "config/editor/logging.json");

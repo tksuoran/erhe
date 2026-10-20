@@ -130,6 +130,7 @@ public:
     int          pending    {0};
     double       w_statistic{0.0};
     double       margin     {0.0};
+    double       deadline_offset{0.0};
     double       slop       {0.0};  // P4.1: involuntary blocking this frame
     double       sleep      {0.0};  // P4.1: servo sleep applied this frame
 };
@@ -472,6 +473,7 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             record.self_miss   = stats.self_miss;
             record.w_statistic = stats.w_statistic;
             record.margin      = stats.margin;
+            record.deadline_offset = stats.deadline_offset;
         }
         if (scenario.latest_ready) {
             // Backfill display times committed after the frame's own turn.

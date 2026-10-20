@@ -31,6 +31,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include "erhe_utility/align.hpp"
 
 #include <fmt/format.h>
@@ -328,13 +329,18 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     // actuators idle (Device::is_display_refresh_calibrating).
     resolver.skip_calibration("the Metal backend has none");
 
-    // Tier resolution (doc/frame_pacing/capability_tiers.md section 2). Tier S
-    // needs presentation backpressure: a display-synced CAMetalLayer, whose
-    // nextDrawable blocks once the compositor holds the drawable pool
-    // (Surface_impl::apply_frame_pacing_tier).
-    // Tier W needs present wait, target present times and presentation
-    // feedback, none of which the Metal backend implements.
+    // Tier resolution (doc/frame_pacing/capability_tiers.md section 2). Both
+    // tiers need a display-synced CAMetalLayer (Surface_impl::apply_frame_pacing_tier).
+    // Tier S senses its backpressure: nextDrawable blocks once the
+    // compositor holds the drawable pool. Tier M is tier W on Metal: the
+    // drawable's presented handler gives presentation feedback and present
+    // wait (Present_feedback), presentDrawable:atTime: the target present
+    // time, which macOS honors (measured, doc/erhe/metal_backend.md "Frame
+    // pacing"), so it needs no C15 present-request holdback.
     const bool         has_layer = (m_surface != nullptr) && !m_surface->get_impl().is_headless();
+    if (has_layer) {
+        m_present_feedback = std::make_shared<Present_feedback>(m_device.get_frame_time_recorder());
+    }
     const std::string& requested = get_graphics_config().frame_pacing_tier;
     if (requested == "off") {
         m_frame_pacing_tier = Frame_pacing_tier::off;
@@ -344,10 +350,12 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     } else if (get_graphics_config().force_disable_vsync) {
         m_frame_pacing_tier = Frame_pacing_tier::off;
         log_context->info("frame pacing: force_disable_vsync leaves no presentation backpressure; tier OFF");
+    } else if (requested == "w") {
+        m_frame_pacing_tier = Frame_pacing_tier::full;
     } else {
-        if (requested == "w") {
-            log_context->warn("frame_pacing_tier 'w' forced but the Metal backend has no tier W; using tier S");
-        } else if ((requested != "s") && (requested != "auto")) {
+        // auto stays tier S until tier M with the estimated deadline offset
+        // has been measured live (doc/plans/metal_backend.md item 5).
+        if ((requested != "s") && (requested != "auto")) {
             log_context->warn("frame_pacing_tier '{}' not recognized; using 'auto'", requested);
         }
         m_frame_pacing_tier = Frame_pacing_tier::slop_servo;
@@ -357,12 +365,16 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     }
     log_context->info(
         "frame pacing tier = {}",
+        (m_frame_pacing_tier == Frame_pacing_tier::full)       ? "M (full pacing: presented handler feedback, presentDrawable:atTime:)" :
         (m_frame_pacing_tier == Frame_pacing_tier::slop_servo) ? "S (slop-servo fallback)" : "OFF"
     );
 }
 
 Device_impl::~Device_impl() noexcept
 {
+    if (m_present_feedback != nullptr) {
+        m_present_feedback->detach();
+    }
     // Resource destructors enqueue completion handlers, so the surface and
     // ring buffers must be torn down before we drain the queue. Surface
     // destruction in turn enqueues handlers (e.g. for the swapchain texture
@@ -557,6 +569,14 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
         (slot.state == Device_frame_state::waited)
     );
 
+    // The CPU slot of the frame ends here, as in the Vulkan backend: the
+    // frame pacer's CPU service time (doc/frame_pacing/inputs.md 3.2).
+    m_device.get_frame_time_recorder().set(
+        static_cast<std::int64_t>(frame_id),
+        &erhe::frame_pacing::Frame_time_record::cpu_slot_end,
+        erhe::frame_pacing::Frame_time_recorder::now()
+    );
+
     // Recycle ring buffer ranges and fire completion handlers for any
     // frame the GPU has reported done. This must run from end_frame()
     // because the editor's per-frame loop calls end_frame() but never
@@ -644,21 +664,112 @@ auto Device_impl::get_native_handles() const -> Native_device_handles
 
 auto Device_impl::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
 {
-    static_cast<void>(frame_id);
-    static_cast<void>(timeout_ns);
-    return Present_wait_result::unsupported;
+    if (m_present_feedback == nullptr) {
+        return Present_wait_result::unsupported;
+    }
+    return m_present_feedback->wait_for_displayed(frame_id, timeout_ns);
 }
 
 void Device_impl::set_present_target_time(const std::int64_t frame_id, const double target_time_seconds, const double hold_until_seconds)
 {
-    static_cast<void>(frame_id);
-    static_cast<void>(target_time_seconds);
+    // The C15 holdback deadline is not used: macOS honors target present
+    // times, and the presenting commit also carries the frame's GPU work,
+    // which a holdback would delay.
     static_cast<void>(hold_until_seconds);
+    erhe::utility::Thread_roles::assert_render_thread();
+    m_present_target_frame_id     = frame_id;
+    m_present_target_time_seconds = target_time_seconds;
+}
+
+Present_feedback::Present_feedback(erhe::frame_pacing::Frame_time_recorder& recorder)
+    : m_recorder{&recorder}
+{
+}
+
+void Present_feedback::note_present(const std::int64_t frame_id)
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    m_newest_presented_id = std::max(m_newest_presented_id, frame_id);
+}
+
+void Present_feedback::on_presented(const std::int64_t frame_id, const double presented_time, const double target_time, const double period)
+{
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        if (m_recorder == nullptr) {
+            return; // the device is gone
+        }
+        if (presented_time <= 0.0) {
+            ++m_undisplayed_streak;
+            if (m_undisplayed_streak == s_undisplayed_log_count) {
+                log_context->info(
+                    "frame pacing: the last {} drawables were not displayed (window occluded or display asleep); no presentation feedback",
+                    m_undisplayed_streak
+                );
+            }
+        } else {
+            if (m_undisplayed_streak >= s_undisplayed_log_count) {
+                log_context->info("frame pacing: drawables are displayed again after {} that were not", m_undisplayed_streak);
+            }
+            m_undisplayed_streak = 0;
+        }
+        if (presented_time > 0.0) {
+            // presentedTime is CACurrentMediaTime host time, the frame time
+            // recorder's clock (measured identical).
+            m_recorder->set(frame_id, &erhe::frame_pacing::Frame_time_record::achieved_present_time, presented_time);
+            if ((target_time > 0.0) && (period > 0.0) && (m_targeted_count < s_early_check_count)) {
+                ++m_targeted_count;
+                if (presented_time < (target_time - (0.5 * period))) {
+                    ++m_early_count;
+                }
+                if ((m_targeted_count == s_early_check_count) && (m_early_count > (s_early_check_count / 10))) {
+                    log_context->warn(
+                        "frame pacing: {} of {} targeted frames displayed a refresh or more before their target; "
+                        "presentDrawable:atTime: is not honored on this system",
+                        m_early_count, m_targeted_count
+                    );
+                }
+            }
+        }
+        m_newest_displayed_id = std::max(m_newest_displayed_id, frame_id);
+    }
+    m_displayed.notify_all();
+}
+
+auto Present_feedback::wait_for_displayed(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
+{
+    std::unique_lock<std::mutex> lock{m_mutex};
+    if ((frame_id < 0) || (frame_id > m_newest_presented_id)) {
+        return Present_wait_result::unsupported; // never presented; waiting could only time out
+    }
+    const bool displayed = m_displayed.wait_for(
+        lock,
+        std::chrono::nanoseconds{timeout_ns},
+        [this, frame_id]() { return m_newest_displayed_id >= frame_id; }
+    );
+    return displayed ? Present_wait_result::displayed : Present_wait_result::timeout;
+}
+
+void Present_feedback::detach()
+{
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        m_recorder            = nullptr;
+        m_newest_displayed_id = std::numeric_limits<std::int64_t>::max(); // releases any waiter
+    }
+    m_displayed.notify_all();
 }
 
 auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
 {
     return m_frame_pacing_tier;
+}
+
+auto Device_impl::is_present_target_time_honored() const -> bool
+{
+    // Tier M requests targets with presentDrawable:atTime:, which macOS
+    // honors; the drawable is taken when the command buffer completes.
+    return m_frame_pacing_tier == Frame_pacing_tier::full;
 }
 
 namespace {
@@ -811,15 +922,46 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         if (swapchain != nullptr) {
             CA::MetalDrawable* drawable = swapchain->get_current_drawable();
             if (drawable != nullptr) {
-                mtl_cb->presentDrawable(drawable);
+                const std::int64_t present_frame_id = static_cast<std::int64_t>(impl.get_frame_id());
+                const double       target_time      = (present_frame_id == m_present_target_frame_id) ? m_present_target_time_seconds : 0.0;
+                const double       period           = m_device.get_display_refresh_duration_seconds();
+                if (m_present_feedback != nullptr) {
+                    std::shared_ptr<Present_feedback> present_feedback = m_present_feedback;
+                    drawable->addPresentedHandler(
+                        [present_feedback, present_frame_id, target_time, period](MTL::Drawable* presented) {
+                            present_feedback->on_presented(present_frame_id, presented->presentedTime(), target_time, period);
+                        }
+                    );
+                    present_feedback->note_present(present_frame_id);
+                }
+                if ((target_time > 0.0) && (period > 0.0)) {
+                    // The drawable shows at the first refresh at or after the
+                    // requested time; a quarter period early bias keeps a
+                    // target on the pacer's grid from rounding up to the next
+                    // refresh across a small grid phase error
+                    // (doc/frame_pacing/capability_tiers.md section 5).
+                    mtl_cb->presentDrawableAtTime(drawable, target_time - (0.25 * period));
+                } else {
+                    mtl_cb->presentDrawable(drawable);
+                }
 
-                // This cb now completes only once the compositor has consumed
-                // the drawable; count it against the presented-frame budget
-                // that begin_swapchain waits on.
+                // Count this cb against the presented-frame budget that
+                // begin_swapchain waits on. Its completion also gives the
+                // frame's GPU bracket for the frame time record: GPUStartTime
+                // and GPUEndTime are host time, the recorder's clock.
                 note_presented_frame_submitted();
                 Device_impl* device_impl_ptr = this;
                 mtl_cb->addCompletedHandler(
-                    [device_impl_ptr](MTL::CommandBuffer*) {
+                    [device_impl_ptr, present_frame_id](MTL::CommandBuffer* completed_cb) {
+                        const double gpu_begin = completed_cb->GPUStartTime();
+                        const double gpu_end   = completed_cb->GPUEndTime();
+                        if ((gpu_begin > 0.0) && (gpu_end > gpu_begin)) {
+                            device_impl_ptr->m_device.get_frame_time_recorder().set(
+                                present_frame_id,
+                                &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_begin,
+                                &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_end
+                            );
+                        }
                         device_impl_ptr->note_presented_frame_completed();
                     }
                 );

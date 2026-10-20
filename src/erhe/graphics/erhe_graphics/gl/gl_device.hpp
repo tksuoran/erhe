@@ -129,6 +129,7 @@ public:
     // Present-wait clamp (frame pacing FR5): no present-wait path on GL.
     [[nodiscard]] auto wait_for_displayed_frame           (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
     [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
+    [[nodiscard]] auto is_present_target_time_honored     () const -> bool;
     // Target present time (frame pacing FR3): no present-timing path on GL.
     void               set_present_target_time            (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
     [[nodiscard]] auto get_native_handles                 () const -> Native_device_handles;
