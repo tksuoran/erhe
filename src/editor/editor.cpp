@@ -181,6 +181,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/present_calibration.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_imgui/imgui_log.hpp"
@@ -3119,13 +3120,23 @@ public:
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
                 // A presentation path that honors target present times shows
-                // its deadline offset in the feedback (Metal tier M);
-                // elsewhere the pacer keeps its fixed initial value.
-                m_frame_pacing_observer.set_deadline_offset_source(
-                    m_graphics_device->is_present_target_time_honored()
-                        ? erhe::frame_pacing::Deadline_offset_source::estimated
-                        : erhe::frame_pacing::Deadline_offset_source::fixed
-                );
+                // its deadline offset in the feedback (Metal tier M), starting
+                // from the deadline the device's present calibration measured,
+                // with the estimate ceiling half a period above it; elsewhere
+                // the pacer keeps its fixed initial value.
+                {
+                    erhe::frame_pacing::Deadline_offset_setup deadline_offset{};
+                    if (m_graphics_device->is_present_target_time_honored()) {
+                        deadline_offset.source = erhe::frame_pacing::Deadline_offset_source::estimated;
+                        const erhe::graphics::Present_calibration& calibration = m_graphics_device->get_present_calibration();
+                        if (calibration.valid) {
+                            deadline_offset.calibrated_period = calibration.period;
+                            deadline_offset.initial           = calibration.deadline_offset;
+                            deadline_offset.maximum           = calibration.deadline_offset + (0.5 * calibration.period);
+                        }
+                    }
+                    m_frame_pacing_observer.set_deadline_offset(deadline_offset);
+                }
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_logs                   = std::make_unique<erhe::imgui::Logs               >(*m_commands.get(),       *m_imgui_renderer.get(), "config/editor/logging.json");

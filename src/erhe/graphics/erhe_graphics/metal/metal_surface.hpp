@@ -45,6 +45,13 @@ public:
     // held (~7 ms per frame at 120 Hz on an idle scene). Other tiers keep
     // the layer defaults.
     void apply_frame_pacing_tier(Frame_pacing_tier tier);
+    // Services the main thread's run loop once without blocking (its
+    // sources and observers, among them the Core Animation commit that puts
+    // a window ordered on screen during init onto the display; NSEvents stay
+    // queued for the window layer). For the device init present calibration
+    // (metal_device_present_calibration.cpp), which presents before the
+    // application's event loop first runs. No-op off the main thread.
+    void service_main_run_loop();
 
 private:
     Device_impl&               m_device_impl;

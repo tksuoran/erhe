@@ -9,6 +9,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Present_calibration` / `Present_calibration_sample`
+  (`present_calibration.hpp`) and `Device::get_present_calibration()` /
+  `set_present_calibration()`: the request window and deadline of a
+  presentation path that honors target present times, measured at device
+  init. The Metal backend measures them in tier M and requests its presents
+  at the calibrated offset.
+- `erhe::frame_pacing`: `Deadline_offset_setup` and
+  `Frame_pacing_observer::set_deadline_offset()` (replacing
+  `set_deadline_offset_source()`): the source plus a host-measured initial
+  deadline offset and estimate ceiling for a given refresh period;
+  `Frame_pacer_tunables::deadline_offset_max` (absolute ceiling, 0.0: the
+  fraction of T).
 - `erhe::graphics`: `Device::is_present_target_time_honored()`: true when the
   presentation path displays an image at the first refresh at or after its
   target present time and takes it at its GPU end. The Metal backend

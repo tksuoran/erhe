@@ -363,6 +363,9 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     if (m_surface != nullptr) {
         m_surface->get_impl().apply_frame_pacing_tier(m_frame_pacing_tier);
     }
+    if (m_frame_pacing_tier == Frame_pacing_tier::full) {
+        run_present_calibration();
+    }
     log_context->info(
         "frame pacing tier = {}",
         (m_frame_pacing_tier == Frame_pacing_tier::full)       ? "M (full pacing: presented handler feedback, presentDrawable:atTime:)" :
@@ -935,12 +938,16 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
                     present_feedback->note_present(present_frame_id);
                 }
                 if ((target_time > 0.0) && (period > 0.0)) {
-                    // The drawable shows at the first refresh at or after the
-                    // requested time; a quarter period early bias keeps a
-                    // target on the pacer's grid from rounding up to the next
-                    // refresh across a small grid phase error
+                    // The compositor displays the drawable at the target vsync
+                    // when the request lies inside its request window, which
+                    // depends on the display mode (a ProMotion panel latches a
+                    // period earlier); the present calibration measured it.
+                    // Without one a quarter period early bias keeps a target on
+                    // the pacer's grid from rounding up to the next refresh
+                    // across a small grid phase error on a fixed-rate display
                     // (doc/frame_pacing/capability_tiers.md section 5).
-                    mtl_cb->presentDrawableAtTime(drawable, target_time - (0.25 * period));
+                    const double request_offset = (m_present_request_offset > 0.0) ? m_present_request_offset : (0.25 * period);
+                    mtl_cb->presentDrawableAtTime(drawable, target_time - request_offset);
                 } else {
                     mtl_cb->presentDrawable(drawable);
                 }

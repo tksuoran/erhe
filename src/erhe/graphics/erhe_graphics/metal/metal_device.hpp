@@ -316,6 +316,10 @@ private:
     // Feeds the window-side display refresh source to the resolver and
     // resolves m_frame_pacing_tier; constructor tail, after the surface.
     void init_frame_pacing(erhe::window::Context_window* context_window);
+    // Tier M: measures the compositor's request window and deadline on the
+    // window's layer before the first frame (metal_device_present_calibration.cpp)
+    // and stores the result in Device::get_present_calibration().
+    void run_present_calibration();
 
     Device&                          m_device;
     Frame_pacing_tier                m_frame_pacing_tier{Frame_pacing_tier::off};
@@ -326,6 +330,9 @@ private:
     // like the Vulkan backend's.
     std::int64_t                     m_present_target_frame_id    {-1};
     double                           m_present_target_time_seconds{0.0};
+    // Seconds before the target vsync to request a tier M present, from the
+    // present calibration; 0.0 without one (a quarter period is used).
+    double                           m_present_request_offset     {0.0};
 
     class Blit_framebuffer_pipeline
     {

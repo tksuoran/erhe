@@ -23,6 +23,7 @@ namespace erhe::graphics {
 
 class Display_refresh_report;
 class Display_refresh_resolver;
+class Present_calibration;
 
 class Format_properties
 {
@@ -806,6 +807,12 @@ public:
     // (erhe::frame_pacing::Deadline_offset_source::estimated). False where
     // targets are ignored or unverified (the Vulkan tier W holdback path).
     [[nodiscard]] auto is_present_target_time_honored       () const -> bool;
+    // Present calibration (present_calibration.hpp): measured at device
+    // init by a backend whose presentation path honors target present times
+    // (Metal tier M); not done elsewhere. Written once during device init,
+    // read-only afterwards.
+    [[nodiscard]] auto get_present_calibration              () const -> const Present_calibration&;
+    void               set_present_calibration              (const Present_calibration& calibration);
 
     // Returns the underlying GPU and OS-platform handles needed to populate
     // XrGraphicsBinding*KHR structs. Backend-neutral: Vulkan backend fills
@@ -824,6 +831,7 @@ private:
     // window's display mode) and the resolver applies to the recorder.
     std::unique_ptr<erhe::frame_pacing::Frame_time_recorder> m_frame_time_recorder;
     std::unique_ptr<Display_refresh_resolver>                 m_display_refresh_resolver;
+    std::unique_ptr<Present_calibration>                      m_present_calibration;
     std::unique_ptr<Device_impl> m_impl;
     // Started-frame counter (wait_for_frame_start); touched only by the
     // thread that starts frames, never by end_frame().

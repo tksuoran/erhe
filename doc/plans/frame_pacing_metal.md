@@ -93,6 +93,44 @@ From the macOS 27 SDK headers (`QuartzCore/CAMetalLayer.h`,
   (C22), the in-flight anchor fix (deviation 16), the hysteresis-band upshift
   allowance (deviation 15, C23); Python model 81/81, C++ 28/28.
 
+## Compositor properties per display mode (measured 2026-10-20)
+
+Tier M depends on two properties of the macOS compositor that differ by
+display mode, measured with the default scene (request bias `b`: the
+request is `presentDrawable:atTime:(V - b*T)` for a target vsync `V`;
+deadline: the completion margin `V - GPUEndTime` a frame needs to display
+at `V`):
+
+| display mode | request window (on target) | early | late | GPU deadline | tier S release-to-display |
+|---|---|---|---|---|---|
+| Dell U2725QE, fixed 120 Hz | `b` = 0.25 (only value run) | - | - | ~T + 1.5 ms (C22) | 29-30 ms |
+| built-in, fixed 60 Hz | `b` = 0.25, 0.75 | `b` = 1.25: 45 % one refresh early | - | ~T + 0.3-1 ms (estimator 16-17.6 ms) | - |
+| built-in, ProMotion (120 Hz) | `b` = 1.25, 1.5 | - | `b` = 0.25, 0.75: 100 %; `b` = 1.0: 20 % | 2T + 0.5-1.5 ms (margins >= 17-18 ms on time, <= 16 ms late) | 37.6 ms |
+
+ProMotion behaves like the fixed-rate compositor with one more period of
+pipeline: both the request cutoff and the GPU deadline lie a period
+earlier. With the hard-coded `b` = 0.25 every ProMotion frame displays a
+refresh late, the estimator saturates at its 2T ceiling, and the pacer
+locks at N=2 with ~80 ms release-to-display (5/5 launches); with `b` =
+1.25-1.5 and the 2T ceiling, N=1 still slips 20-27 % (the deadline lies
+beyond the ceiling).
+
+Neither property can be fixed in advance, so the device measures them:
+
+### Present calibration at device init
+
+Built: `doc/erhe/metal_backend.md` "Frame pacing" describes it (grid,
+request window, deadline; probes as a steady stream one every second
+vsync) with the measured results per display mode. Tier M requests at the
+calibrated offset, and the pacer starts `delta_pe` at the calibrated
+deadline (floor) with the ceiling half a period above. The raw probes are
+in MCP `get_frame_pacing_status` `present_calibration`: the simulator
+plant's request cutoff and deadline per display mode come from those
+reports (collect the Dell at 120 Hz when it is connected). Open: a display
+change after init keeps the calibrated request offset (the pacer side
+drops the calibrated deadline when the period changes); re-calibrating on
+the live layer is not built.
+
 ## Iteration
 
 Each iteration runs these steps in order and appends one entry to the log
@@ -159,3 +197,13 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
 
 - 2026-10-20, iteration 0 (state at plan start): see "What is known". Gate
   not yet run in Release or with 10 launches per configuration.
+- 2026-10-20, iteration 1 (display: built-in panel, the Dell not connected):
+  on ProMotion tier M locked at N=2 in 5/5 launches with every frame a
+  refresh late (~80 ms release to display); the bias sweep and fixed 60 Hz
+  runs located the per-mode request window and deadline (table above).
+  Built the present calibration. Calibrated on ProMotion: 270/272 frames on
+  target, 35 ms, still N=2 - GPU span p90 9-10.7 ms beyond T (the C23
+  tail); at fixed 60 Hz also N=2 (span median 12-15 ms, p90 21-24 ms).
+  Next: step 1 measurement of GPU span vs cadence and start phase on
+  ProMotion with the calibration in place, then the plant (C23 with a
+  cadence-dependent cost) and the upshift change.

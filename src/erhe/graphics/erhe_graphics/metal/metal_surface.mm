@@ -97,6 +97,14 @@ void Surface_impl::apply_frame_pacing_tier(const Frame_pacing_tier tier)
     log_startup->info("Metal layer: displaySyncEnabled, maximumDrawableCount 3 (frame pacing tiers S and M)");
 }
 
+void Surface_impl::service_main_run_loop()
+{
+    if (![NSThread isMainThread]) {
+        return;
+    }
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true);
+}
+
 auto Surface_impl::get_backbuffer_width() const -> int
 {
     return (m_surface_create_info.context_window != nullptr)

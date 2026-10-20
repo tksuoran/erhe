@@ -73,7 +73,10 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_grid_period     = t;
     m_grid_period_ref = t;
     m_deadline_offset = m_tunables.deadline_offset_initial;
-    m_deadline_offset_max = std::max(m_tunables.deadline_offset_initial, m_tunables.deadline_offset_max_frac * t);
+    m_deadline_offset_max = std::max(
+        m_tunables.deadline_offset_initial,
+        (m_tunables.deadline_offset_max > 0.0) ? m_tunables.deadline_offset_max : (m_tunables.deadline_offset_max_frac * t)
+    );
     m_vsyncs          = m_tunables.min_vsyncs;
     m_min_vsyncs      = m_tunables.min_vsyncs;
     m_margin          = m_tunables.margin_initial_frac * t;

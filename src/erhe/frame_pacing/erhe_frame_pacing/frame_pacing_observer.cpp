@@ -37,17 +37,32 @@ void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now
     if (
         (m_pacer == nullptr) ||
         (std::abs(refresh_period - m_refresh_period) > (0.01 * m_refresh_period)) ||
-        (m_pacer_deadline_offset_source != m_deadline_offset_source)
+        (m_pacer_deadline_offset_setup != m_deadline_offset_setup)
     ) {
         Frame_pacer_tunables tunables;
         tunables.refresh_period         = refresh_period;
-        tunables.deadline_offset_source = m_deadline_offset_source;
+        tunables.deadline_offset_source = m_deadline_offset_setup.source;
+        const Deadline_offset_setup& setup = m_deadline_offset_setup;
+        const bool calibrated =
+            (setup.calibrated_period > 0.0) &&
+            (setup.initial > 0.0) &&
+            (std::abs(refresh_period - setup.calibrated_period) <= (0.01 * setup.calibrated_period));
+        if (calibrated) {
+            tunables.deadline_offset_initial = setup.initial;
+            tunables.deadline_offset_max     = setup.maximum;
+        }
         m_pacer          = std::make_unique<Frame_pacer>(tunables);
         m_refresh_period = refresh_period;
-        m_pacer_deadline_offset_source = m_deadline_offset_source;
+        m_pacer_deadline_offset_setup = m_deadline_offset_setup;
         m_min_vsyncs_applied = 1; // fresh pacer starts at the default floor
         m_log_lines.push_back(
-            format_line("frame pacing (observer): pacer created, refresh_period=%.3f ms", refresh_period * 1000.0)
+            format_line(
+                "frame pacing (observer): pacer created, refresh_period=%.3f ms, deadline offset %.3f ms (%s, ceiling %.3f ms)",
+                refresh_period * 1000.0,
+                tunables.deadline_offset_initial * 1000.0,
+                calibrated ? "calibrated" : "default",
+                ((tunables.deadline_offset_max > 0.0) ? tunables.deadline_offset_max : (tunables.deadline_offset_max_frac * refresh_period)) * 1000.0
+            )
         );
     }
 
@@ -225,9 +240,9 @@ void Frame_pacing_observer::request_min_vsyncs(const int min_vsyncs)
     m_min_vsyncs_request.store(clamped, std::memory_order_relaxed);
 }
 
-void Frame_pacing_observer::set_deadline_offset_source(const Deadline_offset_source source)
+void Frame_pacing_observer::set_deadline_offset(const Deadline_offset_setup& setup)
 {
-    m_deadline_offset_source = source;
+    m_deadline_offset_setup = setup;
 }
 
 } // namespace erhe::frame_pacing

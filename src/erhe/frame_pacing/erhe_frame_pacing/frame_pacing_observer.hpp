@@ -32,6 +32,22 @@
 
 namespace erhe::frame_pacing {
 
+// The pacer's deadline offset as the host configures it.
+class Deadline_offset_setup
+{
+public:
+    Deadline_offset_source source{Deadline_offset_source::fixed};
+    // A deadline the host measured (present calibration), for the display
+    // whose refresh period is calibrated_period: the initial offset and
+    // floor, with the estimate ceiling at maximum. Used only while the
+    // refresh period matches (a display change invalidates it); 0.0: none.
+    double calibrated_period{0.0};
+    double initial          {0.0};
+    double maximum          {0.0};
+
+    [[nodiscard]] auto operator==(const Deadline_offset_setup& other) const -> bool = default;
+};
+
 class Frame_pacing_observer
 {
 public:
@@ -60,7 +76,7 @@ public:
     // Where the pacer's deadline offset comes from (Frame_pacer_tunables);
     // the host knows its presentation path. Main thread; a change recreates
     // the pacer at the next tick().
-    void set_deadline_offset_source(Deadline_offset_source source);
+    void set_deadline_offset(const Deadline_offset_setup& setup);
     [[nodiscard]] auto get_min_vsyncs   () const -> int { return m_min_vsyncs_request.load(std::memory_order_relaxed); }
 
 private:
@@ -83,8 +99,8 @@ private:
 
     std::unique_ptr<Frame_pacer> m_pacer;
     double                       m_refresh_period{0.0};
-    Deadline_offset_source       m_deadline_offset_source       {Deadline_offset_source::fixed};
-    Deadline_offset_source       m_pacer_deadline_offset_source {Deadline_offset_source::fixed};
+    Deadline_offset_setup        m_deadline_offset_setup{};
+    Deadline_offset_setup        m_pacer_deadline_offset_setup{};
     Schedule_decision            m_last_decision{};
     std::atomic<int>             m_min_vsyncs_request{1};
     int                          m_min_vsyncs_applied{1};

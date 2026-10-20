@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/display_refresh_resolver.hpp"
+#include "erhe_graphics/present_calibration.hpp"
 
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
@@ -52,6 +53,7 @@ Device::Device(
     : m_device_message_callback{std::move(device_message_callback)}
     , m_frame_time_recorder{std::make_unique<erhe::frame_pacing::Frame_time_recorder>()}
     , m_display_refresh_resolver{make_display_refresh_resolver(graphics_config)}
+    , m_present_calibration{std::make_unique<Present_calibration>()}
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config, vulkan_external_creators)}
 #else
@@ -451,6 +453,26 @@ auto Device::get_frame_pacing_tier() const -> Frame_pacing_tier
 auto Device::is_present_target_time_honored() const -> bool
 {
     return m_impl->is_present_target_time_honored();
+}
+
+auto Device::get_present_calibration() const -> const Present_calibration&
+{
+    return *m_present_calibration;
+}
+
+void Device::set_present_calibration(const Present_calibration& calibration)
+{
+    *m_present_calibration = calibration;
+}
+
+auto c_str(const Present_calibration_phase value) -> const char*
+{
+    switch (value) {
+        case Present_calibration_phase::grid:           return "grid";
+        case Present_calibration_phase::request_window: return "request_window";
+        case Present_calibration_phase::deadline:       return "deadline";
+        default:                                        return "?";
+    }
 }
 
 auto Device::get_native_handles() const -> Native_device_handles
