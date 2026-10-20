@@ -46,7 +46,9 @@
 >pacer::Deadline_offset_source{fixed|estimated}+delta_pe-estimator+FR5-wait_id-minus-floor(dpe/NT){claim-C22-C++-and-sim.py;77/77+27/27}
 @probe-answers->doc/plans/metal_backend.md{clock-identical;targets-honored-windowed;presentedTime-on-grid-8.344ms;handler-0.48ms-off-main;presenting-cb-completes-at-GPU-end-16ms-before-display}
 !compositor-deadline::windowed-needs-drawable~T+1.5ms-before-vsync{fixed-2.5ms->40%-2-refresh-frames}
-@auto=S-until-live-run{frame_pacing_tier-"w"=M};open->plan-item-5-State
+@live-2026-10-20::M-estimated-at-N=1{1/348-two-refresh;release->display-19.8ms-vs-S-29.6ms;dpe~9.2ms}
+!N=2-lock::startup-downshift->Apple-GPU-clocks-down->gpu-span-p95-7.6ms(11.6-no-pipelining)>upshift-bound-7.5ms->never-upshifts{pacer-outer-loop;needs-user-decision}
+@auto=S{frame_pacing_tier-"w"=M};open->plan-item-5-State
 !occluded-window->presentedTime-0->no-feedback{logged;blocked-live-run-2026-10-20}
 
 [TRAPS]
@@ -70,4 +72,4 @@ cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permane
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{5-tier-M-live-run-with-estimator=NEXT(window-visible;then-auto->M)+6-option-A/B-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{5-tier-M-N=2-lock=NEXT(user-decision-pacer-upshift-vs-GPU-DVFS;then-auto->M)+6-option-A/B-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}

@@ -304,8 +304,7 @@ source on Metal.
 The tier (`doc/frame_pacing/capability_tiers.md`) resolves to M (full
 pacing, the editor's tier W path) for `w`, to S (slop servo) for `auto` and
 `s`, and to OFF for `off`, headless (no layer) and `force_disable_vsync`.
-`auto` becomes M once tier M with the estimated deadline offset has been
-measured live (`doc/plans/metal_backend.md` item 5).
+`auto` stays S while tier M can lock at N=2 (below).
 `Surface_impl::apply_frame_pacing_tier` gives tiers M and S a display-synced
 layer with three drawables. Two drawables, the analogue of the Vulkan tier S
 minimum image count, halve the windowed cadence: on a 120 Hz display the
@@ -347,9 +346,22 @@ windowed with `displaySyncEnabled` YES and NO (a 2T target step gives a
 refresh period plus 1.5 ms before its vsync: with frames finishing 7 to 9 ms
 before the target, 70 to 86 % displayed one refresh late, at 16 ms or more
 none did. The pacer's fixed 2.5 ms deadline offset made 40 % of the frames
-two refreshes long; the estimated offset removes that in the pacer
-simulation (claim C22). The live run with the estimate is open
-(`doc/plans/metal_backend.md` item 5).
+two refreshes long. With the estimated offset (claim C22), same build and
+scene, 3 x 120 frames after 15 s:
+
+| configuration | achieved cadence median / p95 | two-refresh frames | release to display median / p95 | learned offset |
+|---|---|---|---|---|
+| tier M, estimated offset | 8.34 / 8.34 ms | 1 of 348 | 19.8 / 25.9 ms | 9.19 ms |
+| tier M, estimated, `ERHE_RENDER_THREAD=0` | - | 0 of 348 | 19.6 / 20.3 ms | 8.61 ms |
+| tier M, estimated, second run | - | 219 of 273 (N=2) | 25.4 / 27.8 ms | 12.44 ms |
+| tier M, estimated, `ERHE_FRAME_PIPELINING=0` | - | 273 of 273 (N=2) | 27.0 / 28.2 ms | 9.26 ms |
+| tier S | 8.34 / 8.34 ms | 0 of 345 | 29.6 / 33.1 ms | - |
+
+A run that downshifts to N=2 during startup stays there: at N=2 the GPU
+clocks down and the presenting command buffer's span grows (p95 7.6 ms,
+11.6 ms without pipelining, against 6.0 ms at N=1), so the pacer's upshift
+test (every frame within `(N - 1) * T - H`, about 7.5 ms, for 0.5 s) never
+completes its dwell.
 
 The records the tier S servo reads (`doc/frame_pacing/inputs.md` 3.2):
 
