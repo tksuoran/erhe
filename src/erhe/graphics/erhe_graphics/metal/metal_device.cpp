@@ -12,6 +12,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
@@ -21,6 +22,8 @@
 #include "erhe_graphics/texture.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_frame_pacing/frame_time_recorder.hpp"
+#include "erhe_window/window.hpp"
 #include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -296,6 +299,66 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             std::make_unique<Surface_impl>(*this, surface_create_info)
         );
     }
+
+    init_frame_pacing(surface_create_info.context_window);
+}
+
+void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_window)
+{
+    Display_refresh_resolver& resolver = m_device.get_display_refresh_resolver();
+
+    // The window-side display refresh source: the display the window is on,
+    // now and whenever the window moves or that display changes mode
+    // (display_refresh_resolver.hpp). The only source on Metal.
+    if (context_window != nullptr) {
+        Device* const owner_device = &m_device;
+        const auto feed_window_period = [context_window, owner_device]() {
+            const std::string display_name = context_window->get_display_name();
+            owner_device->get_display_refresh_resolver().set_window_period(
+                context_window->get_display_refresh_period_seconds(),
+                display_name.c_str(),
+                context_window->enumerate_displays().size()
+            );
+        };
+        feed_window_period();
+        context_window->register_display_changed_callback(feed_window_period);
+    }
+    // The init calibration is a Vulkan swapchain feature; without it the
+    // resolver must not stay in its calibrating state, which holds the pacer
+    // actuators idle (Device::is_display_refresh_calibrating).
+    resolver.skip_calibration("the Metal backend has none");
+
+    // Tier resolution (doc/frame_pacing/capability_tiers.md section 2). Tier S
+    // needs presentation backpressure: a display-synced CAMetalLayer, whose
+    // nextDrawable blocks once the compositor holds the drawable pool
+    // (Surface_impl::apply_frame_pacing_tier).
+    // Tier W needs present wait, target present times and presentation
+    // feedback, none of which the Metal backend implements.
+    const bool         has_layer = (m_surface != nullptr) && !m_surface->get_impl().is_headless();
+    const std::string& requested = get_graphics_config().frame_pacing_tier;
+    if (requested == "off") {
+        m_frame_pacing_tier = Frame_pacing_tier::off;
+    } else if (!has_layer) {
+        m_frame_pacing_tier = Frame_pacing_tier::off;
+        log_context->info("frame pacing: no CAMetalLayer (headless), so no presentation backpressure; tier OFF");
+    } else if (get_graphics_config().force_disable_vsync) {
+        m_frame_pacing_tier = Frame_pacing_tier::off;
+        log_context->info("frame pacing: force_disable_vsync leaves no presentation backpressure; tier OFF");
+    } else {
+        if (requested == "w") {
+            log_context->warn("frame_pacing_tier 'w' forced but the Metal backend has no tier W; using tier S");
+        } else if ((requested != "s") && (requested != "auto")) {
+            log_context->warn("frame_pacing_tier '{}' not recognized; using 'auto'", requested);
+        }
+        m_frame_pacing_tier = Frame_pacing_tier::slop_servo;
+    }
+    if (m_surface != nullptr) {
+        m_surface->get_impl().apply_frame_pacing_tier(m_frame_pacing_tier);
+    }
+    log_context->info(
+        "frame pacing tier = {}",
+        (m_frame_pacing_tier == Frame_pacing_tier::slop_servo) ? "S (slop-servo fallback)" : "OFF"
+    );
 }
 
 Device_impl::~Device_impl() noexcept
@@ -366,9 +429,17 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
     // Vulkan timeline wait does. Without it nothing bounds how far the CPU
     // runs ahead of a GPU-bound frame when no drawable is presented
     // (headless), and the ring buffer pool spills instead.
+    // The wait is the involuntary fence wait of the frame time record (the
+    // vkWaitForFences analogue; doc/frame_pacing/inputs.md 3.2).
     const uint64_t frames_in_flight = static_cast<uint64_t>(s_max_frames_in_flight);
     if (frame_id > frames_in_flight) {
+        const double fence_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
         wait_for_frame_gpu_completion(frame_id - frames_in_flight);
+        m_device.get_frame_time_recorder().add(
+            static_cast<std::int64_t>(frame_id),
+            &erhe::frame_pacing::Frame_time_record::fence_wait_duration,
+            erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin
+        );
     }
 
     const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
@@ -579,7 +650,7 @@ void Device_impl::set_present_target_time(const std::int64_t frame_id, const dou
 
 auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
 {
-    return Frame_pacing_tier::off;
+    return m_frame_pacing_tier;
 }
 
 auto Device_impl::get_command_buffer(const unsigned int thread_slot) -> Command_buffer&
@@ -661,7 +732,19 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
 
         impl.add_gpu_timer_completion_handler();
         note_command_buffer_committed(impl.get_completion_frame_index());
+        // The present request of the frame time record: presentDrawable is
+        // encoded on this cb, so the commit hands the drawable over. It does
+        // not block (the backpressure is in begin_swapchain), but the record
+        // carries the request time like the Vulkan present does.
+        erhe::frame_pacing::Frame_time_recorder& recorder  = m_device.get_frame_time_recorder();
+        const std::int64_t                       record_id = static_cast<std::int64_t>(impl.get_frame_id());
+        if (swapchain != nullptr) {
+            recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_request_time, erhe::frame_pacing::Frame_time_recorder::now());
+        }
         mtl_cb->commit();
+        if (swapchain != nullptr) {
+            recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_return_time, erhe::frame_pacing::Frame_time_recorder::now());
+        }
 
         // Drop our reference now that the cb is committed: Metal keeps the
         // command buffer alive until its completion handlers have run, and

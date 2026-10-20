@@ -13,6 +13,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_frame_pacing/frame_time_recorder.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
@@ -245,12 +246,23 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
     // another drawable. When presentation is stalled this returns false rather
     // than queueing yet another frame behind the stuck one - see
     // Device_impl::wait_for_presented_frame_slot.
+    //
+    // Both waits are the acquire of the frame time record: with a
+    // display-synced layer they are where presentation backpressure blocks
+    // (the presented-frame budget, then nextDrawable once the layer's
+    // drawable pool is held by the compositor), the vkAcquireNextImageKHR
+    // analogue the tier S slop servo senses (doc/frame_pacing/inputs.md 3.2).
+    erhe::frame_pacing::Frame_time_recorder& recorder  = m_device->get_frame_time_recorder();
+    const std::int64_t                       record_id = static_cast<std::int64_t>(m_frame_id);
+    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_begin, erhe::frame_pacing::Frame_time_recorder::now());
     if (!m_device->get_impl().wait_for_presented_frame_slot()) {
+        recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_end, erhe::frame_pacing::Frame_time_recorder::now());
         out_frame_state.should_render = false;
         return false;
     }
 
     const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
+    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_end, erhe::frame_pacing::Frame_time_recorder::now());
     out_frame_state.should_render = ok;
     if (ok) {
         // Latch the engaged swapchain. submit_command_buffers reads this

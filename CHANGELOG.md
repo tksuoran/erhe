@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Display_refresh_resolver::skip_calibration()`: ends the
+  init calibration before it starts for a backend without one (logged at
+  info level; `abort_calibration()` stays the failure path). The Metal
+  backend now resolves frame pacing tier S (display-synced layer, three
+  drawables) and stamps the acquire, fence wait and present records.
 - `erhe::graphics`: `Device_info::texture_heap_size`, the descriptor count of
   the texture heap array: `max_texture_heap_size` bounded by the device's
   descriptor limits (Vulkan: `maxPerSetDescriptors`). `Texture_heap` caps its

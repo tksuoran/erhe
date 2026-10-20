@@ -312,6 +312,32 @@ void Display_refresh_resolver::abort_calibration(const char* reason)
     }
 }
 
+void Display_refresh_resolver::skip_calibration(const char* reason)
+{
+    Apply_callback callback;
+    double         period_to_apply = 0.0;
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        if (!m_calibrating) {
+            return;
+        }
+        m_logger->info("display refresh: no init calibration: {}", (reason != nullptr) ? reason : "");
+        m_calibrating          = false;
+        m_phase                = Display_refresh_calibration_phase::idle;
+        m_calibration_verified = false;
+        const double before = m_resolved_period;
+        resolve_locked();
+        log_sources_locked("no init calibration");
+        if (m_resolved_period != before) {
+            callback        = m_apply_callback;
+            period_to_apply = m_resolved_period;
+        }
+    }
+    if (callback && (period_to_apply > 0.0)) {
+        callback(period_to_apply);
+    }
+}
+
 auto Display_refresh_resolver::get_calibration_phase() const -> Display_refresh_calibration_phase
 {
     const std::lock_guard<std::mutex> lock{m_mutex};

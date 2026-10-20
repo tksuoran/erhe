@@ -154,6 +154,10 @@ public:
     // unless the phases completed): the calibration swapchain failed or hit
     // its time bound.
     void abort_calibration(const char* reason);
+    // Ends the calibration before it starts, for a backend without one: the
+    // queried sources decide, logged at info level (an abort is a failure,
+    // this is the backend's normal configuration).
+    void skip_calibration(const char* reason);
     [[nodiscard]] auto get_calibration_phase() const -> Display_refresh_calibration_phase;
     void note_present(std::int64_t frame_id, Display_refresh_present_kind kind);
     void add_gpu_frame_end(std::int64_t frame_id, double gpu_end_seconds);

@@ -285,6 +285,48 @@ texture of the newest composited frame that has ended (frame pipelining may
 have the render thread compositing the next one) on a fresh command buffer
 and waits for it, returning the frame synchronously on the first call.
 
+### Frame pacing
+
+`Device_impl::init_frame_pacing` (constructor tail, after the surface) feeds
+the window-side display refresh source to `Display_refresh_resolver` (the
+display the window is on, re-fed on `register_display_changed_callback`)
+and ends the resolver's init calibration with `skip_calibration`: the
+calibration is a Vulkan swapchain feature, and a resolver left calibrating
+keeps the pacer actuators idle. The window display mode is the only refresh
+source on Metal.
+
+The tier (`doc/frame_pacing/capability_tiers.md`) resolves to S (slop servo)
+for `auto`, `s` and `w` (warned: there is no tier W on Metal), and to OFF for
+`off`, headless (no layer, no presentation backpressure) and
+`force_disable_vsync`. `Surface_impl::apply_frame_pacing_tier` gives tier S a
+display-synced layer with three drawables. Two drawables, the analogue of
+the Vulkan tier S minimum image count, halve the windowed cadence: on a
+120 Hz display the editor ran at 60 Hz with the servo idle, because the
+compositor holds the displayed drawable until the next one replaces it.
+
+The records the servo reads (`doc/frame_pacing/inputs.md` 3.2):
+
+- `acquire_begin` / `acquire_end`: around `wait_for_presented_frame_slot` and
+  `nextDrawable` in `Command_buffer_impl::begin_swapchain`, where
+  presentation backpressure blocks.
+- `fence_wait_duration`: the wait for frame `frame_id - N` in
+  `acquire_frame_slot`.
+- `present_request_time` / `present_return_time`: around the commit of the
+  command buffer that carries `presentDrawable` (it does not block).
+
+Measured on the windowed Debug editor, 120 Hz display, default scene:
+
+| configuration | loop median | servo sleep | `nextDrawable` wait |
+|---|---|---|---|
+| tier OFF (3 drawables) | 8.34 ms | 0 | 6.9 ms |
+| tier S, 2 drawables, servo idle | 16.65 ms | 0 | 14.2 ms |
+| tier S, 3 drawables | 8.58 ms | 7.2 ms | 5.6 ms |
+
+With three drawables the sleep runs at its clamp (period - headroom) while
+about 5.6 ms of drawable wait remains: the third drawable is queue depth
+the servo cannot remove without presentation feedback. Frame pipelining on
+or off measures the same.
+
 ### Multi-Draw Indirect
 
 Metal has no multi-draw indirect call. `multi_draw_indexed_primitives_indirect`
@@ -390,4 +432,4 @@ the CPU's lead over a GPU-bound frame when no drawable is presented
 
 ## Future work
 
-- [plans/metal_backend.md](../plans/metal_backend.md): `blit_framebuffer`, swapchain resize, present wait, format sorting, GPU multi-draw indirect
+- [plans/metal_backend.md](../plans/metal_backend.md): `blit_framebuffer`, swapchain resize, a display-time pacing tier, GPU-read draw count

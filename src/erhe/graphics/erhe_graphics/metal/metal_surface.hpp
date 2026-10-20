@@ -10,6 +10,7 @@ namespace CA { class MetalLayer; }
 namespace erhe::graphics {
 
 class Device_impl;
+enum class Frame_pacing_tier : unsigned int;
 class Surface_create_info;
 class Swapchain;
 
@@ -32,6 +33,18 @@ public:
     // Size of the emulated backbuffer, taken from the context window.
     [[nodiscard]] auto get_backbuffer_width () const -> int;
     [[nodiscard]] auto get_backbuffer_height() const -> int;
+
+    // Configures the layer for the resolved frame pacing tier
+    // (Device_impl::init_frame_pacing), before the first drawable is taken.
+    // Tier S: display sync on (the backpressure the slop servo senses; the
+    // plain FIFO of the Vulkan swapchain) and three drawables. Unlike the
+    // Vulkan swapchain's minimum image count, two drawables halve the
+    // windowed cadence (measured on a 120 Hz display: 60 Hz with the servo
+    // idle) - the compositor holds the displayed drawable until the next one
+    // replaces it - while three still block in nextDrawable once the pool is
+    // held (~7 ms per frame at 120 Hz on an idle scene). Other tiers keep
+    // the layer defaults.
+    void apply_frame_pacing_tier(Frame_pacing_tier tier);
 
 private:
     Device_impl&               m_device_impl;
