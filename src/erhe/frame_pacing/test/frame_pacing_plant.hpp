@@ -110,6 +110,13 @@ public:
     // has DISPLAYED - the queue-full blocking the slop servo senses.
     // (0 = unmodeled, pre-P4.1 plants.)
     int                                     fifo_images{0};
+    // Claim C24: Metal CAMetalLayer drawable pool (3). > 0: frame k's
+    // drawable acquire (at the END of its CPU work, where the editor
+    // acquires) blocks until the compositor latches frame k-(pool-1),
+    // pool_latch_lead before its display (measured: 15.7 ms on a ProMotion
+    // panel); the blocked CPU also delays the next decision.
+    int                                     drawable_pool{0};
+    double                                  pool_latch_lead{0.0};
     // Claims C19..C21: release comes from the tier S slop-servo sleep
     // instead of the Frame_pacer decision; the presentation target is
     // ignored (plain FIFO displays at the earliest feasible vsync).
@@ -301,7 +308,13 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             push(event);
             has_pending[static_cast<std::size_t>(k - fif)] = false;
         }
-        const double ce = cpu_start + cpu_dur;
+        double ce = cpu_start + cpu_dur;
+        if ((scenario.drawable_pool > 0) && (k >= scenario.drawable_pool - 1)) {
+            const double latched = display_time[static_cast<std::size_t>(k - (scenario.drawable_pool - 1))];
+            if (latched > 0.0) {
+                ce = std::max(ce, latched - scenario.pool_latch_lead);
+            }
+        }
         cpu_end[static_cast<std::size_t>(k)] = ce;
         {
             Plant_event event;

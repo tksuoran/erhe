@@ -42,6 +42,7 @@ void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now
         Frame_pacer_tunables tunables;
         tunables.refresh_period         = refresh_period;
         tunables.deadline_offset_source = m_deadline_offset_setup.source;
+        tunables.present_queue          = m_deadline_offset_setup.present_queue;
         const Deadline_offset_setup& setup = m_deadline_offset_setup;
         const bool calibrated =
             (setup.calibrated_period > 0.0) &&

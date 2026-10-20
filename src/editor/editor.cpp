@@ -3128,6 +3128,7 @@ public:
                     erhe::frame_pacing::Deadline_offset_setup deadline_offset{};
                     if (m_graphics_device->is_present_target_time_honored()) {
                         deadline_offset.source = erhe::frame_pacing::Deadline_offset_source::estimated;
+                        deadline_offset.present_queue = erhe::frame_pacing::Present_queue_kind::fifo;
                         const erhe::graphics::Present_calibration& calibration = m_graphics_device->get_present_calibration();
                         if (calibration.valid) {
                             deadline_offset.calibrated_period = calibration.period;

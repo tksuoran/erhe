@@ -1265,3 +1265,68 @@ TEST(Frame_pacer_claims, c23_upshift_under_gpu_clock_scaling)
     const int misses = count_self_misses(records, 1200, records.size());
     EXPECT_LE(misses, static_cast<int>((records.size() - 1200) / 100)) << "miss rate must be <= 1 percent";
 }
+
+TEST(Frame_pacer_claims, c24_fifo_upshift_promotion)
+{
+    // Measured live (Metal tier M, built-in ProMotion panel,
+    // doc/erhe/metal_backend.md "Frame pacing"): the compositor needs an
+    // image 2T + ~1 ms before its vsync, frees a drawable when it latches the
+    // frame two after it (pool of 3) and displays every queued image (FIFO);
+    // the GPU span at N=2 has a tail beyond T (~15 percent of the frames
+    // 9-14 ms) while at N=1 it stays near 6 ms. After a startup spike the
+    // pacer upshifted to N=1 and went straight back to N=2: judged by the
+    // whole window (the N=2 tail and its near-misses) N=1 looked infeasible.
+    // The predictive downshift now judges a cadence by its own samples, and
+    // on a FIFO queue the anchor follows every in-flight target.
+    const double t        = 1.0 / 120.0;
+    const double dpe_true = (2.0 * t) + (1.0 * ms);
+    Scenario scenario;
+    scenario.frame_count                         = 3000;
+    scenario.plant.tunables.refresh_period       = t;
+    scenario.plant.true_deadline_offset          = dpe_true;
+    scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.deadline_offset_initial = dpe_true + (0.5 * ms);
+    scenario.plant.tunables.deadline_offset_max     = dpe_true + (0.5 * ms) + (0.5 * t);
+    scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.drawable_pool                       = 3;
+    scenario.pool_latch_lead                     = dpe_true - (1.8 * ms);
+    scenario.cpu_duration                        = make_gauss(2401, 3.0, 0.6);
+    auto engine = std::make_shared<std::mt19937>(2402);
+    scenario.gpu_duration_at_cadence = [engine](const std::int64_t k, const int vsyncs) mutable -> double {
+        std::uniform_real_distribution<double> uniform{0.0, 1.0};
+        std::uniform_real_distribution<double> tail{9.0, 14.0};
+        std::normal_distribution<double>       base{6.0, 0.3};
+        if ((k >= 100) && (k < 130)) {
+            return 20.0 * ms; // startup spike (scene load)
+        }
+        if ((vsyncs >= 2) && (uniform(*engine) < 0.15)) {
+            return tail(*engine) * ms; // clocked-down tail at the longer cadence
+        }
+        return std::max(0.5, base(*engine)) * ms;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    const std::vector<Frame_record> records = run_scenario(scenario, pacer);
+
+    std::size_t at_two = 0;
+    for (std::size_t i = 130; i < 400; ++i) {
+        if (records[i].vsyncs >= 2) {
+            ++at_two;
+        }
+    }
+    EXPECT_GT(at_two, 0u) << "the spike must downshift (scenario premise)";
+    EXPECT_EQ(vsync_values(records, 1500), (std::set<int>{1})) << "the cadence must return to N=1 and stay";
+    std::size_t collisions = 0;
+    std::size_t slips      = 0;
+    for (std::size_t i = 131; i < records.size(); ++i) {
+        if (records[i].target_time <= (records[i - 1].target_time + (0.5 * t))) {
+            ++collisions;
+        }
+    }
+    for (std::size_t i = 1500; i < records.size(); ++i) {
+        if (records[i].slipped) {
+            ++slips;
+        }
+    }
+    EXPECT_EQ(collisions, 0u) << "a FIFO queue must never get two targets in one slot";
+    EXPECT_LE(slips, 15u) << "at most 1 percent slipped";
+}

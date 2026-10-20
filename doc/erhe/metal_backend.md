@@ -376,7 +376,9 @@ A ProMotion panel is the fixed-rate compositor with one more period of
 pipeline. With the fixed quarter-period request every ProMotion frame
 displayed a refresh late and the pacer locked at N=2 with about 80 ms
 release to display; calibrated, 270 of 272 frames display on target at
-35 ms (still N=2: the GPU span tail, below).
+35 ms, and with the cadence-scoped predictive downshift and the FIFO
+anchor (`doc/frame_pacing/algorithm.md` deviations 17 and 18) tier M holds
+N=1 at 27-29 ms (live gate in `doc/plans/frame_pacing_metal.md`).
 
 Measured with a probe (Debug windowed editor, M4 Pro, external 120 Hz
 display; the answers are in `doc/plans/metal_backend.md` item 5):
@@ -402,11 +404,11 @@ scene, 3 x 120 frames after 15 s:
 | tier M, estimated, `ERHE_FRAME_PIPELINING=0` | - | 273 of 273 (N=2) | 27.0 / 28.2 ms | 9.26 ms |
 | tier S | 8.34 / 8.34 ms | 0 of 345 | 29.6 / 33.1 ms | - |
 
-A run that downshifts to N=2 during startup stays there: at N=2 the GPU
-clocks down and the presenting command buffer's span grows (p95 7.6 ms,
-11.6 ms without pipelining, against 6.0 ms at N=1), so the pacer's upshift
-test (every frame within `(N - 1) * T - H`, about 7.5 ms, for 0.5 s) never
-completes its dwell.
+At N=2 the GPU clocks down and the presenting command buffer's span grows
+(p95 7.6 ms, 11.6 ms without pipelining, against 6.0 ms at N=1; on the
+ProMotion panel p90 9-10.7 ms with spans beyond T). The pacer judges each
+cadence by the stage times measured at it (claims C23 and C24), so a
+startup downshift to N=2 returns to N=1.
 
 The records the tier S servo reads (`doc/frame_pacing/inputs.md` 3.2):
 
