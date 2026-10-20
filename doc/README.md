@@ -504,5 +504,5 @@ flowchart TD
 - [reference/property_system_wpf_comparison.md](reference/property_system_wpf_comparison.md): erhe::property vs WPF dependency properties
 - [reference/quest_profiling_2026_05_01.md](reference/quest_profiling_2026_05_01.md): Quest 3 GPU profiling report (2026-05-01)
 - [reference/render_thread_audit_2026_10_09.md](reference/render_thread_audit_2026_10_09.md): Render phase audit at commit c06738609 (2026-10-09): what R read and wrote outside its own state before the ImGui overlap and frame pipelining; every site since resolved
-- [reference/render_thread_measurements_2026_10.md](reference/render_thread_measurements_2026_10.md): Render thread frame-time measurements (2026-10): display-paced, unpaced serial and pipelined runs on an Intel iGPU and an NVIDIA dGPU, Tracy phase picture
+- [reference/render_thread_measurements_2026_10.md](reference/render_thread_measurements_2026_10.md): Render thread frame-time measurements (2026-10): display-paced, unpaced serial and pipelined runs on an Intel iGPU, an NVIDIA dGPU and an Apple M4 Pro (Metal, MoltenVK, KosmicKrisp; CPU-bound Debug runs confirming R3), Tracy phase picture
 - [reference/shadow_robustness_review_2026_09_29.md](reference/shadow_robustness_review_2026_09_29.md): Shadow robustness series change summary, correctness analysis, potential issues and improvements (2026-09-29)

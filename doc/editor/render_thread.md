@@ -439,11 +439,14 @@ for frames 1 to 12; run scripts wait for frame 12.
   node list.
 - **Frame-time measurement.** `scripts/render_thread_bench.py` runs one
   scene in the `inline`, `dedicated`, `overlap` and `pipelined`
-  configurations with vsync off and no MCP polling, in an isolated config
-  copy, and averages the phase log over the steady state; `--tracy` records
-  a capture per run (a tree with `ERHE_PROFILE_LIBRARY=tracy` and
-  `ERHE_TRACY_CALLSTACK_DEPTH=0`, since deep callstacks cost more than the
-  frame), `--gpu` picks the Vulkan driver, `--viewport-size` and `--set
+  configurations with vsync and frame pacing off (the pacer's frame start
+  wait is outside the phase log's full tick) and no MCP polling, in an
+  isolated config copy, and averages the phase log over the steady state;
+  `--tracy` records a capture per run from the readiness marker on (a tree
+  with `ERHE_PROFILE_LIBRARY=tracy` and `ERHE_TRACY_CALLSTACK_DEPTH=0`,
+  since deep callstacks cost more than the frame), `--gpu` picks the Vulkan
+  driver (`nvidia`, `intel`, `moltenvk`, `kosmickrisp`), `--config` the
+  configuration of a multi-config tree, `--viewport-size` and `--set
   window.json:size` shrink the window to take a GPU-bound frame off the
   GPU. `scripts/tracy_zone_summary.py` lists the hot CPU and GPU zones and
   the phase picture of a capture: how much of R the main thread was busy
@@ -467,9 +470,11 @@ for frames 1 to 12; run scripts wait for frame 12.
   instances, every light type with shadows) and `commands_bench_draws.json`
   (the same meshes, one shadow light) plus the default scene. The
   measurements taken so far, and how to read them, are in
-  `doc/reference/render_thread_measurements_2026_10.md`: on the GPUs
-  measured every scene is GPU-bound at the full window, and the Tracy phase
-  picture shows R busy while M2 runs in the pipelined schedule (R3).
+  `doc/reference/render_thread_measurements_2026_10.md`: in Release every
+  scene is GPU-bound on every GPU measured (an Apple M4 Pro at a 320x200
+  viewport included), the Tracy phase picture shows R busy while M2 runs in
+  the pipelined schedule, and the CPU-bound Debug runs on Metal show the
+  pipelined tick at max(M1 + M2 + M3, R) plus a 4 us handoff (R3).
 
 ## 4. Future work
 
@@ -500,9 +505,11 @@ for frames 1 to 12; run scripts wait for frame 12.
   exit) reports nothing. The bake, wide-line, skinned and four-view cases
   of the gate have not been run on Metal.
 - **Measurements still open.** The windowed frame pacer check with the
-  present-timing tiers; a CPU-bound measurement on a GPU with a lower floor
-  than the ones measured (every measured scene is GPU-bound, so the R3
-  gain is shown by the Tracy phase picture, not by the tick).
+  present-timing tiers; a CPU-bound Release measurement (every Release
+  scene measured is GPU-bound, so in Release the R3 gain shows as main
+  thread headroom, not in the tick); the Vulkan schedule on macOS, where the
+  windowed tick is bound by the presenting submit (section 4 of the
+  measurements document).
 - **Render phase cost.** `Shadow_renderer::render` dominates R on scenes
   with many casters: the tight directional fit runs once per shadow-mapped
   directional light. Fitting several lights in parallel pays only with many

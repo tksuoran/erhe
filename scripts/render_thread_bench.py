@@ -7,14 +7,14 @@ configurations `inline` (ERHE_RENDER_THREAD=0), `dedicated`
 ERHE_IMGUI_OVERLAP=1), all three with ERHE_FRAME_PIPELINING=0 (the serial
 schedule: the main thread joins R before M2), and `pipelined` (the overlap
 plus ERHE_FRAME_PIPELINING=1: the kick joins the previous frame's R, so M1,
-M2 and M3 of frame N+1 run while R renders frame N), with vsync forced off and no MCP polling; the editor quits by itself after
+M2 and M3 of frame N+1 run while R renders frame N), with vsync and frame pacing forced off and no MCP polling; the editor quits by itself after
 --frames frames and the `Phase timing` lines of logs/log.txt are averaged
 over the steady state (the first --skip lines are dropped).
 
 Every run gets an isolated working directory (copy of config/ with the
 overrides applied, res/ symlinked, shared spirv cache), the same way
 scripts/idle_memory_check.py launches the editor, so the user's config/ is
-never touched. `--tracy` starts tracy-capture before each run and saves
+never touched. `--tracy` starts tracy-capture once each run is ready and saves
 <run_dir>/capture.tracy (the editor must be built with
 ERHE_PROFILE_LIBRARY=tracy; the Tracy client records while the capture is
 connected).
@@ -91,7 +91,8 @@ COLUMNS = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--build-dir", default="build/Ninja_Vulkan_Debug", help="build tree containing bin/editor")
+    parser.add_argument("--build-dir", default="build/Ninja_Vulkan_Debug", help="build tree containing bin/editor (or bin/<config>/editor)")
+    parser.add_argument("--config", default="Release", help="configuration subdirectory of bin/ for multi-config trees (Xcode, Visual Studio)")
     parser.add_argument("--scene", choices=sorted(SCENES), default="default", help="startup commands file to load")
     parser.add_argument("--configs", default="inline,dedicated,overlap", help="comma-separated subset of inline,dedicated,overlap,pipelined")
     parser.add_argument("--frames", type=int, default=720, help="frames to run before the editor quits by itself")
@@ -99,12 +100,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repeat", type=int, default=1, help="runs per configuration; medians are reported")
     parser.add_argument("--tracy", action="store_true", help="record a Tracy capture of every run (tracy-capture on PATH or --tracy-capture)")
     parser.add_argument("--tracy-capture", default="", help="path to the tracy-capture executable")
-    parser.add_argument("--keep-vsync", action="store_true", help="do not force vsync off (display-paced run)")
+    parser.add_argument("--keep-vsync", action="store_true", help="do not force vsync and frame pacing off (display-paced run)")
     parser.add_argument("--set", dest="overrides", action="append", default=[], help="extra config override 'file.json:dotted.path=value' (idle_memory_check.py syntax)")
     parser.add_argument("--wrapper", default="", help="command prefix for the editor, e.g. 'taskset -c 0-7' (split on spaces)")
     parser.add_argument("--sample-cpus", action="store_true", help="sample which CPU each editor thread runs on (per-thread histogram in the summary)")
     parser.add_argument("--viewport-size", default="", help="WxH: float the first viewport window at this size (edits the copied ImGui ini) to cut GPU work")
-    parser.add_argument("--gpu", default="", help="Vulkan ICD to select, e.g. nvidia or intel: sets VK_DRIVER_FILES=/usr/share/vulkan/icd.d/<gpu>_icd.json and labels the runs")
+    parser.add_argument("--gpu", default="", help="Vulkan ICD to select, e.g. nvidia or intel (Linux), moltenvk or kosmickrisp (macOS), or a path to an ICD json: sets VK_DRIVER_FILES and labels the runs")
     parser.add_argument("--label", default="", help="label added to the run directory names")
     parser.add_argument("--runs-root", default="", help="where run directories go (default <build-dir>/render_thread_bench)")
     parser.add_argument("--readiness-timeout", type=float, default=300.0)
@@ -128,21 +129,22 @@ def make_run_dir(args: argparse.Namespace, runs_root: Path, name: str, extra_ove
     if args.viewport_size:
         width, height = (int(v) for v in args.viewport_size.lower().split("x"))
         ini = run_dir / "config" / "editor" / "desktop_window_imgui_host_imgui.ini"
-        text = ini.read_text()
+        # The ini is gitignored: a clone that never ran the windowed editor
+        # has none, and the entry alone is a valid ini.
+        text = ini.read_text() if ini.is_file() else ""
         entry = f"[Window][Viewport_window 1]\nPos=8,28\nSize={width},{height}\nCollapsed=0\n"
-        lines = text.split("\n")
+        # Drop the existing section (up to the next one) and append the entry.
         out = []
         skipping = False
-        for line in lines:
+        for line in text.split("\n"):
             if line.startswith("[Window][Viewport_window 1]"):
                 skipping = True
                 continue
             if skipping and line.startswith("["):
                 skipping = False
-                out.append(entry)
             if not skipping:
                 out.append(line)
-        ini.write_text("\n".join(out))
+        ini.write_text("\n".join(out).rstrip("\n") + "\n\n" + entry)
     (run_dir / "overrides.txt").write_text("\n".join(overrides) + "\n")
     return run_dir
 
@@ -191,6 +193,26 @@ def sample_thread_cpus(pid: int, histogram: dict) -> None:
             histogram[name][int(fields[36])] += 1
 
 
+ICD_DIRS = [Path("/usr/share/vulkan/icd.d"), Path("/usr/local/share/vulkan/icd.d")]
+
+
+def find_icd(gpu: str) -> str:
+    """The ICD json for --gpu: a path as given, else the one <gpu>_icd.json (case-insensitive, any prefix) in ICD_DIRS."""
+    if gpu.endswith(".json"):
+        return gpu
+    matches = [f for d in ICD_DIRS if d.is_dir() for f in sorted(d.iterdir()) if f.name.lower().endswith(f"{gpu.lower()}_icd.json")]
+    if len(matches) != 1:
+        raise SystemExit(f"--gpu {gpu}: expected one matching ICD in {', '.join(str(d) for d in ICD_DIRS)}, found {[str(m) for m in matches]}")
+    return str(matches[0])
+
+
+def find_editor(args: argparse.Namespace) -> Path:
+    single = REPO_ROOT / args.build_dir / "bin" / "editor"
+    if single.is_file():
+        return single
+    return REPO_ROOT / args.build_dir / "bin" / args.config / "editor"
+
+
 def find_tracy_capture(args: argparse.Namespace) -> str:
     if args.tracy_capture:
         return args.tracy_capture
@@ -208,23 +230,17 @@ def run_once(args: argparse.Namespace, runs_root: Path, config_name: str, index:
     overrides = [f"editor_settings.json:quit_after_frames={args.frames}"]
     if not args.keep_vsync:
         overrides.append("erhe_graphics.json:force_disable_vsync=true")
+        # The frame pacer (tier S slop servo when the device lacks present
+        # timing) sleeps in the frame start even with vsync off; that wait
+        # is outside the phase log's full tick, so an unpaced run turns it off.
+        overrides.append("erhe_graphics.json:frame_pacing_tier=off")
     run_dir = make_run_dir(args, runs_root, name, overrides)
-    editor = REPO_ROOT / args.build_dir / "bin" / "editor"
+    editor = find_editor(args)
     env = dict(os.environ)
     env["ERHE_AI_DRIVER"] = "1"
     if args.gpu:
-        env["VK_DRIVER_FILES"] = f"/usr/share/vulkan/icd.d/{args.gpu}_icd.json"
+        env["VK_DRIVER_FILES"] = find_icd(args.gpu)
     env.update(CONFIGS[config_name])
-
-    capture = None
-    if args.tracy:
-        capture_exe = find_tracy_capture(args)
-        capture_log = (run_dir / "tracy_capture.log").open("wb")
-        capture = subprocess.Popen(
-            [capture_exe, "-o", str(run_dir / "capture.tracy"), "-a", "127.0.0.1", "-f"],
-            stdout=capture_log, stderr=subprocess.STDOUT
-        )
-        time.sleep(0.5)
 
     cmd = (args.wrapper.split() if args.wrapper else []) + [str(editor), "--commands", SCENES[args.scene]]
     stdout_log = (run_dir / "editor_stdout.log").open("wb")
@@ -244,6 +260,19 @@ def run_once(args: argparse.Namespace, runs_root: Path, config_name: str, index:
     if not ready and proc.poll() is None:
         os.killpg(proc.pid, signal.SIGKILL)
         raise SystemExit(f"[{name}] readiness marker not seen; killed")
+
+    # The capture connects after the readiness marker: connecting while
+    # the Tracy client is still starting up (macOS) ends in "disconnected
+    # during the initial connection handshake". The client records on
+    # demand, so the capture starts at frame 12; the warm-up skip covers it.
+    capture = None
+    if args.tracy and ready:
+        capture_exe = find_tracy_capture(args)
+        capture_log = (run_dir / "tracy_capture.log").open("wb")
+        capture = subprocess.Popen(
+            [capture_exe, "-o", str(run_dir / "capture.tracy"), "-a", "127.0.0.1", "-f"],
+            stdout=capture_log, stderr=subprocess.STDOUT
+        )
 
     cpu_samples = defaultdict(lambda: defaultdict(int))
     deadline = time.monotonic() + args.run_timeout
@@ -305,7 +334,7 @@ def format_table(results: dict) -> str:
 
 def main() -> int:
     args = parse_args()
-    editor = REPO_ROOT / args.build_dir / "bin" / "editor"
+    editor = find_editor(args)
     if not editor.is_file():
         print(f"error: editor binary not found: {editor}", file=sys.stderr)
         return 2
