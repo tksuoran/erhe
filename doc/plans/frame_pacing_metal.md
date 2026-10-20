@@ -215,5 +215,9 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   Gate, Debug, ProMotion: N=1 in 10/10 (default), 10/10
   (`ERHE_RENDER_THREAD=0`), 10/10 (`ERHE_FRAME_PIPELINING=0`); two-refresh
   frames 1, 1 and 4 of 3450; release to display median 27.1-27.6,
-  28.3-28.8 and 27.3-28.6 ms (tier S 37.6 ms). Next: Release, then the
-  Dell at 120 Hz.
+  28.3-28.8 and 27.3-28.6 ms (tier S 37.6 ms).
+  Gate, Release, ProMotion: N=1 in 10/10 in each of the three threading
+  modes; two-refresh frames 2, 1 and 1 of 3450; release to display median
+  28.3-28.9, 27.8-28.8 and 28.3-28.8 ms (tier S Release 37.5-37.8 ms).
+  The gate passes on the ProMotion panel. Before `auto` -> M: fixed 60 Hz
+  (tier M locked at N=2 there before C24) and the Dell at 120 Hz.
