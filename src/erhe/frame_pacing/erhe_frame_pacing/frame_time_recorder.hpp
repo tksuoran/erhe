@@ -49,6 +49,7 @@ public:
     double gpu_frame_begin      {0.0}; // first render pass begin (calibrated)
     double gpu_frame_end        {0.0}; // last render pass end (calibrated)
     double gpu_clock_ratio      {0.0}; // the GPU's average active clock over the frame / its maximum clock; 0 = not measured (Metal: IOReport)
+    double cpu_clock_ratio      {0.0}; // the P-cores' average active clock over the frame / their maximum clock; 0 = not measured
     double achieved_present_time{0.0}; // presentation feedback, when available
     // Presentation feedback at the QUEUE_OPERATIONS_END stage (when the
     // present operation executed on the queue), when the surface supports

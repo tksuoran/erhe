@@ -364,22 +364,29 @@ period matches the calibrated one). It is logged
 occluded window) or without an on-target request offset it logs why and
 tier M keeps the quarter period and the estimator's 2.5 ms start.
 
-Tier M also starts the GPU clock monitor (`Gpu_clock_monitor`,
-`metal_gpu_clock_monitor.mm`). macOS has no public API for the GPU clock;
-the monitor resolves the private IOReport framework with `dlopen` ("GPU
-Stats" / "GPU Performance States", channel GPUPH: OFF and P1 ... P15 with
-their residencies) and reads the DVFS table from the `pmgr` IORegistry
-entry (`voltage-states9`, frequency and voltage pairs; 338-1578 MHz on the
-M4 Pro). A sample costs 0.15-0.25 ms (up to 1.7 ms), so a sampler thread
+Tier M also starts the clock monitor (`Clock_monitor`,
+`metal_clock_monitor.mm`). macOS has no public API for GPU or CPU clocks;
+the monitor resolves the private IOReport framework with `dlopen` - "GPU
+Stats" / "GPU Performance States" channel GPUPH (OFF and P1 ... P15) and
+"CPU Stats" / "CPU Core Performance States" channels PCPU<cluster><core>0
+(DOWN, IDLE and 19 voltage/performance states), residency per state - and
+reads the DVFS tables of the `pmgr` IORegistry entry (`voltage-states9`
+for the GPU in Hz, 338-1578 MHz on the M4 Pro; `voltage-states5-sram` and
+`voltage-states13-sram` for the two P-core clusters in kHz, 1260-4512
+MHz). A sample costs 0.15-0.25 ms (up to 1.7 ms), so a sampler thread
 takes it, woken by each presenting command buffer's completion handler;
-it writes the frame's GPU bracket together with `gpu_clock_ratio` (the
-average active clock since the previous sample over the maximum), which
-the frame pacer's upshift test uses (`doc/frame_pacing/algorithm.md`
-deviation 19). Measured on the Dell at 120 Hz: at N=1 the GPU runs at
-1470-1540 MHz, 78-81 % busy; at N=2 at 1020-1160 MHz median with dips to
-~650 MHz, 55 % busy. Without IOReport, or with a state table that does
-not match the DVFS table, the monitor logs why and the pacer judges by
-GPU spans.
+it writes `gpu_clock_ratio` and `cpu_clock_ratio` (average active clock
+since the previous sample over the maximum; for the CPU, residency-weighted
+over the P-cores, where the user-interactive main and render threads run)
+and then the frame's GPU bracket, which the frame pacer's upshift test
+uses (`doc/frame_pacing/algorithm.md` deviation 19). Measured on the Dell
+at 120 Hz: at N=1 the GPU runs at 1470-1540 MHz (78-81 % busy) and the
+P-cores at 92-97 % of their maximum; at N=2 the GPU at 1020-1160 MHz
+median with dips to ~650 MHz (55 % busy) and the P-cores at ~53 %; the
+work (stage time times clock ratio) stays the same (GPU ~5.0 ms, CPU
+1.1-1.2 ms in Debug). Without IOReport, or with a state table that does
+not match its DVFS table, the monitor logs why and reports 0 for that
+part.
 
 The device logs the machine's thermal state at init and on every change
 (`erhe::graphics::get_thermal_state`, `NSProcessInfo.thermalState`); MCP
