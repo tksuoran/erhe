@@ -302,9 +302,8 @@ keeps the pacer actuators idle. The window display mode is the only refresh
 source on Metal.
 
 The tier (`doc/frame_pacing/capability_tiers.md`) resolves to M (full
-pacing, the editor's tier W path) for `w`, to S (slop servo) for `auto` and
+pacing, the editor's tier W path) for `auto` and `w`, to S (slop servo) for
 `s`, and to OFF for `off`, headless (no layer) and `force_disable_vsync`.
-`auto` stays S while tier M can lock at N=2 (below).
 `Surface_impl::apply_frame_pacing_tier` gives tiers M and S a display-synced
 layer with three drawables. Two drawables, the analogue of the Vulkan tier S
 minimum image count, halve the windowed cadence: on a 120 Hz display the
@@ -382,8 +381,13 @@ N=1 at 27-29 ms (live gate in `doc/plans/frame_pacing_metal.md`).
 
 Measured with a probe (Debug windowed editor, M4 Pro, external 120 Hz
 display; the answers are in `doc/plans/metal_backend.md` item 5):
-`steady_clock` and `CACurrentMediaTime` are the same clock (offset 0.04 us),
-so host times go into the records unconverted; `presentedTime` lies on the
+`steady_clock` and `CACurrentMediaTime` measured the same clock (offset
+0.04 us) - but only until the first system sleep: `CACurrentMediaTime`
+(`mach_absolute_time`) stops during sleep and `steady_clock` does not, so
+after a night's sleep every target lay hours ahead and no tier M drawable
+was displayed. `Frame_time_recorder::now()` therefore reads
+`mach_absolute_time` on Apple, and Metal host times go into the records
+unconverted; `presentedTime` lies on the
 refresh grid (deltas 8.344 ms, p5 to p95 within 1 us, against the 8.333 ms
 the window display mode reports); the presented handler runs 0.48 ms after
 `presentedTime`, off the main thread; a presenting command buffer completes

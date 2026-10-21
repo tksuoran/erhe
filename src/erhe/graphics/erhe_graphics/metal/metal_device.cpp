@@ -350,15 +350,14 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     } else if (get_graphics_config().force_disable_vsync) {
         m_frame_pacing_tier = Frame_pacing_tier::off;
         log_context->info("frame pacing: force_disable_vsync leaves no presentation backpressure; tier OFF");
-    } else if (requested == "w") {
-        m_frame_pacing_tier = Frame_pacing_tier::full;
+    } else if (requested == "s") {
+        m_frame_pacing_tier = Frame_pacing_tier::slop_servo;
     } else {
-        // auto stays tier S until tier M with the estimated deadline offset
-        // has been measured live (doc/plans/metal_backend.md item 5).
-        if ((requested != "s") && (requested != "auto")) {
+        // auto: tier M (live gate in doc/plans/frame_pacing_metal.md).
+        if ((requested != "w") && (requested != "auto")) {
             log_context->warn("frame_pacing_tier '{}' not recognized; using 'auto'", requested);
         }
-        m_frame_pacing_tier = Frame_pacing_tier::slop_servo;
+        m_frame_pacing_tier = Frame_pacing_tier::full;
     }
     if (m_surface != nullptr) {
         m_surface->get_impl().apply_frame_pacing_tier(m_frame_pacing_tier);

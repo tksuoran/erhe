@@ -219,5 +219,12 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   Gate, Release, ProMotion: N=1 in 10/10 in each of the three threading
   modes; two-refresh frames 2, 1 and 1 of 3450; release to display median
   28.3-28.9, 27.8-28.8 and 28.3-28.8 ms (tier S Release 37.5-37.8 ms).
-  The gate passes on the ProMotion panel. Before `auto` -> M: fixed 60 Hz
-  (tier M locked at N=2 there before C24) and the Dell at 120 Hz.
+  The gate passes on the ProMotion panel.
+- 2026-10-21: after a system sleep no tier M drawable displayed: the
+  recorder clock (`steady_clock`) and Metal's (`mach_absolute_time`)
+  diverged by the sleep (~3.7 h), so every target lay hours ahead. The
+  recorder reads `mach_absolute_time` on Apple now. Fixed 60 Hz, Debug:
+  N=1 in 5/5, two-refresh frames 1-2 of ~270, release to display 39.5-42.6
+  ms (tier S 58.5 ms). `auto` resolves to tier M on Metal. Open: the Dell
+  at 120 Hz with the calibration (collect its probes for the plant); a
+  display change after init keeps the calibrated request offset.
