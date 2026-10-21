@@ -9,7 +9,8 @@
 ✓viewport-measured{e45b1ed5d;doc/plans/bistro_viewport_gpu.md}
 ✓clustered-lights-plan{doc/plans/clustered_lights.md;proposed}
 ✓clustered-lights-review{©User:keep-loop-path(perf-compare)+fixed-cluster-capacity+warning}
-?clustered-lights-phase-1{light-array-storage-block}
+✓clustered-lights-phase-1{c34473e04;light_array_block-binding-9;all-gates-identical-Metal+MoltenVK;ctest-1766+1769;GL-not-run}+028ab410b{composite_input-layout-before-pipeline(MoltenVK-validation-abort-pre-existing)}
+?clustered-lights-phase-2{CPU-binning+clustered-shader-path}
 ?shadow-cache-remaining{per-light-caster-test;skinned-pose-serial;fit-skip}
 
 [TASK::bistro-load]{started-2026-10-18;branch=render-thread;via-harness;doc/plans/bistro_load_profiling.md}
