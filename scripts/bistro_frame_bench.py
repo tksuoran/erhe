@@ -9,9 +9,10 @@ tasks settle (get_async_status idle, then --settle-s seconds with no MCP
 traffic), and a quiet measurement window of --measure-s seconds follows during
 which the script makes no MCP call at all. The editor is then asked to exit.
 
-The whole run is recorded with tracy-capture (the editor must be built with
-ERHE_PROFILE_LIBRARY=tracy; ERHE_TRACY_ON_DEMAND=ON works because the capture
-tool connects before the editor starts). The capture is exported with
+The run from the scene open on is recorded with tracy-capture (the editor
+must be built with ERHE_PROFILE_LIBRARY=tracy; the capture tool connects once
+the editor is ready, so with ERHE_TRACY_ON_DEMAND=ON the startup is not
+recorded). The capture is exported with
 tracy-csvexport and the frames of the quiet window are analysed per frame:
 the main-thread phases (M1, M2, M3, kick, join), the render thread's R, the
 device waits inside them, and the GPU zones, so an alternating slow / fast
@@ -615,9 +616,6 @@ def main():
 
 
 def run_and_analyze(args, capture_exe, csvexport_exe, editor):
-    capture_process = subprocess.Popen([capture_exe, "-o", args.out, "-f"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.0)
-
     env = dict(os.environ, ERHE_AI_DRIVER="1")
     if args.port is not None:
         env["ERHE_MCP_PORT"] = str(args.port)
@@ -628,9 +626,16 @@ def run_and_analyze(args, capture_exe, csvexport_exe, editor):
     )
     port, ready_s = wait_for_ready(editor_process, 600.0)
     if port is None:
-        capture_process.kill()
         sys.exit(f"editor did not reach frame 12 (exit code {editor_process.poll()}); see logs/log.txt")
     print(f"editor ready in {ready_s:.1f} s, MCP port {port}")
+    # The capture connects once the editor runs: connected before the
+    # editor's Tracy listener was up, it was dropped in the handshake
+    # (measured on macOS, "client has disconnected during the initial
+    # connection handshake") and no capture was written. With
+    # ERHE_TRACY_ON_DEMAND the editor records from the connection on, which
+    # covers the scene open and the quiet window.
+    capture_process = subprocess.Popen([capture_exe, "-o", args.out, "-f"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.0)
 
     scene_file = os.path.basename(args.scene)
     start = time.time()
