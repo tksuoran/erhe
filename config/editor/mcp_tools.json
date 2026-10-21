@@ -9976,7 +9976,7 @@
     "name": "set_graphics_settings"
   },
   {
-    "description": "Set shadow fields of the graphics preset in effect, plus the draw-list gate, for the rest of this editor run. Session-only: the preset is applied the way a Settings window preset edit applies it (limits clamp, shadow map reconfigure on the next frame when resolution / depth bits / technique / point shadow resolution change), but graphics_presets.json and editor_settings.json are not modified, and the next Settings window preset edit or selection re-applies the stored preset. Omitted arguments leave their fields unchanged; an unknown enum name or out-of-range value is an error and applies nothing. Returns the values in effect after the call (so {} queries them), plus shadow_map_format (the depth format the requested shadow_depth_bits resolves to) and shadow_depth_bits_axis (its ERHE_SHADOW_DEPTH_BITS shader variant value: 16 / 24 UNORM, 32 float).",
+    "description": "Set shadow fields and the per light type limits of the graphics preset in effect, plus the draw-list gate, for the rest of this editor run. Session-only: the preset is applied the way a Settings window preset edit applies it (limits clamp, shadow map reconfigure on the next frame when resolution / depth bits / technique / point shadow resolution change), but graphics_presets.json and editor_settings.json are not modified, and the next Settings window preset edit or selection re-applies the stored preset. Omitted arguments leave their fields unchanged; an unknown enum name or out-of-range value is an error and applies nothing. Returns the values in effect after the call (so {} queries them), plus shadow_map_format (the depth format the requested shadow_depth_bits resolves to) and shadow_depth_bits_axis (its ERHE_SHADOW_DEPTH_BITS shader variant value: 16 / 24 UNORM, 32 float).",
     "inputSchema": {
       "properties": {
         "shadow_filter": {
@@ -10026,6 +10026,34 @@
         "use_draw_lists": {
           "description": "Render content fill and shadow maps through the persistent per-scene draw lists (session only; the stored Draw Lists setting is not modified)",
           "type": "boolean"
+        },
+        "shadow_enable": {
+          "description": "Whether shadow maps are allocated and rendered at all (false: every light shades unshadowed)",
+          "type": "boolean"
+        },
+        "directional_shadow_light_count": {
+          "description": "Shadow-mapped directional light limit (>= 0; the total of all six counts is clamped to the device light limit)",
+          "type": "integer"
+        },
+        "directional_unshadowed_light_count": {
+          "description": "Limit of directional lights shaded without a shadow map, beyond the shadow-mapped ones (>= 0)",
+          "type": "integer"
+        },
+        "spot_shadow_light_count": {
+          "description": "Shadow-mapped spot light limit (>= 0; the total of all six counts is clamped to the device light limit)",
+          "type": "integer"
+        },
+        "spot_unshadowed_light_count": {
+          "description": "Limit of spot lights shaded without a shadow map, beyond the shadow-mapped ones (>= 0)",
+          "type": "integer"
+        },
+        "point_shadow_light_count": {
+          "description": "Shadow-mapped point light limit (>= 0; the total of all six counts is clamped to the device light limit)",
+          "type": "integer"
+        },
+        "point_unshadowed_light_count": {
+          "description": "Limit of point lights shaded without a shadow map, beyond the shadow-mapped ones (>= 0)",
+          "type": "integer"
         }
       },
       "type": "object"

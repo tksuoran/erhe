@@ -424,6 +424,7 @@ flowchart TD
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
 - [plans/audit_2026_09_30_followups.md](plans/audit_2026_09_30_followups.md) (in progress): 2026-09-30 audit: medium-term set and follow-ups
 - [plans/bistro_load_profiling.md](plans/bistro_load_profiling.md) (proposed): Bistro load time: profile and optimization candidates
+- [plans/bistro_viewport_gpu.md](plans/bistro_viewport_gpu.md) (proposed): Bistro main viewport GPU cost: measurements, light selection by scene order, options (view-relevant selection, clustered culling, geometry)
 - [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
 - [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
 - [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
