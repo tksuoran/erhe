@@ -747,8 +747,8 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) {
-                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
                 float light_visibility  = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane);
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
@@ -764,8 +764,8 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) {
-                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb;
                 color += intensity * BXDF_CALL(L);
@@ -782,8 +782,8 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) {
-                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
                 float light_visibility  = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, float(light.shadow_index_packed.y), light.shadow_limits.x, shadow_receiver_plane);
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
                 color += intensity * BXDF_CALL(L);
@@ -798,8 +798,8 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) {
-                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb;
                 color += intensity * BXDF_CALL(L);
             }
