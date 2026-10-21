@@ -2812,6 +2812,7 @@ auto Mcp_server::query_frame_pacing_frames(const json& args) -> std::string
             {"planned_vsyncs",        sample->planned_vsyncs},
             {"actual_vsyncs",         window->actual_vsyncs(*sample)},
             {"wait_id",               sample->wait_id},
+            {"prewarm_ms",            sample->prewarm_seconds * 1000.0},
             {"release_time",          sample->release_time},
             {"predicted_display",     sample->predicted_display},
             {"cpu_slot_begin",        r.cpu_slot_begin},

@@ -220,10 +220,10 @@ default when the kernel exists); a pre-warm ending with the GPU clock
 below 0.9 doubles it (bounded by half the cadence period) without a
 cadence switch, one that reached the clock but does not fit backs off.
 
-Next: run the Dell gate (Debug and Release, three threading modes, 10
-each) with pre-warm; check the transitions in startup histories (the
-first N-1 frames must not slip; the learned fill); then fixed 60 Hz and
-ProMotion. Last gate before pre-warm: N=1 in 47/60 on the Dell.
+Gated live 2026-10-21 (Log): the Dell gate passes, every upshift
+pre-warmed. Next: the Debug transition (Log, last entry), then the gate
+on fixed 60 Hz and on ProMotion with this build (the calibration's
+majority vote and probe spacing have not run there yet).
 
 ## Tools
 
@@ -322,3 +322,45 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   release to display. Debug: N=1 in 6/10 - the CPU slows down at N=2 too
   (service time median 3.1 ms, p90 5.1, max 15.5 against 1.3 ms at N=1),
   and frames beyond the period reset the upshift dwell.
+- 2026-10-21, iteration 3 (pre-warm gated live, Dell at 120 Hz). The first
+  Release batch with pre-warm reached N=1 in only 7/10. Startup histories
+  (`frame_pacing_live_gate.py --history`, the per-frame `prewarm_ms` in
+  `get_frame_pacing_frames`) showed three defects: (1) the present
+  calibration failed in 4/10 launches ("no request offset displayed on
+  target"): the compositor displays stretches of probes a refresh late at
+  any offset - whole request passes shifted by one, at the start of the
+  stream and in its middle (a warm-up stream before the sweep was tried
+  and refuted: offset 0 is the window's edge and the shifts recur) - and
+  the sweep required every pass on target; (2) the pre-warm kernel rate was
+  measured at the end of the calibration's success path and the editor
+  and the observer enabled pre-warm only for a valid calibration, so
+  exactly those launches upshifted without pre-warm; (3) their ramp frames
+  (clock 0.45-0.78) entered N=1's clock record, its low decile fell to
+  ~0.58 and the upshift never completed again (claim C27, deviation 21).
+  Also found: deadline probes committed before their predecessor's target
+  (margins from ~1.9 T with probes 2 T apart) displayed late again, and
+  the one-split fit read that as "everything late". Fixes: majority of
+  passes per request offset; probes spaced `floor(margin / T) + 1` vsyncs
+  when the margin reaches past 2 T; the kernel rate measured first and
+  pre-warm enabled by it alone; clock records from the steady state only
+  (`clock_settle_time` 150 ms after the cadence's first GPU end, no frames
+  delivered after the cadence was left, no pre-warm frames). Python 100/100
+  (C27's control reproduces the lock), C++ 32/32 (C27 fails against the
+  previous pacer). Calibration valid in 70/70 launches since; request window
+  0-0.75 T in most, deadline 9.2-10.2 ms (1.11-1.22 T).
+  Gate, Release: N=1 in 10/10 (default), 10/10 (`ERHE_RENDER_THREAD=0`),
+  10/10 (`ERHE_FRAME_PIPELINING=0`); two-refresh frames 6, 9 and 9 of 3480;
+  release to display median 17.9-18.0 ms (tier S 31.5-34.2 ms). Debug:
+  10/10, 10/10, 10/10; two-refresh frames 12, 9 and 8 of 3480; 19.8-19.9 ms.
+  The Dell gate passes (was 47/60). Transitions: all 52 upshifts pre-warmed,
+  none reverted; the fill learned 4 ms (one doubling from 2 ms; once 8 ms).
+  Release: no slipped frame in the 120 frames after any upshift. Debug:
+  for 40-100 frames after the upshift ~20-30 % of the frames are scheduled
+  a slot later (a planned two-slot step - every display is on its target):
+  the P-cores stay at ~0.55 of their maximum for 0.3-0.8 s after the
+  switch while the GPU is already at full clock, release-to-GPU-end latency
+  is 25-30 ms (Release 22 ms), and the release scheduler re-anchors one
+  slot forward whenever `V(j) - delta_pe - (typical latency + margin)` has
+  passed. Next hypothesis: the CPU counterpart of the GPU ramp; measure
+  the P-core clock ramp against the latency window first (the plant has no
+  CPU clock dynamics yet).

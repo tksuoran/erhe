@@ -139,6 +139,20 @@ void Device_impl::run_present_calibration()
         m_device.set_present_calibration(result);
     };
 
+    // 0. GPU pre-warm kernel rate (claim C26), first: it does not depend on
+    // the compositor, so a calibration that stops early still enables the
+    // pre-warm. The fill that raises the clock is learned online by the
+    // frame pacer: with clear-only frames the governor stays at its lowest
+    // state even under 8 ms of ALU work per frame, while on top of the
+    // editor's real frames 2.3 ms raised it to ~0.97 - the governor responds
+    // to the real workload.
+    if (m_gpu_prewarm != nullptr) {
+        for (int i = 0; i < 3; ++i) {
+            static_cast<void>(m_gpu_prewarm->run_blocking(s_prewarm_rate_iterations));
+        }
+        result.prewarm_seconds_per_iteration = m_gpu_prewarm->get_seconds_per_iteration();
+    }
+
     CA::MetalLayer* const layer          = (m_surface != nullptr) ? m_surface->get_impl().get_metal_layer() : nullptr;
     const double          nominal_period = m_device.get_display_refresh_duration_seconds();
     if ((layer == nullptr) || (nominal_period <= 0.0)) {
@@ -253,10 +267,13 @@ void Device_impl::run_present_calibration()
     };
 
     // A batch of probes presented as a steady stream, one every second vsync
-    // (a probe a refresh late or early does not take its neighbour's slot):
-    // probe i targets V_i, requests at V_i - request_offset and commits at
-    // V_i - commit_margin. A steadily fed compositor is what tier M sees; a
-    // probe waiting for its predecessor's display measured a compositor
+    // (a probe a refresh late or early does not take its neighbour's slot),
+    // or further apart where the commit margin would otherwise commit a
+    // probe before its predecessor's target: two probes queued together
+    // displayed late again at margins from ~1.9 T on (Dell at 120 Hz), which
+    // is not deadline evidence. Probe i targets V_i, requests at
+    // V_i - request_offset and commits at V_i - commit_margin. A steadily
+    // fed compositor is what tier M sees; a probe waiting for its predecessor's display measured a compositor
     // returning from idle (late displays at any margin). The feedback is
     // collected once the batch has been displayed. False on a failure the
     // calibration cannot continue past.
@@ -272,11 +289,12 @@ void Device_impl::run_present_calibration()
         for (const Probe& probe : probes) {
             lead = std::max(lead, probe.commit_margin);
         }
+        const double spacing      = std::max(2.0, std::floor(lead / period) + 1.0) * period;
         const double first_target = next_vsync_after(now() + lead + (0.5 * period));
         std::vector<std::pair<std::size_t, double>> issued; // (feedback index, target)
         for (std::size_t i = 0; i < probes.size(); ++i) {
             const Probe&   probe  = probes[i];
-            const double   target = first_target + (2.0 * period * static_cast<double>(i));
+            const double   target = first_target + (spacing * static_cast<double>(i));
             const std::ptrdiff_t index = present_one(target - probe.request_offset, target - probe.commit_margin);
             if (index < 0) {
                 return false;
@@ -327,26 +345,30 @@ void Device_impl::run_present_calibration()
             return;
         }
     }
-    // The longest run of request offsets whose every sample displayed on target.
+    // The longest run of request offsets whose samples displayed on target in
+    // the majority of passes: the compositor displays stretches of probes a
+    // refresh late at any offset (whole passes shifted by one on the Dell at
+    // 120 Hz, at the start of the stream and in its middle), so an offset is
+    // judged by most of its passes, not by every one.
     int best_first = -1;
     int best_count = 0;
     {
         int run_first = -1;
         for (int step = 0; step <= s_request_steps; ++step) {
-            bool on_target = (step < s_request_steps);
-            bool any       = false;
+            int samples        = 0;
+            int samples_target = 0;
             for (const Present_calibration_sample& s : result.samples) {
                 if ((s.phase != Present_calibration_phase::request_window) || (step >= s_request_steps)) {
                     continue;
                 }
                 if (std::abs(s.parameter - (0.25 * static_cast<double>(step) * period)) < (0.01 * period)) {
-                    any = true;
-                    if ((s.presented_time <= 0.0) || (s.slot_offset != 0) || (s.completion_margin < (0.5 * s_request_lead_periods * period))) {
-                        on_target = false;
+                    ++samples;
+                    if ((s.presented_time > 0.0) && (s.slot_offset == 0) && (s.completion_margin >= (0.5 * s_request_lead_periods * period))) {
+                        ++samples_target;
                     }
                 }
             }
-            on_target = on_target && any;
+            const bool on_target = (2 * samples_target) > samples;
             if (on_target && (run_first < 0)) {
                 run_first = step;
             }
@@ -454,18 +476,6 @@ void Device_impl::run_present_calibration()
     }
     result.deadline_offset = ((split > 0.0) ? split : smallest_margin) + s_guard;
     result.valid           = true;
-
-    // 4. GPU pre-warm kernel rate (claim C26). The fill that raises the
-    // clock is learned online by the frame pacer: with clear-only frames the
-    // governor stays at its lowest state even under 8 ms of ALU work per
-    // frame, while on top of the editor's real frames 2.3 ms raised it to
-    // ~0.97 - the governor responds to the real workload.
-    if (m_gpu_prewarm != nullptr) {
-        for (int i = 0; i < 3; ++i) {
-            static_cast<void>(m_gpu_prewarm->run_blocking(s_prewarm_rate_iterations));
-        }
-        result.prewarm_seconds_per_iteration = m_gpu_prewarm->get_seconds_per_iteration();
-    }
 
     std::size_t early_in_deadline = 0;
     for (const Present_calibration_sample& s : result.samples) {

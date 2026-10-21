@@ -131,6 +131,40 @@ def print_run(index, label, result, undisplayed):
         print("    span by start phase (n, median ms, > T): " + "  ".join(f"{p}:{n}/{m:.1f}/{b}" for p, (n, m, b) in phases.items()))
 
 
+def fetch_history(port, count):
+    # The capture is unbounded: frames from the first captured one on.
+    history = []
+    first = 0
+    while len(history) < count:
+        chunk = min(2000, count - len(history))
+        reply = mcp(port, "get_frame_pacing_frames", json.dumps({"first_frame_id": first, "count": chunk}))
+        frames = reply.get("frames", [])
+        if not frames:
+            break
+        history += frames
+        first = frames[-1]["frame_id"] + 1
+    return history
+
+
+def print_transitions(run, history):
+    # Cadence changes with the GPU clock ratio of the frames around them:
+    # an upshift preceded by a GPU pre-warm shows the clock rising at N.
+    changes = []
+    previous = None
+    for index, frame in enumerate(history):
+        n = frame.get("planned_vsyncs")
+        if (previous is not None) and (n != previous):
+            before = [round(f.get("gpu_clock_ratio", 0.0), 2) for f in history[max(0, index - 8):index]]
+            after = history[index:index + 8]
+            after_clock = [round(f.get("gpu_clock_ratio", 0.0), 2) for f in after]
+            after_refr = [f.get("actual_vsyncs") for f in after]
+            changes.append(f"  frame {frame['frame_id']}: N {previous}->{n} clock before {before} after {after_clock} refreshes after {after_refr}")
+        previous = n
+    print(f"run {run}: {len(changes)} cadence change(s) in the first {len(history)} frames")
+    for line in changes[:12]:
+        print(line)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", required=True, help="editor executable (relative to the repo root or absolute)")
@@ -141,6 +175,7 @@ def main():
     parser.add_argument("--env", action="append", default=[], help="KEY=VALUE for the editor environment")
     parser.add_argument("--graphics", action="append", default=[], help="key=json-value override of erhe_graphics.json")
     parser.add_argument("--pin-min-vsyncs", type=int, default=None)
+    parser.add_argument("--history", type=int, default=0, help="also fetch the first N captured frames (startup history) and print the cadence transitions")
     parser.add_argument("--label", default="")
     parser.add_argument("--out", default=None, help="directory for the raw JSON of each run")
     args = parser.parse_args()
@@ -190,8 +225,11 @@ def main():
                 undisplayed = "were not displayed" in LOG_PATH.read_text(encoding="utf-8", errors="replace")
                 result = analyze(frames, status)
                 print_run(run, args.label, result, undisplayed)
+                history = fetch_history(args.port, args.history) if (args.history > 0) else []
+                if history:
+                    print_transitions(run, history)
                 if out_dir:
-                    (out_dir / f"run_{run}.json").write_text(json.dumps({"status": status, "frames": frames}, indent=1) + "\n", encoding="utf-8")
+                    (out_dir / f"run_{run}.json").write_text(json.dumps({"status": status, "frames": frames, "history": history}, indent=1) + "\n", encoding="utf-8")
                 mcp(args.port, "request_exit")
             finally:
                 try:

@@ -3143,11 +3143,13 @@ public:
                             deadline_offset.calibrated_period = calibration.period;
                             deadline_offset.initial           = calibration.deadline_offset;
                             deadline_offset.maximum           = calibration.deadline_offset + (0.5 * calibration.period);
-                            // The GPU pre-warm fill starts here and the
-                            // pacer learns the one that raises the clock
-                            // (claim C26); 2.3 ms raised it on an M4 Pro.
-                            deadline_offset.upshift_prewarm   = (calibration.prewarm_seconds_per_iteration > 0.0) ? 0.002 : 0.0;
                         }
+                        // The GPU pre-warm fill starts here and the pacer
+                        // learns the one that raises the clock (claim C26);
+                        // 2.3 ms raised it on an M4 Pro. The kernel rate is
+                        // measured even when the rest of the calibration
+                        // is not valid.
+                        deadline_offset.upshift_prewarm = (calibration.prewarm_seconds_per_iteration > 0.0) ? 0.002 : 0.0;
                     }
                     m_frame_pacing_observer.set_deadline_offset(deadline_offset);
                 }

@@ -81,6 +81,14 @@ public:
     int         upshift_prewarm_frames   {8};
     double      upshift_prewarm_clock    {0.9};
     double      upshift_prewarm_max_frac {0.5};
+    // The clock records (C25) hold each cadence's steady clock (C27): a
+    // cadence's samples start clock_settle_time after its first GPU end -
+    // the governor's ramp after a change is the previous cadence's state
+    // (live ~60 ms to 0.94 at N=1); frames delivered after their cadence was
+    // left and frames that ran a pre-warm are not samples of it. Ramp frames
+    // recorded as N=1's clock once locked the longer cadence; longer
+    // settling starves short stays at a borderline cadence of evidence.
+    double      clock_settle_time        {0.15};
     int         reactive_miss_threshold{2};     // M consecutive observed self-misses
     double      margin_initial_frac{0.20};      // m0
     double      margin_min_frac   {0.02};
@@ -203,6 +211,7 @@ private:
         std::int64_t target_slot  {0};
         double       target_time  {0.0};
         int          vsyncs       {1};
+        bool         prewarm      {false}; // a GPU pre-warm was requested (C26)
         Frame_stats  stats        {};
         bool         has_gpu_end  {false};
         double       gpu_end      {0.0};
@@ -280,6 +289,8 @@ private:
     double m_upshift_time    {0.0};
     int    m_prewarm_left    {0};   // GPU pre-warm frames left (C26); 0 = none
     double m_prewarm_fill    {0.0}; // the learned pre-warm fill (C26)
+    bool   m_has_cadence_start{false}; // C27: the current cadence's first GPU end is known ...
+    double m_cadence_start   {0.0};    // ... and this is it
 
     // Inner loop state.
     double        m_margin{0.0};

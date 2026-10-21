@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: `Frame_pacer_tunables::clock_settle_time` (claim
+  C27): the clock records hold each cadence's steady clock - samples start
+  that long after the cadence's first GPU end; frames delivered after their
+  cadence was left and frames that ran a pre-warm are not recorded.
+  `Deadline_offset_setup::upshift_prewarm` now applies without a calibrated
+  deadline, and `Present_calibration::prewarm_seconds_per_iteration` is
+  measured even when the calibration is not valid.
 - `erhe::frame_pacing`: GPU pre-warm before an upshift (claim C26):
   `Schedule_decision::prewarm_seconds`, `Frame_pacer_tunables::upshift_prewarm_seconds`
   / `upshift_prewarm_frames` / `upshift_prewarm_clock` /

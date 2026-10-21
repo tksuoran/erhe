@@ -298,6 +298,7 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
     entry.target_slot = slot;
     entry.target_time = slot_time(slot);
     entry.vsyncs      = m_vsyncs;
+    entry.prewarm     = (m_prewarm_left > 0);
 
     Schedule_decision decision;
     decision.frame_id           = frame_id;
@@ -352,10 +353,19 @@ void Frame_pacer::on_gpu_done(
         m_cadence_cpu_window.push(cpu_duration);
         m_cadence_gpu_window.push(gpu_duration);
     }
-    if (gpu_clock_ratio > 0.0) {
+    // Clock records only from the cadence's steady state (C27).
+    if ((n_used == m_vsyncs) && !m_has_cadence_start) {
+        m_has_cadence_start = true;
+        m_cadence_start     = gpu_end_time;
+    }
+    const bool clock_steady =
+        (n_used == m_vsyncs) &&
+        ((gpu_end_time - m_cadence_start) >= m_tunables.clock_settle_time) &&
+        ((scheduled == nullptr) || !scheduled->prewarm);
+    if (clock_steady && (gpu_clock_ratio > 0.0)) {
         m_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(gpu_clock_ratio);
     }
-    if (cpu_clock_ratio > 0.0) {
+    if (clock_steady && (cpu_clock_ratio > 0.0)) {
         m_cpu_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(cpu_clock_ratio);
     }
 
@@ -577,7 +587,8 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     const int old_vsyncs = m_vsyncs;
     m_vsyncs = clamped;
     reset_dwell();
-    m_prewarm_left = 0;
+    m_prewarm_left      = 0;
+    m_has_cadence_start = false;
     m_cadence_cpu_window.clear();
     m_cadence_gpu_window.clear();
     m_cadence_pressure = false;

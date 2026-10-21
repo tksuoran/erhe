@@ -50,6 +50,14 @@ class Tunables:
     prewarm_frames:  int   = 8
     prewarm_clock:   float = 0.9    # a pre-warm ending below this clock doubles the fill
     prewarm_max_frac: float = 0.5   # fill bound, fraction of the cadence period
+    # C27: the clock records (C25) hold each cadence's steady clock: a
+    # cadence's samples start this long after its first GPU end (the
+    # governor's ramp after a change is the previous cadence's state; live
+    # ~60 ms up to 0.94 at N=1), frames delivered after their cadence was
+    # left and frames that ran a pre-warm are not samples of it. Longer
+    # starves short stays at a borderline cadence of evidence (C25 heavy).
+    clock_settle: float = 0.15
+    steady_clock_records: bool = True  # C27 (False: every frame's clock under the cadence it was scheduled at, pre-C27)
     M:          int   = 2           # reactive downshift: consecutive self-misses
     m0_frac:    float = 0.20        # initial margin, fraction of T
     m_min_frac: float = 0.02
@@ -143,6 +151,8 @@ class FramePacer:
         self.cpu_clock_by_N = {}
         self.prewarm_left = 0             # C26: pre-warm frames left (0 = none)
         self.prewarm_fill = tun.prewarm_seconds  # C26: the learned fill
+        self.cadence_start = None         # C27: GPU end of the first frame at the current cadence
+        self.frame_prewarm = {}           # id -> pre-warm requested at schedule time (C27)
         self.last_g = 0.0
         self.L_win = {}                   # cadence N -> deque of latency samples
         self.j_next = None                # next target slot (None until engaged)
@@ -310,6 +320,7 @@ class FramePacer:
         self.j_next = j + self.N
         self.last_slot = j
         self.frame_N[frame_id] = self.N
+        self.frame_prewarm[frame_id] = self.prewarm_left > 0
         self.frame_slot[frame_id] = j
         self.frame_target_time[frame_id] = self.V(j)
         # Present-request holdback deadline (C15 mitigation): hold the
@@ -348,9 +359,17 @@ class FramePacer:
         if n_used == self.N:
             self.c_cad.append(c)
             self.g_cad.append(g)
-        if clock > 0.0:
+        # C27: clock records only from the cadence's steady state.
+        if (n_used == self.N) and (self.cadence_start is None):
+            self.cadence_start = gpu_end
+        clock_steady = (not t.steady_clock_records) or (
+            (n_used == self.N) and
+            ((gpu_end - self.cadence_start) >= t.clock_settle) and
+            not self.frame_prewarm.get(frame_id, False)
+        )
+        if clock_steady and (clock > 0.0):
             self.clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(clock)
-        if cpu_clock > 0.0:
+        if clock_steady and (cpu_clock > 0.0):
             self.cpu_clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(cpu_clock)
         self.last_g = g
         self.frame_gpu_end[frame_id] = gpu_end
@@ -525,6 +544,7 @@ class FramePacer:
         self.N = n_new
         self._reset_dwell()
         self.prewarm_left = 0
+        self.cadence_start = None
         self.c_cad.clear()
         self.g_cad.clear()
         self.cadence_pressure = False
@@ -2140,6 +2160,53 @@ def c26_gpu_prewarm():
     check("C26 learned fill: no slips while learning", slips_learn == 0, f"{slips_learn} slips after frame 140")
 
 
+def c27_steady_clock_records():
+    print("C27 clock records hold the steady clock per cadence")
+    # Live (Metal tier M, Dell at 120 Hz, the pre-warm kernel missing): the
+    # startup spike downshifted after ~33 frames at N=1; the first upshift
+    # slipped while the clock ramped (0.45 -> 0.78) and reverted, and those
+    # ramp frames - recorded as N=1's clock - put its low decile near 0.58:
+    # the work (5.1 ms at full clock) then predicted beyond the period at
+    # N=1, every frame reset the dwell, N=2 for good. The governor's ramp
+    # after a change is the previous cadence's state, not this one's.
+    T = 1.0 / 120.0
+    dpe_true = T + 1.0 * MS
+    def arm(fill, seed, steady, n=6000):
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_true + 0.3 * MS,
+                       dpe_max=dpe_true + 0.3 * MS + 0.5 * T, present_queue='fifo',
+                       prewarm_seconds=fill, steady_clock_records=steady)
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        def work(k, n_used):
+            if 30 <= k < 60:
+                return 20.0 * MS   # startup spike, as early as live
+            return max(0.5, rw.gauss(5.1, 0.15)) * MS
+        sc = Scenario("c27", n, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work, dvfs=True,
+                      dpe_true=dpe_true, drawable_pool=3, pool_latch_lead=dpe_true - 1.8 * MS)
+        recs, _ = run(sc)
+        return recs
+    def upshifts(recs):
+        return [i for i in range(70, len(recs)) if recs[i].N == 1 and recs[i - 1].N > 1]
+    # Control: ramp frames recorded (pre-C27) lock the longer cadence.
+    ups_ctl = upshifts(arm(0.0, 2701, False))
+    check("C27 control: ramp frames in the record lock N=2 after one reverted upshift (the live failure)",
+          len(ups_ctl) == 1, f"upshifts to N=1 after the spike: {ups_ctl}")
+    # Without a pre-warm every upshift slips while the clock ramps (C26) and
+    # reverts; the pacer keeps probing with backoff (C10) instead of locking.
+    ups = upshifts(arm(0.0, 2701, True))
+    gaps = [b - a for a, b in zip(ups, ups[1:])]
+    check("C27 a reverted upshift does not end the upshift probes",
+          len(ups) >= 4 and all(b > a for a, b in zip(gaps, gaps[1:])),
+          f"upshifts to N=1: {ups}, gaps {gaps}")
+    # With the pre-warm, the same startup: one upshift, N=1 holds, no slips.
+    recs_on = arm(2.3 * MS, 2701, True)
+    ups_on = upshifts(recs_on)
+    slips_on = sum(1 for r in recs_on[140:] if r.slipped)
+    check("C27 pre-warm with the live startup: one upshift, N=1 holds, no slips",
+          len(ups_on) == 1 and {r.N for r in recs_on[3000:]} == {1} and slips_on == 0,
+          f"upshifts {ups_on}, N after frame 3000: {sorted({r.N for r in recs_on[3000:]})}, {slips_on} slips after frame 140")
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -2167,6 +2234,7 @@ def main():
     c24_fifo_upshift_promotion()
     c25_upshift_under_measured_gpu_clock()
     c26_gpu_prewarm()
+    c27_steady_clock_records()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")
