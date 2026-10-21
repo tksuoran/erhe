@@ -9,6 +9,55 @@ compilation to Metal) for the same scene and the same image. This plan
 finds the cause by comparing the final shader code of the two paths on a
 small repro scene instead of Bistro.
 
+## Root cause (found 2026-10-21)
+
+The whole gap is SPIRV-Cross's MSL lowering of GLSL `precise`. The two
+`precise` additions in `get_light_relative_position()`
+(`res/shaders/erhe_light.glsl`, used by the spot / directional shadow lookup
+and the point shadow lookup) become SPIR-V `NoContraction` operations, and
+SPIRV-Cross emits every `NoContraction` add / sub / mul as a call to a
+helper declared `[[clang::optnone]]` (`spvFAdd`, `spvFSub`, `spvFMul`, ...;
+`spirv_msl.cpp` `SPVFuncImplFAdd`, unchanged on upstream `main` as of
+2026-10-21; there is no option to avoid it). Apple's compiler cannot inline
+an `optnone` function, so each shadow lookup in the light loops makes real
+GPU function calls. KosmicKrisp keeps the same operations exact with
+scoped `{ #pragma METAL fp math_mode(safe) ... }` blocks inline
+(`MESA_KK_DEBUG=msl` output), which cost nothing.
+
+Evidence, Bistro with the `bistro_frame_bench.py` camera, Viewport pass
+GPU timer, GPU saturated (`frame_pacing_tier="off"`,
+`force_disable_vsync=true`), median of 12 one-second samples:
+
+| Viewport pass, ms | Metal | MoltenVK | KosmicKrisp |
+|---|---|---|---|
+| HEAD | 26.6 | 25.1 | 5.9 |
+| shadow lookups replaced by 1.0 | 4.8 | - | 4.55 |
+| `precise` removed from `get_light_relative_position()` | 6.2 | 6.0 | - |
+| HEAD, Metal MSL helpers rewritten to inline `math_mode(safe)` | 6.0 | - | - |
+
+The last row keeps `precise` and the exactness: the helpers become
+`inline T spvFAdd(T l, T r) { #pragma METAL fp math_mode(safe) return l + r; }`
+(and `spvFSub` alike) in the Metal backend's MSL before `newLibrary`, and
+Bistro `render_scene_image` is byte-identical to HEAD (c08a8600). Rejected
+on the way (no effect or slower on Metal): reading `Light` fields in place
+instead of the whole-struct copy SPIRV-Cross emits, non-unrollable light
+and PCF loops, a constant shadow map size instead of `textureSize`, one
+gather instead of four.
+
+How the shaders were obtained: the Metal backend logs every MSL in
+`logs/log.txt`; KosmicKrisp dumps its MSL with `MESA_KK_DEBUG=msl
+MESA_LOG=file MESA_LOG_FILE=<path>` (Mesa does not log to stderr by default
+on macOS), and only for pipelines it compiles: move the KosmicKrisp file
+in `pipeline_cache/` aside for the run (with it, pipelines are
+deserialized and nothing is dumped).
+
+Open: where the fix lives (user decision) - a SPIRV-Cross change (fork per
+`doc/cmake_conventions.md`, plus an upstream pull request; MoltenVK gets it
+only with a MoltenVK that bundles the fixed SPIRV-Cross), the Metal backend
+rewriting the helpers after `compile()` (Metal only), or `precise`-free
+GLSL with the same exactness (both backends; needs its own correctness
+argument and the shadow verification gates).
+
 ## What is measured (2026-10-21, M4 Pro, Release, windowed, Dell 120 Hz)
 
 Bistro (`scripts/bistro_frame_bench.py`, default camera of the script),
