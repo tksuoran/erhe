@@ -21,7 +21,8 @@ command buffer's GPU span (GPUEndTime - GPUStartTime on Metal) and its share
 beyond one refresh period, the GPU span by start phase within the refresh
 period (8 bins; phase 0 = a display time), the deadline offset estimate, and
 whether the log reported undisplayed drawables (an occluded window gives no
-presentation feedback). The editor window must be visible on the display.
+presentation feedback). The editor window must be visible on the display; on macOS the script holds
+a caffeinate assertion (display and system awake) for the batch.
 
 Measurement background and the plan this serves: doc/plans/frame_pacing_metal.md.
 """
@@ -134,6 +135,12 @@ def main():
     parser.add_argument("--label", default="")
     parser.add_argument("--out", default=None, help="directory for the raw JSON of each run")
     args = parser.parse_args()
+
+    if sys.platform == "darwin":
+        # Keep the display and the system awake for the batch (released when
+        # this script exits): a sleeping display leaves no presentation
+        # feedback, and the lock screen that follows occludes the window.
+        subprocess.Popen(["caffeinate", "-d", "-i", "-w", str(os.getpid())])
 
     editor = pathlib.Path(args.editor)
     if not editor.is_absolute():
