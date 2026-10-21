@@ -76,7 +76,7 @@ def analyze(frames, status):
     frames = sorted({f["frame_id"]: f for f in frames}.values(), key=lambda f: f["frame_id"])
     pacer = status.get("pacer", {})
     period = pacer.get("grid_period") or (status.get("display_refresh_period_ms", 0.0) / 1000.0)
-    result = {"N": pacer.get("vsyncs_per_frame"), "deadline_offset_ms": pacer.get("deadline_offset_ms")}
+    result = {"N": pacer.get("vsyncs_per_frame"), "deadline_offset_ms": pacer.get("deadline_offset_ms"), "thermal": status.get("thermal_state")}
     achieved = [(f["frame_id"], f["achieved_present_time"]) for f in frames if f["achieved_present_time"] > 0.0]
     refreshes = collections.Counter()
     for (id_a, t_a), (id_b, t_b) in zip(achieved, achieved[1:]):
@@ -115,6 +115,7 @@ def print_run(index, label, result, undisplayed):
         + (f"latency med {latency[0]:.1f} p95 {latency[1]:.1f} ms " if latency else "latency - ")
         + (f"gpu span med {span[0]:.2f} p90 {span[1]:.2f} max {span[2]:.2f} ms ({result['gpu_beyond_period_pct']:.0f}% > T) " if span else "")
         + (f"dpe {result['deadline_offset_ms']:.2f} ms" if result.get("deadline_offset_ms") is not None else "")
+        + (f" thermal {result['thermal']}" if result.get("thermal") else "")
         + ("  [UNDISPLAYED DRAWABLES - window occluded?]" if undisplayed else "")
     )
     phases = result.get("span_by_phase")
