@@ -54,7 +54,16 @@
 @tool::scripts/frame_pacing_live_gate.py{fresh-launches+span-by-phase}
 !occluded-window->presentedTime-0->no-feedback{logged;blocked-live-run-2026-10-20}
 
+[LANDED_2026-10-21]
+>ec31329c4::present-calibration-at-device-init{tier-M;clear-only-probes-as-steady-stream-1-per-2-vsyncs;service_main_run_loop-needed(window-not-composited-before-first-CA-commit);ProMotion:request-1.0-1.75T+deadline-2.1T;fixed-60:0-0.75T+1.07T;MCP-get_frame_pacing_status.present_calibration-raw-probes}
+>5b7a6d8ae::C24{predictive-downshift-uses-current-cadence-samples(N=2-GPU-tail-sent-pacer-back);FIFO-anchor(Present_queue_kind::fifo)}
+>a08c0c038::Frame_time_recorder::now=mach_absolute_time-on-Apple+auto->M
+@gate::ProMotion-Debug+Release-3-threading-modes-60/60-N=1-28ms(S-37.6)+fixed-60Hz-N=1-41ms(S-58.5)
+
 [TRAPS]
+!steady_clock!=CACurrentMediaTime-after-system-sleep{mach_absolute_time-stops-in-sleep}->recorder-uses-mach_absolute_time
+!ProMotion-compositor=one-period-deeper{request-cutoff-V-T+deadline-2T+1ms}->calibrate¬hardcode
+!blocked-nextDrawable-returns-at-latch-of-frame-k-2(display-15.7ms)
 !AutoreleasePool::per-thread-stack{drain-on-opening-thread;reverse-order}→¬span-device-frame
 !retained-cb-still-in-pool::queue-slot(64)-freed-only-on-dealloc→create-in-local-pool+retain
 !process-global-encoder-trackers::main-M2+render-thread-record-concurrently→thread_local
