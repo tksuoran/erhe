@@ -70,24 +70,40 @@ gates (V1-V6) can compare both on one scene.
 
 ### C2. The cluster grid
 
-A grid belongs to one view of one pass set (a viewport's camera, one
-headset eye, a scene image capture), in that view's framebuffer pixels:
+A grid belongs to one cluster camera, and every pass of the view that
+camera covers reads it. The cluster camera is the view's camera for a
+viewport or a scene image capture, and the headset's root camera for both
+eyes (the combined-eye frustum the headset's shadow fit already uses,
+`Headset_view::update_root_camera_projection`). The grid is a frustum grid
+of that camera:
 
-- X and Y: square screen tiles of `cluster_tile_size` pixels (default 64),
-  counted from the viewport origin, `ceil(width / tile)` by
-  `ceil(height / tile)`. Tile y is counted in the backend's framebuffer
-  convention: `gl_FragCoord` is top-left on Vulkan and Metal and
-  bottom-left on OpenGL, so the grid parameters carry the viewport origin
-  and a y sign the way the wide-line shaders carry `vp_y_sign`.
-- Z: `cluster_slice_count` slices (default 24) of view depth, exponential
-  between the camera's near plane and `z_cluster_far`, the largest view
-  depth any binned light reaches (its centre's view depth plus its range).
-  A fragment deeper than `z_cluster_far` uses the last slice; no binned
-  light reaches it, so whatever that slice lists contributes zero there.
-- View depth per fragment is `dot(v_view_relative_position, -forward)`,
-  `forward` being the camera's view axis from the camera block
-  (`world_from_node`); the camera block gains `view_forward` (vec4) for it
-  rather than having every fragment read a mat4 column.
+- X and Y: `ceil(width / cluster_tile_size)` by
+  `ceil(height / cluster_tile_size)` tiles over the cluster camera's
+  normalized device xy, `cluster_tile_size` pixels (default 64) of a nominal
+  resolution. That resolution is the viewport's size for a desktop view, and
+  the eye resolution widened by the ratio of the combined field of view to
+  one eye's for the headset.
+- Z: `cluster_slice_count` slices (default 24) of the cluster camera's view
+  depth, exponential between its near plane and `z_cluster_far`, the
+  largest view depth any binned light reaches (its centre's view depth plus
+  its range).
+- A fragment finds its cluster from its position, not from `gl_FragCoord`:
+  `cluster_from_view_relative` (the cluster camera's clip transform relative
+  to the pass's `view_origin`, composed in double as the shadow matrices are,
+  `doc/erhe/shadows.md` "View-relative positions") times
+  `v_view_relative_position` gives xy, and a dot product with the cluster
+  camera's forward axis plus an offset gives the depth. One formula serves
+  every backend, with no framebuffer y convention, and both eyes of a
+  multiview pass read the same grid.
+- The boundary clusters are open toward the outside: the outer ring of
+  tiles extends laterally past the frustum's sides, the last slice extends
+  past `z_cluster_far`, and a fragment outside the cluster frustum clamps
+  into the nearest boundary cluster. Binning (C4) tests the boundary
+  clusters with those open sides, so the lists stay conservative for every
+  fragment. That covers the parts of each eye's frustum the combined
+  frustum leaves out (the eyes sit about half the IPD to either side of its
+  apex). No binned light reaches past `z_cluster_far`, so the last slice's
+  list contributes zero there.
 
 Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
 
@@ -103,10 +119,10 @@ Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
   header range and the array range; passes that today call `update()` per
   pass bind the view's ranges instead.
 - `light_cluster_block` (binding 10, storage, std430, readonly in the
-  fragment stage, written by C4): the grid parameters (tile size, counts per
-  axis, viewport origin, y sign, the slice distribution's near / far
-  constants, the per-cluster capacity) and, per view index, per cluster, one
-  `uvec4` of category counts - (spot shadow-mapped, spot unshadowed, point
+  fragment stage, written by C4): the grid parameters
+  (`cluster_from_view_relative`, the forward axis and depth offset, tile
+  counts per axis, the slice distribution's near / far constants, the
+  per-cluster capacity) and, per cluster, one `uvec4` of category counts - (spot shadow-mapped, spot unshadowed, point
   shadow-mapped, point unshadowed) - followed by the cluster's light slots,
   packed two 16-bit slots per `uint`, at most `cluster_capacity` (default
   64) per cluster, in ascending slot order.
@@ -132,9 +148,9 @@ Binning runs on the render thread in the rendergraph pre-execute callback,
 once per binned view per frame, after the shadow fit (the light set and
 projections of the frame are final) and before the first color pass:
 
-- One compute invocation per cluster; the dispatch's z dimension is the view
-  index for a multiview grid (C7). The invocation computes its cluster's
-  view-space AABB from the grid parameters and the camera's projection, then
+- One compute invocation per cluster. The invocation computes its
+  cluster's view-space AABB from the grid parameters and the cluster
+  camera's projection (open on the boundary sides, C2), then
   walks the spot and point slots in ascending order, tests each light's
   range sphere (centre in view space, radius `range` times `1 + 2^-10` so a
   fragment that rounds across a cluster boundary still finds every light
@@ -173,8 +189,9 @@ phase 5 item, taken only if V5 shows the dispatch in the frame.
 1. Directional: two loops with the header's runtime bounds,
    `directional_shadow_count` and `directional_light_count -
    directional_shadow_count`, bodies as today.
-2. Find the cluster from `gl_FragCoord.xy`, the grid's viewport origin and y
-   sign, and the fragment's view depth (C2).
+2. Find the cluster from `v_view_relative_position` through
+   `cluster_from_view_relative` and the cluster camera's depth axis,
+   clamped into the grid (C2).
 3. Four loops over the cluster's list, bounded by its four category counts,
    with today's bodies for spot shadow-mapped, spot unshadowed, point
    shadow-mapped and point unshadowed. The slot comes from the packed list;
@@ -214,13 +231,17 @@ limits the two paths are expected to produce identical images (V1).
 
 ### C7. XR
 
-- Multiview: one grid per eye, both eyes binned in one dispatch (z = view
-  index), stored as per-view slabs of `light_cluster_block`;
-  `standard.frag` indexes the slab by `c_view_index`. Each eye's AABBs come
-  from its own projection.
-- Per-eye fallback: each eye's passes are a view with its own grid.
+- One grid for both eyes, on the headset's root camera (C2), binned once
+  per frame. The multiview pass and the per-eye fallback passes bind the
+  same cluster range; neither indexes it by `c_view_index`.
+- `cluster_from_view_relative` is relative to the pass's `view_origin`,
+  which the camera block sets to the first view's position for every view
+  of a multiview pass, so both eyes transform their positions with the same
+  matrix. The per-eye fallback writes each eye's own `view_origin`, so it
+  composes the matrix per eye pass from the same cluster camera.
 - The headset's shadow fit stays cyclopean (`doc/erhe/multiview.md`
-  "Shadow / light buffer").
+  "Shadow / light buffer"); the shadow fit and the cluster grid share the
+  root camera.
 
 ### C8. The loop path
 
@@ -245,15 +266,18 @@ Each phase is one commit (or a short series), reviewed, with its gates.
    pre-execute callback, `LIGHT_SHADING_CLUSTERED` path in `standard.frag`
    (C5), `light_shading` preset field, single-cluster grid for unbinned
    passes, `Light_set` hand-out for clustered mode (C1). Unit tests of the
-   binner (sphere vs AABB on boundaries, unbounded lights, overflow, y
-   convention per backend). Gate: V1, V3, V4.
+   binner (sphere vs AABB on boundaries, open boundary clusters, fragments
+   outside the cluster frustum, unbounded lights, overflow). Gate: V1, V3,
+   V4.
 3. **GPU binning.** The two dispatches of C4 into a `GPU_access` range,
    overflow counter and readback, MCP `get_light_cluster_check` and
    `get_light_cluster_stats`. The CPU binner remains the test reference.
    Gate: V2 (0 mismatches), V1 again with GPU lists, V5, V6.
-4. **XR.** Multiview slabs and per-eye grids (C7). Gate: V1 on a multiview
-   headless test (two views into a layered target) and a Quest run (needs
-   the user with the headset).
+4. **XR.** The headset's grid on the root camera, bound by the multiview
+   and the per-eye passes (C7). Gate: V3 on a multiview headless test (two
+   views with the eye offsets and field of view of a Quest 3 into a layered
+   target, each eye's image identical to the single-cluster grid's) and a
+   Quest run (needs the user with the headset).
 5. **Refinements, each only when V5 shows it pays:** spot cone vs AABB;
    skip binning on unchanged inputs (C4); shared-memory light tiles in the
    cluster loop for scenes with hundreds of lights; splitting `Light` into a
@@ -271,7 +295,7 @@ Each phase is one commit (or a short series), reviewed, with its gates.
   cause (a light missing from a list, or a compiler reassociating the
   runtime loop); it is not accepted as noise.
 - **V2. List identity.** GPU lists equal the CPU reference for every cluster
-  of every binned view, including multiview slabs.
+  of every binned view, the headset grid included.
 - **V3. Conservativeness.** On Bistro with every light shaded, clustered
   mode with the real grid is byte-identical to clustered mode with the
   single-cluster grid forced for the viewport (a debug setting): every light
