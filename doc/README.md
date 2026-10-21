@@ -420,6 +420,7 @@ flowchart TD
 
 - [plans/android.md](plans/android.md) (proposed): Android: full editor on a phone
 - [plans/animation_keyframing.md](plans/animation_keyframing.md) (in progress): Keyframing and timeline for the Animation window: outstanding work
+- [plans/apple_gpu_shader_gap.md](plans/apple_gpu_shader_gap.md) (in progress): Apple GPU: the standard shader's cost through SPIRV-Cross vs KosmicKrisp
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
 - [plans/audit_2026_09_30_followups.md](plans/audit_2026_09_30_followups.md) (in progress): 2026-09-30 audit: medium-term set and follow-ups
 - [plans/bistro_load_profiling.md](plans/bistro_load_profiling.md) (proposed): Bistro load time: profile and optimization candidates
