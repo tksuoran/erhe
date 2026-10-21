@@ -995,8 +995,11 @@ void Post_processing::composite_input(
 
     const int w = render_pass.get_render_target_width();
     const int h = render_pass.get_render_target_height();
-    encoder.set_render_pipeline(*pipeline);
+    // The bind group layout first: binding the pipeline writes the draw id
+    // push constant through the active layout on devices that emulate
+    // multi-draw indirect.
     encoder.set_bind_group_layout(&m_overlay_copy_bind_group_layout);
+    encoder.set_render_pipeline(*pipeline);
     encoder.set_sampled_image(0, input_texture, m_sampler_linear);
     encoder.set_viewport_rect(0, 0, w, h);
     encoder.set_scissor_rect (0, 0, w, h);
