@@ -310,6 +310,45 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   the cull mode is a rare settings action and compiles the other modes'
   pipelines once, on demand.
 
+### Shadow map cache
+
+The maps persist between frames (one 2D array and one cube array per
+`Shadow_render_node`, no per-frame-in-flight copies; only a pass's own
+clear writes them), so a pass whose inputs did not change is not drawn
+again: `Shadow_renderer::Render_parameters::map_cache` names the
+`Shadow_map_cache` of the maps' owner, and `draw()` keeps a pass - a 2D
+layer or a cube face, the pass's clear included - when
+
+- the frame's configuration equals the one the pass was drawn under: the
+  shadow, distance and cube textures, the rasterizer depth bias, the cull
+  mode, the technique, depth clamp, the depth convention, the empty border,
+  both viewports, the draw-list layer selection, and the content serial of
+  the draw lists published for the frame
+  (`Draw_list_scene::get_published_content_serial()`: any change of entries,
+  records - node transforms included -, flags or membership moves it);
+- the pass's light id and matrix equal its own: `clip_from_world` for a 2D
+  layer, the cube projection translated by the light position for a face.
+
+A changed configuration forgets every pass; a changed light or matrix
+redraws that light's passes only. A directional light's fitted matrix moves
+with the camera, so its layers redraw on a camera move; spot and point
+projections do not depend on the camera. Skinned objects in the scene
+(`Draw_list_scene::has_published_skinned_objects()`) disable the cache:
+joint poses change without a list change. The bucket path (no draw-list
+scene) draws every pass. `Shadow_render_node::reconfigure()` clears the
+cache with the textures. The shadow map shaders read no material, so a
+material edit keeps the maps.
+
+`Shadow_draw_statistics` reports the kept passes (`shadow_map_2d_cached`,
+`point_cube_cached_faces`, `cached_pass_count`), MCP `get_scene_lights` per
+light (`shadow_cached`, `shadow_cube_cached_faces`), and MCP
+`set_shadow_map_cache_enabled` switches the cache for a session (default
+on). Measured on Bistro (Release Metal, M4 Pro, 4 point and 4 spot shadow
+lights, static scene): GPU span 6.4 -> 4.3 ms, render-thread `execute`
+2.1 -> 0.8 ms per frame. The per-light caster test that keeps the passes of
+lights a moving caster does not reach is
+[../plans/shadow_map_cache.md](../plans/shadow_map_cache.md).
+
 ### Empty border and receiver coverage
 
 The receiver filter reads, per lookup, the texels whose centres lie within

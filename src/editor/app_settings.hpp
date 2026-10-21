@@ -158,6 +158,11 @@ public:
     // cache would save. Never persisted.
     bool shadow_maps_frozen_session{false};
 
+    // Session-only switch of the shadow map cache (doc/plans/
+    // shadow_map_cache.md), set by the MCP set_shadow_map_cache_enabled
+    // tool to compare against every pass drawn. Never persisted.
+    bool shadow_map_cache_session{true};
+
     // Node tree (ephemeral UI state, not persisted)
     bool node_tree_show_all          {false};
 

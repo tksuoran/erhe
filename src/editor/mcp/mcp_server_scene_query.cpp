@@ -397,6 +397,22 @@ auto Mcp_server::action_set_shadow_maps_frozen(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_set_shadow_map_cache_enabled(const json& args) -> std::string
+{
+    if (m_context.app_settings == nullptr) {
+        return make_error_content("Editor settings not available");
+    }
+    if (!args.contains("enabled") || !args["enabled"].is_boolean()) {
+        return make_error_content("enabled (boolean) is required");
+    }
+    // Session-only; the next frame's render settings snapshot carries it to
+    // the shadow render nodes.
+    m_context.app_settings->shadow_map_cache_session = args["enabled"].get<bool>();
+    return make_json_content({
+        {"enabled", m_context.app_settings->shadow_map_cache_session}
+    }).dump();
+}
+
 auto Mcp_server::action_set_culling_classification(const json& args) -> std::string
 {
     // The MCP counterpart of the Settings window's Culling Classification
@@ -1440,6 +1456,11 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
         light_json["shadow_draw_list_entry_count"]  = slots[slot].entry_count;
         light_json["shadow_draw_list_culled_count"] = slots[slot].culled_count;
     };
+    // The passes the shadow map cache kept from an earlier frame: a 2D
+    // layer (shadow_cached) or the kept faces of a cube (bit f = face f).
+    const auto add_cached = [](json& light_json, const std::vector<uint8_t>& flags, const std::size_t slot, const char* key) {
+        light_json[key] = (slot < flags.size()) ? flags[slot] : uint8_t{0};
+    };
     // Per cube face (+X -X +Y -Y +Z -Z) of a point light: entries drawn and
     // culled, and whether the face had no surviving caster and drew nothing
     // (doc/plans/culling.md phase 3); shadow_cube_skipped when all six did.
@@ -1489,12 +1510,14 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                     light_json["shadow_index"] = transforms->shadow_index;
                     if (draw_statistics != nullptr) {
                         add_draw_statistics(light_json, draw_statistics->shadow_map_2d, transforms->shadow_index);
+                        add_cached(light_json, draw_statistics->shadow_map_2d_cached, transforms->shadow_index, "shadow_cached");
                     }
                 }
                 if (transforms->point_shadow_index != no_index) {
                     light_json["point_shadow_index"] = transforms->point_shadow_index;
                     if (draw_statistics != nullptr) {
                         add_draw_statistics(light_json, draw_statistics->point_cubes, transforms->point_shadow_index);
+                        add_cached(light_json, draw_statistics->point_cube_cached_faces, transforms->point_shadow_index, "shadow_cube_cached_faces");
                         add_cube_face_statistics(light_json, *draw_statistics, transforms->point_shadow_index);
                     }
                 }

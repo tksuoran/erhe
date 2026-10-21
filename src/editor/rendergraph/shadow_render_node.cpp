@@ -131,6 +131,8 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
     // retried each frame.
     const Shadow_node_configuration previous = m_configuration;
     m_configuration = configuration;
+    // The maps are reallocated (or released) below: nothing they held stays.
+    m_map_cache.clear();
 
     // Reverse-Z is the static device value; query it rather than caching.
     const bool reverse_depth = graphics_device.get_reverse_depth();
@@ -806,6 +808,7 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
             .draw_list_scene          = draw_list_scene,
             .draw_list_layers         = m_frame_passes.draw_list_layers,
             .draw_statistics          = &result.draw_statistics,
+            .map_cache                = render_settings.shadow_map_cache ? &m_map_cache : nullptr,
             .exclude_unlit_casters    = exclude_unlit_casters,
             .casters                  = casters,
             .shadow_bounds            = &root_draw_list_scene->get_shadow_bounds(frame_index)

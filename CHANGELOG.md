@@ -9,6 +9,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Shadow_map_cache` and
+  `Shadow_renderer::Render_parameters::map_cache`: `draw()` keeps the
+  shadow passes (2D layers, cube faces) whose light, matrix and frame
+  configuration are unchanged (doc/erhe/shadows.md "Shadow map cache");
+  `Shadow_draw_statistics::shadow_map_2d_cached`, `point_cube_cached_faces`
+  and `cached_pass_count` report them. `Draw_list_scene::
+  get_published_content_serial()` and `has_published_skinned_objects()`.
+
+- `erhe::math`: `Viewport::operator==` (defaulted).
+
 - `erhe::frame_pacing`: `Clock_record` (claim C29): a cadence's clock
   samples with each frame's work; `Frame_pacer_tunables::clock_record_work_band`
   (1.5) - the upshift test judges N-1 at the clocks of a similar workload

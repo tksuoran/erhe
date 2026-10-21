@@ -67,6 +67,7 @@ public:
     bool                       headlight_when_unlit           {true};
     bool                       sky_enabled                    {true};
     bool                       shadow_maps_frozen             {false}; // App_settings::shadow_maps_frozen_session
+    bool                       shadow_map_cache               {true};  // App_settings::shadow_map_cache_session
 };
 
 // One Render_settings copy per frame in flight, owned by Editor. M2's

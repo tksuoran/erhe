@@ -512,6 +512,13 @@ public:
     // so a pass can skip its draw setup (Shadow_renderer's empty cube
     // faces). True for Cull_view::none.
     [[nodiscard]] auto has_cull_view_survivors(uint64_t frame_index, Cull_view cull_view) -> bool;
+    // The content serial of the lists publish() published for frame_index:
+    // equal for two frames means no list changed between them (entries,
+    // records - transforms included -, flags, membership). Render phase.
+    [[nodiscard]] auto get_published_content_serial(uint64_t frame_index) const -> uint64_t;
+    // Whether skinned objects existed when frame_index was published (their
+    // joint poses change without a list change). Render phase.
+    [[nodiscard]] auto has_published_skinned_objects(uint64_t frame_index) const -> bool;
     // GPU command generation of the shadow passes (doc/plans/culling.md
     // phase 6; render thread, render phase, with the frame's shadow views,
     // before its classification): what every draw_shadow() of frame_index
@@ -906,6 +913,8 @@ private:
         bool                   published  {false};
         // The culling classification publish() recorded for the frame.
         Cull_classification    classification{Cull_classification::cpu};
+        // Skinned objects existed at the publish.
+        bool                   has_skinned_objects{false};
         // Per list: its first entry in the lists back to back (the GPU
         // bounds and mask layout); and the entries of all lists.
         std::vector<uint32_t>  entry_offsets;
