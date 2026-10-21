@@ -2580,7 +2580,11 @@ void Scene_root::capture_render_settings(const Editor_settings_config& editor_se
     }
 }
 
-void Scene_root::resolve_light_set(Render_snapshot_slot& slot, const erhe::scene_renderer::Light_count_limits& light_count_limits)
+void Scene_root::resolve_light_set(
+    Render_snapshot_slot&                           slot,
+    const erhe::scene_renderer::Light_count_limits& light_count_limits,
+    const std::size_t                               light_array_capacity
+)
 {
     // A light hook since this slot's last resolve invalidates its layout;
     // the sets of the other frames in flight re-resolve at their own turn.
@@ -2593,7 +2597,7 @@ void Scene_root::resolve_light_set(Render_snapshot_slot& slot, const erhe::scene
         slot.light_set->invalidate();
         slot.light_set_serial = invalidation_serial;
     }
-    slot.light_set->resolve(m_layers.light()->lights, light_count_limits);
+    slot.light_set->resolve(m_layers.light()->lights, light_count_limits, light_array_capacity);
 }
 
 void Scene_root::snapshot_render_settings(
@@ -2614,7 +2618,10 @@ void Scene_root::snapshot_render_settings(
     // The lights: the resolved set under the active graphics preset's per
     // light type limits (the shadow limits are also what the shadow node
     // sized its maps from), with every slot's copy refreshed.
-    resolve_light_set(slot, get_light_count_limits(render_settings.graphics_preset));
+    // render_settings.max_light_count is the renderer configuration's light
+    // array capacity, the one Light_interface was created with.
+    const std::size_t light_array_capacity = static_cast<std::size_t>(std::max(0, render_settings.max_light_count));
+    resolve_light_set(slot, get_light_count_limits(render_settings.graphics_preset, render_settings.max_light_count), light_array_capacity);
     slot.frame_index = frame_index;
 
     // The skins' joints as posed by this frame's transforms, into the
@@ -2634,6 +2641,7 @@ void Scene_root::snapshot_render_settings(
 auto Scene_root::snapshot_preview_render_settings(
     const Editor_settings_config&                   editor_settings,
     const erhe::scene_renderer::Light_count_limits& light_count_limits,
+    const std::size_t                               light_array_capacity,
     const uint64_t                                  frame_index,
     const std::size_t                               frames_in_flight
 ) -> const erhe::scene_renderer::Light_set&
@@ -2641,7 +2649,7 @@ auto Scene_root::snapshot_preview_render_settings(
     ERHE_PROFILE_FUNCTION();
     Render_snapshot_slot& slot = get_render_snapshot_slot(frame_index, frames_in_flight);
     capture_render_settings(editor_settings, slot.render_settings);
-    resolve_light_set(slot, light_count_limits);
+    resolve_light_set(slot, light_count_limits, light_array_capacity);
     slot.frame_index = frame_index;
     return *slot.light_set;
 }

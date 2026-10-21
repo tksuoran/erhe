@@ -29,7 +29,7 @@
 
 namespace erhe::scene_renderer {
 
-Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const int max_light_count)
+Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const int max_light_count, const Light_cluster_config& cluster_config)
     : max_light_count    {static_cast<std::size_t>(max_light_count)}
     , light_block        {graphics_device, "light_block",         light_buffer_binding_point,         erhe::graphics::Shader_resource::Type::uniform_block}
     , light_control_block{graphics_device, "light_control_block", light_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
@@ -42,6 +42,16 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .readonly      = true
         }
     }
+    , light_cluster_block{
+        graphics_device,
+        {
+            .name          = "light_cluster",
+            .binding_point = light_cluster_buffer_binding_point,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , cluster_config     {cluster_config}
     , light_struct       {graphics_device, "Light"}
     , offsets{
         .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->get_offset_in_parent(),
@@ -64,6 +74,12 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
         .ddgi_counts               = light_block.add_uvec4("ddgi_counts"              )->get_offset_in_parent(),
         .ddgi_texels               = light_block.add_uvec4("ddgi_texels"              )->get_offset_in_parent(),
         .ddgi_params               = light_block.add_vec4 ("ddgi_params"              )->get_offset_in_parent(),
+
+        .cluster_clip_from_cluster_relative = light_block.add_mat4 ("cluster_clip_from_cluster_relative")->get_offset_in_parent(),
+        .cluster_view_origin                = light_block.add_vec4 ("cluster_view_origin"               )->get_offset_in_parent(),
+        .cluster_view_axis                  = light_block.add_vec4 ("cluster_view_axis"                 )->get_offset_in_parent(),
+        .cluster_slices                     = light_block.add_vec4 ("cluster_slices"                    )->get_offset_in_parent(),
+        .cluster_counts                     = light_block.add_uvec4("cluster_counts"                    )->get_offset_in_parent(),
 
         .light = {
             .clip_from_world              = light_struct.add_mat4 ("clip_from_world"             )->get_offset_in_parent(),
@@ -163,6 +179,8 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
         }
     }
 {
+    // Cluster headers and light lists (light_cluster.hpp).
+    light_cluster_block.add_uint("data", erhe::graphics::Shader_resource::unsized_array);
 }
 
 auto Light_interface::get_sampler(const bool compare) const -> const erhe::graphics::Sampler*
@@ -188,6 +206,12 @@ Light_buffer::Light_buffer(
         erhe::graphics::Buffer_target::storage,
         "Light_buffer::m_light_array_buffer",
         light_interface.light_array_block.get_binding_point()
+    }
+    , m_light_cluster_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::storage,
+        "Light_buffer::m_light_cluster_buffer",
+        light_interface.light_cluster_block.get_binding_point()
     }
     , m_control_buffer{
         graphics_device,
@@ -455,6 +479,7 @@ void Light_projections::reset_distance_fallbacks()
 
 void Light_projections::clear()
 {
+    view_buffers.reset();
     light_projection_transforms.clear();
     light_view_relative_transforms.clear();
     light_shadow_limits.clear();
@@ -491,6 +516,7 @@ void Light_projections::apply(
     // Invalidate (not clear - buffers keep capacity) the cross-light receiver
     // cache; the first tight directional fit of this pass refills it.
     fit_receiver_cache.valid = false;
+    view_buffers.reset();
     parameters = erhe::scene::Light_projection_parameters{
         .view_camera          = view_camera,
         .main_camera_viewport = view_camera_viewport,
@@ -624,90 +650,39 @@ auto Light_projections::get_light_projection_transforms_for_light_id(const std::
     return nullptr;
 }
 
-auto Light_buffer::update(
-    const Light_projections* light_projections,
-    const glm::vec3&         ambient_light,
-    const uint32_t           lightmap_flags,
-    const Ddgi_parameters*   ddgi,
-    const uint32_t           shadow_debug_light_index
-) -> Light_buffer_ranges
+auto Light_buffer::get_light_count(const Light_projections* light_projections) const -> std::size_t
 {
-    ERHE_PROFILE_FUNCTION();
-
-    const auto                   light_struct_size = m_light_interface.light_struct.get_size_bytes();
-    const auto&                  offsets           = m_light_interface.offsets;
-
-    // The light array holds the shaded lights only (light_count below); an
-    // empty set still writes one zero entry, since a storage range cannot
-    // be empty.
-    const std::size_t light_count = (light_projections != nullptr)
+    return (light_projections != nullptr)
         ? std::min(light_projections->light_projection_transforms.size(), m_light_interface.max_light_count)
         : std::size_t{0};
-    const std::size_t header_byte_count = m_light_interface.light_block.get_size_bytes();
-    const std::size_t array_byte_count  = offsets.light_struct + std::max(light_count, std::size_t{1}) * light_struct_size;
+}
 
-    Light_buffer_ranges  ranges{
-        .header = m_light_buffer      .acquire(erhe::graphics::Ring_buffer_usage::CPU_write, header_byte_count),
-        .lights = m_light_array_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, array_byte_count)
-    };
-    std::span<std::byte> header_gpu_data = ranges.header.get_span();
-    std::span<std::byte> light_gpu_data  = ranges.lights.get_span();
-    ERHE_VERIFY(header_gpu_data.size_bytes() >= header_byte_count);
-    ERHE_VERIFY(light_gpu_data .size_bytes() >= array_byte_count);
-    uint32_t       directional_light_count {0u};
-    uint32_t       spot_light_count        {0u};
-    uint32_t       point_light_count       {0u};
-    uint32_t       directional_shadow_count{0u};
-    uint32_t       spot_shadow_count       {0u};
-    uint32_t       point_shadow_count      {0u};
-    const uint32_t uvec4_zero[4]           {0u, 0u, 0u, 0u};
+auto Light_buffer::get_light_array_bytes(const std::size_t light_count) const -> std::size_t
+{
+    // An empty set still gets one zero entry: a storage range cannot be empty.
+    return m_light_interface.offsets.light_struct + (std::max(light_count, std::size_t{1}) * m_light_interface.light_struct.get_size_bytes());
+}
 
-    const erhe::graphics::Sampler* compare_sampler    = m_light_interface.get_sampler(true);
-    const erhe::graphics::Sampler* no_compare_sampler = m_light_interface.get_sampler(false);
-
-    uint64_t shadow_map_texture_handle_compare    = erhe::graphics::invalid_texture_handle;
-    uint64_t shadow_map_texture_handle_no_compare = erhe::graphics::invalid_texture_handle;
-    // No shadow map (no Light_projections at all, or Light_projections::apply()
-    // ran with a null texture - the per-view "shadows off" path in
-    // Shadow_render_node): leave the handles at invalid_texture_handle so the
-    // shader's max_u32 "no shadow map" sentinel fires and every light shades
-    // unshadowed. bind_shadow_samplers() below still binds the fallback texture
-    // to keep the sampler bindings valid; it is never sampled then.
-    erhe::graphics::Texture* shadow_map_texture = light_projections ? light_projections->shadow_map_texture.get() : nullptr;
-    if (shadow_map_texture != nullptr) {
-        // The handles written into the UBO are only used as a "shadow
-        // texture present" sentinel on all backends: the shader reads
-        // shadow_texture_compare.x and treats max_u32 as "no shadow map".
-        // Actual shadow sampling goes through the named s_shadow_compare /
-        // s_shadow_no_compare uniform bindings declared in the default
-        // uniform block, which bind_shadow_samplers() below binds via
-        // set_sampled_image() for every backend. A zero handle stub from
-        // backends without GL_ARB_bindless_texture is fine for the sentinel
-        // check.
-        shadow_map_texture_handle_compare    = m_graphics_device.get_handle(*shadow_map_texture, *compare_sampler);
-        shadow_map_texture_handle_no_compare = m_graphics_device.get_handle(*shadow_map_texture, *no_compare_sampler);
-        // log_render->trace(
-        //     "Shadow texture assigned: texture='{}' handle_compare={} handle_no_compare={}",
-        //     shadow_map_texture->get_debug_label().data(),
-        //     shadow_map_texture_handle_compare,
-        //     shadow_map_texture_handle_no_compare
-        // );
-        // } else {
-        //     log_render->warn("Shadow map texture is null - no shadow texture assigned");
-    }
+void Light_buffer::write_light_array(
+    const Light_projections*   light_projections,
+    const std::size_t          light_count,
+    const std::span<std::byte> light_gpu_data
+) const
+{
+    ERHE_PROFILE_FUNCTION();
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
 
-    const std::size_t common_offset      = 0;
+    const std::size_t  light_struct_size  = m_light_interface.light_struct.get_size_bytes();
+    const Light_block& offsets            = m_light_interface.offsets;
     const std::size_t light_array_offset = offsets.light_struct;
+    const std::size_t array_byte_count   = get_light_array_bytes(light_count);
+    ERHE_VERIFY(light_gpu_data.size_bytes() >= array_byte_count);
 
     // The light array slots are the resolved light set's slots (Light_set /
     // Light_projections::apply): transforms[i] shades slot i. Only lights
-    // that resolved into the set are written; the per-type shadow-mapped /
-    // total counts follow the resolution too (a light is shadow-mapped iff
-    // it got a shadow layer, not merely cast_shadow). Without light
-    // projections nothing is written and the counts stay 0.
+    // that resolved into the set are written.
     ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_view_relative_transforms.size() == light_projections->light_projection_transforms.size()));
     ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_shadow_limits.size() == light_projections->light_projection_transforms.size()));
     for (std::size_t light_index = 0; light_index < light_count; ++light_index) {
@@ -716,30 +691,6 @@ auto Light_buffer::update(
         ERHE_VERIFY(light != nullptr);
         ERHE_VERIFY(light_projection_transforms.index == light_index);
 
-        const bool shadow_mapped = light_projection_transforms.is_shadow_mapped();
-        switch (light->get_light_type()) {
-            case erhe::scene::Light_type::directional:
-                ++directional_light_count;
-                if (shadow_mapped) {
-                    ++directional_shadow_count;
-                }
-                break;
-            case erhe::scene::Light_type::point:
-                ++point_light_count;
-                if (shadow_mapped) {
-                    ++point_shadow_count;
-                }
-                break;
-            case erhe::scene::Light_type::spot:
-                ++spot_light_count;
-                if (shadow_mapped) {
-                    ++spot_shadow_count;
-                }
-                break;
-            default: break;
-        }
-
-        using vec2 = glm::vec2;
         using vec3 = glm::vec3;
         using vec4 = glm::vec4;
         using mat4 = glm::mat4;
@@ -801,6 +752,170 @@ auto Light_buffer::update(
     if (light_count == 0) {
         memset(light_gpu_data.data() + light_array_offset, 0, light_struct_size);
     }
+}
+
+void Light_view_buffers::reset()
+{
+    written                = false;
+    grid                   = Light_cluster_grid{};
+    lights                 = erhe::graphics::Ring_buffer_range{};
+    clusters               = erhe::graphics::Ring_buffer_range{};
+    overflow_cluster_count = 0;
+    max_list_length        = 0;
+}
+
+void Light_buffer::write_view(Light_projections& light_projections, const Light_cluster_view& cluster_view)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Light_view_buffers& view = light_projections.view_buffers;
+    ERHE_VERIFY(!view.written);
+
+    const std::size_t light_count      = get_light_count(&light_projections);
+    const std::size_t array_byte_count = get_light_array_bytes(light_count);
+    view.lights = m_light_array_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, array_byte_count);
+    write_light_array(&light_projections, light_count, view.lights.get_span());
+    view.lights.bytes_written(array_byte_count);
+    view.lights.close();
+    view.lights.release();
+
+    const Light_layer_partition& partition = light_projections.light_partition;
+    // Every slot a cluster list names is in the light array written above.
+    ERHE_VERIFY(get_cluster_slot_end(partition) <= light_count);
+    if ((partition.light_shading == Light_shading::clustered) && (cluster_view.camera != nullptr)) {
+        m_binner.bin(light_projections, cluster_view, m_light_interface.cluster_config);
+        view.grid                   = m_binner.get_grid();
+        view.overflow_cluster_count = m_binner.get_overflow_cluster_count();
+        view.max_list_length        = m_binner.get_max_list_length();
+        const std::size_t byte_count = m_binner.get_byte_count();
+        view.clusters = m_light_cluster_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        m_binner.write(view.clusters.get_span());
+        view.clusters.bytes_written(byte_count);
+    } else {
+        view.grid                   = Light_cluster_grid{};
+        view.overflow_cluster_count = 0;
+        view.max_list_length        = 0;
+        const std::size_t byte_count = get_single_cluster_byte_count(partition);
+        view.clusters = m_light_cluster_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        write_single_cluster(partition, view.clusters.get_span());
+        view.clusters.bytes_written(byte_count);
+    }
+    view.clusters.close();
+    view.clusters.release();
+    view.written = true;
+}
+
+auto Light_buffer::update(
+    const Light_projections* light_projections,
+    const glm::vec3&         ambient_light,
+    const uint32_t           lightmap_flags,
+    const Ddgi_parameters*   ddgi,
+    const uint32_t           shadow_debug_light_index
+) -> Light_buffer_ranges
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Light_block& offsets = m_light_interface.offsets;
+
+    const Light_view_buffers* view_buffers = ((light_projections != nullptr) && light_projections->view_buffers.written)
+        ? &light_projections->view_buffers
+        : nullptr;
+    const std::size_t light_count       = get_light_count(light_projections);
+    const std::size_t header_byte_count = m_light_interface.light_block.get_size_bytes();
+
+    Light_buffer_ranges ranges{};
+    ranges.header = m_light_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, header_byte_count);
+    if (view_buffers != nullptr) {
+        ranges.view_lights   = &view_buffers->lights;
+        ranges.view_clusters = &view_buffers->clusters;
+    } else {
+        const std::size_t array_byte_count = get_light_array_bytes(light_count);
+        ranges.lights = m_light_array_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, array_byte_count);
+        write_light_array(light_projections, light_count, ranges.lights.get_span());
+        ranges.lights.bytes_written(array_byte_count);
+        ranges.lights.close();
+
+        const Light_layer_partition partition = (light_projections != nullptr) ? light_projections->light_partition : Light_layer_partition{};
+        // Every slot the single cluster names is in the light array written above.
+        ERHE_VERIFY(get_cluster_slot_end(partition) <= light_count);
+        const std::size_t cluster_byte_count = get_single_cluster_byte_count(partition);
+        ranges.clusters = m_light_cluster_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, cluster_byte_count);
+        write_single_cluster(partition, ranges.clusters.get_span());
+        ranges.clusters.bytes_written(cluster_byte_count);
+        ranges.clusters.close();
+    }
+    const Light_cluster_grid& grid = (view_buffers != nullptr) ? view_buffers->grid : Light_cluster_grid{};
+
+    std::span<std::byte> header_gpu_data = ranges.header.get_span();
+    ERHE_VERIFY(header_gpu_data.size_bytes() >= header_byte_count);
+
+    // The per-type shadow-mapped / total counts follow the resolution (a
+    // light is shadow-mapped iff it got a shadow layer, not merely
+    // cast_shadow). Without light projections the counts stay 0.
+    uint32_t directional_light_count {0u};
+    uint32_t spot_light_count        {0u};
+    uint32_t point_light_count       {0u};
+    uint32_t directional_shadow_count{0u};
+    uint32_t spot_shadow_count       {0u};
+    uint32_t point_shadow_count      {0u};
+    for (std::size_t light_index = 0; light_index < light_count; ++light_index) {
+        const erhe::scene::Light_projection_transforms& light_projection_transforms = light_projections->light_projection_transforms[light_index];
+        const erhe::scene::Light_snapshot* const light = light_projection_transforms.light;
+        ERHE_VERIFY(light != nullptr);
+        const bool shadow_mapped = light_projection_transforms.is_shadow_mapped();
+        switch (light->get_light_type()) {
+            case erhe::scene::Light_type::directional:
+                ++directional_light_count;
+                if (shadow_mapped) {
+                    ++directional_shadow_count;
+                }
+                break;
+            case erhe::scene::Light_type::point:
+                ++point_light_count;
+                if (shadow_mapped) {
+                    ++point_shadow_count;
+                }
+                break;
+            case erhe::scene::Light_type::spot:
+                ++spot_light_count;
+                if (shadow_mapped) {
+                    ++spot_shadow_count;
+                }
+                break;
+            default: break;
+        }
+    }
+
+    const erhe::graphics::Sampler* compare_sampler    = m_light_interface.get_sampler(true);
+    const erhe::graphics::Sampler* no_compare_sampler = m_light_interface.get_sampler(false);
+
+    uint64_t shadow_map_texture_handle_compare    = erhe::graphics::invalid_texture_handle;
+    uint64_t shadow_map_texture_handle_no_compare = erhe::graphics::invalid_texture_handle;
+    // No shadow map (no Light_projections at all, or Light_projections::apply()
+    // ran with a null texture - the per-view "shadows off" path in
+    // Shadow_render_node): leave the handles at invalid_texture_handle so the
+    // shader's max_u32 "no shadow map" sentinel fires and every light shades
+    // unshadowed. bind_shadow_samplers() below still binds the fallback texture
+    // to keep the sampler bindings valid; it is never sampled then.
+    erhe::graphics::Texture* shadow_map_texture = light_projections ? light_projections->shadow_map_texture.get() : nullptr;
+    if (shadow_map_texture != nullptr) {
+        // The handles written into the header are only used as a "shadow
+        // texture present" sentinel on all backends: the shader reads
+        // shadow_texture_compare.x and treats max_u32 as "no shadow map".
+        // Actual shadow sampling goes through the named s_shadow_compare /
+        // s_shadow_no_compare uniform bindings declared in the default
+        // uniform block, which bind_shadow_samplers() below binds via
+        // set_sampled_image() for every backend. A zero handle stub from
+        // backends without GL_ARB_bindless_texture is fine for the sentinel
+        // check.
+        shadow_map_texture_handle_compare    = m_graphics_device.get_handle(*shadow_map_texture, *compare_sampler);
+        shadow_map_texture_handle_no_compare = m_graphics_device.get_handle(*shadow_map_texture, *no_compare_sampler);
+    }
+
+    using erhe::graphics::as_span;
+    using erhe::graphics::write;
+
+    const std::size_t common_offset = 0;
 
     const glm::vec2 brdf_phi_incident_phi = (light_projections != nullptr) ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
     const uint32_t  brdf_material         = (light_projections != nullptr) ? light_projections->brdf_material_slot : 0u;
@@ -858,10 +973,15 @@ auto Light_buffer::update(
     write(header_gpu_data, common_offset + offsets.ddgi_texels,               as_span(ddgi_texels)            );
     write(header_gpu_data, common_offset + offsets.ddgi_params,               as_span(ddgi_params)            );
 
+    // The light cluster grid of the view (Light_cluster_grid).
+    write(header_gpu_data, common_offset + offsets.cluster_clip_from_cluster_relative, as_span(grid.clip_from_cluster_relative));
+    write(header_gpu_data, common_offset + offsets.cluster_view_origin,                as_span(grid.view_origin));
+    write(header_gpu_data, common_offset + offsets.cluster_view_axis,                  as_span(grid.view_axis));
+    write(header_gpu_data, common_offset + offsets.cluster_slices,                     as_span(grid.slices));
+    write(header_gpu_data, common_offset + offsets.cluster_counts,                     as_span(grid.counts));
+
     ranges.header.bytes_written(header_byte_count);
     ranges.header.close();
-    ranges.lights.bytes_written(array_byte_count);
-    ranges.lights.close();
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to light buffer", light_count);
 
     return ranges;
@@ -977,14 +1097,16 @@ auto Light_buffer::update_control(const std::size_t light_index, const float sha
 
 void Light_buffer_ranges::release()
 {
-    header.release();
-    lights.release();
+    header  .release();
+    lights  .release();
+    clusters.release();
 }
 
 void Light_buffer::bind_light_buffer(erhe::graphics::Command_encoder& encoder, const Light_buffer_ranges& ranges)
 {
-    m_light_buffer      .bind(encoder, ranges.header);
-    m_light_array_buffer.bind(encoder, ranges.lights);
+    m_light_buffer        .bind(encoder, ranges.header);
+    m_light_array_buffer  .bind(encoder, (ranges.view_lights   != nullptr) ? *ranges.view_lights   : ranges.lights);
+    m_light_cluster_buffer.bind(encoder, (ranges.view_clusters != nullptr) ? *ranges.view_clusters : ranges.clusters);
 }
 
 void Light_buffer::bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range)

@@ -382,7 +382,8 @@ auto light_type_index(const erhe::scene::Light_type type) -> std::size_t
 
 auto compute_light_layer_partition(
     std::span<const std::shared_ptr<erhe::scene::Light>> lights,
-    const Light_count_limits&                            light_count_limits
+    const Light_count_limits&                            light_count_limits,
+    const std::size_t                                    light_array_capacity
 ) -> Light_layer_partition
 {
     ERHE_PROFILE_FUNCTION();
@@ -392,6 +393,9 @@ auto compute_light_layer_partition(
     // light casts shadows and there is room, else an unshadowed slot while
     // there is room, else the light is not shaded.
     Light_layer_partition partition{};
+    partition.light_shading = light_count_limits.light_shading;
+    const std::size_t max_shaded_count = std::min(light_count_limits.max_light_count, light_array_capacity);
+    std::size_t shaded_count = 0;
     for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
         if (!light) {
             continue;
@@ -403,14 +407,34 @@ auto compute_light_layer_partition(
             // loops skip it entirely.
             continue;
         }
+        if (shaded_count >= max_shaded_count) {
+            break;
+        }
         const std::size_t t = light_type_index(light->get_light_type());
         if (light->get_cast_shadow() && (partition.per_type_shadow[t] < light_count_limits.per_type_shadow[t])) {
             ++partition.per_type_shadow[t];
+            ++shaded_count;
         } else if (partition.per_type_nonshadow[t] < light_count_limits.per_type_unshadowed[t]) {
             ++partition.per_type_nonshadow[t];
+            ++shaded_count;
         }
     }
     return partition;
+}
+
+void set_light_partition_axes(Shader_key& key, const Light_layer_partition& partition)
+{
+    const bool clustered = (partition.light_shading == Light_shading::clustered);
+    auto count = [clustered](const std::size_t value) -> uint32_t {
+        return clustered ? 0u : static_cast<uint32_t>(value);
+    };
+    key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, count(partition.per_type_nonshadow[0]));
+    key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     count(partition.per_type_shadow   [0]));
+    key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        count(partition.per_type_nonshadow[1]));
+    key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            count(partition.per_type_shadow   [1]));
+    key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       count(partition.per_type_nonshadow[2]));
+    key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           count(partition.per_type_shadow   [2]));
+    key.set(Shader_bool::LIGHT_SHADING_CLUSTERED,                 clustered);
 }
 
 auto get_shadow_depth_bits_axis(const erhe::dataformat::Format depth_format) -> uint32_t

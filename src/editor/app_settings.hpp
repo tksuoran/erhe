@@ -30,7 +30,9 @@ class App_message_bus;
 // render passes, point_shadow_cube_count() cubes) and the limits the
 // renderers hand out light slots with (Light_projections::apply /
 // compute_light_layer_partition).
-[[nodiscard]] auto get_light_count_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Light_count_limits;
+// The light limits of a preset; max_light_count is the light array capacity
+// (Graphics_settings::max_light_count), which bounds the shaded total.
+[[nodiscard]] auto get_light_count_limits(const Graphics_preset_entry& graphics_preset, int max_light_count) -> erhe::scene_renderer::Light_count_limits;
 
 class Graphics_settings
 {

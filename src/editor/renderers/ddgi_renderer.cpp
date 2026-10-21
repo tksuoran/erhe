@@ -326,6 +326,11 @@ Ddgi_renderer::Ddgi_renderer(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_cluster_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_control_binding_point,
                     .type          = Binding_type::uniform_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -630,6 +635,11 @@ void Ddgi_renderer::create_query_pass(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_cluster_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_query_input_binding_point,
                     .type          = Binding_type::storage_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -767,6 +777,11 @@ void Ddgi_renderer::create_reference_pass(
                 },
                 {
                     .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = light_cluster_buffer_binding_point,
                     .type          = Binding_type::storage_buffer,
                     .stage_flags   = Shader_stage_flags::compute
                 },

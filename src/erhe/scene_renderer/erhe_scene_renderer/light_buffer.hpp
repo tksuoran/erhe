@@ -3,12 +3,14 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/light_frustum_fit.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
+#include "erhe_scene_renderer/light_cluster.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_scene_renderer/light_set.hpp"
 
@@ -106,6 +108,15 @@ public:
     std::size_t  ddgi_texels;                  // uvec4 (x irradiance texels, y distance texels, z tiles per atlas row)
     std::size_t  ddgi_params;                  // vec4 (normal bias, view bias, depth sharpness, intensity)
 
+    // The light cluster grid of the pass's view (Light_cluster_grid,
+    // doc/plans/clustered_lights.md C2); the single-cluster grid when the
+    // view was not binned.
+    std::size_t  cluster_clip_from_cluster_relative; // mat4
+    std::size_t  cluster_view_origin;                // vec4 (xyz, 0)
+    std::size_t  cluster_view_axis;                  // vec4 (xyz, 0)
+    std::size_t  cluster_slices;                     // vec4 (scale, bias, near, 0)
+    std::size_t  cluster_counts;                     // uvec4 (tiles x, tiles y, slices, 0)
+
     Light_struct light;
     // Offset of lights[] in light_array_block (the shaded lights in slot
     // order, an unsized storage array).
@@ -149,7 +160,7 @@ static constexpr uint32_t c_texture_heap_slot_ddgi_probe_data{7};
 class Light_interface
 {
 public:
-    Light_interface(erhe::graphics::Device& graphics_device, int max_light_count);
+    Light_interface(erhe::graphics::Device& graphics_device, int max_light_count, const Light_cluster_config& cluster_config);
 
     // Returns the dedicated shadow sampler for the named role. The
     // comparison-enabled variant uses the comparison op that matches the
@@ -166,6 +177,10 @@ public:
     // The lights in slot order (std430, readonly, unsized; doc/plans/
     // clustered_lights.md C3): light_array.lights[slot].
     erhe::graphics::Shader_resource light_array_block;
+    // The light cluster lists (std430, readonly, unsized uint array, layout
+    // in light_cluster.hpp): light_cluster.data[].
+    erhe::graphics::Shader_resource light_cluster_block;
+    Light_cluster_config            cluster_config;
     erhe::graphics::Shader_resource light_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
@@ -261,6 +276,28 @@ public:
 // 2 tan(fov / 2) / N = 2 tan(outer / 2) / (N - 2 M). Infinity for a cone of
 // 180 degrees or wider.
 [[nodiscard]] auto get_spot_distance_min_resolution(float outer_spot_angle, erhe::scene::Shadow_map_footprint footprint) -> float;
+
+// The light array and the light cluster lists of one view for one frame
+// (doc/plans/clustered_lights.md C3), written once by Light_buffer::
+// write_view() and bound by every pass of the view. The ranges are closed and
+// released when written: the ring reclaims them once the frame completes, and
+// the frame's passes bind them until then.
+class Light_view_buffers
+{
+public:
+    // Empties the buffers (the next update() writes its own light array and
+    // the single-cluster grid).
+    void reset();
+
+    bool                              written{false};
+    Light_cluster_grid                grid{};
+    erhe::graphics::Ring_buffer_range lights;
+    erhe::graphics::Ring_buffer_range clusters;
+    // From the binning (C4): clusters whose list hit the capacity, and the
+    // longest list the grid asked for. 0 for the single-cluster grid.
+    std::size_t                       overflow_cluster_count{0};
+    std::size_t                       max_list_length       {0};
+};
 
 // Selects camera for which the shadow frustums are fitted
 class Light_projections
@@ -384,6 +421,11 @@ public:
     float                                                 shadow_bias_origin_scale{1.0f};
 
     // TODO A bit hacky injection of these parameters..
+    // This frame's light array and cluster lists of the view, when
+    // Light_buffer::write_view() wrote them after apply(); apply() and
+    // clear() reset them.
+    Light_view_buffers                                    view_buffers;
+
     float                                                 brdf_phi         {0.0f};
     float                                                 brdf_incident_phi{0.0f};
     // Pre-resolved slot of the BRDF slice material in the set that pass binds.
@@ -427,7 +469,13 @@ public:
     void release();
 
     erhe::graphics::Ring_buffer_range header;
+    // Written by this update(), or empty when the projections carry the
+    // view's buffers (Light_view_buffers), which view_lights and
+    // view_clusters then point at.
     erhe::graphics::Ring_buffer_range lights;
+    erhe::graphics::Ring_buffer_range clusters;
+    const erhe::graphics::Ring_buffer_range* view_lights  {nullptr};
+    const erhe::graphics::Ring_buffer_range* view_clusters{nullptr};
 };
 
 class Light_buffer
@@ -442,9 +490,20 @@ public:
         Light_interface&                light_interface
     );
 
-    // Writes the light header and the light array from the resolved slots in
-    // light_projections (Light_projections::apply); null light_projections
-    // writes no lights. The array holds the shaded lights only, at least one
+    // Render phase, once per view and frame after the view's
+    // Light_projections::apply(), outside any render pass: writes the view's
+    // light array and light cluster lists into light_projections.view_buffers
+    // (doc/plans/clustered_lights.md C3, C4). The lights are binned into the
+    // cluster grid of cluster_view when the partition's light shading is
+    // clustered and cluster_view names a camera; otherwise the view gets the
+    // single-cluster grid.
+    void write_view(Light_projections& light_projections, const Light_cluster_view& cluster_view);
+
+    // Writes the light header from the resolved slots in light_projections
+    // (Light_projections::apply), and binds the view's light array and
+    // cluster lists when write_view() wrote them; otherwise writes its own
+    // light array and the single-cluster grid. Null light_projections writes
+    // no lights. A light array holds the shaded lights only, at least one
     // (zero) entry so the storage range is never empty.
     auto update(
         const Light_projections* light_projections,
@@ -492,10 +551,16 @@ public:
     void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
 
 private:
+    [[nodiscard]] auto get_light_count       (const Light_projections* light_projections) const -> std::size_t;
+    [[nodiscard]] auto get_light_array_bytes (std::size_t light_count) const -> std::size_t;
+    void write_light_array(const Light_projections* light_projections, std::size_t light_count, std::span<std::byte> out) const;
+
     erhe::graphics::Device&                  m_graphics_device;
     Light_interface&                         m_light_interface;
     erhe::graphics::Ring_buffer_client       m_light_buffer;
     erhe::graphics::Ring_buffer_client       m_light_array_buffer;
+    erhe::graphics::Ring_buffer_client       m_light_cluster_buffer;
+    Light_cluster_binner                     m_binner;
     erhe::graphics::Ring_buffer_client       m_control_buffer;
     std::shared_ptr<erhe::graphics::Texture> m_fallback_shadow_texture;
     // 1x1 black textures bound to the three s_ddgi_* slots whenever no probe

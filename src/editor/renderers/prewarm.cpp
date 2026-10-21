@@ -24,6 +24,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 
@@ -85,7 +86,7 @@ void prewarm_all(
     // prewarmed light-count variants match when a scene has more lights than
     // the preset shades / shadow-maps.
     const erhe::scene_renderer::Light_count_limits light_count_limits = (context.app_settings != nullptr)
-        ? get_light_count_limits(context.app_settings->graphics.current_graphics_preset)
+        ? get_light_count_limits(context.app_settings->graphics.current_graphics_preset, context.app_settings->graphics.max_light_count)
         : erhe::scene_renderer::Light_count_limits{};
 
     // Collect the view counts the runtime forward path will encounter.
@@ -141,7 +142,7 @@ void prewarm_all(
         if (light_layer != nullptr) {
             lights_span = light_layer->lights;
         }
-        const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(lights_span, light_count_limits);
+        const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(lights_span, light_count_limits, context.program_interface->light_interface.max_light_count);
 
         std::span<const std::shared_ptr<erhe::primitive::Material>> extra_materials{};
         const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();

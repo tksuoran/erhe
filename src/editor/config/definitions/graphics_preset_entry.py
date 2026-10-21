@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=3,
+    version=4,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -44,5 +44,9 @@ struct("Graphics_preset_entry",
         field("spot_unshadowed_light_count",        Int, added_in=2, default="4", short_desc="Spot Lights (no shadow)"),
         field("point_shadow_light_count",           Int, added_in=1, default="2", short_desc="Point Shadow Lights"),
         field("point_unshadowed_light_count",       Int, added_in=2, default="4", short_desc="Point Lights (no shadow)"),
+        # Light shading (v4; doc/plans/clustered_lights.md C1): with
+        # clustered, every active light is shaded and the unshadowed counts
+        # above are not used; the shadow counts apply in both modes.
+        field("light_shading", EnumRef("Light_shading_mode"), added_in=4, default="Light_shading_mode::loops", short_desc="Light Shading"),
     ],
 )

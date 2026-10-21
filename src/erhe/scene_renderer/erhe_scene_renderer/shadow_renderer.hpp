@@ -386,6 +386,10 @@ public:
     // (parameters.draw_list_scene null, verified).
     auto render(const Render_parameters& parameters) -> bool;
 
+    // The light buffer the shadow passes write; its write_view() writes a
+    // view's light array and cluster lists after fit() (render phase).
+    [[nodiscard]] auto get_light_buffer() -> Light_buffer& { return m_light_buffer; }
+
     // Init-time prewarm. Drives both:
     //   Phase 1: shader-module compile (glslang -> SPIR-V ->
     //            vkCreateShaderModule) for each unique depth-only variant

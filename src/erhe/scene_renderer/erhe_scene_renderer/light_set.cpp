@@ -5,6 +5,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
 #include <limits>
 
 namespace erhe::scene_renderer {
@@ -17,7 +18,7 @@ namespace {
         if (lhs.per_type_shadow    [t] != rhs.per_type_shadow    [t]) { return false; }
         if (lhs.per_type_unshadowed[t] != rhs.per_type_unshadowed[t]) { return false; }
     }
-    return true;
+    return (lhs.max_light_count == rhs.max_light_count) && (lhs.light_shading == rhs.light_shading);
 }
 
 }
@@ -29,10 +30,15 @@ void Light_set::invalidate()
 
 auto Light_set::resolve(
     const std::span<const std::shared_ptr<erhe::scene::Light>> lights,
-    const Light_count_limits&                                  light_count_limits
+    const Light_count_limits&                                  in_light_count_limits,
+    const std::size_t                                          light_array_capacity
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+
+    // The shaded total never exceeds the light array the slots are written to.
+    Light_count_limits light_count_limits = in_light_count_limits;
+    light_count_limits.max_light_count = std::min(light_count_limits.max_light_count, light_array_capacity);
 
     if (!m_dirty.exchange(false, std::memory_order_acq_rel) && (light_count_limits == m_light_count_limits)) {
         capture();
@@ -45,7 +51,7 @@ auto Light_set::resolve(
     // shadow / unshadowed slot. compute_light_layer_partition walks the lights
     // in input order against the limits with the same rule as pass 2 below,
     // so its counts are exactly the slots handed out.
-    m_partition = compute_light_layer_partition(lights, light_count_limits);
+    m_partition = compute_light_layer_partition(lights, light_count_limits, light_array_capacity);
     const std::size_t (&per_type_shadow)   [light_type_count] = m_partition.per_type_shadow;
     const std::size_t (&per_type_nonshadow)[light_type_count] = m_partition.per_type_nonshadow;
 
@@ -73,6 +79,7 @@ auto Light_set::resolve(
     std::size_t directional_light_count{};
     std::size_t spot_light_count{};
     std::size_t point_light_count{};
+    std::size_t shaded_count{};
     for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
         if (!light) {
             continue;
@@ -80,6 +87,9 @@ auto Light_set::resolve(
         if (!light->is_active()) {
             ++inactive_light_count;
             continue;
+        }
+        if (shaded_count >= light_count_limits.max_light_count) {
+            break;
         }
 
         switch (light->get_light_type()) {
@@ -93,9 +103,11 @@ auto Light_set::resolve(
         if (light->get_cast_shadow() && (cursor_shadow[t] < per_type_shadow[t])) {
             m_slot_lights[base_shadow[t] + cursor_shadow[t]] = light;
             ++cursor_shadow[t];
+            ++shaded_count;
         } else if (cursor_nonshadow[t] < per_type_nonshadow[t]) {
             m_slot_lights[base_nonshadow[t] + cursor_nonshadow[t]] = light;
             ++cursor_nonshadow[t];
+            ++shaded_count;
         }
     }
 

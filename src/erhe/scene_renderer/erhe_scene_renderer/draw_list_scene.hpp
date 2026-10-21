@@ -62,6 +62,8 @@ public:
     // draw, so it belongs in the environment the cached resolutions key on.
     bool                  ddgi_enabled     {false};
 
+    // Equal when make_environment_key() is (the cached resolutions depend on
+    // the key only).
     [[nodiscard]] auto operator==(const Color_environment& other) const -> bool;
     // The environment Shader_key exactly as Forward_renderer::render() builds
     // it (light counts, shadow axes; SHADER_DEBUG 0), before the multiview

@@ -80,7 +80,8 @@ const char* safe_str(const char* str)
 
 namespace {
 
-// The shader-key axes the render phase owns: Forward_renderer::prepare()
+// The shader-key axes the render phase owns (and LIGHT_SHADING_CLUSTERED,
+// copied in apply_render_environment()): Forward_renderer::prepare()
 // derives the keys with these zero (Shader_key::derive copies them from the
 // environment key and sets none of them itself), and drawing a snapshot sets
 // them from the draw's own environment, so the key equals the one a single
@@ -104,6 +105,7 @@ void apply_render_environment(Shader_key& key, const Shader_key& environment, co
     for (const Shader_int axis : c_render_environment_int_axes) {
         key.set(axis, environment.get(axis));
     }
+    key.set(Shader_bool::LIGHT_SHADING_CLUSTERED, environment.get(Shader_bool::LIGHT_SHADING_CLUSTERED));
     // derive() ORs the environment bits in before the pass's forced bits are
     // applied, so a pass that forces USE_DDGI off keeps it off.
     if (
@@ -239,12 +241,7 @@ void Forward_renderer::render(const Draw_parameters& parameters, const Render_bu
     const Light_layer_partition partition = get_light_layer_partition(base);
 
     Shader_key environment_key{};
-    environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(partition.per_type_nonshadow[0]));
-    environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(partition.per_type_shadow   [0]));
-    environment_key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(partition.per_type_nonshadow[1]));
-    environment_key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(partition.per_type_shadow   [1]));
-    environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(partition.per_type_nonshadow[2]));
-    environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(partition.per_type_shadow   [2]));
+    set_light_partition_axes(environment_key, partition);
     environment_key.set(Shader_int::SHADOW_FILTER,                            parameters.shadow_filter);
     environment_key.set(Shader_int::SHADOW_BIAS,                              parameters.shadow_bias);
     environment_key.set(Shader_int::SHADOW_TECHNIQUE,                         parameters.shadow_technique);
@@ -516,12 +513,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
             // per-primitive Shader_key::derive sees the same light counts +
             // multiview width the runtime would.
             Shader_key environment_key{};
-            environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(parameters.light_partition.per_type_nonshadow[0]));
-            environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(parameters.light_partition.per_type_shadow   [0]));
-            environment_key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(parameters.light_partition.per_type_nonshadow[1]));
-            environment_key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(parameters.light_partition.per_type_shadow   [1]));
-            environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(parameters.light_partition.per_type_nonshadow[2]));
-            environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(parameters.light_partition.per_type_shadow   [2]));
+            set_light_partition_axes(environment_key, parameters.light_partition);
             environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug));
             environment_key.set(Shader_int::SHADOW_FILTER,                            parameters.shadow_filter);
             environment_key.set(Shader_int::SHADOW_BIAS,                              parameters.shadow_bias);

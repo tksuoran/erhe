@@ -737,7 +737,7 @@ auto App_rendering::create_shadow_node_for_scene_view(
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& preset            = app_settings.graphics.current_graphics_preset;
-    const erhe::scene_renderer::Light_count_limits limits = get_light_count_limits(preset);
+    const erhe::scene_renderer::Light_count_limits limits = get_light_count_limits(preset, app_settings.graphics.max_light_count);
     const int   resolution        = preset.shadow_enable ? preset.shadow_resolution  : 1;
     const int   light_count       = static_cast<int>(limits.shadow_map_2d_layer_count());
     const int   point_resolution  = preset.shadow_enable ? preset.point_shadow_resolution  : 1;
@@ -766,7 +766,7 @@ auto App_rendering::create_shadow_node_for_scene_view(
 void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset)
 {
     const erhe::scene_renderer::Light_count_limits limits = (graphics_preset != nullptr)
-        ? get_light_count_limits(*graphics_preset)
+        ? get_light_count_limits(*graphics_preset, m_context.app_settings->graphics.max_light_count)
         : erhe::scene_renderer::Light_count_limits{};
     const int resolution        = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
     const int light_count       = static_cast<int>(limits.shadow_map_2d_layer_count());

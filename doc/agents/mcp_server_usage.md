@@ -517,7 +517,10 @@ light type limits `directional_shadow_light_count`,
 `directional_unshadowed_light_count`, `spot_shadow_light_count`,
 `spot_unshadowed_light_count`, `point_shadow_light_count`,
 `point_unshadowed_light_count` (integers >= 0; their total is clamped to the
-device's light limit), `use_draw_lists`. Omitted arguments keep their values, so `{}` queries. The edited preset goes
+renderer's `max_light_count`), `light_shading` (`loops` | `clustered`:
+clustered shades every active light from per-fragment light cluster lists and
+ignores the unshadowed counts, [shader_variants.md](../erhe/shader_variants.md)
+"Light shading"), `use_draw_lists`. Omitted arguments keep their values, so `{}` queries. The edited preset goes
 through `Graphics_settings::apply_preset()`, the same apply as a Settings
 window preset edit (limits clamp; the shadow maps are reconfigured on the next
 frame, logged as `Reconfiguring N shadow render node(s) from preset ...`). The

@@ -1,6 +1,7 @@
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_graphics/shader_source_cache.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_scene_renderer/light_cluster.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 
 #include "erhe_graphics/bind_group_layout.hpp"
@@ -8,6 +9,8 @@
 #include "erhe_file/file.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <string>
 
 namespace erhe::graphics { class Vertex_attribute; }
 
@@ -34,7 +37,7 @@ Program_interface::Program_interface(
     , cube_interface     {graphics_device}
     , glyph_interface    {graphics_device}
     , joint_interface    {graphics_device, config.max_joint_count}
-    , light_interface    {graphics_device, config.max_light_count}
+    , light_interface    {graphics_device, config.max_light_count, config.light_cluster}
     , material_interface {graphics_device, config.max_material_count}
     , primitive_interface{graphics_device, config.max_primitive_count}
 {
@@ -72,6 +75,8 @@ Program_interface::Program_interface(
             {.binding_point = light_buffer_binding_point,         .type = to_binding_type(light_interface.light_block),          .stage_flags = Stage::vertex | Stage::fragment},
             // light_array: the lights of light_block (doc/plans/clustered_lights.md C3).
             {.binding_point = light_array_buffer_binding_point,   .type = to_binding_type(light_interface.light_array_block),    .stage_flags = Stage::vertex | Stage::fragment},
+            // light_cluster: the light cluster lists standard.frag's clustered path reads (C3).
+            {.binding_point = light_cluster_buffer_binding_point, .type = to_binding_type(light_interface.light_cluster_block),  .stage_flags = Stage::fragment},
             // light_control: depth_to_color.frag only.
             {.binding_point = light_control_buffer_binding_point, .type = to_binding_type(light_interface.light_control_block),  .stage_flags = Stage::fragment},
             // primitive: transforms in *.vert + material index / fields in *.frag.
@@ -242,6 +247,7 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&material_interface.material_block);
     create_info.add_interface_block(&light_interface.light_block);
     create_info.add_interface_block(&light_interface.light_array_block);
+    create_info.add_interface_block(&light_interface.light_cluster_block);
     create_info.add_interface_block(&light_interface.light_control_block);
     create_info.add_interface_block(&camera_interface.camera_block);
     create_info.add_interface_block(&cube_interface.cube_instance_block);
@@ -252,6 +258,8 @@ auto Program_interface::make_prototype(
     create_info.bind_group_layout = bind_group_layout.get();
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
     create_info.defines.emplace_back("ERHE_GRID_LABELS", "1");
+    // The light cluster header stride of light_cluster.data[] (light_cluster.hpp).
+    create_info.defines.emplace_back("ERHE_LIGHT_CLUSTER_HEADER_UINT_COUNT", std::to_string(c_light_cluster_header_uint_count) + "u");
 
     bool found = false;
     auto process_shader = [&create_info, &found](erhe::graphics::Shader_type shader_type, const std::filesystem::path& path) -> void

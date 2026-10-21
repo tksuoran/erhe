@@ -32,6 +32,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/joint_poses.hpp
     erhe_scene_renderer/light_buffer.cpp
     erhe_scene_renderer/light_buffer.hpp
+    erhe_scene_renderer/light_cluster.cpp
+    erhe_scene_renderer/light_cluster.hpp
     erhe_scene_renderer/light_set.cpp
     erhe_scene_renderer/light_set.hpp
     erhe_scene_renderer/material_buffer.cpp
