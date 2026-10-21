@@ -253,7 +253,19 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_float_argument(args, "shadow_depth_bias_constant", preset.shadow_depth_bias_constant)) &&
         check(read_float_argument(args, "shadow_depth_bias_slope",    preset.shadow_depth_bias_slope))    &&
         check(read_non_negative_float_argument(args, "shadow_bias_texel_scale",  preset.shadow_bias_texel_scale))  &&
-        check(read_non_negative_float_argument(args, "shadow_bias_origin_scale", preset.shadow_bias_origin_scale));
+        check(read_non_negative_float_argument(args, "shadow_bias_origin_scale", preset.shadow_bias_origin_scale)) &&
+        check(read_int_argument  (args, "directional_shadow_light_count",     0, preset.directional_shadow_light_count))     &&
+        check(read_int_argument  (args, "directional_unshadowed_light_count", 0, preset.directional_unshadowed_light_count)) &&
+        check(read_int_argument  (args, "spot_shadow_light_count",            0, preset.spot_shadow_light_count))            &&
+        check(read_int_argument  (args, "spot_unshadowed_light_count",        0, preset.spot_unshadowed_light_count))        &&
+        check(read_int_argument  (args, "point_shadow_light_count",           0, preset.point_shadow_light_count))           &&
+        check(read_int_argument  (args, "point_unshadowed_light_count",       0, preset.point_unshadowed_light_count));
+    if (args.contains("shadow_enable")) {
+        if (!args["shadow_enable"].is_boolean()) {
+            return make_error_content("shadow_enable must be a boolean");
+        }
+        preset.shadow_enable = args["shadow_enable"].get<bool>();
+    }
     if (!args_ok) {
         return make_error_content(error);
     }
@@ -303,6 +315,12 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"shadow_bias_texel_scale",    in_effect.shadow_bias_texel_scale},
         {"shadow_bias_origin_scale",   in_effect.shadow_bias_origin_scale},
         {"point_shadow_resolution",    in_effect.point_shadow_resolution},
+        {"directional_shadow_light_count",     in_effect.directional_shadow_light_count},
+        {"directional_unshadowed_light_count", in_effect.directional_unshadowed_light_count},
+        {"spot_shadow_light_count",            in_effect.spot_shadow_light_count},
+        {"spot_unshadowed_light_count",        in_effect.spot_unshadowed_light_count},
+        {"point_shadow_light_count",           in_effect.point_shadow_light_count},
+        {"point_unshadowed_light_count",       in_effect.point_unshadowed_light_count},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();
 }
