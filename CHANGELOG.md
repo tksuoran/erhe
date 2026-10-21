@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: `Frame_time_record::gpu_clock_ratio` and the
+  `gpu_clock_ratio` argument of `Frame_pacer::on_gpu_done` (0.0: not
+  measured): the GPU's average active clock over a frame as a ratio of its
+  maximum. The upshift test predicts the GPU time at the next shorter
+  cadence from the work at the clock measured there (claim C25). The Metal
+  backend measures it in tier M (IOReport).
 - `erhe::graphics`: `Thermal_state`, `get_thermal_state()` and
   `start_thermal_state_logging()` (`thermal_state.hpp`): the machine's
   thermal state (Apple: `NSProcessInfo.thermalState`, unknown elsewhere),

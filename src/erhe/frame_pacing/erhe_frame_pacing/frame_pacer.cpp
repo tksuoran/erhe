@@ -87,6 +87,10 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_gpu_window.init(m_tunables.history);
     m_cadence_cpu_window.init(m_tunables.history);
     m_cadence_gpu_window.init(m_tunables.history);
+    m_clock_windows.resize(static_cast<std::size_t>(m_tunables.max_vsyncs) + 1);
+    for (Sample_window& window : m_clock_windows) {
+        window.init(m_tunables.history);
+    }
     m_period_sample_window.init(m_tunables.grid_reseed_window);
     m_deadline_samples.resize(m_tunables.history);
     m_deadline_samples_scratch.reserve(m_tunables.history);
@@ -328,7 +332,8 @@ void Frame_pacer::on_gpu_done(
     const double       gpu_end_time,
     const double       cpu_duration,
     const double       gpu_duration,
-    const double       latency
+    const double       latency,
+    const double       gpu_clock_ratio
 )
 {
     m_gpu_window.push(gpu_duration);
@@ -339,6 +344,9 @@ void Frame_pacer::on_gpu_done(
     if (n_used == m_vsyncs) {
         m_cadence_cpu_window.push(cpu_duration);
         m_cadence_gpu_window.push(gpu_duration);
+    }
+    if (gpu_clock_ratio > 0.0) {
+        m_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(gpu_clock_ratio);
     }
 
     const std::int64_t target_slot = (scheduled != nullptr) ? scheduled->target_slot : m_last_slot;
@@ -458,7 +466,21 @@ void Frame_pacer::on_gpu_done(
         // its dwell (C23); a heavy tail beyond the period still keeps the
         // longer cadence (C10). The frames of the dwell, not the window:
         // the window stays stale for ~2 s after a load drop (C3).
-        const double stage_time     = std::max(cpu_duration, gpu_duration);
+        // Where the host measures the GPU clock (C25), the GPU time at the
+        // next shorter cadence is predicted from the work (span * clock
+        // ratio) at the clock last seen there - its low decile, or the full
+        // clock before that cadence has a record: a GPU that clocks down at
+        // the longer cadence (Apple GPUs at N=2: 41-97 % of the maximum
+        // against 93-98 % at N=1) makes its spans there no evidence of the
+        // shorter cadence's cost, and one that clocks down at the shorter
+        // cadence too must not be judged at full clock.
+        double gpu_next = gpu_duration;
+        if (gpu_clock_ratio > 0.0) {
+            const Sample_window& record     = m_clock_windows[static_cast<std::size_t>(std::clamp(m_vsyncs - 1, 1, m_tunables.max_vsyncs))];
+            const double         clock_next = (record.count() >= m_tunables.cadence_min_samples) ? record.quantile(0.1, 1.0) : 1.0;
+            gpu_next = gpu_duration * gpu_clock_ratio / clock_next;
+        }
+        const double stage_time     = std::max(cpu_duration, gpu_next);
         const double next_period    = static_cast<double>(m_vsyncs - 1) * m_grid_period;
         const bool   beyond_period  = stage_time > next_period;
         const bool   in_band        = !beyond_period && (stage_time > (next_period - m_hysteresis));

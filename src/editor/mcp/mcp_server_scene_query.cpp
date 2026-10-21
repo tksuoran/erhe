@@ -2828,6 +2828,7 @@ auto Mcp_server::query_frame_pacing_frames(const json& args) -> std::string
             {"submit_time",           r.submit_time},
             {"present_holdback_begin", r.present_holdback_begin},
             {"present_holdback_end",  r.present_holdback_end},
+            {"gpu_clock_ratio",       r.gpu_clock_ratio},
             {"present_request_time",  r.present_request_time},
             {"present_return_time",   r.present_return_time},
             {"gpu_begin",             r.gpu_frame_begin},

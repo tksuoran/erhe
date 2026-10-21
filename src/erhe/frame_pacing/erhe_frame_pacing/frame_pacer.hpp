@@ -155,7 +155,10 @@ public:
 
     // Measurement feedback. Durations are service times (see header comment).
     void on_cpu_done        (std::int64_t frame_id, double cpu_duration);
-    void on_gpu_done        (std::int64_t frame_id, double gpu_end_time, double cpu_duration, double gpu_duration, double latency);
+    // gpu_clock_ratio: the GPU's average active clock over the frame as a
+    // ratio of its maximum, where the host measures it; 0.0 = not measured
+    // (claim C25).
+    void on_gpu_done        (std::int64_t frame_id, double gpu_end_time, double cpu_duration, double gpu_duration, double latency, double gpu_clock_ratio = 0.0);
     void on_present_feedback(std::int64_t frame_id, double achieved_present_time);
 
     void set_min_vsyncs           (int min_vsyncs);
@@ -271,6 +274,10 @@ private:
     Sample_window m_cadence_cpu_window;
     Sample_window m_cadence_gpu_window;
     bool          m_cadence_pressure{false};
+    // GPU clock ratios measured at each cadence N (index 0..max_vsyncs),
+    // kept across cadence changes: the clock the GPU shows at a cadence
+    // predicts the GPU time there (C25).
+    std::vector<Sample_window> m_clock_windows;
     std::vector<Sample_window> m_latency_windows; // per cadence N, index 0..max_vsyncs
 
     // Slot cursor and anchoring.

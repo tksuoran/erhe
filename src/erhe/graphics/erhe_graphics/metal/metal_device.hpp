@@ -33,6 +33,7 @@ namespace erhe::dataformat {
 }
 
 namespace erhe::frame_pacing { class Frame_time_recorder; }
+namespace erhe::graphics { class Gpu_clock_monitor; }
 namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
@@ -325,6 +326,10 @@ private:
     Frame_pacing_tier                m_frame_pacing_tier{Frame_pacing_tier::off};
     // Null without a CAMetalLayer (headless).
     std::shared_ptr<Present_feedback> m_present_feedback;
+    // Tier M: the GPU clock per presented frame (metal_gpu_clock_monitor.hpp);
+    // null elsewhere. Shared with the presenting command buffers'
+    // completion handlers.
+    std::shared_ptr<Gpu_clock_monitor> m_gpu_clock_monitor;
     // The FR3 target present time of one frame (set_present_target_time),
     // applied when that frame's drawable is presented. Render thread only,
     // like the Vulkan backend's.

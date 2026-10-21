@@ -364,6 +364,23 @@ period matches the calibrated one). It is logged
 occluded window) or without an on-target request offset it logs why and
 tier M keeps the quarter period and the estimator's 2.5 ms start.
 
+Tier M also starts the GPU clock monitor (`Gpu_clock_monitor`,
+`metal_gpu_clock_monitor.mm`). macOS has no public API for the GPU clock;
+the monitor resolves the private IOReport framework with `dlopen` ("GPU
+Stats" / "GPU Performance States", channel GPUPH: OFF and P1 ... P15 with
+their residencies) and reads the DVFS table from the `pmgr` IORegistry
+entry (`voltage-states9`, frequency and voltage pairs; 338-1578 MHz on the
+M4 Pro). A sample costs 0.15-0.25 ms (up to 1.7 ms), so a sampler thread
+takes it, woken by each presenting command buffer's completion handler;
+it writes the frame's GPU bracket together with `gpu_clock_ratio` (the
+average active clock since the previous sample over the maximum), which
+the frame pacer's upshift test uses (`doc/frame_pacing/algorithm.md`
+deviation 19). Measured on the Dell at 120 Hz: at N=1 the GPU runs at
+1470-1540 MHz, 78-81 % busy; at N=2 at 1020-1160 MHz median with dips to
+~650 MHz, 55 % busy. Without IOReport, or with a state table that does
+not match the DVFS table, the monitor logs why and the pacer judges by
+GPU spans.
+
 The device logs the machine's thermal state at init and on every change
 (`erhe::graphics::get_thermal_state`, `NSProcessInfo.thermalState`); MCP
 `get_frame_pacing_status` reports it as `thermal_state`, and the live gate

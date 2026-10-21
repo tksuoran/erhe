@@ -638,9 +638,15 @@ public:
     // prepared).
     void record_join_wait(const uint64_t frame_id, const Frame_result& joined_result)
     {
-        const auto to_recorder_time = [](const std::chrono::steady_clock::time_point time_point) -> double {
-            // Frame_time_recorder::now() is steady_clock seconds since its epoch.
-            return std::chrono::duration<double>{time_point.time_since_epoch()}.count();
+        // The render thread times its waits with steady_clock; the recorder
+        // has its own clock (mach_absolute_time on Apple, which stops during
+        // system sleep while steady_clock does not). Map each time point
+        // through now in both clocks: exact to the nanoseconds between the
+        // two reads, whatever the recorder's clock is.
+        const double                                recorder_now = erhe::frame_pacing::Frame_time_recorder::now();
+        const std::chrono::steady_clock::time_point steady_now   = std::chrono::steady_clock::now();
+        const auto to_recorder_time = [recorder_now, steady_now](const std::chrono::steady_clock::time_point time_point) -> double {
+            return recorder_now - std::chrono::duration<double>{steady_now - time_point}.count();
         };
         erhe::frame_pacing::Frame_time_recorder& recorder = m_graphics_device->get_frame_time_recorder();
         recorder.set(static_cast<std::int64_t>(frame_id), &erhe::frame_pacing::Frame_time_record::join_wait_begin, to_recorder_time(joined_result.join_wait_begin));
