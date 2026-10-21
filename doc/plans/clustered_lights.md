@@ -157,11 +157,14 @@ projections of the frame are final) and before the first color pass:
   that reaches it) against the AABB, and appends passing slots. The walk in
   slot order makes each list ascending and the category counts a running
   tally, with no atomics and no sort.
-- A cluster whose list would exceed `cluster_capacity` stores the first
-  `cluster_capacity` slots and sets the cluster's overflow bit. The binning
-  pass counts overflowing clusters into a per-frame counter that is read
-  back with the retired frame and reported (log warning per change, MCP
-  stats, V6). Capacity is a renderer config value.
+- Each cluster holds at most `cluster_capacity` lights (a renderer config
+  value, default 64); the limit is fixed (user decision). A cluster whose
+  list would exceed it stores the first `cluster_capacity` slots and sets
+  its overflow bit, and the binning pass counts overflowing clusters into a
+  per-frame counter read back with the retired frame. A frame whose count is
+  nonzero logs a warning naming the view, the count and the largest list
+  length the grid asked for, once each time the count changes; MCP
+  `get_light_cluster_stats` reports the same values (V6).
 - Spot cone tests against the AABB are a later refinement (phase 5); the
   sphere bound is exact for the range window and conservative for the cone.
 - The view-space light centres are computed once per view, in a first
@@ -245,10 +248,10 @@ limits the two paths are expected to produce identical images (V1).
 
 ### C8. The loop path
 
-The loop path stays until the gates V1-V4 have passed on every backend;
-it is the identity reference of V1. Phase 6 then removes it - the six
-light-count axes, the preset's unshadowed counts, `light_shading` - unless
-the user decides to keep it (Open, item 1).
+The loop path stays (user decision): it is the identity reference of V1
+and the baseline of the performance comparison V5, selected per session by
+`light_shading` = `loops`. Its six light-count axes and the preset's
+unshadowed counts stay with it.
 
 ## Phases
 
@@ -281,8 +284,7 @@ Each phase is one commit (or a short series), reviewed, with its gates.
 5. **Refinements, each only when V5 shows it pays:** spot cone vs AABB;
    skip binning on unchanged inputs (C4); shared-memory light tiles in the
    cluster loop for scenes with hundreds of lights; splitting `Light` into a
-   shading record and a shadow record indexed by shadow slot (Open, item 3).
-6. **Remove the loop path** (C8), per the user's decision.
+   shading record and a shadow record indexed by shadow slot (Open, item 1).
 
 ## Verification
 
@@ -317,17 +319,11 @@ Each phase is one commit (or a short series), reviewed, with its gates.
 
 ## Open
 
-1. Keep the loop path after the gates pass (as a debug reference / for
-   scenes with very few lights), or remove it in phase 6 together with the
-   six light-count axes and the unshadowed preset counts.
-2. Cluster overflow: fixed per-cluster capacity with a reported overflow
-   (C4, chosen for determinism and no atomics), or an exact compacted list
-   (count pass, prefix sum, write pass) with no per-cluster limit.
-3. Split `Light` (416 bytes) into a 96-byte shading record for every light
+1. Split `Light` (416 bytes) into a 96-byte shading record for every light
    and a 320-byte shadow record per shadow slot. Smaller loads in every
    loop iteration and in the ray-hit loops; touches every reader. Decided
    from V5 in phase 5.
-4. Shadow slots remain by scene order (`bistro_viewport_gpu.md` option 1 is
+2. Shadow slots remain by scene order (`bistro_viewport_gpu.md` option 1 is
    not pursued), so on Bistro the far shadow-mapped point lights keep their
    cube faces while near lights shade unshadowed; clustered mode makes the
    near lights lit, not shadowed.
