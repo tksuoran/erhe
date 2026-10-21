@@ -60,7 +60,18 @@
 >a08c0c038::Frame_time_recorder::now=mach_absolute_time-on-Apple+auto->M
 @gate::ProMotion-Debug+Release-3-threading-modes-60/60-N=1-28ms(S-37.6)+fixed-60Hz-N=1-41ms(S-58.5)
 
+[LANDED_2026-10-21b]
+>ed9cb7a0e::thermal-state{NSProcessInfo;logged+MCP+gate}+Dell-calibration{request-0.38-0.5T;deadline-9.2ms}
+>cb0414237+87ab403cf::Clock_monitor{IOReport-dlopen;GPUPH+PCPU-channels;pmgr-voltage-states9(GPU,Hz)+5/13-sram(P-clusters,kHz);sampler-thread-per-frame;gpu/cpu_clock_ratio}+C25{upshift-judged-by-work-at-clock-recorded-at-N-1}+join-wait-steady_clock->recorder-mapping-fix
+>24610a4b6::Gpu_prewarm{ALU-kernel-after-presenting-cb-ordered-by-MTLEvent;rate-at-init}+C26{prewarm-phase-before-upshift;fill-learned-online-start-2ms-double-if-clock<0.9}{NOT-LIVE-GATED}
+@measured::Dell-N=1-GPU-1470-1540MHz+P-cores-92-97%;N=2-GPU-~0.5(dips-0.41)+P-cores-~53%;work(time*clock)-cadence-invariant{GPU~5.0ms;CPU-Debug~1.1ms}
+@measured::prewarm-probe{2.3ms-after-N=2-frame:clock-0.51->0.97,span-9.9->4.9ms}
+@user-decisions-2026-10-21::IOReport-private-API-ok-for-clocks+prewarm-over-ramp-tolerant-attribution(judder-visible)+fill-learned-online
+
 [TRAPS]
+!GPU-governor¬utilization-controller{N=2-68%-busy-at-0.45-clock;2.3ms-ALU-after-frame-raises-to-0.97}+ignores-compute-only-load-with-clear-frames(init-sweep-useless)
+!prewarm-kernel-unordered-overlaps-frame(stretches-span)->MTLEvent-wait-after-presenting-cb
+!any-steady_clock->recorder-time-conversion-must-map-via-now-in-both-clocks
 !steady_clock!=CACurrentMediaTime-after-system-sleep{mach_absolute_time-stops-in-sleep}->recorder-uses-mach_absolute_time
 !ProMotion-compositor=one-period-deeper{request-cutoff-V-T+deadline-2T+1ms}->calibrate¬hardcode
 !blocked-nextDrawable-returns-at-latch-of-frame-k-2(display-15.7ms)
