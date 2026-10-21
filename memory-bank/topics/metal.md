@@ -106,6 +106,9 @@
 !Vulkan-frame-bracket-span-held-upload->frame-submit-idle-gap(1.4ms-Debug)->governor-lowers-clock-at-N=1(0.72)->span~T->spurious-downshift;fixed:gap-queries+gpu_service_time
 !zsh-unquoted-$VAR-not-word-split{--env-$E-passes-one-arg}
 
+!Bistro-2026-10-21::Apple-compiler(Metal+MoltenVK)-ran-unrolled-light-bodies-beyond-range->c8dc0080c-range-early-out{GPU-Metal-123->40ms;MoltenVK-108->35ms;KK-18->13ms;images-identical};remaining-~3x-GPU-gap-vs-KosmicKrisp-unexplained(no-lights-pass-also-slower)->open;KK-FIFO-not-vsync-locked(present-interval-13.7ms-stdev-3.8)
+!bistro_frame_bench-on-macOS::tracy-capture-must-connect-after-editor-ready(c14396142);ERHE_TRACY_DIR=dir-with-symlinks-to-~/git/tracy/{capture,csvexport}/build/*
+
 [DIAGNOSIS_RECIPE]
 cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permanent}
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
