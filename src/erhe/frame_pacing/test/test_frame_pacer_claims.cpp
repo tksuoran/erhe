@@ -1575,3 +1575,40 @@ TEST(Frame_pacer_claims, c27_steady_clock_records)
     }
     EXPECT_EQ(slips, 0u) << "no slips across the transition";
 }
+
+TEST(Frame_pacer_claims, c28_latency_per_visit)
+{
+    // Live (Metal tier M, Dell at 120 Hz, all threading modes): after the
+    // upshift the pacer released every frame at once for 85-120 frames - its
+    // N=1 latency window still held the startup frames (scene load,
+    // 30-50 ms) - and the frames waited in the FR5 clamp, at the join and in
+    // nextDrawable instead; those waits, counted as latency, kept the
+    // estimate at the N=2 level (22-30 ms against ~7 ms in steady state).
+    // Release: one refresh of extra latency; Debug: 20-30 % of the frames
+    // skipped a slot. The latency input excludes the involuntary waits (the
+    // plant follows the host's definition), and a cadence's latency window
+    // holds the current visit.
+    const std::vector<Frame_record> records = run_c27(2.3 * ms); // the live startup: spike at N=1, pre-warm
+    std::size_t upshift = 0;
+    for (std::size_t i = 70; i < records.size(); ++i) {
+        if ((records[i].vsyncs == 1) && (records[i - 1].vsyncs > 1)) {
+            upshift = i;
+            break;
+        }
+    }
+    ASSERT_GT(upshift, 0u);
+    const auto median_input_to_display = [&records](const std::size_t first, const std::size_t last) -> double {
+        std::vector<double> values;
+        for (std::size_t i = first; i < std::min(last, records.size()); ++i) {
+            values.push_back(records[i].display_time - records[i].decision_time);
+        }
+        std::sort(values.begin(), values.end());
+        return values[values.size() / 2];
+    };
+    const double t      = 1.0 / 120.0;
+    const double steady = median_input_to_display(3000, records.size());
+    // Frames 20-100 after the upshift (the first 20 carry the N=2 seed by
+    // design, C3).
+    const double excess = median_input_to_display(upshift + 20, upshift + 100) - steady;
+    EXPECT_LT(excess, 0.5 * t) << "the latency estimate follows the cadence entered";
+}

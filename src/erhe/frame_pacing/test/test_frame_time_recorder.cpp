@@ -41,6 +41,27 @@ TEST(Frame_time_recorder, cpu_service_time_subtracts_all_waits)
     EXPECT_NEAR(record.cpu_service_time(), 0.010 - 0.001 - 0.002 - 0.001 - 0.001, 1e-9);
 }
 
+// The chain latency excludes the involuntary waits between the release and
+// the submit (claim C28): the FR5 clamp, the join, the acquire and the fence
+// waits, each only after the release; the holdback after the submit is not
+// one of them.
+TEST(Frame_time_recorder, release_wait_time_sums_waits_after_release)
+{
+    Frame_time_recorder recorder{8};
+    recorder.begin_frame(2, 2.0);
+    const double release = 2.001;
+    recorder.set(2, &Frame_time_record::pacer_wait_begin,   2.000, &Frame_time_record::pacer_wait_end,   release);
+    recorder.set(2, &Frame_time_record::present_wait_begin, 2.0015, &Frame_time_record::present_wait_end, 2.0075); // 6 ms
+    recorder.set(2, &Frame_time_record::join_wait_begin,    2.0005, &Frame_time_record::join_wait_end,    2.0015); // 0.5 ms after the release
+    recorder.set(2, &Frame_time_record::acquire_begin,      2.008, &Frame_time_record::acquire_end,      2.009);   // 1 ms
+    recorder.add(2, &Frame_time_record::fence_wait_duration, 0.0002);
+    recorder.set(2, &Frame_time_record::present_holdback_begin, 2.010, &Frame_time_record::present_holdback_end, 2.012);
+
+    Frame_time_record record{};
+    ASSERT_TRUE(recorder.get(2, record));
+    EXPECT_NEAR(record.release_wait_time(release), 0.006 + 0.0005 + 0.001 + 0.0002, 1e-9);
+}
+
 TEST(Frame_time_recorder, writes_to_unopened_or_evicted_records_are_ignored)
 {
     Frame_time_recorder recorder{4};

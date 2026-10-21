@@ -58,6 +58,14 @@ class Tunables:
     # starves short stays at a borderline cadence of evidence (C25 heavy).
     clock_settle: float = 0.15
     steady_clock_records: bool = True  # C27 (False: every frame's clock under the cadence it was scheduled at, pre-C27)
+    # C28: a cadence's latency window holds the current visit only: entering
+    # a cadence clears it, and until the visit has K_seed samples of its own
+    # the latency estimate is floored by a seed - the estimate of the
+    # cadence left, floored by the structural sum. Samples of an earlier
+    # visit (the startup load spike at N=1) kept the release budget at the
+    # old latency for a whole window after an upshift, and a seed kept as a
+    # window sample carried that spike down a chain of short visits.
+    latency_per_visit: bool = True    # C28 (False: the window keeps earlier visits' samples and the seed as a sample, pre-C28)
     M:          int   = 2           # reactive downshift: consecutive self-misses
     m0_frac:    float = 0.20        # initial margin, fraction of T
     m_min_frac: float = 0.02
@@ -155,6 +163,7 @@ class FramePacer:
         self.frame_prewarm = {}           # id -> pre-warm requested at schedule time (C27)
         self.last_g = 0.0
         self.L_win = {}                   # cadence N -> deque of latency samples
+        self.L_seed = 0.0                 # C28: latency floor until the visit has K_seed samples (0 = none)
         self.j_next = None                # next target slot (None until engaged)
         self.last_slot = -1
         self._reset_dwell()
@@ -201,6 +210,8 @@ class FramePacer:
         fallback = self._q(self.c_win, 0.0) + self._q(self.g_win, 0.0)
         if fallback <= 0.0:
             fallback = self.tun.T
+        if self.tun.latency_per_visit and self.L_seed > 0.0 and len(win or ()) < self.tun.K_seed:
+            return max(self.L_seed, self._q(win, 0.0) if win else 0.0)
         if win:
             return self._q(win, fallback)
         return fallback
@@ -215,6 +226,8 @@ class FramePacer:
         fallback = self._q2(self.c_win, 0.5, 0.0) + self._q2(self.g_win, 0.5, 0.0)
         if fallback <= 0.0:
             fallback = self.tun.T
+        if self.tun.latency_per_visit and self.L_seed > 0.0 and len(win or ()) < self.tun.K_seed:
+            return max(self.L_seed, self._q2(win, 0.5, 0.0) if win else 0.0)
         if win:
             return self._q2(win, 0.5, fallback)
         return fallback
@@ -541,6 +554,11 @@ class FramePacer:
         if n_new == self.N:
             return
         old = self.N
+        # C28: the seed is the estimate at the cadence left; the structural
+        # sum floors it only where that visit has no measured estimate yet
+        # (its whole-history windows still hold an earlier load).
+        seed = self._L_hat() if (self.forced is None) else 0.0
+        seed_measured = len(self.L_win.get(old) or ()) >= t.K_seed
         self.N = n_new
         self._reset_dwell()
         self.prewarm_left = 0
@@ -549,7 +567,12 @@ class FramePacer:
         self.g_cad.clear()
         self.cadence_pressure = False
         win = self.L_win.get(n_new)
-        if not win:
+        if t.latency_per_visit:
+            if not seed_measured:
+                seed = max(seed, self._q(self.c_win, 0.0) + self._q(self.g_win, 0.0))
+            self.L_seed = seed if seed > 0.0 else t.T
+            self.L_win[n_new] = deque(maxlen=t.history)
+        elif not win:
             carry = self._q(self.L_win.get(old), 0.0)
             struct = self._q(self.c_win, 0.0) + self._q(self.g_win, 0.0)
             init = max(carry, struct)
@@ -853,6 +876,7 @@ class Scenario:
                                          # ProMotion panel); the blocked CPU
                                          # also delays the next decision.
     pool_latch_lead: float = 0.0
+    latency_includes_waits: bool = False # C28 control: the host's latency input counts the involuntary waits (pre-C28)
     slop_servo: bool = False             # C19..C21: release comes from the
                                          # tier S slop-servo sleep instead of
                                          # the FramePacer decision; the
@@ -993,6 +1017,12 @@ def run(sc: Scenario):
         ce = cpu_start + c
         if sc.drawable_pool > 0 and (k - (sc.drawable_pool - 1)) in disp_time:
             ce = max(ce, disp_time[k - (sc.drawable_pool - 1)] - sc.pool_latch_lead)
+        # C28: the latency input is the chain's own latency - release to GPU
+        # end minus the involuntary waits on the CPU path (fence, acquire /
+        # drawable pool; the FR5 clamp is inside r_eff). Those waits measure
+        # how early the frame was released: counted as latency, an early
+        # release justified itself.
+        cpu_waits = (cpu_start - r_eff) + (ce - (cpu_start + c))
         cpu_end[k] = ce
         push(ce, 'cpu', (k, c))
         gs = max(ce, gpu_end.get(k - 1, 0.0), gpu_busy_until)
@@ -1013,7 +1043,8 @@ def run(sc: Scenario):
             dvfs_clock += (target - dvfs_clock) * (1.0 - math.exp(-dt / tau))
         # c and g are pure stage service times (waits excluded) — normative,
         # see frame_pacing_inputs.md section 3.2/3.3.
-        gpu_payload = (k, ge, c, g, ge - r_eff, clock, cpu_clock)
+        L_input = (ge - r_eff) if sc.latency_includes_waits else (ge - r_eff - cpu_waits)
+        gpu_payload = (k, ge, c, g, L_input, clock, cpu_clock)
         if sc.lazy_gpu:
             pending_gpu[k] = gpu_payload
         else:
@@ -2207,6 +2238,49 @@ def c27_steady_clock_records():
           f"upshifts {ups_on}, N after frame 3000: {sorted({r.N for r in recs_on[3000:]})}, {slips_on} slips after frame 140")
 
 
+def c28_latency_per_visit():
+    print("C28 the latency estimate follows the cadence entered")
+    # Live (Metal tier M, Dell at 120 Hz, all threading modes): after the
+    # upshift the pacer released every frame at once for 85-120 frames - its
+    # N=1 latency window still held the startup frames (scene load,
+    # 30-50 ms) - and the frames waited in the FR5 clamp, at the join and in
+    # nextDrawable instead; those waits, counted as latency, kept the
+    # estimate at the N=2 level (22-30 ms against ~7 ms in steady state).
+    # Release: one refresh of extra latency; Debug (render thread slower):
+    # 20-30 % of the frames skipped a slot. The latency input excludes the
+    # involuntary waits, and a cadence's window holds the current visit.
+    T = 1.0 / 120.0
+    dpe_true = T + 1.0 * MS
+    def arm(fixed, seed):
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_true + 0.3 * MS,
+                       dpe_max=dpe_true + 0.3 * MS + 0.5 * T, present_queue='fifo',
+                       prewarm_seconds=2.3 * MS, latency_per_visit=fixed)
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        def work(k, n_used):
+            if 30 <= k < 60:
+                return 20.0 * MS   # startup spike at N=1, as live
+            return max(0.5, rw.gauss(5.1, 0.15)) * MS
+        sc = Scenario("c28", 4000, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work, dvfs=True,
+                      dpe_true=dpe_true, drawable_pool=3, pool_latch_lead=dpe_true - 1.8 * MS,
+                      latency_includes_waits=not fixed)
+        recs, _ = run(sc)
+        up = next(i for i in range(70, len(recs)) if recs[i].N == 1 and recs[i - 1].N > 1)
+        med = lambda v: sorted(v)[len(v) // 2]
+        steady = med([r.disp_time - r.decision_t for r in recs[3000:]])
+        # Input-to-display latency over frames 20-100 after the upshift
+        # (the first 20 carry the N=2 seed by design, C3).
+        excess = med([r.disp_time - r.decision_t for r in recs[up + 20:up + 100]]) - steady
+        slips = sum(1 for r in recs[up:] if r.slipped)
+        return excess, slips, {r.N for r in recs[3000:]}
+    ctl = arm(False, 2701)
+    fix = arm(True, 2701)
+    check("C28 control: earlier visits' samples and waits as latency keep one refresh of extra latency (the live failure)",
+          ctl[0] > 0.75 * T, f"excess input-to-display latency {ctl[0] * 1000:.1f} ms over frames 20-100 after the upshift")
+    check("C28 the estimate follows the cadence entered", fix[0] < 0.5 * T and fix[1] == 0 and fix[2] == {1},
+          f"excess {fix[0] * 1000:.1f} ms, {fix[1]} slips, N after frame 3000: {sorted(fix[2])}")
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -2235,6 +2309,7 @@ def main():
     c25_upshift_under_measured_gpu_clock()
     c26_gpu_prewarm()
     c27_steady_clock_records()
+    c28_latency_per_visit()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")
