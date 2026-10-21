@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: GPU pre-warm before an upshift (claim C26):
+  `Schedule_decision::prewarm_seconds`, `Frame_pacer_tunables::upshift_prewarm_seconds`
+  / `upshift_prewarm_frames` / `upshift_prewarm_clock` /
+  `upshift_prewarm_max_frac`, `Deadline_offset_setup::upshift_prewarm`.
+  `erhe::graphics`: `Device::set_present_prewarm()` /
+  `get_present_prewarm()`, `Present_calibration::prewarm_seconds_per_iteration`
+  (the Metal backend runs the pre-warm in tier M).
 - `erhe::frame_pacing`: `Frame_time_record::gpu_clock_ratio` /
   `cpu_clock_ratio` and the matching arguments of `Frame_pacer::on_gpu_done`
   (0.0: not measured): the GPU's and the CPU's average active clock over a

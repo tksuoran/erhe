@@ -33,7 +33,7 @@ namespace erhe::dataformat {
 }
 
 namespace erhe::frame_pacing { class Frame_time_recorder; }
-namespace erhe::graphics { class Clock_monitor; }
+namespace erhe::graphics { class Clock_monitor; class Gpu_prewarm; }
 namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
@@ -330,6 +330,8 @@ private:
     // null elsewhere. Shared with the presenting command buffers'
     // completion handlers.
     std::shared_ptr<Clock_monitor> m_clock_monitor;
+    // Tier M: the GPU pre-warm kernel (metal_gpu_prewarm.hpp); null elsewhere.
+    std::unique_ptr<Gpu_prewarm>   m_gpu_prewarm;
     // The FR3 target present time of one frame (set_present_target_time),
     // applied when that frame's drawable is presented. Render thread only,
     // like the Vulkan backend's.

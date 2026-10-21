@@ -3,6 +3,7 @@
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
 #include "erhe_graphics/metal/metal_clock_monitor.hpp"
+#include "erhe_graphics/metal/metal_gpu_prewarm.hpp"
 #include "erhe_graphics/metal/metal_gpu_timer.hpp"
 #include "erhe_graphics/metal/metal_scoped_debug_group.hpp"
 #include "erhe_graphics/metal/metal_helpers.hpp"
@@ -364,11 +365,17 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
         m_surface->get_impl().apply_frame_pacing_tier(m_frame_pacing_tier);
     }
     if (m_frame_pacing_tier == Frame_pacing_tier::full) {
-        run_present_calibration();
+        // The clock monitor and the pre-warm kernel first: the present
+        // calibration measures the pre-warm with them.
         m_clock_monitor = std::make_shared<Clock_monitor>(m_device.get_frame_time_recorder());
         if (!m_clock_monitor->is_available()) {
             m_clock_monitor.reset();
         }
+        m_gpu_prewarm = std::make_unique<Gpu_prewarm>(m_mtl_device, m_mtl_command_queue);
+        if (!m_gpu_prewarm->is_available()) {
+            m_gpu_prewarm.reset();
+        }
+        run_present_calibration();
     }
     log_context->info(
         "frame pacing tier = {}",
@@ -992,6 +999,14 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
 
         impl.add_gpu_timer_completion_handler();
         note_command_buffer_committed(impl.get_completion_frame_index());
+        // GPU pre-warm (claim C26): ordered after the presenting command
+        // buffer through the pre-warm event, so it runs in the idle gap.
+        const double prewarm_seconds = ((swapchain != nullptr) && (m_gpu_prewarm != nullptr))
+            ? m_device.get_present_prewarm(static_cast<std::int64_t>(impl.get_frame_id()))
+            : 0.0;
+        if (prewarm_seconds > 0.0) {
+            m_gpu_prewarm->signal_after(mtl_cb);
+        }
         // The present request of the frame time record: presentDrawable is
         // encoded on this cb, so the commit hands the drawable over. It does
         // not block (the backpressure is in begin_swapchain), but the record
@@ -1004,6 +1019,9 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         mtl_cb->commit();
         if (swapchain != nullptr) {
             recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_return_time, erhe::frame_pacing::Frame_time_recorder::now());
+        }
+        if (prewarm_seconds > 0.0) {
+            m_gpu_prewarm->dispatch(prewarm_seconds);
         }
 
         // Drop our reference now that the cb is committed: Metal keeps the

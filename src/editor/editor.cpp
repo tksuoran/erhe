@@ -821,6 +821,7 @@ public:
 
         packet.present_target_time = 0.0;
         packet.present_hold_until  = 0.0;
+        packet.present_prewarm     = 0.0;
         packet.present_wait_id     = -1;
         int64_t display_advance_ns = -1;
 
@@ -883,6 +884,7 @@ public:
             if ((pacing_decision.target_time > 0.0) && (pacing_decision.frame_id == frame_id)) {
                 packet.present_target_time = pacing_decision.target_time;
                 packet.present_hold_until  = pacing_decision.hold_until;
+                packet.present_prewarm     = pacing_decision.prewarm_seconds;
             }
             if ((pacing_decision.wait_id >= 0) && (pacing_decision.frame_id == frame_id)) {
                 packet.present_wait_id = pacing_decision.wait_id;
@@ -1851,6 +1853,7 @@ public:
             packet.present_target_time,
             packet.present_hold_until
         );
+        m_graphics_device->set_present_prewarm(static_cast<std::int64_t>(packet.device_frame_id), packet.present_prewarm);
 
         // Rendering
         m_app_rendering->process_start_capture();
@@ -3140,6 +3143,10 @@ public:
                             deadline_offset.calibrated_period = calibration.period;
                             deadline_offset.initial           = calibration.deadline_offset;
                             deadline_offset.maximum           = calibration.deadline_offset + (0.5 * calibration.period);
+                            // The GPU pre-warm fill starts here and the
+                            // pacer learns the one that raises the clock
+                            // (claim C26); 2.3 ms raised it on an M4 Pro.
+                            deadline_offset.upshift_prewarm   = (calibration.prewarm_seconds_per_iteration > 0.0) ? 0.002 : 0.0;
                         }
                     }
                     m_frame_pacing_observer.set_deadline_offset(deadline_offset);

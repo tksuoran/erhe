@@ -45,6 +45,9 @@ public:
     double calibrated_period{0.0};
     double initial          {0.0};
     double maximum          {0.0};
+    // GPU pre-warm before an upshift (claim C26): the fill the pacer starts
+    // learning from; 0.0 = the host has no pre-warm.
+    double upshift_prewarm  {0.0};
 
     [[nodiscard]] auto operator==(const Deadline_offset_setup& other) const -> bool = default;
 };

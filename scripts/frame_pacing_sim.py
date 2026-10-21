@@ -35,6 +35,21 @@ class Tunables:
     q_up:       float = 0.9         # share of the dwell's frames that must have upshift headroom
     cadence_min_samples: int = 30   # stage samples at the current cadence the predictive downshift needs (C24)
     cadence_scoped: bool = True     # C24: predictive downshift on the current cadence's samples (False: the whole window, pre-C24)
+    # GPU pre-warm before an upshift (C26): the host can run extra GPU work
+    # after a frame's work (Metal tier M: an ALU-only kernel ordered after
+    # the presenting command buffer). The Apple GPU holds a low clock at the
+    # longer cadence; switching there makes the first frames at N-1 slip
+    # while the clock ramps. With pre-warm the completed upshift dwell first
+    # requests the fill per frame for up to prewarm_frames frames and
+    # switches once a frame's own times fit N-1's budget. A pre-warm ending
+    # below prewarm_clock doubles the fill (the governor needs more; it
+    # answers only the real workload, so the fill is learned online, not
+    # calibrated); one that reached it but does not fit is a failed upshift
+    # (backoff). The fill that worked stays.
+    prewarm_seconds: float = 0.0    # the fill to start from; 0 = no pre-warm
+    prewarm_frames:  int   = 8
+    prewarm_clock:   float = 0.9    # a pre-warm ending below this clock doubles the fill
+    prewarm_max_frac: float = 0.5   # fill bound, fraction of the cadence period
     M:          int   = 2           # reactive downshift: consecutive self-misses
     m0_frac:    float = 0.20        # initial margin, fraction of T
     m_min_frac: float = 0.02
@@ -94,6 +109,8 @@ class ScheduleDecision:
     pred_dur:     float  # FR4: predicted visible duration
     N:            int
     wait_id:      int    # present-wait clamp: block until this id displayed
+    prewarm:      float = 0.0  # C26: seconds (wall time) of extra GPU work after
+                               # this frame's work (0 = none), see Tunables.prewarm
     hold_until:   float = 0.0  # C15/C18: delay the present request to this
                                # time (0 = no holdback needed). Capped so an
                                # INLINE holdback can never push the next
@@ -124,6 +141,9 @@ class FramePacer:
         # changes: the clock the GPU shows at a cadence predicts the cost there.
         self.clock_by_N = {}
         self.cpu_clock_by_N = {}
+        self.prewarm_left = 0             # C26: pre-warm frames left (0 = none)
+        self.prewarm_fill = tun.prewarm_seconds  # C26: the learned fill
+        self.last_g = 0.0
         self.L_win = {}                   # cadence N -> deque of latency samples
         self.j_next = None                # next target slot (None until engaged)
         self.last_slot = -1
@@ -312,6 +332,7 @@ class FramePacer:
             # images a deadline offset of one or more cadence periods holds
             # in the queue by itself (C22).
             wait_id=frame_id - 1 - t.Q_star - math.floor(self.dpe / (self.N * self.period)),
+            prewarm=(self.prewarm_fill if self.prewarm_left > 0 else 0.0),
             hold_until=hold_until)
 
     # -- measurement feedback ----------------------------------------------
@@ -331,6 +352,7 @@ class FramePacer:
             self.clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(clock)
         if cpu_clock > 0.0:
             self.cpu_clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(cpu_clock)
+        self.last_g = g
         self.frame_gpu_end[frame_id] = gpu_end
         d = self.V(self.frame_slot[frame_id]) - self.dpe
         s = d - gpu_end
@@ -441,8 +463,26 @@ class FramePacer:
                 record = records.get(self.N - 1)
                 ratio_next = self._q2(record, 0.1, 1.0) if record and len(record) >= t.cadence_min_samples else 1.0
                 return duration * ratio / ratio_next
-            stage = max(at_next(c, cpu_clock, self.cpu_clock_by_N), at_next(g, clock, self.clock_by_N))
             next_period = (self.N - 1) * self.period
+            if self.prewarm_left > 0:
+                # Pre-warm (C26): the frame's own GPU time is measured at the
+                # raised clock; switch once it - and the CPU's at the clock
+                # recorded at N-1 - fits N-1's budget. A pre-warm that does
+                # not get there is a failed upshift (backoff, C10).
+                if max(at_next(c, cpu_clock, self.cpu_clock_by_N), g) <= next_period - t.H:
+                    self.prewarm_left = 0
+                    self._change_cadence(self.N - 1, upshift=True)
+                    self.upshift_time = gpu_end
+                else:
+                    self.prewarm_left -= 1
+                    if self.prewarm_left == 0:
+                        if 0.0 < clock < t.prewarm_clock:
+                            # The governor did not raise the clock: learn a larger fill.
+                            self.prewarm_fill = min(2.0 * self.prewarm_fill, t.prewarm_max_frac * self.N * self.period)
+                        else:
+                            self.dwell_required *= 2.0
+                return
+            stage = max(at_next(c, cpu_clock, self.cpu_clock_by_N), at_next(g, clock, self.clock_by_N))
             beyond = stage > next_period
             self.dwell_frames += 1
             if not beyond and stage > next_period - t.H:
@@ -452,8 +492,12 @@ class FramePacer:
             else:
                 self.dwell += elapsed
                 if self.dwell >= self.dwell_required:
-                    self._change_cadence(self.N - 1, upshift=True)
-                    self.upshift_time = gpu_end
+                    if (self.prewarm_fill > 0.0) and (clock > 0.0):
+                        self.prewarm_left = t.prewarm_frames
+                        self._reset_dwell()
+                    else:
+                        self._change_cadence(self.N - 1, upshift=True)
+                        self.upshift_time = gpu_end
         else:
             self._reset_dwell()
 
@@ -480,6 +524,7 @@ class FramePacer:
         old = self.N
         self.N = n_new
         self._reset_dwell()
+        self.prewarm_left = 0
         self.c_cad.clear()
         self.g_cad.clear()
         self.cadence_pressure = False
@@ -685,6 +730,21 @@ class Scenario:
     cpu_clock_fn: object = None          # C25: (k, N) -> CPU clock ratio; the CPU duration
                                          # is then c / ratio (c_fn gives the work at full clock)
     report_cpu_clock: bool = True        # C25: the host measures the CPU clock too
+    dvfs: bool = False                   # C26: the Apple GPU governor as measured (not a
+                                         # utilization controller): at N=1, or with at least
+                                         # dvfs_prewarm_min of pre-warm work after the frame,
+                                         # the clock heads for 1.0 with dvfs_tau_up; at a
+                                         # longer cadence without it for dvfs_low with
+                                         # dvfs_tau_down. The GPU duration is the work
+                                         # (g_fn / g_at_cadence_fn) / clock and the clock is
+                                         # reported. Pre-warm work runs after the frame's work
+                                         # (ordered after it), delaying the next frame's GPU
+                                         # start only when it overlaps it.
+    dvfs_low: float = 0.47
+    dvfs_tau_up: float = 0.06
+    dvfs_delay: float = 0.015            # C26: the governor reacts this long after the condition changes
+    dvfs_tau_down: float = 0.2
+    dvfs_prewarm_min: float = 0.002
     forced_range: tuple = None           # (first, last) frames with corruption
     recreate_at: int = None              # swapchain recreation at this frame
     lazy_gpu:    bool = False            # C9: GPU measurements delivered via the
@@ -838,6 +898,10 @@ def run(sc: Scenario):
     skip_rng = random.Random(sc.skip_seed)
     servo = SlopServo(sc.servo_tun, t.T) if sc.slop_servo else None
     prev_decision_t = 0.0
+    dvfs_clock = 1.0                     # C26 plant GPU clock
+    dvfs_high = True                     # C26: the governor's current condition ...
+    dvfs_since = 0.0                     # ... and since when it holds
+    gpu_busy_until = 0.0                 # C26: end of pre-warm work on the GPU
 
     def maybe_skip(slot):
         # C17: scanout-side skip - the present op stays on cadence but
@@ -887,7 +951,10 @@ def run(sc: Scenario):
             cpu_clock = cpu_ratio if sc.report_cpu_clock else 0.0
         g = sc.g_at_cadence_fn(k, dec.N) if sc.g_at_cadence_fn is not None else sc.g_fn(k)
         clock = 0.0
-        if sc.gpu_clock_fn is not None:
+        if sc.dvfs:
+            g = g / dvfs_clock
+            clock = dvfs_clock
+        elif sc.gpu_clock_fn is not None:
             # C25: g is the work at full clock; a clocked-down GPU takes longer.
             ratio = sc.gpu_clock_fn(k, dec.N)
             g = g / ratio
@@ -908,9 +975,22 @@ def run(sc: Scenario):
             ce = max(ce, disp_time[k - (sc.drawable_pool - 1)] - sc.pool_latch_lead)
         cpu_end[k] = ce
         push(ce, 'cpu', (k, c))
-        gs = max(ce, gpu_end.get(k - 1, 0.0))
+        gs = max(ce, gpu_end.get(k - 1, 0.0), gpu_busy_until)
         ge = gs + g
         gpu_end[k] = ge
+        prewarm_time = dec.prewarm   # wall time; the host sizes its kernel to it
+        gpu_busy_until = ge + prewarm_time
+        if sc.dvfs:
+            tp_d = sc.true_period if sc.true_period is not None else t.T
+            dt = dec.N * tp_d
+            high = (dec.N <= 1) or (prewarm_time >= sc.dvfs_prewarm_min)
+            if high != dvfs_high:
+                dvfs_high = high
+                dvfs_since = ge
+            target_high = dvfs_high if (ge - dvfs_since) >= sc.dvfs_delay else (not dvfs_high)
+            target = 1.0 if target_high else sc.dvfs_low
+            tau = sc.dvfs_tau_up if target > dvfs_clock else sc.dvfs_tau_down
+            dvfs_clock += (target - dvfs_clock) * (1.0 - math.exp(-dt / tau))
         # c and g are pure stage service times (waits excluded) — normative,
         # see frame_pacing_inputs.md section 3.2/3.3.
         gpu_payload = (k, ge, c, g, ge - r_eff, clock, cpu_clock)
@@ -2011,6 +2091,55 @@ def c25_upshift_under_measured_gpu_clock():
           f"{changes} cadence changes after frame 600, final N={recs_h[-1].N}")
 
 
+def c26_gpu_prewarm():
+    print("C26 GPU pre-warm before an upshift")
+    # Measured live (Metal tier M, Dell U2725QE at 120 Hz): with ~5 ms of
+    # work the Apple GPU holds ~0.5 of its maximum clock at N=2 and ~0.97 at
+    # N=1. After an upshift the clock needs ~6 frames to ramp; meanwhile
+    # spans of 9-11 ms display frames 1-2 refreshes late (visible judder)
+    # and the reactive path reverts. 2.3 ms of ALU-only work after each N=2
+    # frame raised the clock to 0.97 (probe), so pre-warm runs that before
+    # the switch.
+    T = 1.0 / 120.0
+    dpe_true = T + 1.0 * MS
+    def arm(prewarm, seed, n=6000, fill=2.3 * MS):
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_true + 0.3 * MS,
+                       dpe_max=dpe_true + 0.3 * MS + 0.5 * T, present_queue='fifo',
+                       prewarm_seconds=(fill if prewarm else 0.0))
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        def work(k, n_used):
+            if 100 <= k < 130:
+                return 20.0 * MS
+            return max(0.5, rw.gauss(5.1, 0.15)) * MS
+        sc = Scenario("c26", n, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work, dvfs=True,
+                      dpe_true=dpe_true, drawable_pool=3, pool_latch_lead=dpe_true - 1.8 * MS)
+        recs, _ = run(sc)
+        return recs
+    recs_off = arm(False, 2601)
+    recs_on = arm(True, 2601)
+    recs_learn = arm(True, 2601, fill=0.7 * MS)
+    def summary(recs):
+        # After the spike's own downshifts settle (frame 140 on).
+        ups = [i for i in range(140, len(recs)) if recs[i].N < recs[i - 1].N and recs[i].N == 1]
+        slips = sum(1 for r in recs[140:] if r.slipped)
+        return ups, slips, {r.N for r in recs[3000:]}
+    ups_off, slips_off, n_off = summary(recs_off)
+    ups_on, slips_on, n_on = summary(recs_on)
+    check("C26 without pre-warm the upshift slips while the clock ramps (the live failure)",
+          slips_off > 0 and (n_off != {1} or len(ups_off) > 1),
+          f"{len(ups_off)} upshifts to N=1, {slips_off} slips after frame 140, N after frame 3000: {n_off}")
+    check("C26 pre-warm: one upshift, N=1 holds", len(ups_on) == 1 and n_on == {1},
+          f"{len(ups_on)} upshifts to N=1, N after frame 3000: {n_on}")
+    check("C26 pre-warm: no slips across the transition", slips_on == 0, f"{slips_on} slips after frame 140")
+    # A fill below what the governor answers (0.7 ms against the plant's
+    # 2 ms) is doubled by each pre-warm that ends with the clock still low,
+    # without a cadence switch - no slips while it learns.
+    ups_learn, slips_learn, n_learn = summary(recs_learn)
+    check("C26 learned fill: N=1 holds", n_learn == {1}, f"N after frame 3000: {n_learn}")
+    check("C26 learned fill: no slips while learning", slips_learn == 0, f"{slips_learn} slips after frame 140")
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -2037,6 +2166,7 @@ def main():
     c23_upshift_under_gpu_clock_scaling()
     c24_fifo_upshift_promotion()
     c25_upshift_under_measured_gpu_clock()
+    c26_gpu_prewarm()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")

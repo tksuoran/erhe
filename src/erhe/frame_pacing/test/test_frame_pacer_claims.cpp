@@ -1424,3 +1424,81 @@ TEST(Frame_pacer_claims, c25_upshift_under_measured_gpu_clock)
     EXPECT_EQ(changes, 0u) << "no cadence changes after the startup";
     EXPECT_GE(heavy.back().vsyncs, 2) << "stays at a longer cadence";
 }
+
+namespace {
+
+auto run_c26(const double prewarm_seconds) -> std::vector<Frame_record>
+{
+    const double t        = 1.0 / 120.0;
+    const double dpe_true = t + (1.0 * ms);
+    Scenario scenario;
+    scenario.frame_count                            = 6000;
+    scenario.plant.tunables.refresh_period          = t;
+    scenario.plant.true_deadline_offset             = dpe_true;
+    scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.deadline_offset_initial = dpe_true + (0.3 * ms);
+    scenario.plant.tunables.deadline_offset_max     = dpe_true + (0.3 * ms) + (0.5 * t);
+    scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.plant.tunables.upshift_prewarm_seconds = prewarm_seconds;
+    scenario.drawable_pool                          = 3;
+    scenario.pool_latch_lead                        = dpe_true - (1.8 * ms);
+    scenario.dvfs                                   = true;
+    scenario.cpu_duration                           = make_gauss(2601, 1.0, 0.2);
+    auto work_engine = std::make_shared<std::mt19937>(2602);
+    scenario.gpu_duration_at_cadence = [work_engine](const std::int64_t k, const int) mutable -> double {
+        std::normal_distribution<double> work{5.1, 0.15};
+        if ((k >= 100) && (k < 130)) {
+            return 20.0 * ms; // startup spike (scene load)
+        }
+        return std::max(0.5, work(*work_engine)) * ms;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    return run_scenario(scenario, pacer);
+}
+
+} // anonymous namespace
+
+TEST(Frame_pacer_claims, c26_gpu_prewarm)
+{
+    // Measured live (Metal tier M, Dell U2725QE at 120 Hz): with ~5 ms of work
+    // the Apple GPU holds ~0.5 of its maximum clock at N=2 and ~0.97 at N=1.
+    // After an upshift the clock needs ~6 frames to ramp; meanwhile frames
+    // display 1-2 refreshes late (visible judder) and the reactive path
+    // reverts. 2.3 ms of ALU-only work after each N=2 frame raised the clock
+    // to 0.97 (probe), so pre-warm runs that before the switch.
+    const auto summary = [](const std::vector<Frame_record>& records, std::size_t& upshifts, std::size_t& slips) {
+        upshifts = 0;
+        slips    = 0;
+        for (std::size_t i = 140; i < records.size(); ++i) {
+            if ((records[i].vsyncs == 1) && (records[i - 1].vsyncs > 1)) {
+                ++upshifts;
+            }
+            if (records[i].slipped) {
+                ++slips;
+            }
+        }
+    };
+    std::size_t upshifts_off = 0;
+    std::size_t slips_off    = 0;
+    const std::vector<Frame_record> without = run_c26(0.0);
+    summary(without, upshifts_off, slips_off);
+    EXPECT_GT(slips_off, 0u) << "without pre-warm the upshift slips while the clock ramps (the live failure)";
+
+    std::size_t upshifts_on = 0;
+    std::size_t slips_on    = 0;
+    const std::vector<Frame_record> with = run_c26(2.3 * ms);
+    summary(with, upshifts_on, slips_on);
+    EXPECT_EQ(upshifts_on, 1u) << "one upshift";
+    EXPECT_EQ(vsync_values(with, 3000), (std::set<int>{1})) << "N=1 holds";
+    EXPECT_EQ(slips_on, 0u) << "no slips across the transition";
+
+    // A fill below what the governor answers (0.7 ms against the plant's
+    // 2 ms) is doubled by each pre-warm that ends with the clock still low,
+    // without a cadence switch.
+    std::size_t upshifts_learn = 0;
+    std::size_t slips_learn    = 0;
+    const std::vector<Frame_record> learn = run_c26(0.7 * ms);
+    summary(learn, upshifts_learn, slips_learn);
+    EXPECT_EQ(vsync_values(learn, 3000), (std::set<int>{1})) << "learned fill: N=1 holds";
+    EXPECT_EQ(slips_learn, 0u) << "learned fill: no slips while learning";
+}

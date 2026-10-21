@@ -2675,6 +2675,7 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
                 {"request_min_ms",     calibration.request_min * 1000.0},
                 {"request_max_ms",     calibration.request_max * 1000.0},
                 {"deadline_offset_ms", calibration.deadline_offset * 1000.0},
+                {"prewarm_ns_per_iteration", calibration.prewarm_seconds_per_iteration * 1.0e9},
                 {"samples",            std::move(samples)}
             };
         }

@@ -388,6 +388,18 @@ work (stage time times clock ratio) stays the same (GPU ~5.0 ms, CPU
 not match its DVFS table, the monitor logs why and reports 0 for that
 part.
 
+Tier M also creates the GPU pre-warm (`Gpu_prewarm`,
+`metal_gpu_prewarm.cpp`): an ALU-only kernel (FMA loop over 65536
+threads, one never-taken write) in its own command buffer after the
+presenting one, ordered after it by an `MTLEvent` so it runs in the idle
+gap (unordered it overlapped the frame and stretched its span). The frame
+pacer requests it per frame (`Schedule_decision::prewarm_seconds`, handed
+over by `Device::set_present_prewarm`) before an upshift; the iteration
+count follows the kernel's measured duration per iteration, which the
+present calibration seeds (`prewarm_seconds_per_iteration`). The fill is
+learned by the pacer (`doc/frame_pacing/algorithm.md` deviation 20): with
+clear-only frames the governor ignores even 8 ms of the kernel per frame.
+
 The device logs the machine's thermal state at init and on every change
 (`erhe::graphics::get_thermal_state`, `NSProcessInfo.thermalState`); MCP
 `get_frame_pacing_status` reports it as `thermal_state`, and the live gate
