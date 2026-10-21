@@ -428,6 +428,7 @@ flowchart TD
 - [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
 - [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
 - [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
+- [plans/clustered_lights.md](plans/clustered_lights.md) (proposed): Clustered light culling: cluster grid, binning compute pass, light storage block, runtime-bounded forward loops, consumers, verification gates
 - [plans/command_script.md](plans/command_script.md) (proposed): Editor command scripts: outstanding work
 - [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
 - [plans/crash_signal.md](plans/crash_signal.md) (in progress): Positive crash signal for harness-run apps

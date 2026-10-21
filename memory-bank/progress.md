@@ -7,7 +7,8 @@
 ✓pacer-C29{3a6726af0;Python-104/104;C++-35/35;live-gate-1ab77b378}
 ✓shadow-map-cache{e14ca1086;image-gate-7/7-0px;ctest-1698/1699(aa_cost_benchmark-flake)+MCP-95/95}
 ✓viewport-measured{e45b1ed5d;doc/plans/bistro_viewport_gpu.md}
-?clustered-lights-plan{NEXT;fresh-context;user-reviews-plan-before-build}
+✓clustered-lights-plan{doc/plans/clustered_lights.md;proposed}
+?clustered-lights-review{user-decides-Open-1-2;then-phase-1}
 ?shadow-cache-remaining{per-light-caster-test;skinned-pose-serial;fit-skip}
 
 [TASK::bistro-load]{started-2026-10-18;branch=render-thread;via-harness;doc/plans/bistro_load_profiling.md}

@@ -1,0 +1,309 @@
+# Clustered light culling
+
+Status: proposed
+
+Extends [../erhe/scene_renderer.md](../erhe/scene_renderer.md) (`Light_set`,
+`Light_buffer`, the forward passes) and
+[../erhe/shader_variants.md](../erhe/shader_variants.md) (the light-count
+axes and the "Light array layout invariant"). It is option 2 of
+[bistro_viewport_gpu.md](bistro_viewport_gpu.md), whose "Measurements" and
+"Light selection is by scene order" sections hold the numbers this plan is
+measured against. Shadow-mapped lights stay as
+[../erhe/shadows.md](../erhe/shadows.md) describes them; this plan changes
+how many lights are shaded and which lights a fragment evaluates, not how a
+light's visibility is sampled.
+
+## What exists
+
+- `Light_set::resolve()` hands out light slots per type in scene order up to
+  the preset's `Light_count_limits` (six counts: directional / spot / point,
+  shadow-mapped / unshadowed). Slot order is type-major, shadow-mapped first
+  within a type. `Graphics_settings::apply_limits` clamps the sum to
+  `max_light_count` (`config/editor/renderer.json`, 32).
+- `light_block` is a std140 uniform block at binding 1: a header (counts,
+  ambient, lightmap flags, BRDF slice, shadow debug light, bias scales, DDGI
+  volume) followed by `lights[max_light_count]`, 416 bytes per light (five
+  mat4, six vec4). `Light_buffer::update()` writes the whole padded array
+  into a `CPU_write` ring range once per pass (`Scene_pass_resources::
+  begin_pass`, `Forward_renderer::draw_primitives`), so a view writes it
+  several times per frame.
+- `standard.frag` runs six loops whose bounds are the `ERHE_LIGHT_COUNT_*`
+  shader key axes, so every partition of the scene's lights is a separate
+  set of shader variants: adding, removing, retyping or toggling
+  `cast_shadow` on a light recompiles every material variant in use, and
+  the viewport, the previews, the headlight and the null-light passes each
+  hold their own partition. The spot and point loops skip a light whose
+  range attenuation is zero; `get_range_attenuation()` is exactly zero at
+  and beyond `range` and is inverse-square with no cutoff for `range <= 0`.
+- `erhe_ray_hit.glsl` (`ray_trace.comp`, `ddgi_trace.comp`,
+  `ddgi_reference.comp`, `rc_trace.comp`) loops the same array with the
+  header's runtime counts and traces a shadow ray only for a light whose
+  attenuation is nonzero.
+- The lightmap baker reads no `light_block`: `collect_lights` fills its own
+  `lightmap_gather` block (at most 16 lights). It is outside this plan.
+- Compute, SSBOs, shared memory and SSBO atomics run on Vulkan, Metal and
+  OpenGL (`cull_compact.comp`, `id_scan_*.comp`, the content wide-line
+  pre-pass). The rendergraph pre-execute callback (`Rendergraph::
+  set_pre_execute_callback`, `src/editor/editor.cpp`) runs once per frame on
+  the render thread, outside any render pass, before the first node
+  executes; `Cull_frame_registry::classify_frame` runs there.
+- Free buffer binding points in the shared scene layout: 9-12 (Metal maps a
+  GLSL binding to the buffer index; 13 is the acceleration structure, 14 the
+  texture argument buffer, 15 push constants, 16+ vertex buffers).
+
+## Design
+
+### C1. What is shaded
+
+In clustered mode every active light is shaded, up to `max_light_count`
+(raised to 1024; the light array becomes a storage block, C3). The
+preset's shadow-mapped counts stay what they are: they size the shadow maps
+and hand out the shadow slots in scene order, as now. The preset's
+unshadowed counts apply to the loop path only (C8); in clustered mode
+`Light_set` gives every active light that did not get a shadow slot an
+unshadowed slot. Slot order stays type-major, shadow-mapped first within a
+type, so a slot range per (type, shadowed) category exists in both modes.
+
+The mode is a graphics preset field, `light_shading` (`loops` |
+`clustered`), so `set_graphics_preset` switches it in a session and the
+gates (V1-V6) can compare both on one scene.
+
+### C2. The cluster grid
+
+A grid belongs to one view of one pass set (a viewport's camera, one
+headset eye, a scene image capture), in that view's framebuffer pixels:
+
+- X and Y: square screen tiles of `cluster_tile_size` pixels (default 64),
+  counted from the viewport origin, `ceil(width / tile)` by
+  `ceil(height / tile)`. Tile y is counted in the backend's framebuffer
+  convention: `gl_FragCoord` is top-left on Vulkan and Metal and
+  bottom-left on OpenGL, so the grid parameters carry the viewport origin
+  and a y sign the way the wide-line shaders carry `vp_y_sign`.
+- Z: `cluster_slice_count` slices (default 24) of view depth, exponential
+  between the camera's near plane and `z_cluster_far`, the largest view
+  depth any binned light reaches (its centre's view depth plus its range).
+  A fragment deeper than `z_cluster_far` uses the last slice; no binned
+  light reaches it, so whatever that slice lists contributes zero there.
+- View depth per fragment is `dot(v_view_relative_position, -forward)`,
+  `forward` being the camera's view axis from the camera block
+  (`world_from_node`); the camera block gains `view_forward` (vec4) for it
+  rather than having every fragment read a mat4 column.
+
+Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
+
+### C3. Light buffers
+
+- `light_block` (binding 1) keeps the header and stays a uniform block. Its
+  `lights[]` array moves out.
+- `light_array_block` (binding 9, storage, std430, readonly): the shaded
+  lights in slot order, `Light` unchanged (416 bytes). Written once per view
+  per frame into a `CPU_write` ring range, at the actual light count (no
+  padding to `max_light_count`), and bound by every pass of that view, the
+  binning dispatch (C4) included. `Light_buffer::update()` returns the
+  header range and the array range; passes that today call `update()` per
+  pass bind the view's ranges instead.
+- `light_cluster_block` (binding 10, storage, std430, readonly in the
+  fragment stage, written by C4): the grid parameters (tile size, counts per
+  axis, viewport origin, y sign, the slice distribution's near / far
+  constants, the per-cluster capacity) and, per view index, per cluster, one
+  `uvec4` of category counts - (spot shadow-mapped, spot unshadowed, point
+  shadow-mapped, point unshadowed) - followed by the cluster's light slots,
+  packed two 16-bit slots per `uint`, at most `cluster_capacity` (default
+  64) per cluster, in ascending slot order.
+- Directional lights and lights with `range <= 0` are not binned: they
+  reach every fragment. They keep their slots and are looped by the header's
+  runtime counts (directional) or listed in every cluster (unbounded spot /
+  point, so the category ranges stay contiguous in slot order).
+- Every pass that draws `standard.frag` binds a cluster block. A pass whose
+  view was not binned (material, brush and scene previews, the BRDF slice,
+  null-light passes) binds the single-cluster grid: 1 x 1 x 1, listing every
+  shaded slot. Its cost is the loop path's; it keeps the bind group complete
+  and the shader single-path.
+
+Storage per view and frame in flight: header 16 bytes per cluster plus
+`cluster_capacity / 2` uints - 9072 x (16 + 128) bytes = 1.3 MB for
+Bistro's viewport. The cluster buffer is a `GPU_access` ring range acquired
+by the render phase per view and frame, the precedent being the GPU cull
+masks (`draw_list_scene_gpu_cull.cpp`); frame retirement reclaims it.
+
+### C4. Binning
+
+Binning runs on the render thread in the rendergraph pre-execute callback,
+once per binned view per frame, after the shadow fit (the light set and
+projections of the frame are final) and before the first color pass:
+
+- One compute invocation per cluster; the dispatch's z dimension is the view
+  index for a multiview grid (C7). The invocation computes its cluster's
+  view-space AABB from the grid parameters and the camera's projection, then
+  walks the spot and point slots in ascending order, tests each light's
+  range sphere (centre in view space, radius `range` times `1 + 2^-10` so a
+  fragment that rounds across a cluster boundary still finds every light
+  that reaches it) against the AABB, and appends passing slots. The walk in
+  slot order makes each list ascending and the category counts a running
+  tally, with no atomics and no sort.
+- A cluster whose list would exceed `cluster_capacity` stores the first
+  `cluster_capacity` slots and sets the cluster's overflow bit. The binning
+  pass counts overflowing clusters into a per-frame counter that is read
+  back with the retired frame and reported (log warning per change, MCP
+  stats, V6). Capacity is a renderer config value.
+- Spot cone tests against the AABB are a later refinement (phase 5); the
+  sphere bound is exact for the range window and conservative for the cone.
+- The view-space light centres are computed once per view, in a first
+  small dispatch (one invocation per light) into a scratch range, so the
+  per-cluster loop reads a 16-byte `vec4` per light instead of a 416-byte
+  `Light`.
+
+A `Light_cluster_binner` CPU implementation of the same tests over the same
+inputs is the reference: the unit tests run it, and MCP
+`get_light_cluster_check` compares the GPU lists of the retired frame with
+it cluster by cluster (V2), as `get_cull_classification_check` does for the
+GPU cull masks.
+
+Binning reruns every frame; the inputs change with every camera move and
+every light edit, and the dispatch is a few microseconds against a pass of
+milliseconds. A skip on unchanged inputs (the camera's view and projection,
+the light set generation and snapshots, the grid) uses the shadow map
+cache's key pattern (`doc/erhe/shadows.md` "Shadow map cache") and is a
+phase 5 item, taken only if V5 shows the dispatch in the frame.
+
+### C5. The fragment loops
+
+`standard.frag` in clustered mode:
+
+1. Directional: two loops with the header's runtime bounds,
+   `directional_shadow_count` and `directional_light_count -
+   directional_shadow_count`, bodies as today.
+2. Find the cluster from `gl_FragCoord.xy`, the grid's viewport origin and y
+   sign, and the fragment's view depth (C2).
+3. Four loops over the cluster's list, bounded by its four category counts,
+   with today's bodies for spot shadow-mapped, spot unshadowed, point
+   shadow-mapped and point unshadowed. The slot comes from the packed list;
+   everything else is unchanged.
+
+The six `ERHE_LIGHT_COUNT_*` axes are not part of a clustered key: the
+loops are runtime-bounded, so one variant set serves every light layout and
+a light edit compiles nothing. `LIGHT_SHADING_CLUSTERED` (a scene-level
+bool axis set by the render environment like the light counts are now)
+selects the path while both exist.
+
+Because the lists are ascending and the per-category order is the loop
+path's slot order, a fragment's sum runs over the same lights in the same
+order as the loop path, minus lights whose range attenuation is zero there,
+which add nothing in either path. With every light fitting the preset's
+limits the two paths are expected to produce identical images (V1).
+
+### C6. Other light consumers
+
+- Shadow caster passes (`Shadow_renderer`): read `lights[light_control_
+  block.light_index]` from `light_array_block`; no clusters.
+- `erhe_ray_hit.glsl` consumers (ray trace, DDGI, radiance cascades): read
+  `light_array_block` with the header's runtime counts, all shaded lights,
+  no clusters (they hit arbitrary world points). Their layouts
+  (`ddgi_renderer.cpp`, `radiance_cascades_renderer.cpp`,
+  `ray_trace_renderer.cpp`) gain binding 9. In clustered mode they shade
+  every light, so their per-ray loop is longer by the lights the preset
+  used to leave out; the shadow ray stays gated on nonzero attenuation. V5
+  measures the trace passes on Bistro in both modes.
+- Lightmap baker: unchanged (own gather block).
+- Texel renderer (`shadow_debug.vert`): reads slot 0 from
+  `light_array_block`.
+- `Scene_preview` (material, brush, thumbnails): single-cluster grid (C3);
+  its `get_light_count_limits()` stays.
+- Example (`src/example`): single-cluster grid; hextiles and hello_swap read
+  no lights.
+
+### C7. XR
+
+- Multiview: one grid per eye, both eyes binned in one dispatch (z = view
+  index), stored as per-view slabs of `light_cluster_block`;
+  `standard.frag` indexes the slab by `c_view_index`. Each eye's AABBs come
+  from its own projection.
+- Per-eye fallback: each eye's passes are a view with its own grid.
+- The headset's shadow fit stays cyclopean (`doc/erhe/multiview.md`
+  "Shadow / light buffer").
+
+### C8. The loop path
+
+The loop path stays until the gates V1-V4 have passed on every backend;
+it is the identity reference of V1. Phase 6 then removes it - the six
+light-count axes, the preset's unshadowed counts, `light_shading` - unless
+the user decides to keep it (Open, item 1).
+
+## Phases
+
+Each phase is one commit (or a short series), reviewed, with its gates.
+
+1. **Light array as a storage block.** `light_array_block` at binding 9
+   (C3), written once per view per frame at the actual count; `Light_buffer`
+   API change (header range + array range) and every consumer of C6
+   rebound; `max_light_count` 1024. Loop path only, behavior unchanged.
+   Gate: V1-style image identity against HEAD on the render-thread gate
+   scenes, the Bistro image gate and the DDGI / RC / ray trace gates, all
+   threading configurations; validation clean; ctest.
+2. **CPU binning and the clustered shader path.** Grid (C2), cluster block
+   (C3), `Light_cluster_binner` filling a `CPU_write` range per view in the
+   pre-execute callback, `LIGHT_SHADING_CLUSTERED` path in `standard.frag`
+   (C5), `light_shading` preset field, single-cluster grid for unbinned
+   passes, `Light_set` hand-out for clustered mode (C1). Unit tests of the
+   binner (sphere vs AABB on boundaries, unbounded lights, overflow, y
+   convention per backend). Gate: V1, V3, V4.
+3. **GPU binning.** The two dispatches of C4 into a `GPU_access` range,
+   overflow counter and readback, MCP `get_light_cluster_check` and
+   `get_light_cluster_stats`. The CPU binner remains the test reference.
+   Gate: V2 (0 mismatches), V1 again with GPU lists, V5, V6.
+4. **XR.** Multiview slabs and per-eye grids (C7). Gate: V1 on a multiview
+   headless test (two views into a layered target) and a Quest run (needs
+   the user with the headset).
+5. **Refinements, each only when V5 shows it pays:** spot cone vs AABB;
+   skip binning on unchanged inputs (C4); shared-memory light tiles in the
+   cluster loop for scenes with hundreds of lights; splitting `Light` into a
+   shading record and a shadow record indexed by shadow slot (Open, item 3).
+6. **Remove the loop path** (C8), per the user's decision.
+
+## Verification
+
+- **V1. Image identity.** With every scene light within the preset's limits
+  (Medium on the default scene and creation scenes; a preset with limits
+  covering Bistro's 43 lights), `render_scene_image` in clustered mode is
+  byte-identical to loop mode, on Vulkan (MoltenVK), Metal and OpenGL, in
+  all render-thread configurations (`memory-bank/local/metal_gates/gate.py`
+  and the render-thread gate scripts). A difference is investigated to its
+  cause (a light missing from a list, or a compiler reassociating the
+  runtime loop); it is not accepted as noise.
+- **V2. List identity.** GPU lists equal the CPU reference for every cluster
+  of every binned view, including multiview slabs.
+- **V3. Conservativeness.** On Bistro with every light shaded, clustered
+  mode with the real grid is byte-identical to clustered mode with the
+  single-cluster grid forced for the viewport (a debug setting): every light
+  the grid leaves out of a cluster contributes zero to every fragment in it.
+- **V4. Variants.** Adding, removing and retyping lights in clustered mode
+  compiles no new `standard` variant (shader cache counts over MCP).
+- **V5. Cost.** Bistro, headless Metal, `frame_pacing_tier` off,
+  `force_disable_vsync`, the bench camera of `scripts/bistro_frame_bench.py`
+  (`bistro_viewport_gpu.md` "Measurements"): `Viewport window` GPU time in
+  loop mode (Medium, 16 shaded) and clustered mode (Medium shadow counts, all
+  43 shaded), plus the binning dispatches and the DDGI / RC / ray trace pass
+  times in both modes. The target is clustered with 43 lights at or below
+  loop mode with 16.
+- **V6. Overflow.** Bistro reports zero overflowing clusters at the default
+  capacity; a test scene with more overlapping lights than the capacity
+  reports them and logs once.
+- Vulkan validation clean on every phase that touches binds or barriers
+  (`doc/erhe/gpu_coding_rules.md`).
+
+## Open
+
+1. Keep the loop path after the gates pass (as a debug reference / for
+   scenes with very few lights), or remove it in phase 6 together with the
+   six light-count axes and the unshadowed preset counts.
+2. Cluster overflow: fixed per-cluster capacity with a reported overflow
+   (C4, chosen for determinism and no atomics), or an exact compacted list
+   (count pass, prefix sum, write pass) with no per-cluster limit.
+3. Split `Light` (416 bytes) into a 96-byte shading record for every light
+   and a 320-byte shadow record per shadow slot. Smaller loads in every
+   loop iteration and in the ray-hit loops; touches every reader. Decided
+   from V5 in phase 5.
+4. Shadow slots remain by scene order (`bistro_viewport_gpu.md` option 1 is
+   not pursued), so on Bistro the far shadow-mapped point lights keep their
+   cube faces while near lights shade unshadowed; clustered mode makes the
+   near lights lit, not shadowed.

@@ -142,3 +142,6 @@ color attribute that input on its own, the factor and the texture unread;
 `standard.frag` and `erhe_ray_hit.glsl` both branch on it. That is what lets
 an ordinary material take its base color from `primvars:displayColor`, which
 slot 1 above can only do because its own base color is white.
+
+## Future work
+- [../plans/clustered_lights.md](../plans/clustered_lights.md): clustered light culling (every light shaded, per-cluster light lists)
