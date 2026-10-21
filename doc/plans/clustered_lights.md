@@ -1,6 +1,6 @@
 # Clustered light culling
 
-Status: proposed
+Status: in progress
 
 Extends [../erhe/scene_renderer.md](../erhe/scene_renderer.md) (`Light_set`,
 `Light_buffer`, the forward passes) and
@@ -20,13 +20,15 @@ light's visibility is sampled.
   shadow-mapped / unshadowed). Slot order is type-major, shadow-mapped first
   within a type. `Graphics_settings::apply_limits` clamps the sum to
   `max_light_count` (`config/editor/renderer.json`, 32).
-- `light_block` is a std140 uniform block at binding 1: a header (counts,
+- `light_block` is a std140 uniform block at binding 1, the header (counts,
   ambient, lightmap flags, BRDF slice, shadow debug light, bias scales, DDGI
-  volume) followed by `lights[max_light_count]`, 416 bytes per light (five
-  mat4, six vec4). `Light_buffer::update()` writes the whole padded array
-  into a `CPU_write` ring range once per pass (`Scene_pass_resources::
-  begin_pass`, `Forward_renderer::draw_primitives`), so a view writes it
-  several times per frame.
+  volume); `light_array_block` is a readonly std430 storage block at binding
+  9, `light_array.lights[]`, the shaded lights in slot order, 416 bytes per
+  light (five mat4, six vec4). `Light_buffer::update()` writes both into
+  `CPU_write` ring ranges (`Light_buffer_ranges`) once per pass
+  (`Scene_pass_resources::begin_pass`, `Forward_renderer::draw_primitives`),
+  so a view writes them several times per frame; every consumer of C6
+  binds both.
 - `standard.frag` runs six loops whose bounds are the `ERHE_LIGHT_COUNT_*`
   shader key axes, so every partition of the scene's lights is a separate
   set of shader variants: adding, removing, retyping or toggling
@@ -47,9 +49,9 @@ light's visibility is sampled.
   set_pre_execute_callback`, `src/editor/editor.cpp`) runs once per frame on
   the render thread, outside any render pass, before the first node
   executes; `Cull_frame_registry::classify_frame` runs there.
-- Free buffer binding points in the shared scene layout: 9-12 (Metal maps a
-  GLSL binding to the buffer index; 13 is the acceleration structure, 14 the
-  texture argument buffer, 15 push constants, 16+ vertex buffers).
+- Free buffer binding points in the shared scene layout: 10-12 (Metal maps
+  a GLSL binding to the buffer index; 13 is the acceleration structure, 14
+  the texture argument buffer, 15 push constants, 16+ vertex buffers).
 
 ## Design
 
@@ -256,16 +258,8 @@ unshadowed counts stay with it.
 ## Phases
 
 Each phase is one commit (or a short series), reviewed, with its gates.
+Phase 1 (the light array as a storage block, C3) is built.
 
-1. **Light array as a storage block.** `light_array_block` at binding 9
-   (C3) at the actual count, still written per `Light_buffer::update()`
-   call; `Light_buffer::update()` returns `Light_buffer_ranges` (header +
-   lights) and every consumer of C6 binds both. Loop path only, behavior
-   unchanged: `max_light_count` stays 32, because the High preset's 40
-   lights are clamped to it today.
-   Gate: V1-style image identity against HEAD on the render-thread gate
-   scenes, the Bistro image gate and the DDGI / RC / ray trace gates, all
-   threading configurations; validation clean; ctest.
 2. **CPU binning and the clustered shader path.** Grid (C2), cluster block
    (C3), the light array written once per view per frame and bound by that
    view's passes, `max_light_count` 1024, `Light_cluster_binner` filling a
