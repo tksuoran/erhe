@@ -39,8 +39,11 @@ auto compile_spirv_to_mtl_function(
     spirv_cross::CompilerMSL::Options msl_options;
     msl_options.platform = spirv_cross::CompilerMSL::Options::macOS;
     // Metal 3 is required: full mutable aliasing of argument buffer descriptors
-    // (used by our bindless texture heap) only works on MSL 3+.
-    msl_options.set_msl_version(3, 0);
+    // (used by our bindless texture heap) only works on MSL 3+. MSL 3.2 lets
+    // SPIRV-Cross emit the helpers for `precise` arithmetic as inlinable
+    // functions with scoped fp pragmas instead of [[clang::optnone]] calls
+    // (doc/erhe/metal_backend.md "Precise arithmetic").
+    msl_options.set_msl_version(3, 2);
     msl_options.argument_buffers = true;
     msl_options.argument_buffers_tier = spirv_cross::CompilerMSL::Options::ArgumentBuffersTier::Tier2;
     msl_options.force_active_argument_buffer_resources = true;

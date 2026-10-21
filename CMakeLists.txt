@@ -596,11 +596,16 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "metal")
         GIT_TAG           metal-cpp_27
         GIT_SHALLOW       TRUE
     )
+    # Fork: upstream SPIRV-Cross emits the helpers for `precise` arithmetic
+    # as [[clang::optnone]] functions, which Apple's compiler cannot inline
+    # (about 4x the forward pass cost on Bistro). Branch
+    # msl-inline-precise-helpers emits them inline with scoped fp pragmas
+    # from MSL 3.2 (doc/erhe/metal_backend.md "Precise arithmetic"). Return
+    # to KhronosGroup/SPIRV-Cross once an upstream release has the change.
     CPMAddPackage(
         NAME              SPIRV-Cross
-        GITHUB_REPOSITORY KhronosGroup/SPIRV-Cross
-        GIT_TAG           vulkan-sdk-1.4.357.0
-        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY tksuoran/SPIRV-Cross
+        GIT_TAG           5dbbf6da16b69387b624b82834bbffcefc33fcfa
     )
 elseif (${ERHE_GRAPHICS_API} STREQUAL "none")
     message(STATUS "Erhe configured to use null graphics backend (headless).")

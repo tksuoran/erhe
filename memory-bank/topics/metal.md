@@ -107,6 +107,9 @@
 !zsh-unquoted-$VAR-not-word-split{--env-$E-passes-one-arg}
 
 !Bistro-2026-10-21::Apple-compiler(Metal+MoltenVK)-ran-unrolled-light-bodies-beyond-range->c8dc0080c-range-early-out{GPU-Metal-123->40ms;MoltenVK-108->35ms;KK-18->13ms;images-identical};remaining-~3x-GPU-gap-vs-KosmicKrisp-unexplained(no-lights-pass-also-slower)->open;KK-FIFO-not-vsync-locked(present-interval-13.7ms-stdev-3.8)
+!SPIRV-Cross-precise->[[clang::optnone]]-spvFAdd/spvFSub/spvFMul-calls{Apple-compiler-cannot-inline;Bistro-Viewport-Metal-26.6ms-vs-KK-5.9}->fork-tksuoran/SPIRV-Cross-msl-inline-precise-helpers{MSL>=3.2-inline+#pragma-metal-fp-math_mode(safe)+contract(off)}+Metal-backend-MSL-3.2->5.5ms;MoltenVK-still-optnone-until-upstream;doc/plans/apple_gpu_shader_gap.md
+!KK-MSL-dump::MESA_KK_DEBUG=msl+MESA_LOG=file+MESA_LOG_FILE=<path>{¬stderr-on-macOS}+move-KK-pipeline_cache-file-aside(else-deserialized-no-dump)
+!saturated-GPU-A/B::frame_pacing_tier=off+force_disable_vsync=true->Viewport-timer-run-to-run-stable(26.6+-0.1ms);unsaturated-runs-drift-25-40ms
 !bistro_frame_bench-on-macOS::tracy-capture-must-connect-after-editor-ready(c14396142);ERHE_TRACY_DIR=dir-with-symlinks-to-~/git/tracy/{capture,csvexport}/build/*
 
 [DIAGNOSIS_RECIPE]
