@@ -221,9 +221,10 @@ below 0.9 doubles it (bounded by half the cadence period) without a
 cadence switch, one that reached the clock but does not fit backs off.
 
 Gated live 2026-10-21 (Log): the Dell gate passes, every upshift
-pre-warmed. Next: the Debug transition (Log, last entry), then the gate
-on fixed 60 Hz and on ProMotion with this build (the calibration's
-majority vote and probe spacing have not run there yet).
+pre-warmed, and the upshift transition is clean in Debug and Release
+(C28). Next: the gate on fixed 60 Hz and on ProMotion with this build
+(the calibration's majority vote and probe spacing have not run there
+yet).
 
 ## Tools
 
@@ -364,3 +365,28 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   passed. Next hypothesis: the CPU counterpart of the GPU ramp; measure
   the P-core clock ramp against the latency window first (the plant has no
   CPU clock dynamics yet).
+- 2026-10-21, iteration 4 (the Debug upshift transient). The P-core ramp was
+  not the cause: in every configuration, Release included, the pacer
+  released every frame immediately for 85-120 frames after the upshift
+  (no pacer wait) while each frame did ~1.8 ms of work and spent 13 ms in
+  involuntary waits - the FR5 clamp (~6 ms), the join (~7 ms) and every
+  4th frame `nextDrawable` (9 ms). N=1's latency window still held the
+  startup frames (scene load, 30-50 ms) and the waits, counted as latency,
+  kept the estimate at the N=2 level: early release justified itself
+  (Release: one refresh of extra latency; Debug, render thread slower: a
+  skipped slot in 20-30 % of the frames). The plant measured latency after
+  the clamp but counted the fence and drawable-pool waits. Fix (claim C28,
+  deviation 22): the latency input excludes the involuntary waits between
+  release and submit (`Frame_time_record::release_wait_time`; plant
+  likewise), and a cadence change clears the entered cadence's latency
+  window, seeding a floor until the visit has `K` samples (a seed kept as a
+  sample had carried the startup spike down a chain of short visits).
+  Python 102/102 (the C28 control reproduces the trap), C++ 34/34 (C28 fails
+  on the previous pacer). No CPU performance request was needed (user:
+  work without requesting performant cores).
+  Gate, Dell 120 Hz: N=1 in 60/60; two-refresh frames 7-10 of 3480 per
+  batch; release to display 19.3-19.9 ms Debug, 18.0-18.3 ms Release. After
+  the 54 upshifts: 0 skipped slots in the first 60 frames (before: Debug
+  20-34 per 10 frames over 10 upshifts), input-to-display latency over
+  frames 20-100 after the upshift 0.3-1.1 ms above steady state (before:
+  4.6-18.7 ms).

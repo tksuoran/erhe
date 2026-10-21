@@ -289,6 +289,7 @@ private:
     double m_upshift_time    {0.0};
     int    m_prewarm_left    {0};   // GPU pre-warm frames left (C26); 0 = none
     double m_prewarm_fill    {0.0}; // the learned pre-warm fill (C26)
+    double m_latency_seed    {0.0};    // C28: latency floor until the visit has cold_start_seed_frames samples; 0 = none
     bool   m_has_cadence_start{false}; // C27: the current cadence's first GPU end is known ...
     double m_cadence_start   {0.0};    // ... and this is it
 

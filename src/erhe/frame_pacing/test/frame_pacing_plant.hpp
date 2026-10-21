@@ -401,7 +401,11 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             event.gpu_end  = ge;
             event.cpu_dur  = cpu_dur;
             event.gpu_dur  = gpu_dur;
-            event.latency  = ge - release_effective;
+            // The latency input is the chain's own latency (C28): release to
+            // GPU end minus the involuntary waits on the CPU path (fence,
+            // acquire / drawable pool; the FR5 clamp is inside the effective
+            // release) - they measure how early the frame was released.
+            event.latency  = ge - release_effective - ((cpu_start - release_effective) + (ce - (cpu_start + cpu_dur)));
             event.gpu_clock = gpu_clock;
             event.cpu_clock = cpu_clock;
             if (scenario.lazy_gpu_delivery) {

@@ -53,6 +53,24 @@ auto Frame_time_record::cpu_service_time() const -> double
     return std::max(0.0, span - waits);
 }
 
+auto Frame_time_record::release_wait_time(const double release) const -> double
+{
+    double waits = fence_wait_duration;
+    const auto add_after_release = [release, &waits](const double wait_begin, const double wait_end) {
+        if (wait_end <= wait_begin) {
+            return;
+        }
+        const double begin = std::max(wait_begin, release);
+        if (wait_end > begin) {
+            waits += wait_end - begin;
+        }
+    };
+    add_after_release(present_wait_begin, present_wait_end);
+    add_after_release(join_wait_begin, join_wait_end);
+    add_after_release(acquire_begin, acquire_end);
+    return waits;
+}
+
 Frame_time_recorder::Frame_time_recorder(const std::size_t capacity)
 {
     m_records.resize(std::max<std::size_t>(1, capacity));

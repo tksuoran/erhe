@@ -121,6 +121,10 @@ auto Frame_pacer::latency_estimate() const -> double
         fallback = m_tunables.refresh_period;
     }
     const Sample_window& window = m_latency_windows[static_cast<std::size_t>(m_vsyncs)];
+    if ((m_latency_seed > 0.0) && (window.count() < m_tunables.cold_start_seed_frames)) {
+        // The visit's own samples are too few yet: the seed floors them (C28).
+        return std::max(m_latency_seed, window.quantile(p, 0.0));
+    }
     if (!window.empty()) {
         return window.quantile(p, fallback);
     }
@@ -140,6 +144,9 @@ auto Frame_pacer::latency_typical() const -> double
         fallback = m_tunables.refresh_period;
     }
     const Sample_window& window = m_latency_windows[static_cast<std::size_t>(m_vsyncs)];
+    if ((m_latency_seed > 0.0) && (window.count() < m_tunables.cold_start_seed_frames)) {
+        return std::max(m_latency_seed, window.quantile(0.5, 0.0));
+    }
     if (!window.empty()) {
         return window.quantile(0.5, fallback);
     }
@@ -584,7 +591,16 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     if (clamped == m_vsyncs) {
         return;
     }
-    const int old_vsyncs = m_vsyncs;
+    // The latency seed of the cadence entered (C28): the estimate at the
+    // cadence left; the structural sum floors it only where that visit has
+    // no measured estimate yet (the whole-history windows can still hold an
+    // earlier load, such as the startup spike).
+    const double p             = m_tunables.quantile_p;
+    const bool   seed_measured = m_latency_windows[static_cast<std::size_t>(m_vsyncs)].count() >= m_tunables.cold_start_seed_frames;
+    double       seed          = m_forced ? 0.0 : latency_estimate();
+    if (!seed_measured) {
+        seed = std::max(seed, m_cpu_window.quantile(p, 0.0) + m_gpu_window.quantile(p, 0.0));
+    }
     m_vsyncs = clamped;
     reset_dwell();
     m_prewarm_left      = 0;
@@ -592,21 +608,15 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     m_cadence_cpu_window.clear();
     m_cadence_gpu_window.clear();
     m_cadence_pressure = false;
-    Sample_window& window = m_latency_windows[static_cast<std::size_t>(m_vsyncs)];
-    if (window.empty()) {
-        // Seed the new cadence's latency estimate: carry-over is a safe
-        // overestimate when downshifting; the structural sum floors it when
-        // upshifting (doc/frame_pacing/algorithm.md section 5).
-        const double p     = m_tunables.quantile_p;
-        const double carry = m_latency_windows[static_cast<std::size_t>(old_vsyncs)].quantile(p, 0.0);
-        const double structural =
-            m_cpu_window.quantile(p, 0.0) + m_gpu_window.quantile(p, 0.0);
-        double initial = std::max(carry, structural);
-        if (initial <= 0.0) {
-            initial = m_tunables.refresh_period;
-        }
-        window.push(initial);
-    }
+    // A cadence's latency window holds the current visit only (C28):
+    // samples of an earlier visit (the startup spike at N=1) kept the release
+    // budget at the old latency for a whole window after an upshift, and a
+    // seed kept as a window sample carried such a spike down a chain of
+    // short visits. Until the visit has cold_start_seed_frames samples the
+    // seed floors the estimate (carry-over is a safe overestimate when
+    // downshifting; doc/frame_pacing/algorithm.md section 5).
+    m_latency_windows[static_cast<std::size_t>(m_vsyncs)].clear();
+    m_latency_seed = (seed > 0.0) ? seed : m_tunables.refresh_period;
     if (is_upshift) {
         // Pre-emptive safety boost while the new cadence's latency
         // distribution is learned.

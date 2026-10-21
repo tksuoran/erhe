@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: `Frame_time_record::release_wait_time(release)`
+  (claim C28): the involuntary waits between a frame's release and its
+  submit (FR5 clamp, join, acquire, fence). `Frame_pacing_observer` passes
+  `on_gpu_done` the chain latency without them, and `Frame_pacer` keeps a
+  cadence's latency window for the current visit only (a cadence change
+  clears it and seeds a floor until the visit has `cold_start_seed_frames`
+  samples).
 - `erhe::frame_pacing`: `Frame_pacer_tunables::clock_settle_time` (claim
   C27): the clock records hold each cadence's steady clock - samples start
   that long after the cadence's first GPU end; frames delivered after their

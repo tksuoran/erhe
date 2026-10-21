@@ -66,6 +66,14 @@ public:
 
     // Whole-slot span, for profiling display.
     [[nodiscard]] auto cpu_slot_span() const -> double;
+
+    // The involuntary waits on the frame's path from its release to its
+    // submit (doc/frame_pacing/inputs.md section 3.3, claim C28): the FR5
+    // present-wait clamp, the join wait, the swapchain acquire and the fence
+    // waits. They measure how early the frame was released, so the chain
+    // latency L_k excludes them. The present-request holdback and blocking
+    // inside the present call come after the submit and are not counted.
+    [[nodiscard]] auto release_wait_time(double release) const -> double;
 };
 
 class Frame_time_recorder
