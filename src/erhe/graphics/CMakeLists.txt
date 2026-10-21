@@ -305,8 +305,18 @@ erhe_target_sources_grouped(
     erhe_graphics/swapchain.cpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture_heap.cpp
+    erhe_graphics/thermal_state.cpp
+    erhe_graphics/thermal_state.hpp
     erhe_graphics/vulkan_external_creators.hpp
 )
+
+if (APPLE)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/thermal_state_apple.mm
+    )
+    target_link_libraries(${_target} PRIVATE "-framework Foundation")
+endif ()
 
 if (ERHE_SPIRV)
     # Glslang_shader_stages takes the backend's Shader_stages_prototype_impl.

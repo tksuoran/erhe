@@ -364,12 +364,18 @@ period matches the calibrated one). It is logged
 occluded window) or without an on-target request offset it logs why and
 tier M keeps the quarter period and the estimator's 2.5 ms start.
 
+The device logs the machine's thermal state at init and on every change
+(`erhe::graphics::get_thermal_state`, `NSProcessInfo.thermalState`); MCP
+`get_frame_pacing_status` reports it as `thermal_state`, and the live gate
+prints it per run.
+
 Measured on the built-in panel of an M4 Pro (Debug, default scene):
 
 | display mode | request window | request offset | deadline | duration |
 |---|---|---|---|---|
 | fixed 60 Hz | 0 ... 0.75 T (1.0 T: a refresh early) | 0.38-0.5 T | 17.6-17.8 ms (1.06 T) | 2.9 s |
 | ProMotion 120 Hz | 1.0 ... 1.75 T (0.75 T: a refresh late) | 1.38 T | 17.3-17.9 ms (2.1 T) | 1.5 s |
+| Dell U2725QE 120 Hz (HiDPI 1920x720, backing 3840x1440) | 0 or 0.25 ... 0.75 T (1.0 T: a refresh early) | 0.38-0.5 T | 9.2-9.3 ms (1.11 T); some late probes at 10-22 ms margins | 1.5 s |
 
 A ProMotion panel is the fixed-rate compositor with one more period of
 pipeline. With the fixed quarter-period request every ProMotion frame

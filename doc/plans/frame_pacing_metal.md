@@ -228,3 +228,12 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   ms (tier S 58.5 ms). `auto` resolves to tier M on Metal. Open: the Dell
   at 120 Hz with the calibration (collect its probes for the plant); a
   display change after init keeps the calibrated request offset.
+- 2026-10-21, Dell U2725QE at 120 Hz (HiDPI 1920x720, backing 3840x1440):
+  calibration request 0.38-0.5 T, deadline 9.2-9.3 ms. Tier S 31.5-34.2 ms.
+  Tier M at N=1: 18.7-21 ms. But tier M locks at N=2 (some N=3) in a
+  varying share of launches: Debug 3/30; Release batches 8/10, 5/10, 0/10
+  (thermal state nominal throughout, `pmset` no warnings). At N=2 the GPU
+  clocks down and 26-74 % of the spans exceed T, so the upshift dwell
+  never completes; at N=1 the same work takes 5.2 ms. Nothing measured at
+  N=2 predicts N=1: next is upshift probing with backoff (Iteration step
+  3 candidate (a)), judged by C24's cadence-scoped tests.

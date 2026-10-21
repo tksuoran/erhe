@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/present_calibration.hpp"
+#include "erhe_graphics/thermal_state.hpp"
 
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
@@ -72,6 +73,7 @@ Device::Device(
     // (the GL default vertex input state) can exist. No-op on backends
     // with no per-context objects.
     m_impl->create_per_context_resources();
+    start_thermal_state_logging();
     m_next_frame_start_id = m_impl->get_frame_index();
 }
 

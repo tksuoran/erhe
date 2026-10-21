@@ -33,6 +33,7 @@
 #include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/present_calibration.hpp"
+#include "erhe_graphics/thermal_state.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "grid/grid.hpp"
@@ -2624,6 +2625,7 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
     json result;
     if (m_context.graphics_device != nullptr) {
         result["display_refresh_period_ms"] = m_context.graphics_device->get_display_refresh_duration_seconds() * 1000.0;
+        result["thermal_state"] = erhe::graphics::c_str(erhe::graphics::get_thermal_state());
         // Every source of the refresh period and the resolver's decision
         // (erhe::graphics::Display_refresh_resolver): the window's display
         // mode, VK_EXT_present_timing's refreshDuration / refreshInterval,

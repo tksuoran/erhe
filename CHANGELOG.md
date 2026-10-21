@@ -9,6 +9,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Thermal_state`, `get_thermal_state()` and
+  `start_thermal_state_logging()` (`thermal_state.hpp`): the machine's
+  thermal state (Apple: `NSProcessInfo.thermalState`, unknown elsewhere),
+  logged at device init and on every change.
 - `erhe::graphics`: `Present_calibration` / `Present_calibration_sample`
   (`present_calibration.hpp`) and `Device::get_present_calibration()` /
   `set_present_calibration()`: the request window and deadline of a
