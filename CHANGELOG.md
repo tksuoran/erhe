@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: `Frame_time_record::gpu_idle_time` and
+  `gpu_service_time()`: the GPU idle gap inside a frame's span (Vulkan: the
+  frame bracket's gap between the upload submit and the presenting submit)
+  and the span without it. `Frame_pacing_observer` passes `on_gpu_done` the
+  service time as the GPU duration.
+
 - `erhe::frame_pacing`: `Frame_time_record::release_wait_time(release)`
   (claim C28): the involuntary waits between a frame's release and its
   submit (FR5 clamp, join, acquire, fence). `Frame_pacing_observer` passes

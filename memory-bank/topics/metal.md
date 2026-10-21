@@ -101,6 +101,11 @@
 !TSan-macOS::symbolizes-itself->race:-suppressions-match;pending-report->SIGABRT-at-exit(__tsan::finalize)¬editor-crash;windowed-capture_screenshot-exceeds-MCP-request-timeout-under-TSan(still-processed)
 !Metal-completion-blocks::TSan-false-positive(ordering-inside-Metal)->suppressed
 
+!MoltenVK::VK_GOOGLE_display_timing=presentDrawable:atTime:+presentedTime{mach_absolute_time-ns=recorder-clock;honored}->tier-W-via-display-timing;KosmicKrisp-has-no-timing-ext->tier-S
+!Instruments-Metal-System-Trace-fixes-GPU-perf-state->MoltenVK-pass-read-2x-Metal(false);cost-model-from-untraced-records+IOReport-only
+!Vulkan-frame-bracket-span-held-upload->frame-submit-idle-gap(1.4ms-Debug)->governor-lowers-clock-at-N=1(0.72)->span~T->spurious-downshift;fixed:gap-queries+gpu_service_time
+!zsh-unquoted-$VAR-not-word-split{--env-$E-passes-one-arg}
+
 [DIAGNOSIS_RECIPE]
 cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permanent}
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}

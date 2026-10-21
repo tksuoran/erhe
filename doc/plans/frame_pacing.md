@@ -128,7 +128,11 @@ the cadence climbed to the 200 ms holdback cap). What remains:
    request is suppressed, or whether the time-domain conversion rejects the
    sample; log the raw feedback once at startup so the three cases are
    distinguishable from `logs/log.txt`.
-2. **The upload-to-frame bubble inflates `g_k`.** The bracket begins at the
+2. **The upload-to-frame bubble inflated `g_k`** - addressed: the frame
+   bracket measures the gap between the upload submit and the presenting
+   submit and `g_k` excludes it (inputs.md 3.3; found again on MoltenVK,
+   where it caused the N=1 -> N=2 downshifts). Re-measure this path.
+   The original finding: The bracket begins at the
    frame's first command buffer (the M2 upload cb, submitted at the start of
    R) and the frame cb follows after R's CPU recording (about 2 ms here), so
    the span reads about 10.8 ms for 8.1 ms of timed GPU passes, with a q95
@@ -202,19 +206,23 @@ the cadence climbed to the 200 ms holdback cap). What remains:
 
 ## Tier A: Android Vulkan backend
 
-The pacer core, the frame records and the tier resolution are
-backend-agnostic, but no Android sourcing exists: nothing in
-`src/erhe/graphics` calls `VK_GOOGLE_display_timing`. Tier A needs
+The Vulkan backend runs tier W on `VK_GOOGLE_display_timing` on macOS
+(MoltenVK; `doc/erhe/vulkan_backend.md`): the target through
+`VkPresentTimesInfoGOOGLE`, `actualPresentTime` feedback through
+`Swapchain_impl::poll_display_timing`, no C15 holdback. The capability is
+Apple-only because `display_timing_to_seconds` (`vulkan_swapchain.cpp`)
+converts only the Apple presentation clock. Android needs
 
-- `vkGetRefreshCycleDurationGOOGLE` for the refresh period and
-  `vkGetPastPresentationTimingGOOGLE` for the achieved-present feedback,
-  mapped onto the same `on_present_feedback` path tier W uses,
-- calibrated timestamps in the `CLOCK_MONOTONIC` domain,
-- `VkPresentTimesInfoGOOGLE.desiredPresentTime` as the FR3 actuator
-  ("no earlier than" semantics),
+- the `CLOCK_MONOTONIC` conversion there (the host time domain offsets of
+  `Device_impl` cover it when the driver advertises that calibrated domain),
+  and `m_display_timing` enabled on Android,
+- `vkGetRefreshCycleDurationGOOGLE` as a `Display_refresh_resolver` source
+  (logged only today),
 - a decision for the FR5 queue clamp when the device ships no
   `VK_KHR_present_wait`: either a gate built from GOOGLE feedback, or tier A
-  resolves OFF on such devices (the state today).
+  resolves OFF on such devices (the state today),
+- a measurement of whether the Android compositor honors the target and of
+  its deadline (the quarter-period early request is the macOS value).
 
 ## VRR-aware tier
 

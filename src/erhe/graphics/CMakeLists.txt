@@ -313,9 +313,11 @@ erhe_target_sources_grouped(
 if (APPLE)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/clock_monitor_apple.hpp
+        erhe_graphics/clock_monitor_apple.mm
         erhe_graphics/thermal_state_apple.mm
     )
-    target_link_libraries(${_target} PRIVATE "-framework Foundation")
+    target_link_libraries(${_target} PRIVATE "-framework Foundation" "-framework IOKit")
 endif ()
 
 if (ERHE_SPIRV)
@@ -502,8 +504,6 @@ if (ERHE_GRAPHICS_API_METAL)
         erhe_graphics/metal/metal_device_present_calibration.cpp
         erhe_graphics/metal/metal_pixel_format_table.cpp
         erhe_graphics/metal/metal_pixel_format_table.hpp
-        erhe_graphics/metal/metal_clock_monitor.hpp
-        erhe_graphics/metal/metal_clock_monitor.mm
         erhe_graphics/metal/metal_gpu_prewarm.cpp
         erhe_graphics/metal/metal_gpu_prewarm.hpp
         erhe_graphics/metal/metal_gpu_timer.cpp

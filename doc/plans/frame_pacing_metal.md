@@ -312,7 +312,7 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   headroom test judges max(c, g * ratio) - the work at full clock - while
   the predictive and reactive downshifts keep the real spans. Plant: GPU
   clock by cadence, GPU time = work / clock; claim C25.
-  Built: the clock monitor (now `Clock_monitor`, metal_clock_monitor.mm), C25 in both
+  Built: the clock monitor (now `Clock_monitor`, clock_monitor_apple.mm), C25 in both
   suites (Python 90/90, C++ 30/30). Live the work (span * clock ratio) is
   4.8-5.05 ms median at N=1 and N=2 alike, Debug and Release. Found and
   fixed: the editor converted the render thread's steady_clock join waits
@@ -390,3 +390,31 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   20-34 per 10 frames over 10 upshifts), input-to-display latency over
   frames 20-100 after the upshift 0.3-1.1 ms above steady state (before:
   4.6-18.7 ms).
+- 2026-10-21, Vulkan on macOS (Dell at 120 Hz, `build_xcode_vulkan`).
+  KosmicKrisp exposes neither `VK_EXT_present_timing` nor
+  `VK_GOOGLE_display_timing` and stays on tier S. MoltenVK exposes
+  `VK_GOOGLE_display_timing`: its `desiredPresentTime` is
+  `presentDrawable:atTime:` and `actualPresentTime` the drawable's
+  `presentedTime`, both `mach_absolute_time` nanoseconds (the recorder's
+  clock), and the targets are honored (at N=2, 99 % of the frames displayed
+  two refreshes apart). Tier W now runs on it (`doc/erhe/vulkan_backend.md`)
+  with the tier M differences (no holdback, estimated deadline offset, a
+  quarter-period early request; no present calibration, no pre-warm). The
+  Metal findings carry over: at N=2 the GPU clocks down (0.4-0.65) and the
+  pacer stayed at N=2 until the Vulkan device ran the `Clock_monitor` (now
+  `clock_monitor_apple.mm`, shared by both backends). Then it upshifted, but
+  at N=1 the governor lowered the clock to ~0.72 within a second, the frame
+  span read ~T and the predictive downshift returned to N=2 with every frame
+  on time. The span held the 1.4 ms (Debug; Release 0.65 ms) GPU idle gap
+  between the upload submit and the presenting submit, which does not scale
+  with the clock; the bracket now measures that gap and the pacer's `g`
+  excludes it (inputs.md 3.3). Work at full clock is ~5.8 ms; a Metal System
+  Trace of the MoltenVK editor read the main pass at 8.3 ms because
+  Instruments fixes a lower GPU performance state - not a MoltenVK cost.
+  Gate, MoltenVK, Dell 120 Hz: N=1 in 60/60 (Debug and Release, default,
+  `ERHE_RENDER_THREAD=0`, `ERHE_FRAME_PIPELINING=0`); two-refresh frames
+  8-12 of ~3450 per batch; release to display 18.2-20.4 ms Debug,
+  16.7-19.7 ms Release; GPU service 6-6.5 ms at 72-80 % clock. Open: the
+  Vulkan path has no present calibration (ProMotion needs a request a
+  period earlier, see "Compositor properties per display mode") and no
+  pre-warm; re-gate on fixed 60 Hz and ProMotion.

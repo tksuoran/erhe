@@ -157,7 +157,7 @@ void Frame_pacing_observer::deliver_pending(Frame_time_recorder& recorder, const
                 frame_id,
                 record.gpu_frame_end,
                 record.cpu_service_time(),
-                record.gpu_frame_end - record.gpu_frame_begin,
+                record.gpu_service_time(),
                 record.gpu_frame_end - release - record.release_wait_time(release),
                 record.gpu_clock_ratio,
                 record.cpu_clock_ratio

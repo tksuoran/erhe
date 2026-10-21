@@ -48,6 +48,11 @@ public:
     double present_return_time  {0.0}; // right after vkQueuePresentKHR (FIFO backpressure can block inside)
     double gpu_frame_begin      {0.0}; // first render pass begin (calibrated)
     double gpu_frame_end        {0.0}; // last render pass end (calibrated)
+    // GPU idle inside the frame span: the gap between the frame's first
+    // submit and its presenting submit (Vulkan: the render thread records
+    // the frame command buffer after the upload command buffer was
+    // submitted); 0 = none or not measured. gpu_service_time() excludes it.
+    double gpu_idle_time        {0.0};
     double gpu_clock_ratio      {0.0}; // the GPU's average active clock over the frame / its maximum clock; 0 = not measured (Metal: IOReport)
     double cpu_clock_ratio      {0.0}; // the P-cores' average active clock over the frame / their maximum clock; 0 = not measured
     double achieved_present_time{0.0}; // presentation feedback, when available
@@ -63,6 +68,10 @@ public:
     // pacer wait, the present wait and the join wait are subtracted for the portion
     // overlapping the slot.
     [[nodiscard]] auto cpu_service_time() const -> double;
+
+    // Normative g_k for the pacer (doc/frame_pacing/inputs.md section 3.3):
+    // the GPU frame span minus the recorded idle gap.
+    [[nodiscard]] auto gpu_service_time() const -> double;
 
     // Whole-slot span, for profiling display.
     [[nodiscard]] auto cpu_slot_span() const -> double;

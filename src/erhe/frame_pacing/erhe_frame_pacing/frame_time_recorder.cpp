@@ -9,6 +9,14 @@
 
 namespace erhe::frame_pacing {
 
+auto Frame_time_record::gpu_service_time() const -> double
+{
+    if (gpu_frame_end <= gpu_frame_begin) {
+        return 0.0;
+    }
+    return std::max(0.0, (gpu_frame_end - gpu_frame_begin) - gpu_idle_time);
+}
+
 auto Frame_time_record::cpu_slot_span() const -> double
 {
     if ((cpu_slot_begin <= 0.0) || (cpu_slot_end <= cpu_slot_begin)) {
