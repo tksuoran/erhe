@@ -79,7 +79,7 @@ auto App_settings::get_ui_scale() const -> float
     return imgui.font_size / 16.0f;
 }
 
-auto get_light_count_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Light_count_limits
+auto get_light_count_limits(const Graphics_preset_entry& graphics_preset, const int max_light_count) -> erhe::scene_renderer::Light_count_limits
 {
     auto count = [](const int value) -> std::size_t { return static_cast<std::size_t>(std::max(0, value)); };
     erhe::scene_renderer::Light_count_limits limits{
@@ -96,6 +96,15 @@ auto get_light_count_limits(const Graphics_preset_entry& graphics_preset) -> erh
             0
         }
     };
+    limits.max_light_count = count(max_light_count);
+    if (graphics_preset.light_shading == Light_shading_mode::clustered) {
+        // Clustered: every active light is shaded, up to the light array
+        // capacity; the shadow limits still pick the shadow-mapped ones.
+        limits.light_shading = erhe::scene_renderer::Light_shading::clustered;
+        for (std::size_t t = 0; t < 3; ++t) {
+            limits.per_type_unshadowed[t] = limits.max_light_count;
+        }
+    }
     if (!graphics_preset.shadow_enable) {
         // Shadows off: no light is shadow-mapped, the unshadowed limits still
         // decide how many lights of each type are shaded.
@@ -173,7 +182,7 @@ void Graphics_settings::apply_limits(Graphics_preset_entry& graphics_preset)
     graphics_preset.shadow_resolution = std::min(graphics_preset.shadow_resolution, max_shadow_resolution);
     graphics_preset.shadow_resolution = std::min(graphics_preset.shadow_resolution, 8192);
 
-    // Per light type light counts: their sum is bounded by the light UBO
+    // Per light type light counts: their sum is bounded by the light array
     // capacity (max_light_count; shadow lights keep priority, then unshadowed,
     // directional / spot / point within each), and the directional + spot
     // shadow lights share the 2D shadow map array, so their sum is bounded by

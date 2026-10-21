@@ -22,5 +22,7 @@ namespace erhe::scene_renderer {
 // C3). Metal maps a GLSL binding to the buffer index; 9-12 are the free
 // indices below its reserved ones.
 #define light_array_buffer_binding_point   9
+// The light cluster lists (doc/plans/clustered_lights.md C3).
+#define light_cluster_buffer_binding_point 10
 
 } // namespace erhe::scene_renderer

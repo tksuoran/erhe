@@ -120,14 +120,18 @@ Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
   binning dispatch (C4) included. `Light_buffer::update()` returns the
   header range and the array range; passes that today call `update()` per
   pass bind the view's ranges instead.
-- `light_cluster_block` (binding 10, storage, std430, readonly in the
-  fragment stage, written by C4): the grid parameters
-  (`cluster_from_view_relative`, the forward axis and depth offset, tile
-  counts per axis, the slice distribution's near / far constants, the
-  per-cluster capacity) and, per cluster, one `uvec4` of category counts - (spot shadow-mapped, spot unshadowed, point
-  shadow-mapped, point unshadowed) - followed by the cluster's light slots,
-  packed two 16-bit slots per `uint`, at most `cluster_capacity` (default
-  64) per cluster, in ascending slot order.
+- The grid parameters (`Light_cluster_grid`: `cluster_clip_from_cluster_relative`,
+  the cluster camera's view origin and depth axis, the slice scale / bias /
+  near, the tile and slice counts) are the `cluster_*` fields of the
+  `light_block` header, written per pass from the view's grid.
+- `light_cluster_block` (binding 10, storage, std430, readonly,
+  `light_cluster.data[]`, layout in `light_cluster.hpp`): three uints per
+  cluster - the offset of its list in `data[]`, the spot shadow-mapped |
+  spot unshadowed counts, the point shadow-mapped | point unshadowed counts
+  (16 bits each) - followed by the lists, two 16-bit light slots per uint,
+  ascending, at most `cluster_capacity` (default 64) per cluster. The CPU
+  binner packs the lists compactly; the GPU binner (phase 3) writes them at
+  fixed per-cluster offsets, which the same header format expresses.
 - Directional lights and lights with `range <= 0` are not binned: they
   reach every fragment. They keep their slots and are looped by the header's
   runtime counts (directional) or listed in every cluster (unbounded spot /
@@ -138,9 +142,9 @@ Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
   shaded slot. Its cost is the loop path's; it keeps the bind group complete
   and the shader single-path.
 
-Storage per view and frame in flight: header 16 bytes per cluster plus
-`cluster_capacity / 2` uints - 9072 x (16 + 128) bytes = 1.3 MB for
-Bistro's viewport. The cluster buffer is a `GPU_access` ring range acquired
+Storage per view and frame in flight at fixed offsets (phase 3): 12 header
+bytes per cluster plus `cluster_capacity / 2` uints - 9072 x (12 + 128)
+bytes = 1.3 MB for Bistro's viewport. The cluster buffer is a `GPU_access` ring range acquired
 by the render phase per view and frame, the precedent being the GPU cull
 masks (`draw_list_scene_gpu_cull.cpp`); frame retirement reclaims it.
 
@@ -258,7 +262,45 @@ unshadowed counts stay with it.
 ## Phases
 
 Each phase is one commit (or a short series), reviewed, with its gates.
-Phase 1 (the light array as a storage block, C3) is built.
+Phases 1 (the light array as a storage block, C3) and 2 are built.
+
+Phase 2 (CPU binning and the clustered shader path) is built; the code is
+described in [../erhe/scene_renderer.md](../erhe/scene_renderer.md)
+(`Light_buffer`, `Light_set`, `Light_cluster_binner`) and
+[../erhe/shader_variants.md](../erhe/shader_variants.md) "Light shading".
+Gates passed on the phase 2 commit:
+
+- V1: the default scene (two cameras; inline, dedicated and pipelined
+  render thread) on Metal and MoltenVK (validation clean), and Bistro with
+  all 43 lights within the loop limits, byte-identical between loop and
+  clustered mode; loop mode byte-identical to the phase 1 commit.
+- V3: covered by the Bistro V1 run (loop mode evaluates every light at every
+  fragment); the debug setting forcing the single-cluster grid is not built.
+- V4: in clustered mode adding, retyping and removing spot, point and
+  directional lights logs no `Shader_variant_cache miss` (headless Metal);
+  the same edits in loop mode compile new variants.
+- V6 (CPU half): `light_cluster_capacity` 1 changes the image and logs the
+  overflow warning.
+- `erhe_scene_renderer_tests` `Light_cluster_test`: every light reaching a
+  sampled position (inside the cluster frustum, beside it, behind the camera
+  and past the far end; perspective with Vulkan and OpenGL conventions, an
+  asymmetric XR-style perspective, orthographic) is in the list of the
+  cluster an fp32 copy of `erhe_light_cluster_index()` picks; the lists are
+  tight (no list holds every binned light; a far cluster does not list a
+  small light); lists ascending; category counts; directional lights never
+  binned; unbounded spot lights in every cluster; the capacity cut keeps the
+  lowest slots; the shaded total stops at the light array capacity; the
+  single-cluster layout.
+
+Phase 2 measurements (V5 recipe: Release headless Metal, M4 Pro,
+`force_disable_vsync` and `frame_pacing_tier` off, Bistro at the
+`scripts/bistro_frame_bench.py` camera, configurations switched with
+`set_graphics_preset` in one session, medians of `get_gpu_timers` and of
+the phase log's R):
+`Viewport window` GPU 3.50-3.53 ms loops Medium (16 shaded), 4.26 ms loops
+with all 43, 3.66 ms clustered (43); render thread CPU 1.44-1.60 / 1.83 /
+2.50 ms - the CPU binner costs about 1 ms per frame (it tests every tile of
+every slice a light's depth range spans), which phase 3 removes.
 
 2. **CPU binning and the clustered shader path.** Grid (C2), cluster block
    (C3), the light array written once per view per frame and bound by that

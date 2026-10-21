@@ -123,6 +123,31 @@ fragment shader whenever the mesh carries the attribute.
 Counts are **exact** (one variant per observed tuple). No tier
 rounding.
 
+### Light shading (`LIGHT_SHADING_CLUSTERED`)
+
+The scene-level boolean axis `ERHE_LIGHT_SHADING_CLUSTERED` selects how
+`standard.frag` loops the shaded lights; `set_light_partition_axes()` sets
+the light axes of an environment key from the partition's `light_shading`
+(`erhe::scene_renderer::Light_shading`, the editor's graphics preset field
+`light_shading`).
+
+- Loops (`Light_shading::loops`, the axis clear): six loops whose bounds are
+  the six `ERHE_LIGHT_COUNT_*` axes above, over consecutive slots. Every
+  partition of the scene's lights is its own variant set, so adding,
+  removing or retyping a light compiles new variants.
+- Clustered (`Light_shading::clustered`, the axis set): the six
+  `ERHE_LIGHT_COUNT_*` axes stay 0. The directional loops take the light
+  block's runtime counts (`directional_shadow_count`,
+  `directional_light_count`); the spot and point loops walk the fragment's
+  light cluster list (`erhe_light_cluster.glsl`, doc/erhe/scene_renderer.md
+  `Light_cluster_binner`) in four category runs. One variant set serves
+  every light layout, so a light edit compiles nothing. The lists are
+  ascending, so a fragment sums the same lights in the same order as the
+  loop path, minus lights whose range attenuation is zero there.
+
+The light-count axes below (the partition, the light array layout
+invariant and its literal loop bounds) apply to the loop path only.
+
 The four light-count axes per type are populated from
 `compute_light_layer_partition(lights)`, which returns a
 `Light_layer_partition { per_type_shadow[4], per_type_nonshadow[4] }`.

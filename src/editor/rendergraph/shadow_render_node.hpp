@@ -299,6 +299,14 @@ private:
         const erhe::scene::Camera_snapshot&    camera
     );
 
+    // Render phase, after publish_light_copies(): the frame's light array
+    // and light cluster lists of this view (Light_buffer::write_view(),
+    // doc/plans/clustered_lights.md C3, C4), binned for the view's render
+    // camera (not the shadow fit override camera). Logs the cluster
+    // overflow count each time it changes.
+    void write_light_view(Shadow_frame_result& result);
+    std::size_t                                               m_light_cluster_overflow_count{0};
+
     std::shared_ptr<erhe::scene::Light>                       m_headlight;
     std::array<std::shared_ptr<erhe::scene::Light>, 1>        m_headlight_lights;
     erhe::scene_renderer::Light_set                           m_headlight_set;

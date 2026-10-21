@@ -13,6 +13,7 @@
 #include "erhe_bxdf.glsl"
 #include "erhe_camera_view.glsl"
 #include "erhe_light.glsl"
+#include "erhe_light_cluster.glsl"
 #include "erhe_math.glsl"   // to_render_target_range()
 #include "erhe_srgb.glsl"
 #include "erhe_texture.glsl"
@@ -665,8 +666,6 @@ void main()
 #    define BXDF_CALL(L_arg) isotropic_brdf(base_color, roughness_x, metallic, material.reflectance, L_arg, V, N)
 #  endif
 
-        uint light_offset = 0;
-
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
         // Baked lightmap (doc/lightmap_baking_plan.md phase 5): a primitive
         // with an atlas region (lightmap_scale_offset.xy > 0) replaces the
@@ -712,98 +711,158 @@ void main()
 
         if (!lightmap_valid) {
 
-        // Directional - shadow-mapped prefix
-        for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED); ++i) {
-            uint  light_index    = light_offset + i;
-            Light light          = light_array.lights[light_index];
-            vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-            vec3  L              = normalize(point_to_light);
-            float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) {
-                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane);
-                color += intensity * BXDF_CALL(L);
+        // One light's contribution per light category, shared by the loop
+        // path and the clustered path (doc/plans/clustered_lights.md C5) so
+        // both evaluate the same expressions in the same order.
+#  define ERHE_SHADE_DIRECTIONAL_SHADOWMAPPED(LIGHT_INDEX) { \
+            uint  light_index    = (LIGHT_INDEX); \
+            Light light          = light_array.lights[light_index]; \
+            vec3  point_to_light = light.direction_and_outer_spot_cos.xyz; \
+            vec3  L              = normalize(point_to_light); \
+            float N_dot_L        = dot(N, L); \
+            if (N_dot_L > 0.0) { \
+                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane); \
+                color += intensity * BXDF_CALL(L); \
+            } \
+        }
+#  define ERHE_SHADE_DIRECTIONAL_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
+            uint  light_index    = (LIGHT_INDEX); \
+            Light light          = light_array.lights[light_index]; \
+            vec3  point_to_light = light.direction_and_outer_spot_cos.xyz; \
+            vec3  L              = normalize(point_to_light); \
+            float N_dot_L        = dot(N, L); \
+            if (N_dot_L > 0.0) { \
+                vec3 intensity = light.radiance_and_range.rgb; \
+                color += intensity * BXDF_CALL(L); \
+            } \
+        }
+#  define ERHE_SHADE_SPOT_SHADOWMAPPED(LIGHT_INDEX) { \
+            uint  light_index    = (LIGHT_INDEX); \
+            Light light          = light_array.lights[light_index]; \
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
+            vec3  L              = normalize(point_to_light); \
+            float N_dot_L        = dot(N, L); \
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
+                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
+                float light_visibility  = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane); \
+                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility; \
+                color += intensity * BXDF_CALL(L); \
+            } \
+        }
+#  define ERHE_SHADE_SPOT_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
+            uint  light_index    = (LIGHT_INDEX); \
+            Light light          = light_array.lights[light_index]; \
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
+            vec3  L              = normalize(point_to_light); \
+            float N_dot_L        = dot(N, L); \
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
+                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
+                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb; \
+                color += intensity * BXDF_CALL(L); \
+            } \
+        }
+        // Point shadow-mapped: sample the omnidirectional shadow cube by the
+        // fragment->light direction; the cube-array layer for this light is
+        // shadow_index_packed.y (written by light_buffer.cpp).
+#  define ERHE_SHADE_POINT_SHADOWMAPPED(LIGHT_INDEX) { \
+            uint  light_index    = (LIGHT_INDEX); \
+            Light light          = light_array.lights[light_index]; \
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
+            vec3  L              = normalize(point_to_light); \
+            float N_dot_L        = dot(N, L); \
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
+                float light_visibility  = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, float(light.shadow_index_packed.y), light.shadow_limits.x, shadow_receiver_plane); \
+                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility; \
+                color += intensity * BXDF_CALL(L); \
+            } \
+        }
+#  define ERHE_SHADE_POINT_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
+            uint  light_index    = (LIGHT_INDEX); \
+            Light light          = light_array.lights[light_index]; \
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
+            vec3  L              = normalize(point_to_light); \
+            float N_dot_L        = dot(N, L); \
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
+                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb; \
+                color += intensity * BXDF_CALL(L); \
+            } \
+        }
+
+#  if defined(ERHE_LIGHT_SHADING_CLUSTERED)
+        // Directional lights reach every fragment: the light block's runtime
+        // counts (shadow-mapped prefix, then the rest of the type).
+        for (uint i = 0u; i < light_block.directional_shadow_count; ++i) {
+            ERHE_SHADE_DIRECTIONAL_SHADOWMAPPED(i)
+        }
+        for (uint i = light_block.directional_shadow_count; i < light_block.directional_light_count; ++i) {
+            ERHE_SHADE_DIRECTIONAL_NOT_SHADOWMAPPED(i)
+        }
+
+        // Spot and point lights: the fragment's cluster list, ascending
+        // slots in four category runs (light_cluster.hpp).
+        {
+            uint cluster       = erhe_light_cluster_index(v_view_relative_position);
+            uint header        = erhe_light_cluster_header(cluster);
+            uint list_offset   = light_cluster.data[header];
+            uint counts_spot   = light_cluster.data[header + 1u];
+            uint counts_point  = light_cluster.data[header + 2u];
+            uint list_index    = 0u;
+            uint list_end      = counts_spot & 0xffffu;
+            for (; list_index < list_end; ++list_index) {
+                ERHE_SHADE_SPOT_SHADOWMAPPED(erhe_light_cluster_slot(list_offset, list_index))
             }
+            list_end += counts_spot >> 16u;
+            for (; list_index < list_end; ++list_index) {
+                ERHE_SHADE_SPOT_NOT_SHADOWMAPPED(erhe_light_cluster_slot(list_offset, list_index))
+            }
+            list_end += counts_point & 0xffffu;
+            for (; list_index < list_end; ++list_index) {
+                ERHE_SHADE_POINT_SHADOWMAPPED(erhe_light_cluster_slot(list_offset, list_index))
+            }
+            list_end += counts_point >> 16u;
+            for (; list_index < list_end; ++list_index) {
+                ERHE_SHADE_POINT_NOT_SHADOWMAPPED(erhe_light_cluster_slot(list_offset, list_index))
+            }
+        }
+#  else
+        // Loop path: per category loops bounded by the light count axes,
+        // over consecutive slots (doc/erhe/shader_variants.md "Light array
+        // layout invariant").
+        uint light_offset = 0u;
+        for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED); ++i) {
+            ERHE_SHADE_DIRECTIONAL_SHADOWMAPPED(light_offset + i)
         }
         light_offset += uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED);
-
-        // Directional - non-shadow suffix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED); ++i) {
-            uint  light_index    = light_offset + i;
-            Light light          = light_array.lights[light_index];
-            vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-            vec3  L              = normalize(point_to_light);
-            float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) {
-                vec3 intensity = light.radiance_and_range.rgb;
-                color += intensity * BXDF_CALL(L);
-            }
+            ERHE_SHADE_DIRECTIONAL_NOT_SHADOWMAPPED(light_offset + i)
         }
         light_offset += uint(ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED);
-
-        // Spot - shadow-mapped prefix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED); ++i) {
-            uint  light_index    = light_offset + i;
-            Light light          = light_array.lights[light_index];
-            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
-            vec3  L              = normalize(point_to_light);
-            float N_dot_L        = dot(N, L);
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
-                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-                float light_visibility  = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane);
-                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
-                color += intensity * BXDF_CALL(L);
-            }
+            ERHE_SHADE_SPOT_SHADOWMAPPED(light_offset + i)
         }
         light_offset += uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED);
-
-        // Spot - non-shadow suffix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED); ++i) {
-            uint  light_index    = light_offset + i;
-            Light light          = light_array.lights[light_index];
-            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
-            vec3  L              = normalize(point_to_light);
-            float N_dot_L        = dot(N, L);
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
-                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb;
-                color += intensity * BXDF_CALL(L);
-            }
+            ERHE_SHADE_SPOT_NOT_SHADOWMAPPED(light_offset + i)
         }
         light_offset += uint(ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
-
-        // Point - shadow-mapped prefix. Sample the omnidirectional shadow cube
-        // by the fragment->light direction; the cube-array layer for this light
-        // is shadow_index_packed.y (written by light_buffer.cpp).
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED); ++i) {
-            uint  light_index    = light_offset + i;
-            Light light          = light_array.lights[light_index];
-            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
-            vec3  L              = normalize(point_to_light);
-            float N_dot_L        = dot(N, L);
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
-                float light_visibility  = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, float(light.shadow_index_packed.y), light.shadow_limits.x, shadow_receiver_plane);
-                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
-                color += intensity * BXDF_CALL(L);
-            }
+            ERHE_SHADE_POINT_SHADOWMAPPED(light_offset + i)
         }
         light_offset += uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED);
-
-        // Point - non-shadow suffix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_NOT_SHADOWMAPPED); ++i) {
-            uint  light_index    = light_offset + i;
-            Light light          = light_array.lights[light_index];
-            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
-            vec3  L              = normalize(point_to_light);
-            float N_dot_L        = dot(N, L);
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) {
-                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb;
-                color += intensity * BXDF_CALL(L);
-            }
+            ERHE_SHADE_POINT_NOT_SHADOWMAPPED(light_offset + i)
         }
+#  endif
+#  undef ERHE_SHADE_DIRECTIONAL_SHADOWMAPPED
+#  undef ERHE_SHADE_DIRECTIONAL_NOT_SHADOWMAPPED
+#  undef ERHE_SHADE_SPOT_SHADOWMAPPED
+#  undef ERHE_SHADE_SPOT_NOT_SHADOWMAPPED
+#  undef ERHE_SHADE_POINT_SHADOWMAPPED
+#  undef ERHE_SHADE_POINT_NOT_SHADOWMAPPED
 
         } // !lightmap_valid - analytic lights gated off for lightmapped draws
 #  undef BXDF_CALL
@@ -909,7 +968,16 @@ void main()
         // First light is used as the L direction for V/L/H dot-product
         // visualizations and for the shadow-map texel pattern. Skipped
         // when no light is configured.
-#  if ((ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + \
+#  if defined(ERHE_LIGHT_SHADING_CLUSTERED)
+        vec3 L_dbg = vec3(0.0, 1.0, 0.0);
+        if ((light_block.directional_light_count + light_block.spot_light_count + light_block.point_light_count) > 0u) {
+            Light light_0 = light_array.lights[0];
+            vec3  point_to_light_0 = (light_block.directional_light_count > 0u)
+                ? light_0.direction_and_outer_spot_cos.xyz
+                : (light_0.position_and_inner_spot_cos.xyz - v_position.xyz);
+            L_dbg = normalize(point_to_light_0);
+        }
+#  elif ((ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + \
         ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED + \
         ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + \
         ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED + \
@@ -1073,6 +1141,21 @@ void main()
             // The receiver is sampled regardless of N.L, unlike the lit loops.
             uint  dbg_light_index = light_block.shadow_debug_light_index;
             float dbg_visibility  = 1.0;
+#    if defined(ERHE_LIGHT_SHADING_CLUSTERED)
+            // The light block's runtime counts give the same category ranges.
+            const uint dbg_spot_shadowed_begin  = light_block.directional_light_count;
+            const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + light_block.spot_light_count;
+            if (dbg_light_index < light_block.directional_shadow_count) {
+                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, shadow_receiver_plane);
+            }
+            if ((dbg_light_index >= dbg_spot_shadowed_begin) && (dbg_light_index < (dbg_spot_shadowed_begin + light_block.spot_shadow_count))) {
+                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, shadow_receiver_plane);
+            }
+            if ((dbg_light_index >= dbg_point_shadowed_begin) && (dbg_light_index < (dbg_point_shadowed_begin + light_block.point_shadow_count))) {
+                Light dbg_light = light_array.lights[dbg_light_index];
+                dbg_visibility = sample_point_light_visibility(v_view_relative_position, v_position_rounding, dbg_light.view_origin.xyz, float(dbg_light.shadow_index_packed.y), dbg_light.shadow_limits.x, shadow_receiver_plane);
+            }
+#    else
             const uint dbg_spot_shadowed_begin  = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED);
             const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
 #    if ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED > 0
@@ -1090,6 +1173,7 @@ void main()
                 Light dbg_light = light_array.lights[dbg_light_index];
                 dbg_visibility = sample_point_light_visibility(v_view_relative_position, v_position_rounding, dbg_light.view_origin.xyz, float(dbg_light.shadow_index_packed.y), dbg_light.shadow_limits.x, shadow_receiver_plane);
             }
+#    endif
 #    endif
             out_color.rgb = vec3(dbg_visibility);
         }

@@ -31,6 +31,7 @@ void Render_settings::snapshot(const Editor_settings_config& editor_settings, co
     lightmap_bicubic_sampling        = editor_settings.lightmap.bicubic_sampling;
 
     graphics_preset                  = app_settings.graphics.current_graphics_preset;
+    max_light_count                  = app_settings.graphics.max_light_count;
     use_draw_lists                   = app_settings.get_use_draw_lists();
     headlight_when_unlit             = app_settings.graphics.headlight_when_unlit;
     sky_enabled                      = app_settings.graphics.sky_enabled;

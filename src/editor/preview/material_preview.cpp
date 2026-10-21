@@ -7,6 +7,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/composition_pass.hpp"
@@ -252,6 +253,7 @@ void Material_preview::render_preview(erhe::graphics::Command_buffer& command_bu
     const erhe::scene_renderer::Light_set& light_set = m_scene_root_shared->snapshot_preview_render_settings(
         *m_context.editor_settings,
         get_light_count_limits(),
+        m_context.program_interface->light_interface.max_light_count,
         m_context.graphics_device->get_frame_index(),
         m_context.graphics_device->get_number_of_frames_in_flight()
     );

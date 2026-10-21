@@ -74,6 +74,7 @@ erhe_target_sources_grouped(
     res/shaders/erhe_camera_view.glsl
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl
+    res/shaders/erhe_light_cluster.glsl
     res/shaders/erhe_math.glsl
     res/shaders/erhe_ray_hit.glsl
     res/shaders/erhe_srgb.glsl
@@ -1044,6 +1045,8 @@ set(_config_sources
     ${_config_out}/shadow_cull_mode.cpp
     ${_config_out}/shadow_technique_mode.hpp
     ${_config_out}/shadow_technique_mode.cpp
+    ${_config_out}/light_shading_mode.hpp
+    ${_config_out}/light_shading_mode.cpp
     ${_config_out}/shadow_mode.hpp
     ${_config_out}/shadow_mode.cpp
     ${_config_out}/graphics_preset_entry.hpp

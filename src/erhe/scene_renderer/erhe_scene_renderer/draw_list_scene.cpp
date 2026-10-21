@@ -224,16 +224,10 @@ auto c_str(const Shadow_sub_variant sub_variant) -> const char*
 
 auto Color_environment::operator==(const Color_environment& other) const -> bool
 {
-    for (std::size_t i = 0; i < 4; ++i) {
-        if (light_partition.per_type_shadow   [i] != other.light_partition.per_type_shadow   [i]) { return false; }
-        if (light_partition.per_type_nonshadow[i] != other.light_partition.per_type_nonshadow[i]) { return false; }
-    }
-    return
-        (shadow_filter     == other.shadow_filter    ) &&
-        (shadow_bias       == other.shadow_bias      ) &&
-        (shadow_technique  == other.shadow_technique ) &&
-        (shadow_depth_bits == other.shadow_depth_bits) &&
-        (ddgi_enabled      == other.ddgi_enabled     );
+    // Equal when the keys are: the resolutions depend on the key only, and
+    // in clustered mode the per type light counts never reach it, so a light
+    // edit that keeps the key keeps every cached resolution.
+    return make_environment_key() == other.make_environment_key();
 }
 
 auto Color_environment::make_environment_key() const -> Shader_key
@@ -242,12 +236,7 @@ auto Color_environment::make_environment_key() const -> Shader_key
     // light counts per type, shadow axes, SHADER_DEBUG = 0 (draw lists never
     // carry the debug axis; those passes use the fallback).
     Shader_key key{};
-    key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(light_partition.per_type_nonshadow[0]));
-    key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(light_partition.per_type_shadow   [0]));
-    key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(light_partition.per_type_nonshadow[1]));
-    key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(light_partition.per_type_shadow   [1]));
-    key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(light_partition.per_type_nonshadow[2]));
-    key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(light_partition.per_type_shadow   [2]));
+    set_light_partition_axes(key, light_partition);
     key.set(Shader_int::SHADER_DEBUG,                             0u);
     key.set(Shader_int::SHADOW_FILTER,                            shadow_filter);
     key.set(Shader_int::SHADOW_BIAS,                              shadow_bias);
@@ -1546,7 +1535,7 @@ auto Draw_list_scene::resolve_color_stages(
     }
 
     // Combine (plan section 0.2): primitive-derived key from registration OR
-    // environment bool bits (none today), environment int axes overwrite (the
+    // environment bool bits (USE_DDGI, LIGHT_SHADING_CLUSTERED), environment int axes overwrite (the
     // primitive key never sets those axes when SHADER_DEBUG == 0), multiview
     // axis per view configuration, blending mode from the primitive key.
     Shader_key       key = draw_list.key.primitive_key;

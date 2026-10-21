@@ -96,8 +96,10 @@ SPIRV-Cross and has the optnone cost until it ships the change.
 All Metal buffer indices are explicitly assigned during SPIRV-Cross compilation via `add_msl_resource_binding()`, eliminating runtime remapping:
 
 ```
-Index 0-7:   UBOs/SSBOs (= GLSL binding number, identity mapping)
-Index 8-13:  (available)
+Index 0-10:  UBOs/SSBOs (= GLSL binding number, identity mapping; 9 is the
+             scene renderer's light array, 10 its light cluster lists)
+Index 11-12: (available)
+Index 13:    Acceleration structure (ray queries)
 Index 14:    Texture argument buffer
 Index 15:    Push constant (ERHE_DRAW_ID, vertex/compute only)
 Index 16+:   Vertex attributes (vertex_buffer_index_offset)

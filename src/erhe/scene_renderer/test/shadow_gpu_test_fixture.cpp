@@ -401,7 +401,7 @@ void Shadow_gpu_test::set_light(const Shadow_light_kind light_kind, const Shadow
 
     const std::shared_ptr<erhe::scene::Light> lights[] = { m_light };
     m_light_set.invalidate();
-    m_light_set.resolve(std::span<const std::shared_ptr<erhe::scene::Light>>{lights}, Light_count_limits::uniform(1, 0));
+    m_light_set.resolve(std::span<const std::shared_ptr<erhe::scene::Light>>{lights}, Light_count_limits::uniform(1, 0), m_program_interface->light_interface.max_light_count);
 }
 
 void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)

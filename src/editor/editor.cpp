@@ -30,6 +30,7 @@
 #include "config/generated/window_config.hpp"
 #include "config/generated/window_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
+#include "erhe_codegen/migration.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "items.hpp"
@@ -266,6 +267,7 @@
 #include <fstream>
 #include <set>
 #include <filesystem>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -432,6 +434,33 @@ static constexpr unsigned int s_render_thread_slot      = 2;
     }
     log_startup->info("Frame pipelining: {} (from {})", pipelining ? "on" : "off", source);
     return pipelining;
+}
+
+// config/editor/renderer.json with its v1 -> v2 migration: v1's
+// max_light_count sized a light uniform block (default 32); v2's is the
+// capacity of the light storage array that clustered light shading fills
+// with every active light (default 1024), so a v1 value below the v2
+// default is raised to it.
+[[nodiscard]] auto load_renderer_config() -> Renderer_config
+{
+    static std::once_flag s_once;
+    std::call_once(
+        s_once,
+        []() {
+            erhe::codegen::register_migration<Renderer_config>(
+                [](Renderer_config& config, const uint32_t old_version, const uint32_t new_version) -> bool
+                {
+                    static_cast<void>(new_version);
+                    if (old_version < 2) {
+                        const Renderer_config v2_defaults{};
+                        config.max_light_count = std::max(config.max_light_count, v2_defaults.max_light_count);
+                    }
+                    return true;
+                }
+            );
+        }
+    );
+    return erhe::codegen::load_config<Renderer_config>("config/editor/renderer.json");
 }
 
 } // anonymous namespace
@@ -2310,7 +2339,7 @@ public:
         , m_no_startup_scene     {no_startup_scene}
         , m_graphics_config     {erhe::codegen::load_config<Graphics_config>       ("config/editor/erhe_graphics.json")}
         , m_mesh_memory_config  {erhe::codegen::load_config<Mesh_memory_config>    ("config/editor/mesh_memory.json")}
-        , m_renderer_config     {erhe::codegen::load_config<Renderer_config>       ("config/editor/renderer.json")}
+        , m_renderer_config     {load_renderer_config()}
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
         , m_window_config       {erhe::codegen::load_config<Window_config>         ("config/editor/window.json")}
     {
@@ -2630,6 +2659,11 @@ public:
                 .max_material_count  = m_renderer_config.max_material_count,
                 .max_primitive_count = m_renderer_config.max_primitive_count,
                 .max_draw_count      = m_renderer_config.max_draw_count,
+                .light_cluster       = erhe::scene_renderer::Light_cluster_config{
+                    .tile_size   = m_renderer_config.light_cluster_tile_size,
+                    .slice_count = m_renderer_config.light_cluster_slice_count,
+                    .capacity    = m_renderer_config.light_cluster_capacity
+                },
                 .view_count      = xr_view_count
             };
             {

@@ -541,6 +541,7 @@ public:
     auto               snapshot_preview_render_settings(
         const Editor_settings_config&                   editor_settings,
         const erhe::scene_renderer::Light_count_limits& light_count_limits,
+        std::size_t                                     light_array_capacity,
         uint64_t                                        frame_index,
         std::size_t                                     frames_in_flight
     ) -> const erhe::scene_renderer::Light_set&;
@@ -740,7 +741,8 @@ private:
     // Resolves slot's light set from the light layer under
     // light_count_limits, re-resolving the layout when the lights were
     // invalidated since the slot's last resolve.
-    void resolve_light_set(Render_snapshot_slot& slot, const erhe::scene_renderer::Light_count_limits& light_count_limits);
+    // light_array_capacity: Light_interface::max_light_count (Light_set::resolve()).
+    void resolve_light_set(Render_snapshot_slot& slot, const erhe::scene_renderer::Light_count_limits& light_count_limits, std::size_t light_array_capacity);
 
     // One slot per frame in flight, indexed by frame index modulo their
     // count; sized at the first snapshot (main thread only).

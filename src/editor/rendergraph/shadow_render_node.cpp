@@ -9,6 +9,7 @@
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -416,7 +417,7 @@ auto Shadow_render_node::resolve_headlight(const erhe::scene::Camera_snapshot& c
         .per_type_shadow     = {0, 0, 0, 0},
         .per_type_unshadowed = {1, 0, 0, 0}
     };
-    m_headlight_set.resolve(m_headlight_lights, headlight_limits);
+    m_headlight_set.resolve(m_headlight_lights, headlight_limits, m_context.program_interface->light_interface.max_light_count);
     return m_headlight_set;
 }
 
@@ -633,6 +634,7 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
         result.light_projections.shadow_distance_texture = {};
         result.light_projections.shadow_cube_texture     = {};
         publish_light_copies(result, light_set, *camera);
+        write_light_view(result);
         return;
     }
 
@@ -817,6 +819,40 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     m_context.shadow_renderer->fit(m_frame_passes.parameters.value(), m_cull_views);
     m_distance_fallback_light_ids = result.light_projections.distance_fallback_light_ids;
     publish_light_copies(result, light_set, *camera);
+    write_light_view(result);
+}
+
+void Shadow_render_node::write_light_view(Shadow_frame_result& result)
+{
+    const erhe::scene_renderer::Light_cluster_view cluster_view{
+        .camera        = m_scene_view.get_render_camera(),
+        .viewport      = m_scene_view.get_render_camera_viewport(),
+        .reverse_depth = m_scene_view.get_reverse_depth(),
+        .depth_range   = m_scene_view.get_depth_range(),
+        .conventions   = m_scene_view.get_conventions()
+    };
+    m_context.shadow_renderer->get_light_buffer().write_view(result.light_projections, cluster_view);
+
+    // A comparison with the previous frame's count, for one log line per
+    // change. Binning reruns every frame (its inputs move with every camera
+    // and light change), and the overflow count is a result of that binning
+    // with no change event of its own; the comparison only gates the log,
+    // the count itself is derived by this frame's binning.
+    const erhe::scene_renderer::Light_view_buffers& view_buffers = result.light_projections.view_buffers;
+    if (view_buffers.overflow_cluster_count != m_light_cluster_overflow_count) {
+        m_light_cluster_overflow_count = view_buffers.overflow_cluster_count;
+        if (m_light_cluster_overflow_count > 0) {
+            log_render->warn(
+                "Light clusters: {} clusters of {} exceed the capacity ({} lights); the longest list asks for {} lights",
+                m_light_cluster_overflow_count,
+                view_buffers.grid.get_cluster_count(),
+                m_context.program_interface->light_interface.cluster_config.capacity,
+                view_buffers.max_list_length
+            );
+        } else {
+            log_render->info("Light clusters: no cluster exceeds the capacity");
+        }
+    }
 }
 
 void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)

@@ -9,6 +9,27 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: clustered light shading (doc/plans/clustered_lights.md
+  phase 2). `Light_shading` (`loops`, `clustered`);
+  `Light_count_limits::max_light_count` (bound on the shaded total) and
+  `Light_count_limits::light_shading`, carried by
+  `Light_layer_partition::light_shading` (which gains a defaulted
+  `operator==`); `set_light_partition_axes(Shader_key&, partition)` sets
+  the six `LIGHT_COUNT_*` axes (loops) or the new `Shader_bool::
+  LIGHT_SHADING_CLUSTERED` axis (clustered). `light_cluster.hpp`:
+  `Light_cluster_config` (tile size, slice count, capacity),
+  `Light_cluster_grid`, `Light_cluster_view`, `Light_cluster_binner`,
+  `c_light_cluster_header_uint_count`, `get_single_cluster_byte_count()`,
+  `write_single_cluster()`. `Light_view_buffers` and
+  `Light_projections::view_buffers`; `Light_buffer::write_view()` writes a
+  view's light array and cluster lists once per frame, which `update()`
+  then binds. `Light_interface::light_cluster_block` (`light_cluster.data[]`,
+  binding `light_cluster_buffer_binding_point` = 10) and
+  `Light_interface::cluster_config`; the `cluster_*` grid fields of the
+  `light_block` header. `Program_interface_config::light_cluster`.
+  `Shadow_renderer::get_light_buffer()`. `get_cluster_slot_end()`; shader
+  prototypes get the define `ERHE_LIGHT_CLUSTER_HEADER_UINT_COUNT`.
+
 - `erhe::scene_renderer`: `Shadow_map_cache` and
   `Shadow_renderer::Render_parameters::map_cache`: `draw()` keeps the
   shadow passes (2D layers, cube faces) whose light, matrix and frame
@@ -490,6 +511,20 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::scene_renderer`: `Light_interface`'s constructor takes a
+  `Light_cluster_config`. `Light_buffer_ranges` gains `clusters` (the
+  single-cluster grid `update()` wrote) and `view_lights` /
+  `view_clusters` (the view's buffers when `write_view()` wrote them);
+  `bind_light_buffer()` also binds the cluster lists, so a bind group
+  layout or shader prototype that names `light_array_block` also names
+  `light_cluster_block`. `Light_set::resolve()` and
+  `compute_light_layer_partition()` take the light array capacity
+  (`Light_interface::max_light_count`) and stop handing out slots at the
+  smaller of it and `Light_count_limits::max_light_count`;
+  `Light_set::get_light_count_limits()` reports that bound.
+  `Color_environment::operator==` compares the environment keys
+  (`make_environment_key()`).
 
 - `erhe::scene_renderer`: the lights moved out of `light_block` into
   `Light_interface::light_array_block`, a readonly storage block

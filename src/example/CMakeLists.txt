@@ -14,6 +14,7 @@ erhe_target_sources_grouped(
     res/shaders/erhe_camera_view.glsl
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl
+    res/shaders/erhe_light_cluster.glsl
     res/shaders/erhe_math.glsl
     res/shaders/erhe_srgb.glsl
     res/shaders/erhe_texture.glsl

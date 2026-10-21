@@ -1,17 +1,26 @@
 # Deviceless: the culling lanes (test_cull_lanes.cpp) are pure arithmetic over
-# arrays; the membership and slot logic of Material_set is pure
-# bookkeeping over shared_ptr<Material>, so it is tested with no window, no
-# device, no scene and no draw list (doc/erhe/draw_list_material_set.md R16).
+# arrays; the light cluster binner (test_light_cluster.cpp) runs on real
+# Light / Camera nodes resolved and projected without a shadow map; the
+# membership and slot logic of Material_set is pure bookkeeping over
+# shared_ptr<Material>, so it is tested with no window, no device, no scene
+# and no draw list (doc/erhe/draw_list_material_set.md R16).
 set(_target "erhe_scene_renderer_tests")
 add_executable(${_target}
     main.cpp
+    scene_renderer_test_logging.cpp
+    scene_renderer_test_logging.hpp
     test_cull_lanes.cpp
+    test_light_cluster.cpp
     test_material_set.cpp
 )
 
 target_link_libraries(${_target}
     PRIVATE
         erhe::scene_renderer
+        erhe::file
+        erhe::item
+        erhe::log
+        erhe::property
         erhe::math
         erhe::primitive
         erhe::scene

@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
 #include "renderers/material_set_factory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/viewport_config.hpp"
@@ -346,7 +347,7 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
     // variants with all light counts = 0 and the first preview render
     // would compile-on-miss for every standard-shader variant the preview
     // actually uses.
-    const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(light_layer->lights, get_light_count_limits());
+    const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(light_layer->lights, get_light_count_limits(), m_context.program_interface->light_interface.max_light_count);
 
     // Preview is single-view -- offscreen render target, never multiview.
     static constexpr uint32_t single_view = 0u;

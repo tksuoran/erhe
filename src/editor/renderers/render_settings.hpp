@@ -63,6 +63,7 @@ public:
 
     // App_settings::graphics
     Graphics_preset_entry      graphics_preset                {}; // the name string keeps its capacity across snapshots
+    int                        max_light_count                {32};    // Graphics_settings::max_light_count (the light array capacity)
     bool                       use_draw_lists                 {false}; // App_settings::get_use_draw_lists() (session override applied)
     bool                       headlight_when_unlit           {true};
     bool                       sky_enabled                    {true};

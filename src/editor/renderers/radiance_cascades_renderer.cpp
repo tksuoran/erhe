@@ -320,6 +320,11 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_cluster_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_control_binding_point,
                     .type          = Binding_type::uniform_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -490,6 +495,11 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                 },
                 {
                     .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = light_cluster_buffer_binding_point,
                     .type          = Binding_type::storage_buffer,
                     .stage_flags   = Shader_stage_flags::compute
                 },

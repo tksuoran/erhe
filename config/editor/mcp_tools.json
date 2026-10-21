@@ -9991,6 +9991,10 @@
           "description": "Shadow_technique_mode: depth, distance",
           "type": "string"
         },
+        "light_shading": {
+          "description": "Light_shading_mode: loops (per light type loops, the preset's light limits decide which lights are shaded) or clustered (every active light shaded from per-fragment light cluster lists, doc/plans/clustered_lights.md)",
+          "type": "string"
+        },
         "shadow_cull_mode": {
           "description": "Shadow_cull_mode: cull_front, cull_back, cull_none",
           "type": "string"

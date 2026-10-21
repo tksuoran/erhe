@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -136,7 +137,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(VARIANT_SHADOW_CUBE)              \
     X(VARIANT_POINTS)                   \
     X(SOLID_WIREFRAME)                  \
-    X(USE_DDGI)
+    X(USE_DDGI)                         \
+    X(LIGHT_SHADING_CLUSTERED)
 
 #define ERHE_SHADER_INT(X) \
     X(LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)     \
@@ -259,6 +261,17 @@ public:
 [[nodiscard]] auto light_type_index(erhe::scene::Light_type type) -> std::size_t;
 inline constexpr std::size_t light_type_count = 4;
 
+// How the standard shader loops the shaded lights (doc/plans/clustered_lights.md
+// C1, C5). loops: per type loops whose bounds are the six LIGHT_COUNT_*
+// shader key axes. clustered: the directional loops take the light block's
+// runtime counts and the spot / point loops take the fragment's light cluster
+// list; the LIGHT_SHADING_CLUSTERED axis is set and the six count axes stay 0.
+enum class Light_shading : unsigned int
+{
+    loops     = 0,
+    clustered = 1
+};
+
 // Per light type limits on how many lights are shaded, from the active
 // graphics preset (Graphics_preset_entry::*_shadow_light_count /
 // *_unshadowed_light_count): per_type_shadow[t] lights of type t are
@@ -281,6 +294,10 @@ class Light_count_limits
 public:
     std::size_t per_type_shadow    [light_type_count] {0, 0, 0, 0}; // directional, spot, point, other
     std::size_t per_type_unshadowed[light_type_count] {0, 0, 0, 0};
+    // Bound on the number of shaded lights of all types together (the light
+    // array capacity); a light that finds the total full is not shaded.
+    std::size_t max_light_count{std::numeric_limits<std::size_t>::max()};
+    Light_shading light_shading{Light_shading::loops};
 
     // Number of 2D shadow map array layers (directional + spot shadow lights).
     [[nodiscard]] auto shadow_map_2d_layer_count() const -> std::size_t
@@ -300,6 +317,8 @@ public:
         for (std::size_t t = 0; t < light_type_count; ++t) {
             result.per_type_unshadowed[t] = per_type_unshadowed[t];
         }
+        result.max_light_count = max_light_count;
+        result.light_shading   = light_shading;
         return result;
     }
     // Same shadow / unshadowed limits for directional, spot and point.
@@ -315,17 +334,31 @@ public:
 class Light_layer_partition
 {
 public:
-    std::size_t per_type_shadow   [light_type_count] {0, 0, 0, 0};
-    std::size_t per_type_nonshadow[light_type_count] {0, 0, 0, 0};
+    [[nodiscard]] auto operator==(const Light_layer_partition& other) const -> bool = default;
+
+    std::size_t   per_type_shadow   [light_type_count] {0, 0, 0, 0};
+    std::size_t   per_type_nonshadow[light_type_count] {0, 0, 0, 0};
+    // From the limits the partition was computed with.
+    Light_shading light_shading{Light_shading::loops};
 };
+
+// Sets the light axes of an environment key from the partition: the six
+// LIGHT_COUNT_* axes for Light_shading::loops, LIGHT_SHADING_CLUSTERED (and
+// the counts 0) for Light_shading::clustered. Every builder of a color pass
+// environment key calls this.
+void set_light_partition_axes(Shader_key& key, const Light_layer_partition& partition);
 
 // Counts the active lights that get shaded, per type, into shadow-mapped /
 // non-shadow buckets, walking lights in input order against light_count_limits
 // (see Light_count_limits for the rule). This is the canonical partition:
 // Light_projections::apply() assigns UBO slots and shadow layers from it.
+// light_array_capacity is the light array the shaded lights are written to
+// (Light_interface::max_light_count): the shaded total stops at the smaller
+// of it and light_count_limits.max_light_count.
 [[nodiscard]] auto compute_light_layer_partition(
     std::span<const std::shared_ptr<erhe::scene::Light>> lights,
-    const Light_count_limits&                            light_count_limits
+    const Light_count_limits&                            light_count_limits,
+    std::size_t                                          light_array_capacity
 ) -> Light_layer_partition;
 
 // ERHE_SHADOW_DEPTH_BITS variant axis value of a shadow map depth format:

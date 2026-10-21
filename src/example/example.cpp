@@ -441,7 +441,7 @@ public:
         const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
         // No scene host hooks here: re-resolve the light set every frame.
         m_light_set.invalidate();
-        m_light_set.resolve(lights, erhe::scene_renderer::Light_count_limits::uniform(0, 8)); // no shadow map -> no light is shadow-mapped
+        m_light_set.resolve(lights, erhe::scene_renderer::Light_count_limits::uniform(0, 8), m_program_interface.light_interface.max_light_count); // no shadow map -> no light is shadow-mapped
         // The renderers read the camera through its render copy.
         const erhe::scene::Camera_snapshot camera_snapshot{*m_camera};
         m_light_projections.apply(

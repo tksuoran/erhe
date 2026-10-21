@@ -56,8 +56,16 @@ public:
     // the slot layout from lights (the scene's light layer, in its order =
     // priority within a type) when invalidated or when light_count_limits
     // differ from the last resolve, then captures every slot's snapshot from
-    // its light. Returns true when the slot layout changed.
-    auto resolve(std::span<const std::shared_ptr<erhe::scene::Light>> lights, const Light_count_limits& light_count_limits) -> bool;
+    // its light. light_array_capacity is the light array the slots are
+    // written to (Light_interface::max_light_count); the shaded total stops
+    // at the smaller of it and light_count_limits.max_light_count, and
+    // get_light_count_limits() reports that smaller bound. Returns true when
+    // the slot layout changed.
+    auto resolve(
+        std::span<const std::shared_ptr<erhe::scene::Light>> lights,
+        const Light_count_limits&                            light_count_limits,
+        std::size_t                                          light_array_capacity
+    ) -> bool;
 
     // Slot i of the light UBO = get_lights()[i], the render phase's copy of
     // the light; pointers into the vector stay valid until the next resolve().
