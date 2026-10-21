@@ -44,6 +44,8 @@ public:
     // GPU pre-warm kernel (doc/plans/frame_pacing_metal.md, claim C26): its
     // measured duration per iteration; 0.0 = no pre-warm on this path. The
     // fill that raises the clock is learned online by the frame pacer.
+    // Measured first, independent of valid: the kernel rate does not depend
+    // on the compositor properties.
     double      prewarm_seconds_per_iteration{0.0};
     std::vector<Present_calibration_sample> samples;
 };

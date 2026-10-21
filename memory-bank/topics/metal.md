@@ -68,7 +68,16 @@
 @measured::prewarm-probe{2.3ms-after-N=2-frame:clock-0.51->0.97,span-9.9->4.9ms}
 @user-decisions-2026-10-21::IOReport-private-API-ok-for-clocks+prewarm-over-ramp-tolerant-attribution(judder-visible)+fill-learned-online
 
+[LANDED_2026-10-21c]
+>Dell-gate-PASSES{Release+Debug-x3-threading-60/60-N=1;two-refresh-0.17-0.34%;Release-17.9ms+Debug-19.9ms-vs-tier-S-31.5-34}
+>fixes::calibration-majority-of-passes-per-request-offset+deadline-probe-spacing-floor(margin/T)+1+prewarm-rate-measured-first+prewarm-enabled-by-rate-alone(editor+observer)+C27-steady-clock-records{clock_settle_time-0.15s;n_used==N;¬prewarm-frames}
+>tooling::live-gate--history(startup-transitions)+get_frame_pacing_frames.prewarm_ms
+@open::Debug-upshift-transient{P-cores-0.55-for-0.3-0.8s-after-switch;latency-25-30ms;scheduler-re-anchors->20-30%-frames-skip-a-slot-for-40-100-frames;displays-all-on-target}+60Hz+ProMotion-gate-with-this-build->doc/plans/frame_pacing_metal.md-Log
+
 [TRAPS]
+!compositor-shows-stretches-of-probes-a-refresh-late-at-any-offset(whole-passes)->judge-by-majority¬unanimity;request-at-target(offset-0)=window-edge
+!probes-committed-before-predecessor-target->late-again(¬deadline-evidence)
+!actual_vsyncs(MCP/window)=display-delta-to-NEXT-frame{forward-looking}
 !GPU-governor¬utilization-controller{N=2-68%-busy-at-0.45-clock;2.3ms-ALU-after-frame-raises-to-0.97}+ignores-compute-only-load-with-clear-frames(init-sweep-useless)
 !prewarm-kernel-unordered-overlaps-frame(stretches-span)->MTLEvent-wait-after-presenting-cb
 !any-steady_clock->recorder-time-conversion-must-map-via-now-in-both-clocks

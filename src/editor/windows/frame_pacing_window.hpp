@@ -74,6 +74,7 @@ public:
         double       release_time  {0.0};
         double       predicted_display{0.0};
         std::int64_t wait_id       {-1};
+        double       prewarm_seconds{0.0}; // C26 GPU pre-warm the decision asked for; 0 = none
         // The pacer's dynamic vsync grid at capture time (deviation 10):
         // vsync boundaries near this sample are at grid_phase + n *
         // grid_period. The UI must draw refresh lines from the sample-local

@@ -152,6 +152,7 @@ void Frame_pacing_window::collect(
         sample.release_time      = decision.release_time;
         sample.predicted_display = decision.predicted_display;
         sample.wait_id           = decision.wait_id;
+        sample.prewarm_seconds   = decision.prewarm_seconds;
         if (pacer_for_grid != nullptr) {
             sample.grid_phase  = pacer_for_grid->get_grid_phase();
             sample.grid_period = pacer_for_grid->get_grid_period();
@@ -564,6 +565,9 @@ void Frame_pacing_window::frame_tooltip(const Frame_sample& sample, const char* 
             ImGui::Text(format, args...);
         };
         row("planned vsyncs", "%d", sample.planned_vsyncs);
+        if (sample.prewarm_seconds > 0.0) {
+            row("GPU pre-warm", "%.2f ms", sample.prewarm_seconds * 1000.0);
+        }
         const int actual = actual_vsyncs(sample);
         if (actual > 0) {
             row("actual vsyncs", "%d", actual);

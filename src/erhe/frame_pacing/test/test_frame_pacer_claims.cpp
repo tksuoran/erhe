@@ -1502,3 +1502,76 @@ TEST(Frame_pacer_claims, c26_gpu_prewarm)
     EXPECT_EQ(vsync_values(learn, 3000), (std::set<int>{1})) << "learned fill: N=1 holds";
     EXPECT_EQ(slips_learn, 0u) << "learned fill: no slips while learning";
 }
+
+namespace {
+
+auto run_c27(const double prewarm_seconds) -> std::vector<Frame_record>
+{
+    const double t        = 1.0 / 120.0;
+    const double dpe_true = t + (1.0 * ms);
+    Scenario scenario;
+    scenario.frame_count                            = 6000;
+    scenario.plant.tunables.refresh_period          = t;
+    scenario.plant.true_deadline_offset             = dpe_true;
+    scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.deadline_offset_initial = dpe_true + (0.3 * ms);
+    scenario.plant.tunables.deadline_offset_max     = dpe_true + (0.3 * ms) + (0.5 * t);
+    scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.plant.tunables.upshift_prewarm_seconds = prewarm_seconds;
+    scenario.drawable_pool                          = 3;
+    scenario.pool_latch_lead                        = dpe_true - (1.8 * ms);
+    scenario.dvfs                                   = true;
+    scenario.cpu_duration                           = make_gauss(2701, 1.0, 0.2);
+    auto work_engine = std::make_shared<std::mt19937>(2702);
+    scenario.gpu_duration_at_cadence = [work_engine](const std::int64_t k, const int) mutable -> double {
+        std::normal_distribution<double> work{5.1, 0.15};
+        if ((k >= 30) && (k < 60)) {
+            return 20.0 * ms; // startup spike, as early as live
+        }
+        return std::max(0.5, work(*work_engine)) * ms;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    return run_scenario(scenario, pacer);
+}
+
+} // anonymous namespace
+
+TEST(Frame_pacer_claims, c27_steady_clock_records)
+{
+    // Live (Metal tier M, Dell at 120 Hz, the pre-warm kernel missing): the
+    // startup spike downshifted after ~33 frames at N=1; the first upshift
+    // slipped while the clock ramped (0.45 -> 0.78) and reverted, and those
+    // ramp frames - recorded as N=1's clock - put its low decile near 0.58:
+    // the work (5.1 ms at full clock) then predicted beyond the period at
+    // N=1, every frame reset the dwell, N=2 for good. The clock records
+    // hold each cadence's steady clock only.
+    const auto upshifts = [](const std::vector<Frame_record>& records) -> std::vector<std::size_t> {
+        std::vector<std::size_t> result;
+        for (std::size_t i = 70; i < records.size(); ++i) {
+            if ((records[i].vsyncs == 1) && (records[i - 1].vsyncs > 1)) {
+                result.push_back(i);
+            }
+        }
+        return result;
+    };
+
+    // Without a pre-warm every upshift slips while the clock ramps (C26) and
+    // reverts; the pacer keeps probing with backoff (C10) instead of locking.
+    const std::vector<std::size_t> without = upshifts(run_c27(0.0));
+    ASSERT_GE(without.size(), 4u) << "a reverted upshift does not end the upshift probes";
+    for (std::size_t i = 2; i < without.size(); ++i) {
+        EXPECT_GT(without[i] - without[i - 1], without[i - 1] - without[i - 2]) << "probes back off";
+    }
+
+    // With the pre-warm, the same startup: one upshift, N=1 holds, no slips.
+    const std::vector<Frame_record> with = run_c27(2.3 * ms);
+    EXPECT_EQ(upshifts(with).size(), 1u) << "one upshift";
+    EXPECT_EQ(vsync_values(with, 3000), (std::set<int>{1})) << "N=1 holds";
+    std::size_t slips = 0;
+    for (std::size_t i = 140; i < with.size(); ++i) {
+        if (with[i].slipped) {
+            ++slips;
+        }
+    }
+    EXPECT_EQ(slips, 0u) << "no slips across the transition";
+}

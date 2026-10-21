@@ -51,8 +51,9 @@ void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now
         if (calibrated) {
             tunables.deadline_offset_initial = setup.initial;
             tunables.deadline_offset_max     = setup.maximum;
-            tunables.upshift_prewarm_seconds = setup.upshift_prewarm;
         }
+        // The pre-warm (C26) does not depend on the compositor calibration.
+        tunables.upshift_prewarm_seconds = setup.upshift_prewarm;
         m_pacer          = std::make_unique<Frame_pacer>(tunables);
         m_refresh_period = refresh_period;
         m_pacer_deadline_offset_setup = m_deadline_offset_setup;
