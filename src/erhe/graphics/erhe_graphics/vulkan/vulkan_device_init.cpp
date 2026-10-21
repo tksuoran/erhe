@@ -2,6 +2,9 @@
 // erhe_graphics target (see CMakeLists.txt) so the portability-subset structs
 // are visible everywhere in this library, not just in this translation unit.
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#if defined(__APPLE__)
+#   include "erhe_graphics/clock_monitor_apple.hpp"
+#endif
 #include "erhe_graphics/vulkan/vulkan_device_sync_pool.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_scoped_debug_group.hpp"
@@ -1215,15 +1218,24 @@ Device_impl::Device_impl(
         (m_device_extensions.m_VK_KHR_calibrated_timestamps || m_device_extensions.m_VK_EXT_calibrated_timestamps) &&
         (get_calibrated_host_time_domain() != VK_TIME_DOMAIN_DEVICE_KHR);
     m_host_query_reset = query_host_query_reset_features.hostQueryReset == VK_TRUE;
+    // VK_GOOGLE_display_timing has no feature struct; its times are in the
+    // platform's presentation clock, which display_timing_to_seconds()
+    // (vulkan_swapchain.cpp) converts on Apple only so far.
+#if defined(__APPLE__)
+    m_capabilities.m_display_timing = m_device_extensions.m_VK_GOOGLE_display_timing;
+#endif
     m_capabilities.m_frame_pacing_tier_w =
-        m_capabilities.m_present_id            &&
-        m_capabilities.m_present_wait          &&
-        m_capabilities.m_present_timing        &&
-        m_capabilities.m_calibrated_timestamps;
+        m_capabilities.m_present_id   &&
+        m_capabilities.m_present_wait &&
+        (
+            (m_capabilities.m_present_timing && m_capabilities.m_calibrated_timestamps) ||
+            m_capabilities.m_display_timing
+        );
     log_context->info("Frame pacing capabilities:");
     log_context->info("  present_id            = {}", m_capabilities.m_present_id);
     log_context->info("  present_wait          = {}", m_capabilities.m_present_wait);
     log_context->info("  present_timing        = {}", m_capabilities.m_present_timing);
+    log_context->info("  display_timing        = {}", m_capabilities.m_display_timing);
     log_context->info("  calibrated_timestamps = {}", m_capabilities.m_calibrated_timestamps);
 
     // Tier resolution (P4.2): capabilities + the frame_pacing_tier config.
@@ -2041,11 +2053,15 @@ Device_impl::Device_impl(
             .pNext              = nullptr,
             .commandPool        = m_frame_end_command_pools[frame_slot],
             .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = 1
+            .commandBufferCount = 3
         };
+        std::array<VkCommandBuffer, 3> frame_end_command_buffers{};
         const VkResult frame_end_cb_result = vkAllocateCommandBuffers(
-            m_vulkan_device, &frame_end_allocate_info, &m_frame_end_command_buffers[frame_slot]
+            m_vulkan_device, &frame_end_allocate_info, frame_end_command_buffers.data()
         );
+        m_frame_end_command_buffers      [frame_slot] = frame_end_command_buffers[0];
+        m_frame_gap_begin_command_buffers[frame_slot] = frame_end_command_buffers[1];
+        m_frame_gap_end_command_buffers  [frame_slot] = frame_end_command_buffers[2];
         if (frame_end_cb_result != VK_SUCCESS) {
             log_context->critical(
                 "vkAllocateCommandBuffers() failed with {} {} for frame-end cb (frame_slot={})",
@@ -2057,6 +2073,16 @@ Device_impl::Device_impl(
             VK_OBJECT_TYPE_COMMAND_BUFFER,
             reinterpret_cast<uint64_t>(m_frame_end_command_buffers[frame_slot]),
             fmt::format("Device frame-end cb (frame_slot={})", frame_slot).c_str()
+        );
+        set_debug_label(
+            VK_OBJECT_TYPE_COMMAND_BUFFER,
+            reinterpret_cast<uint64_t>(m_frame_gap_begin_command_buffers[frame_slot]),
+            fmt::format("Device frame gap begin cb (frame_slot={})", frame_slot).c_str()
+        );
+        set_debug_label(
+            VK_OBJECT_TYPE_COMMAND_BUFFER,
+            reinterpret_cast<uint64_t>(m_frame_gap_end_command_buffers[frame_slot]),
+            fmt::format("Device frame gap end cb (frame_slot={})", frame_slot).c_str()
         );
     }
 
@@ -2654,7 +2680,7 @@ Device_impl::Device_impl(
                             .pNext              = nullptr,
                             .flags              = 0,
                             .queryType          = VK_QUERY_TYPE_TIMESTAMP,
-                            .queryCount         = 2,
+                            .queryCount         = s_frame_bracket_query_count,
                             .pipelineStatistics = 0
                         };
                         const VkResult bracket_result = vkCreateQueryPool(
@@ -2674,12 +2700,22 @@ Device_impl::Device_impl(
                             reinterpret_cast<uint64_t>(m_frame_bracket_query_pools[slot]),
                             "Frame bracket query pool"
                         );
-                        vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[slot], 0, 2);
+                        vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[slot], 0, s_frame_bracket_query_count);
                     }
                     if (bracket_ok) {
                         m_frame_bracket_enabled = true;
                         m_frame_bracket_frame_id.fill(-1);
                         log_startup->info("Frame GPU timestamp bracket enabled (ring of {})", s_frame_bracket_ring);
+#if defined(__APPLE__)
+                        // Apple GPUs clock down at longer cadences (claim C25):
+                        // tier W gives the pacer each frame's clocks.
+                        if (m_frame_pacing_tier == Frame_pacing_tier::full) {
+                            m_clock_monitor = std::make_shared<Clock_monitor>(m_device.get_frame_time_recorder());
+                            if (!m_clock_monitor->is_available()) {
+                                m_clock_monitor.reset();
+                            }
+                        }
+#endif
                     } else {
                         for (VkQueryPool& pool : m_frame_bracket_query_pools) {
                             if (pool != VK_NULL_HANDLE) {

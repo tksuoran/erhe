@@ -2835,6 +2835,7 @@ auto Mcp_server::query_frame_pacing_frames(const json& args) -> std::string
             {"present_request_time",  r.present_request_time},
             {"present_return_time",   r.present_return_time},
             {"gpu_begin",             r.gpu_frame_begin},
+            {"gpu_idle_ms",           r.gpu_idle_time * 1000.0},
             {"gpu_end",               r.gpu_frame_end},
             {"achieved_present_time", r.achieved_present_time},
             {"achieved_queue_ops_time", r.achieved_queue_ops_time},

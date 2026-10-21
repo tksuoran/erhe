@@ -1,4 +1,4 @@
-#include "erhe_graphics/metal/metal_clock_monitor.hpp"
+#include "erhe_graphics/clock_monitor_apple.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_frame_pacing/frame_time_recorder.hpp"
 

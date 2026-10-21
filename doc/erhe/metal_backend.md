@@ -376,7 +376,7 @@ occluded window) or without an on-target request offset it logs why and tier M k
 estimator's 2.5 ms start.
 
 Tier M also starts the clock monitor (`Clock_monitor`,
-`metal_clock_monitor.mm`). macOS has no public API for GPU or CPU clocks;
+`clock_monitor_apple.mm`). macOS has no public API for GPU or CPU clocks;
 the monitor resolves the private IOReport framework with `dlopen` - "GPU
 Stats" / "GPU Performance States" channel GPUPH (OFF and P1 ... P15) and
 "CPU Stats" / "CPU Core Performance States" channels PCPU<cluster><core>0

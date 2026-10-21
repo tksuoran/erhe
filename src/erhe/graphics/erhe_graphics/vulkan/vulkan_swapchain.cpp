@@ -1201,6 +1201,7 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
     static_cast<void>(swapchain_create_info); // only consumed by the Win32 fullscreen-exclusive surface caps query
 #endif
     m_present_timing_active              = false;
+    m_display_timing_active              = false;
     m_present_at_absolute_time           = false;
     m_present_at_relative_time           = false;
     m_present_stage_queries_mask         = 0;
@@ -1210,6 +1211,27 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
     // or OFF (capability_tiers.md section 2), so it takes the branch below
     // and gets the display refresh period from the window like any other
     // tier S device.
+    if (
+        (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::full) &&
+        !m_device_impl.get_capabilities().m_present_timing &&
+        m_device_impl.get_capabilities().m_display_timing
+    ) {
+        // Tier W through VK_GOOGLE_display_timing: no per-swapchain opt-in
+        // and no timing queue to size. The display refresh period stays with
+        // the Display_refresh_resolver (window display mode + the init
+        // calibration); the driver's refresh cycle is logged for comparison.
+        m_display_timing_active = true;
+        VkRefreshCycleDurationGOOGLE refresh_cycle{};
+        const VkResult result = (vkGetRefreshCycleDurationGOOGLE != nullptr)
+            ? vkGetRefreshCycleDurationGOOGLE(m_device_impl.get_vulkan_device(), m_vulkan_swapchain, &refresh_cycle)
+            : VK_ERROR_EXTENSION_NOT_PRESENT;
+        log_swapchain->info(
+            "display timing (VK_GOOGLE_display_timing) enabled; refresh cycle {:.3f} ms ({} {})",
+            static_cast<double>(refresh_cycle.refreshDuration) * 1e-6,
+            static_cast<int32_t>(result), c_str(result)
+        );
+        return;
+    }
     if (
         !m_device_impl.get_capabilities().m_present_timing ||
         (m_device_impl.get_frame_pacing_tier() != Frame_pacing_tier::full)
@@ -1521,6 +1543,62 @@ void Swapchain_impl::update_present_timing_calibration(const uint64_t frame_id)
             m_timing_calibration_queue_ops_value =
                 queue_ops_timestamps[0] - static_cast<uint64_t>(static_cast<int64_t>(host_delta_seconds * 1e9));
             m_timing_calibration_queue_ops_valid = true;
+        }
+    }
+}
+
+namespace {
+
+// VK_GOOGLE_display_timing times are nanoseconds of the platform's
+// presentation clock. MoltenVK passes desiredPresentTime to
+// presentDrawable:atTime: and reports the drawable's presentedTime, both
+// CACurrentMediaTime seconds (mach_absolute_time), which is the
+// Frame_time_recorder clock on Apple. Other platforms (Android:
+// CLOCK_MONOTONIC) are not converted yet; the capability is Apple-only
+// (Device_impl::m_capabilities.m_display_timing).
+[[nodiscard]] auto display_timing_to_seconds(const uint64_t time_ns) -> double
+{
+    return static_cast<double>(time_ns) * 1e-9;
+}
+
+[[nodiscard]] auto seconds_to_display_timing(const double seconds) -> uint64_t
+{
+    return (seconds > 0.0) ? static_cast<uint64_t>(seconds * 1e9) : 0;
+}
+
+} // anonymous namespace
+
+void Swapchain_impl::poll_display_timing()
+{
+    if (!m_display_timing_active || (vkGetPastPresentationTimingGOOGLE == nullptr)) {
+        return;
+    }
+    uint32_t count = static_cast<uint32_t>(m_past_display_timings.size());
+    const VkResult result = vkGetPastPresentationTimingGOOGLE(
+        m_device_impl.get_vulkan_device(), m_vulkan_swapchain, &count, m_past_display_timings.data()
+    );
+    if ((result != VK_SUCCESS) && (result != VK_INCOMPLETE)) {
+        return;
+    }
+    erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl.get_frame_time_recorder();
+    for (uint32_t i = 0; i < count; ++i) {
+        const VkPastPresentationTimingGOOGLE& timing = m_past_display_timings[i];
+        if ((timing.presentID == 0) || (timing.actualPresentTime == 0)) {
+            continue; // not one of ours, or not displayed (occluded window)
+        }
+        const std::int64_t feedback_frame_id = static_cast<std::int64_t>(timing.presentID) - 1;
+        recorder.set(feedback_frame_id, &erhe::frame_pacing::Frame_time_record::achieved_present_time, display_timing_to_seconds(timing.actualPresentTime));
+        if (!m_display_timing_feedback_logged) {
+            m_display_timing_feedback_logged = true;
+            log_swapchain->info(
+                "First display timing feedback: present_id={} desired={:.6f} actual={:.6f} earliest={:.6f} margin={:.3f} ms now={:.6f}",
+                timing.presentID,
+                display_timing_to_seconds(timing.desiredPresentTime),
+                display_timing_to_seconds(timing.actualPresentTime),
+                display_timing_to_seconds(timing.earliestPresentTime),
+                static_cast<double>(timing.presentMargin) * 1e-6,
+                erhe::frame_pacing::Frame_time_recorder::now()
+            );
         }
     }
 }
@@ -1886,6 +1964,30 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
         timings_info.pNext = present_info.pNext;
         present_info.pNext = &timings_info;
     }
+    // VK_GOOGLE_display_timing: the present id ties the feedback to the
+    // frame; the target is requested a quarter period early so a target on
+    // the pacer's grid does not round up to the next refresh across a small
+    // grid phase error (the Metal tier M default without a calibration,
+    // doc/erhe/metal_backend.md "Frame pacing").
+    VkPresentTimeGOOGLE present_time{
+        .presentID          = static_cast<uint32_t>(frame_id + 1),
+        .desiredPresentTime = 0
+    };
+    VkPresentTimesInfoGOOGLE present_times_info{
+        .sType          = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE,
+        .pNext          = nullptr,
+        .swapchainCount = 1,
+        .pTimes         = &present_time
+    };
+    if (m_display_timing_active) {
+        const double target_time = m_device_impl.get_present_target_time(static_cast<std::int64_t>(frame_id));
+        const double period      = m_device_impl.get_device().get_display_refresh_duration_seconds();
+        if ((target_time > 0.0) && (period > 0.0)) {
+            present_time.desiredPresentTime = seconds_to_display_timing(target_time - (0.25 * period));
+        }
+        present_times_info.pNext = present_info.pNext;
+        present_info.pNext       = &present_times_info;
+    }
 
     ERHE_VULKAN_TRACE(
         "vkQueuePresentKHR image_index={} present_sem=0x{:x} swapchain=0x{:x}",
@@ -1980,6 +2082,7 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
     add_present_to_history(frame_id, index, present_fence);
     cleanup_present_history();
     poll_present_timing(frame_id);
+    poll_display_timing();
 
     return result;
 }

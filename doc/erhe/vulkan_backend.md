@@ -248,6 +248,10 @@ their per-slot state by the frame id of the command buffer that drives them
   dependencies, splices all wait/signal semaphores into one
   `VkSubmitInfo2`, appends the device-owned frame-end command buffer (the
   frame bracket end timestamp) when a command buffer engaged a swapchain,
+  brackets the frame's GPU idle gap (a gap-begin timestamp command buffer
+  appended to the frame's first non-presenting submit, a gap-end one
+  prepended to its presenting submit; `doc/frame_pacing/inputs.md`
+  section 3.3),
   runs `vkQueueSubmit2`, then drives `vkQueuePresentKHR` for every swapchain
   a command buffer engaged via `begin_swapchain`. The bracket end rides on
   the presenting submit because the present-request holdback and
@@ -666,7 +670,16 @@ calibration it keys. `init_present_timing` /
 `query_swapchain_timing_properties` feed the device's
 `Display_refresh_resolver` the swapchain's `refreshDuration` /
 `refreshInterval`, re-queried when `poll_present_timing` sees the timing
-properties counter change; the display refresh init calibration itself runs
+properties counter change. Without `VK_EXT_present_timing`, tier W runs on
+`VK_GOOGLE_display_timing` where the platform's presentation clock is
+converted (Apple: MoltenVK reports and takes `mach_absolute_time`
+nanoseconds, the frame time recorder's clock): `present_image` chains
+`VkPresentTimesInfoGOOGLE` (present id = frame id + 1, the target a quarter
+refresh period early) and `poll_display_timing` writes `actualPresentTime`
+into the frame records. On Apple, tier W also runs the `Clock_monitor`
+(`clock_monitor_apple.hpp`), which takes the frame bracket results and
+writes them with the frame's GPU and CPU clock ratios. The display refresh
+init calibration itself runs
 on its own clear-only swapchain inside device init
 (`Device_impl::run_display_refresh_calibration`), before this swapchain's
 `VkSwapchainKHR` exists. `wait_frame` records the frame id of the open

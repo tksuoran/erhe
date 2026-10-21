@@ -229,6 +229,10 @@ private:
     // host clock (VkSwapchainCalibratedTimestampInfoEXT chained into
     // vkGetCalibratedTimestamps). No-op for host time domains.
     void update_present_timing_calibration     (uint64_t frame_id);
+    // VK_GOOGLE_display_timing (tier W without VK_EXT_present_timing, e.g.
+    // MoltenVK): drains past presentation timings into the frame time
+    // recorder (achieved present time per frame id).
+    void poll_display_timing                   ();
 
     Device_impl&          m_device_impl;
     Surface_impl&         m_surface_impl;
@@ -292,6 +296,11 @@ private:
     bool                   m_timing_calibration_queue_ops_valid{false};
     uint64_t               m_timing_calibration_queue_ops_value{0};
     std::array<VkPastPresentationTimingEXT, 8>          m_past_timings{};
+    // VK_GOOGLE_display_timing state: active in tier W when the device has
+    // no VK_EXT_present_timing. presentID is the device frame index + 1.
+    bool                                                m_display_timing_active{false};
+    bool                                                m_display_timing_feedback_logged{false};
+    std::array<VkPastPresentationTimingGOOGLE, 16>      m_past_display_timings{};
     std::array<std::array<VkPresentStageTimeEXT, 4>, 8> m_past_timing_stages{};
 
     // QUEUE_FULL hardening (session lock / undrainable display). When

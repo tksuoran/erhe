@@ -16,8 +16,10 @@ settle and waits another --settle before sampling.
 
 Per run it prints: the pacer cadence N, refreshes per displayed frame
 (achieved present deltas in refresh periods), release-to-display latency
-(achieved present minus pacer_wait_end, or cpu_slot_begin), the presenting
-command buffer's GPU span (GPUEndTime - GPUStartTime on Metal) and its share
+(achieved present minus pacer_wait_end, or cpu_slot_begin), the frame's GPU
+service time (GPUEndTime - GPUStartTime of the presenting command buffer on
+Metal; the frame bracket minus the idle gap between the frame's submits on
+Vulkan) and its share
 beyond one refresh period, the GPU span by start phase within the refresh
 period (8 bins; phase 0 = a display time), the deadline offset estimate, and
 whether the log reported undisplayed drawables (an occluded window gives no
@@ -90,7 +92,12 @@ def analyze(frames, status):
             latency.append((f["achieved_present_time"] - start) * 1000.0)
     if latency:
         result["latency_ms"] = (statistics.median(latency), quantile(latency, 0.95))
-    spans = [((f["gpu_end"] - f["gpu_begin"]) * 1000.0, f["gpu_begin"]) for f in frames if f["gpu_end"] > f["gpu_begin"] > 0.0]
+    # GPU service time: the frame span minus the idle gap between the frame's
+    # submits (Vulkan; gpu_idle_ms), the pacer's g input.
+    spans = [((f["gpu_end"] - f["gpu_begin"]) * 1000.0 - f.get("gpu_idle_ms", 0.0), f["gpu_begin"]) for f in frames if f["gpu_end"] > f["gpu_begin"] > 0.0]
+    idles = [f.get("gpu_idle_ms", 0.0) for f in frames if f.get("gpu_idle_ms", 0.0) > 0.0]
+    if idles:
+        result["gpu_idle_ms"] = statistics.median(idles)
     clocks = [f.get("gpu_clock_ratio", 0.0) for f in frames if f.get("gpu_clock_ratio", 0.0) > 0.0]
     if clocks:
         result["gpu_clock"] = statistics.median(clocks)
@@ -120,6 +127,7 @@ def print_run(index, label, result, undisplayed):
         f"run {index} {label}: N={result['N']} refreshes={result['refreshes']} "
         + (f"latency med {latency[0]:.1f} p95 {latency[1]:.1f} ms " if latency else "latency - ")
         + (f"gpu span med {span[0]:.2f} p90 {span[1]:.2f} max {span[2]:.2f} ms ({result['gpu_beyond_period_pct']:.0f}% > T) " if span else "")
+        + (f"(idle gap med {result['gpu_idle_ms']:.2f} ms excluded) " if result.get("gpu_idle_ms") else "")
         + (f"dpe {result['deadline_offset_ms']:.2f} ms" if result.get("deadline_offset_ms") is not None else "")
         + (f" thermal {result['thermal']}" if result.get("thermal") else "")
         + (f" gpu clock {result['gpu_clock'] * 100.0:.0f}%" if result.get("gpu_clock") else "")

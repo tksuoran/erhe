@@ -25,6 +25,8 @@ VK_DEFINE_HANDLE(VmaAllocator)
 
 namespace erhe::graphics {
 
+class Clock_monitor;
+
 class Command_buffer;
 class Command_buffer_impl;
 class Gpu_timer_impl;
@@ -72,6 +74,7 @@ public:
     bool m_VK_KHR_shader_relaxed_extended_instruction{false};
     bool m_VK_KHR_present_wait2                 {false};
     bool m_VK_EXT_present_timing                {false};
+    bool m_VK_GOOGLE_display_timing             {false};
     bool m_VK_EXT_full_screen_exclusive         {false};
     bool m_VK_KHR_calibrated_timestamps         {false};
     bool m_VK_EXT_calibrated_timestamps         {false};
@@ -111,6 +114,11 @@ public:
     bool m_present_at_absolute_time{false};
     bool m_present_at_relative_time{false};
     bool m_calibrated_timestamps{false};
+    // VK_GOOGLE_display_timing (MoltenVK): desiredPresentTime as the FR3
+    // actuator and actualPresentTime as the feedback, in the platform's
+    // presentation clock (Swapchain_impl::display_timing_to_seconds). The
+    // tier W alternative to m_present_timing.
+    bool m_display_timing       {false};
     // Tier W: all of the above available; the frame pacer may run.
     // Anything less is off mode (FR6: no middle tier).
     bool m_frame_pacing_tier_w  {false};
@@ -395,6 +403,16 @@ public:
     void               run_display_refresh_calibration(Surface_impl& surface_impl);
     void               record_frame_bracket_begin   (VkCommandBuffer cb, uint64_t frame_id);
     [[nodiscard]] auto record_frame_bracket_end     (uint64_t frame_id) -> VkCommandBuffer;
+    // The GPU idle gap between a frame's first submit and its presenting
+    // submit (the render thread records the frame command buffer after the
+    // upload command buffer was submitted; doc/frame_pacing/inputs.md
+    // section 3.3): record_frame_bracket_gap_begin returns a cb to append to
+    // the frame's first non-presenting submit, record_frame_bracket_gap_end
+    // one to prepend to its presenting submit once the gap began; each
+    // VK_NULL_HANDLE when there is nothing to record.
+    [[nodiscard]] auto record_frame_bracket_gap_begin(uint64_t frame_id) -> VkCommandBuffer;
+    [[nodiscard]] auto record_frame_bracket_gap_end  (uint64_t frame_id) -> VkCommandBuffer;
+    [[nodiscard]] auto record_frame_bracket_timestamp(VkCommandBuffer cb, uint64_t frame_id, uint32_t query) -> VkCommandBuffer;
     void               reset_frame_end_command_pool (std::size_t in_flight_slot);
     void               poll_frame_bracket_results   (uint64_t started_frame_id);
     void               update_gpu_calibration       (uint64_t started_frame_id);
@@ -734,6 +752,9 @@ private:
     // together with the per-thread pools (same timeline gate).
     std::array<VkCommandPool,   s_number_of_frames_in_flight> m_frame_end_command_pools  {};
     std::array<VkCommandBuffer, s_number_of_frames_in_flight> m_frame_end_command_buffers{};
+    // From the same pool: the frame bracket's gap begin / gap end timestamps.
+    std::array<VkCommandBuffer, s_number_of_frames_in_flight> m_frame_gap_begin_command_buffers{};
+    std::array<VkCommandBuffer, s_number_of_frames_in_flight> m_frame_gap_end_command_buffers{};
 
     VkSemaphore              m_vulkan_frame_end_semaphore {VK_NULL_HANDLE};
 
@@ -859,17 +880,28 @@ private:
     // submitted command buffer referencing that pool has completed - with
     // one pool per slot that is exactly frame (F - ring), retired long ago,
     // while a single shared pool would still be referenced by the frames in
-    // flight (VUID-vkResetQueryPool-firstQuery-02741).
+    // flight (VUID-vkResetQueryPool-firstQuery-02741). Queries 2 and 3 are
+    // the gap begin / gap end (record_frame_bracket_gap_begin), written
+    // only by frames whose m_frame_bracket_has_gap is set.
     static constexpr std::size_t s_frame_bracket_ring = 16;
+    static constexpr uint32_t    s_frame_bracket_query_count = 4;
     std::array<VkQueryPool, s_frame_bracket_ring> m_frame_bracket_query_pools{};
     bool         m_frame_bracket_enabled{false};
     std::array<std::int64_t, s_frame_bracket_ring> m_frame_bracket_frame_id{};
+    // Per ring slot: both gap queries were recorded for that frame.
+    std::array<bool, s_frame_bracket_ring> m_frame_bracket_has_gap{};
+    // Tier W on Apple (MoltenVK): the GPU and CPU clocks per frame
+    // (clock_monitor_apple.hpp, claim C25); the frame bracket results reach
+    // the recorder through it so a GPU span never arrives without its clocks.
+    std::shared_ptr<Clock_monitor> m_clock_monitor;
     // Per frame-in-flight slot: the frame's bracket begin timestamp was
     // recorded (by the first cb of that frame to begin).
     std::array<bool, s_number_of_frames_in_flight> m_frame_bracket_begun{};
     // Per frame-in-flight slot: the frame's bracket end timestamp was
     // recorded (by the presenting submit, else by end_frame).
     std::array<bool, s_number_of_frames_in_flight> m_frame_bracket_ended{};
+    // Per frame-in-flight slot: the gap begin timestamp was recorded.
+    std::array<bool, s_number_of_frames_in_flight> m_frame_bracket_gap_begun{};
     bool         m_host_query_reset   {false};
     bool         m_report_address_binding{false};
     // GPU clock calibration and host time domain offsets: written by

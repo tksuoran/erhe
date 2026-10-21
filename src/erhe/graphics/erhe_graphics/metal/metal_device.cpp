@@ -2,7 +2,7 @@
 #include "erhe_graphics/texture_heap.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
-#include "erhe_graphics/metal/metal_clock_monitor.hpp"
+#include "erhe_graphics/clock_monitor_apple.hpp"
 #include "erhe_graphics/metal/metal_gpu_prewarm.hpp"
 #include "erhe_graphics/metal/metal_gpu_timer.hpp"
 #include "erhe_graphics/metal/metal_scoped_debug_group.hpp"

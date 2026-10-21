@@ -326,7 +326,7 @@ private:
     Frame_pacing_tier                m_frame_pacing_tier{Frame_pacing_tier::off};
     // Null without a CAMetalLayer (headless).
     std::shared_ptr<Present_feedback> m_present_feedback;
-    // Tier M: the GPU clock per presented frame (metal_clock_monitor.hpp);
+    // Tier M: the GPU clock per presented frame (clock_monitor_apple.hpp);
     // null elsewhere. Shared with the presenting command buffers'
     // completion handlers.
     std::shared_ptr<Clock_monitor> m_clock_monitor;

@@ -1,4 +1,7 @@
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#if defined(__APPLE__)
+#   include "erhe_graphics/clock_monitor_apple.hpp"
+#endif
 #include "erhe_graphics/vulkan_external_creators.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
@@ -148,8 +151,13 @@ auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
 auto Device_impl::is_present_target_time_honored() const -> bool
 {
     // Measured not honored on NVIDIA (doc/frame_pacing/capability_tiers.md
-    // section 5), unverified elsewhere: tier W paces through the C15 holdback.
-    return false;
+    // section 5): VK_EXT_present_timing tier W paces through the C15
+    // holdback. VK_GOOGLE_display_timing on MoltenVK maps the target onto
+    // presentDrawable:atTime:, which the Metal backend measured honored.
+    return
+        (m_frame_pacing_tier == Frame_pacing_tier::full) &&
+        !m_capabilities.m_present_timing &&
+        m_capabilities.m_display_timing;
 }
 
 auto Device_impl::get_context_window() const -> erhe::window::Context_window*
@@ -264,6 +272,12 @@ Device_impl::~Device_impl() noexcept
 {
     static_cast<void>(device_wait_idle());
 
+#if defined(__APPLE__)
+    if (m_clock_monitor != nullptr) {
+        m_clock_monitor->detach();
+    }
+#endif
+
 #if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
     if (m_tracy_vk_ctx != nullptr) {
         TracyVkDestroy(m_tracy_vk_ctx);
@@ -359,8 +373,10 @@ Device_impl::~Device_impl() noexcept
     for (std::size_t frame_slot = 0; frame_slot < s_number_of_frames_in_flight; ++frame_slot) {
         if (m_frame_end_command_pools[frame_slot] != VK_NULL_HANDLE) {
             vkDestroyCommandPool(m_vulkan_device, m_frame_end_command_pools[frame_slot], nullptr);
-            m_frame_end_command_pools[frame_slot]   = VK_NULL_HANDLE;
-            m_frame_end_command_buffers[frame_slot] = VK_NULL_HANDLE;
+            m_frame_end_command_pools[frame_slot]         = VK_NULL_HANDLE;
+            m_frame_end_command_buffers[frame_slot]       = VK_NULL_HANDLE;
+            m_frame_gap_begin_command_buffers[frame_slot] = VK_NULL_HANDLE;
+            m_frame_gap_end_command_buffers[frame_slot]   = VK_NULL_HANDLE;
         }
     }
 
@@ -1236,6 +1252,7 @@ auto Device_impl::query_device_extensions(
         check_device_extension(VK_KHR_PRESENT_ID_2_EXTENSION_NAME,   device_extensions_out.m_VK_KHR_present_id2,    1.0f);
         check_device_extension(VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_wait2,  1.0f);
         check_device_extension(VK_EXT_PRESENT_TIMING_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_timing, 3.0f);
+        check_device_extension(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME, device_extensions_out.m_VK_GOOGLE_display_timing, 1.0f);
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
         // Exclusive fullscreen (Window_configuration::exclusive_fullscreen):
         // bypasses DWM composition; useful for frame pacing testing.
@@ -1597,6 +1614,38 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     // vkQueuePresentKHR below block this thread for up to N refresh periods
     // before end_frame runs; a bracket end queued by end_frame would read
     // back that wait as GPU time (see record_frame_bracket_end).
+    // The frame's GPU idle gap: the first non-presenting submit (the
+    // upload cb) ends it with the gap begin timestamp; the presenting submit
+    // starts with the gap end timestamp. Bottom-of-pipe gap end fires when
+    // the GPU is free to start the presenting submit - after the gap begin
+    // and no earlier than the submit reaches the queue.
+    if (submit_info_aggregate.swapchains_to_present.empty()) {
+        const VkCommandBuffer gap_begin_command_buffer = record_frame_bracket_gap_begin(frame_id);
+        if (gap_begin_command_buffer != VK_NULL_HANDLE) {
+            submit_info_aggregate.command_buffers.push_back(
+                VkCommandBufferSubmitInfo{
+                    .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                    .pNext         = nullptr,
+                    .commandBuffer = gap_begin_command_buffer,
+                    .deviceMask    = 0,
+                }
+            );
+        }
+    } else {
+        const VkCommandBuffer gap_end_command_buffer = record_frame_bracket_gap_end(frame_id);
+        if (gap_end_command_buffer != VK_NULL_HANDLE) {
+            submit_info_aggregate.command_buffers.insert(
+                submit_info_aggregate.command_buffers.begin(),
+                VkCommandBufferSubmitInfo{
+                    .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                    .pNext         = nullptr,
+                    .commandBuffer = gap_end_command_buffer,
+                    .deviceMask    = 0,
+                }
+            );
+        }
+    }
+
     if (!submit_info_aggregate.swapchains_to_present.empty()) {
         const VkCommandBuffer frame_end_command_buffer = record_frame_bracket_end(frame_id);
         if (frame_end_command_buffer != VK_NULL_HANDLE) {
@@ -1688,9 +1737,11 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         // No holdback while the display refresh init calibration runs: it
         // measures the display's cadence from these presents, and a hold
         // would be read back as it (Device::is_display_refresh_calibrating).
+        // No holdback where targets are honored: the target itself keeps an
+        // early image off the display.
         if (
             (target_seconds > 0.0) && (release_time > 0.0) && get_graphics_config().frame_pacing_present_holdback &&
-            !m_device.is_display_refresh_calibrating()
+            !m_device.is_display_refresh_calibrating() && !is_present_target_time_honored()
         ) {
             double wait_seconds = release_time - erhe::frame_pacing::Frame_time_recorder::now();
             // Runaway sanity cap only (in the spirit of the release-gate
@@ -1892,10 +1943,12 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
     if (m_frame_bracket_enabled) {
         ERHE_PROFILE_SCOPE("vkResetQueryPool");
         const std::size_t bracket_slot = static_cast<std::size_t>(frame_id % s_frame_bracket_ring);
-        vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[bracket_slot], 0, 2);
+        vkResetQueryPool(m_vulkan_device, m_frame_bracket_query_pools[bracket_slot], 0, s_frame_bracket_query_count);
         m_frame_bracket_frame_id[bracket_slot] = static_cast<std::int64_t>(frame_id);
-        m_frame_bracket_begun[slot] = false;
-        m_frame_bracket_ended[slot] = false;
+        m_frame_bracket_has_gap [bracket_slot] = false;
+        m_frame_bracket_begun    [slot] = false;
+        m_frame_bracket_ended    [slot] = false;
+        m_frame_bracket_gap_begun[slot] = false;
     }
 
     // Per-(frame_in_flight, thread) command pool reset, gated on the
@@ -3200,9 +3253,42 @@ auto Device_impl::record_frame_bracket_end(const uint64_t frame_id) -> VkCommand
         return VK_NULL_HANDLE;
     }
     m_frame_bracket_ended[in_flight_slot] = true;
-    // acquire_frame_slot reset this frame-in-flight slot's frame-end pool, so the
-    // cb is in the initial state.
-    const VkCommandBuffer cb             = m_frame_end_command_buffers[in_flight_slot];
+    return record_frame_bracket_timestamp(m_frame_end_command_buffers[in_flight_slot], frame_id, 1);
+}
+
+auto Device_impl::record_frame_bracket_gap_begin(const uint64_t frame_id) -> VkCommandBuffer
+{
+    const std::size_t in_flight_slot = get_frame_slot_index(frame_id);
+    if (
+        !m_frame_bracket_enabled ||
+        !m_frame_bracket_begun[in_flight_slot] ||
+        m_frame_bracket_ended[in_flight_slot] ||
+        m_frame_bracket_gap_begun[in_flight_slot]
+    ) {
+        return VK_NULL_HANDLE;
+    }
+    m_frame_bracket_gap_begun[in_flight_slot] = true;
+    return record_frame_bracket_timestamp(m_frame_gap_begin_command_buffers[in_flight_slot], frame_id, 2);
+}
+
+auto Device_impl::record_frame_bracket_gap_end(const uint64_t frame_id) -> VkCommandBuffer
+{
+    const std::size_t in_flight_slot = get_frame_slot_index(frame_id);
+    if (
+        !m_frame_bracket_enabled ||
+        !m_frame_bracket_gap_begun[in_flight_slot] ||
+        m_frame_bracket_ended[in_flight_slot]
+    ) {
+        return VK_NULL_HANDLE;
+    }
+    m_frame_bracket_has_gap[static_cast<std::size_t>(frame_id % s_frame_bracket_ring)] = true;
+    return record_frame_bracket_timestamp(m_frame_gap_end_command_buffers[in_flight_slot], frame_id, 3);
+}
+
+auto Device_impl::record_frame_bracket_timestamp(const VkCommandBuffer cb, const uint64_t frame_id, const uint32_t query) -> VkCommandBuffer
+{
+    // acquire_frame_slot reset this frame-in-flight slot's frame-end pool, so
+    // the cb is in the initial state.
     ERHE_VERIFY(cb != VK_NULL_HANDLE);
     const VkCommandBufferBeginInfo begin_info{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -3213,18 +3299,18 @@ auto Device_impl::record_frame_bracket_end(const uint64_t frame_id) -> VkCommand
     const VkResult begin_result = vkBeginCommandBuffer(cb, &begin_info);
     if (begin_result != VK_SUCCESS) {
         log_context->critical(
-            "vkBeginCommandBuffer() for frame-end cb failed with {} {}",
-            static_cast<int32_t>(begin_result), c_str(begin_result)
+            "vkBeginCommandBuffer() for frame bracket cb (query {}) failed with {} {}",
+            query, static_cast<int32_t>(begin_result), c_str(begin_result)
         );
         abort();
     }
     const std::size_t bracket_slot = static_cast<std::size_t>(frame_id % s_frame_bracket_ring);
-    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pools[bracket_slot], 1);
+    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pools[bracket_slot], query);
     const VkResult end_result = vkEndCommandBuffer(cb);
     if (end_result != VK_SUCCESS) {
         log_context->critical(
-            "vkEndCommandBuffer() for frame-end cb failed with {} {}",
-            static_cast<int32_t>(end_result), c_str(end_result)
+            "vkEndCommandBuffer() for frame bracket cb (query {}) failed with {} {}",
+            query, static_cast<int32_t>(end_result), c_str(end_result)
         );
         abort();
     }
@@ -3261,12 +3347,15 @@ void Device_impl::poll_frame_bracket_results(const uint64_t started_frame_id)
         if ((frame_id < 0) || (frame_id >= static_cast<std::int64_t>(started_frame_id))) {
             continue;
         }
-        uint64_t data[4] = {0, 0, 0, 0}; // (value, availability) x 2
+        // (value, availability) per query: begin, end, and when the frame
+        // recorded them, gap begin and gap end.
+        const uint32_t query_count = m_frame_bracket_has_gap[slot] ? 4u : 2u;
+        uint64_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         const VkResult result = vkGetQueryPoolResults(
             m_vulkan_device,
             m_frame_bracket_query_pools[slot],
             0,
-            2,
+            query_count,
             sizeof(data),
             data,
             2u * sizeof(uint64_t),
@@ -3275,17 +3364,36 @@ void Device_impl::poll_frame_bracket_results(const uint64_t started_frame_id)
         if ((result != VK_SUCCESS) && (result != VK_NOT_READY)) {
             continue;
         }
-        if ((data[1] == 0) || (data[3] == 0)) {
+        bool available = true;
+        for (uint32_t query = 0; query < query_count; ++query) {
+            available = available && (data[(2 * query) + 1] != 0);
+        }
+        if (!available) {
             continue; // not yet available - poll again next frame
         }
         const uint64_t begin_ticks = data[0] & m_gpu_timer_valid_mask;
         const uint64_t end_ticks   = data[2] & m_gpu_timer_valid_mask;
+        m_frame_bracket_frame_id[slot] = -1;
+        if (query_count == 4u) {
+            // Set before the bracket: the observer delivers a frame's GPU
+            // time once its bracket is in the record.
+            const double gap_begin = gpu_ticks_to_reference_seconds(data[4] & m_gpu_timer_valid_mask);
+            const double gap_end   = gpu_ticks_to_reference_seconds(data[6] & m_gpu_timer_valid_mask);
+            m_device.get_frame_time_recorder().set(
+                frame_id, &erhe::frame_pacing::Frame_time_record::gpu_idle_time, std::max(0.0, gap_end - gap_begin)
+            );
+        }
+#if defined(__APPLE__)
+        if (m_clock_monitor != nullptr) {
+            m_clock_monitor->on_frame_gpu_done(frame_id, gpu_ticks_to_reference_seconds(begin_ticks), gpu_ticks_to_reference_seconds(end_ticks));
+            continue;
+        }
+#endif
         m_device.get_frame_time_recorder().set(
             frame_id,
             &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_ticks_to_reference_seconds(begin_ticks),
             &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_ticks_to_reference_seconds(end_ticks)
         );
-        m_frame_bracket_frame_id[slot] = -1;
     }
 }
 
