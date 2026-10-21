@@ -371,7 +371,7 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
     uint light_offset = 0u;
 
     for (uint i = 0u; i < light_block.directional_light_count; ++i) {
-        Light light   = light_block.lights[light_offset + i];
+        Light light   = light_array.lights[light_offset + i];
         vec3  L       = normalize(light.direction_and_outer_spot_cos.xyz);
         float N_dot_L = dot(N, L);
         if ((N_dot_L > 0.0) && light_visible(surface.position, surface.geometric_normal, L, c_t_far)) {
@@ -381,7 +381,7 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
     light_offset += light_block.directional_light_count;
 
     for (uint i = 0u; i < light_block.spot_light_count; ++i) {
-        Light light          = light_block.lights[light_offset + i];
+        Light light          = light_array.lights[light_offset + i];
         vec3  point_to_light = light.position_and_inner_spot_cos.xyz - surface.position;
         float light_distance = length(point_to_light);
         vec3  L              = point_to_light / light_distance;
@@ -398,7 +398,7 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
     light_offset += light_block.spot_light_count;
 
     for (uint i = 0u; i < light_block.point_light_count; ++i) {
-        Light light          = light_block.lights[light_offset + i];
+        Light light          = light_array.lights[light_offset + i];
         vec3  point_to_light = light.position_and_inner_spot_cos.xyz - surface.position;
         float light_distance = length(point_to_light);
         vec3  L              = point_to_light / light_distance;

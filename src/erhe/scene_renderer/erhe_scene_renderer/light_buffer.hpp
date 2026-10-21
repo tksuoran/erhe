@@ -107,6 +107,8 @@ public:
     std::size_t  ddgi_params;                  // vec4 (normal bias, view bias, depth sharpness, intensity)
 
     Light_struct light;
+    // Offset of lights[] in light_array_block (the shaded lights in slot
+    // order, an unsized storage array).
     std::size_t  light_struct;
 };
 
@@ -158,8 +160,12 @@ public:
     [[nodiscard]] auto get_sampler(bool compare) const -> const erhe::graphics::Sampler*;
 
     std::size_t                     max_light_count;
+    // The header: counts, ambient, DDGI volume, shadow map sentinels (std140).
     erhe::graphics::Shader_resource light_block;
     erhe::graphics::Shader_resource light_control_block;
+    // The lights in slot order (std430, readonly, unsized; doc/plans/
+    // clustered_lights.md C3): light_array.lights[slot].
+    erhe::graphics::Shader_resource light_array_block;
     erhe::graphics::Shader_resource light_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
@@ -412,6 +418,18 @@ public:
     }
 };
 
+// The ranges one Light_buffer::update() writes: the light_block header and
+// the light_array_block lights. Bound together by bind_light_buffer() and
+// released together.
+class Light_buffer_ranges
+{
+public:
+    void release();
+
+    erhe::graphics::Ring_buffer_range header;
+    erhe::graphics::Ring_buffer_range lights;
+};
+
 class Light_buffer
 {
 public:
@@ -424,15 +442,17 @@ public:
         Light_interface&                light_interface
     );
 
-    // Writes the light UBO from the resolved slots in light_projections
-    // (Light_projections::apply); null light_projections writes no lights.
+    // Writes the light header and the light array from the resolved slots in
+    // light_projections (Light_projections::apply); null light_projections
+    // writes no lights. The array holds the shaded lights only, at least one
+    // (zero) entry so the storage range is never empty.
     auto update(
         const Light_projections* light_projections,
         const glm::vec3&         ambient_light,
         uint32_t                 lightmap_flags = 0u, // bit 0: bicubic lightmap sampling
         const Ddgi_parameters*   ddgi            = nullptr,
         uint32_t                 shadow_debug_light_index = 0u // light slot Shader_debug::shadow_visibility shows
-    ) -> erhe::graphics::Ring_buffer_range;
+    ) -> Light_buffer_ranges;
 
     // Bind the DDGI probe atlases (or the 1x1 black fallbacks when null) to
     // the s_ddgi_* sampler bindings. Called alongside bind_lightmap by
@@ -468,13 +488,14 @@ public:
         float       shadow_map_resolution = 0.0f
     ) -> erhe::graphics::Ring_buffer_range;
 
-    void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
+    void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const Light_buffer_ranges& ranges);
     void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
 
 private:
     erhe::graphics::Device&                  m_graphics_device;
     Light_interface&                         m_light_interface;
     erhe::graphics::Ring_buffer_client       m_light_buffer;
+    erhe::graphics::Ring_buffer_client       m_light_array_buffer;
     erhe::graphics::Ring_buffer_client       m_control_buffer;
     std::shared_ptr<erhe::graphics::Texture> m_fallback_shadow_texture;
     // 1x1 black textures bound to the three s_ddgi_* slots whenever no probe

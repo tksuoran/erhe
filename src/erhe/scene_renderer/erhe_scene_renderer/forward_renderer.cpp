@@ -444,7 +444,7 @@ void Forward_renderer::draw_primitives(
         }
     }
 
-    Ring_buffer_range light_range = m_pass_resources.get_light_buffer().update(base.light_projections, base.ambient_light, m_pass_resources.get_lightmap_bicubic() ? 1u : 0u, &m_pass_resources.get_ddgi());
+    Light_buffer_ranges light_range = m_pass_resources.get_light_buffer().update(base.light_projections, base.ambient_light, m_pass_resources.get_lightmap_bicubic() ? 1u : 0u, &m_pass_resources.get_ddgi());
     m_pass_resources.get_light_buffer().bind_light_buffer(render_encoder, light_range);
     m_pass_resources.get_light_buffer().bind_shadow_samplers(render_encoder, base.light_projections);
     m_pass_resources.get_light_buffer().bind_lightmap(render_encoder, m_pass_resources.get_lightmap_texture());

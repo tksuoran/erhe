@@ -176,6 +176,11 @@ Ray_trace_renderer::Ray_trace_renderer(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_control_binding_point,
                     .type          = Binding_type::uniform_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -244,6 +249,7 @@ Ray_trace_renderer::Ray_trace_renderer(
                 &program_interface.camera_interface.camera_block,
                 &program_interface.material_interface.material_block,
                 &program_interface.light_interface.light_block,
+                &program_interface.light_interface.light_array_block,
                 &m_control_block,
                 &m_scene_tlas->get_instance_block()
             },
@@ -513,7 +519,7 @@ void Ray_trace_renderer::render(
     // transforms come from there), so with no projections available pass no
     // lights - ambient still applies.
     const glm::vec3 ambient_light = scene_root.get_render_settings(m_graphics_device.get_frame_index()).ambient_light;
-    Ring_buffer_range light_range = m_light_buffer->update(light_projections, ambient_light);
+    erhe::scene_renderer::Light_buffer_ranges light_range = m_light_buffer->update(light_projections, ambient_light);
 
     // Runtime knobs from Ray_trace_config, clamped to sane / compile-time
     // bounds (max_bounces must not exceed the shader's stack bound).

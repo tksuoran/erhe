@@ -861,7 +861,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
     }
 
     Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, parameters.joint_poses);
-    Ring_buffer_range light_range    = m_light_buffer.update(&parameters.light_projections, glm::vec3{0.0f}, 0);
+    Light_buffer_ranges light_range  = m_light_buffer.update(&parameters.light_projections, glm::vec3{0.0f}, 0);
 
     // The rasterizer depth bias parameters are signed toward the light:
     // positive moves a caster's stored depth toward the light, negative away

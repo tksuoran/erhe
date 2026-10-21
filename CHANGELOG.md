@@ -491,6 +491,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: the lights moved out of `light_block` into
+  `Light_interface::light_array_block`, a readonly storage block
+  `light_array` (`light_array.lights[]`, binding
+  `light_array_buffer_binding_point` = 9) holding the shaded lights only;
+  `light_block` keeps the header (counts, ambient, shadow map sentinels,
+  DDGI volume). `Light_buffer::update()` returns `Light_buffer_ranges`
+  (`header`, `lights`, `release()`), and `bind_light_buffer()` takes it.
+  A bind group layout or shader prototype that names `light_block` also
+  names `light_array_block`.
+
 - `erhe::scene_renderer`: `Gpu_cull_classifier::is_device_capable()` also
   needs `erhe::graphics::Device_info::use_draw_indirect_count` (and six
   compute storage blocks), and `is_supported()` the two compaction

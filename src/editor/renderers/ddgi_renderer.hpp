@@ -393,7 +393,7 @@ private:
     void record_reference_chunk(
         erhe::graphics::Command_buffer&          command_buffer,
         const Scene_tlas::Frame&                 tlas_frame,
-        const erhe::graphics::Ring_buffer_range& light_range,
+        const erhe::scene_renderer::Light_buffer_ranges& light_range,
         erhe::scene_renderer::Material_set&      material_set
     );
 

@@ -321,6 +321,11 @@ Ddgi_renderer::Ddgi_renderer(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_control_binding_point,
                     .type          = Binding_type::uniform_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -420,6 +425,7 @@ Ddgi_renderer::Ddgi_renderer(
             .interface_blocks    = {
                 &program_interface.material_interface.material_block,
                 &program_interface.light_interface.light_block,
+                &program_interface.light_interface.light_array_block,
                 &m_control_block,
                 &m_scene_tlas->get_instance_block()
             },
@@ -619,6 +625,11 @@ void Ddgi_renderer::create_query_pass(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_query_input_binding_point,
                     .type          = Binding_type::storage_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -668,6 +679,7 @@ void Ddgi_renderer::create_query_pass(
             .struct_types        = { &program_interface.light_interface.light_struct },
             .interface_blocks    = {
                 &program_interface.light_interface.light_block,
+                &program_interface.light_interface.light_array_block,
                 &m_query_input_block,
                 &m_query_output_block
             },
@@ -754,6 +766,11 @@ void Ddgi_renderer::create_reference_pass(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_control_binding_point,
                     .type          = Binding_type::uniform_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -803,6 +820,7 @@ void Ddgi_renderer::create_reference_pass(
             .interface_blocks    = {
                 &program_interface.material_interface.material_block,
                 &program_interface.light_interface.light_block,
+                &program_interface.light_interface.light_array_block,
                 &m_reference_control_block,
                 &m_scene_tlas->get_instance_block(),
                 &m_reference_input_block,
@@ -982,7 +1000,7 @@ auto Ddgi_renderer::get_reference_query_intensity() const -> float
 void Ddgi_renderer::record_reference_chunk(
     erhe::graphics::Command_buffer&          command_buffer,
     const Scene_tlas::Frame&                 tlas_frame,
-    const erhe::graphics::Ring_buffer_range& light_range,
+    const erhe::scene_renderer::Light_buffer_ranges& light_range,
     erhe::scene_renderer::Material_set&      material_set
 )
 {
@@ -1198,7 +1216,7 @@ void Ddgi_renderer::record_irradiance_query(erhe::graphics::Command_buffer& comm
     // scene ambient (the no-volume / zero-weight fallback) and the volume
     // parameters. No lights: ddgi_sample_irradiance() does not read them.
     const glm::vec3   ambient     = scene_root.get_render_settings(m_graphics_device.get_frame_index()).ambient_light;
-    Ring_buffer_range light_range = m_light_buffer->update(nullptr, ambient, 0u, &field.parameters);
+    erhe::scene_renderer::Light_buffer_ranges light_range = m_light_buffer->update(nullptr, ambient, 0u, &field.parameters);
 
     {
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
@@ -1863,7 +1881,7 @@ void Ddgi_renderer::tick_field(erhe::graphics::Command_buffer& command_buffer, S
     erhe::scene_renderer::Ddgi_parameters field_parameters = get_forward_parameters();
     field_parameters.intensity = 1.0f;
     const bool multi_bounce = update_field && (get_config().bounces == Indirect_diffuse_bounces::multi);
-    Ring_buffer_range light_range    = m_light_buffer->update(
+    erhe::scene_renderer::Light_buffer_ranges light_range    = m_light_buffer->update(
         m_light_projections.get(),
         m_sky_radiance,
         0u,

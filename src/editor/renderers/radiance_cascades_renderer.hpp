@@ -447,7 +447,7 @@ private:
     void record_visibility(
         erhe::graphics::Command_buffer&          command_buffer,
         const Scene_tlas::Frame&                 tlas_frame,
-        const erhe::graphics::Ring_buffer_range& light_range,
+        const erhe::scene_renderer::Light_buffer_ranges& light_range,
         erhe::scene_renderer::Material_set&      material_set
     );
 
@@ -457,7 +457,7 @@ private:
     void record_trace(
         erhe::graphics::Command_buffer&          command_buffer,
         const Scene_tlas::Frame&                 tlas_frame,
-        const erhe::graphics::Ring_buffer_range& light_range,
+        const erhe::scene_renderer::Light_buffer_ranges& light_range,
         erhe::scene_renderer::Material_set&      material_set
     );
     // Merge mode per_neighbour_trace: traces the connecting segments of the
@@ -467,7 +467,7 @@ private:
     void record_neighbour_trace(
         erhe::graphics::Command_buffer&          command_buffer,
         const Scene_tlas::Frame&                 tlas_frame,
-        const erhe::graphics::Ring_buffer_range& light_range,
+        const erhe::scene_renderer::Light_buffer_ranges& light_range,
         erhe::scene_renderer::Material_set&      material_set
     );
     // Merges every cascade with everything beyond it (rc_merge.comp): one

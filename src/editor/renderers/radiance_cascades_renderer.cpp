@@ -315,6 +315,11 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_control_binding_point,
                     .type          = Binding_type::uniform_buffer,
                     .stage_flags   = Shader_stage_flags::compute
@@ -433,6 +438,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                 .interface_blocks    = {
                     &program_interface.material_interface.material_block,
                     &program_interface.light_interface.light_block,
+                    &program_interface.light_interface.light_array_block,
                     &m_control_block,
                     &m_scene_tlas->get_instance_block()
                 },
@@ -480,6 +486,11 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                 {
                     .binding_point = light_buffer_binding_point,
                     .type          = to_binding_type(program_interface.light_interface.light_block),
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = light_array_buffer_binding_point,
+                    .type          = Binding_type::storage_buffer,
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
@@ -532,6 +543,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
             .interface_blocks    = {
                 &program_interface.material_interface.material_block,
                 &program_interface.light_interface.light_block,
+                &program_interface.light_interface.light_array_block,
                 &m_visibility_block,
                 &m_scene_tlas->get_instance_block()
             },
@@ -1516,7 +1528,7 @@ void Radiance_cascades_renderer::allocate_field(erhe::graphics::Command_buffer& 
 void Radiance_cascades_renderer::record_visibility(
     erhe::graphics::Command_buffer&          command_buffer,
     const Scene_tlas::Frame&                 tlas_frame,
-    const erhe::graphics::Ring_buffer_range& light_range,
+    const erhe::scene_renderer::Light_buffer_ranges& light_range,
     erhe::scene_renderer::Material_set&      material_set
 )
 {
@@ -1597,7 +1609,7 @@ void Radiance_cascades_renderer::record_visibility(
 void Radiance_cascades_renderer::record_trace(
     erhe::graphics::Command_buffer&          command_buffer,
     const Scene_tlas::Frame&                 tlas_frame,
-    const erhe::graphics::Ring_buffer_range& light_range,
+    const erhe::scene_renderer::Light_buffer_ranges& light_range,
     erhe::scene_renderer::Material_set&      material_set
 )
 {
@@ -1757,7 +1769,7 @@ void Radiance_cascades_renderer::record_trace(
 void Radiance_cascades_renderer::record_neighbour_trace(
     erhe::graphics::Command_buffer&          command_buffer,
     const Scene_tlas::Frame&                 tlas_frame,
-    const erhe::graphics::Ring_buffer_range& light_range,
+    const erhe::scene_renderer::Light_buffer_ranges& light_range,
     erhe::scene_renderer::Material_set&      material_set
 )
 {
@@ -2617,7 +2629,7 @@ void Radiance_cascades_renderer::tick_cascades(erhe::graphics::Command_buffer& c
     erhe::scene_renderer::Ddgi_parameters field_parameters = get_forward_parameters();
     field_parameters.intensity = 1.0f;
     const bool multi_bounce = (get_config().bounces == Indirect_diffuse_bounces::multi) && has_field();
-    Ring_buffer_range light_range = m_light_buffer->update(
+    erhe::scene_renderer::Light_buffer_ranges light_range = m_light_buffer->update(
         m_light_projections.get(),
         ambient,
         0u,
