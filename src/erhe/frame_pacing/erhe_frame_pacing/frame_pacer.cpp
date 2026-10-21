@@ -41,6 +41,58 @@ void Sample_window::push(const double value)
     }
 }
 
+void Clock_record::init(const std::size_t capacity)
+{
+    m_clocks.assign(capacity, 0.0);
+    m_works.assign(capacity, 0.0);
+    m_scratch.reserve(capacity);
+    m_head  = 0;
+    m_count = 0;
+}
+
+void Clock_record::push(const double clock_ratio, const double work)
+{
+    if (m_clocks.empty()) {
+        return;
+    }
+    m_clocks[m_head] = clock_ratio;
+    m_works [m_head] = work;
+    m_head = (m_head + 1) % m_clocks.size();
+    if (m_count < m_clocks.size()) {
+        ++m_count;
+    }
+}
+
+auto Clock_record::clock_for_work(
+    const double      work,
+    const double      band,
+    const double      p,
+    const std::size_t min_samples,
+    const double      fallback
+) const -> double
+{
+    m_scratch.clear();
+    const std::size_t capacity = m_clocks.size();
+    const std::size_t start    = (capacity > 0) ? ((m_head + capacity - m_count) % capacity) : 0;
+    const double      low      = work / band;
+    const double      high     = work * band;
+    for (std::size_t i = 0; i < m_count; ++i) {
+        const std::size_t index = (start + i) % capacity;
+        if ((m_works[index] >= low) && (m_works[index] <= high)) {
+            m_scratch.push_back(m_clocks[index]);
+        }
+    }
+    if ((m_scratch.size() < min_samples) || m_scratch.empty()) {
+        return fallback;
+    }
+    std::sort(m_scratch.begin(), m_scratch.end());
+    const double      raw_index = std::ceil(p * static_cast<double>(m_scratch.size())) - 1.0;
+    const std::size_t clamped   = static_cast<std::size_t>(
+        std::clamp(raw_index, 0.0, static_cast<double>(m_scratch.size() - 1))
+    );
+    return m_scratch[clamped];
+}
+
 auto Sample_window::quantile(const double p, const double fallback) const -> double
 {
     if (m_count == 0) {
@@ -90,11 +142,11 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_cadence_gpu_window.init(m_tunables.history);
     m_clock_windows.resize(static_cast<std::size_t>(m_tunables.max_vsyncs) + 1);
     m_cpu_clock_windows.resize(static_cast<std::size_t>(m_tunables.max_vsyncs) + 1);
-    for (Sample_window& window : m_clock_windows) {
-        window.init(m_tunables.history);
+    for (Clock_record& record : m_clock_windows) {
+        record.init(m_tunables.history);
     }
-    for (Sample_window& window : m_cpu_clock_windows) {
-        window.init(m_tunables.history);
+    for (Clock_record& record : m_cpu_clock_windows) {
+        record.init(m_tunables.history);
     }
     m_period_sample_window.init(m_tunables.grid_reseed_window);
     m_deadline_samples.resize(m_tunables.history);
@@ -369,11 +421,14 @@ void Frame_pacer::on_gpu_done(
         (n_used == m_vsyncs) &&
         ((gpu_end_time - m_cadence_start) >= m_tunables.clock_settle_time) &&
         ((scheduled == nullptr) || !scheduled->prewarm);
+    // Each with the frame's work (C29).
+    m_last_gpu_work = gpu_duration * gpu_clock_ratio;
+    m_last_cpu_work = cpu_duration * cpu_clock_ratio;
     if (clock_steady && (gpu_clock_ratio > 0.0)) {
-        m_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(gpu_clock_ratio);
+        m_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(gpu_clock_ratio, m_last_gpu_work);
     }
     if (clock_steady && (cpu_clock_ratio > 0.0)) {
-        m_cpu_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(cpu_clock_ratio);
+        m_cpu_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(cpu_clock_ratio, m_last_cpu_work);
     }
 
     const std::int64_t target_slot = (scheduled != nullptr) ? scheduled->target_slot : m_last_slot;
@@ -501,14 +556,18 @@ void Frame_pacer::on_gpu_done(
         // the maximum against 93-98 % at N=1; P-cores ~53 % against 92-97 %)
         // makes its times there no evidence of the shorter cadence's cost,
         // and one that clocks down at the shorter cadence too must not be
-        // judged at full clock.
+        // judged at full clock. The clock seen there is the one seen for a
+        // similar workload (C29): the governor answers the work, and the
+        // empty editor's idle clock at N=1 once predicted a scene's work at
+        // twice the period there.
         const std::size_t next_index = static_cast<std::size_t>(std::clamp(m_vsyncs - 1, 1, m_tunables.max_vsyncs));
-        const auto at_next = [this](const double duration, const double ratio, const Sample_window& record) -> double {
+        const auto at_next = [this](const double duration, const double ratio, const Clock_record& record) -> double {
             if (ratio <= 0.0) {
                 return duration;
             }
-            const double ratio_next = (record.count() >= m_tunables.cadence_min_samples) ? record.quantile(0.1, 1.0) : 1.0;
-            return duration * ratio / ratio_next;
+            const double work       = duration * ratio;
+            const double ratio_next = record.clock_for_work(work, m_tunables.clock_record_work_band, 0.1, m_tunables.cadence_min_samples, 1.0);
+            return work / ratio_next;
         };
         const double next_period    = static_cast<double>(m_vsyncs - 1) * m_grid_period;
         if (m_prewarm_left > 0) {
@@ -539,6 +598,7 @@ void Frame_pacer::on_gpu_done(
             at_next(cpu_duration, cpu_clock_ratio, m_cpu_clock_windows[next_index]),
             at_next(gpu_duration, gpu_clock_ratio, m_clock_windows[next_index])
         );
+        m_last_upshift_stage_time = stage_time;
         const bool   beyond_period  = stage_time > next_period;
         const bool   in_band        = !beyond_period && (stage_time > (next_period - m_hysteresis));
         ++m_dwell_frames;
@@ -564,6 +624,28 @@ void Frame_pacer::on_gpu_done(
     } else {
         reset_dwell();
     }
+}
+
+auto Frame_pacer::get_upshift_state() const -> Upshift_state
+{
+    const std::size_t next_index = static_cast<std::size_t>(std::clamp(m_vsyncs - 1, 1, m_tunables.max_vsyncs));
+    const Clock_record& gpu_record = m_clock_windows[next_index];
+    const Clock_record& cpu_record = m_cpu_clock_windows[next_index];
+    const double        band       = m_tunables.clock_record_work_band;
+    const std::size_t   min_count  = m_tunables.cadence_min_samples;
+    return Upshift_state{
+        .dwell                  = m_dwell,
+        .dwell_required         = m_dwell_required,
+        .dwell_frames           = m_dwell_frames,
+        .dwell_frames_loaded    = m_dwell_frames_loaded,
+        .last_stage_time        = m_last_upshift_stage_time,
+        .next_period            = static_cast<double>(std::max(m_vsyncs - 1, 1)) * m_grid_period,
+        .gpu_clock_next         = gpu_record.clock_for_work(m_last_gpu_work, band, 0.1, min_count, 0.0),
+        .cpu_clock_next         = cpu_record.clock_for_work(m_last_cpu_work, band, 0.1, min_count, 0.0),
+        .gpu_clock_next_samples = gpu_record.count(),
+        .prewarm_left           = m_prewarm_left,
+        .prewarm_fill           = m_prewarm_fill
+    };
 }
 
 void Frame_pacer::reset_dwell()

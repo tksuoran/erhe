@@ -58,6 +58,15 @@ class Tunables:
     # starves short stays at a borderline cadence of evidence (C25 heavy).
     clock_settle: float = 0.15
     steady_clock_records: bool = True  # C27 (False: every frame's clock under the cadence it was scheduled at, pre-C27)
+    # C29: a clock record sample keeps the frame's work (time x clock), and
+    # the clock at N-1 is judged from the samples whose work lies within
+    # this factor of the frame's: the governor answers the workload, so a
+    # light workload's clock (the empty editor before a scene opens: 0.21 at
+    # N=1) is no evidence of a heavier one's. Without such samples the
+    # cadence is judged at full clock; the pre-warm (C26) measures the
+    # frame at the raised clock before switching.
+    clock_record_work_band: float = 1.5
+    clock_by_work: bool = True        # C29 (False: every sample of the cadence, pre-C29)
     # C28: a cadence's latency window holds the current visit only: entering
     # a cadence clears it, and until the visit has K_seed samples of its own
     # the latency estimate is floored by a seed - the estimate of the
@@ -381,9 +390,9 @@ class FramePacer:
             not self.frame_prewarm.get(frame_id, False)
         )
         if clock_steady and (clock > 0.0):
-            self.clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(clock)
+            self.clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append((clock, g * clock))
         if clock_steady and (cpu_clock > 0.0):
-            self.cpu_clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(cpu_clock)
+            self.cpu_clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append((cpu_clock, c * cpu_clock))
         self.last_g = g
         self.frame_gpu_end[frame_id] = gpu_end
         d = self.V(self.frame_slot[frame_id]) - self.dpe
@@ -489,11 +498,15 @@ class FramePacer:
             # there no evidence of the shorter cadence's cost, and one that
             # clocks down at the shorter cadence too must not be judged at
             # full clock.
+            # C29: judged by the samples of a similar workload only.
             def at_next(duration, ratio, records):
                 if ratio <= 0.0:
                     return duration
-                record = records.get(self.N - 1)
-                ratio_next = self._q2(record, 0.1, 1.0) if record and len(record) >= t.cadence_min_samples else 1.0
+                work = duration * ratio
+                record = records.get(self.N - 1) or ()
+                clocks = [clk for clk, wk in record
+                          if (not t.clock_by_work) or (work / t.clock_record_work_band <= wk <= work * t.clock_record_work_band)]
+                ratio_next = self._q2(clocks, 0.1, 1.0) if len(clocks) >= t.cadence_min_samples else 1.0
                 return duration * ratio / ratio_next
             next_period = (self.N - 1) * self.period
             if self.prewarm_left > 0:
@@ -788,6 +801,10 @@ class Scenario:
     dvfs_delay: float = 0.015            # C26: the governor reacts this long after the condition changes
     dvfs_tau_down: float = 0.2
     dvfs_prewarm_min: float = 0.002
+    dvfs_idle_work: float = 0.0          # C29: GPU work (at full clock) below which the governor
+                                         # heads for dvfs_idle at any cadence (live: the empty
+                                         # editor before a scene opens, 0.21 at N=1)
+    dvfs_idle: float = 0.21
     forced_range: tuple = None           # (first, last) frames with corruption
     recreate_at: int = None              # swapchain recreation at this frame
     lazy_gpu:    bool = False            # C9: GPU measurements delivered via the
@@ -943,7 +960,8 @@ def run(sc: Scenario):
     servo = SlopServo(sc.servo_tun, t.T) if sc.slop_servo else None
     prev_decision_t = 0.0
     dvfs_clock = 1.0                     # C26 plant GPU clock
-    dvfs_high = True                     # C26: the governor's current condition ...
+    dvfs_high = True                     # C26: the governor's current condition (C29: or 'idle') ...
+    dvfs_prev = True                     # ... the one before it ...
     dvfs_since = 0.0                     # ... and since when it holds
     gpu_busy_until = 0.0                 # C26: end of pre-warm work on the GPU
 
@@ -994,6 +1012,7 @@ def run(sc: Scenario):
             c = c / cpu_ratio
             cpu_clock = cpu_ratio if sc.report_cpu_clock else 0.0
         g = sc.g_at_cadence_fn(k, dec.N) if sc.g_at_cadence_fn is not None else sc.g_fn(k)
+        g_work = g
         clock = 0.0
         if sc.dvfs:
             g = g / dvfs_clock
@@ -1033,12 +1052,16 @@ def run(sc: Scenario):
         if sc.dvfs:
             tp_d = sc.true_period if sc.true_period is not None else t.T
             dt = dec.N * tp_d
-            high = (dec.N <= 1) or (prewarm_time >= sc.dvfs_prewarm_min)
+            if g_work < sc.dvfs_idle_work:
+                high = 'idle'   # C29: a light workload idles the governor at any cadence
+            else:
+                high = (dec.N <= 1) or (prewarm_time >= sc.dvfs_prewarm_min)
             if high != dvfs_high:
+                dvfs_prev = dvfs_high
                 dvfs_high = high
                 dvfs_since = ge
-            target_high = dvfs_high if (ge - dvfs_since) >= sc.dvfs_delay else (not dvfs_high)
-            target = 1.0 if target_high else sc.dvfs_low
+            state = dvfs_high if (ge - dvfs_since) >= sc.dvfs_delay else dvfs_prev
+            target = sc.dvfs_idle if state == 'idle' else (1.0 if state else sc.dvfs_low)
             tau = sc.dvfs_tau_up if target > dvfs_clock else sc.dvfs_tau_down
             dvfs_clock += (target - dvfs_clock) * (1.0 - math.exp(-dt / tau))
         # c and g are pure stage service times (waits excluded) — normative,
@@ -2281,6 +2304,46 @@ def c28_latency_per_visit():
           f"excess {fix[0] * 1000:.1f} ms, {fix[1]} slips, N after frame 3000: {sorted(fix[2])}")
 
 
+def c29_clock_records_by_workload():
+    print("C29 the clock at the shorter cadence is judged for the frame's workload")
+    # Live (Metal tier M, Dell at 120 Hz, Bistro): the empty editor ran at
+    # N=1 with the GPU idling at 0.21 of its maximum clock; the scene open
+    # downshifted to N=2 (and briefly N=3), and N=1's record - all from the
+    # empty editor - predicted Bistro's 4.1 ms of work (at full clock) at
+    # 18 ms there: every frame reset the dwell, N=2 for good, although with
+    # the pacer off the same frames displayed one refresh apart.
+    T = 1.0 / 120.0
+    dpe_true = T + 1.0 * MS
+    def arm(by_work, seed, n=6000):
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_true + 0.3 * MS,
+                       dpe_max=dpe_true + 0.3 * MS + 0.5 * T, present_queue='fifo',
+                       prewarm_seconds=2.3 * MS, clock_by_work=by_work)
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        def work(k, n_used):
+            if k < 500:
+                return max(0.05, rw.gauss(0.3, 0.03)) * MS   # the empty editor
+            if k < 530:
+                return 30.0 * MS                              # the scene open
+            return max(0.5, rw.gauss(4.5, 0.15)) * MS         # the scene
+        sc = Scenario("c29", n, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work, dvfs=True,
+                      dvfs_idle_work=1.0 * MS, dpe_true=dpe_true, drawable_pool=3,
+                      pool_latch_lead=dpe_true - 1.8 * MS)
+        recs, _ = run(sc)
+        return recs
+    def summary(recs):
+        ups = [i for i in range(540, len(recs)) if recs[i].N == 1 and recs[i - 1].N > 1]
+        slips = sum(1 for r in recs[540:] if r.slipped)
+        return ups, slips, {r.N for r in recs[3000:]}
+    ups_ctl, _, n_ctl = summary(arm(False, 2901))
+    check("C29 control: the empty editor's clock record keeps N=2 after the scene opens (the live failure)",
+          (not ups_ctl) and (1 not in n_ctl), f"upshifts to N=1 after the open: {ups_ctl}, N after frame 3000: {sorted(n_ctl)}")
+    ups, slips, n_fix = summary(arm(True, 2901))
+    check("C29 judged for the workload: one upshift, N=1 holds, no slips",
+          len(ups) == 1 and n_fix == {1} and slips == 0,
+          f"upshifts {ups}, N after frame 3000: {sorted(n_fix)}, {slips} slips after frame 540")
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -2310,6 +2373,7 @@ def main():
     c26_gpu_prewarm()
     c27_steady_clock_records()
     c28_latency_per_visit()
+    c29_clock_records_by_workload()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")

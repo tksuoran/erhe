@@ -69,6 +69,11 @@ public:
     double                                  dvfs_tau_down   {0.2};
     double                                  dvfs_delay      {0.015};
     double                                  dvfs_prewarm_min{0.002};
+    // Claim C29: GPU work (at full clock) below dvfs_idle_work idles the
+    // governor at dvfs_idle at any cadence (live: the empty editor before a
+    // scene opens, 0.21 at N=1); 0 = never.
+    double                                  dvfs_idle_work  {0.0};
+    double                                  dvfs_idle       {0.21};
     Plant_parameters                        plant{};
     // Claim C6: frames in [forced_first, forced_last] run with latency
     // estimate and margin forced to zero.
@@ -256,7 +261,8 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
     // (vkWaitForPresentKHR semantics: any newer id unblocks older waits).
     bool         has_pending_display = false;
     double       dvfs_clock     = 1.0;  // C26 plant GPU clock
-    bool         dvfs_high      = true; // C26: the governor's current condition ...
+    double       dvfs_state     = 1.0;  // C26: the governor's current target (1.0, dvfs_low or C29 dvfs_idle) ...
+    double       dvfs_previous  = 1.0;  // ... the one before it ...
     double       dvfs_since     = 0.0;  // ... and since when it holds
     double       gpu_busy_until = 0.0;  // C26: end of pre-warm work on the GPU
     std::int64_t pending_display_id  = 0;
@@ -325,6 +331,7 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
         double gpu_dur = scenario.gpu_duration_at_cadence
             ? scenario.gpu_duration_at_cadence(k, decision.vsyncs_per_frame)
             : scenario.gpu_duration(k);
+        const double gpu_work  = gpu_dur; // at full clock (C29)
         double gpu_clock = 0.0;
         if (scenario.dvfs) {
             gpu_dur   = gpu_dur / dvfs_clock;
@@ -381,13 +388,14 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
         gpu_busy_until = ge + decision.prewarm_seconds; // C26: pre-warm runs after the frame's work
         if (scenario.dvfs) {
             const double dt   = static_cast<double>(decision.vsyncs_per_frame) * ((scenario.plant.true_grid_period > 0.0) ? scenario.plant.true_grid_period : t);
-            const bool   high = (decision.vsyncs_per_frame <= 1) || (decision.prewarm_seconds >= scenario.dvfs_prewarm_min);
-            if (high != dvfs_high) {
-                dvfs_high  = high;
-                dvfs_since = ge;
+            const bool   high  = (decision.vsyncs_per_frame <= 1) || (decision.prewarm_seconds >= scenario.dvfs_prewarm_min);
+            const double state = (gpu_work < scenario.dvfs_idle_work) ? scenario.dvfs_idle : (high ? 1.0 : scenario.dvfs_low);
+            if (state != dvfs_state) {
+                dvfs_previous = dvfs_state;
+                dvfs_state    = state;
+                dvfs_since    = ge;
             }
-            const bool   target_high = ((ge - dvfs_since) >= scenario.dvfs_delay) ? dvfs_high : !dvfs_high;
-            const double target      = target_high ? 1.0 : scenario.dvfs_low;
+            const double target = ((ge - dvfs_since) >= scenario.dvfs_delay) ? dvfs_state : dvfs_previous;
             const double tau         = (target > dvfs_clock) ? scenario.dvfs_tau_up : scenario.dvfs_tau_down;
             dvfs_clock += (target - dvfs_clock) * (1.0 - std::exp(-dt / tau));
         }

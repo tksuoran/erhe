@@ -2707,6 +2707,20 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
     if (m_context.frame_pacing_observer != nullptr) {
         const erhe::frame_pacing::Frame_pacer* const pacer = m_context.frame_pacing_observer->get_pacer();
         if (pacer != nullptr) {
+            const erhe::frame_pacing::Upshift_state upshift = pacer->get_upshift_state();
+            result["upshift"] = {
+                {"dwell_ms",               upshift.dwell * 1000.0},
+                {"dwell_required_ms",      upshift.dwell_required * 1000.0},
+                {"dwell_frames",           upshift.dwell_frames},
+                {"dwell_frames_loaded",    upshift.dwell_frames_loaded},
+                {"last_stage_time_ms",     upshift.last_stage_time * 1000.0},
+                {"next_period_ms",         upshift.next_period * 1000.0},
+                {"gpu_clock_next",         upshift.gpu_clock_next},
+                {"cpu_clock_next",         upshift.cpu_clock_next},
+                {"gpu_clock_next_samples", upshift.gpu_clock_next_samples},
+                {"prewarm_left",           upshift.prewarm_left},
+                {"prewarm_fill_ms",        upshift.prewarm_fill * 1000.0}
+            };
             result["pacer"] = {
                 {"vsyncs_per_frame", pacer->get_vsyncs_per_frame()},
                 {"min_vsyncs",       m_context.frame_pacing_observer->get_min_vsyncs()},

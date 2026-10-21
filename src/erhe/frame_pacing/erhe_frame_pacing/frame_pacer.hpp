@@ -89,6 +89,14 @@ public:
     // recorded as N=1's clock once locked the longer cadence; longer
     // settling starves short stays at a borderline cadence of evidence.
     double      clock_settle_time        {0.15};
+    // A clock record sample keeps the frame's work (time x clock), and the
+    // clock at N-1 is judged from the samples whose work lies within this
+    // factor of the frame's (C29): the governor answers the workload, so a
+    // light workload's clock (the empty editor before a scene opens: 0.21 at
+    // N=1) is no evidence of a heavier one's. Without such samples the
+    // cadence is judged at full clock; the pre-warm (C26) measures the frame
+    // at the raised clock before switching.
+    double      clock_record_work_band   {1.5};
     int         reactive_miss_threshold{2};     // M consecutive observed self-misses
     double      margin_initial_frac{0.20};      // m0
     double      margin_min_frac   {0.02};
@@ -150,6 +158,45 @@ public:
     int    vsyncs     {1};
 };
 
+// The upshift path's state, exposed for telemetry: why a longer cadence
+// is kept.
+class Upshift_state
+{
+public:
+    double      dwell                 {0.0}; // accumulated headroom time, seconds
+    double      dwell_required        {0.0}; // the dwell the next upshift needs (backoff, C10)
+    std::size_t dwell_frames          {0};
+    std::size_t dwell_frames_loaded   {0};
+    double      last_stage_time       {0.0}; // the last upshift test's stage time at N-1, seconds
+    double      next_period           {0.0}; // N-1's budget the stage time was judged against
+    double      gpu_clock_next        {0.0}; // the clock ratio N-1 is judged at for the last frame's work (0 = no record of that workload)
+    double      cpu_clock_next        {0.0};
+    std::size_t gpu_clock_next_samples{0}; // all of N-1's samples, any workload
+    int         prewarm_left          {0};
+    double      prewarm_fill          {0.0}; // seconds
+};
+
+// The clocks measured at one cadence, each with the frame's work (its stage
+// time times the clock, i.e. the time at full clock) - claim C29.
+// Capacity is allocated once at init; steady state performs no allocations.
+class Clock_record
+{
+public:
+    void init(std::size_t capacity);
+    void push(double clock_ratio, double work);
+    [[nodiscard]] auto count() const -> std::size_t { return m_count; }
+    // The p-quantile of the clocks of the samples whose work lies within
+    // [work / band, work * band]; fallback when fewer than min_samples.
+    [[nodiscard]] auto clock_for_work(double work, double band, double p, std::size_t min_samples, double fallback) const -> double;
+
+private:
+    std::vector<double>         m_clocks;
+    std::vector<double>         m_works;
+    mutable std::vector<double> m_scratch;
+    std::size_t                 m_head {0};
+    std::size_t                 m_count{0};
+};
+
 // Fixed-capacity sliding sample window with order-statistic quantile.
 // Capacity is allocated once at init; steady state performs no allocations.
 class Sample_window
@@ -198,6 +245,7 @@ public:
     [[nodiscard]] auto get_grid_period     () const -> double { return m_grid_period; }
     [[nodiscard]] auto get_deadline_offset () const -> double { return m_deadline_offset; }
     [[nodiscard]] auto get_frame_stats     (std::int64_t frame_id) const -> Frame_stats;
+    [[nodiscard]] auto get_upshift_state   () const -> Upshift_state;
 
     // Test hook (claim C6): force latency estimate and margin to given values.
     void set_forced_override(bool enabled, double forced_latency, double forced_margin);
@@ -278,6 +326,9 @@ private:
     double m_dwell       {0.0}; // accumulated upshift headroom time
     std::size_t m_dwell_frames         {0}; // frames of the current dwell
     std::size_t m_dwell_frames_loaded  {0}; // of them without upshift headroom
+    double m_last_upshift_stage_time{0.0}; // telemetry (get_upshift_state)
+    double m_last_gpu_work{0.0};           // telemetry: the last frame's work (time x clock)
+    double m_last_cpu_work{0.0};
     int    m_consecutive_misses{0};
     double m_streak_attribution{0.0}; // min over streak of max(c, g); +inf when no streak
     std::int64_t m_last_pressure_frame{-1000000000}; // completed-count of last (near-)miss
@@ -307,8 +358,8 @@ private:
     // GPU and CPU clock ratios measured at each cadence N (index
     // 0..max_vsyncs), kept across cadence changes: the clock a processor
     // shows at a cadence predicts its stage time there (C25).
-    std::vector<Sample_window> m_clock_windows;
-    std::vector<Sample_window> m_cpu_clock_windows;
+    std::vector<Clock_record> m_clock_windows;
+    std::vector<Clock_record> m_cpu_clock_windows;
     std::vector<Sample_window> m_latency_windows; // per cadence N, index 0..max_vsyncs
 
     // Slot cursor and anchoring.
