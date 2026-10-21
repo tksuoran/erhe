@@ -430,8 +430,10 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   at the clocks of a similar workload only, at full clock without them.
   Python 104/104 (the C29 control reproduces the live failure), C++ 35/35
   (C29 fails on the previous pacer). Live: N=1 reached and held on Bistro
-  with live shadows (`gpu_clock_next` 0.95-0.99) in the one run made before
-  the screen locked; the gate (five Bistro bench runs: N=1 share,
-  two-refresh frames, release to display; and the Dell default-scene gate
-  60/60) needs an unlocked, visible window - a locked screen gives no
-  presentation feedback.
+  with live shadows (`gpu_clock_next` 0.95-0.99). Gate (visible window):
+  Bistro bench 5/5 launches at N=1 in the measured window, two-refresh
+  frames 0-0.3 %, release to display 18.4-22.2 ms; Dell default scene N=1
+  in 60/60 (Debug and Release, default, `ERHE_RENDER_THREAD=0`,
+  `ERHE_FRAME_PIPELINING=0`), two-refresh frames 0-2 of ~350 per launch. A
+  locked screen gives no presentation feedback (the calibration logs "no
+  presentation feedback"); live gates need it unlocked.
