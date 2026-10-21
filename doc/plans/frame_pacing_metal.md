@@ -190,9 +190,40 @@ pre-warming is user-invisible:
 2. Host (Metal): an ALU-only compute kernel (register-resident FMA loop,
    one small write, minimal memory traffic) dispatched after the frame's
    work, its duration calibrated against GPU timestamps.
-3. Plant and claim C26: a DVFS ramp (the clock follows the GPU busy share
-   with a time constant fitted to the measured ramp); without pre-warm the
-   first N-1 frames slip, with it none do and the cadence holds.
+3. Plant and claim C26: without pre-warm the first N-1 frames slip, with
+   it none do and the cadence holds.
+
+Probe (Release, Dell, pinned N=2, an ALU-only kernel - FMA loop over
+65536 threads - in its own command buffer after the presenting one):
+without ordering the kernel overlapped the frame's work (clock 0.98, but
+the frame span stayed 7.3 ms); waiting on an `MTLEvent` the presenting
+command buffer signals at its end, the kernel runs in the idle gap: none
+-> clock 0.51, span 9.9 ms; 2.3 ms -> 0.97, 4.9 ms; 4.8 ms -> 0.99, 5.2 ms.
+The governor is not a plain utilization controller (2.3 ms of 16.7 raised
+the clock although the busy share fell from 59 % to 43 %), so the plant
+models it phenomenologically: low clock at the longer cadence unless a
+pre-warm of at least the calibrated fill runs, ramping with the measured
+time constant.
+
+Built (2026-10-21, not yet run live): `Gpu_prewarm` (metal_gpu_prewarm.cpp;
+kernel ordered after the presenting command buffer by an MTLEvent, duration
+requested in seconds, iteration count from the measured rate),
+`Device::set_present_prewarm`, the pacer's pre-warm phase
+(`Schedule_decision::prewarm_seconds`) and claim C26 in both suites
+(Python 97/97, C++ 31/31). The init calibration measures only the kernel
+rate: an init sweep of the fill failed - with clear-only frames the
+governor stayed at its lowest state (0.21, 338 MHz) even under 8 ms of
+ALU work per frame (the app not yet active at init is not the cause:
+gate-launched editors are never active, and the runtime probe worked) -
+so the fill is learned online (user decision): it starts at 2 ms (editor
+default when the kernel exists); a pre-warm ending with the GPU clock
+below 0.9 doubles it (bounded by half the cadence period) without a
+cadence switch, one that reached the clock but does not fit backs off.
+
+Next: run the Dell gate (Debug and Release, three threading modes, 10
+each) with pre-warm; check the transitions in startup histories (the
+first N-1 frames must not slip; the learned fill); then fixed 60 Hz and
+ProMotion. Last gate before pre-warm: N=1 in 47/60 on the Dell.
 
 ## Tools
 

@@ -55,6 +55,20 @@ public:
     // clock.
     std::function<double(std::int64_t, int)> cpu_clock;
     bool                                    report_cpu_clock{true};
+    // Claim C26: the Apple GPU governor as measured (not a utilization
+    // controller): at N=1, or with at least dvfs_prewarm_min of pre-warm work
+    // after the frame, the clock heads for 1.0 with dvfs_tau_up; at a longer
+    // cadence without it for dvfs_low with dvfs_tau_down; a changed
+    // condition takes effect after dvfs_delay. The GPU duration is the work
+    // (gpu_duration / gpu_duration_at_cadence) / clock and the clock is
+    // reported. Pre-warm work runs after the frame's work, delaying the next
+    // frame's GPU start only when it overlaps it.
+    bool                                    dvfs{false};
+    double                                  dvfs_low        {0.47};
+    double                                  dvfs_tau_up     {0.06};
+    double                                  dvfs_tau_down   {0.2};
+    double                                  dvfs_delay      {0.015};
+    double                                  dvfs_prewarm_min{0.002};
     Plant_parameters                        plant{};
     // Claim C6: frames in [forced_first, forced_last] run with latency
     // estimate and margin forced to zero.
@@ -241,6 +255,10 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
     // satisfied_time[i] = time a present with id >= i reached the display
     // (vkWaitForPresentKHR semantics: any newer id unblocks older waits).
     bool         has_pending_display = false;
+    double       dvfs_clock     = 1.0;  // C26 plant GPU clock
+    bool         dvfs_high      = true; // C26: the governor's current condition ...
+    double       dvfs_since     = 0.0;  // ... and since when it holds
+    double       gpu_busy_until = 0.0;  // C26: end of pre-warm work on the GPU
     std::int64_t pending_display_id  = 0;
     std::int64_t pending_display_slot= 0;
     std::mt19937 skip_engine{scenario.skip_seed};
@@ -308,7 +326,10 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             ? scenario.gpu_duration_at_cadence(k, decision.vsyncs_per_frame)
             : scenario.gpu_duration(k);
         double gpu_clock = 0.0;
-        if (scenario.gpu_clock) {
+        if (scenario.dvfs) {
+            gpu_dur   = gpu_dur / dvfs_clock;
+            gpu_clock = dvfs_clock;
+        } else if (scenario.gpu_clock) {
             // C25: the work at full clock takes longer on a clocked-down GPU.
             const double ratio = scenario.gpu_clock(k, decision.vsyncs_per_frame);
             gpu_dur   = gpu_dur / ratio;
@@ -351,12 +372,25 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             push(event);
         }
 
-        double gpu_start = ce;
+        double gpu_start = std::max(ce, gpu_busy_until);
         if (k >= 1) {
             gpu_start = std::max(gpu_start, gpu_end[static_cast<std::size_t>(k - 1)]);
         }
         const double ge = gpu_start + gpu_dur;
         gpu_end[static_cast<std::size_t>(k)] = ge;
+        gpu_busy_until = ge + decision.prewarm_seconds; // C26: pre-warm runs after the frame's work
+        if (scenario.dvfs) {
+            const double dt   = static_cast<double>(decision.vsyncs_per_frame) * ((scenario.plant.true_grid_period > 0.0) ? scenario.plant.true_grid_period : t);
+            const bool   high = (decision.vsyncs_per_frame <= 1) || (decision.prewarm_seconds >= scenario.dvfs_prewarm_min);
+            if (high != dvfs_high) {
+                dvfs_high  = high;
+                dvfs_since = ge;
+            }
+            const bool   target_high = ((ge - dvfs_since) >= scenario.dvfs_delay) ? dvfs_high : !dvfs_high;
+            const double target      = target_high ? 1.0 : scenario.dvfs_low;
+            const double tau         = (target > dvfs_clock) ? scenario.dvfs_tau_up : scenario.dvfs_tau_down;
+            dvfs_clock += (target - dvfs_clock) * (1.0 - std::exp(-dt / tau));
+        }
         {
             // cpu_dur / gpu_dur are pure stage service times (waits excluded);
             // normative, see doc/frame_pacing/inputs.md sections 3.2/3.3.

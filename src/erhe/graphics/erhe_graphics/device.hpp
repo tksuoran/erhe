@@ -791,6 +791,12 @@ public:
     // refreshDuration can be grossly wrong); 0.0 = no holdback. Called by
     // the thread that submits the frame (the present path reads it there).
     void               set_present_target_time              (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds = 0.0);
+    // GPU pre-warm of one frame (claim C26, Present_calibration::prewarm_seconds):
+    // the backend runs this much extra GPU work after the frame's work,
+    // ordered after it (Metal tier M); 0.0 = none. Called by the thread that
+    // submits the frame, which also reads it there.
+    void               set_present_prewarm                  (std::int64_t frame_id, double seconds);
+    [[nodiscard]] auto get_present_prewarm                  (std::int64_t frame_id) const -> double;
     // Resolved frame pacing tier (doc/frame_pacing/capability_tiers.md,
     // implementation plan P4.2). Resolved once at device init from the
     // capability probes and the frame_pacing_tier graphics config; the
@@ -832,6 +838,8 @@ private:
     std::unique_ptr<erhe::frame_pacing::Frame_time_recorder> m_frame_time_recorder;
     std::unique_ptr<Display_refresh_resolver>                 m_display_refresh_resolver;
     std::unique_ptr<Present_calibration>                      m_present_calibration;
+    std::int64_t                 m_present_prewarm_frame_id{-1};
+    double                       m_present_prewarm_seconds {0.0};
     std::unique_ptr<Device_impl> m_impl;
     // Started-frame counter (wait_for_frame_start); touched only by the
     // thread that starts frames, never by end_frame().

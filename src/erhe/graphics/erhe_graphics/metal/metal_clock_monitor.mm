@@ -296,7 +296,11 @@ void Clock_monitor::detach()
 void Clock_monitor::sampler_loop()
 {
     Ioreport&       ioreport = *m_ioreport;
-    CFDictionaryRef previous = ioreport.create_samples(ioreport.subscription, ioreport.subscribed, nullptr);
+    CFDictionaryRef previous = nullptr;
+    {
+        const std::lock_guard<std::mutex> ioreport_lock{m_ioreport_mutex};
+        previous = ioreport.create_samples(ioreport.subscription, ioreport.subscribed, nullptr);
+    }
     std::vector<Pending_frame> frames;
     for (;;) {
         {
@@ -311,21 +315,24 @@ void Clock_monitor::sampler_loop()
 
         // Average active clocks since the previous sample - the interval
         // that holds these frames' GPU work - over the maximum DVFS clocks.
-        double                gpu_ratio = 0.0;
-        double                cpu_ratio = 0.0;
-        const CFDictionaryRef current   = ioreport.create_samples(ioreport.subscription, ioreport.subscribed, nullptr);
-        if ((current != nullptr) && (previous != nullptr)) {
-            const CFDictionaryRef delta = ioreport.create_samples_delta(previous, current, nullptr);
-            if (delta != nullptr) {
-                gpu_ratio = ioreport.clock_ratio(delta, m_gpu);
-                cpu_ratio = ioreport.clock_ratio(delta, m_cpu);
-                CFRelease(delta);
+        double gpu_ratio = 0.0;
+        double cpu_ratio = 0.0;
+        {
+            const std::lock_guard<std::mutex> ioreport_lock{m_ioreport_mutex};
+            const CFDictionaryRef current = ioreport.create_samples(ioreport.subscription, ioreport.subscribed, nullptr);
+            if ((current != nullptr) && (previous != nullptr)) {
+                const CFDictionaryRef delta = ioreport.create_samples_delta(previous, current, nullptr);
+                if (delta != nullptr) {
+                    gpu_ratio = ioreport.clock_ratio(delta, m_gpu);
+                    cpu_ratio = ioreport.clock_ratio(delta, m_cpu);
+                    CFRelease(delta);
+                }
             }
+            if (previous != nullptr) {
+                CFRelease(previous);
+            }
+            previous = current;
         }
-        if (previous != nullptr) {
-            CFRelease(previous);
-        }
-        previous = current;
 
         const std::lock_guard<std::mutex> lock{m_mutex};
         if (m_recorder == nullptr) {

@@ -41,6 +41,10 @@ public:
     double      request_min    {0.0};   // on-target request offsets measured: [request_min, request_max]
     double      request_max    {0.0};
     double      deadline_offset{0.0};   // seconds: completion margin a frame needs to display at its target
+    // GPU pre-warm kernel (doc/plans/frame_pacing_metal.md, claim C26): its
+    // measured duration per iteration; 0.0 = no pre-warm on this path. The
+    // fill that raises the clock is learned online by the frame pacer.
+    double      prewarm_seconds_per_iteration{0.0};
     std::vector<Present_calibration_sample> samples;
 };
 

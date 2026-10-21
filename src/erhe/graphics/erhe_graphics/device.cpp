@@ -457,6 +457,17 @@ auto Device::is_present_target_time_honored() const -> bool
     return m_impl->is_present_target_time_honored();
 }
 
+void Device::set_present_prewarm(const std::int64_t frame_id, const double seconds)
+{
+    m_present_prewarm_frame_id = frame_id;
+    m_present_prewarm_seconds  = seconds;
+}
+
+auto Device::get_present_prewarm(const std::int64_t frame_id) const -> double
+{
+    return (frame_id == m_present_prewarm_frame_id) ? m_present_prewarm_seconds : 0.0;
+}
+
 auto Device::get_present_calibration() const -> const Present_calibration&
 {
     return *m_present_calibration;

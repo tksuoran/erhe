@@ -89,6 +89,7 @@ private:
     bool                                    m_stop{false};
     erhe::frame_pacing::Frame_time_recorder* m_recorder{nullptr};
     std::thread                             m_thread;
+    std::mutex                              m_ioreport_mutex; // every IOReport call on the subscription
 };
 
 } // namespace erhe::graphics

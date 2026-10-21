@@ -67,6 +67,20 @@ public:
     double      upshift_dwell_time{0.5};        // T_up
     double      upshift_quantile  {0.9};        // q_up: share of the dwell's frames that must have headroom
     std::size_t cadence_min_samples{30};        // stage samples at the current cadence the predictive downshift needs (C24)
+    // GPU pre-warm before an upshift (C26): the host can run extra GPU work
+    // after a frame's work (Metal tier M: an ALU-only kernel ordered after
+    // the presenting command buffer); upshift_prewarm_seconds is the fill to
+    // start from (0 = no pre-warm). A completed upshift dwell first requests
+    // the fill for up to upshift_prewarm_frames frames and switches once a
+    // frame's own times fit N-1's budget. A pre-warm that ends without the
+    // GPU clock reaching upshift_prewarm_clock doubles the fill (bounded by
+    // upshift_prewarm_max_frac of the cadence period) - the governor needs
+    // more; one that reached it but still does not fit is a failed upshift
+    // (backoff). The fill that worked stays for later upshifts.
+    double      upshift_prewarm_seconds  {0.0};
+    int         upshift_prewarm_frames   {8};
+    double      upshift_prewarm_clock    {0.9};
+    double      upshift_prewarm_max_frac {0.5};
     int         reactive_miss_threshold{2};     // M consecutive observed self-misses
     double      margin_initial_frac{0.20};      // m0
     double      margin_min_frac   {0.02};
@@ -106,6 +120,8 @@ public:
     double       predicted_duration{0.0}; // FR4 (N * T)
     int          vsyncs_per_frame  {1};   // N used for this frame
     std::int64_t wait_id           {-1};  // FR5: block release until this frame displayed (<0: none)
+    double       prewarm_seconds   {0.0}; // C26: run this much extra GPU work (wall time) after
+                                          // this frame's work, ordered after it (0 = none)
     double       hold_until        {0.0}; // C15 mitigation: delay the present request to this
                                           // time (0 = none). Computed from the TRACKED grid
                                           // (deviation 12); see deviation 13 / claim C18 for
@@ -262,6 +278,8 @@ private:
     double m_dwell_required  {0.0};
     bool   m_has_upshift_time{false};
     double m_upshift_time    {0.0};
+    int    m_prewarm_left    {0};   // GPU pre-warm frames left (C26); 0 = none
+    double m_prewarm_fill    {0.0}; // the learned pre-warm fill (C26)
 
     // Inner loop state.
     double        m_margin{0.0};

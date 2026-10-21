@@ -82,6 +82,7 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_margin          = m_tunables.margin_initial_frac * t;
     m_streak_attribution = std::numeric_limits<double>::infinity();
     m_dwell_required     = m_tunables.upshift_dwell_time;
+    m_prewarm_fill       = m_tunables.upshift_prewarm_seconds;
 
     m_cpu_window.init(m_tunables.history);
     m_gpu_window.init(m_tunables.history);
@@ -322,6 +323,7 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
     if (m_completed_frames >= static_cast<std::int64_t>(m_tunables.cold_start_seed_frames)) {
         decision.hold_until = slot_time(slot) - m_grid_period + m_tunables.guard;
     }
+    decision.prewarm_seconds = (m_prewarm_left > 0) ? m_prewarm_fill : 0.0;
     return decision;
 }
 
@@ -491,11 +493,35 @@ void Frame_pacer::on_gpu_done(
             const double ratio_next = (record.count() >= m_tunables.cadence_min_samples) ? record.quantile(0.1, 1.0) : 1.0;
             return duration * ratio / ratio_next;
         };
+        const double next_period    = static_cast<double>(m_vsyncs - 1) * m_grid_period;
+        if (m_prewarm_left > 0) {
+            // Pre-warm (C26): the frame's own GPU time is measured at the
+            // raised clock; switch once it - and the CPU's at the clock
+            // recorded at N-1 - fits N-1's budget. A pre-warm that does not
+            // get there is a failed upshift (backoff, C10).
+            const double prewarmed_stage = std::max(at_next(cpu_duration, cpu_clock_ratio, m_cpu_clock_windows[next_index]), gpu_duration);
+            if (prewarmed_stage <= (next_period - m_hysteresis)) {
+                m_prewarm_left = 0;
+                change_cadence(m_vsyncs - 1, true);
+                m_has_upshift_time = true;
+                m_upshift_time     = gpu_end_time;
+            } else {
+                --m_prewarm_left;
+                if (m_prewarm_left == 0) {
+                    if ((gpu_clock_ratio > 0.0) && (gpu_clock_ratio < m_tunables.upshift_prewarm_clock)) {
+                        // The governor did not raise the clock: learn a larger fill.
+                        m_prewarm_fill = std::min(2.0 * m_prewarm_fill, m_tunables.upshift_prewarm_max_frac * static_cast<double>(m_vsyncs) * m_grid_period);
+                    } else {
+                        m_dwell_required = m_dwell_required * 2.0;
+                    }
+                }
+            }
+            return;
+        }
         const double stage_time = std::max(
             at_next(cpu_duration, cpu_clock_ratio, m_cpu_clock_windows[next_index]),
             at_next(gpu_duration, gpu_clock_ratio, m_clock_windows[next_index])
         );
-        const double next_period    = static_cast<double>(m_vsyncs - 1) * m_grid_period;
         const bool   beyond_period  = stage_time > next_period;
         const bool   in_band        = !beyond_period && (stage_time > (next_period - m_hysteresis));
         ++m_dwell_frames;
@@ -508,9 +534,14 @@ void Frame_pacer::on_gpu_done(
         } else {
             m_dwell += elapsed;
             if (m_dwell >= m_dwell_required) {
-                change_cadence(m_vsyncs - 1, true);
-                m_has_upshift_time = true;
-                m_upshift_time     = gpu_end_time;
+                if ((m_prewarm_fill > 0.0) && (gpu_clock_ratio > 0.0)) {
+                    m_prewarm_left = m_tunables.upshift_prewarm_frames;
+                    reset_dwell();
+                } else {
+                    change_cadence(m_vsyncs - 1, true);
+                    m_has_upshift_time = true;
+                    m_upshift_time     = gpu_end_time;
+                }
             }
         }
     } else {
@@ -546,6 +577,7 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     const int old_vsyncs = m_vsyncs;
     m_vsyncs = clamped;
     reset_dwell();
+    m_prewarm_left = 0;
     m_cadence_cpu_window.clear();
     m_cadence_gpu_window.clear();
     m_cadence_pressure = false;

@@ -43,6 +43,7 @@ public:
     int64_t                               display_advance_ns   {-1}; // FR4 routing, from M1's pacer decision for this frame; < 0 = wall clock
     double                                present_target_time  {0.0}; // FR3 target present time from M1's pacer decision (reference-clock seconds); 0 = none
     double                                present_hold_until   {0.0}; // C15 present-request holdback deadline from M1's pacer decision; 0 = none
+    double                                present_prewarm      {0.0}; // C26 GPU pre-warm seconds from M1's pacer decision; 0 = none
     std::int64_t                          present_wait_id      {-1};  // FR5 present-wait clamp: the frame id R waits to be displayed, from M1's pacer decision for this frame when frame pacing is enforced; -1 = no wait
     int64_t                               frame_host_system_time_ns{0}; // Time::get_host_system_time_ns() after M1's prepare_update; R's animated selection outline reads it
     erhe::xr::Frame_timing                headset_frame_timing {};   // M1's xrWaitFrame result; R begins the OpenXR frame with it

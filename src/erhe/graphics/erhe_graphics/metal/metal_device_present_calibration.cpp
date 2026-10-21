@@ -16,6 +16,7 @@
 // arrive on Metal's own threads and are collected under a mutex.
 
 #include "erhe_graphics/metal/metal_device.hpp"
+#include "erhe_graphics/metal/metal_gpu_prewarm.hpp"
 #include "erhe_graphics/metal/metal_surface.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -49,6 +50,7 @@ constexpr int         s_deadline_refine_steps = 3;     // refine pass: this many
 constexpr double      s_guard                 = 0.001; // seconds, added to the measured deadline
 constexpr double      s_feedback_timeout      = 0.25;  // seconds past the expected display
 constexpr double      s_wall_clock_bound      = 10.0;  // seconds for the whole calibration
+constexpr std::uint32_t s_prewarm_rate_iterations = 20000;
 constexpr double      s_window_shown_bound    = 2.0;   // seconds for the window to get displayed
 
 auto now() -> double
@@ -453,6 +455,18 @@ void Device_impl::run_present_calibration()
     result.deadline_offset = ((split > 0.0) ? split : smallest_margin) + s_guard;
     result.valid           = true;
 
+    // 4. GPU pre-warm kernel rate (claim C26). The fill that raises the
+    // clock is learned online by the frame pacer: with clear-only frames the
+    // governor stays at its lowest state even under 8 ms of ALU work per
+    // frame, while on top of the editor's real frames 2.3 ms raised it to
+    // ~0.97 - the governor responds to the real workload.
+    if (m_gpu_prewarm != nullptr) {
+        for (int i = 0; i < 3; ++i) {
+            static_cast<void>(m_gpu_prewarm->run_blocking(s_prewarm_rate_iterations));
+        }
+        result.prewarm_seconds_per_iteration = m_gpu_prewarm->get_seconds_per_iteration();
+    }
+
     std::size_t early_in_deadline = 0;
     for (const Present_calibration_sample& s : result.samples) {
         if ((s.phase == Present_calibration_phase::deadline) && (s.presented_time > 0.0) && (s.slot_offset < 0)) {
@@ -461,11 +475,12 @@ void Device_impl::run_present_calibration()
     }
     result.status = fmt::format(
         "period {:.3f} ms; request window {:.2f} ... {:.2f} T -> request at {:.3f} ms ({:.2f} T) before the target; "
-        "deadline {:.3f} ms ({:.2f} T); {} samples, {} early in the deadline phase; {:.0f} ms",
+        "deadline {:.3f} ms ({:.2f} T); GPU pre-warm kernel {:.1f} ns per iteration; {} samples, {} early in the deadline phase; {:.0f} ms",
         period * 1000.0,
         result.request_min / period, result.request_max / period,
         result.request_offset * 1000.0, result.request_offset / period,
         result.deadline_offset * 1000.0, result.deadline_offset / period,
+        result.prewarm_seconds_per_iteration * 1.0e9,
         result.samples.size(), early_in_deadline,
         (now() - start_time) * 1000.0
     );
