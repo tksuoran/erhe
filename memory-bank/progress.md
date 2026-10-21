@@ -8,7 +8,8 @@
 ✓shadow-map-cache{e14ca1086;image-gate-7/7-0px;ctest-1698/1699(aa_cost_benchmark-flake)+MCP-95/95}
 ✓viewport-measured{e45b1ed5d;doc/plans/bistro_viewport_gpu.md}
 ✓clustered-lights-plan{doc/plans/clustered_lights.md;proposed}
-?clustered-lights-review{user-decides-Open-1-2;then-phase-1}
+✓clustered-lights-review{©User:keep-loop-path(perf-compare)+fixed-cluster-capacity+warning}
+?clustered-lights-phase-1{light-array-storage-block}
 ?shadow-cache-remaining{per-light-caster-test;skinned-pose-serial;fit-skip}
 
 [TASK::bistro-load]{started-2026-10-18;branch=render-thread;via-harness;doc/plans/bistro_load_profiling.md}
