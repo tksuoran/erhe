@@ -130,6 +130,15 @@ The four light-count axes per type are populated from
 its UBO slot assignment so the shader-side counts and the packed UBO
 layout cannot diverge.
 
+In `standard.frag` the spot and point loops evaluate a light (spot
+cone, shadow lookup, BXDF) only where its range attenuation is above
+zero; `get_range_attenuation` is exactly zero beyond a light's range.
+Apple's shader compiler (the Metal backend and MoltenVK, both through
+SPIRV-Cross MSL) executes the unrolled loop bodies in full otherwise:
+on Bistro (43 lights with 15 m range, 8 shadow-mapped) the early-out
+took the frame's GPU time from 123 to 40 ms on Metal and from 108 to
+35 ms on MoltenVK, with byte-identical images.
+
 ## Light array layout invariant
 
 There is one light array per type in the lights UBO. Within each
