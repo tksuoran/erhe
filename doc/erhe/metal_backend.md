@@ -68,12 +68,28 @@ define expansion). Subsequent runs read from the cache instead of
 re-invoking glslang.
 
 Key SPIRV-Cross options:
-- MSL version 3.0 (Metal 3 / `GPUFamilyMetal3` is required at runtime)
+- MSL version 3.2 (Metal 3 / `GPUFamilyMetal3` is required at runtime;
+  MSL 3.2 needs macOS 15 or later)
 - `argument_buffers = true`, Tier 2
 - `force_active_argument_buffer_resources = true`
 - Descriptor set 0: discrete (UBOs/SSBOs as individual `[[buffer(N)]]`,
   plus dedicated samplers as `[[texture(N)]]`/`[[sampler(N)]]`)
 - Descriptor set 7: argument buffer for texture-heap sampled images
+
+### Precise arithmetic
+
+GLSL `precise` (SPIR-V `NoContraction`, used for the view-relative and
+light-relative positions of the shadow lookups) reaches MSL as calls to
+SPIRV-Cross helpers (`spvFAdd`, `spvFSub`, `spvFMul` and the matrix
+forms). From MSL 3.2 the SPIRV-Cross fork pinned in `CMakeLists.txt`
+emits them as ordinary inlinable functions whose bodies start with
+`#pragma metal fp math_mode(safe)` and `#pragma metal fp contract(off)`,
+which keeps each operation exact. Below MSL 3.2, and in upstream
+SPIRV-Cross, the helpers are declared `[[clang::optnone]]`: Apple's
+compiler cannot inline them, and on Bistro (43 lights, M4 Pro) the
+forward pass costs about four times as much as with the inlined helpers.
+MoltenVK compiles the Vulkan backend's shaders with its own bundled
+SPIRV-Cross and has the optnone cost until it ships the change.
 
 ### Explicit Metal Buffer Index Layout
 

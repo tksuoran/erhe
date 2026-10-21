@@ -1,6 +1,9 @@
 # Apple GPU: the standard shader's cost through SPIRV-Cross vs KosmicKrisp
 
-Status: in progress
+Status: blocked
+
+Metal is fixed; MoltenVK waits for the SPIRV-Cross change to reach an
+upstream release and a MoltenVK built with it ("Remaining" below).
 
 On an Apple GPU the editor's forward pass costs about 3x more GPU time
 through the Metal backend and through MoltenVK (both SPIRV-Cross MSL, then
@@ -51,12 +54,34 @@ on macOS), and only for pipelines it compiles: move the KosmicKrisp file
 in `pipeline_cache/` aside for the run (with it, pipelines are
 deserialized and nothing is dumped).
 
-Open: where the fix lives (user decision) - a SPIRV-Cross change (fork per
-`doc/cmake_conventions.md`, plus an upstream pull request; MoltenVK gets it
-only with a MoltenVK that bundles the fixed SPIRV-Cross), the Metal backend
-rewriting the helpers after `compile()` (Metal only), or `precise`-free
-GLSL with the same exactness (both backends; needs its own correctness
-argument and the shadow verification gates).
+Fix (2026-10-21): the SPIRV-Cross fork `tksuoran/SPIRV-Cross`, branch
+`msl-inline-precise-helpers` (pinned in `CMakeLists.txt`), emits the
+helpers without `optnone` and with `#pragma metal fp math_mode(safe)` /
+`#pragma metal fp contract(off)` from MSL 3.2, and the Metal backend
+compiles MSL 3.2 (`doc/erhe/metal_backend.md` "Precise arithmetic"). Metal
+Viewport pass 26.6 -> 5.5 ms (KosmicKrisp 5.9 ms). Bistro
+`render_scene_image` differs from HEAD in one pixel by one LSB (the
+precise multiply and matrix helpers of the vertex shader, now inlined);
+upstream SPIRV-Cross `main` without the change renders HEAD's image.
+Metal ctest 1765/1765 including the shadow head-on tests. After a display resolution change (smaller
+viewport) the pinned build measures Metal 3.7 ms vs KosmicKrisp 3.95 ms.
+
+Remaining:
+- Verified on the fork commit: SPIRV-Cross's 13 reference suites
+  of `test_shaders.sh` pass (SDK glslang / SPIRV-Tools, MSL references
+  compiled by the Metal toolchain); the `tests-other/` unit tests were not
+  run (they need SPIRV-Cross's own `external/` glslang and SPIRV-Tools
+  builds) and upstream CI runs them on the pull request. Upstream `main`
+  lacks the reference `texture-shadow-lod.vk.frag.vk` (plain and opt);
+  `test_shaders.py` writes it on every run - delete it, it is unrelated.
+- Upstream pull request from the fork branch (the user opens it; the
+  commit message of 5dbbf6da is its description).
+- MoltenVK keeps the optnone helpers (its bundled SPIRV-Cross) until the
+  change is upstream and in a MoltenVK release: an upstream pull request
+  from the fork branch. A `precise`-free formulation of
+  `get_light_relative_position()` would fix MoltenVK without that, at the
+  cost of its own correctness argument and the shadow verification gates.
+- Return to `KhronosGroup/SPIRV-Cross` once a release has the change.
 
 ## What is measured (2026-10-21, M4 Pro, Release, windowed, Dell 120 Hz)
 
