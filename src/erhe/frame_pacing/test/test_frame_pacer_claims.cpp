@@ -1330,3 +1330,79 @@ TEST(Frame_pacer_claims, c24_fifo_upshift_promotion)
     EXPECT_EQ(collisions, 0u) << "a FIFO queue must never get two targets in one slot";
     EXPECT_LE(slips, 15u) << "at most 1 percent slipped";
 }
+
+namespace {
+
+auto run_c25(const bool report_clock, const double work_ms, const unsigned int seed) -> std::vector<Frame_record>
+{
+    const double t        = 1.0 / 120.0;
+    const double dpe_true = t + (1.0 * ms);
+    Scenario scenario;
+    scenario.frame_count                            = 6000;
+    scenario.plant.tunables.refresh_period          = t;
+    scenario.plant.true_deadline_offset             = dpe_true;
+    scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.deadline_offset_initial = dpe_true + (0.3 * ms);
+    scenario.plant.tunables.deadline_offset_max     = dpe_true + (0.3 * ms) + (0.5 * t);
+    scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.drawable_pool                          = 3;
+    scenario.pool_latch_lead                        = dpe_true - (1.8 * ms);
+    scenario.report_gpu_clock                       = report_clock;
+    scenario.cpu_duration                           = make_gauss(seed, 3.0, 0.6);
+    auto work_engine  = std::make_shared<std::mt19937>(seed + 1);
+    auto clock_engine = std::make_shared<std::mt19937>(seed + 2);
+    scenario.gpu_duration_at_cadence = [work_engine, work_ms](const std::int64_t k, const int) mutable -> double {
+        std::normal_distribution<double> work{work_ms, 0.3};
+        if ((k >= 100) && (k < 130)) {
+            return 20.0 * ms; // startup spike (scene load)
+        }
+        return std::max(0.5, work(*work_engine)) * ms;
+    };
+    scenario.gpu_clock = [clock_engine](const std::int64_t, const int vsyncs) mutable -> double {
+        if (vsyncs <= 1) {
+            std::normal_distribution<double> high{0.96, 0.015};
+            return std::clamp(high(*clock_engine), 0.9, 1.0);
+        }
+        std::uniform_real_distribution<double> spread{0.41, 0.97};
+        return spread(*clock_engine);
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    return run_scenario(scenario, pacer);
+}
+
+} // anonymous namespace
+
+TEST(Frame_pacer_claims, c25_upshift_under_measured_gpu_clock)
+{
+    // Measured live (Metal tier M, Dell U2725QE at 120 Hz, IOReport GPU
+    // performance states): at N=1 the GPU runs at 93-98 percent of its
+    // maximum clock; at N=2 it is idle half the time and DVFS spreads it over
+    // 41-97 percent, so the same ~5 ms of work takes 6.4-8.1 ms median with
+    // a tail beyond the period, every such frame reset the upshift dwell, and
+    // a varying share of launches stayed at N=2. With the host reporting the
+    // clock the upshift test predicts the GPU time at N-1 from the work at
+    // the clock seen there.
+    const std::vector<Frame_record> without_clock = run_c25(false, 5.0, 2501);
+    EXPECT_EQ(vsync_values(without_clock, 3000).count(1), 0u) << "spans alone keep the longer cadence (the live failure)";
+
+    const std::vector<Frame_record> with_clock = run_c25(true, 5.0, 2501);
+    EXPECT_EQ(vsync_values(with_clock, 3000), (std::set<int>{1})) << "the work at full clock returns to N=1 and stays";
+    std::size_t slips = 0;
+    for (std::size_t i = 3000; i < with_clock.size(); ++i) {
+        if (with_clock[i].slipped) {
+            ++slips;
+        }
+    }
+    EXPECT_LE(slips, 30u) << "at most 1 percent slipped";
+
+    // Work that does not fit N=1 even at full clock keeps the longer cadence.
+    const std::vector<Frame_record> heavy = run_c25(true, 9.0, 2505);
+    std::size_t changes = 0;
+    for (std::size_t i = 601; i < heavy.size(); ++i) {
+        if (heavy[i].vsyncs != heavy[i - 1].vsyncs) {
+            ++changes;
+        }
+    }
+    EXPECT_EQ(changes, 0u) << "no cadence changes after the startup";
+    EXPECT_GE(heavy.back().vsyncs, 2) << "stays at a longer cadence";
+}

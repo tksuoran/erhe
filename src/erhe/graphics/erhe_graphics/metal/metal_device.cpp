@@ -2,6 +2,7 @@
 #include "erhe_graphics/texture_heap.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
+#include "erhe_graphics/metal/metal_gpu_clock_monitor.hpp"
 #include "erhe_graphics/metal/metal_gpu_timer.hpp"
 #include "erhe_graphics/metal/metal_scoped_debug_group.hpp"
 #include "erhe_graphics/metal/metal_helpers.hpp"
@@ -364,6 +365,10 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     }
     if (m_frame_pacing_tier == Frame_pacing_tier::full) {
         run_present_calibration();
+        m_gpu_clock_monitor = std::make_shared<Gpu_clock_monitor>(m_device.get_frame_time_recorder());
+        if (!m_gpu_clock_monitor->is_available()) {
+            m_gpu_clock_monitor.reset();
+        }
     }
     log_context->info(
         "frame pacing tier = {}",
@@ -376,6 +381,9 @@ Device_impl::~Device_impl() noexcept
 {
     if (m_present_feedback != nullptr) {
         m_present_feedback->detach();
+    }
+    if (m_gpu_clock_monitor != nullptr) {
+        m_gpu_clock_monitor->detach();
     }
     // Resource destructors enqueue completion handlers, so the surface and
     // ring buffers must be torn down before we drain the queue. Surface
@@ -957,16 +965,22 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
                 // and GPUEndTime are host time, the recorder's clock.
                 note_presented_frame_submitted();
                 Device_impl* device_impl_ptr = this;
+                std::shared_ptr<Gpu_clock_monitor> gpu_clock_monitor = m_gpu_clock_monitor;
                 mtl_cb->addCompletedHandler(
-                    [device_impl_ptr, present_frame_id](MTL::CommandBuffer* completed_cb) {
+                    [device_impl_ptr, present_frame_id, gpu_clock_monitor](MTL::CommandBuffer* completed_cb) {
                         const double gpu_begin = completed_cb->GPUStartTime();
                         const double gpu_end   = completed_cb->GPUEndTime();
                         if ((gpu_begin > 0.0) && (gpu_end > gpu_begin)) {
-                            device_impl_ptr->m_device.get_frame_time_recorder().set(
-                                present_frame_id,
-                                &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_begin,
-                                &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_end
-                            );
+                            if (gpu_clock_monitor != nullptr) {
+                                // Writes the bracket with the frame's GPU clock.
+                                gpu_clock_monitor->on_frame_gpu_done(present_frame_id, gpu_begin, gpu_end);
+                            } else {
+                                device_impl_ptr->m_device.get_frame_time_recorder().set(
+                                    present_frame_id,
+                                    &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_begin,
+                                    &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_end
+                                );
+                            }
                         }
                         device_impl_ptr->note_presented_frame_completed();
                     }

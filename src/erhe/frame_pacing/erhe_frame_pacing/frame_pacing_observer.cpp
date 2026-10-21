@@ -156,7 +156,8 @@ void Frame_pacing_observer::deliver_pending(Frame_time_recorder& recorder, const
                 record.gpu_frame_end,
                 record.cpu_service_time(),
                 record.gpu_frame_end - record.gpu_frame_begin,
-                record.gpu_frame_end - release
+                record.gpu_frame_end - release,
+                record.gpu_clock_ratio
             );
             entry.gpu_delivered = true;
             ++m_gpu_sample_count;

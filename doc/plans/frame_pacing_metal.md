@@ -237,3 +237,29 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   never completes; at N=1 the same work takes 5.2 ms. Nothing measured at
   N=2 predicts N=1: next is upshift probing with backoff (Iteration step
   3 candidate (a)), judged by C24's cadence-scoped tests.
+- 2026-10-21, iteration 2 (user decision: measure the GPU clock rather than
+  probe blind; a probe broke C2/C3/C4/C10 - stage times cannot tell a
+  clocked-down GPU from heavy load). IOReport ("GPU Stats" / "GPU
+  Performance States", channel GPUPH: OFF + P1-P15, residency per state;
+  DVFS table `voltage-states9` of the `pmgr` IORegistry entry, 338-1578 MHz
+  on the M4 Pro; no root needed) on the Dell, Release: at N=1 the GPU runs
+  at 1470-1540 MHz, 78-81 % busy, span 5.2-5.6 ms; at N=2 at 1020-1160 MHz
+  median (dips to ~650 MHz), 55 % busy, span 6.4-8.1 ms median with the
+  tail beyond T. A sample costs 160-230 us (up to 1.7 ms): a sampler
+  thread, not a frame thread. Design: the device records each presented
+  frame's average active GPU clock as a ratio of the DVFS maximum
+  (`Frame_time_record::gpu_clock_ratio`, 0 = unknown); the pacer's upshift
+  headroom test judges max(c, g * ratio) - the work at full clock - while
+  the predictive and reactive downshifts keep the real spans. Plant: GPU
+  clock by cadence, GPU time = work / clock; claim C25.
+  Built: `Gpu_clock_monitor` (metal_gpu_clock_monitor.mm), C25 in both
+  suites (Python 90/90, C++ 30/30). Live the work (span * clock ratio) is
+  4.8-5.05 ms median at N=1 and N=2 alike, Debug and Release. Found and
+  fixed: the editor converted the render thread's steady_clock join waits
+  to recorder time assuming the recorder is steady_clock - wrong since the
+  recorder reads mach_absolute_time, so after a system sleep join waits
+  counted as CPU service. Dell gate, Release: N=1 in 10/10 (default),
+  9/10 (`ERHE_RENDER_THREAD=0`), 10/10 (`ERHE_FRAME_PIPELINING=0`), ~19 ms
+  release to display. Debug: N=1 in 6/10 - the CPU slows down at N=2 too
+  (service time median 3.1 ms, p90 5.1, max 15.5 against 1.3 ms at N=1),
+  and frames beyond the period reset the upshift dwell.
