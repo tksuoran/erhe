@@ -8,7 +8,9 @@
 // tools (doc/frame_pacing/inputs.md section 4).
 //
 // All timestamps are seconds in one monotonic clock domain (QPC on
-// Windows); now() below provides that clock. Zero means "not recorded".
+// Windows, mach_absolute_time on Apple - the clock of CACurrentMediaTime and
+// Metal's host times); now() below provides that clock. Zero means "not
+// recorded".
 //
 // Thread-safe: the editor's main thread begins a frame's record and runs the
 // pacer while its render thread stamps the previous frame (submit, present,

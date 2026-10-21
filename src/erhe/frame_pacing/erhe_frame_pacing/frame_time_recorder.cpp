@@ -3,6 +3,10 @@
 
 #include <algorithm>
 
+#if defined(__APPLE__)
+#   include <mach/mach_time.h>
+#endif
+
 namespace erhe::frame_pacing {
 
 auto Frame_time_record::cpu_slot_span() const -> double
@@ -56,7 +60,22 @@ Frame_time_recorder::Frame_time_recorder(const std::size_t capacity)
 
 auto Frame_time_recorder::now() -> double
 {
+#if defined(__APPLE__)
+    // mach_absolute_time: the clock of CACurrentMediaTime and of every Metal
+    // host time (presentedTime, GPUStartTime / GPUEndTime,
+    // presentDrawable:atTime:). steady_clock matches it only until the
+    // first system sleep - mach_absolute_time stops during sleep and
+    // steady_clock does not - after which targets lie hours ahead and
+    // presentDrawable:atTime: never displays.
+    static const double s_seconds_per_tick = []() {
+        mach_timebase_info_data_t timebase{};
+        mach_timebase_info(&timebase);
+        return (static_cast<double>(timebase.numer) / static_cast<double>(timebase.denom)) * 1e-9;
+    }();
+    return static_cast<double>(mach_absolute_time()) * s_seconds_per_tick;
+#else
     return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+#endif
 }
 
 void Frame_time_recorder::begin_frame(const std::int64_t frame_id, const double cpu_slot_begin)
