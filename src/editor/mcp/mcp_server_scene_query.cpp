@@ -381,6 +381,22 @@ auto Mcp_server::action_set_draw_lists_enabled(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_set_shadow_maps_frozen(const json& args) -> std::string
+{
+    if (m_context.app_settings == nullptr) {
+        return make_error_content("Editor settings not available");
+    }
+    if (!args.contains("frozen") || !args["frozen"].is_boolean()) {
+        return make_error_content("frozen (boolean) is required");
+    }
+    // Session-only; the next frame's render settings snapshot carries it to
+    // the shadow render nodes.
+    m_context.app_settings->shadow_maps_frozen_session = args["frozen"].get<bool>();
+    return make_json_content({
+        {"frozen", m_context.app_settings->shadow_maps_frozen_session}
+    }).dump();
+}
+
 auto Mcp_server::action_set_culling_classification(const json& args) -> std::string
 {
     // The MCP counterpart of the Settings window's Culling Classification

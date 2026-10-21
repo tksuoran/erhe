@@ -831,7 +831,10 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
 
     {
         const Cpu_time_scope cpu_time_scope{result.cpu_time_us};
-        if (m_frame_passes.parameters.has_value()) {
+        // Frozen (MCP set_shadow_maps_frozen, a measurement switch): the
+        // maps keep what the last drawn frame left in them.
+        const bool frozen = m_context.render_settings->shadow_maps_frozen && (m_execute_count > 0);
+        if (m_frame_passes.parameters.has_value() && !frozen) {
             const erhe::scene_renderer::Shadow_renderer::Render_parameters& parameters = m_frame_passes.parameters.value();
             // The frame command buffer the hook fitted with.
             ERHE_VERIFY(&parameters.command_buffer == &command_buffer);
