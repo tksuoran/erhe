@@ -258,15 +258,18 @@ unshadowed counts stay with it.
 Each phase is one commit (or a short series), reviewed, with its gates.
 
 1. **Light array as a storage block.** `light_array_block` at binding 9
-   (C3), written once per view per frame at the actual count; `Light_buffer`
-   API change (header range + array range) and every consumer of C6
-   rebound; `max_light_count` 1024. Loop path only, behavior unchanged.
+   (C3) at the actual count, still written per `Light_buffer::update()`
+   call; `Light_buffer::update()` returns `Light_buffer_ranges` (header +
+   lights) and every consumer of C6 binds both. Loop path only, behavior
+   unchanged: `max_light_count` stays 32, because the High preset's 40
+   lights are clamped to it today.
    Gate: V1-style image identity against HEAD on the render-thread gate
    scenes, the Bistro image gate and the DDGI / RC / ray trace gates, all
    threading configurations; validation clean; ctest.
 2. **CPU binning and the clustered shader path.** Grid (C2), cluster block
-   (C3), `Light_cluster_binner` filling a `CPU_write` range per view in the
-   pre-execute callback, `LIGHT_SHADING_CLUSTERED` path in `standard.frag`
+   (C3), the light array written once per view per frame and bound by that
+   view's passes, `max_light_count` 1024, `Light_cluster_binner` filling a
+   `CPU_write` range per view in the pre-execute callback, `LIGHT_SHADING_CLUSTERED` path in `standard.frag`
    (C5), `light_shading` preset field, single-cluster grid for unbinned
    passes, `Light_set` hand-out for clustered mode (C1). Unit tests of the
    binner (sphere vs AABB on boundaries, open boundary clusters, fragments

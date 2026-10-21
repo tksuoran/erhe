@@ -33,6 +33,15 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
     : max_light_count    {static_cast<std::size_t>(max_light_count)}
     , light_block        {graphics_device, "light_block",         light_buffer_binding_point,         erhe::graphics::Shader_resource::Type::uniform_block}
     , light_control_block{graphics_device, "light_control_block", light_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_array_block{
+        graphics_device,
+        {
+            .name          = "light_array",
+            .binding_point = light_array_buffer_binding_point,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
     , light_struct       {graphics_device, "Light"}
     , offsets{
         .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->get_offset_in_parent(),
@@ -69,7 +78,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .texture_from_view_relative   = light_struct.add_mat4 ("texture_from_view_relative"  )->get_offset_in_parent(),
             .view_relative_from_texture   = light_struct.add_mat4 ("view_relative_from_texture"  )->get_offset_in_parent(),
         },
-        .light_struct = light_block.add_struct("lights", &light_struct, max_light_count)->get_offset_in_parent()
+        .light_struct = light_array_block.add_struct("lights", &light_struct, erhe::graphics::Shader_resource::unsized_array)->get_offset_in_parent()
     }
     , light_index_offset{
         light_control_block.add_uint("light_index")->get_offset_in_parent()
@@ -173,6 +182,12 @@ Light_buffer::Light_buffer(
         erhe::graphics::Buffer_target::uniform,
         "Light_buffer::m_light_buffer",
         light_interface.light_block.get_binding_point()
+    }
+    , m_light_array_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::storage,
+        "Light_buffer::m_light_array_buffer",
+        light_interface.light_array_block.get_binding_point()
     }
     , m_control_buffer{
         graphics_device,
@@ -615,20 +630,30 @@ auto Light_buffer::update(
     const uint32_t           lightmap_flags,
     const Ddgi_parameters*   ddgi,
     const uint32_t           shadow_debug_light_index
-) -> erhe::graphics::Ring_buffer_range
+) -> Light_buffer_ranges
 {
     ERHE_PROFILE_FUNCTION();
 
     const auto                   light_struct_size = m_light_interface.light_struct.get_size_bytes();
     const auto&                  offsets           = m_light_interface.offsets;
 
-    // NOTE: As long as we are using uniform buffer, always fill in data max lights
-    // (m_light_interface.max_light_count) instea of lights.size(), and pad the
-    // unused part of the array with zeros.
-    const size_t                      exact_byte_count  = offsets.light_struct + m_light_interface.max_light_count * light_struct_size;
-    erhe::graphics::Ring_buffer_range buffer_range      = m_light_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, exact_byte_count);
-    std::span<std::byte>              light_gpu_data    = buffer_range.get_span();
-    ERHE_VERIFY(light_gpu_data.size_bytes() >= exact_byte_count);
+    // The light array holds the shaded lights only (light_count below); an
+    // empty set still writes one zero entry, since a storage range cannot
+    // be empty.
+    const std::size_t light_count = (light_projections != nullptr)
+        ? std::min(light_projections->light_projection_transforms.size(), m_light_interface.max_light_count)
+        : std::size_t{0};
+    const std::size_t header_byte_count = m_light_interface.light_block.get_size_bytes();
+    const std::size_t array_byte_count  = offsets.light_struct + std::max(light_count, std::size_t{1}) * light_struct_size;
+
+    Light_buffer_ranges  ranges{
+        .header = m_light_buffer      .acquire(erhe::graphics::Ring_buffer_usage::CPU_write, header_byte_count),
+        .lights = m_light_array_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, array_byte_count)
+    };
+    std::span<std::byte> header_gpu_data = ranges.header.get_span();
+    std::span<std::byte> light_gpu_data  = ranges.lights.get_span();
+    ERHE_VERIFY(header_gpu_data.size_bytes() >= header_byte_count);
+    ERHE_VERIFY(light_gpu_data .size_bytes() >= array_byte_count);
     uint32_t       directional_light_count {0u};
     uint32_t       spot_light_count        {0u};
     uint32_t       point_light_count       {0u};
@@ -674,21 +699,15 @@ auto Light_buffer::update(
     using erhe::graphics::as_span;
     using erhe::graphics::write;
 
-    std::size_t write_offset = 0;
-    const std::size_t common_offset = write_offset;
+    const std::size_t common_offset      = 0;
+    const std::size_t light_array_offset = offsets.light_struct;
 
-    write_offset += offsets.light_struct;
-    const std::size_t light_array_offset = write_offset;
-
-    // The light UBO slots are the resolved light set's slots (Light_set /
+    // The light array slots are the resolved light set's slots (Light_set /
     // Light_projections::apply): transforms[i] shades slot i. Only lights
     // that resolved into the set are written; the per-type shadow-mapped /
     // total counts follow the resolution too (a light is shadow-mapped iff
     // it got a shadow layer, not merely cast_shadow). Without light
     // projections nothing is written and the counts stay 0.
-    const std::size_t light_count = (light_projections != nullptr)
-        ? std::min(light_projections->light_projection_transforms.size(), m_light_interface.max_light_count)
-        : std::size_t{0};
     ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_view_relative_transforms.size() == light_projections->light_projection_transforms.size()));
     ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_shadow_limits.size() == light_projections->light_projection_transforms.size()));
     for (std::size_t light_index = 0; light_index < light_count; ++light_index) {
@@ -746,7 +765,7 @@ auto Light_buffer::update(
         const vec4 direction_outer_spot = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
         const auto light_offset         = light_array_offset + light_index * light_struct_size;
 
-        ERHE_VERIFY(light_offset < exact_byte_count);
+        ERHE_VERIFY(light_offset < array_byte_count);
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms.clip_from_world.get_matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
         write(light_gpu_data, light_offset + offsets.light.world_from_texture,           as_span(world_from_texture));
@@ -779,15 +798,9 @@ auto Light_buffer::update(
         const uint32_t shadow_index_packed[4] = { shadow_index_u32, point_shadow_index_u32, distance_rays_valid_u32, 0u };
         write(light_gpu_data, light_offset + offsets.light.shadow_index_packed, as_span(shadow_index_packed));
     }
-    // Fill in unused part of the array
-    size_t padding_light_offset = light_count;
-    size_t padding_light_count = m_light_interface.max_light_count - padding_light_offset;
-    memset(
-        light_gpu_data.data() + light_array_offset + padding_light_offset * light_struct_size,
-        0,
-        padding_light_count * light_struct_size
-    );
-    write_offset += m_light_interface.max_light_count * light_struct_size;
+    if (light_count == 0) {
+        memset(light_gpu_data.data() + light_array_offset, 0, light_struct_size);
+    }
 
     const glm::vec2 brdf_phi_incident_phi = (light_projections != nullptr) ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
     const uint32_t  brdf_material         = (light_projections != nullptr) ? light_projections->brdf_material_slot : 0u;
@@ -795,25 +808,25 @@ auto Light_buffer::update(
         ? glm::vec2{light_projections->shadow_bias_texel_scale, light_projections->shadow_bias_origin_scale}
         : glm::vec2{1.0f, 1.0f};
 
-    // Late write to begin of buffer to full in light counts
-    write(light_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare));
-    write(light_gpu_data, common_offset + offsets.shadow_texture_no_compare, as_span(shadow_map_texture_handle_no_compare));
+    // The header: shadow map sentinels, light counts, ambient, DDGI volume
+    write(header_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare));
+    write(header_gpu_data, common_offset + offsets.shadow_texture_no_compare, as_span(shadow_map_texture_handle_no_compare));
 
-    write(light_gpu_data, common_offset + offsets.directional_light_count,   as_span(directional_light_count) );
-    write(light_gpu_data, common_offset + offsets.spot_light_count,          as_span(spot_light_count)        );
-    write(light_gpu_data, common_offset + offsets.point_light_count,         as_span(point_light_count)       );
-    write(light_gpu_data, common_offset + offsets.directional_shadow_count,  as_span(directional_shadow_count));
+    write(header_gpu_data, common_offset + offsets.directional_light_count,   as_span(directional_light_count) );
+    write(header_gpu_data, common_offset + offsets.spot_light_count,          as_span(spot_light_count)        );
+    write(header_gpu_data, common_offset + offsets.point_light_count,         as_span(point_light_count)       );
+    write(header_gpu_data, common_offset + offsets.directional_shadow_count,  as_span(directional_shadow_count));
 
-    write(light_gpu_data, common_offset + offsets.spot_shadow_count,         as_span(spot_shadow_count)       );
-    write(light_gpu_data, common_offset + offsets.point_shadow_count,        as_span(point_shadow_count)      );
-    write(light_gpu_data, common_offset + offsets.brdf_material,             as_span(brdf_material)           );
-    write(light_gpu_data, common_offset + offsets.lightmap_flags,            as_span(lightmap_flags)          );
+    write(header_gpu_data, common_offset + offsets.spot_shadow_count,         as_span(spot_shadow_count)       );
+    write(header_gpu_data, common_offset + offsets.point_shadow_count,        as_span(point_shadow_count)      );
+    write(header_gpu_data, common_offset + offsets.brdf_material,             as_span(brdf_material)           );
+    write(header_gpu_data, common_offset + offsets.lightmap_flags,            as_span(lightmap_flags)          );
 
-    write(light_gpu_data, common_offset + offsets.brdf_phi_incident_phi,     as_span(brdf_phi_incident_phi)   );
-    write(light_gpu_data, common_offset + offsets.shadow_debug_light_index,  as_span(shadow_debug_light_index));
+    write(header_gpu_data, common_offset + offsets.brdf_phi_incident_phi,     as_span(brdf_phi_incident_phi)   );
+    write(header_gpu_data, common_offset + offsets.shadow_debug_light_index,  as_span(shadow_debug_light_index));
 
-    write(light_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
-    write(light_gpu_data, common_offset + offsets.shadow_bias_scales,        as_span(shadow_bias_scales)     );
+    write(header_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
+    write(header_gpu_data, common_offset + offsets.shadow_bias_scales,        as_span(shadow_bias_scales)     );
 
     // DDGI probe volume (doc/editor/ddgi.md phase 6). ddgi_counts.w is the
     // gate the fragment shader reads: 0 = no volume, keep the flat ambient.
@@ -839,17 +852,19 @@ auto Light_buffer::update(
     const glm::vec4 ddgi_params = ddgi_valid
         ? glm::vec4{ddgi->normal_bias, ddgi->view_bias, ddgi->depth_sharpness, ddgi->intensity}
         : glm::vec4{0.0f, 0.0f, 50.0f, 1.0f};
-    write(light_gpu_data, common_offset + offsets.ddgi_grid_origin,          as_span(ddgi_grid_origin)       );
-    write(light_gpu_data, common_offset + offsets.ddgi_grid_spacing,         as_span(ddgi_grid_spacing)      );
-    write(light_gpu_data, common_offset + offsets.ddgi_counts,               as_span(ddgi_counts)            );
-    write(light_gpu_data, common_offset + offsets.ddgi_texels,               as_span(ddgi_texels)            );
-    write(light_gpu_data, common_offset + offsets.ddgi_params,               as_span(ddgi_params)            );
+    write(header_gpu_data, common_offset + offsets.ddgi_grid_origin,          as_span(ddgi_grid_origin)       );
+    write(header_gpu_data, common_offset + offsets.ddgi_grid_spacing,         as_span(ddgi_grid_spacing)      );
+    write(header_gpu_data, common_offset + offsets.ddgi_counts,               as_span(ddgi_counts)            );
+    write(header_gpu_data, common_offset + offsets.ddgi_texels,               as_span(ddgi_texels)            );
+    write(header_gpu_data, common_offset + offsets.ddgi_params,               as_span(ddgi_params)            );
 
-    buffer_range.bytes_written(write_offset);
-    buffer_range.close();
-    SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", padding_light_offset);
+    ranges.header.bytes_written(header_byte_count);
+    ranges.header.close();
+    ranges.lights.bytes_written(array_byte_count);
+    ranges.lights.close();
+    SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to light buffer", light_count);
 
-    return buffer_range;
+    return ranges;
 }
 
 void Light_buffer::bind_shadow_samplers(
@@ -960,9 +975,16 @@ auto Light_buffer::update_control(const std::size_t light_index, const float sha
     return buffer_range;
 }
 
-void Light_buffer::bind_light_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range)
+void Light_buffer_ranges::release()
 {
-    m_light_buffer.bind(encoder, range);
+    header.release();
+    lights.release();
+}
+
+void Light_buffer::bind_light_buffer(erhe::graphics::Command_encoder& encoder, const Light_buffer_ranges& ranges)
+{
+    m_light_buffer      .bind(encoder, ranges.header);
+    m_light_array_buffer.bind(encoder, ranges.lights);
 }
 
 void Light_buffer::bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range)

@@ -27,7 +27,7 @@ void main()
     );
 
     uint  light_index = 0;
-    Light light       = light_block.lights[light_index];
+    Light light       = light_array.lights[light_index];
 
     vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
     uint resolution_x         = uint(shadowmap_resolution.x);

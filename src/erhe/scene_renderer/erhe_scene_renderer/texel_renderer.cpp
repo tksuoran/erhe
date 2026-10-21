@@ -100,7 +100,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     m_texture_heap->reset_heap(parameters.render_encoder.get_command_buffer());
 
-    Ring_buffer_range light_range = m_light_buffer.update(parameters.light_projections, glm::vec3{0.0f});
+    Light_buffer_ranges light_range = m_light_buffer.update(parameters.light_projections, glm::vec3{0.0f});
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(parameters.render_encoder, parameters.light_projections);
 

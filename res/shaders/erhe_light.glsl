@@ -260,7 +260,7 @@ float sample_light_visibility(vec3 view_relative_position, float vertex_rounding
     // in the generated shader preamble (from default_uniform_block) and
     // bound via Render_command_encoder::set_sampled_image() for all backends.
 
-    Light light                                 = light_block.lights[light_index];
+    Light light                                 = light_array.lights[light_index];
     // shadow_index_packed.x is the dense shadow-array-layer the
     // Shadow_renderer wrote this light's depth map into. It differs
     // from light_index whenever an earlier type bucket has any

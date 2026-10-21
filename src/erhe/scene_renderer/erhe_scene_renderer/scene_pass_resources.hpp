@@ -141,7 +141,7 @@ public:
     public:
         std::optional<erhe::graphics::Ring_buffer_range> camera_range{};
         erhe::graphics::Ring_buffer_range                joint_range{};
-        erhe::graphics::Ring_buffer_range                light_range{};
+        Light_buffer_ranges                              light_range{};
         // The set begin_pass() bound, for end_pass() to unbind. Never null
         // after begin_pass().
         Material_set*                                    material_source{nullptr};

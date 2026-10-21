@@ -305,7 +305,7 @@ void main()
         vec3  caster_dp_dy = dFdy(caster_position);
 #   endif
         uint  light_index    = light_control_block.light_index;
-        Light light          = light_block.lights[light_index];
+        Light light          = light_array.lights[light_index];
         bool  is_directional = (light_index < light_block.directional_light_count);
         float resolution     = light_control_block.shadow_map_resolution;
         vec4  caster_in_texture_homogeneous = light.texture_from_view_relative * vec4(caster_position, 1.0);
@@ -715,7 +715,7 @@ void main()
         // Directional - shadow-mapped prefix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED); ++i) {
             uint  light_index    = light_offset + i;
-            Light light          = light_block.lights[light_index];
+            Light light          = light_array.lights[light_index];
             vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
@@ -729,7 +729,7 @@ void main()
         // Directional - non-shadow suffix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED); ++i) {
             uint  light_index    = light_offset + i;
-            Light light          = light_block.lights[light_index];
+            Light light          = light_array.lights[light_index];
             vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
@@ -743,7 +743,7 @@ void main()
         // Spot - shadow-mapped prefix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED); ++i) {
             uint  light_index    = light_offset + i;
-            Light light          = light_block.lights[light_index];
+            Light light          = light_array.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
@@ -760,7 +760,7 @@ void main()
         // Spot - non-shadow suffix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED); ++i) {
             uint  light_index    = light_offset + i;
-            Light light          = light_block.lights[light_index];
+            Light light          = light_array.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
@@ -778,7 +778,7 @@ void main()
         // is shadow_index_packed.y (written by light_buffer.cpp).
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED); ++i) {
             uint  light_index    = light_offset + i;
-            Light light          = light_block.lights[light_index];
+            Light light          = light_array.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
@@ -794,7 +794,7 @@ void main()
         // Point - non-shadow suffix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_NOT_SHADOWMAPPED); ++i) {
             uint  light_index    = light_offset + i;
-            Light light          = light_block.lights[light_index];
+            Light light          = light_array.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
@@ -915,7 +915,7 @@ void main()
         ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED + \
         ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED + \
         ERHE_LIGHT_COUNT_POINT_NOT_SHADOWMAPPED) > 0)
-        Light light_0 = light_block.lights[0];
+        Light light_0 = light_array.lights[0];
 #    if ((ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED) > 0)
         vec3  point_to_light_0 = light_0.direction_and_outer_spot_cos.xyz;
 #    else
@@ -1037,7 +1037,7 @@ void main()
 #  elif ERHE_SHADER_DEBUG == 28 // shadowmap_texels
         {
             uint  light_index   = 0u;
-            vec4  light_pos_homog = light_block.lights[light_index].texture_from_world * v_position;
+            vec4  light_pos_homog = light_array.lights[light_index].texture_from_world * v_position;
             vec3  light_pos       = light_pos_homog.xyz / light_pos_homog.w;
             vec2  shadowmap_res   = vec2(textureSize(s_shadow_compare, 0).xy);
             vec2  uv              = fract(shadowmap_res * light_pos.xy);
@@ -1064,7 +1064,7 @@ void main()
         {
             // Shadow / light visibility factor of the light at
             // light_block.shadow_debug_light_index (an index into
-            // light_block.lights, which is bucketed directional-shadowed,
+            // light_array.lights, which is bucketed directional-shadowed,
             // directional-unshadowed, spot-shadowed, spot-unshadowed,
             // point-shadowed, point-unshadowed): 0.0 = fully shadowed,
             // 1.0 = fully lit. A light that is not shadow-mapped (or an index
@@ -1087,7 +1087,7 @@ void main()
 #    endif
 #    if ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_point_shadowed_begin) && (dbg_light_index < (dbg_point_shadowed_begin + uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)))) {
-                Light dbg_light = light_block.lights[dbg_light_index];
+                Light dbg_light = light_array.lights[dbg_light_index];
                 dbg_visibility = sample_point_light_visibility(v_view_relative_position, v_position_rounding, dbg_light.view_origin.xyz, float(dbg_light.shadow_index_packed.y), dbg_light.shadow_limits.x, shadow_receiver_plane);
             }
 #    endif

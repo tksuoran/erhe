@@ -72,7 +72,7 @@ public:
     std::vector<int>                   msaa_sample_count_entry_values;
     int                                max_shadow_resolution{4};
     int                                max_depth_layers{1};
-    // Light UBO capacity (Renderer_config::max_light_count): bounds the sum of
+    // Light array capacity (Renderer_config::max_light_count): bounds the sum of
     // a preset's per light type light counts.
     int                                max_light_count{32};
     // A scene whose light layer is empty is rendered with one synthetic

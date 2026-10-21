@@ -141,13 +141,15 @@ took the frame's GPU time from 123 to 40 ms on Metal and from 108 to
 
 ## Light array layout invariant
 
-There is one light array per type in the lights UBO. Within each
-per-type array, shadow-mapped lights occupy the prefix (indices
-`0 .. SHADOWMAPPED_COUNT - 1`); non-shadow-mapped lights follow
+The shaded lights are one array, `light_array.lights` (a storage block at
+binding 9; the counts and the rest of the light state are the `light_block`
+uniform block), ordered type-major: directional, spot, point. Within each
+type's range, shadow-mapped lights occupy the prefix (indices
+`0 .. SHADOWMAPPED_COUNT - 1` of the range); non-shadow-mapped lights follow
 (indices `SHADOWMAPPED_COUNT .. SHADOWMAPPED_COUNT + NOT_SHADOWMAPPED_COUNT - 1`).
 
-`Light_buffer::update_light_buffer()` enforces this ordering when
-packing the UBO. The shader walks each type as two consecutive loops:
+`Light_set::resolve()` assigns the slots in this order and
+`Light_buffer::update()` writes them. The shader walks each type as two consecutive loops:
 
 ```glsl
 for (uint i = light_offset;

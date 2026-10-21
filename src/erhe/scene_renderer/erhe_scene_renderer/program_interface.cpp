@@ -70,6 +70,8 @@ Program_interface::Program_interface(
             {.binding_point = material_buffer_binding_point,      .type = to_binding_type(material_interface.material_block),     .stage_flags = Stage::vertex | Stage::fragment},
             // light: lighting in standard.frag/erhe_light.glsl + shadow_debug.vert.
             {.binding_point = light_buffer_binding_point,         .type = to_binding_type(light_interface.light_block),          .stage_flags = Stage::vertex | Stage::fragment},
+            // light_array: the lights of light_block (doc/plans/clustered_lights.md C3).
+            {.binding_point = light_array_buffer_binding_point,   .type = to_binding_type(light_interface.light_array_block),    .stage_flags = Stage::vertex | Stage::fragment},
             // light_control: depth_to_color.frag only.
             {.binding_point = light_control_buffer_binding_point, .type = to_binding_type(light_interface.light_control_block),  .stage_flags = Stage::fragment},
             // primitive: transforms in *.vert + material index / fields in *.frag.
@@ -239,6 +241,7 @@ auto Program_interface::make_prototype(
     // create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_out());
     create_info.add_interface_block(&material_interface.material_block);
     create_info.add_interface_block(&light_interface.light_block);
+    create_info.add_interface_block(&light_interface.light_array_block);
     create_info.add_interface_block(&light_interface.light_control_block);
     create_info.add_interface_block(&camera_interface.camera_block);
     create_info.add_interface_block(&cube_interface.cube_instance_block);
