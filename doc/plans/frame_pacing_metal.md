@@ -166,6 +166,34 @@ Before the first iteration (optional, one experiment): a measurement-only
 targetTimestamp` and the achieved cadence for the default scene - the
 system's deadline and the latency reference.
 
+### Next: GPU pre-warm before an upshift (user decision 2026-10-21)
+
+Evidence (Dell, CPU and GPU clocks normalized; gate N=1 in 47/60: Debug
+26/30, Release 21/30): every failing run upshifted at about frame 73 and
+reverted. Over the first 6-7 frames at N-1 the GPU clock ramps from
+0.45-0.53 to ~0.8 of its maximum with spans of 9-11 ms, frames display 1-2
+refreshes late and the reactive path downshifts; or the ramp frames stay
+in the cadence window and the predictive test fires once it holds 30
+samples, though every current frame fits.
+
+After an upshift the Apple GPU needs about 5 frames to ramp its clock
+(Debug trace: 0.56, 0.62, 0.69, 0.78, 0.89 of the maximum; spans 8.7 to
+5.4 ms), so the first frames at N-1 can slip - visible judder. Absorbing
+those slips in the miss attribution was rejected (the user sees them);
+pre-warming is user-invisible:
+
+1. Pacer: when the upshift dwell completes, keep N for a pre-warm phase
+   and ask the host for extra GPU work per frame, sized so the GPU's busy
+   share matches the one expected at N-1; switch to N-1 once the measured
+   GPU clock reaches the low decile recorded at N-1, or after a frame cap
+   (about 8 frames). A downshift or pressure cancels the phase.
+2. Host (Metal): an ALU-only compute kernel (register-resident FMA loop,
+   one small write, minimal memory traffic) dispatched after the frame's
+   work, its duration calibrated against GPU timestamps.
+3. Plant and claim C26: a DVFS ramp (the clock follows the GPU busy share
+   with a time constant fitted to the measured ramp); without pre-warm the
+   first N-1 frames slip, with it none do and the cadence holds.
+
 ## Tools
 
 - `scripts/frame_pacing_live_gate.py` - fresh launches, settle, sample,
@@ -252,7 +280,7 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   headroom test judges max(c, g * ratio) - the work at full clock - while
   the predictive and reactive downshifts keep the real spans. Plant: GPU
   clock by cadence, GPU time = work / clock; claim C25.
-  Built: `Gpu_clock_monitor` (metal_gpu_clock_monitor.mm), C25 in both
+  Built: the clock monitor (now `Clock_monitor`, metal_clock_monitor.mm), C25 in both
   suites (Python 90/90, C++ 30/30). Live the work (span * clock ratio) is
   4.8-5.05 ms median at N=1 and N=2 alike, Debug and Release. Found and
   fixed: the editor converted the render thread's steady_clock join waits

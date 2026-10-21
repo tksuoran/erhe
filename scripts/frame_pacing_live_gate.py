@@ -94,6 +94,9 @@ def analyze(frames, status):
     clocks = [f.get("gpu_clock_ratio", 0.0) for f in frames if f.get("gpu_clock_ratio", 0.0) > 0.0]
     if clocks:
         result["gpu_clock"] = statistics.median(clocks)
+    cpu_clocks = [f.get("cpu_clock_ratio", 0.0) for f in frames if f.get("cpu_clock_ratio", 0.0) > 0.0]
+    if cpu_clocks:
+        result["cpu_clock"] = statistics.median(cpu_clocks)
     if spans and period > 0.0:
         values = [s for s, _ in spans]
         result["gpu_span_ms"] = (statistics.median(values), quantile(values, 0.9), max(values))
@@ -120,6 +123,7 @@ def print_run(index, label, result, undisplayed):
         + (f"dpe {result['deadline_offset_ms']:.2f} ms" if result.get("deadline_offset_ms") is not None else "")
         + (f" thermal {result['thermal']}" if result.get("thermal") else "")
         + (f" gpu clock {result['gpu_clock'] * 100.0:.0f}%" if result.get("gpu_clock") else "")
+        + (f" cpu clock {result['cpu_clock'] * 100.0:.0f}%" if result.get("cpu_clock") else "")
         + ("  [UNDISPLAYED DRAWABLES - window occluded?]" if undisplayed else "")
     )
     phases = result.get("span_by_phase")

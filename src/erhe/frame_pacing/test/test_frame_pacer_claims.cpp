@@ -1333,7 +1333,7 @@ TEST(Frame_pacer_claims, c24_fifo_upshift_promotion)
 
 namespace {
 
-auto run_c25(const bool report_clock, const double work_ms, const unsigned int seed) -> std::vector<Frame_record>
+auto run_c25(const bool report_clock, const double work_ms, const unsigned int seed, const double cpu_ms = 3.6, const bool report_cpu = true) -> std::vector<Frame_record>
 {
     const double t        = 1.0 / 120.0;
     const double dpe_true = t + (1.0 * ms);
@@ -1348,7 +1348,17 @@ auto run_c25(const bool report_clock, const double work_ms, const unsigned int s
     scenario.drawable_pool                          = 3;
     scenario.pool_latch_lead                        = dpe_true - (1.8 * ms);
     scenario.report_gpu_clock                       = report_clock;
-    scenario.cpu_duration                           = make_gauss(seed, 3.0, 0.6);
+    scenario.report_cpu_clock                       = report_clock && report_cpu;
+    scenario.cpu_duration                           = make_gauss(seed, cpu_ms, 0.5);
+    auto cpu_clock_engine = std::make_shared<std::mt19937>(seed + 3);
+    scenario.cpu_clock = [cpu_clock_engine](const std::int64_t, const int vsyncs) mutable -> double {
+        if (vsyncs <= 1) {
+            std::normal_distribution<double> high{0.94, 0.03};
+            return std::clamp(high(*cpu_clock_engine), 0.85, 1.0);
+        }
+        std::normal_distribution<double> low{0.53, 0.04};
+        return std::clamp(low(*cpu_clock_engine), 0.45, 0.7);
+    };
     auto work_engine  = std::make_shared<std::mt19937>(seed + 1);
     auto clock_engine = std::make_shared<std::mt19937>(seed + 2);
     scenario.gpu_duration_at_cadence = [work_engine, work_ms](const std::int64_t k, const int) mutable -> double {
@@ -1394,6 +1404,14 @@ TEST(Frame_pacer_claims, c25_upshift_under_measured_gpu_clock)
         }
     }
     EXPECT_LE(slips, 30u) << "at most 1 percent slipped";
+
+    // A CPU that clocks down too (Debug: ~4.3 ms of CPU work at full clock,
+    // ~8 ms at N=2): the GPU clock alone keeps the longer cadence, both
+    // clocks return.
+    const std::vector<Frame_record> gpu_only = run_c25(true, 5.0, 2511, 4.3, false);
+    EXPECT_EQ(vsync_values(gpu_only, 3000).count(1), 0u) << "the GPU clock alone keeps the longer cadence";
+    const std::vector<Frame_record> both = run_c25(true, 5.0, 2511, 4.3, true);
+    EXPECT_EQ(vsync_values(both, 3000), (std::set<int>{1})) << "both clocks return to N=1";
 
     // Work that does not fit N=1 even at full clock keeps the longer cadence.
     const std::vector<Frame_record> heavy = run_c25(true, 9.0, 2505);

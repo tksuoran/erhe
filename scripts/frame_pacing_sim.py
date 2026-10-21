@@ -123,6 +123,7 @@ class FramePacer:
         # GPU clock ratios measured at each cadence (C25), kept across cadence
         # changes: the clock the GPU shows at a cadence predicts the cost there.
         self.clock_by_N = {}
+        self.cpu_clock_by_N = {}
         self.L_win = {}                   # cadence N -> deque of latency samples
         self.j_next = None                # next target slot (None until engaged)
         self.last_slot = -1
@@ -318,7 +319,7 @@ class FramePacer:
     def on_cpu_done(self, frame_id, c):
         self.c_win.append(c)
 
-    def on_gpu_done(self, frame_id, gpu_end, c, g, L, clock=0.0):
+    def on_gpu_done(self, frame_id, gpu_end, c, g, L, clock=0.0, cpu_clock=0.0):
         t = self.tun
         self.g_win.append(g)
         n_used = self.frame_N.get(frame_id, self.N)
@@ -328,6 +329,8 @@ class FramePacer:
             self.g_cad.append(g)
         if clock > 0.0:
             self.clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(clock)
+        if cpu_clock > 0.0:
+            self.cpu_clock_by_N.setdefault(n_used, deque(maxlen=t.history)).append(cpu_clock)
         self.frame_gpu_end[frame_id] = gpu_end
         d = self.V(self.frame_slot[frame_id]) - self.dpe
         s = d - gpu_end
@@ -424,19 +427,21 @@ class FramePacer:
             # in the hysteresis band below it count against the 1 - q_up
             # allowance (a heavy tail past the period keeps the longer
             # cadence, C10).
-            # Where the host measures the GPU clock (C25), the GPU time at the
-            # next shorter cadence is predicted from the work (span * clock
-            # ratio) at the clock last seen there - its low decile, or the
-            # full clock before that cadence has a record: a GPU that clocks
-            # down at the longer cadence makes its spans there no evidence of
-            # the shorter cadence's cost, and one that clocks down at the
-            # shorter cadence too must not be judged at full clock.
-            g_next = g
-            if clock > 0.0:
-                record = self.clock_by_N.get(self.N - 1)
-                clock_next = self._q2(record, 0.1, 1.0) if record and len(record) >= t.cadence_min_samples else 1.0
-                g_next = g * clock / clock_next
-            stage = max(c, g_next)
+            # Where the host measures the GPU and CPU clocks (C25), the stage
+            # times at the next shorter cadence are predicted from the work
+            # (time * clock ratio) at the clock last seen there - its low
+            # decile, or the full clock before that cadence has a record: a
+            # processor that clocks down at the longer cadence makes its times
+            # there no evidence of the shorter cadence's cost, and one that
+            # clocks down at the shorter cadence too must not be judged at
+            # full clock.
+            def at_next(duration, ratio, records):
+                if ratio <= 0.0:
+                    return duration
+                record = records.get(self.N - 1)
+                ratio_next = self._q2(record, 0.1, 1.0) if record and len(record) >= t.cadence_min_samples else 1.0
+                return duration * ratio / ratio_next
+            stage = max(at_next(c, cpu_clock, self.cpu_clock_by_N), at_next(g, clock, self.clock_by_N))
             next_period = (self.N - 1) * self.period
             beyond = stage > next_period
             self.dwell_frames += 1
@@ -677,6 +682,9 @@ class Scenario:
                                          # g_at_cadence_fn give the work at full clock)
     report_gpu_clock: bool = True        # C25: the host measures the clock (Metal: IOReport)
                                          # and passes the ratio to the pacer
+    cpu_clock_fn: object = None          # C25: (k, N) -> CPU clock ratio; the CPU duration
+                                         # is then c / ratio (c_fn gives the work at full clock)
+    report_cpu_clock: bool = True        # C25: the host measures the CPU clock too
     forced_range: tuple = None           # (first, last) frames with corruption
     recreate_at: int = None              # swapchain recreation at this frame
     lazy_gpu:    bool = False            # C9: GPU measurements delivered via the
@@ -871,6 +879,12 @@ def run(sc: Scenario):
             else:
                 r_eff = max(dec.release, decision_t, wait_t)
         c = sc.c_fn(k)
+        cpu_clock = 0.0
+        if sc.cpu_clock_fn is not None:
+            # C25: c is the work at full clock; a clocked-down CPU takes longer.
+            cpu_ratio = sc.cpu_clock_fn(k, dec.N)
+            c = c / cpu_ratio
+            cpu_clock = cpu_ratio if sc.report_cpu_clock else 0.0
         g = sc.g_at_cadence_fn(k, dec.N) if sc.g_at_cadence_fn is not None else sc.g_fn(k)
         clock = 0.0
         if sc.gpu_clock_fn is not None:
@@ -899,7 +913,7 @@ def run(sc: Scenario):
         gpu_end[k] = ge
         # c and g are pure stage service times (waits excluded) — normative,
         # see frame_pacing_inputs.md section 3.2/3.3.
-        gpu_payload = (k, ge, c, g, ge - r_eff, clock)
+        gpu_payload = (k, ge, c, g, ge - r_eff, clock, cpu_clock)
         if sc.lazy_gpu:
             pending_gpu[k] = gpu_payload
         else:
@@ -1935,17 +1949,18 @@ def c24_fifo_upshift_promotion():
 
 def c25_upshift_under_measured_gpu_clock():
     print("C25 upshift judged by the work at full GPU clock")
-    # Measured live (Metal tier M, Dell U2725QE at 120 Hz, IOReport GPU
-    # performance states): at N=1 the GPU runs at 93-98 % of its maximum
-    # clock; at N=2 it is idle half the time and DVFS spreads it over 41-97 %
-    # (median ~69 %), so the same ~5 ms of work takes 6.4-8.1 ms median with
-    # a tail beyond the period. Every beyond-period frame reset the upshift
+    # Measured live (Metal tier M, Dell U2725QE at 120 Hz, IOReport GPU and
+    # P-core performance states): at N=1 the GPU runs at 93-98 % of its
+    # maximum clock; at N=2 it is idle half the time and DVFS spreads it over
+    # 41-97 % (median ~69 %), so the same ~5 ms of work takes 6.4-8.1 ms
+    # median with a tail beyond the period. The P-cores drop from 92-97 % to
+    # ~53 % alike (CPU time ~1.7x). Every beyond-period frame reset the upshift
     # dwell and a varying share of launches stayed at N=2 for good. With the
     # host reporting the clock, the upshift test judges the work at full
     # clock.
     T = 1.0 / 120.0
     dpe_true = T + 1.0 * MS
-    def arm(report, work_ms, seed, n=6000):
+    def arm(report, work_ms, seed, n=6000, cpu_ms=3.6, report_cpu=True):
         tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_true + 0.3 * MS,
                        dpe_max=dpe_true + 0.3 * MS + 0.5 * T, present_queue='fifo')
         rng = random.Random(seed)
@@ -1959,8 +1974,14 @@ def c25_upshift_under_measured_gpu_clock():
             if n_used <= 1:
                 return min(1.0, max(0.9, rc.gauss(0.96, 0.015)))
             return rc.uniform(0.41, 0.97)
-        sc = Scenario("c25", n, gauss_fn(rng, 3.0, 0.6), None, tun=tun, g_at_cadence_fn=work,
-                      gpu_clock_fn=clock, report_gpu_clock=report,
+        rp = random.Random(seed + 3)
+        def cpu_clock(k, n_used):
+            if n_used <= 1:
+                return min(1.0, max(0.85, rp.gauss(0.94, 0.03)))
+            return min(0.7, max(0.45, rp.gauss(0.53, 0.04)))
+        sc = Scenario("c25", n, gauss_fn(rng, cpu_ms, 0.5), None, tun=tun, g_at_cadence_fn=work,
+                      gpu_clock_fn=clock, cpu_clock_fn=cpu_clock, report_gpu_clock=report,
+                      report_cpu_clock=report and report_cpu,
                       dpe_true=dpe_true, drawable_pool=3, pool_latch_lead=dpe_true - 1.8 * MS)
         recs, _ = run(sc)
         return recs
@@ -1973,6 +1994,15 @@ def c25_upshift_under_measured_gpu_clock():
           f"no clock reported: N values after frame 3000: {n_off}")
     check("C25 work at full clock returns to N=1 and stays", n_on == {1}, f"N values after frame 3000: {n_on}")
     check("C25 slips", slips_on <= 30, f"{slips_on}/3000 slipped")
+    # A CPU that clocks down too (Debug: ~4.3 ms of CPU work at full clock,
+    # ~8 ms at N=2): the GPU clock alone keeps the longer cadence, both
+    # clocks return.
+    n_gpu_only = {r.N for r in arm(True, 5.0, 2511, cpu_ms=4.3, report_cpu=False)[3000:]}
+    n_both = {r.N for r in arm(True, 5.0, 2511, cpu_ms=4.3)[3000:]}
+    check("C25 CPU that clocks down: the GPU clock alone keeps the longer cadence", 1 not in n_gpu_only,
+          f"GPU clock only: N values after frame 3000: {n_gpu_only}")
+    check("C25 CPU that clocks down: both clocks return to N=1", n_both == {1},
+          f"both clocks: N values after frame 3000: {n_both}")
     # Work that does not fit N=1 even at full clock (9 ms against T = 8.3 ms)
     # keeps the longer cadence with the clock reported.
     recs_h = arm(True, 9.0, 2505)

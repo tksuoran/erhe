@@ -88,7 +88,11 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_cadence_cpu_window.init(m_tunables.history);
     m_cadence_gpu_window.init(m_tunables.history);
     m_clock_windows.resize(static_cast<std::size_t>(m_tunables.max_vsyncs) + 1);
+    m_cpu_clock_windows.resize(static_cast<std::size_t>(m_tunables.max_vsyncs) + 1);
     for (Sample_window& window : m_clock_windows) {
+        window.init(m_tunables.history);
+    }
+    for (Sample_window& window : m_cpu_clock_windows) {
         window.init(m_tunables.history);
     }
     m_period_sample_window.init(m_tunables.grid_reseed_window);
@@ -333,7 +337,8 @@ void Frame_pacer::on_gpu_done(
     const double       cpu_duration,
     const double       gpu_duration,
     const double       latency,
-    const double       gpu_clock_ratio
+    const double       gpu_clock_ratio,
+    const double       cpu_clock_ratio
 )
 {
     m_gpu_window.push(gpu_duration);
@@ -347,6 +352,9 @@ void Frame_pacer::on_gpu_done(
     }
     if (gpu_clock_ratio > 0.0) {
         m_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(gpu_clock_ratio);
+    }
+    if (cpu_clock_ratio > 0.0) {
+        m_cpu_clock_windows[static_cast<std::size_t>(std::clamp(n_used, 1, m_tunables.max_vsyncs))].push(cpu_clock_ratio);
     }
 
     const std::int64_t target_slot = (scheduled != nullptr) ? scheduled->target_slot : m_last_slot;
@@ -466,21 +474,27 @@ void Frame_pacer::on_gpu_done(
         // its dwell (C23); a heavy tail beyond the period still keeps the
         // longer cadence (C10). The frames of the dwell, not the window:
         // the window stays stale for ~2 s after a load drop (C3).
-        // Where the host measures the GPU clock (C25), the GPU time at the
-        // next shorter cadence is predicted from the work (span * clock
-        // ratio) at the clock last seen there - its low decile, or the full
-        // clock before that cadence has a record: a GPU that clocks down at
-        // the longer cadence (Apple GPUs at N=2: 41-97 % of the maximum
-        // against 93-98 % at N=1) makes its spans there no evidence of the
-        // shorter cadence's cost, and one that clocks down at the shorter
-        // cadence too must not be judged at full clock.
-        double gpu_next = gpu_duration;
-        if (gpu_clock_ratio > 0.0) {
-            const Sample_window& record     = m_clock_windows[static_cast<std::size_t>(std::clamp(m_vsyncs - 1, 1, m_tunables.max_vsyncs))];
-            const double         clock_next = (record.count() >= m_tunables.cadence_min_samples) ? record.quantile(0.1, 1.0) : 1.0;
-            gpu_next = gpu_duration * gpu_clock_ratio / clock_next;
-        }
-        const double stage_time     = std::max(cpu_duration, gpu_next);
+        // Where the host measures the GPU and CPU clocks (C25), the stage
+        // times at the next shorter cadence are predicted from the work (time
+        // * clock ratio) at the clock last seen there - its low decile, or
+        // the full clock before that cadence has a record: a processor that
+        // clocks down at the longer cadence (Apple GPUs at N=2: 41-97 % of
+        // the maximum against 93-98 % at N=1; P-cores ~53 % against 92-97 %)
+        // makes its times there no evidence of the shorter cadence's cost,
+        // and one that clocks down at the shorter cadence too must not be
+        // judged at full clock.
+        const std::size_t next_index = static_cast<std::size_t>(std::clamp(m_vsyncs - 1, 1, m_tunables.max_vsyncs));
+        const auto at_next = [this](const double duration, const double ratio, const Sample_window& record) -> double {
+            if (ratio <= 0.0) {
+                return duration;
+            }
+            const double ratio_next = (record.count() >= m_tunables.cadence_min_samples) ? record.quantile(0.1, 1.0) : 1.0;
+            return duration * ratio / ratio_next;
+        };
+        const double stage_time = std::max(
+            at_next(cpu_duration, cpu_clock_ratio, m_cpu_clock_windows[next_index]),
+            at_next(gpu_duration, gpu_clock_ratio, m_clock_windows[next_index])
+        );
         const double next_period    = static_cast<double>(m_vsyncs - 1) * m_grid_period;
         const bool   beyond_period  = stage_time > next_period;
         const bool   in_band        = !beyond_period && (stage_time > (next_period - m_hysteresis));

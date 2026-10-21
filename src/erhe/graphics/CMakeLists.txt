@@ -502,8 +502,8 @@ if (ERHE_GRAPHICS_API_METAL)
         erhe_graphics/metal/metal_device_present_calibration.cpp
         erhe_graphics/metal/metal_pixel_format_table.cpp
         erhe_graphics/metal/metal_pixel_format_table.hpp
-        erhe_graphics/metal/metal_gpu_clock_monitor.hpp
-        erhe_graphics/metal/metal_gpu_clock_monitor.mm
+        erhe_graphics/metal/metal_clock_monitor.hpp
+        erhe_graphics/metal/metal_clock_monitor.mm
         erhe_graphics/metal/metal_gpu_timer.cpp
         erhe_graphics/metal/metal_gpu_timer.hpp
         erhe_graphics/metal/metal_helpers.cpp

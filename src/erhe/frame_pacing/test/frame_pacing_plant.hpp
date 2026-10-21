@@ -51,6 +51,10 @@ public:
     // measures the clock and passes the ratio to the pacer.
     std::function<double(std::int64_t, int)> gpu_clock;
     bool                                    report_gpu_clock{true};
+    // Claim C25: the CPU clock likewise; cpu_duration gives the work at full
+    // clock.
+    std::function<double(std::int64_t, int)> cpu_clock;
+    bool                                    report_cpu_clock{true};
     Plant_parameters                        plant{};
     // Claim C6: frames in [forced_first, forced_last] run with latency
     // estimate and margin forced to zero.
@@ -166,6 +170,7 @@ public:
     double       gpu_dur {0.0};
     double       latency {0.0};
     double       gpu_clock{0.0};
+    double       cpu_clock{0.0};
     double       present_time{0.0};
 };
 
@@ -211,7 +216,7 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
                     break;
                 }
                 case Plant_event::Kind::gpu: {
-                    pacer.on_gpu_done(event.frame_id, event.gpu_end, event.cpu_dur, event.gpu_dur, event.latency, event.gpu_clock);
+                    pacer.on_gpu_done(event.frame_id, event.gpu_end, event.cpu_dur, event.gpu_dur, event.latency, event.gpu_clock, event.cpu_clock);
                     break;
                 }
                 case Plant_event::Kind::present: {
@@ -291,7 +296,14 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
                 : std::max({decision.release_time, decision_time, wait_time});
         }
 
-        const double cpu_dur = scenario.cpu_duration(k);
+        double cpu_dur   = scenario.cpu_duration(k);
+        double cpu_clock = 0.0;
+        if (scenario.cpu_clock) {
+            // C25: the work at full clock takes longer on a clocked-down CPU.
+            const double ratio = scenario.cpu_clock(k, decision.vsyncs_per_frame);
+            cpu_dur   = cpu_dur / ratio;
+            cpu_clock = scenario.report_cpu_clock ? ratio : 0.0;
+        }
         double gpu_dur = scenario.gpu_duration_at_cadence
             ? scenario.gpu_duration_at_cadence(k, decision.vsyncs_per_frame)
             : scenario.gpu_duration(k);
@@ -357,6 +369,7 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             event.gpu_dur  = gpu_dur;
             event.latency  = ge - release_effective;
             event.gpu_clock = gpu_clock;
+            event.cpu_clock = cpu_clock;
             if (scenario.lazy_gpu_delivery) {
                 pending_gpu[static_cast<std::size_t>(k)] = event;
                 has_pending[static_cast<std::size_t>(k)] = true;
