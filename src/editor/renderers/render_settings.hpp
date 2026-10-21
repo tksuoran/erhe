@@ -66,6 +66,7 @@ public:
     bool                       use_draw_lists                 {false}; // App_settings::get_use_draw_lists() (session override applied)
     bool                       headlight_when_unlit           {true};
     bool                       sky_enabled                    {true};
+    bool                       shadow_maps_frozen             {false}; // App_settings::shadow_maps_frozen_session
 };
 
 // One Render_settings copy per frame in flight, owned by Editor. M2's

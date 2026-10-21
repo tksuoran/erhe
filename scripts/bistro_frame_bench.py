@@ -565,6 +565,7 @@ def main():
     parser.add_argument("--out", default=os.path.join(REPO_ROOT, "logs", "bistro_frames.tracy"), help="capture file")
     parser.add_argument("--port", type=int, default=None, help="preferred MCP port (ERHE_MCP_PORT)")
     parser.add_argument("--graphics-override", action="append", default=[], metavar="KEY=JSON", help="top-level erhe_graphics.json value for this run, e.g. force_disable_vsync=true (the file is restored at exit)")
+    parser.add_argument("--mcp-before-settle", action="append", default=[], metavar="TOOL[=JSON]", help="MCP tool call made after the camera is set and before the settle, e.g. 'set_shadow_maps_frozen={\"frozen\": true}' (repeatable)")
     parser.add_argument("--analyze-only", action="store_true", help="skip the editor run; analyse --out")
     parser.add_argument("--keep-running", action="store_true", help="leave the editor running after the measurement (the capture is then analysed only after the editor exits by itself)")
     parser.add_argument("--test-download", action="store_true", help="download and verify the default scene archive even when the scene is present (into a temporary directory), then exit")
@@ -667,6 +668,10 @@ def run_and_analyze(args, capture_exe, csvexport_exe, editor):
                   f"{viewport.get('width')}x{viewport.get('height')}")
     else:
         print(f"get_viewports: {str(viewports)[:300]}")
+    for call in args.mcp_before_settle:
+        tool, _, arguments = call.partition("=")
+        reply = mcp(port, tool, json.loads(arguments) if arguments else {})
+        print(f"{tool}: {str(reply)[:200]}")
     # Any deferred work the transform change queued (lightmap / BVH / draw
     # list rebuilds) settles before the silence.
     wait_until_settled(port, scene_file, args.timeout)

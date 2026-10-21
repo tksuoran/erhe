@@ -151,6 +151,13 @@ public:
     // Settings window "Draw Lists" checkbox clears it when edited.
     std::optional<bool> use_draw_lists_session_override;
 
+    // Session-only measurement switch, set by the MCP set_shadow_maps_frozen
+    // tool: while true the shadow render nodes keep their maps from the last
+    // rendered frame and record no shadow pass (the projections are still
+    // fitted and published), so a run measures what a perfect shadow map
+    // cache would save. Never persisted.
+    bool shadow_maps_frozen_session{false};
+
     // Node tree (ephemeral UI state, not persisted)
     bool node_tree_show_all          {false};
 

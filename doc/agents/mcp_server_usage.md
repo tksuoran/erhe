@@ -545,6 +545,20 @@ GPU path's capability keeps the CPU path (`get_draw_lists`
 
 Returns: `{mode, gpu_supported}`.
 
+### set_shadow_maps_frozen
+
+Measurement switch, session-only (`App_settings::shadow_maps_frozen_session`,
+carried to the render phase by `Render_settings::shadow_maps_frozen`): with
+`frozen` true the shadow render nodes record no shadow pass and the maps
+keep what the last drawn frame left in them, while the light projections are
+still fitted and published every frame. A run then measures what a perfect
+shadow map cache would save (GPU time, render-thread time, cadence); the
+shadows go stale if lights or casters move. `scripts/bistro_frame_bench.py
+--mcp-before-settle 'set_shadow_maps_frozen={"frozen": true}'` measures
+Bistro with it.
+
+Returns: `{frozen}`.
+
 ### instantiate_prefab / reload_prefab / get_prefabs / set_prefab_template_property
 
 `instantiate_prefab` places a prefab (a glTF file, or a USD file at a prim) into a scene as a carrier prim recording the composition arc, with the template's content cloned below it; `reload_prefab` re-reads a prefab's file and refreshes every instance, keeping their overrides; `get_prefabs` lists the loaded templates. `set_prefab_template_property` sets (or, with a null value, clears) a local value on an item INSIDE a template - `source_path`, optional `prim_path`, `item_path` (the M1 path below the template root), `property`, `value` - which no scene lookup reaches otherwise; every instance reads the change live through its reference layer. It is not undoable, like `reload_prefab`. An item inside an instance is edited with `set_item_property` (a local value there is an override; a null value clears it and exposes the template's value) and reports `"source": "reference"` in `get_item_properties` for what the template supplies.

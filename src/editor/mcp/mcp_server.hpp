@@ -342,6 +342,7 @@ private:
     auto query_draw_lists       (const nlohmann::json& args) -> std::string;
     auto action_set_draw_lists_enabled(const nlohmann::json& args) -> std::string;
     auto action_set_culling_classification(const nlohmann::json& args) -> std::string;
+    auto action_set_shadow_maps_frozen    (const nlohmann::json& args) -> std::string;
     auto query_cull_classification_check  (const nlohmann::json& args) -> std::string;
     auto action_reset_composition_pass_stats(const nlohmann::json& args) -> std::string;
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
