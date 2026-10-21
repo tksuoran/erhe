@@ -71,6 +71,16 @@ is in range, and the loop runs every shaded light.
    frustum culling (2569 culled). Occlusion culling (`doc/plans/culling.md`
    phase 7, not started) and LODs are the levers; larger work.
 
-Option 1 is the smallest change with a visible effect on both quality and
-cost and composes with option 2; option 2 is the scalable answer for scenes
-with hundreds of lights.
+Decision (user, 2026-10-21): option 1 is not pursued; option 2,
+clustered light culling, is next - first as a design plan of its own
+(a new plan document, `clustered_lights.md` beside this one), covering: the cluster
+grid (view-space slices, sizes per viewport), the light binning pass
+(compute, per view, per frame or on change), the per-cluster light index
+lists and their buffers (per frame in flight, the render thread's frame
+slots), the light buffer layout change (all lights shaded, shadow-mapped
+ones still limited by the shadow slots), the forward shader loops
+(`standard.frag` per-type loops, `erhe_light.glsl`), the backends (Vulkan,
+Metal, OpenGL), the editor's other light consumers (DDGI / radiance
+cascades / ray tracing `erhe_ray_hit.glsl`, lightmap baking, XR
+multiview), and the verification gates (image identity against the
+current loops when every light fits, the Bistro per-pass timings above).
