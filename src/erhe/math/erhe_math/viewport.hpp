@@ -35,6 +35,8 @@ public:
 
     [[nodiscard]] auto hit_test(int px, int py) const -> bool;
 
+    [[nodiscard]] auto operator==(const Viewport& other) const -> bool = default;
+
     int x     {0};
     int y     {0};
     int width {0};

@@ -1421,6 +1421,7 @@ void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t fram
         effective_classification = Cull_classification::cpu;
     }
     slot.classification             = effective_classification;
+    slot.has_skinned_objects        = !m_skinned_object_indices.empty();
     m_published_cull_classification = effective_classification;
 
     if ((slot.serial != m_draw_list_serial) || (slot.lists.size() != m_draw_lists.size())) {
@@ -1475,6 +1476,16 @@ auto Draw_list_scene::get_published_slot(const uint64_t frame_index) const -> co
     const Draw_list_slot& slot = m_draw_list_slots[frame_index % m_draw_list_slots.size()];
     ERHE_VERIFY(slot.published && (slot.frame_index == frame_index));
     return slot;
+}
+
+auto Draw_list_scene::get_published_content_serial(const uint64_t frame_index) const -> uint64_t
+{
+    return get_published_slot(frame_index).serial;
+}
+
+auto Draw_list_scene::has_published_skinned_objects(const uint64_t frame_index) const -> bool
+{
+    return get_published_slot(frame_index).has_skinned_objects;
 }
 
 auto Draw_list_scene::get_published_draw_lists(const uint64_t frame_index) const -> const std::vector<Draw_list>&

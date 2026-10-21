@@ -1,13 +1,15 @@
-# Shadow map cache: skip unchanged shadow passes
+# Shadow map cache: remaining work
 
-Status: proposed
+Status: in progress
 
-Every frame each shadow render node re-renders every shadow-mapped light's
-map (`doc/erhe/shadows.md`), although in a scene where neither the light nor
-its casters change the map comes out identical. This plan keeps a map from
-the frame it was drawn in and redraws only the lights whose inputs changed.
+The cache is built (`doc/erhe/shadows.md` "Shadow map cache"): a pass is
+kept while its light, its matrix and the frame's configuration - including
+the content serial of the published draw lists - are unchanged.
+`scripts/shadow_map_cache_check.py` is its image gate (cache on against
+every pass drawn, after caster, light, cone and camera edits). What remains
+is finer invalidation.
 
-## Measured potential (Bistro, Release Metal, M4 Pro, Dell at 120 Hz)
+## Bistro measurements (Release Metal, M4 Pro, Dell at 120 Hz)
 
 `scripts/bistro_frame_bench.py` on the Tracy tree, with a Metal System Trace
 attached during the settle for the per-pass GPU split. Bistro shadow-maps
@@ -23,90 +25,37 @@ attached during the settle for the per-pass GPU split. Bistro shadow-maps
 GPU passes with shadows live (Metal System Trace, profiler-attached clock):
 main viewport 4.3 ms (vertex 1.8, fragment 2.2), point shadow faces 2.15 ms,
 spot shadows 0.3 ms, post processing 0.4 ms, ImGui host 0.27 ms, overlay
-0.18 ms. A perfect cache removes about a third of the GPU frame and half of
-the render thread (`draw_shadow` ~0.95 ms, its share of `execute`).
+0.18 ms. With the cache built (doc/erhe/shadows.md "Shadow map cache") the static
+scene's GPU span is 4.3 ms and render-thread `execute` 0.8 ms, the frozen
+upper bound.
 
 The heavy bench scene (`config/editor/commands_bench_heavy.json`, four
 directional cascades) spends 1.3 ms of its 5.5 ms GPU frame on the
 directional passes and 0.6 ms on point faces; its directional maps are
-camera-dependent (below).
+camera-dependent: they are kept only while the camera is still.
 
-## What a map depends on
+## Remaining work
 
-- **Spot and point lights**: the projection is built from the light's frame,
-  range, spot angles and the map resolution only (`Light_snapshot::
-  projection_transforms`, `light.cpp`), and the passes use the light as the
-  view origin. A camera move never changes these maps. Bistro has only these.
-- **Directional lights**: the stable fit centres on the snapped camera
-  position and the tight fit clips to the view frustum and the receivers
-  (`doc/erhe/shadow_tight_fit.md`), so a camera move changes the fitted
-  `clip_from_world` and with it the map. Cached directional maps pay off only
-  while the camera is still (editing with a fixed view); the texel snap keeps
-  the matrix bitwise unchanged for sub-texel camera motion only along the
-  stable fit.
-- **Receivers** matter only through the directional fit; comparing the
-  fitted matrices covers them.
-
-## Design
-
-The maps already persist: one `texture_2d_array` and one
-`texture_cube_map_array` per `Shadow_render_node`, no per-frame-in-flight
-copies, cleared only by the pass's own `Load_action::Clear`
-(`shadow_render_node.cpp`). A pass that is not begun keeps its layer.
-
-Per shadow layer (2D layer or cube face) the node keeps the key the layer
-was drawn with and redraws when any part differs:
-
-1. **Light and projection**: the light id assigned to the layer, and the
-   fitted `clip_from_world` / per-face matrices, compared bitwise (the fit's
-   output; spot and point outputs are deterministic, and the directional
-   comparison is the camera-move invalidation).
-2. **Configuration**: the shadow technique, depth format, resolution, cull
-   mode, depth-bias settings, `Light_set` generation (slot layout, which
-   decides `shadow_index` / `point_shadow_index`), and a texture generation
-   bumped by `reconfigure()`.
-3. **Casters**: "did a caster of this layer change since it was drawn".
-   The draw-list scene is the single funnel for caster changes:
-   `write_object_transform`, `write_object_bounds`, `set_object_flags`,
-   `add_entries`, `remove_entries` and `release_object` all bump
-   `m_shadow_bounds_serial` (`draw_list_scene.cpp`). The cache needs it per
-   layer instead of scene-wide:
-   - the funnel records the changed objects' old and new world bounds in a
-     per-frame change list (empty in a static frame, so the steady-state
-     cost is zero);
-   - after the frame's cull views exist, each changed bound is tested
-     against each layer's cull view (sphere / octant for cube faces, frustum
-     for spot and directional - the classification lane code); a hit on the
-     old or the new bound invalidates that layer. Cost: changed objects x
-     shadow layers, once per frame.
-   - the global serial stays the fast path: unchanged since the newest
-     cached layer means no caster test at all.
-4. **Skinned casters**: they carry no bounds and survive every view, and
-   `Joint_poses::capture` re-uploads every frame without a serial. A layer
-   whose cull view admits a skinned caster redraws every frame until skinned
-   entries get posed bounds and a pose serial (the animation player and the
-   IK tools are the change sites).
-
-On a hit the layer redraws with the pass's clear as today. Point cube faces
-are independent layers, so a drag beside a point light redraws only the
-faces that see it.
-
-Steady state: the comparison is a few matrices per layer and one serial
-test - no per-frame allocation, no per-object work in a static frame. The
-shadow fit (`fit`, ~0.2-0.45 ms on the render thread) still runs every
-frame; skipping it for spot / point lights whose key is unchanged is the
-follow-up (`doc/plans/shadows.md` "Temporal whole-fit skip").
-
-## Verification
-
-- `set_shadow_maps_frozen` (MCP, `doc/agents/mcp_server_usage.md`) is the
-  upper bound; the cache must reach it on static Bistro.
-- Image gate: every capture of the render-thread gates and `shadow_verify`
-  byte-identical with the cache on and off; a drag of a caster, a light edit,
-  a preset change and a light add / remove each invalidate exactly the
-  layers they touch (a per-layer redraw counter in `get_shadow_fit_debug`).
-- Skinned and physics scenes: no stale shadow over a 600-frame soak with
-  animation playing and bodies falling.
+1. **Per-light caster test.** Any draw-list change (a caster drag, a
+   selection flag) forgets every pass. The draw-list scene is the single
+   funnel for caster changes (`write_object_transform`,
+   `write_object_bounds`, `set_object_flags`, `add_entries`,
+   `remove_entries`, `release_object`): record the changed objects' old
+   and new world bounds per frame (an empty list in a static frame), test
+   them against each pass's cull view (sphere / octant for cube faces,
+   frustum for spot and directional - the classification lane code) and
+   forget only the passes they reach. The content serial then leaves the
+   configuration and becomes the fast path (unchanged: no bounds test).
+   Gate: a drag beside one point light keeps the other lights' passes
+   (`get_scene_lights` kept flags), images identical to every pass drawn.
+2. **Skinned casters.** Skinned objects disable the cache: joint poses have
+   no serial. A pose serial at the change sites (animation player, IK and
+   rigging tools) plus posed bounds for the per-light test of item 1 would
+   keep the passes no animated caster reaches.
+3. **Fit skip.** The shadow fit (`fit`, 0.2-0.45 ms on the render thread)
+   still runs every frame; for spot and point lights whose snapshot is
+   unchanged the projections could be reused
+   (`doc/plans/shadows.md` "Temporal whole-fit skip").
 
 ## Related finding: tier M cadence on Bistro
 

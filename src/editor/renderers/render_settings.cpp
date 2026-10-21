@@ -35,6 +35,7 @@ void Render_settings::snapshot(const Editor_settings_config& editor_settings, co
     headlight_when_unlit             = app_settings.graphics.headlight_when_unlit;
     sky_enabled                      = app_settings.graphics.sky_enabled;
     shadow_maps_frozen               = app_settings.shadow_maps_frozen_session;
+    shadow_map_cache                 = app_settings.shadow_map_cache_session;
 }
 
 void Render_settings_frames::initialize(erhe::graphics::Device& device)

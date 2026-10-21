@@ -107,9 +107,75 @@ public:
     std::vector<Draw_statistics> point_cube_faces;
     std::vector<uint8_t>         point_cube_skipped_faces;
     Draw_statistics              total{};
+    // Passes the shadow map cache kept from an earlier frame (not drawn):
+    // per 2D layer (1 = kept), per cube the kept faces (bit f for face f),
+    // and their count. Kept passes add nothing to the counts above.
+    std::vector<uint8_t>         shadow_map_2d_cached;
+    std::vector<uint8_t>         point_cube_cached_faces;
+    std::size_t                  cached_pass_count{0};
     // The frame whose GPU counts the entry and culled counts are (GPU
     // command path only).
     std::optional<uint64_t>      gpu_counts_frame_index{};
+};
+
+// The contents the shadow maps of one owner (a set of 2D layers and point
+// cubes) hold, so Shadow_renderer::draw() redraws only the passes whose
+// inputs changed (doc/plans/shadow_map_cache.md). A pass - a 2D layer or a
+// cube face - is kept when the frame's configuration (the textures, the
+// rasterizer and technique settings, the viewports, the layer selection and
+// the content serial of the published draw lists) equals the one it was
+// drawn under, and the light and matrices of the pass equal its own. Any
+// change of the configuration forgets every pass. The draw-list path only;
+// a scene with skinned objects draws every pass (joint poses carry no
+// serial). Owned by the caller next to the textures; clear() when they are
+// reallocated. Render thread.
+class Shadow_map_cache
+{
+public:
+    void clear();
+
+private:
+    friend class Shadow_renderer;
+
+    class Configuration
+    {
+    public:
+        [[nodiscard]] auto operator==(const Configuration& other) const -> bool = default;
+
+        const erhe::graphics::Texture*      texture             {nullptr};
+        const erhe::graphics::Texture*      distance_texture    {nullptr};
+        const erhe::graphics::Texture*      point_cube_texture  {nullptr};
+        float                               depth_bias_constant {0.0f};
+        float                               depth_bias_slope    {0.0f};
+        Shadow_cull_mode                    cull_mode           {Shadow_cull_mode::cull_back};
+        bool                                use_distance        {false};
+        bool                                use_depth_clamp     {false};
+        bool                                reverse_depth       {true};
+        erhe::math::Depth_range             depth_range         {erhe::math::Depth_range::zero_to_one};
+        int                                 border_texels       {0};
+        erhe::math::Viewport                light_camera_viewport{};
+        erhe::math::Viewport                point_shadow_viewport{};
+        uint64_t                            content_serial      {0};
+    };
+    class Pass
+    {
+    public:
+        std::size_t light_id        {0};
+        glm::mat4   clip_from_world {1.0f};
+        bool        valid           {false};
+    };
+
+    // Starts a frame: forgets every pass when configuration differs from the
+    // last frame's (or usable is false).
+    void begin_frame(const Configuration& configuration, std::span<const erhe::scene::Layer_id> layers, bool usable);
+    [[nodiscard]] auto is_kept(std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world) const -> bool;
+    void store(std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world);
+
+    Configuration                       m_configuration{};
+    std::vector<erhe::scene::Layer_id>  m_layers;
+    bool                                m_usable{false};
+    std::vector<Pass>                   m_passes_2d;
+    std::vector<Pass>                   m_cube_faces;
 };
 
 class Shadow_renderer
@@ -234,6 +300,10 @@ public:
         std::span<const erhe::scene::Layer_id>                             draw_list_layers{};
         // Filled per pass by the draw-list path when non-null; cleared first.
         Shadow_draw_statistics*                                            draw_statistics{nullptr};
+        // Draw-list path: the contents the maps hold from earlier frames
+        // (Shadow_map_cache); passes whose inputs are unchanged are not
+        // drawn. Null: every pass draws.
+        Shadow_map_cache*                                                  map_cache{nullptr};
 
         // Unlit (KHR_materials_unlit) primitives are backdrop geometry (sky
         // domes, emissive decals), not occluders: skip them when bucketing

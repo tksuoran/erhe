@@ -545,6 +545,18 @@ GPU path's capability keeps the CPU path (`get_draw_lists`
 
 Returns: `{mode, gpu_supported}`.
 
+### set_shadow_map_cache_enabled
+
+Session-only switch of the shadow map cache
+(`App_settings::shadow_map_cache_session`, default on; `doc/erhe/shadows.md`
+"Shadow map cache"): `enabled` false draws every shadow pass every frame.
+`get_scene_lights` reports per shadow-mapped light the passes the last
+rendered frame kept: `shadow_cached` (2D layer, 0 / 1) and
+`shadow_cube_cached_faces` (point cube, bit f = face f).
+`scripts/shadow_map_cache_check.py` compares captures with it on and off.
+
+Returns: `{enabled}`.
+
 ### set_shadow_maps_frozen
 
 Measurement switch, session-only (`App_settings::shadow_maps_frozen_session`,

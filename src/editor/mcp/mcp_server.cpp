@@ -728,6 +728,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_draw_lists_enabled",         &Mcp_server::action_set_draw_lists_enabled        },
         { "set_culling_classification",     &Mcp_server::action_set_culling_classification    },
         { "set_shadow_maps_frozen",         &Mcp_server::action_set_shadow_maps_frozen        },
+        { "set_shadow_map_cache_enabled",   &Mcp_server::action_set_shadow_map_cache_enabled  },
         { "get_cull_classification_check",  &Mcp_server::query_cull_classification_check      },
         { "reset_composition_pass_stats",   &Mcp_server::action_reset_composition_pass_stats  },
         { "get_physics_state",              &Mcp_server::query_get_physics_state              },

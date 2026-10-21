@@ -8927,6 +8927,22 @@
     "name": "get_cull_classification_check"
   },
   {
+    "name": "set_shadow_map_cache_enabled",
+    "description": "Switch the shadow map cache for the rest of this editor run (session-only, never persisted; default enabled): enabled, each shadow pass (2D layer or cube face) is redrawn only when its light, its matrices, the shadow configuration or the scene's published draw lists changed since it was drawn, and scenes with skinned objects draw every pass. get_scene_lights reports the kept passes per light (shadow_cached, shadow_cube_cached_faces). Use to compare images and costs against every pass drawn.",
+    "inputSchema": {
+      "properties": {
+        "enabled": {
+          "description": "true = keep unchanged shadow passes, false = draw every pass every frame",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "set_shadow_maps_frozen",
     "description": "Measurement switch for the rest of this editor run (session-only, never persisted): while frozen, the shadow render nodes record no shadow passes and the shadow maps keep what the last drawn frame left in them; the light projections are still fitted and published every frame. Use to measure what a perfect shadow map cache would save (GPU time, render-thread time, achieved cadence). Shadows go stale while frozen if lights or casters move.",
     "inputSchema": {

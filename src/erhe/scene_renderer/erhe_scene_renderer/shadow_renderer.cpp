@@ -26,6 +26,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <fmt/format.h>
 
 #include <algorithm>
@@ -162,8 +163,79 @@ void Shadow_draw_statistics::clear()
     point_cube_faces.clear();
     point_cube_skipped_faces.clear();
     total = Draw_statistics{};
+    shadow_map_2d_cached.clear();
+    point_cube_cached_faces.clear();
+    cached_pass_count = 0;
     gpu_counts_frame_index.reset();
 }
+
+void Shadow_map_cache::clear()
+{
+    m_usable = false;
+    m_passes_2d.clear();
+    m_cube_faces.clear();
+}
+
+void Shadow_map_cache::begin_frame(
+    const Configuration&                         configuration,
+    const std::span<const erhe::scene::Layer_id> layers,
+    const bool                                   usable
+)
+{
+    const bool same_layers = std::equal(layers.begin(), layers.end(), m_layers.begin(), m_layers.end());
+    if (!usable || !m_usable || !(configuration == m_configuration) || !same_layers) {
+        // (clear() keeps the vectors' capacity.)
+        m_passes_2d.clear();
+        m_cube_faces.clear();
+    }
+    m_configuration = configuration;
+    if (!same_layers) {
+        m_layers.assign(layers.begin(), layers.end());
+    }
+    m_usable = usable;
+}
+
+auto Shadow_map_cache::is_kept(
+    std::vector<Pass>& passes,
+    const std::size_t  index,
+    const std::size_t  light_id,
+    const glm::mat4&   clip_from_world
+) const -> bool
+{
+    if (!m_usable || (index >= passes.size())) {
+        return false;
+    }
+    const Pass& pass = passes[index];
+    return pass.valid && (pass.light_id == light_id) && (pass.clip_from_world == clip_from_world);
+}
+
+void Shadow_map_cache::store(
+    std::vector<Pass>& passes,
+    const std::size_t  index,
+    const std::size_t  light_id,
+    const glm::mat4&   clip_from_world
+)
+{
+    if (!m_usable) {
+        return;
+    }
+    if (passes.size() <= index) {
+        passes.resize(index + 1);
+    }
+    passes[index] = Pass{.light_id = light_id, .clip_from_world = clip_from_world, .valid = true};
+}
+
+namespace {
+
+void mark_cached(std::vector<uint8_t>& flags, const std::size_t slot, const uint8_t bits)
+{
+    if (flags.size() <= slot) {
+        flags.resize(slot + 1, uint8_t{0});
+    }
+    flags[slot] |= bits;
+}
+
+} // anonymous namespace
 
 Shadow_renderer::Shadow_renderer(
     erhe::graphics::Device&         graphics_device,
@@ -839,6 +911,40 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         (parameters.draw_list_scene != nullptr) &&
         parameters.draw_list_scene->has_gpu_shadow_commands(m_graphics_device.get_frame_index());
 
+    // The maps keep the passes whose inputs did not change since they were
+    // drawn (Shadow_map_cache). Joint poses carry no serial: a scene with
+    // skinned objects draws every pass.
+    Shadow_map_cache* const map_cache = (parameters.draw_list_scene != nullptr) ? parameters.map_cache : nullptr;
+    if (map_cache != nullptr) {
+        const uint64_t frame_index = m_graphics_device.get_frame_index();
+        const bool     usable      = !parameters.draw_list_scene->has_published_skinned_objects(frame_index);
+        map_cache->begin_frame(
+            Shadow_map_cache::Configuration{
+                .texture               = parameters.texture.get(),
+                .distance_texture      = parameters.distance_texture.get(),
+                .point_cube_texture    = parameters.point_cube_texture.get(),
+                .depth_bias_constant   = depth_bias_constant,
+                .depth_bias_slope      = depth_bias_slope,
+                .cull_mode             = parameters.cull_mode,
+                .use_distance          = parameters.use_distance,
+                .use_depth_clamp       = use_depth_clamp,
+                .reverse_depth         = parameters.reverse_depth,
+                .depth_range           = parameters.depth_range,
+                .border_texels         = parameters.shadow_map_footprint.get_border_texels(),
+                .light_camera_viewport = parameters.light_camera_viewport,
+                .point_shadow_viewport = parameters.point_shadow_viewport,
+                .content_serial        = parameters.draw_list_scene->get_published_content_serial(frame_index)
+            },
+            parameters.draw_list_layers,
+            usable
+        );
+    }
+    // (Callers check draw_statistics, which owns flags.)
+    const auto count_cached = [&parameters](std::vector<uint8_t>& flags, const std::size_t slot, const uint8_t bits) {
+        mark_cached(flags, slot, bits);
+        ++parameters.draw_statistics->cached_pass_count;
+    };
+
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
         const erhe::scene::Light_projection_transforms* light_projection_transform = find_2d_pass(parameters, light_slot);
@@ -848,6 +954,13 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         const erhe::scene::Light_snapshot& light = parameters.light_set.get_lights()[light_slot];
         const std::size_t light_index  = light_projection_transform->index;
         const std::size_t shadow_index = light_projection_transform->shadow_index;
+        const glm::mat4   clip_from_world = light_projection_transform->clip_from_world.get_matrix();
+        if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world)) {
+            if (parameters.draw_statistics != nullptr) {
+                count_cached(parameters.draw_statistics->shadow_map_2d_cached, shadow_index, uint8_t{1});
+            }
+            continue;
+        }
         erhe::graphics::Base_render_pipeline& base_pipeline =
             (use_depth_clamp && (light.get_light_type() == erhe::scene::Light_type::directional))
                 ? m_pipelines_depth_clamp[cull_index]
@@ -974,6 +1087,9 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 
         control_range.release();
         camera_range.release();
+        if (map_cache != nullptr) {
+            map_cache->store(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world);
+        }
     }
 
     // Omnidirectional point-light shadow cube pass. Each shadow-casting point
@@ -1010,6 +1126,10 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
             const std::size_t point_shadow_index = lpt->point_shadow_index;
             const std::size_t light_index = lpt->index;
             const glm::vec3   light_pos   = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+            // The faces' key: the cube projection with the light position (a
+            // face's camera is fixed by both).
+            const std::size_t cube_light_id = (lpt->light != nullptr) ? lpt->light->get_id() : 0;
+            const glm::mat4   cube_key      = glm::translate(lpt->clip_from_light_camera.get_matrix(), -light_pos);
 
             // Empty faces (doc/plans/culling.md phase 3): a face whose view
             // has no surviving entry in any shadow list draws nothing. Its
@@ -1037,6 +1157,12 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 
             for (int face = 0; face < 6; ++face) {
                 const std::size_t pass_index = (point_shadow_index * 6) + static_cast<std::size_t>(face);
+                if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key)) {
+                    if (parameters.draw_statistics != nullptr) {
+                        count_cached(parameters.draw_statistics->point_cube_cached_faces, point_shadow_index, static_cast<uint8_t>(1u << face));
+                    }
+                    continue;
+                }
 
                 erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
                 erhe::graphics::Scoped_render_pass scoped_render_pass{
@@ -1154,6 +1280,9 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                 if ((parameters.draw_list_scene != nullptr) && (parameters.draw_statistics != nullptr)) {
                     accumulate_pass_statistics(parameters.draw_statistics, parameters.draw_statistics->point_cubes, point_shadow_index, pass_statistics);
                     record_face_statistics(parameters.draw_statistics, pass_index, pass_statistics);
+                }
+                if (map_cache != nullptr) {
+                    map_cache->store(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key);
                 }
             }
         }
