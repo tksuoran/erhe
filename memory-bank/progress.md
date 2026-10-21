@@ -10,7 +10,8 @@
 ✓clustered-lights-plan{doc/plans/clustered_lights.md;proposed}
 ✓clustered-lights-review{©User:keep-loop-path(perf-compare)+fixed-cluster-capacity+warning}
 ✓clustered-lights-phase-1{c34473e04;light_array_block-binding-9;all-gates-identical-Metal+MoltenVK;ctest-1766+1769;GL-not-run}+028ab410b{composite_input-layout-before-pipeline(MoltenVK-validation-abort-pre-existing)}
-?clustered-lights-phase-2{CPU-binning+clustered-shader-path}
+✓clustered-lights-phase-2{41066df11;CPU-binner+LIGHT_SHADING_CLUSTERED;V1-identical+V4-0-variants;9-binner-tests;fable-review-no-blockers-10-fixes(capacity-clamp+slice-0-open-xy+tightness-tests+v1->v2-max_light_count-migration);ctest-Metal-1775+MoltenVK-1790}
+⚡clustered-lights-phase-3{GPU-binning;via-harness}
 ?shadow-cache-remaining{per-light-caster-test;skinned-pose-serial;fit-skip}
 
 [TASK::bistro-load]{started-2026-10-18;branch=render-thread;via-harness;doc/plans/bistro_load_profiling.md}
