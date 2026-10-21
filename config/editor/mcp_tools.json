@@ -316,7 +316,7 @@
     "name": "set_window_visibility"
   },
   {
-    "description": "Frame pacing snapshot: display refresh period, pacer state (cadence N, margin, vsync grid phase), latest schedule decision, enforcement flag, simulated workload knob, and capture bounds (first/latest frame id). All times are seconds in the frame-record reference clock unless suffixed _ms.",
+    "description": "Frame pacing snapshot: display refresh period, pacer state (cadence N, margin, vsync grid phase), upshift state (dwell and the dwell required, the last upshift test's stage time against N-1's period, the GPU / CPU clock ratio N-1 is judged at for the last frame's workload - 0 when N-1 has no samples of that workload - and the pre-warm fill), latest schedule decision, enforcement flag, simulated workload knob, and capture bounds (first/latest frame id). All times are seconds in the frame-record reference clock unless suffixed _ms.",
     "inputSchema": {
       "properties": {},
       "type": "object"

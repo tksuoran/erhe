@@ -473,7 +473,7 @@ flowchart TD
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (in progress): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (in progress): Rigging tools roadmap (IK, constraints, skinning, drivers)
 - [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (in progress): Rigging Phase 3 - skeleton editing and posing basics requirements
-- [plans/shadow_map_cache.md](plans/shadow_map_cache.md) (proposed): Shadow map cache: redraw only the shadow layers whose light, configuration or casters changed; Bistro measurements and the tier M N=2 finding
+- [plans/shadow_map_cache.md](plans/shadow_map_cache.md) (proposed): Shadow map cache: redraw only the shadow layers whose light, configuration or casters changed; Bistro measurements and the tier M cadence finding (C29)
 - [plans/shadow_robustness.md](plans/shadow_robustness.md) (proposed): Shadow robustness future work (Metal verification, forward pass cost profiling and optimization)
 - [plans/shadows.md](plans/shadows.md) (proposed): Shadow follow-ups
 - [plans/texture_graph.md](plans/texture_graph.md) (proposed): Texture graph backlog

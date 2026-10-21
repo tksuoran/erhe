@@ -108,15 +108,11 @@ follow-up (`doc/plans/shadows.md` "Temporal whole-fit skip").
 - Skinned and physics scenes: no stale shadow over a 600-frame soak with
   animation playing and bodies falling.
 
-## Related finding: Bistro stays at two refreshes per frame
+## Related finding: tier M cadence on Bistro
 
-Tier M holds Bistro at N=2 (60 fps on the 120 Hz Dell) although the frames
-fit one refresh: with the pacer off the same build displays 99 % of frames
-after one refresh with a 6.4 ms GPU span, and with frozen shadows (4.1-4.5 ms
-of GPU work at the N=1 clock) the pacer still stays at N=2. The scene open
-drives the cadence 1 -> 2 -> 3 -> 2; at N=2 the GPU clocks down to about
-0.5, the window statistic `W` reads about 10 ms and 15-24 self-misses per
-600 frames reset the upshift dwell, so the pre-warmed upshift never starts.
-This belongs to [frame_pacing_metal.md](frame_pacing_metal.md); it is the
-larger Bistro win (60 -> 120 fps with no rendering change) and is
-independent of the cache.
+Tier M held Bistro at N=2 (60 fps on the 120 Hz Dell) although the frames
+fit one refresh: N=1's GPU clock record came from the empty editor before
+the scene opened. Claim C29 (`doc/frame_pacing/algorithm.md` deviation 23)
+fixes the cause; its live gate is open in
+[frame_pacing_metal.md](frame_pacing_metal.md) (Log). The cache's GPU
+savings apply at either cadence.

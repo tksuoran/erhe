@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: `Clock_record` (claim C29): a cadence's clock
+  samples with each frame's work; `Frame_pacer_tunables::clock_record_work_band`
+  (1.5) - the upshift test judges N-1 at the clocks of a similar workload
+  only. `Frame_pacer::get_upshift_state()` / `Upshift_state`: the upshift
+  path's dwell, last stage time and the clocks N-1 is judged at
+  (telemetry).
+
 - `erhe::frame_pacing`: `Frame_time_record::gpu_idle_time` and
   `gpu_service_time()`: the GPU idle gap inside a frame's span (Vulkan: the
   frame bracket's gap between the upload submit and the presenting submit)

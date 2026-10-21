@@ -418,3 +418,20 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   Vulkan path has no present calibration (ProMotion needs a request a
   period earlier, see "Compositor properties per display mode") and no
   pre-warm; re-gate on fixed 60 Hz and ProMotion.
+- 2026-10-21, Bistro held at N=2 (`scripts/bistro_frame_bench.py`, Release,
+  Dell at 120 Hz). With the pacer off the same build displays 99 % of the
+  frames one refresh apart (GPU span 6.4 ms); tier M stayed at N=2 even with
+  the shadow maps frozen (4.1-4.5 ms of GPU work at the N=1 clock). The
+  `upshift` block of `get_frame_pacing_status` showed the cause: N=1's GPU
+  clock record had a low decile of 0.21 - all of it from the empty editor
+  before the scene opened, where the governor idles - so Bistro's work was
+  predicted at 18 ms there and every frame reset the dwell. Fix (claim C29,
+  deviation 23): a clock sample keeps the frame's work and N-1 is judged
+  at the clocks of a similar workload only, at full clock without them.
+  Python 104/104 (the C29 control reproduces the live failure), C++ 35/35
+  (C29 fails on the previous pacer). Live: N=1 reached and held on Bistro
+  with live shadows (`gpu_clock_next` 0.95-0.99) in the one run made before
+  the screen locked; the gate (five Bistro bench runs: N=1 share,
+  two-refresh frames, release to display; and the Dell default-scene gate
+  60/60) needs an unlocked, visible window - a locked screen gives no
+  presentation feedback.

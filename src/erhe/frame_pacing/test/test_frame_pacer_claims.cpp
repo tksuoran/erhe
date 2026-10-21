@@ -1612,3 +1612,66 @@ TEST(Frame_pacer_claims, c28_latency_per_visit)
     const double excess = median_input_to_display(upshift + 20, upshift + 100) - steady;
     EXPECT_LT(excess, 0.5 * t) << "the latency estimate follows the cadence entered";
 }
+
+namespace {
+
+auto run_c29() -> std::vector<Frame_record>
+{
+    const double t        = 1.0 / 120.0;
+    const double dpe_true = t + (1.0 * ms);
+    Scenario scenario;
+    scenario.frame_count                            = 6000;
+    scenario.plant.tunables.refresh_period          = t;
+    scenario.plant.true_deadline_offset             = dpe_true;
+    scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.deadline_offset_initial = dpe_true + (0.3 * ms);
+    scenario.plant.tunables.deadline_offset_max     = dpe_true + (0.3 * ms) + (0.5 * t);
+    scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.plant.tunables.upshift_prewarm_seconds = 2.3 * ms;
+    scenario.drawable_pool                          = 3;
+    scenario.pool_latch_lead                        = dpe_true - (1.8 * ms);
+    scenario.dvfs                                   = true;
+    scenario.dvfs_idle_work                         = 1.0 * ms;
+    scenario.cpu_duration                           = make_gauss(2901, 1.0, 0.2);
+    auto work_engine = std::make_shared<std::mt19937>(2902);
+    scenario.gpu_duration_at_cadence = [work_engine](const std::int64_t k, const int) mutable -> double {
+        if (k < 500) {
+            std::normal_distribution<double> empty_editor{0.3, 0.03};
+            return std::max(0.05, empty_editor(*work_engine)) * ms;
+        }
+        if (k < 530) {
+            return 30.0 * ms; // the scene open
+        }
+        std::normal_distribution<double> scene{4.5, 0.15};
+        return std::max(0.5, scene(*work_engine)) * ms;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    return run_scenario(scenario, pacer);
+}
+
+} // anonymous namespace
+
+TEST(Frame_pacer_claims, c29_clock_records_by_workload)
+{
+    // Live (Metal tier M, Dell at 120 Hz, Bistro): the empty editor ran at
+    // N=1 with the GPU idling at 0.21 of its maximum clock; the scene open
+    // downshifted to N=2, and N=1's clock record - all from the empty
+    // editor - predicted Bistro's 4.1 ms of work (at full clock) at 18 ms
+    // there: every frame reset the dwell, N=2 for good, although with the
+    // pacer off the same frames displayed one refresh apart. The clock at
+    // N-1 is judged from the samples of a similar workload only.
+    const std::vector<Frame_record> records = run_c29();
+    std::size_t upshifts = 0;
+    std::size_t slips    = 0;
+    for (std::size_t i = 540; i < records.size(); ++i) {
+        if ((records[i].vsyncs == 1) && (records[i - 1].vsyncs > 1)) {
+            ++upshifts;
+        }
+        if (records[i].slipped) {
+            ++slips;
+        }
+    }
+    EXPECT_EQ(upshifts, 1u) << "one upshift after the scene open";
+    EXPECT_EQ(vsync_values(records, 3000), (std::set<int>{1})) << "N=1 holds";
+    EXPECT_EQ(slips, 0u) << "no slips after the scene open";
+}
