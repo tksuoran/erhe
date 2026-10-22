@@ -563,6 +563,39 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: the 416-byte light record is split into three
+  std430 arrays (doc/erhe/scene_renderer.md "Light records"):
+  - `Light_struct` / GLSL `Light` (`light_array.lights[slot]`, binding 9,
+    48 bytes): keeps `position_and_inner_spot_cos`,
+    `direction_and_outer_spot_cos`, `radiance_and_range`.
+  - New `Light_shadowed_struct` / GLSL `Light_shadowed`
+    (`Light_interface::light_shadowed_struct`, block
+    `light_shadowed_array_block`, `light_shadowed_array.lights[record]`,
+    binding 11, `light_shadowed_array_buffer_binding_point`, 208 bytes):
+    the three shading vec4s plus `view_origin`, `texture_from_view_relative`
+    and `view_relative_from_texture` (moved from `Light_struct`) and
+    `shadow_params`, which replaces `shadow_limits` (x: caster vertex
+    rounding, was `shadow_limits.x`) and `shadow_index_packed` (y: 2D layer,
+    was `.x`; z: cube index, was `.y`; w: distance rays valid as 1.0 / 0.0,
+    was `.z`), all as floats.
+  - New `Light_shadow_world_struct` / GLSL `Light_shadow_world`
+    (`light_shadow_world_array_block`,
+    `light_shadow_world_array.transforms[record]`, binding 12,
+    `light_shadow_world_array_buffer_binding_point`, 128 bytes):
+    `texture_from_world` and `world_from_texture` (moved from
+    `Light_struct`).
+  - `Light_struct::clip_from_world` is removed (no reader).
+  The record index of a shadow-mapped slot is its 2D layer, or the 2D layer
+  count plus its cube; GLSL `erhe_light_shadow_record(slot)`
+  (`erhe_light_record.glsl`) computes it from the `light_block` counts.
+  `sample_light_visibility()` takes the record index after the light
+  index. `Light_block` gains `shadowed`, `shadow_world`, `shadowed_struct`
+  and `shadow_world_struct`; `Light_view_buffers` gains `shadowed` and
+  `shadow_worlds`; `Light_buffer_ranges` gains `shadowed` and
+  `shadow_worlds`, and its `view_lights` / `view_clusters` pointers are
+  replaced by `view_buffers`. `Light_projections::apply()` composes the
+  view-relative matrices and the bias limits for shadow-mapped slots only.
+
 - `erhe::scene_renderer`: `alpha_test` and `screen_door` primitives moved
   out of the translucent class into their own: they used to be taken by
   `Blending_mode_policy::translucent_primitives_only` /

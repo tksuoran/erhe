@@ -33,7 +33,7 @@ the editor integration.
   cameras use the standard GL cube up-vectors plus `create_look_at`.
 - **Separate dense index.** A shadow-casting point light gets a
   `point_shadow_index` (cube-array layer base, written to
-  `shadow_index_packed.y`) and its 2D `shadow_index` stays `max()`, so the 2D
+  the hot record's `shadow_params.z`) and its 2D `shadow_index` stays `max()`, so the 2D
   shadow loop and 2D receiver sampling skip it for free. Point is the last
   shadow-bearing type bucket, so this does not shift directional / spot 2D layer
   indices.
@@ -202,8 +202,8 @@ lookup is one nearest fetch, a single compare with no filter.
   bound `e (2a + e) / a^2` (`e = 2 get_position_rounding(P - L, V_c)`
   `= 2 ((1 + 4u) V_c + sqrt(3) 4u |P - L|)`, the error of one derivative of
   the caster's light-relative position: `V_c` the light's caster vertex
-  rounding bound (`shadows.md` "Minimum bias", the light block's
-  `shadow_limits.x`) and `|P - L|` standing in for the caster's interpolation
+  rounding bound (`shadows.md` "Minimum bias", the hot record's
+  `shadow_params.x`) and `|P - L|` standing in for the caster's interpolation
   magnitudes, and `a = 2 r_c / (resolution |q|^2)` the smallest world size of
   a cube pixel at the centre, which maximizes the bound), times half the
   texel diagonal on the plane, `sqrt(2) r_c / (resolution |q| |N . d_c|)`,
@@ -223,7 +223,7 @@ lookup is one nearest fetch, a single compare with no filter.
   `inversesqrt` and a divide in Vulkan's precision rules, 4.5 ulps = 9u,
   rounded up).
 - **Not terms.** R32F stores the caster's fp32 value exactly; both passes
-  work relative to the same exact fp32 light position (the light block's
+  work relative to the same exact fp32 light position (the hot record's
   `view_origin`, `world_from_light_camera[3]`, which is the cube face
   cameras' eye); both select the same texel centre, computed by the same
   expression from the same resolution.
@@ -266,7 +266,7 @@ nearer than their own, against 0.08 mm of bias.
 | `src/editor/rendergraph/shadow_render_node.{hpp,cpp}` | cube texture, shared depth scratch, `6*count` render passes (face `f` of cube `p` at `[6*p+f]`), `reconfigure()` on resolution / count |
 | `src/editor/app_rendering.cpp` | threads the preset fields into the node |
 | `src/erhe/scene/erhe_scene/light.{hpp,cpp}` | `point_light_projection_transforms`, `Light_projection_transforms::point_shadow_index` |
-| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.{hpp,cpp}` | dense `point_shadow_index` assignment, `shadow_index_packed.y`, per light `view_origin` (the light position), `shadow_map_resolution` control field (the face resolution), `shadow_cube_texture` + fallback, `c_texture_heap_slot_shadow_cube = 3`, `c_min_point_shadow_resolution` |
+| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.{hpp,cpp}` | dense `point_shadow_index` assignment, `shadow_params.z`, per light `view_origin` (the light position), `shadow_map_resolution` control field (the face resolution), `shadow_cube_texture` + fallback, `c_texture_heap_slot_shadow_cube = 3`, `c_min_point_shadow_resolution` |
 | `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.{hpp,cpp}` | `draw_shadow_casters()` shared by both passes, the point-cube loop, `Render_parameters::point_cube_*` |
 | `src/erhe/scene_renderer/erhe_scene_renderer/shader_key.hpp` | `VARIANT_SHADOW_CUBE` |
 | `res/shaders/erhe_standard_variant.glsl`, `standard.vert`, `standard.frag` | `ERHE_USE_VARYING_POSITION` for the cube variant, the caster write, the receiver multiply |

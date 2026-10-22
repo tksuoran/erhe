@@ -114,7 +114,8 @@ Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
 - `light_block` (binding 1) keeps the header and stays a uniform block. Its
   `lights[]` array moves out.
 - `light_array_block` (binding 9, storage, std430, readonly): the shaded
-  lights in slot order, `Light` unchanged (416 bytes). Written once per view
+  lights in slot order, `Light` (48-byte shading records since the phase 5
+  split; the shadow-mapped lights' records are bindings 11 and 12). Written once per view
   per frame into a `CPU_write` ring range, at the actual light count (no
   padding to `max_light_count`), and bound by every pass of that view, the
   binning dispatch (C4) included. `Light_buffer::update()` returns the
@@ -386,7 +387,8 @@ binning equals loop mode with the same 43 lights shaded.
 5. **Refinements, each only when V5 shows it pays:** spot cone (built,
    see "Phase 5 spot cone" below); skip binning on unchanged inputs (C4); shared-memory light tiles in the
    cluster loop for scenes with hundreds of lights; splitting `Light` into a
-   shading record and a shadow record indexed by shadow slot (Open, item 1).
+   shading record and a shadow record indexed by shadow slot (built, see
+   "Phase 5 light record split" below).
 
 Phase 5 spot cone (built): a spot light that passes the sphere test of a
 closed cluster is tested by its cone against the sphere around the
@@ -427,6 +429,51 @@ costs 0.15 ms of fragment time over loop mode with 16 (was 0.57 ms). The
 removed entries carry that cost (shadow-mapped spot lights, overdrawn
 foliage fragments) is not measured.
 
+Phase 5 light record split (built): the 416-byte `Light` is split along
+what the fragment light loops read. Every shaded light has a 48-byte
+shading record (`light_array`, binding 9, by slot), which the unshadowed
+loops and the ray-hit loops read; every shadow-mapped light has a 208-byte
+hot record (`light_shadowed_array`, binding 11) holding the shading fields
+and everything its shadow lookup reads, so its loop iteration reads one
+contiguous record with no dependent load, and a 128-byte cold record of
+world-space shadow transforms for the debug views (`light_shadow_world_array`,
+binding 12). The shadow record index is the slot less the unshadowed slots
+before it, computed without memory access. Layout in
+[../erhe/scene_renderer.md](../erhe/scene_renderer.md) "Light records";
+`Light_projections::apply()` composes the view-relative matrices and the
+bias limits for shadow-mapped slots only. Gates (M4 Pro, Debug): the
+default scene with the 16 added lights (loops and clustered, cameras a and
+b, shader debug 28 and 30 for a directional, a spot and a point light, the
+distance technique and hard filtering) byte-identical to the previous
+commit on Metal and MoltenVK (validation clean); the ray trace readback and
+the radiance cascades render byte-identical, DDGI within its
+nondeterminism; ctest 1785 / 1788 passed (Metal / MoltenVK);
+`get_light_cluster_check` 0 mismatches. Bistro's `render_scene_image` takes
+one of two images run to run at the previous commit as well (98 pixels
+apart, same binary), so it is compared by its set of outcomes; the split
+produces one of them.
+
+Measurements (Bistro bench camera, Release Metal, M4 Pro), fullscreen
+`Viewport window` fragment phase from Metal System Trace (medians over
+190-410 frames). Back-to-back sessions of one binary drifted by up to 6 %,
+so the layouts were measured interleaved (previous commit, a first split
+with one shadow record per shadow-mapped light reached through an index in
+the shading record, this split; two rounds):
+
+| | previous commit | indexed shadow record | hot / cold records |
+|---|---|---|---|
+| loops Medium (16 shaded) | 4.15-4.21 | 3.98-3.99 | 3.97-4.03 |
+| clustered (43) | 4.25-4.30 | 4.22 | 4.18-4.22 |
+| clustered, shadows off | 3.58-3.62 | 3.56-3.57 | 3.52-3.55 |
+
+The vertex phase stays 2.0 ms. Render thread CPU (R, headless, vsync and
+pacing off, two sessions each) loops Medium 1.58-1.80 -> 1.46-1.57 ms,
+clustered 1.86-1.97 -> 1.65-1.70 ms: the skipped caster vertex rounding and
+view-relative composition of the unshadowed lights. DDGI, radiance cascades
+and the ray trace do no GPU work on Bistro in the bench session (zero
+timers; the ray trace reports no instances), so the ray-hit loops are not
+measured there.
+
 ## Verification
 
 - **V1. Image identity.** With every scene light within the preset's limits
@@ -460,11 +507,7 @@ foliage fragments) is not measured.
 
 ## Open
 
-1. Split `Light` (416 bytes) into a 96-byte shading record for every light
-   and a 320-byte shadow record per shadow slot. Smaller loads in every
-   loop iteration and in the ray-hit loops; touches every reader. Decided
-   from V5 in phase 5.
-2. Shadow slots remain by scene order (`bistro_viewport_gpu.md` option 1 is
+1. Shadow slots remain by scene order (`bistro_viewport_gpu.md` option 1 is
    not pursued), so on Bistro the far shadow-mapped point lights keep their
    cube faces while near lights shade unshadowed; clustered mode makes the
    near lights lit, not shadowed.

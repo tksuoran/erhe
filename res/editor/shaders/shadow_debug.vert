@@ -26,8 +26,16 @@ void main()
         vec2( 1.0,  1.0)  // d
     );
 
-    uint  light_index = 0;
-    Light light       = light_array.lights[light_index];
+    // Shadow record 0 is 2D shadow map layer 0 when a 2D shadow map exists
+    // (a shadow-mapped directional or spot light); without one nothing is
+    // drawn (degenerate triangles).
+    if ((light_block.directional_shadow_count + light_block.spot_shadow_count) == 0u) {
+        v_color     = 0.0;
+        gl_Position = vec4(0.0);
+        return;
+    }
+    uint               shadow_record = 0;
+    Light_shadow_world shadow        = light_shadow_world_array.transforms[shadow_record];
 
     vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
     uint resolution_x         = uint(shadowmap_resolution.x);
@@ -45,10 +53,10 @@ void main()
         float(cell_x + corner_texel_offset.x) / shadowmap_resolution.x,
         float(cell_y + corner_texel_offset.y) / shadowmap_resolution.y
     );
-    float light_layer     = float(light_index);
+    float light_layer     = float(shadow_record);
     float lod             = 0.0;
     float shadow_sample   = textureLod(s_shadow_no_compare, vec3(center_position_in_light_texture, light_layer), lod).x;
-    vec4  pos_world       = light.world_from_texture * vec4(corner_position_in_light_texture, shadow_sample, 1.0);
+    vec4  pos_world       = shadow.world_from_texture * vec4(corner_position_in_light_texture, shadow_sample, 1.0);
     mat4  clip_from_world = camera.cameras[c_view_index].clip_from_world;
     v_color     = float((cell_x ^ cell_y) & 1u);
     gl_Position = clip_from_world * pos_world;
