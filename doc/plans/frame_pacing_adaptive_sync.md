@@ -2,9 +2,11 @@
 
 Status: in progress
 
-Built: detection, pacer and editor wiring; loops Medium holds 120 Hz
-fullscreen in every session. Open: a load just inside one period
-(clustered) is history-dependent at N=1 / N=2 (see "Verification").
+Built and gated: detection, pacer and editor wiring; loops Medium and
+clustered hold 120 Hz fullscreen on the Adaptive-Sync display in every
+session, windowed unchanged (see "Verification"; claims C30 and C31,
+deviations 24 and 25). The goal is met; open: the ProMotion and 60 Hz
+re-gates and a continuous VRR cadence for loads beyond one period.
 
 Tier M (`doc/erhe/metal_backend.md` "Frame pacing", algorithm in
 `doc/frame_pacing/algorithm.md`, Metal iteration log in
@@ -132,49 +134,70 @@ the editor seeds `Frame_pacer_tunables::deadline_offset_initial` there
 instead of the windowed compositor's calibration (T + 1.3 ms = 9.63 ms at
 120 Hz).
 
+A load just inside one period (Bistro clustered) stayed at N=2 on the
+upshift test's hysteresis band; on VRR the cadence tests take the forms of
+`doc/frame_pacing/algorithm.md` deviation 25, verified by claim C31 in both
+model suites.
+
 ## Verification
 
 Live, 2026-10-22, Release Metal (`build_xcode_metal`), M4 Pro, external
 48-120 Hz panel at 3840x1440 @ 120 Hz, Bistro at the bench camera; per
-config 10 s settle, then a 5 s pacing capture. Fullscreen detection log:
-"display presentation: variable refresh (fullscreen; display refresh
-interval 8.333 ... 20.833 ms = 48.0 ... 120.0 Hz)"; windowed: "fixed grid
-(windowed; ...)".
+config 10 s settle, then a 5 s pacing capture (about 600 frames at N=1).
+Fullscreen detection log: "display presentation: variable refresh
+(fullscreen; display refresh interval 8.333 ... 20.833 ms = 48.0 ... 120.0
+Hz)"; windowed: "fixed grid (windowed; ...)". The display's minimum
+interval is 8.344 ms; "exact" is the share of present deltas within
+0.1 ms of it.
 
-| session | config (in order) | present delta median (p5 / p95), ms | within 0.1 ms of 8.333 | N | GPU span median (p5 / p95), ms | GPU clock |
+| session | config (in order) | present delta median (p5 / p95), ms | exact | N | GPU span median (p5 / p95), ms | GPU clock |
 |---|---|---|---|---|---|---|
-| A fullscreen | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.51 | 1.00 |
-| | clustered | 16.667 (16.15 / 17.02) | 0 % | 2 | 8.01 | 0.98 |
-| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.51 | 1.00 |
-| B fullscreen, heavy first | loops 43 lights | 16.656 (16.43 / 16.89) | 0 % | 2 | 10.55 (10.34 / 11.46) | 0.99 |
-| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.34 (6.30 / 6.47) | 0.99 |
-| | clustered | 16.667 (16.34 / 16.97) | 0 % | 2 | 8.19 (7.73 / 10.84) | 0.91 |
-| C fullscreen | clustered (first) | 16.667 (16.23 / 17.00) | 0 % | 2 | 7.81 (7.63 / 10.81) | 0.97 |
-| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.31 (6.28 / 6.53) | 0.99 |
-| | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.67 (7.62 / 7.70) | 1.00 |
-| windowed | loops Medium | 8.344 (8.344 / 8.344) | - | 1 | 4.05 | 0.97 |
-| | clustered | 8.344 (8.344 / 8.344) | - | 1 | 4.72 | 0.97 |
+| D fullscreen, clustered first | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.75 (7.70 / 7.78) | 1.00 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 99.8 % | 1 | 6.35 (6.32 / 6.38) | 0.99 |
+| | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.74 (7.69 / 7.78) | 1.00 |
+| E fullscreen, heavy first | loops 43 lights | 16.639 (16.32 / 16.94) | 0 % | 2 | 10.38 (10.26 / 10.48) | 0.99 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 99.8 % | 1 | 6.29 (6.25 / 6.51) | 0.99 |
+| | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.65 (7.60 / 7.68) | 1.00 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.29 (6.25 / 6.40) | 0.99 |
+| F fullscreen | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.31 (6.26 / 6.43) | 0.99 |
+| | clustered | 8.344 (8.344 / 8.344) | 99.7 % | 1 | 7.66 (7.61 / 7.69) | 1.00 |
+| | loops 43 lights | 16.663 (16.20 / 17.06) | 0 % | 2 | 10.44 (10.26 / 11.61) | 0.99 |
+| | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.66 (7.61 / 7.69) | 1.00 |
+| G fullscreen, clustered first | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.73 (7.69 / 7.76) | 1.00 |
+| | loops 43 lights | 16.667 (15.99 / 17.04) | 0.7 % | 2 | 10.50 (10.37 / 10.66) | 0.99 |
+| | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.73 (7.69 / 7.77) | 1.00 |
+| windowed | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 3.97 (3.87 / 4.14) | 0.98 |
+| | clustered | 8.344 (8.344 / 8.344) | 99.8 % | 1 | 4.58 (4.46 / 4.79) | 0.98 |
+| H fullscreen, clustered first | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.63 (7.59 / 7.67) | 1.00 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 99.7 % | 1 | 6.28 (6.24 / 6.41) | 0.99 |
+| | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.63 (7.59 / 7.67) | 1.00 |
+| I fullscreen, heavy first | loops 43 lights | 16.663 (16.10 / 17.07) | 0 % | 2 | 10.36 (10.24 / 10.81) | 0.98 |
+| | clustered | 8.344 (8.344 / 8.344) | 99.8 % | 1 | 7.67 (7.62 / 7.69) | 1.00 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.31 (6.27 / 6.47) | 0.99 |
+| windowed | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 4.73 (4.60 / 4.97) | 0.98 |
+
+Sessions D-G and the first windowed session ran the upshift rule of
+deviation 25 with the earlier downshift rules; H, I and the last windowed
+row run the backlog downshift test of deviation 25 as it stands.
 
 Fullscreen, the grid estimate stays 8.333 ms and the deadline offset at
-its initial value (`deadline_offset_initial`) in every config; the display shows each frame 8.344 ms after the
-previous one (its actual minimum interval), which the phase tracking of
-on-time displays follows. Windowed, the grid estimate is 8.344 ms with the
-calibrated deadline offset (9.03 ms), as before.
+its initial value (2.5 ms) in every config; the display shows each frame
+8.344 ms after the previous one (its actual minimum interval), which the
+phase tracking of on-time displays follows. Windowed, the grid estimate is
+8.344 ms (the tracked fixed grid) and the deadline offset 11.7-12.7 ms
+(present calibration 9.62 ms, raised by the estimator).
 
-- The drift is gone: no session's grid estimate moved, and loops Medium
-  holds 120 Hz after the heavy configuration (B) as in a fresh session.
-- Loops 43 lights (10.5 ms of GPU) runs at N=2 with 16.7 ms deltas, as
-  its load requires.
-- Clustered (GPU span 7.67 ms at N=1, 0.66 ms margin) is borderline and
-  still history-dependent: 1 of 4 visits holds N=1 at 120 Hz, 3 stay at
-  N=2. At N=2 its GPU span has a tail (p95 10.8 ms against 7.7 ms at N=1),
-  and those frames lie beyond the N=1 period, so they reset the upshift
-  dwell. On a VRR display an integer cadence is the wrong model for such a
-  load: a frame slightly over T could display when ready (about 8.5 ms,
-  ~118 Hz) instead of waiting for a second period. A continuous VRR
-  cadence (period = max(T, the frame's predicted time)) is open.
-- Not re-gated: the built-in ProMotion panel in fullscreen (its range
-  makes it a variable refresh display too) and the 60 Hz modes.
+- Loops Medium and clustered hold 120 Hz in every fullscreen visit (10
+  clustered visits: first in a session, after loops Medium, after loops 43
+  lights), with no pre-warm frame captured: no visit fell to N=2.
+- Loops 43 lights (10.4-10.5 ms of GPU) runs at N=2 with 16.7 ms deltas, as
+  its load requires on the integer cadence. A continuous VRR cadence
+  (targets spaced at the predicted frame interval when it exceeds T, about
+  95 Hz for that load) is not part of this plan's goal and is open.
+- Not re-gated here: the built-in ProMotion panel in fullscreen (its range
+  makes it a variable refresh display too) and the 60 Hz modes; they belong
+  to the tier M re-gate of [frame_pacing_metal.md](frame_pacing_metal.md),
+  which needs the user at the machine.
 
 ## Goal and gate
 

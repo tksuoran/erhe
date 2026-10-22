@@ -74,6 +74,13 @@ public:
     // scene opens, 0.21 at N=1); 0 = never.
     double                                  dvfs_idle_work  {0.0};
     double                                  dvfs_idle       {0.21};
+    // Claim C31: at N>=2 without pre-warm a frame runs at the governor's
+    // clock times dvfs_dip_factor with probability dvfs_dip_probability
+    // (live, Bistro clustered at N=2: clock median 0.91-0.97, p5 0.67; the
+    // span tail p95 10.8 ms is the clock, the work stays 7.5 ms); 0 = never.
+    double                                  dvfs_dip_probability{0.0};
+    double                                  dvfs_dip_factor     {1.0};
+    unsigned int                            dvfs_dip_seed       {0};
     Plant_parameters                        plant{};
     // Claim C6: frames in [forced_first, forced_last] run with latency
     // estimate and margin forced to zero.
@@ -278,6 +285,8 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
     std::int64_t pending_display_id  = 0;
     std::int64_t pending_display_slot= 0;
     std::mt19937 skip_engine{scenario.skip_seed};
+    std::mt19937 dip_engine{scenario.dvfs_dip_seed};           // C31
+    std::uniform_real_distribution<double> dip_uniform{0.0, 1.0};
     std::uniform_real_distribution<double> skip_uniform{0.0, 1.0};
     const auto maybe_skip = [&](const std::int64_t slot) -> std::int64_t {
         // C17: scanout-side skip - the present op stays on cadence but
@@ -344,8 +353,14 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
         const double gpu_work  = gpu_dur; // at full clock (C29)
         double gpu_clock = 0.0;
         if (scenario.dvfs) {
-            gpu_dur   = gpu_dur / dvfs_clock;
             gpu_clock = dvfs_clock;
+            if (scenario.dvfs_dip_probability > 0.0) {
+                const bool dip = dip_uniform(dip_engine) < scenario.dvfs_dip_probability;
+                if (dip && (decision.vsyncs_per_frame >= 2) && (decision.prewarm_seconds <= 0.0)) {
+                    gpu_clock = dvfs_clock * scenario.dvfs_dip_factor;
+                }
+            }
+            gpu_dur = gpu_dur / gpu_clock;
         } else if (scenario.gpu_clock) {
             // C25: the work at full clock takes longer on a clocked-down GPU.
             const double ratio = scenario.gpu_clock(k, decision.vsyncs_per_frame);

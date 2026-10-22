@@ -141,8 +141,10 @@ public:
     // period tracking), a late display re-anchors the slot cursor only, no
     // target lies more than max_refresh_interval after the previous one, the
     // cadence tests drop the guard allowance (a late frame costs its
-    // lateness, not a refresh), and a frame the display could not show at
-    // its target (a repeat in between) is no deadline offset evidence.
+    // lateness, not a refresh), the cadence tests take their VRR forms
+    // (C31, deviation 25: no upshift band, the queue backlog as the
+    // downshift test, a dwell-scaled upshift survival window), and a frame the display could not show at its
+    // target (a repeat in between) is no deadline offset evidence.
     Present_display_kind display             {Present_display_kind::fixed_grid};
     double               max_refresh_interval{0.0}; // variable_refresh: the longest interval the display holds an image (s), > 0
 };
@@ -313,6 +315,11 @@ private:
     void               on_variable_refresh_feedback(std::int64_t frame_id, double achieved_present_time);
     [[nodiscard]] auto is_variable_refresh  () const -> bool;
     [[nodiscard]] auto cadence_guard        () const -> double; // C30: the cadence tests' jitter allowance
+    [[nodiscard]] auto upshift_hysteresis   () const -> double; // C31: the upshift test's hysteresis width
+    [[nodiscard]] auto vrr_overload         () const -> bool;   // C31: the VRR downshift test (queue backlog)
+    [[nodiscard]] auto upshift_survival     () const -> double; // C10/C31: the time an upshift must hold
+    [[nodiscard]] auto target_spacing       (int vsyncs) const -> std::int64_t; // C30: slots between targets at a cadence
+    [[nodiscard]] auto upshift_shortens_spacing() const -> bool; // C31: whether N-1 spaces targets closer than N
     [[nodiscard]] auto vrr_slots_max        () const -> std::int64_t; // C30: most slots between two targets without a repeat
     [[nodiscard]] auto deadline_evidence    () -> double;
 
@@ -358,6 +365,8 @@ private:
     double m_last_cpu_work{0.0};
     int    m_consecutive_misses{0};
     double m_streak_attribution{0.0}; // min over streak of max(c, g); +inf when no streak
+    double m_backlog           {0.0};   // C31: queue backlog the stage times build at the current cadence
+    bool   m_backlog_growing   {false}; // C31: the latest frame at the current cadence added to it
     std::int64_t m_last_pressure_frame{-1000000000}; // completed-count of last (near-)miss
     // Upshift backoff: a pressure-reverted upshift doubles the next probe's
     // required dwell (geometric convergence at infeasible-borderline load);
