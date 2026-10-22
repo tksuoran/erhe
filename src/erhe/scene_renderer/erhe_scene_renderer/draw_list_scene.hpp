@@ -57,6 +57,7 @@ public:
     uint32_t              shadow_bias      {1};
     uint32_t              shadow_technique {0};
     uint32_t              shadow_depth_bits{0};
+    Specular_anti_aliasing specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
     // DDGI (doc/editor/ddgi.md phase 6): whether the probe volume is active
     // this frame. Toggling it changes the shader variant of every color
     // draw, so it belongs in the environment the cached resolutions key on.

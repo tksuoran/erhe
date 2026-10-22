@@ -318,7 +318,7 @@ vec3 evaluate_bxdf(Hit_surface surface, Material m, vec3 base_color, float rough
     if ((m.bxdf_model == 2u) || (m.bxdf_model == 4u)) { // anisotropic_brdf / anisotropic_engine_ready
         vec3 T = normalize(surface.tangent.xyz);
         vec3 B = normalize(cross(N, T)) * surface.tangent.w;
-        return anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, m.reflectance, L, V, T, B, N);
+        return anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, m.reflectance, L, V, T, B, N, vec2(0.0)); // no specular anti-aliasing (no derivatives in compute)
     }
     if (m.bxdf_model == 3u) { // anisotropic_slope
         vec3 T     = normalize(surface.tangent.xyz);

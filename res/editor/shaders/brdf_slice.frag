@@ -1,3 +1,8 @@
+// The slice shows the finite difference specular anti-aliasing kernel
+// (ERHE_SPECULAR_ANTI_ALIASING_FINITE_DIFFERENCE, erhe_bxdf.glsl) of the half
+// vector across the slice; its normal is constant, so the normal kernel would
+// be zero.
+#define ERHE_SPECULAR_ANTI_ALIASING 2
 #include "erhe_bxdf.glsl"
 
 layout(location = 0) in vec2 v_texcoord;
@@ -64,6 +69,12 @@ void main() {
 
     // compute V by reflecting L across H
     vec3 V = 2 * dot(H, L) * H - L;
+
+    // Specular anti-aliasing (finite difference, defined above): fwidth()
+    // of the half vector is defined here (uniform control flow).
+    mat3 TBN_t            = transpose(mat3(tangent, bitangent, normal));
+    vec2 kernel_roughness = specular_aa_kernel_from_footprint(fwidth(shading_frame_half_vector(TBN_t, V, L).xy));
+
     vec3 b = anisotropic_brdf(
         material.base_color.rgb,
         material.roughness.x,
@@ -74,7 +85,8 @@ void main() {
         V,
         tangent,
         bitangent,
-        normal
+        normal,
+        kernel_roughness
     );
 
     // apply N . L

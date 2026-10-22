@@ -367,7 +367,30 @@ auto Shader_key::derive(
         // when has_color_0, so vertex-color debug modes are covered.
     }
 
+    // The environment's specular anti-aliasing mode reaches only the keys
+    // whose shader calls anisotropic_brdf().
+    set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(key));
+
     return key;
+}
+
+void set_specular_anti_aliasing_axis(Shader_key& key, const Specular_anti_aliasing mode)
+{
+    const uint32_t bxdf_model = key.get(Shader_int::BXDF_MODEL);
+    const bool     uses_anisotropic_brdf =
+        (
+            (bxdf_model == static_cast<uint32_t>(erhe::primitive::Bxdf_model::anisotropic_brdf)) ||
+            (bxdf_model == static_cast<uint32_t>(erhe::primitive::Bxdf_model::anisotropic_engine_ready))
+        ) &&
+        key.get(Shader_bool::USE_VERTEX_VARYING_TANGENT) &&
+        key.get(Shader_bool::USE_VERTEX_VARYING_BITANGENT);
+    const Specular_anti_aliasing value = uses_anisotropic_brdf ? mode : Specular_anti_aliasing::off;
+    key.set(Shader_int::SPECULAR_ANTI_ALIASING, static_cast<uint32_t>(value));
+}
+
+auto get_specular_anti_aliasing(const Shader_key& key) -> Specular_anti_aliasing
+{
+    return static_cast<Specular_anti_aliasing>(key.get(Shader_int::SPECULAR_ANTI_ALIASING));
 }
 
 auto light_type_index(const erhe::scene::Light_type type) -> std::size_t

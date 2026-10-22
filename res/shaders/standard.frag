@@ -217,6 +217,12 @@ layout(location = 16) flat in float v_wire_width;
 #  define ERHE_USES_LIT_LOCALS 1
 #endif
 
+// The BxDF dispatch below calls anisotropic_brdf(), which takes the
+// specular anti-aliasing kernel (erhe_bxdf.glsl).
+#if ((ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_BRDF) || (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY)) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
+#  define ERHE_USES_ANISOTROPIC_BRDF 1
+#endif
+
 #if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
 // Bicubic lightmap sampling (doc/lightmap_baking_plan.md article
 // alignment): cubic B-spline reconstruction via 4 bilinear taps - hides
@@ -645,6 +651,32 @@ void main()
 #  endif
 
     float N_dot_V = clamped_dot(N, V);
+
+#  if defined(ERHE_USES_ANISOTROPIC_BRDF)
+    // Specular anti-aliasing (erhe_bxdf.glsl; ERHE_SPECULAR_ANTI_ALIASING
+    // axis): every derivative it needs is taken here, once per fragment, in
+    // uniform control flow, ahead of the lightmap branch and the light loops.
+    // ERHE_SPECULAR_AA_KERNEL(L, point_to_light, positional) is the kernel
+    // roughness of one light.
+    mat3 TBN_t = transpose(mat3(T, B, N));
+#    if ERHE_SPECULAR_ANTI_ALIASING == ERHE_SPECULAR_ANTI_ALIASING_FINITE_DIFFERENCE
+    Specular_aa_fragment specular_aa = specular_aa_begin_fragment(
+        TBN_t,
+        V,
+        v_view_relative_position,
+        view_position_in_world - v_position.xyz,
+        T,
+        B,
+        N
+    );
+#      define ERHE_SPECULAR_AA_KERNEL(L_arg, P2L_arg, POSITIONAL_arg) specular_aa_light_kernel(specular_aa, TBN_t, L_arg, P2L_arg, POSITIONAL_arg)
+#    elif ERHE_SPECULAR_ANTI_ALIASING == ERHE_SPECULAR_ANTI_ALIASING_NORMAL_KERNEL
+    vec2 specular_aa_kernel = specular_aa_kernel_from_normal_derivatives(dFdx(N), dFdy(N), T, B);
+#      define ERHE_SPECULAR_AA_KERNEL(L_arg, P2L_arg, POSITIONAL_arg) specular_aa_kernel
+#    else
+#      define ERHE_SPECULAR_AA_KERNEL(L_arg, P2L_arg, POSITIONAL_arg) vec2(0.0)
+#    endif
+#  endif
 #endif // ERHE_USES_LIT_LOCALS
 
     vec3 color;
@@ -657,13 +689,17 @@ void main()
         // tangent/bitangent varyings, fall back to the isotropic call
         // (using roughness_x) so the shader still links and renders
         // something reasonable.
+        // BXDF_CALL(L, point_to_light, positional): positional is 1.0 for
+        // spot and point lights (point_to_light changes with the fragment
+        // position) and 0.0 for directional lights; the anisotropic BRDF's
+        // finite difference specular anti-aliasing reads them.
 #  if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
         mat3 TBN_t = transpose(mat3(T, B, N));
-#    define BXDF_CALL(L_arg) slope_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, TBN_t, L_arg, V, T, B, N)
-#  elif ((ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_BRDF) || (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY)) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
-#    define BXDF_CALL(L_arg) anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, L_arg, V, T, B, N)
+#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) slope_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, TBN_t, L_arg, V, T, B, N)
+#  elif defined(ERHE_USES_ANISOTROPIC_BRDF)
+#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, L_arg, V, T, B, N, ERHE_SPECULAR_AA_KERNEL(L_arg, P2L_arg, POSITIONAL_arg))
 #  else
-#    define BXDF_CALL(L_arg) isotropic_brdf(base_color, roughness_x, metallic, material.reflectance, L_arg, V, N)
+#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) isotropic_brdf(base_color, roughness_x, metallic, material.reflectance, L_arg, V, N)
 #  endif
 
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
@@ -722,7 +758,7 @@ void main()
             float N_dot_L        = dot(N, L); \
             if (N_dot_L > 0.0) { \
                 vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane); \
-                color += intensity * BXDF_CALL(L); \
+                color += intensity * BXDF_CALL(L, point_to_light, 0.0); \
             } \
         }
 #  define ERHE_SHADE_DIRECTIONAL_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
@@ -733,7 +769,7 @@ void main()
             float N_dot_L        = dot(N, L); \
             if (N_dot_L > 0.0) { \
                 vec3 intensity = light.radiance_and_range.rgb; \
-                color += intensity * BXDF_CALL(L); \
+                color += intensity * BXDF_CALL(L, point_to_light, 0.0); \
             } \
         }
 #  define ERHE_SHADE_SPOT_SHADOWMAPPED(LIGHT_INDEX) { \
@@ -747,7 +783,7 @@ void main()
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
                 float light_visibility  = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane); \
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility; \
-                color += intensity * BXDF_CALL(L); \
+                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
             } \
         }
 #  define ERHE_SHADE_SPOT_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
@@ -760,7 +796,7 @@ void main()
             if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb; \
-                color += intensity * BXDF_CALL(L); \
+                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
             } \
         }
         // Point shadow-mapped: sample the omnidirectional shadow cube by the
@@ -776,7 +812,7 @@ void main()
             if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
                 float light_visibility  = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, float(light.shadow_index_packed.y), light.shadow_limits.x, shadow_receiver_plane); \
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility; \
-                color += intensity * BXDF_CALL(L); \
+                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
             } \
         }
 #  define ERHE_SHADE_POINT_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
@@ -788,7 +824,7 @@ void main()
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
             if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb; \
-                color += intensity * BXDF_CALL(L); \
+                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
             } \
         }
 
@@ -866,6 +902,9 @@ void main()
 
         } // !lightmap_valid - analytic lights gated off for lightmapped draws
 #  undef BXDF_CALL
+#  if defined(ERHE_SPECULAR_AA_KERNEL)
+#    undef ERHE_SPECULAR_AA_KERNEL
+#  endif
     }
 #endif
 

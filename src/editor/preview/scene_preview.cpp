@@ -2,6 +2,8 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "app_settings.hpp"
+#include "config/generated/graphics_preset_entry.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "renderers/material_set_factory.hpp"
@@ -349,6 +351,13 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
     // actually uses.
     const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(light_layer->lights, get_light_count_limits(), m_context.program_interface->light_interface.max_light_count);
 
+    // The graphics preset in effect (the codegen defaults when the editor
+    // runs without settings, as prewarm.cpp does).
+    static const Graphics_preset_entry s_default_preset{};
+    const Graphics_preset_entry& preset = (m_context.app_settings != nullptr)
+        ? m_context.app_settings->graphics.current_graphics_preset
+        : s_default_preset;
+
     // Preview is single-view -- offscreen render target, never multiview.
     static constexpr uint32_t single_view = 0u;
     const std::span<const uint32_t> view_counts{&single_view, 1};
@@ -362,7 +371,15 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
         .mesh_memory            = *m_context.mesh_memory,
         .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
         .warmup_targets         = {},
-        .light_partition        = partition
+        .light_partition        = partition,
+        // The environment axes the preview's Composition_pass draws with:
+        // the preset's shadow and specular anti-aliasing modes, and the
+        // depth bits of this preview's own (dummy) shadow map.
+        .shadow_filter          = static_cast<uint32_t>(preset.shadow_filter),
+        .shadow_bias            = static_cast<uint32_t>(preset.shadow_bias),
+        .shadow_technique       = static_cast<uint32_t>(preset.shadow_technique),
+        .shadow_depth_bits      = m_shadow_texture ? erhe::scene_renderer::get_shadow_depth_bits_axis(m_shadow_texture->get_pixelformat()) : 0u,
+        .specular_anti_aliasing = static_cast<erhe::scene_renderer::Specular_anti_aliasing>(preset.specular_anti_aliasing)
     };
     forward_renderer.prewarm_standard_variants(params);
 }

@@ -48,6 +48,7 @@
 #include "config/generated/shadow_frustum_fit_config_serialization.hpp"
 #include "config/generated/shadow_technique_mode.hpp"
 #include "config/generated/sky_config_serialization.hpp"
+#include "config/generated/specular_anti_aliasing_mode.hpp"
 #include "config/generated/text_renderer_config.hpp"
 #include "config/generated/text_renderer_config_serialization.hpp"
 #include "config/generated/threading_config.hpp"
@@ -524,6 +525,28 @@ void Settings_window::imgui()
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderInt("##", &graphics_preset.point_shadow_light_count, 0, 8)) {
                 on_graphics_preset_edited();
+            }
+        });
+        // Specular anti-aliasing of the anisotropic BRDF
+        // (doc/erhe/scene_renderer.md "Specular anti-aliasing"); the
+        // SPECULAR_ANTI_ALIASING variant axis of the anisotropic variants.
+        add_entry("Specular Anti-aliasing", [this]() {
+            Graphics_preset_entry&            graphics_preset = get_graphics_preset();
+            const Specular_anti_aliasing_mode current         = graphics_preset.specular_anti_aliasing;
+            const erhe::codegen::Enum_info&   enum_info       = get_enum_info(static_cast<const Specular_anti_aliasing_mode*>(nullptr));
+            if (ImGui::BeginCombo("##", std::string{::to_string(current)}.c_str())) {
+                for (const erhe::codegen::Enum_value_info& value_info : enum_info.values) {
+                    const Specular_anti_aliasing_mode mode     = static_cast<Specular_anti_aliasing_mode>(value_info.value);
+                    const bool                        selected = (mode == current);
+                    if (ImGui::Selectable(value_info.name, selected)) {
+                        graphics_preset.specular_anti_aliasing = mode;
+                        on_graphics_preset_edited();
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
             }
         });
     }

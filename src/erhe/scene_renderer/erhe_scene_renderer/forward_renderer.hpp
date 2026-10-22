@@ -134,6 +134,9 @@ public:
         // = UNORM, the hard path snaps its reference to that grid; 32 = float
         // and 0 = no shadow map, no snap).
         uint32_t                                               shadow_depth_bits{0};
+        // ERHE_SPECULAR_ANTI_ALIASING variant axis of the variants that call
+        // anisotropic_brdf() (set_specular_anti_aliasing_axis()).
+        Specular_anti_aliasing                                 specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
         // .x: 0xffffffffu = no active joint for the joint_weight_ramp debug
         // mode ("missing data" magenta), anything else = one is active and
         // marked per-slot in the joint buffer (see debug_target_joint).
@@ -202,6 +205,7 @@ public:
         uint32_t                                 shadow_bias{1};
         uint32_t                                 shadow_technique{0};
         uint32_t                                 shadow_depth_bits{0};
+        Specular_anti_aliasing                   specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
         glm::uvec4                               debug_joint_indices{0xffffffffu, 0, 0, 0};
         std::span<const glm::vec4>               debug_joint_colors{};
         const erhe::scene::Node*                 debug_target_joint{nullptr};
@@ -278,6 +282,9 @@ public:
         // ERHE_SHADOW_DEPTH_BITS axis to prewarm: get_shadow_depth_bits_axis()
         // of the shadow map format the runtime will sample.
         uint32_t                                                    shadow_depth_bits{0};
+        // Specular anti-aliasing mode to prewarm (ERHE_SPECULAR_ANTI_ALIASING
+        // axis). Same single-valued, warm-the-active-mode policy.
+        Specular_anti_aliasing                                      specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
     };
 
     // Returns the number of Device::warmup_render_pipeline calls issued

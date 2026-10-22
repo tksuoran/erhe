@@ -146,5 +146,75 @@ color attribute that input on its own, the factor and the texture unread;
 an ordinary material take its base color from `primvars:displayColor`, which
 slot 1 above can only do because its own base color is white.
 
+### Specular anti-aliasing
+
+`anisotropic_brdf()` (`res/shaders/erhe_bxdf.glsl`) widens its GGX lobe by a
+kernel roughness added to each alpha^2 (Kaplanyan et al. 2016, Tokuyoshi
+2017), so a highlight that changes faster than a pixel does not alias. Both
+kernel forms below use the pixel filter's standard deviation `sigma` 0.5 and
+the clamp `Kappa` 0.18; they are not equal estimates (the half vector form
+squares an L1 footprint, the normal form sums squared derivatives, so they
+can differ by up to a factor of 2). The function takes the kernel as an
+argument and takes no derivative itself: the light loops of `standard.frag`
+are non-uniform control flow (the per-light `N_dot_L` and range branches,
+and in clustered mode neighbouring pixels walking different cluster lists),
+where a derivative is undefined. `standard.frag` takes every derivative the
+kernel needs once per fragment, in uniform control flow next to the shadow
+receiver plane and ahead of the lightmap branch, and evaluates the per-light
+part without derivatives, so the loop and clustered paths shade the same
+pixels identically.
+
+The mode is `Specular_anti_aliasing` (`shader_key.hpp`), the
+`SPECULAR_ANTI_ALIASING` variant axis (doc/erhe/shader_variants.md
+"Specular anti-aliasing"): the renderers' `specular_anti_aliasing`
+parameters (default `normal_kernel`) set it on the variants that call
+`anisotropic_brdf()`, and each variant holds only its mode's code.
+
+- `off` - no kernel.
+- `normal_kernel` - from the screen space derivatives of the shading normal
+  (after normal mapping), once per fragment: `var_x = sigma^2 (dot(dN/dx,
+  T)^2 + dot(dN/dy, T)^2)`, `var_y` likewise with `B`, kernel `min(2 var,
+  Kappa)`. Filament evaluates this kernel on the geometric normal; the
+  shading normal is used here so that normal map detail finer than a pixel
+  is filtered as well, since that is the normal the BRDF sees. A
+  flat-shaded face without a normal map gets no kernel.
+- `finite_difference` - the kernel the function took before the modes
+  existed: the footprint `|dH/dx| + |dH/dy|` of the shading frame half
+  vector's xy, per light. Once per fragment (`specular_aa_begin_fragment()`)
+  it forms the view direction in the shading frame and the position, `T`,
+  `B` and `N` of the fragment's x and y quad neighbours: value plus or minus
+  the fine derivative (`dFdxFine` where the GLSL version has it), the sign
+  from the derivative of the pixel's own column / row parity, so both pixels
+  of a pair difference the same two pixels as `fwidth()` does whatever the
+  quad alignment. Per light (`specular_aa_light_kernel()`) the half vector
+  is evaluated at the fragment and at both neighbours, the light vector
+  moving with the position for spot and point lights. That is six
+  normalizes per light where the former code had three (its `wo`, `wi`,
+  `wh`, which `anisotropic_brdf()` no longer computes), plus three per
+  fragment; `off` and `normal_kernel` have none per light.
+
+  Comparison with the former in-loop `fwidth()` (the parent of this change,
+  Debug, Metal, 960x540): with one directional light on the default scene's
+  brushed-metal polyhedra (two cameras) the 8-bit images are identical. With
+  one spot or one point light over a brushed-metal (Titanium) sphere and a
+  Gold torus, 455 to 2718 pixels differ, by 2 on average and at most 74,
+  along silhouettes and the `N_dot_L` terminator: the pixels whose quads
+  were split by the former per-light branch, where its derivative was
+  undefined, plus small rounding differences of the neighbour light vector.
+  The former derivative's own coarseness was implementation-defined
+  (`fwidth()` may be coarse), so it is not a reference beyond the
+  hardware it was measured on.
+
+Compute shaders (`erhe_ray_hit.glsl`) do not define the axis and pass a
+zero kernel. The BRDF slice (`brdf_slice.frag`, a constant normal) defines
+`finite_difference` and takes `fwidth()` of the half vector (uniform control
+flow there). Every editor color pass, the material, brush and scene
+previews and the thumbnails included, draws through `Composition_pass`,
+which passes the frame's graphics preset mode
+(`Graphics_preset_entry::specular_anti_aliasing`);
+`Scene_preview::prewarm_variants()` warms the preset's mode and shadow
+axes, and `Thumbnails` marks its slots stale on a graphics preset change so
+each re-renders on its next draw.
+
 ## Future work
 - [../plans/clustered_lights.md](../plans/clustered_lights.md): clustered light culling phases 3-5 (GPU binning, the headset grid, refinements)

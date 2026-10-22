@@ -13,6 +13,7 @@
 #include "config/generated/shadow_cull_mode.hpp"
 #include "config/generated/shadow_filter_mode.hpp"
 #include "config/generated/light_shading_mode.hpp"
+#include "config/generated/specular_anti_aliasing_mode.hpp"
 #include "config/generated/shadow_technique_mode.hpp"
 #include "content_library/content_library.hpp"
 #include "create/create_box.hpp"
@@ -249,6 +250,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_enum_argument (args, "shadow_technique",           preset.shadow_technique))           &&
         check(read_enum_argument (args, "shadow_cull_mode",           preset.shadow_cull_mode))           &&
         check(read_enum_argument (args, "light_shading",              preset.light_shading))              &&
+        check(read_enum_argument (args, "specular_anti_aliasing",     preset.specular_anti_aliasing))     &&
         check(read_int_argument  (args, "shadow_resolution",       1, preset.shadow_resolution))          &&
         check(read_int_argument  (args, "shadow_depth_bits",       1, preset.shadow_depth_bits))          &&
         check(read_int_argument  (args, "point_shadow_resolution", 1, preset.point_shadow_resolution))    &&
@@ -324,6 +326,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"point_shadow_light_count",           in_effect.point_shadow_light_count},
         {"point_unshadowed_light_count",       in_effect.point_unshadowed_light_count},
         {"light_shading",              std::string{to_string(in_effect.light_shading)}},
+        {"specular_anti_aliasing",     std::string{to_string(in_effect.specular_anti_aliasing)}},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();
 }

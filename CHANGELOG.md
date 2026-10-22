@@ -9,6 +9,28 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: selectable specular anti-aliasing of the
+  anisotropic BRDF (doc/erhe/scene_renderer.md "Specular anti-aliasing").
+  `Specular_anti_aliasing` (`off`, `normal_kernel`, `finite_difference`)
+  and the `Shader_int::SPECULAR_ANTI_ALIASING` variant axis;
+  `set_specular_anti_aliasing_axis(Shader_key&, Specular_anti_aliasing)`
+  sets it on the keys whose shader calls `anisotropic_brdf()` only (after
+  the force masks, in the draw, prewarm and draw-list paths alike), and
+  `get_specular_anti_aliasing(const Shader_key&)` reads it. New `specular_anti_aliasing` members (default
+  `normal_kernel`) in `Forward_renderer::Render_parameters`,
+  `Draw_parameters` and `Prewarm_parameters`,
+  `Draw_list_renderer::Render_parameters` and `Color_environment`. Shader
+  side: `anisotropic_brdf()` (`erhe_bxdf.glsl`) takes the kernel roughness
+  as a new last argument and no longer takes a derivative;
+  `specular_anti_aliasing()` is replaced by
+  `specular_aa_kernel_from_normal_derivatives()`,
+  `specular_aa_begin_fragment()` and `specular_aa_light_kernel()`. The
+  default changes the look: `finite_difference` reproduces the previous
+  kernel (8-bit identical with one directional light on the default scene;
+  with a spot or point light it differs along silhouettes and the `N_dot_L`
+  terminator, where the previous derivative was undefined), while
+  `normal_kernel` adds no kernel on flat-shaded faces.
+
 - `erhe::scene_renderer`: GPU light binning (doc/plans/clustered_lights.md
   phase 3). `light_cluster_gpu_binner.hpp`: `Light_cluster_gpu_binner`
   (the compute pipeline of `res/shaders/light_cluster_bin.comp`;

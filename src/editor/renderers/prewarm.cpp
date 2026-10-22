@@ -73,6 +73,9 @@ void prewarm_all(
     const uint32_t shadow_technique = (context.app_settings != nullptr)
         ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_technique)
         : 0u;
+    const erhe::scene_renderer::Specular_anti_aliasing specular_anti_aliasing = (context.app_settings != nullptr)
+        ? static_cast<erhe::scene_renderer::Specular_anti_aliasing>(context.app_settings->graphics.current_graphics_preset.specular_anti_aliasing)
+        : erhe::scene_renderer::Specular_anti_aliasing::normal_kernel;
     // ERHE_SHADOW_DEPTH_BITS follows the shadow map's actual format, which
     // is the format Shadow_render_node::reconfigure() creates for the preset's
     // requested bit count (choose_shadow_depth_format) - not the request.
@@ -192,7 +195,8 @@ void prewarm_all(
                 .shadow_filter                 = shadow_filter,
                 .shadow_bias                   = shadow_bias,
                 .shadow_technique              = shadow_technique,
-                .shadow_depth_bits             = shadow_depth_bits
+                .shadow_depth_bits             = shadow_depth_bits,
+                .specular_anti_aliasing        = specular_anti_aliasing
             };
             forward_pipeline_warmups += context.forward_renderer->prewarm_standard_variants(params);
         }
