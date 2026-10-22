@@ -4,6 +4,17 @@
 
 namespace erhe::scene_renderer {
 
+auto is_blending_class_selected(const Draw_blending_selection selection, const erhe::primitive::Blending_class blending_class) -> bool
+{
+    switch (selection) {
+        case Draw_blending_selection::opaque_only:       return blending_class == erhe::primitive::Blending_class::opaque;
+        case Draw_blending_selection::alpha_tested_only: return blending_class == erhe::primitive::Blending_class::alpha_tested;
+        case Draw_blending_selection::translucent_only:  return blending_class == erhe::primitive::Blending_class::translucent;
+        case Draw_blending_selection::all:               return true;
+        default:                                         return false;
+    }
+}
+
 void Draw_list_bounds::resize(const std::size_t count)
 {
     // Grown entries have no bounds until set() writes them: a negative

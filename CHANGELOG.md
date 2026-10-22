@@ -9,6 +9,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Blending_class` (`opaque`, `alpha_tested`,
+  `translucent`), `get_blending_class(Material_blending_mode)`,
+  `get_blending_class(const Material*)` (no material classifies as opaque),
+  `blending_class_draw_order` and `c_str(Blending_class)`: the draw order
+  class of a blending mode (doc/erhe/primitive.md "Blending classes").
+- `erhe::scene_renderer`: `Blending_mode_policy::alpha_tested_primitives_only`,
+  `Draw_blending_selection::alpha_tested_only`,
+  `is_blending_class_selected(Draw_blending_selection, Blending_class)` and
+  `Shader_key::get_blending_class()` (doc/erhe/scene_renderer.md "Draw order
+  of the blending classes").
+
 - `erhe::scene_renderer`: `Light_cluster_binner` input layout adds per-slot
   spot cones (axis * sin, cot) after the light spheres; the lists cone-cull
   closed clusters (doc/erhe/scene_renderer.md `Light_cluster_binner`).
@@ -552,6 +563,23 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `alpha_test` and `screen_door` primitives moved
+  out of the translucent class into their own: they used to be taken by
+  `Blending_mode_policy::translucent_primitives_only` /
+  `Draw_blending_selection::translucent_only` and drawn with
+  `color_blend_premultiplied`, and are now taken only by
+  `alpha_tested_primitives_only` / `alpha_tested_only` and drawn with
+  blending off. `allow_all` / `Draw_blending_selection::all` (was `both`)
+  draw opaque, alpha-tested and translucent primitives in that order in
+  `Forward_renderer::render()` and `Draw_list_scene::draw_color()`.
+  `Draw_list_key::blending` is an `erhe::primitive::Blending_class`. A
+  draw-list primitive without a material now classifies as opaque (it was
+  translucent), as the bucket path already did, so it enters the opaque
+  color lists and the shadow lists. `standard.frag` runs the alpha-test /
+  screen-door discard before the ambient term and the light loops, and the
+  lightmap, DDGI and shadow-compare reads after it select level 0
+  explicitly (`textureLod`, `textureGrad` with zero gradients).
+
 - `erhe::scene_renderer`: `Light_buffer::write_view()` takes a
   `Light_view_binning` (default: CPU binning, no stats): with
   `Light_cluster_binning::gpu`, a supported `Light_cluster_gpu_binner`, the
@@ -868,6 +896,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   six-plane array.
 
 ### Removed
+
+- `erhe::primitive`: `needs_translucent_pass()` (replaced by
+  `get_blending_class()`).
+- `erhe::scene_renderer`: `Draw_blending` and `c_str(Draw_blending)`
+  (replaced by `erhe::primitive::Blending_class`).
 
 - `erhe::scene_renderer`: `Light_view_buffers::overflow_cluster_count` and
   `max_list_length` (the binning stats are `Light_cluster_view_state::

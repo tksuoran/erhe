@@ -624,8 +624,12 @@ float sample_light_visibility(vec3 view_relative_position, float vertex_rounding
 #       endif
         // Fetched at the centre of nearest_texel, so the hardware selects
         // exactly the texel texel_offset_nearest measures to.
+        // Zero gradients select level 0 (the map has one level) without
+        // implicit derivatives: callers sample in non-uniform control flow
+        // (per light, after the alpha-test discard). GLSL has no core
+        // textureLod for sampler2DArrayShadow.
         vec4  uv_ref_layer = vec4((nearest_texel + 0.5) / shadowmap_resolution, array_layer, D_ref);
-        return texture(s_shadow_compare, uv_ref_layer);
+        return textureGrad(s_shadow_compare, uv_ref_layer, vec2(0.0), vec2(0.0));
     }
 #   elif ERHE_SHADOW_FILTER == 2
     {

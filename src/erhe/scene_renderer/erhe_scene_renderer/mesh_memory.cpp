@@ -1276,13 +1276,19 @@ void bucket_primitives(
                     break;
                 }
                 case Blending_mode_policy::opaque_primitives_only: {
-                    if (shader_key.blending_mode != erhe::primitive::Material_blending_mode::opaque) {
+                    if (shader_key.get_blending_class() != erhe::primitive::Blending_class::opaque) {
+                        continue;
+                    }
+                    break;
+                }
+                case Blending_mode_policy::alpha_tested_primitives_only: {
+                    if (shader_key.get_blending_class() != erhe::primitive::Blending_class::alpha_tested) {
                         continue;
                     }
                     break;
                 }
                 case Blending_mode_policy::translucent_primitives_only: {
-                    if (shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque) {
+                    if (shader_key.get_blending_class() != erhe::primitive::Blending_class::translucent) {
                         continue;
                     }
                     break;

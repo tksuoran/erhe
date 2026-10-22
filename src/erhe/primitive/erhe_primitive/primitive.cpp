@@ -184,8 +184,36 @@ auto c_str(const Material_blending_mode blending_mode) -> const char*
         case Material_blending_mode::subtract   : return "subtract";
         case Material_blending_mode::screen_door: return "screen_door";
         case Material_blending_mode::alpha_test : return "alpha_test";
-        default: { 
+        default: {
             ERHE_FATAL("Bad Material_blending_mode");
+        }
+    }
+}
+
+auto get_blending_class(const Material_blending_mode blending_mode) -> Blending_class
+{
+    switch (blending_mode) {
+        case Material_blending_mode::opaque     : return Blending_class::opaque;
+        case Material_blending_mode::screen_door:
+        case Material_blending_mode::alpha_test : return Blending_class::alpha_tested;
+        case Material_blending_mode::alpha_blend:
+        case Material_blending_mode::multiply   :
+        case Material_blending_mode::add        :
+        case Material_blending_mode::subtract   : return Blending_class::translucent;
+        default: {
+            ERHE_FATAL("Bad Material_blending_mode");
+        }
+    }
+}
+
+auto c_str(const Blending_class blending_class) -> const char*
+{
+    switch (blending_class) {
+        case Blending_class::opaque      : return "opaque";
+        case Blending_class::alpha_tested: return "alpha_tested";
+        case Blending_class::translucent : return "translucent";
+        default: {
+            ERHE_FATAL("Bad Blending_class");
         }
     }
 }

@@ -29,12 +29,16 @@ enum class Shadow_sub_variant : uint8_t
 
 [[nodiscard]] auto c_str(Shadow_sub_variant sub_variant) -> const char*;
 
+// Which erhe::primitive::Blending_class lists a color draw takes (R7).
 enum class Draw_blending_selection : uint8_t
 {
-    opaque_only      = 0,
-    translucent_only = 1,
-    both             = 2  // opaque lists first, then translucent (R7)
+    opaque_only       = 0,
+    alpha_tested_only = 1,
+    translucent_only  = 2,
+    all               = 3  // every class, in erhe::primitive::blending_class_draw_order
 };
+
+[[nodiscard]] auto is_blending_class_selected(Draw_blending_selection selection, erhe::primitive::Blending_class blending_class) -> bool;
 
 // One culling view of the frame being rendered
 // (doc/erhe/draw_list_renderer.md Q6): the index

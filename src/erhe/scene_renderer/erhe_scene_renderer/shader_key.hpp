@@ -239,6 +239,11 @@ public:
         return hash;
     }
 
+    // The erhe::primitive::Blending_class of blending_mode; a key no
+    // material was derived into classifies like the default material
+    // record, opaque (erhe::primitive::get_blending_class(const Material*)).
+    [[nodiscard]] auto get_blending_class() const -> erhe::primitive::Blending_class;
+
     [[nodiscard]] auto derive(
         const erhe::primitive::Material*       material,
         const erhe::dataformat::Vertex_format* vertex_format,

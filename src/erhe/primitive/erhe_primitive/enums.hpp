@@ -3,6 +3,7 @@
 #include "erhe_graphics/enums.hpp"
 #include "erhe_property/enum_info.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -84,6 +85,30 @@ enum class Material_blending_mode : uint16_t
     screen_door  = 5,
     alpha_test   = 6
 };
+
+// The draw order class of a Material_blending_mode in the color passes
+// (doc/erhe/primitive.md "Blending classes"), drawn in the enum's order:
+// opaque draws write depth and never discard, so early depth testing and
+// hidden surface removal keep working for every draw after them;
+// alpha_tested draws (alpha_test, screen_door) write depth but discard,
+// which turns early depth testing off for the draws that follow, so they
+// come after every opaque draw, with blending off; translucent draws
+// (alpha_blend, multiply, add, subtract) blend over both.
+enum class Blending_class : uint8_t
+{
+    opaque       = 0,
+    alpha_tested = 1,
+    translucent  = 2
+};
+
+// The classes in the order the color passes draw them.
+inline constexpr std::array<Blending_class, 3> blending_class_draw_order{
+    Blending_class::opaque,
+    Blending_class::alpha_tested,
+    Blending_class::translucent
+};
+
+[[nodiscard]] auto get_blending_class(Material_blending_mode blending_mode) -> Blending_class;
 
 // Normal map storage encoding. Right handed = OpenGL Y convention, left
 // handed = Direct3D (the shader flips Y). Three channel stores unit
@@ -247,6 +272,7 @@ extern const erhe::property::Enum_info c_sampler_mipmap_mode_enum_info;
 [[nodiscard]] auto c_str(Normal_style normal_style) -> const char*;
 [[nodiscard]] auto c_str(Bxdf_model bxdf_model) -> const char*;
 [[nodiscard]] auto c_str(Material_blending_mode blending_mode) -> const char*;
+[[nodiscard]] auto c_str(Blending_class blending_class) -> const char*;
 [[nodiscard]] auto c_str(Texgen_mode texgen_mode) -> const char*;
 [[nodiscard]] auto c_str(Normalmap_encoding normalmap_encoding) -> const char*;
 [[nodiscard]] auto c_str(Texture_channel texture_channel) -> const char*;

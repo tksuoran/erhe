@@ -333,47 +333,6 @@ App_rendering::App_rendering(
     );
     static_cast<void>(selection_stencil_mask_proxy_hidden);
 
-    edge_lines_not_selected = make_composition_pass(
-        "Content edge lines not selected",
-        Composition_pass_data{
-            .content_wide_line_group       {0},
-            .mesh_layers                   {Mesh_layer_id::content},
-            .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
-            .primitive_mode                {Primitive_mode::edge_lines},
-            .filter                        {filter_not_selected},
-            .get_render_style              {render_style_not_selected},
-            .get_appearance                {appearance_not_selected},
-            .is_enabled                    {
-                // Solid wireframe replaces the wide-line edge path: when it is
-                // enabled, suppress the Content_wide_line_renderer edge lines so
-                // the two do not both draw. Where solid wireframe is unsupported
-                // its toggle is inert, so the wide-line edges must not be
-                // suppressed by it.
-                [solid_wireframe_supported](const Render_context& context) -> bool {
-                    return !solid_wireframe_supported || !context.viewport_config.render_style_not_selected.solid_wireframe;
-                }
-            }
-        }, not_selected
-    );
-
-    edge_lines_selected = make_composition_pass(
-        "Content edge lines opaque selected",
-        Composition_pass_data{
-            .content_wide_line_group       {1},
-            .mesh_layers                   {Mesh_layer_id::content},
-            .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
-            .primitive_mode                {Primitive_mode::edge_lines},
-            .filter                        {filter_selected},
-            .get_render_style              {render_style_selected},
-            .get_appearance                {appearance_selected},
-            .is_enabled                    {
-                [solid_wireframe_supported](const Render_context& context) -> bool {
-                    return !solid_wireframe_supported || !context.viewport_config.render_style_selected.solid_wireframe;
-                }
-            }
-        }, selected
-    );
-
     // Corner points and polygon centroids. Both take the normal
     // Forward_renderer path (not Content_wide_line_renderer) and force the
     // VARIANT_POINTS standard-shader variant, which sizes each point from the
@@ -383,6 +342,17 @@ App_rendering::App_rendering(
     // is_primitive_mode_enabled in Composition_pass::render). Not exposed as
     // members: unlike the edge-line passes, nothing outside the Composer
     // references them.
+    //
+    // They write depth without discarding, so they come before the edge
+    // lines, whose wide-line shader discards. Which of a point and a line
+    // wins a pixel is the same in either order (the point's less test
+    // after the line equals the line's less-or-equal test after the
+    // point), and a point's depth bias (0.0005 * |N.V| in clip z,
+    // standard.vert) is at least the line's (0.0005 * (N.V)^2, or the
+    // ulp-sized tent lift), so a point stays on top of the lines meeting
+    // at it. The one difference: where a line fragment is nearer than the
+    // point's flat sprite depth, the line now blends over the point
+    // instead of over the surface.
     const uint32_t points_variant_mask = make_shader_bool_mask(Shader_bool::VARIANT_POINTS);
 
     auto corner_points_not_selected = make_composition_pass(
@@ -437,6 +407,47 @@ App_rendering::App_rendering(
         }, selected
     );
 
+    edge_lines_not_selected = make_composition_pass(
+        "Content edge lines not selected",
+        Composition_pass_data{
+            .content_wide_line_group       {0},
+            .mesh_layers                   {Mesh_layer_id::content},
+            .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode                {Primitive_mode::edge_lines},
+            .filter                        {filter_not_selected},
+            .get_render_style              {render_style_not_selected},
+            .get_appearance                {appearance_not_selected},
+            .is_enabled                    {
+                // Solid wireframe replaces the wide-line edge path: when it is
+                // enabled, suppress the Content_wide_line_renderer edge lines so
+                // the two do not both draw. Where solid wireframe is unsupported
+                // its toggle is inert, so the wide-line edges must not be
+                // suppressed by it.
+                [solid_wireframe_supported](const Render_context& context) -> bool {
+                    return !solid_wireframe_supported || !context.viewport_config.render_style_not_selected.solid_wireframe;
+                }
+            }
+        }, not_selected
+    );
+
+    edge_lines_selected = make_composition_pass(
+        "Content edge lines opaque selected",
+        Composition_pass_data{
+            .content_wide_line_group       {1},
+            .mesh_layers                   {Mesh_layer_id::content},
+            .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode                {Primitive_mode::edge_lines},
+            .filter                        {filter_selected},
+            .get_render_style              {render_style_selected},
+            .get_appearance                {appearance_selected},
+            .is_enabled                    {
+                [solid_wireframe_supported](const Render_context& context) -> bool {
+                    return !solid_wireframe_supported || !context.viewport_config.render_style_selected.solid_wireframe;
+                }
+            }
+        }, selected
+    );
+
     // Geometry graph ghost meshes (Houdini template flag): edge lines only,
     // always on (no get_render_style -> not gated by the per-viewport
     // edge-lines style; pattern: the corner-cap passes above). The filter
@@ -467,6 +478,29 @@ App_rendering::App_rendering(
             }
         },
         not_selected
+    );
+
+    // Alpha-tested content (Blending_class::alpha_tested: alpha_test and
+    // screen_door materials). These draws write depth but discard, which
+    // turns early depth testing / hidden surface removal off for the draws
+    // that follow, so they come after every draw above that writes depth
+    // without discarding - the opaque fills, the selection stencil masks,
+    // the corner points and centroids - and before the sky, which then skips
+    // the pixels they cover. Blending is off (the shader writes alpha 1),
+    // and the selected pass writes selection stencil bit 7 like the opaque
+    // one, so the outline below masks against these meshes too. The edge
+    // line passes above keep their place: content drawn after them covers
+    // their pixels, as the translucent passes do.
+    const std::shared_ptr<Composition_pass> alpha_tested_content_fill_not_selected = make_composition_pass(
+        "Content fill alpha tested not selected",
+        content_fill_not_selected,
+        erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only
+    );
+
+    const std::shared_ptr<Composition_pass> alpha_tested_content_fill_selected_or_hovered = make_composition_pass(
+        "Content fill alpha tested selected",
+        content_fill_selected_or_hovered,
+        erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only
     );
 
     selection_outline = make_composition_pass(

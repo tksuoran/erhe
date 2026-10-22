@@ -268,24 +268,66 @@ void Forward_renderer::render(const Draw_parameters& parameters, const Render_bu
             render_pipeline_state->data.debug_label
         };
 
-        for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-            const Prepared_bucket&    bucket       = buckets[bucket_index];
-            const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
+        // Buckets draw in Blending_class order (opaque, alpha tested,
+        // translucent), so a pass taking several classes (allow_all) draws
+        // every discarding bucket after every opaque one; a pass taking one
+        // class walks the list once per class and skips the others.
+        for (const erhe::primitive::Blending_class blending_class : erhe::primitive::blending_class_draw_order) {
+            for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
+                const Prepared_bucket&    bucket       = buckets[bucket_index];
+                if (bucket.shader_key.get_blending_class() != blending_class) {
+                    continue;
+                }
+                const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
 
-            ERHE_VERIFY(bucket.entry_count > 0);
+                ERHE_VERIFY(bucket.entry_count > 0);
 
-            Shader_key shader_key = bucket.shader_key;
-            apply_render_environment(shader_key, environment_key, snapshot.force_disable_mask);
+                Shader_key shader_key = bucket.shader_key;
+                apply_render_environment(shader_key, environment_key, snapshot.force_disable_mask);
 
-            const erhe::graphics::Shader_stages* shader_stages = parameters.shader_stages_override;
-            if (shader_stages == nullptr) {
-                const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
-                    shader_key,
-                    &vertex_input.vertex_format
+                const erhe::graphics::Shader_stages* shader_stages = parameters.shader_stages_override;
+                if (shader_stages == nullptr) {
+                    const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
+                        shader_key,
+                        &vertex_input.vertex_format
+                    );
+                    if (reloadable_shader_stages == nullptr) {
+                        log_draw->warn(
+                            "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
+                            bucket_index,
+                            bucket.entry_count,
+                            bucket.buffer_set.vertex_buffers.size(),
+                            shader_key.describe()
+                        );
+                        continue;
+                    }
+                    shader_stages = &reloadable_shader_stages->shader_stages;
+                }
+
+                // TODO Implement other blending modes
+                // Mirrored (negative determinant) buckets get the front-face-
+                // flipped pipeline variant so face culling keeps the same
+                // visible faces as for non-mirrored meshes.
+                // A pass may override the color-blend state (e.g. the selection
+                // stencil-mask pass uses color_writes_disabled to write depth/stencil
+                // only); otherwise pick by the bucket's blend mode.
+                const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
+                    ? parameters.color_blend_override
+                    : (blending_class == erhe::primitive::Blending_class::translucent)
+                        ? &erhe::graphics::Color_blend_state::color_blend_premultiplied
+                        : &erhe::graphics::Color_blend_state::color_blend_disabled;
+                erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
+                    base.render_pass->get_descriptor(),
+                    color_blend,
+                    shader_stages,
+                    vertex_input.vertex_input.get(),
+                    &vertex_input.vertex_format,
+                    bucket.negative_determinant,
+                    bucket.double_sided
                 );
-                if (reloadable_shader_stages == nullptr) {
+                if (render_pipeline == nullptr) {
                     log_draw->warn(
-                        "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
+                        "No render pipeline for bucket {} ({} primitives, {} vertex streams): {}",
                         bucket_index,
                         bucket.entry_count,
                         bucket.buffer_set.vertex_buffers.size(),
@@ -293,83 +335,50 @@ void Forward_renderer::render(const Draw_parameters& parameters, const Render_bu
                     );
                     continue;
                 }
-                shader_stages = &reloadable_shader_stages->shader_stages;
-            }
 
-            // TODO Implement other blending modes
-            // Mirrored (negative determinant) buckets get the front-face-
-            // flipped pipeline variant so face culling keeps the same
-            // visible faces as for non-mirrored meshes.
-            // A pass may override the color-blend state (e.g. the selection
-            // stencil-mask pass uses color_writes_disabled to write depth/stencil
-            // only); otherwise pick by the bucket's blend mode.
-            const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
-                ? parameters.color_blend_override
-                : (shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque)
-                    ? &erhe::graphics::Color_blend_state::color_blend_disabled
-                    : &erhe::graphics::Color_blend_state::color_blend_premultiplied; // color_blend_alpha,
-            erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
-                base.render_pass->get_descriptor(),
-                color_blend,
-                shader_stages,
-                vertex_input.vertex_input.get(),
-                &vertex_input.vertex_format,
-                bucket.negative_determinant,
-                bucket.double_sided
-            );
-            if (render_pipeline == nullptr) {
-                log_draw->warn(
-                    "No render pipeline for bucket {} ({} primitives, {} vertex streams): {}",
+                m_bucket_label.clear();
+                fmt::format_to(
+                    std::back_inserter(m_bucket_label),
+                    "bucket {}/{} prims={} streams={} shader key {:016x}",
                     bucket_index,
+                    buckets.size(),
                     bucket.entry_count,
                     bucket.buffer_set.vertex_buffers.size(),
-                    shader_key.describe()
+                    shader_key.get_hash()
                 );
-                continue;
-            }
+                erhe::graphics::Scoped_debug_group bucket_scope{render_encoder.get_command_buffer(), std::string_view{m_bucket_label}};
 
-            m_bucket_label.clear();
-            fmt::format_to(
-                std::back_inserter(m_bucket_label),
-                "bucket {}/{} prims={} streams={} shader key {:016x}",
-                bucket_index,
-                buckets.size(),
-                bucket.entry_count,
-                bucket.buffer_set.vertex_buffers.size(),
-                shader_key.get_hash()
-            );
-            erhe::graphics::Scoped_debug_group bucket_scope{render_encoder.get_command_buffer(), std::string_view{m_bucket_label}};
+                base.render_encoder.set_render_pipeline(*render_pipeline);
 
-            base.render_encoder.set_render_pipeline(*render_pipeline);
+                erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
+                render_encoder.set_index_buffer(index_buffer);
+                for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
+                    erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
+                    render_encoder.set_vertex_buffer(
+                        vertex_buffer,
+                        0,
+                        static_cast<uint32_t>(stream_index)
+                    );
+                }
 
-            erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
-            render_encoder.set_index_buffer(index_buffer);
-            for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
-                erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
-                render_encoder.set_vertex_buffer(
-                    vertex_buffer,
-                    0,
-                    static_cast<uint32_t>(stream_index)
+                // The records were written against the set this pass binds (D5).
+                Ring_buffer_range          primitive_range            = m_primitive_buffer.update(snapshot.get_records(bucket, record_size));
+                Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(snapshot.get_draw_commands(bucket));
+                ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entry_count);
+                m_primitive_buffer.bind(render_encoder, primitive_range);
+                m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
+
+                render_encoder.multi_draw_indexed_primitives_indirect(
+                    render_pipeline_state->data.input_assembly.primitive_topology,
+                    m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
+                    draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+                    draw_indirect_buffer_range.draw_indirect_count,
+                    sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
                 );
+
+                primitive_range.release();
+                draw_indirect_buffer_range.range.release();
             }
-
-            // The records were written against the set this pass binds (D5).
-            Ring_buffer_range          primitive_range            = m_primitive_buffer.update(snapshot.get_records(bucket, record_size));
-            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(snapshot.get_draw_commands(bucket));
-            ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entry_count);
-            m_primitive_buffer.bind(render_encoder, primitive_range);
-            m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
-
-            render_encoder.multi_draw_indexed_primitives_indirect(
-                render_pipeline_state->data.input_assembly.primitive_topology,
-                m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
-                draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-                draw_indirect_buffer_range.draw_indirect_count,
-                sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-            );
-
-            primitive_range.release();
-            draw_indirect_buffer_range.range.release();
         }
     }
 

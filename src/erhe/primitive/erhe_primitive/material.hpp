@@ -72,26 +72,6 @@ public:
 [[nodiscard]] auto operator==(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
 [[nodiscard]] auto operator!=(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
 
-// True when the mode needs framebuffer blending (so the host mesh must
-// route through the translucent composition-pass family). alpha_test and
-// screen_door render with depth write enabled and discard for masked
-// pixels, so they stay in the opaque pass.
-[[nodiscard]] inline auto needs_translucent_pass(const Material_blending_mode mode) -> bool
-{
-    switch (mode) {
-        case Material_blending_mode::alpha_blend:
-        case Material_blending_mode::multiply:
-        case Material_blending_mode::add:
-        case Material_blending_mode::subtract:
-            return true;
-        case Material_blending_mode::opaque:
-        case Material_blending_mode::screen_door:
-        case Material_blending_mode::alpha_test:
-            return false;
-    }
-    return false;
-}
-
 // The material state whose storage is this struct: the texture slots.
 // Every slot field is a mirror of a registered property of the Material
 // (doc/erhe/property_system.md section 4.1): the texture_reference (D28), the
@@ -439,5 +419,11 @@ private:
 
 [[nodiscard]] auto operator==(const Material& lhs, const Material& rhs) -> bool;
 [[nodiscard]] auto operator!=(const Material& lhs, const Material& rhs) -> bool;
+
+// The Blending_class of the material's blending mode; a primitive without
+// a material draws with the default material record (Material_values
+// defaults, opaque), so nullptr classifies as that default. The one
+// classification the draw lists and the render buckets share.
+[[nodiscard]] auto get_blending_class(const Material* material) -> Blending_class;
 
 } // namespace erhe::primitive

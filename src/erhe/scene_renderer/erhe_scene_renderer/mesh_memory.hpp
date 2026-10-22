@@ -496,13 +496,16 @@ private:
     std::size_t                m_count{0};
 };
 
+// Which primitives a pass buckets, by the erhe::primitive::Blending_class of
+// their blending mode (erhe::primitive::get_blending_class()).
 enum class Blending_mode_policy : uint32_t
 {
     not_set                            = 0, // error
-    opaque_primitives_only             = 1, // Keep opaque primitives only
-    translucent_primitives_only        = 2, // Keep translucent primitives only
-    allow_all                          = 3, // unique buckets for each blending mode
-    override_with_base_render_pipeline = 4  // override primitive blending mode from base render pipeline
+    opaque_primitives_only             = 1, // Keep Blending_class::opaque primitives only
+    translucent_primitives_only        = 2, // Keep Blending_class::translucent primitives only
+    allow_all                          = 3, // unique buckets for each blending mode, drawn in Blending_class order
+    override_with_base_render_pipeline = 4, // override primitive blending mode from base render pipeline
+    alpha_tested_primitives_only       = 5  // Keep Blending_class::alpha_tested primitives only
 };
 
 void bucket_primitives(
