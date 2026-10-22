@@ -23,6 +23,18 @@ namespace {
 // boundary still finds every light that reaches it (C4).
 constexpr double c_bound_widening = 1.0 / 1024.0;
 
+// Widening of a spot light's cone, in cosine space: the binner's cone has
+// the half angle acos(outer_cos - c_cone_cos_widening), where outer_cos is
+// the fp32 cosine the light array holds, so a fragment whose fp32
+// get_spot_attenuation() (normalize, dot: a few ulps of 1.0) rounds across
+// the cone's edge still finds the light (C4).
+constexpr double c_cone_cos_widening = 1.0 / 65536.0;
+
+// The cone test's cluster sphere: an fp32 upper bound of sqrt(3), and the
+// relative widening of the radius (1 + 2^-10, exact in fp32).
+constexpr float c_sqrt3_upper          = 1.7320509f;
+constexpr float c_cone_radius_widening = 1.0009765625f;
+
 // The light array slot ranges of the four binned categories: spot
 // shadow-mapped, spot unshadowed, point shadow-mapped, point unshadowed
 // (Light_set slot order: type major, shadow-mapped first).
@@ -162,6 +174,87 @@ constexpr uint32_t c_flag_y_min_at_bottom = 1u << 1u;
     return distance_squared <= radius_squared;
 }
 
+// Whether a spot light's widened cone can reach a closed cluster's widened
+// bounds. light.xyz is the apex (the light centre), cone.xyz the emission
+// axis times s = sin(a), cone.w = cot(a), a the widened half angle (the
+// write_inputs() layout). The test takes the sphere around the bounds -
+// centre b, radius r an upper bound of the half diagonal without a square
+// root (min of the L1 norm and sqrt(3) times the largest half extent) - and
+// V = b - apex, along = dot(V, axis), perp = |cross(V, axis)|. The signed
+// distance of b from the cone's lateral surface line in the plane of the
+// axis and b is cos(a) perp - sin(a) along; it is a lower bound of b's
+// distance to the cone for every a in (0, pi), so the sphere misses the
+// cone when it exceeds r. For a <= pi / 2 the cone also lies in front of
+// the apex plane, so the sphere misses it when along < -r. Both tests are
+// evaluated on squares (no square root, so the CPU and GPU agree bit for
+// bit): with t = r + sin(a) along, cos(a) perp > t is
+//   cot >= 0: t < 0, or (cot perp s)^2 > t^2
+//   cot <  0: t < 0 and (cot perp s)^2 < t^2
+// and along < -r is s along < 0 and (s along)^2 (1 + cot^2) > r^2
+// (1 + cot^2 = 1 / s^2).
+[[nodiscard]] auto cone_reaches_bounds(const glm::vec4& light, const glm::vec4& cone, const glm::vec3& lo, const glm::vec3& hi) -> bool
+{
+    const float ex = (hi.x - lo.x) * 0.5f;
+    const float ey = (hi.y - lo.y) * 0.5f;
+    const float ez = (hi.z - lo.z) * 0.5f;
+    const float bx = lo.x + ex;
+    const float by = lo.y + ey;
+    const float bz = lo.z + ez;
+    const float exy      = ex + ey;
+    const float l1       = exy + ez;
+    const float e_max    = std::max(ex, std::max(ey, ez));
+    const float l_max    = e_max * c_sqrt3_upper;
+    const float r_bound  = std::min(l1, l_max);
+    const float r        = r_bound * c_cone_radius_widening;
+    const float vx = bx - light.x;
+    const float vy = by - light.y;
+    const float vz = bz - light.z;
+    // s along
+    const float ax       = vx * cone.x;
+    const float ay       = vy * cone.y;
+    const float az       = vz * cone.z;
+    const float axy      = ax + ay;
+    const float along_s  = axy + az;
+    // cross(V, s): s perp is its length
+    const float cx0      = vy * cone.z;
+    const float cx1      = vz * cone.y;
+    const float cy0      = vz * cone.x;
+    const float cy1      = vx * cone.z;
+    const float cz0      = vx * cone.y;
+    const float cz1      = vy * cone.x;
+    const float cx       = cx0 - cx1;
+    const float cy       = cy0 - cy1;
+    const float cz       = cz0 - cz1;
+    const float cxx      = cx * cx;
+    const float cyy      = cy * cy;
+    const float czz      = cz * cz;
+    const float cxy      = cxx + cyy;
+    const float perp_s_sq = cxy + czz;
+    const float cot_sq   = cone.w * cone.w;
+    const float lateral  = perp_s_sq * cot_sq; // (cos(a) perp)^2
+    const float t        = r + along_s;
+    const float tt       = t * t;
+    if (cone.w >= 0.0f) {
+        if (t < 0.0f) {
+            return false;
+        }
+        if (lateral > tt) {
+            return false;
+        }
+        if (along_s < 0.0f) {
+            const float along_sq  = along_s * along_s;
+            const float inv_sin_sq = 1.0f + cot_sq;
+            const float back      = along_sq * inv_sin_sq;
+            const float rr        = r * r;
+            if (back > rr) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return !((t < 0.0f) && (lateral < tt));
+}
+
 } // anonymous namespace
 
 auto get_cluster_slot_end(const Light_layer_partition& partition) -> std::size_t
@@ -242,18 +335,41 @@ void Light_cluster_binner::build_grid(
     const double near = std::max(static_cast<double>(camera.projection().get_z_near()), 1.0e-3);
     double far = near;
     m_lights.clear();
+    m_cones.clear();
+    const glm::dmat3 node_from_world_linear{node_from_world};
     for (std::size_t slot = bounds.begin[0]; slot < bounds.begin[4]; ++slot) {
         const erhe::scene::Light_projection_transforms& transforms = light_projections.light_projection_transforms[slot];
-        const double     range  = static_cast<double>(transforms.light->get_range());
+        const erhe::scene::Light_snapshot&              light      = *transforms.light;
+        const double     range  = static_cast<double>(light.get_range());
         const glm::dvec3 centre = glm::dvec3{node_from_world * glm::dvec4{get_light_position(transforms), 1.0}};
         if (range <= 0.0) {
             // No range: inverse square with no cutoff reaches every fragment.
             m_lights.push_back(glm::vec4{glm::vec3{centre}, -1.0f});
+            m_cones.push_back(glm::vec4{0.0f});
             continue;
         }
         const double radius = range * (1.0 + c_bound_widening);
         m_lights.push_back(glm::vec4{glm::vec3{centre}, static_cast<float>(radius)});
         far = std::max(far, -centre.z + radius);
+
+        // The spot cone (cone_reaches_bounds()): get_spot_attenuation() is
+        // nonzero only where the fp32 cosine of the angle between the
+        // emission axis and the fragment exceeds the light array's fp32
+        // outer cosine. Zero for point lights and for a cone widened to
+        // the whole sphere (never tested / never culls).
+        glm::vec4 cone{0.0f};
+        if (light.get_light_type() == erhe::scene::Light_type::spot) {
+            // As Light_buffer::update() writes direction_and_outer_spot_cos.
+            const float  outer_cos   = std::cos(light.get_outer_spot_angle() * 0.5f);
+            const double widened_cos = static_cast<double>(outer_cos) - c_cone_cos_widening;
+            if (widened_cos > -1.0) {
+                const glm::dvec3 direction{glm::normalize(light.get_light_frame().direction)};
+                const glm::dvec3 axis      = glm::normalize(node_from_world_linear * -direction);
+                const double     sin_a     = std::sin(std::acos(widened_cos));
+                cone = glm::vec4{glm::vec3{axis * sin_a}, static_cast<float>(widened_cos / sin_a)};
+            }
+        }
+        m_cones.push_back(cone);
     }
     const uint32_t slice_count = (far > (near * (1.0 + c_bound_widening)))
         ? static_cast<uint32_t>(config.slice_count)
@@ -368,8 +484,10 @@ void Light_cluster_binner::bin_prepared()
 
     m_hits.clear();
     for (std::size_t light_index = 0, light_end = m_lights.size(); light_index < light_end; ++light_index) {
-        const glm::vec4& light = m_lights[light_index];
-        const uint32_t   slot  = first_slot + static_cast<uint32_t>(light_index);
+        const glm::vec4& light   = m_lights[light_index];
+        const glm::vec4& cone    = m_cones[light_index];
+        const uint32_t   slot    = first_slot + static_cast<uint32_t>(light_index);
+        const bool       is_spot = (slot < m_category_begin[2]);
         if (light.w < 0.0f) {
             for (std::size_t cluster = 0; cluster < cluster_count; ++cluster) {
                 m_hits.push_back(Hit{.cluster = static_cast<uint32_t>(cluster), .slot = slot});
@@ -383,7 +501,13 @@ void Light_cluster_binner::bin_prepared()
             const std::size_t slice_begin = static_cast<std::size_t>(k) * tiles_y * tiles_x;
             const std::size_t slice_end   = slice_begin + (static_cast<std::size_t>(tiles_y) * tiles_x);
             for (std::size_t cluster = slice_begin; cluster < slice_end; ++cluster) {
-                if (sphere_reaches_bounds(light, m_cluster_min[cluster], m_cluster_max[cluster], m_cluster_open[cluster])) {
+                // The cone test only for closed clusters (an open side has
+                // no bounding sphere) and only for spot lights.
+                const uint32_t open = m_cluster_open[cluster];
+                if (
+                    sphere_reaches_bounds(light, m_cluster_min[cluster], m_cluster_max[cluster], open) &&
+                    (!is_spot || (open != 0u) || cone_reaches_bounds(light, cone, m_cluster_min[cluster], m_cluster_max[cluster]))
+                ) {
                     m_hits.push_back(Hit{.cluster = static_cast<uint32_t>(cluster), .slot = slot});
                 }
             }
@@ -431,7 +555,7 @@ void Light_cluster_binner::bin_prepared()
 
 auto Light_cluster_binner::get_input_byte_count() const -> std::size_t
 {
-    const std::size_t vec4_count = m_slices.size() + m_corners.size() + std::max(m_lights.size(), std::size_t{1});
+    const std::size_t vec4_count = m_slices.size() + m_corners.size() + (2 * std::max(m_lights.size(), std::size_t{1}));
     return (c_light_cluster_bin_header_uvec4_count * sizeof(glm::uvec4)) + (vec4_count * sizeof(glm::vec4));
 }
 
@@ -457,9 +581,11 @@ void Light_cluster_binner::write_inputs(const std::span<std::byte> out) const
     std::memcpy(out.data() + offset, m_corners.data(), m_corners.size() * sizeof(glm::vec4));
     offset += m_corners.size() * sizeof(glm::vec4);
     if (m_lights.empty()) {
-        std::memset(out.data() + offset, 0, sizeof(glm::vec4));
+        std::memset(out.data() + offset, 0, 2 * sizeof(glm::vec4));
     } else {
         std::memcpy(out.data() + offset, m_lights.data(), m_lights.size() * sizeof(glm::vec4));
+        offset += m_lights.size() * sizeof(glm::vec4);
+        std::memcpy(out.data() + offset, m_cones.data(), m_cones.size() * sizeof(glm::vec4));
     }
 }
 

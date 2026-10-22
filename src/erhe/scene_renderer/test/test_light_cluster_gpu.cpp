@@ -3,7 +3,8 @@
 // cluster by cluster, and its overflow counters equal the CPU's. A synthetic
 // light set (spot and point lights in front of, beside, behind and past the
 // far end of the camera, shadow-mapped and unshadowed, one unbounded spot
-// light, two directional lights) is resolved and projected without a shadow
+// light, two directional lights; spot cones from narrow to wider than a
+// hemisphere) is resolved and projected without a shadow
 // map, as the deviceless Light_cluster_test does, then binned both ways.
 
 #include "gpu_test_fixture.hpp"
@@ -365,6 +366,124 @@ TEST_F(Light_cluster_gpu_test, gpu_boundary_lights_equal_cpu)
         }
     }
     EXPECT_GT(straddling, targets.size() / 2) << "the sweeps must straddle the fp32 decision";
+}
+
+TEST_F(Light_cluster_gpu_test, gpu_spot_cones_equal_cpu)
+{
+    // Spot lights from a hair-thin cone to wider than a hemisphere, and spot
+    // lights whose widened cone touches a cluster's bounding sphere within a
+    // few ulps of the fp32 decision (cone_reaches_bounds() in
+    // light_cluster.cpp): both binners list the same clusters.
+    Light_cluster_config config{};
+    config.capacity = 1024; // no capacity cut decides a sweep's membership
+
+    std::mt19937 random{9001u};
+    std::uniform_real_distribution<float> x_distribution{-20.0f, 20.0f};
+    std::uniform_real_distribution<float> y_distribution{ -6.0f,  8.0f};
+    std::uniform_real_distribution<float> z_distribution{-40.0f, 12.0f};
+    std::uniform_real_distribution<float> range_distribution{2.0f, 12.0f};
+    for (const float outer_degrees : {0.5f, 2.0f, 10.0f, 45.0f, 90.0f, 150.0f, 179.0f, 180.0f, 181.0f, 240.0f, 330.0f, 359.9f}) {
+        for (std::size_t i = 0; i < 4; ++i) {
+            const glm::vec3 position{x_distribution(random), y_distribution(random), z_distribution(random)};
+            const glm::vec3 target  {x_distribution(random), y_distribution(random), z_distribution(random)};
+            std::shared_ptr<erhe::scene::Light> light = make_scene_light(erhe::scene::Light_type::spot, position, target, range_distribution(random), false);
+            light->set_inner_spot_angle(0.5f * glm::radians(outer_degrees));
+            light->set_outer_spot_angle(glm::radians(outer_degrees));
+            m_lights.push_back(light);
+        }
+    }
+    const std::size_t base_count = m_lights.size();
+
+    // The fp32 inputs, to place the sweeps against the bounds the binners test.
+    resolve_and_apply();
+    m_binner.prepare(m_light_projections, make_view(), config);
+    std::vector<std::byte> inputs(m_binner.get_input_byte_count());
+    m_binner.write_inputs(std::span<std::byte>{inputs});
+    const auto read_vec4 = [&inputs](const std::size_t index) -> glm::vec4 {
+        glm::vec4 value{};
+        std::memcpy(&value, inputs.data() + (c_light_cluster_bin_header_uvec4_count * sizeof(glm::uvec4)) + (index * sizeof(glm::vec4)), sizeof(value));
+        return value;
+    };
+    const glm::uvec4 counts      = m_binner.get_grid().counts;
+    const uint32_t   tiles_x     = counts.x;
+    const uint32_t   tiles_y     = counts.y;
+    const uint32_t   slice_count = counts.z;
+    ASSERT_GT(slice_count, 16u);
+
+    // Per target cluster (closed: interior tiles, not slice 0) a sweep of
+    // spot lights whose apex is four sphere radii from the bounds' centre
+    // and whose axis is 50 degrees off the centre, with outer angles around
+    // the one where the widened cone is tangent to the bounding sphere.
+    constexpr int    sweep            = 16;
+    constexpr double sweep_step       = 1.0 / 1048576.0; // relative outer angle step
+    constexpr double cone_cos_widening = 1.0 / 65536.0;  // as light_cluster.cpp
+    const glm::dmat4 world_from_node{m_camera_snapshot.world_from_node()};
+    std::vector<uint32_t> target_clusters;
+    for (const uint32_t k : {6u, 10u, 14u}) {
+        for (const glm::uvec2 tile : {glm::uvec2{7u, 6u}, glm::uvec2{12u, 10u}, glm::uvec2{15u, 4u}}) {
+            target_clusters.push_back((((k * tiles_y) + tile.y) * tiles_x) + tile.x);
+            const glm::vec4 slice = read_vec4(k);
+            glm::dvec3 lo{0.0};
+            glm::dvec3 hi{0.0};
+            for (uint32_t c = 0; c < 4; ++c) {
+                const uint32_t  corner    = (((tile.y + (c >> 1u)) * (tiles_x + 1)) + tile.x + (c & 1u));
+                const glm::vec3 origin    {read_vec4(slice_count + (2 * corner) + 0)};
+                const glm::vec3 direction {read_vec4(slice_count + (2 * corner) + 1)};
+                const glm::dvec3 p0 = glm::dvec3{origin + (slice.x * direction)};
+                const glm::dvec3 p1 = glm::dvec3{origin + (slice.y * direction)};
+                lo = (c == 0) ? glm::min(p0, p1) : glm::min(lo, glm::min(p0, p1));
+                hi = (c == 0) ? glm::max(p0, p1) : glm::max(hi, glm::max(p0, p1));
+            }
+            lo -= glm::dvec3{slice.z};
+            hi += glm::dvec3{slice.z};
+            const glm::dvec3 e      = 0.5 * (hi - lo);
+            const glm::dvec3 b      = lo + e;
+            const double     radius = std::min(e.x + e.y + e.z, std::sqrt(3.0) * std::max(e.x, std::max(e.y, e.z))) * (1.0 + (1.0 / 1024.0));
+            const double     distance = 4.0 * radius;
+            const glm::dvec3 u      = glm::normalize(glm::dvec3{1.0, 0.6, 0.3});
+            const glm::dvec3 apex   = b + (distance * u);
+            const glm::dvec3 side   = glm::normalize(glm::cross(u, glm::dvec3{0.0, 0.0, 1.0}));
+            const double     theta  = glm::radians(50.0);
+            const glm::dvec3 axis   = (std::cos(theta) * -u) + (std::sin(theta) * side);
+            const double     half_angle  = theta - std::asin(radius / distance);
+            const double     outer_angle = 2.0 * std::acos(std::cos(half_angle) + cone_cos_widening);
+            const glm::dvec3 apex_world  {world_from_node * glm::dvec4{apex, 1.0}};
+            const glm::dvec3 axis_world  {world_from_node * glm::dvec4{axis, 0.0}};
+            for (int step = -sweep; step <= sweep; ++step) {
+                const float outer = static_cast<float>(outer_angle * (1.0 + (static_cast<double>(step) * sweep_step)));
+                std::shared_ptr<erhe::scene::Light> light = make_scene_light(
+                    erhe::scene::Light_type::spot, glm::vec3{apex_world}, glm::vec3{apex_world + axis_world}, static_cast<float>(3.0 * distance), false
+                );
+                light->set_inner_spot_angle(0.5f * outer);
+                light->set_outer_spot_angle(outer);
+                m_lights.push_back(light);
+            }
+        }
+    }
+    resolve_and_apply();
+    bin_and_compare(config);
+
+    // The sweeps are the last spot unshadowed slots, in scene order, and
+    // straddle the decision: the target cluster lists the wider cones of a
+    // sweep and not the narrower ones.
+    const Light_layer_partition& partition = m_light_projections.light_partition;
+    const std::size_t spot_end   = partition.per_type_shadow[0] + partition.per_type_nonshadow[0] + partition.per_type_shadow[1] + partition.per_type_nonshadow[1];
+    const std::size_t per_sweep  = (2 * sweep) + 1;
+    const std::size_t sweep_first_slot = spot_end - (target_clusters.size() * per_sweep);
+    ASSERT_EQ(m_lights.size() - base_count, target_clusters.size() * per_sweep);
+    std::size_t straddling = 0;
+    for (std::size_t i = 0; i < target_clusters.size(); ++i) {
+        const std::span<const uint32_t> slots = m_binner.get_cluster_slots(target_clusters[i]);
+        std::size_t listed = 0;
+        for (std::size_t step = 0; step < per_sweep; ++step) {
+            const uint32_t slot = static_cast<uint32_t>(sweep_first_slot + (i * per_sweep) + step);
+            listed += std::binary_search(slots.begin(), slots.end(), slot) ? 1u : 0u;
+        }
+        if ((listed > 0) && (listed < per_sweep)) {
+            ++straddling;
+        }
+    }
+    EXPECT_GT(straddling, target_clusters.size() / 2) << "the sweeps must straddle the fp32 decision";
 }
 
 } // namespace erhe::scene_renderer::test

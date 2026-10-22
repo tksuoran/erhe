@@ -96,8 +96,9 @@ void write_single_cluster(const Light_layer_partition& partition, std::span<std:
 inline constexpr std::size_t c_light_cluster_bin_header_uvec4_count = 3;
 
 // The light binner (C4): tests every spot and point light's range sphere
-// against every cluster's view-space bounds and lists the passing slots per
-// cluster in ascending order. prepare() builds the grid and the fp32 inputs
+// against every cluster's view-space bounds, and every spot light's widened
+// cone against the bounding sphere of every closed cluster that passes, and
+// lists the passing slots per cluster in ascending order. prepare() builds the grid and the fp32 inputs
 // of the tests (cluster bounds from tile corner rays and slice depths, light
 // spheres in the cluster camera's node space); bin_prepared() runs the tests
 // on the CPU. The GPU binner (Light_cluster_gpu_binner) runs the same tests,
@@ -133,6 +134,10 @@ public:
     //   data[slice]                            = slice near depth, far depth, widening, 0
     //   data[slices + 2 corner + 0 / 1]        = corner ray origin (view depth 0) / direction (per unit depth)
     //   data[slices + 2 corners + binned slot] = light centre (node space), radius (< 0: unbounded)
+    //   data[slices + 2 corners + binned count + binned slot] = spot cone:
+    //       emission axis (node space) times the sine of the widened outer
+    //       half angle, its cotangent; zero for point lights and for a cone
+    //       widened to the whole sphere
     [[nodiscard]] auto get_input_byte_count      () const -> std::size_t;
     void write_inputs(std::span<std::byte> out) const;
     // The fixed-offset layout the GPU binner writes (C3): cluster headers,
@@ -173,6 +178,7 @@ private:
     std::vector<glm::vec4>  m_slices;          // per slice: near depth, far depth, widening, 0
     std::vector<glm::vec4>  m_corners;         // per corner: origin, direction
     std::vector<glm::vec4>  m_lights;          // per binned slot: centre, radius
+    std::vector<glm::vec4>  m_cones;           // per binned slot: axis * sin, cot (0 for point lights)
     // Per cluster: the widened bounds and the open-side flags.
     std::vector<glm::vec3>  m_cluster_min;
     std::vector<glm::vec3>  m_cluster_max;
