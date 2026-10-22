@@ -105,15 +105,18 @@ enum class Display_refresh_present_kind : unsigned int {
 // Adaptive-Sync display the window drives directly (fullscreen): it shows
 // an image when the image's target time arrives, no earlier than
 // minimum_refresh_interval after the previous one, and repeats the previous
-// image after maximum_refresh_interval. fixed_grid: a refresh grid (a
-// compositor, or a fixed-rate display); the intervals are the display's
-// range where known (0 = unknown).
+// image after maximum_refresh_interval; with update_granularity > 0
+// (ProMotion) it refreshes only at its own ticks of that spacing (claim
+// C32), with 0 at any time. fixed_grid: a refresh grid (a compositor, or a
+// fixed-rate display); the intervals and the granularity are the display's
+// where known (0 = unknown).
 class Display_presentation
 {
 public:
     erhe::frame_pacing::Present_display_kind kind                    {erhe::frame_pacing::Present_display_kind::fixed_grid};
     double                                   minimum_refresh_interval{0.0}; // seconds
     double                                   maximum_refresh_interval{0.0}; // seconds
+    double                                   update_granularity      {0.0}; // seconds, 0 = continuous or unknown
     bool                                     fullscreen              {false};
 
     [[nodiscard]] auto operator==(const Display_presentation& other) const -> bool = default;

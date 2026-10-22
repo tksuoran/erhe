@@ -145,8 +145,17 @@ public:
     // (C31, deviation 25: no upshift band, the queue backlog as the
     // downshift test, a dwell-scaled upshift survival window), and a frame the display could not show at its
     // target (a repeat in between) is no deadline offset evidence.
+    // On variable_refresh with refresh_granularity > 0 (C32, deviation 26)
+    // the display refreshes only at its own ticks, a grid of that spacing
+    // (ProMotion: half the minimum interval): every display is phase
+    // evidence modulo the granularity, and the pacer locks its slots onto
+    // the ticks. A granularity not below refresh_granularity_max_frac of the
+    // refresh period is no tick grid finer than the period (a fixed-rate
+    // mode reports its refresh interval) and is ignored.
     Present_display_kind display             {Present_display_kind::fixed_grid};
     double               max_refresh_interval{0.0}; // variable_refresh: the longest interval the display holds an image (s), > 0
+    double               refresh_granularity {0.0}; // variable_refresh: the display's update granularity (s), 0 = continuous
+    double               refresh_granularity_max_frac{0.75}; // larger granularities (fraction of refresh_period) are ignored
 };
 
 // Result of Frame_pacer::schedule() for one frame.
@@ -245,6 +254,11 @@ class Frame_pacer
 {
 public:
     explicit Frame_pacer(const Frame_pacer_tunables& tunables, double nominal_grid_phase = 0.0);
+
+    // The update granularity the pacer locks onto (claim C32): the
+    // tunables' refresh_granularity on variable_refresh when it lies below
+    // refresh_granularity_max_frac of the refresh period, else 0.
+    [[nodiscard]] static auto get_usable_refresh_granularity(const Frame_pacer_tunables& tunables) -> double;
 
     // Inner loop (FR2/FR3/FR4/FR5): schedule frame frame_id at current time now.
     [[nodiscard]] auto schedule(std::int64_t frame_id, double now) -> Schedule_decision;

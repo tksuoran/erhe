@@ -113,9 +113,21 @@ auto Sample_window::quantile(const double p, const double fallback) const -> dou
     return m_scratch[clamped];
 }
 
+auto Frame_pacer::get_usable_refresh_granularity(const Frame_pacer_tunables& tunables) -> double
+{
+    const double granularity = tunables.refresh_granularity;
+    const bool usable =
+        (tunables.display == Present_display_kind::variable_refresh) &&
+        (granularity > 0.0) &&
+        (granularity < (tunables.refresh_granularity_max_frac * tunables.refresh_period));
+    return usable ? granularity : 0.0;
+}
+
 Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nominal_grid_phase)
     : m_tunables{tunables}
 {
+    // C32: a granularity that is no tick grid finer than the period is ignored.
+    m_tunables.refresh_granularity = get_usable_refresh_granularity(tunables);
     // C30: a variable refresh display needs its maximum refresh interval.
     ERHE_VERIFY((m_tunables.display != Present_display_kind::variable_refresh) || (m_tunables.max_refresh_interval > 0.0));
     const double t    = m_tunables.refresh_period;
@@ -927,6 +939,23 @@ void Frame_pacer::on_variable_refresh_feedback(const std::int64_t frame_id, cons
     // neither the gross-error re-seed nor the PLL period branch runs. The
     // phase follows on-time displays only (innovation within guard).
     const Frame_entry* entry = find_entry(frame_id);
+    const double granularity = m_tunables.refresh_granularity;
+    if (granularity > 0.0) {
+        // C32: the display refreshes only at its ticks, so every display -
+        // on time or late - lies on the tick grid: its residual modulo the
+        // granularity is phase evidence. Locking the slots onto the ticks
+        // puts each on-time display at its target; untracked, a tick offset
+        // beyond guard read every frame as late and re-anchored the slot
+        // cursor a slot ahead (one target in three skipped a slot, live).
+        // The residual is taken against the nearest slot, not the absolute
+        // lattice phase + j * granularity: a granularity a little off half
+        // the period shifts that lattice against the slots by the slot index
+        // times the error (live: displays 0.805 ms before their targets).
+        const double near_slot = std::round((achieved_present_time - m_grid_phase) / m_grid_period);
+        double residual = achieved_present_time - (m_grid_phase + (near_slot * m_grid_period));
+        residual -= std::round(residual / granularity) * granularity;
+        m_grid_phase += m_tunables.grid_tracker_gain * residual;
+    }
     std::int64_t achieved_slot = 0;
     if ((entry != nullptr) && (achieved_present_time > (entry->target_time + m_tunables.guard))) {
         // A late display re-anchors the slot cursor only: the late frame's
@@ -942,7 +971,7 @@ void Frame_pacer::on_variable_refresh_feedback(const std::int64_t frame_id, cons
     } else {
         const double nearest_slot = std::round((achieved_present_time - m_grid_phase) / m_grid_period);
         const double error        = achieved_present_time - (m_grid_phase + (nearest_slot * m_grid_period));
-        if (std::abs(error) < m_tunables.guard) {
+        if ((std::abs(error) < m_tunables.guard) && (granularity <= 0.0)) {
             m_grid_phase += m_tunables.grid_tracker_gain * error;
         }
         achieved_slot = static_cast<std::int64_t>(std::round((achieved_present_time - m_grid_phase) / m_grid_period));

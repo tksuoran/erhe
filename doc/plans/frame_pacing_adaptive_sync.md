@@ -3,10 +3,11 @@
 Status: in progress
 
 Built and gated: detection, pacer and editor wiring; loops Medium and
-clustered hold 120 Hz fullscreen on the Adaptive-Sync display in every
-session, windowed unchanged (see "Verification"; claims C30 and C31,
-deviations 24 and 25). The goal is met; open: the ProMotion and 60 Hz
-re-gates and a continuous VRR cadence for loads beyond one period.
+clustered hold 120 Hz fullscreen on the Adaptive-Sync display and on the
+built-in ProMotion panel in every session, windowed unchanged (see
+"Verification"; claims C30, C31 and C32, deviations 24, 25 and 26). The
+goal is met; open: the 60 Hz re-gate, the Dell's update granularity (not
+yet read) and a continuous VRR cadence for loads beyond one period.
 
 Tier M (`doc/erhe/metal_backend.md` "Frame pacing", algorithm in
 `doc/frame_pacing/algorithm.md`, Metal iteration log in
@@ -134,6 +135,17 @@ the editor seeds `Frame_pacer_tunables::deadline_offset_initial` there
 instead of the windowed compositor's calibration (T + 1.3 ms = 9.63 ms at
 120 Hz).
 
+The built-in ProMotion panel (24-120 Hz) is a variable refresh display
+with an update granularity: NSScreen `displayUpdateGranularity` 4.167 ms
+(half the minimum interval), and fullscreen it shows a drawable only at one
+of its own ticks of that spacing, at a launch-dependent offset from the
+requested time. The backend reports the granularity
+(`Display_presentation::update_granularity`), the editor passes it to
+`set_display`, and the pacer locks its slots onto the ticks
+(`doc/frame_pacing/algorithm.md` deviation 26, claim C32 in both model
+suites); without it, an offset beyond `guard` read every frame as late and
+one target in three skipped a slot.
+
 A load just inside one period (Bistro clustered) stayed at N=2 on the
 upshift test's hysteresis band; on VRR the cadence tests take the forms of
 `doc/frame_pacing/algorithm.md` deviation 25, verified by claim C31 in both
@@ -194,10 +206,32 @@ phase tracking of on-time displays follows. Windowed, the grid estimate is
   its load requires on the integer cadence. A continuous VRR cadence
   (targets spaced at the predicted frame interval when it exceeds T, about
   95 Hz for that load) is not part of this plan's goal and is open.
-- Not re-gated here: the built-in ProMotion panel in fullscreen (its range
-  makes it a variable refresh display too) and the 60 Hz modes; they belong
-  to the tier M re-gate of [frame_pacing_metal.md](frame_pacing_metal.md),
-  which needs the user at the machine.
+- Not re-gated here: the 60 Hz modes; they belong to the tier M re-gate of
+  [frame_pacing_metal.md](frame_pacing_metal.md), which needs the user at
+  the machine.
+
+ProMotion, 2026-10-22, Release Metal, built-in panel only (3024x1964 @
+120 Hz, 24-120 Hz, update granularity 4.167 ms), fullscreen viewport
+1751x1884. Fullscreen detection: "variable refresh (fullscreen; display
+refresh interval 8.333 ... 41.667 ms = 24.0 ... 120.0 Hz, update
+granularity 4.167 ms)". Every presented time lies on the panel's tick grid.
+
+- Before deviation 26: 4 of 5 default-scene launches and five Bistro
+  sessions (19 configs, loops Medium, clustered and loops 43 lights, either
+  first) held 120 Hz with the displays 1.0-1.8 ms before their targets; in
+  1 of 5 launches the ticks fell 2.42 ms after the targets and one frame in
+  three displayed 16.67 ms after its predecessor (115 of 346).
+- With deviation 26: default scene N=1 in 10 of 10 launches, 0-1
+  two-refresh frames per ~352, every display on its target (0.0 ms),
+  release to display 9.7-10.9 ms. Bistro, two sessions (clustered first;
+  loops 43 lights first, then back), 9 configs: 100 % of the deltas at
+  8.333 ms, N=1, displays on target; GPU span clustered 5.53-5.58 ms,
+  loops Medium 4.72-4.74 ms, loops 43 lights 7.68-7.78 ms (it fits one
+  period at this viewport), GPU clock 0.98-1.00. The deadline offset starts
+  at 2.5 ms and rises to 3.9-5.4 ms after a configuration switch's late
+  frames, which adds that much release-to-display latency (10-16 ms).
+- Windowed: fixed grid, N=1 in 40 of 40 launches (default, render thread
+  inline, pipelining off; after the fix), release to display 25-27 ms.
 
 ## Goal and gate
 

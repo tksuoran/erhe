@@ -108,13 +108,14 @@ void Display_refresh_resolver::set_window_presentation(const Display_presentatio
         const double min_hz = (presentation.maximum_refresh_interval > 0.0) ? (1.0 / presentation.maximum_refresh_interval) : 0.0;
         const double max_hz = (presentation.minimum_refresh_interval > 0.0) ? (1.0 / presentation.minimum_refresh_interval) : 0.0;
         m_logger->info(
-            "display presentation: {} ({}; display refresh interval {:.3f} ... {:.3f} ms = {:.1f} ... {:.1f} Hz)",
+            "display presentation: {} ({}; display refresh interval {:.3f} ... {:.3f} ms = {:.1f} ... {:.1f} Hz, update granularity {:.3f} ms)",
             variable ? "variable refresh" : "fixed grid",
             presentation.fullscreen ? "fullscreen" : "windowed",
             presentation.minimum_refresh_interval * 1000.0,
             presentation.maximum_refresh_interval * 1000.0,
             min_hz,
-            max_hz
+            max_hz,
+            presentation.update_granularity * 1000.0
         );
         callback = m_presentation_callback;
     }

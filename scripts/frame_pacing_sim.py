@@ -116,6 +116,14 @@ class Tunables:
     # max_refresh_interval would be broken up by the display's repeats.
     display: str = 'fixed_grid'
     max_refresh_interval: float = 0.0  # 'variable_refresh': the longest interval the display holds an image [s]
+    # C32: 'variable_refresh' only - the display's update granularity [s]
+    # (0 = continuous). A ProMotion panel (granularity T/2) shows an image
+    # only at one of its own ticks, a grid of that spacing with its own
+    # phase: the pacer locks its slots onto it.
+    refresh_granularity: float = 0.0
+    refresh_granularity_max_frac: float = 0.75  # C32: a granularity not below this fraction of T is no
+                                                # tick grid finer than the period (a fixed-rate mode
+                                                # reports its refresh interval) and is ignored
 
     @property
     def H(self):     return self.H_frac * self.T
@@ -158,6 +166,10 @@ class FramePacer:
         self.tun = tun
         # C30: a variable refresh display needs its maximum refresh interval.
         assert tun.display != 'variable_refresh' or tun.max_refresh_interval > 0.0
+        # C32: the granularity the pacer locks onto (0 = none).
+        self.granularity = tun.refresh_granularity if (
+            tun.display == 'variable_refresh' and
+            0.0 < tun.refresh_granularity < tun.refresh_granularity_max_frac * tun.T) else 0.0
         self.phase = nominal_phase        # estimated vsync grid phase
         self.period = tun.T               # estimated vsync grid period (tracked)
         self.period_ref = tun.T           # PLL clamp center (nominal until a re-seed replaces it)
@@ -787,6 +799,20 @@ class FramePacer:
         # follows on-time displays only (innovation within guard).
         t = self.tun
         target = self.frame_target_time.get(frame_id)
+        if self.granularity > 0.0:
+            # C32: the display refreshes only at its ticks, so every display -
+            # on time or late - lies on the tick grid: its residual modulo
+            # the granularity is phase evidence. Locking the slots onto the
+            # ticks puts each on-time display at its target; untracked, an
+            # offset beyond guard read every frame as late. The residual is
+            # taken against the nearest slot, not the absolute lattice
+            # phase + j * g: a granularity a little off T/2 shifts that
+            # lattice against the slots by the slot index times the error.
+            g = self.granularity
+            near = round((t_present - self.phase) / self.period)
+            residual = t_present - (self.phase + near * self.period)
+            residual -= round(residual / g) * g
+            self.phase += t.grid_gain * residual
         nearest = round((t_present - self.phase) / self.period)
         err = t_present - (self.phase + nearest * self.period)
         if target is not None and t_present > target + t.guard:
@@ -798,7 +824,7 @@ class FramePacer:
             # frame every 50).
             achieved = self.frame_slot[frame_id] + math.ceil((t_present - target) / self.period - 1e-9)
         else:
-            if abs(err) < t.guard:
+            if abs(err) < t.guard and self.granularity <= 0.0:
                 self.phase += t.grid_gain * err
             achieved = round((t_present - self.phase) / self.period)
         if self.last_fb is None or frame_id > self.last_fb[0]:
@@ -1071,6 +1097,18 @@ class Scenario:
                                          # refresh. Live: NSScreen 8.333 /
                                          # 20.833 ms (48-120 Hz).
     vrr_max_interval: float = 0.0
+    vrr_granularity: float = 0.0         # C32: > 0: the VRR display refreshes
+                                         # only at its ticks, a grid of this
+                                         # spacing (ProMotion: T/2 = 4.167 ms)
+                                         # at vrr_tick_phase; an image shows at
+                                         # the first tick at or after its
+                                         # target minus vrr_tick_lead (or when
+                                         # it is ready). Live: displays sat at
+                                         # a constant offset from the targets,
+                                         # -1.84 ... +2.42 ms by session.
+    vrr_tick_phase: float = 0.0
+    vrr_tick_lead: float = 0.0
+    vrr_tick_drift: float = 0.0          # C32: relative error of the tick spacing
     latency_includes_waits: bool = False # C28 control: the host's latency input counts the involuntary waits (pre-C28)
     slop_servo: bool = False             # C19..C21: release comes from the
                                          # tier S slop-servo sleep instead of
@@ -1302,11 +1340,16 @@ def run(sc: Scenario):
             # C30: VRR display - the refresh follows the image, not a grid.
             # The target is honored (presentDrawable:atTime:); a late image
             # displays when it is ready, not at a later vsync.
-            want = max(dec.target_time, avail + sc.dpe_true)
+            want = max(dec.target_time - sc.vrr_tick_lead, avail + sc.dpe_true)
             if vrr_refresh is not None:
                 while want > vrr_refresh + sc.vrr_max_interval:
                     vrr_refresh += sc.vrr_max_interval   # repeat of the previous image
                 want = max(want, vrr_refresh + sc.vrr_min_interval)
+            if sc.vrr_granularity > 0.0:
+                # C32: the first tick at or after it (the tolerance keeps a
+                # minimum interval after a tick on the next-but-one tick).
+                tick = sc.vrr_granularity * (1.0 + sc.vrr_tick_drift)
+                want = sc.vrr_tick_phase + math.ceil((want - sc.vrr_tick_phase) / tick - 1e-3) * tick
             vrr_refresh = want
             # i: the nominal slot, for rec_slot in the frame record only (the
             # VRR display has no slots).
@@ -2795,6 +2838,103 @@ def c31_variable_refresh_borderline():
     all_seeds("C31 VRR overload: a step to a mean of 8.45 ms (30 % tail) downshifts within 200 frames", step_check(8.0, 0.3, 200))
 
 
+def c32_variable_refresh_ticks():
+    print("C32 variable refresh display with an update granularity (ProMotion, fullscreen)")
+    # Live (Metal tier M, Release, built-in ProMotion panel 3024x1964,
+    # fullscreen; NSScreen minimum / maximum refresh interval 8.333 /
+    # 41.667 ms, displayUpdateGranularity 4.167 ms): every presented time lay
+    # on a fixed 4.167 ms tick grid, at a constant offset from the pacer's
+    # targets that differed by session (-1.84 ... -1.0 ms, or +2.42 ms) and
+    # drifted slowly. The VRR phase tracker (C30) follows on-time displays
+    # within guard only, and a display beyond target + guard is late: at
+    # +2.42 ms every frame re-anchored the slot cursor a slot ahead of its
+    # own target, and one target in three skipped a slot (deltas 8.33,
+    # 8.33, 16.67 ms; 116 of 348) with the GPU done 5.5-6.5 ms early. With
+    # the granularity the pacer locks its slots onto the ticks from every
+    # display (its residual modulo the granularity).
+    # The plant's fixed request lead (1.8 ms) puts an untracked display in
+    # [-1.8, +2.37) ms of its target; the live offsets (-1.84 ... +2.42 ms)
+    # imply a lead that varies a little by launch.
+    T = 1.0 / 120.0
+    g = T / 2.0
+    lead = 1.8 * MS
+    def arm(seed, offset_ms, granularity, drift=0.0, n=6000, work_ms=6.5, told_error=0.0):
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=2.5 * MS, dpe_max=2.5 * MS + 0.5 * T,
+                       present_queue='fifo', prewarm_seconds=2.3 * MS)
+        tun.display = 'variable_refresh'
+        tun.max_refresh_interval = 1.0 / 24.0
+        tun.refresh_granularity = granularity * (1.0 + told_error)
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        def work(k, n_used):
+            return max(0.5, rw.gauss(work_ms, 0.1)) * MS
+        # The pacer's slots lie at multiples of T (phase 0); the tick phase
+        # puts an untracked display offset_ms after its target.
+        sc = Scenario("c32", n, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work,
+                      dvfs=True, dvfs_low=0.8, vrr_min_interval=T, vrr_max_interval=1.0 / 24.0,
+                      dpe_true=1.0 * MS, drawable_pool=3, pool_latch_lead=0.0,
+                      vrr_granularity=g, vrr_tick_phase=offset_ms * MS, vrr_tick_lead=lead,
+                      vrr_tick_drift=drift)
+        return run(sc)
+    def summary(result, start=1000):
+        # Goal: N=1 from frame 1000, >= 99 % of the present deltas within
+        # 0.1 ms of T and >= 99 % of the displays within 0.1 ms of their
+        # targets (the slots sit on the ticks).
+        recs, pacer = result
+        tail = recs[start:]
+        deltas = [b.disp_time - a.disp_time for a, b in zip(tail, tail[1:])]
+        exact = sum(1 for d in deltas if abs(d - T) < 0.1 * MS)
+        on_target = sum(1 for r in tail if abs(r.disp_time - r.target_time) < 0.1 * MS)
+        skipped = sum(1 for d in deltas if d > 1.5 * T)
+        ok = ({r.N for r in tail} == {1}) and (exact >= 0.99 * len(deltas)) and (on_target >= 0.99 * len(tail))
+        detail = (f"N from frame {start}: {sorted({r.N for r in tail})}, {exact}/{len(deltas)} deltas within "
+                  f"0.1 ms of T, {skipped} skipped slots, {on_target}/{len(tail)} displays on target, "
+                  f"deadline offset {pacer.dpe * 1000:.2f} ms")
+        return ok, detail
+    # Controls: the pacer not told the granularity (the live failure) - the
+    # displays 1.5 and 2.2 ms after the targets read as late every frame.
+    for offset in (1.5, 2.2):
+        ok, detail = summary(arm(3201, offset, 0.0))
+        check(f"C32 control: granularity not told, displays {offset} ms after the targets: slots skipped (the live failure)",
+              not ok, detail)
+    for offset in (-1.5, -0.5, 0.5, 1.5, 2.2):
+        ok, detail = summary(arm(3201, offset, g))
+        check(f"C32 ticks {offset} ms after the targets: 120 Hz, displays on target", ok, detail)
+    # The tick grid drifting against the pacer's clock through the whole
+    # offset range (live: the offset moved ~0.8 ms in 25 minutes; here 4 ms
+    # in 50 s).
+    ok, detail = summary(arm(3201, -1.5, g, drift=8e-5))
+    check("C32 drifting ticks: 120 Hz, displays on target", ok, detail)
+    # The host's granularity is not exactly T/2 (live: NSScreen reports
+    # 4.166667 ms, and slot indices count from the clock's epoch, ~1e7 slots
+    # after a day of uptime): a lock onto the absolute lattice phase + j * g
+    # left the displays at a constant offset from the targets (live: 0.805 ms
+    # before them in every launch). The residual is taken against the nearest
+    # slot. Here the error is scaled up to show within 6000 frames.
+    ok, detail = summary(arm(3201, 0.5, g, told_error=1e-4))
+    check("C32 granularity told with a small error: 120 Hz, displays on target", ok, detail)
+    # Control: a continuous VRR display (the C30 startup-spike arm) with a
+    # granularity of T told (NSScreen reports a fixed-rate mode's refresh
+    # interval as its granularity): ignored, so the arm equals the C30 arm.
+    def continuous(granularity):
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=T + 1.3 * MS, dpe_max=T + 1.3 * MS + 0.5 * T,
+                       present_queue='fifo', prewarm_seconds=2.3 * MS)
+        tun.display = 'variable_refresh'
+        tun.max_refresh_interval = 1.0 / 48.0
+        tun.refresh_granularity = granularity
+        rng = random.Random(3001)
+        rw = random.Random(3002)
+        def work(k, n_used):
+            return max(0.5, rw.gauss(20.0 if 30 <= k < 60 else 6.5, 0.1)) * MS
+        sc = Scenario("c32c", 6000, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work,
+                      dvfs=True, dvfs_low=0.8, vrr_min_interval=T, vrr_max_interval=1.0 / 48.0,
+                      dpe_true=1.0 * MS, drawable_pool=3, pool_latch_lead=0.0)
+        return [r.disp_time for r in run(sc)[0]]
+    told_t = continuous(T)
+    check("C32 control: continuous VRR display, granularity T told: ignored (identical to untold)",
+          told_t == continuous(0.0), f"{len(told_t)} display times compared")
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -2827,6 +2967,7 @@ def main():
     c29_clock_records_by_workload()
     c30_variable_refresh_display()
     c31_variable_refresh_borderline()
+    c32_variable_refresh_ticks()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")
