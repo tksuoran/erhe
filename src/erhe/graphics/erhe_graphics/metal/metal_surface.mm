@@ -144,6 +144,9 @@ auto Surface_impl::query_display_presentation() const -> Display_presentation
     if (@available(macOS 12.0, *)) {
         presentation.minimum_refresh_interval = static_cast<double>([screen minimumRefreshInterval]);
         presentation.maximum_refresh_interval = static_cast<double>([screen maximumRefreshInterval]);
+        // ProMotion reports half its minimum interval: it refreshes only at
+        // its own ticks of that spacing (claim C32); 0 is continuous.
+        presentation.update_granularity       = static_cast<double>([screen displayUpdateGranularity]);
     }
     // A fixed-rate screen reports equal intervals; the margin keeps a
     // rounding difference between the two from reading as a range.

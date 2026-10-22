@@ -2848,7 +2848,8 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
             {"presentation",                  (refresh.presentation.kind == erhe::frame_pacing::Present_display_kind::variable_refresh) ? "variable_refresh" : "fixed_grid"},
             {"presentation_fullscreen",       refresh.presentation.fullscreen},
             {"min_refresh_interval_ms",       refresh.presentation.minimum_refresh_interval * 1000.0},
-            {"max_refresh_interval_ms",       refresh.presentation.maximum_refresh_interval * 1000.0}
+            {"max_refresh_interval_ms",       refresh.presentation.maximum_refresh_interval * 1000.0},
+            {"update_granularity_ms",         refresh.presentation.update_granularity * 1000.0}
         };
         // The present calibration (erhe::graphics::Present_calibration) with
         // every raw sample: the compositor's request window and deadline

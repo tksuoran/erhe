@@ -2127,3 +2127,140 @@ TEST(Frame_pacer_claims, c31_variable_refresh_borderline)
         }
     }
 }
+
+namespace {
+
+// Whether the pacer is told the display's update granularity (the control
+// withholds it).
+enum class C32_pacer_told : unsigned int {
+    granularity = 0,
+    nothing
+};
+
+// The plant's fixed request lead (1.8 ms) puts an untracked display in
+// [-1.8, +2.37) ms of its target; the live offsets (-1.84 ... +2.42 ms)
+// imply a lead that varies a little by launch.
+// Claim C32 scenario: a ProMotion panel driven fullscreen (variable refresh
+// 24-120 Hz, update granularity T/2), the pacer's VRR tunables with the
+// editor's VRR deadline seed (2.5 ms), GPU work 6.5 ms at full clock; the
+// tick grid puts an untracked display offset_ms after its target (the
+// pacer's slots lie at multiples of T).
+auto run_c32(const double offset_ms, const C32_pacer_told told, const double drift = 0.0, const double told_error = 0.0) -> std::vector<Frame_record>
+{
+    const double t = c30_period;
+    const double granularity = 0.5 * t;
+    Scenario scenario;
+    scenario.frame_count                             = 6000;
+    scenario.plant.tunables.refresh_period           = t;
+    scenario.plant.tunables.deadline_offset_source   = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.deadline_offset_initial  = 2.5 * ms;
+    scenario.plant.tunables.deadline_offset_max      = (2.5 * ms) + (0.5 * t);
+    scenario.plant.tunables.present_queue            = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.plant.tunables.upshift_prewarm_seconds  = 2.3 * ms;
+    scenario.plant.tunables.display                  = erhe::frame_pacing::Present_display_kind::variable_refresh;
+    scenario.plant.tunables.max_refresh_interval     = 1.0 / 24.0;
+    scenario.plant.tunables.refresh_granularity      = (told == C32_pacer_told::granularity) ? (granularity * (1.0 + told_error)) : 0.0;
+    scenario.plant.true_deadline_offset              = 1.0 * ms;
+    scenario.drawable_pool                           = 3;
+    scenario.pool_latch_lead                         = 0.0;
+    scenario.dvfs                                    = true;
+    scenario.dvfs_low                                = 0.8;
+    scenario.vrr_min_interval                        = t;
+    scenario.vrr_max_interval                        = 1.0 / 24.0;
+    scenario.vrr_granularity                         = granularity;
+    scenario.vrr_tick_phase                          = offset_ms * ms;
+    scenario.vrr_tick_lead                           = 1.8 * ms;
+    scenario.vrr_tick_drift                          = drift;
+    scenario.cpu_duration = make_gauss(3201, 1.0, 0.2);
+    auto work_engine = std::make_shared<std::mt19937>(3202);
+    scenario.gpu_duration_at_cadence = [work_engine](const std::int64_t, const int) mutable -> double {
+        std::normal_distribution<double> work{6.5, 0.1};
+        return std::max(0.5, work(*work_engine)) * ms;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    return run_scenario(scenario, pacer);
+}
+
+// C32 goal: N=1 from frame 1000, at least 99 % of the present deltas
+// within 0.1 ms of T and at least 99 % of the displays within 0.1 ms of
+// their targets (the slots sit on the ticks).
+auto c32_on_ticks(const std::vector<Frame_record>& records, std::string& detail) -> bool
+{
+    if (records.size() <= 1001u) {
+        detail = "too few frames";
+        return false;
+    }
+    std::size_t exact     = 0;
+    std::size_t skipped   = 0;
+    std::size_t on_target = 0;
+    for (std::size_t i = 1000; i < records.size(); ++i) {
+        if (std::abs(records[i].display_time - records[i].target_time) < (0.1 * ms)) {
+            ++on_target;
+        }
+        if (i > 1000) {
+            const double delta = records[i].display_time - records[i - 1].display_time;
+            if (std::abs(delta - c30_period) < (0.1 * ms)) {
+                ++exact;
+            }
+            if (delta > (1.5 * c30_period)) {
+                ++skipped;
+            }
+        }
+    }
+    const std::size_t frames = records.size() - 1000;
+    const std::size_t deltas = frames - 1;
+    detail = std::to_string(exact) + "/" + std::to_string(deltas) + " deltas within 0.1 ms of T, " +
+             std::to_string(skipped) + " skipped slots, " + std::to_string(on_target) + "/" + std::to_string(frames) + " displays on target";
+    return
+        (vsync_values(records, 1000) == std::set<int>{1}) &&
+        (static_cast<double>(exact) >= (0.99 * static_cast<double>(deltas))) &&
+        (static_cast<double>(on_target) >= (0.99 * static_cast<double>(frames)));
+}
+
+} // anonymous namespace
+
+TEST(Frame_pacer_claims, c32_variable_refresh_ticks)
+{
+    // Live (Metal tier M, Release, built-in ProMotion panel 3024x1964,
+    // fullscreen; NSScreen minimum / maximum refresh interval 8.333 /
+    // 41.667 ms, displayUpdateGranularity 4.167 ms): every presented time
+    // lay on a fixed 4.167 ms tick grid, at a constant offset from the
+    // pacer's targets that differed by session (-1.84 ... -1.0 ms, or
+    // +2.42 ms) and drifted slowly. The VRR phase tracker (C30) followed
+    // on-time displays within guard only, and a display beyond target +
+    // guard was late: at +2.42 ms every frame re-anchored the slot cursor a
+    // slot ahead of its own target, and one target in three skipped a slot.
+    // Told the granularity, the pacer locks its slots onto the ticks
+    // (algorithm.md deviation 26).
+    std::string detail;
+    // Controls: not told, displays 1.5 and 2.2 ms after the targets skip
+    // slots (the live failure).
+    for (const double offset : {1.5, 2.2}) {
+        EXPECT_FALSE(c32_on_ticks(run_c32(offset, C32_pacer_told::nothing), detail)) << "control, offset " << offset << " ms: " << detail;
+    }
+    for (const double offset : {-1.5, -0.5, 0.5, 1.5, 2.2}) {
+        EXPECT_TRUE(c32_on_ticks(run_c32(offset, C32_pacer_told::granularity), detail)) << "offset " << offset << " ms: " << detail;
+    }
+    // The tick grid drifting through the whole offset range.
+    EXPECT_TRUE(c32_on_ticks(run_c32(-1.5, C32_pacer_told::granularity, 8e-5), detail)) << "drifting ticks: " << detail;
+    // The host's granularity is not exactly T/2 and slot indices count from
+    // the clock's epoch: a lock onto the absolute lattice phase + j * g left
+    // the displays at a constant offset from the targets (live: 0.805 ms
+    // before them). The error is scaled up to show within 6000 frames.
+    EXPECT_TRUE(c32_on_ticks(run_c32(0.5, C32_pacer_told::granularity, 0.0, 1e-4), detail)) << "granularity told with a small error: " << detail;
+    // Control: NSScreen reports a fixed-rate mode's refresh interval as its
+    // granularity; a granularity of T is no tick grid finer than the period
+    // and is ignored.
+    {
+        Frame_pacer_tunables tunables;
+        tunables.refresh_period       = c30_period;
+        tunables.display              = erhe::frame_pacing::Present_display_kind::variable_refresh;
+        tunables.max_refresh_interval = 1.0 / 48.0;
+        tunables.refresh_granularity  = c30_period;
+        EXPECT_EQ(Frame_pacer::get_usable_refresh_granularity(tunables), 0.0) << "granularity T: ignored";
+        tunables.refresh_granularity  = 0.5 * c30_period;
+        EXPECT_EQ(Frame_pacer::get_usable_refresh_granularity(tunables), 0.5 * c30_period) << "granularity T/2: used";
+        tunables.display              = erhe::frame_pacing::Present_display_kind::fixed_grid;
+        EXPECT_EQ(Frame_pacer::get_usable_refresh_granularity(tunables), 0.0) << "fixed grid: ignored";
+    }
+}

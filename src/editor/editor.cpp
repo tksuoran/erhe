@@ -873,14 +873,33 @@ public:
         }
         m_frame_pacing_observer.set_deadline_offset(deadline_offset);
         if (variable_refresh) {
-            m_frame_pacing_observer.set_display(erhe::frame_pacing::Present_display_kind::variable_refresh, presentation.maximum_refresh_interval);
+            m_frame_pacing_observer.set_display(
+                erhe::frame_pacing::Present_display_kind::variable_refresh,
+                presentation.maximum_refresh_interval,
+                presentation.update_granularity
+            );
         } else {
-            m_frame_pacing_observer.set_display(erhe::frame_pacing::Present_display_kind::fixed_grid, 0.0);
+            m_frame_pacing_observer.set_display(erhe::frame_pacing::Present_display_kind::fixed_grid, 0.0, 0.0);
         }
+        // C32: the pacer ignores a granularity that is no tick grid finer than
+        // the period (a fixed-rate mode reports its refresh interval).
+        erhe::frame_pacing::Frame_pacer_tunables granularity_check{};
+        granularity_check.refresh_period      = presentation.minimum_refresh_interval;
+        granularity_check.display             = variable_refresh ? erhe::frame_pacing::Present_display_kind::variable_refresh : erhe::frame_pacing::Present_display_kind::fixed_grid;
+        granularity_check.refresh_granularity = presentation.update_granularity;
+        const bool granularity_ignored =
+            variable_refresh &&
+            (presentation.update_granularity > 0.0) &&
+            (erhe::frame_pacing::Frame_pacer::get_usable_refresh_granularity(granularity_check) == 0.0);
+        const std::string granularity_note = granularity_ignored
+            ? fmt::format(" ignored: not below {:.2f} of the minimum refresh interval", granularity_check.refresh_granularity_max_frac)
+            : std::string{};
         log_frame_pacing->info(
-            "frame pacing: display {} (max refresh interval {:.3f} ms), deadline offset seed {}",
+            "frame pacing: display {} (max refresh interval {:.3f} ms, update granularity {:.3f} ms{}), deadline offset seed {}",
             variable_refresh ? "variable refresh" : "fixed grid",
             presentation.maximum_refresh_interval * 1000.0,
+            variable_refresh ? (presentation.update_granularity * 1000.0) : 0.0,
+            granularity_note,
             (deadline_offset.initial > 0.0) ? "present calibration" : "pacer default"
         );
     }

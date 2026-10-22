@@ -39,7 +39,8 @@ void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now
         (std::abs(refresh_period - m_refresh_period) > (0.01 * m_refresh_period)) ||
         (m_pacer_deadline_offset_setup != m_deadline_offset_setup) ||
         (m_pacer_display != m_display) ||
-        (m_pacer_max_refresh_interval != m_max_refresh_interval)
+        (m_pacer_max_refresh_interval != m_max_refresh_interval) ||
+        (m_pacer_refresh_granularity != m_refresh_granularity)
     ) {
         Frame_pacer_tunables tunables;
         tunables.refresh_period         = refresh_period;
@@ -58,17 +59,27 @@ void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now
         tunables.upshift_prewarm_seconds = setup.upshift_prewarm;
         tunables.display                 = m_display;
         tunables.max_refresh_interval    = m_max_refresh_interval;
+        tunables.refresh_granularity     = m_refresh_granularity;
         m_pacer          = std::make_unique<Frame_pacer>(tunables);
         m_refresh_period = refresh_period;
         m_pacer_deadline_offset_setup = m_deadline_offset_setup;
         m_pacer_display               = m_display;
         m_pacer_max_refresh_interval  = m_max_refresh_interval;
+        m_pacer_refresh_granularity   = m_refresh_granularity;
         m_min_vsyncs_applied = 1; // fresh pacer starts at the default floor
+        // C32: a granularity the pacer ignores (no tick grid finer than the
+        // period) is logged with its value.
+        const std::string granularity_note =
+            ((tunables.refresh_granularity > 0.0) && (Frame_pacer::get_usable_refresh_granularity(tunables) == 0.0))
+                ? format_line(" (ignored: not below %.2f of the refresh period)", tunables.refresh_granularity_max_frac)
+                : std::string{};
         m_log_lines.push_back(
             format_line(
-                "frame pacing (observer): pacer created, refresh_period=%.3f ms, %s, deadline offset %.3f ms (%s, ceiling %.3f ms)",
+                "frame pacing (observer): pacer created, refresh_period=%.3f ms, %s, update granularity %.3f ms%s, deadline offset %.3f ms (%s, ceiling %.3f ms)",
                 refresh_period * 1000.0,
                 (tunables.display == Present_display_kind::variable_refresh) ? "variable refresh" : "fixed grid",
+                tunables.refresh_granularity * 1000.0,
+                granularity_note.c_str(),
                 tunables.deadline_offset_initial * 1000.0,
                 calibrated ? "calibrated" : "default",
                 ((tunables.deadline_offset_max > 0.0) ? tunables.deadline_offset_max : (tunables.deadline_offset_max_frac * refresh_period)) * 1000.0
@@ -257,10 +268,12 @@ void Frame_pacing_observer::set_deadline_offset(const Deadline_offset_setup& set
     m_deadline_offset_setup = setup;
 }
 
-void Frame_pacing_observer::set_display(const Present_display_kind display, const double max_refresh_interval)
+void Frame_pacing_observer::set_display(const Present_display_kind display, const double max_refresh_interval, const double refresh_granularity)
 {
+    const bool variable_refresh = (display == Present_display_kind::variable_refresh);
     m_display              = display;
-    m_max_refresh_interval = (display == Present_display_kind::variable_refresh) ? max_refresh_interval : 0.0;
+    m_max_refresh_interval = variable_refresh ? max_refresh_interval : 0.0;
+    m_refresh_granularity  = variable_refresh ? refresh_granularity  : 0.0;
 }
 
 } // namespace erhe::frame_pacing

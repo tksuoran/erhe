@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Display_presentation::update_granularity` (Metal: the
+  window screen's NSScreen `displayUpdateGranularity`; 4.167 ms on a
+  ProMotion panel, which refreshes only at its own ticks of that spacing) and
+  `erhe::frame_pacing`: `Frame_pacer_tunables::refresh_granularity`: on a
+  variable refresh display with a granularity the pacer locks its slots
+  onto the display's ticks (doc/frame_pacing/algorithm.md deviation 26,
+  claim C32).
 - `erhe::graphics`: `Display_presentation` (`kind`, `minimum_refresh_interval`,
   `maximum_refresh_interval`, `fullscreen`),
   `Display_refresh_resolver::set_window_presentation`,
@@ -576,6 +583,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::frame_pacing`: `Frame_pacing_observer::set_display(Present_display_kind,
+  double max_refresh_interval, double refresh_granularity)` takes the
+  display's update granularity (0 = continuous; claim C32).
 
 - `erhe::scene_renderer`: the 416-byte light record is split into three
   std430 arrays (doc/erhe/scene_renderer.md "Light records"):

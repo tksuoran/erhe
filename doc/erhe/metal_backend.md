@@ -441,14 +441,18 @@ interval range is not a single value is a variable refresh rate display
 with no compositor grid, so the presentation is `variable_refresh` with the
 range. A window on the same display presents through the compositor's fixed
 grid (measured on a 48-120 Hz panel: 8.344 ms windowed), so a windowed
-presentation is `fixed_grid`. It is re-read with the window period on a
+presentation is `fixed_grid`. The report also carries the screen's
+`displayUpdateGranularity` (`update_granularity`; 4.167 ms on the built-in
+ProMotion panel), which the pacer uses as described in
+`doc/frame_pacing/algorithm.md` deviation 26. It is re-read with the window period on a
 display change, a mode change and entering or leaving fullscreen (the
 window's display changed callback, which also fires on
 `SDL_EVENT_WINDOW_ENTER_FULLSCREEN` / `LEAVE_FULLSCREEN`), logged on each
 change (`erhe.graphics.display_refresh`, "display presentation: variable
-refresh (fullscreen; display refresh interval 8.333 ... 20.833 ms = 48.0 ...
-120.0 Hz)"), reported by MCP `get_frame_pacing_status`
-`display_refresh.presentation`, and handed to the resolver's presentation
+refresh (fullscreen; display refresh interval 8.333 ... 41.667 ms = 24.0 ...
+120.0 Hz, update granularity 4.167 ms)" on the ProMotion panel), reported by MCP
+`get_frame_pacing_status` `display_refresh.presentation` and
+`update_granularity_ms`, and handed to the resolver's presentation
 callback (what the editor does with it: `doc/frame_pacing/inputs.md`
 "Display kind"). The SDL fullscreen state is taken as direct to display:
 what puts the compositor back in the path of a fullscreen window - an

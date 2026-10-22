@@ -161,6 +161,16 @@ public:
     // the previous refresh. Live: NSScreen 8.333 / 20.833 ms (48-120 Hz).
     double                                  vrr_min_interval{0.0};
     double                                  vrr_max_interval{0.0};
+    // Claim C32: > 0: the VRR display refreshes only at its ticks, a grid of
+    // this spacing (ProMotion: T/2 = 4.167 ms) at vrr_tick_phase; an image
+    // shows at the first tick at or after its target minus vrr_tick_lead
+    // (or when it is ready). vrr_tick_drift: relative error of the tick
+    // spacing. Live: displays sat at a constant offset from the targets,
+    // -1.84 ... +2.42 ms by session.
+    double                                  vrr_granularity{0.0};
+    double                                  vrr_tick_phase {0.0};
+    double                                  vrr_tick_lead  {0.0};
+    double                                  vrr_tick_drift {0.0};
     // Claims C19..C21: release comes from the tier S slop-servo sleep
     // instead of the Frame_pacer decision; the presentation target is
     // ignored (plain FIFO displays at the earliest feasible vsync).
@@ -507,12 +517,18 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             // C30: VRR display - the refresh follows the image, not a grid.
             // The target is honored (presentDrawable:atTime:); a late image
             // displays when it is ready, not at a later vsync.
-            double shown = std::max(decision.target_time, available + dpe);
+            double shown = std::max(decision.target_time - scenario.vrr_tick_lead, available + dpe);
             if (has_vrr_refresh) {
                 while (shown > (vrr_refresh + scenario.vrr_max_interval)) {
                     vrr_refresh += scenario.vrr_max_interval; // repeat of the previous image
                 }
                 shown = std::max(shown, vrr_refresh + scenario.vrr_min_interval);
+            }
+            if (scenario.vrr_granularity > 0.0) {
+                // C32: the first tick at or after it (the tolerance keeps a
+                // minimum interval after a tick on the next-but-one tick).
+                const double tick = scenario.vrr_granularity * (1.0 + scenario.vrr_tick_drift);
+                shown = scenario.vrr_tick_phase + (std::ceil(((shown - scenario.vrr_tick_phase) / tick) - 1e-3) * tick);
             }
             has_vrr_refresh = true;
             vrr_refresh     = shown;

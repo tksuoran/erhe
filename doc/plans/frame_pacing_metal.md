@@ -437,3 +437,26 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   `ERHE_FRAME_PIPELINING=0`), two-refresh frames 0-2 of ~350 per launch. A
   locked screen gives no presentation feedback (the calibration logs "no
   presentation feedback"); live gates need it unlocked.
+- 2026-10-22, ProMotion re-gate (built-in panel only, 3024x1964 @ 120 Hz,
+  24-120 Hz, Release). Windowed tier M: the present calibration requests
+  1.38 T before the target (request window 1.00-1.75 T) with a deadline of
+  2.17-2.20 T; N=1 in 30 of 30 launches (default, `ERHE_RENDER_THREAD=0`,
+  `ERHE_FRAME_PIPELINING=0`), two-refresh frames 0-2 of ~346 per launch,
+  release to display 24.9-27.3 ms. Fullscreen the panel is a variable
+  refresh display whose drawables show only at its own 4.167 ms ticks
+  (NSScreen `displayUpdateGranularity`), at a launch-dependent offset from
+  the requested time: in 1 of 5 launches that offset (+2.42 ms) exceeded
+  `guard`, every frame counted as late and one target in three skipped a
+  slot. The pacer now locks its slots onto the ticks (claim C32, deviation
+  26); fullscreen N=1 in 10 of 10 launches with every display on its
+  target, release to display 9.7-10.9 ms, and Bistro holds 120 Hz in
+  every configuration ([frame_pacing_adaptive_sync.md](frame_pacing_adaptive_sync.md)
+  "Verification"). MoltenVK windowed (tier W) fails here: N=2 or N=3 in 9
+  of 9 sampled launches, release to display ~41 ms, deadline offset at its
+  2T ceiling; every frame displays exactly one refresh after its target
+  with 22-35 ms of GPU margin, so the cause is the request time
+  (`desiredPresentTime` a quarter period early), as on Metal before the
+  present calibration. Fullscreen MoltenVK reports a fixed grid and runs at
+  N=2 (~38 ms). Open: a present calibration for the Vulkan
+  `VK_GOOGLE_display_timing` path (the request offset at least), and the
+  60 Hz re-gate.
