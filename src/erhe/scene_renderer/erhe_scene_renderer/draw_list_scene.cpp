@@ -57,7 +57,7 @@ public:
     bool                                double_sided{false};
     const erhe::primitive::Buffer_mesh* buffer_mesh {nullptr};
     erhe::primitive::Mesh_variant       variant     {erhe::primitive::Mesh_variant::original};
-    Draw_blending                       blending   {Draw_blending::opaque};
+    erhe::primitive::Blending_class     blending   {erhe::primitive::Blending_class::opaque};
     Buffer_set                          buffer_set {};
     Shader_key                          key        {};
     erhe::primitive::Index_range        index_range{};
@@ -98,22 +98,19 @@ public:
 
     const erhe::primitive::Material* material = mesh_primitive.material.get();
 
-    // Blending classification (R1/R7): opaque materials -> opaque; anything
-    // else, including no material (no blending mode), -> translucent. This is
-    // exactly the opaque_primitives_only / translucent_primitives_only split
-    // of Blending_mode_policy in bucket_primitives().
-    const bool is_opaque =
-        (material != nullptr) &&
-        (material->get_blending_mode() == erhe::primitive::Material_blending_mode::opaque);
-    result.blending = is_opaque ? Draw_blending::opaque : Draw_blending::translucent;
+    // Blending classification (R1/R7): the one classification
+    // bucket_primitives() applies through Shader_key::get_blending_class()
+    // (no material classifies as the opaque default material record).
+    result.blending = erhe::primitive::get_blending_class(material);
 
     // glTF material.doubleSided or USD UsdGeomGprim.doubleSided, through the
     // one helper both the draw lists and the render buckets ask.
     result.double_sided = erhe::scene::is_double_sided(mesh, mesh_primitive);
 
     // Shadow lists take opaque casters only (Shadow_renderer uses
-    // opaque_primitives_only today).
-    if ((purpose == Draw_purpose::shadow) && !is_opaque) {
+    // opaque_primitives_only): the position-only caster variants have no
+    // alpha test, so alpha-tested and translucent primitives cast nothing.
+    if ((purpose == Draw_purpose::shadow) && (result.blending != erhe::primitive::Blending_class::opaque)) {
         return result;
     }
 
@@ -2290,8 +2287,9 @@ auto Draw_list_scene::has_drawable_entries(
         if ((key.purpose != purpose) || draw_list.entries.empty()) {
             continue;
         }
-        if ((blending == Draw_blending_selection::opaque_only     ) && (key.blending != Draw_blending::opaque     )) { continue; }
-        if ((blending == Draw_blending_selection::translucent_only) && (key.blending != Draw_blending::translucent)) { continue; }
+        if (!is_blending_class_selected(blending, key.blending)) {
+            continue;
+        }
         if (!is_layer_selected(layers, key.layer_id)) {
             continue;
         }
@@ -2339,13 +2337,12 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
     const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
     verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
 
-    const Draw_blending classes_both[] = { Draw_blending::opaque, Draw_blending::translucent };
-    const std::span<const Draw_blending> classes =
-        (parameters.blending == Draw_blending_selection::opaque_only     ) ? std::span<const Draw_blending>{classes_both, 1} :
-        (parameters.blending == Draw_blending_selection::translucent_only) ? std::span<const Draw_blending>{classes_both + 1, 1} :
-                                                                             std::span<const Draw_blending>{classes_both, 2};
-
-    for (const Draw_blending blending : classes) {
+    // Classes draw in erhe::primitive::blending_class_draw_order: every
+    // discarding (alpha tested) list after every opaque one.
+    for (const erhe::primitive::Blending_class blending : erhe::primitive::blending_class_draw_order) {
+        if (!is_blending_class_selected(parameters.blending, blending)) {
+            continue;
+        }
         for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
             const Draw_list&     draw_list = draw_lists[list_index];
             const Draw_list_key& key       = draw_list.key;
@@ -2373,9 +2370,9 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
             }
             const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
                 ? parameters.color_blend_override
-                : (blending == Draw_blending::opaque)
-                    ? &erhe::graphics::Color_blend_state::color_blend_disabled
-                    : &erhe::graphics::Color_blend_state::color_blend_premultiplied;
+                : (blending == erhe::primitive::Blending_class::translucent)
+                    ? &erhe::graphics::Color_blend_state::color_blend_premultiplied
+                    : &erhe::graphics::Color_blend_state::color_blend_disabled;
             const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(key.buffer_set.vertex_input_key);
             erhe::graphics::Render_pipeline* render_pipeline = parameters.base_render_pipeline.get_pipeline_for(
                 parameters.render_pass->get_descriptor(),

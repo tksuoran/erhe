@@ -23,15 +23,6 @@ auto c_str(const Draw_mobility mobility) -> const char*
     }
 }
 
-auto c_str(const Draw_blending blending) -> const char*
-{
-    switch (blending) {
-        case Draw_blending::opaque:      return "opaque";
-        case Draw_blending::translucent: return "translucent";
-        default:                         return "?";
-    }
-}
-
 auto Draw_list_key::operator==(const Draw_list_key& other) const -> bool
 {
     return

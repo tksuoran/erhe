@@ -27,7 +27,7 @@ volume computation, and PBR material definitions.
   import-time results. `meshoptimizer.h` stays private to this target.
 - `Index_range` -- offset and count for a specific primitive type within the index buffer
 - `Buffer_range` -- byte offset, element count, and element size within a buffer; identifies the owning pool via `{pool_id, buffer_id}`.
-- Enums: `Normal_style`, `Primitive_mode`, `Primitive_type`
+- Enums: `Normal_style`, `Primitive_mode`, `Primitive_type`, `Blending_class` ("Blending classes" below)
 
 ## Public API
 - Create a `Primitive` from a `Geometry` + `Build_info` to get a renderable mesh.
@@ -39,6 +39,31 @@ volume computation, and PBR material definitions.
 - Which channel of a slot's texture each scalar input reads is a material property of its own: `metallic_channel`, `roughness_channel`, `occlusion_channel` and `opacity_channel`, each an `erhe::primitive::Texture_channel` (`r`, `g`, `b`, `a`, whose values are the component index). The defaults are glTF's fixed packing - metallic B and roughness G of the metallic-roughness slot, occlusion R of the occlusion slot, opacity A of the base color slot, erhe having no opacity slot of its own - so a glTF material authors none of them; a `UsdPreviewSurface` names the channel in its connection, which is where a non-default value comes from. The four travel to the shader as one `uvec4 texture_channels` of the material record, in that order, and the shader indexes the sampled texel with them.
 - Where the base color and the fragment alpha come from is a material property of its own: `base_color_source` and `opacity_source`, each an `erhe::primitive::Material_input_source`. `value` is the material's own - the factor, times the slot's texture where one is bound, times the mesh's vertex color where the mesh carries one - and is what every glTF material and every plain `UsdPreviewSurface` wants; it is the default and the multiply is unchanged by this property. `vertex_color` is the mesh's color attribute alone: the factor and the texture of that input are not read at all. A `UsdPreviewSurface` input fed by a `UsdPrimvarReader` of `displayColor` / `displayOpacity` is what names it (`doc/erhe/usd.md`); glTF has no form for it, so a glTF material never authors one and the exporter writes nothing new. The pair travels to the shader as the `uvec2 input_sources` of the material record.
 - A bound normal texture is decoded as `texel * normal_texture_decode_scale + normal_texture_decode_bias`, two `vec4` properties whose defaults `(2, 2, 2, 2)` and `(-1, -1, -1, -1)` are the mapping glTF fixes and UsdPreviewSurface's fallbacks, so a material that authors neither decodes a 0..1 map into -1..1. USD carries them as the normal slot's `UsdUVTexture` `inputs:scale` and `inputs:bias`; glTF has no field for either, so a glTF import and export leave both at the defaults. The scalar `normal_texture_scale` is a different thing and stays what glTF's `normalTexture.scale` is: the bumpiness multiplier the shader applies to the decoded X and Y.
+
+## Blending classes
+
+`Blending_class` (`enums.hpp`) is the draw order class of a
+`Material_blending_mode` in the color passes, and
+`get_blending_class(Material_blending_mode)` is the one mapping from mode to
+class; `get_blending_class(const Material*)` classifies a primitive without
+a material as the default material record (`Material_values`, opaque). The
+draw lists and the render buckets of `erhe::scene_renderer` both classify
+through it, and `blending_class_draw_order` is the order every color pass
+that takes several classes draws them in:
+
+| Class | Modes | Depth write | Discard | Blending |
+| :--- | :--- | :--- | :--- | :--- |
+| `opaque` | `opaque` | yes | no | off |
+| `alpha_tested` | `alpha_test`, `screen_door` | yes | yes | off |
+| `translucent` | `alpha_blend`, `multiply`, `add`, `subtract` | per pass pipeline | no | premultiplied |
+
+The order exists for the GPU's early depth test (on Apple GPUs, hidden
+surface removal): a draw that writes depth and may discard turns it off for
+the draws that follow it, so every opaque draw goes first, the alpha-tested
+draws after them, and the translucent draws blend over both. The standard
+fragment shader evaluates the alpha test and the screen-door dither before
+the ambient term and the light loops (`doc/erhe/scene_renderer.md`), and
+writes alpha 1 for both discard modes.
 
 ## Empty primitives
 

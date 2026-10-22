@@ -963,4 +963,12 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
     return !(lhs == rhs);
 }
 
+auto get_blending_class(const Material* const material) -> Blending_class
+{
+    const Material_blending_mode blending_mode = (material != nullptr)
+        ? material->get_blending_mode()
+        : Material_values{}.blending_mode;
+    return get_blending_class(blending_mode);
+}
+
 } // namespace erhe::primitive

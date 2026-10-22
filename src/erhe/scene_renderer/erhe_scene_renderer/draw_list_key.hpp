@@ -28,18 +28,8 @@ enum class Draw_mobility : uint8_t
     skinned  = 2
 };
 
-// Blending classification of the primitive material (R7). A primitive with
-// no material has no blending mode and is classified translucent, mirroring
-// today's Blending_mode_policy handling in bucket_primitives().
-enum class Draw_blending : uint8_t
-{
-    opaque      = 0,
-    translucent = 1
-};
-
 [[nodiscard]] auto c_str(Draw_purpose  purpose ) -> const char*;
 [[nodiscard]] auto c_str(Draw_mobility mobility) -> const char*;
-[[nodiscard]] auto c_str(Draw_blending blending) -> const char*;
 
 // Identity of a draw list: every entry in a list shares all of these, so a
 // list can be drawn with one pipeline / one buffer bind / one multi-draw.
@@ -51,7 +41,9 @@ class Draw_list_key
 public:
     Draw_purpose                    purpose             {Draw_purpose::color};
     Draw_mobility                   mobility            {Draw_mobility::dynamic};
-    Draw_blending                   blending            {Draw_blending::opaque};
+    // Blending class of the primitive material (R7,
+    // erhe::primitive::get_blending_class(const Material*)).
+    erhe::primitive::Blending_class blending            {erhe::primitive::Blending_class::opaque};
     bool                            negative_determinant{false};
     // the Material double_sided property (glTF material.doubleSided): selects a
     // face-culling-disabled pipeline variant, so it has to partition lists.

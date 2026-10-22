@@ -137,7 +137,7 @@ vec3 ddgi_sample_irradiance(vec3 world_position, vec3 normal, vec3 view_directio
         // shading point, given the mean and variance of the distances it
         // recorded toward it.
         vec2  distance_uv = ddgi_probe_uv(probe_coords, -probe_direction, distance_texels, distance_atlas_size);
-        vec2  moments     = texture(s_ddgi_distance, distance_uv).rg;
+        vec2  moments     = textureLod(s_ddgi_distance, distance_uv, 0.0).rg;
         float mean        = moments.x;
         float variance    = abs(mean * mean - moments.y);
         if (probe_distance > mean) {
@@ -153,7 +153,7 @@ vec3 ddgi_sample_irradiance(vec3 world_position, vec3 normal, vec3 view_directio
         weight = max(weight, 1.0e-4);
 
         vec2 irradiance_uv = ddgi_probe_uv(probe_coords, normal, irradiance_texels, irradiance_atlas_size);
-        irradiance_sum += texture(s_ddgi_irradiance, irradiance_uv).rgb * weight;
+        irradiance_sum += textureLod(s_ddgi_irradiance, irradiance_uv, 0.0).rgb * weight;
         weight_sum     += weight;
     }
 

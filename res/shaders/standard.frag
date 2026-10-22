@@ -248,10 +248,10 @@ vec3 sample_lightmap_bicubic(vec2 uv)
     // the B-spline weight ratio baked into the sub-texel offset.
     vec2 h0           = (base + (w1 / g0) - 0.5) * texel_size;
     vec2 h1           = (base + (w3 / g1) + 1.5) * texel_size;
-    vec3 t00          = texture(s_lightmap, vec2(h0.x, h0.y)).rgb;
-    vec3 t10          = texture(s_lightmap, vec2(h1.x, h0.y)).rgb;
-    vec3 t01          = texture(s_lightmap, vec2(h0.x, h1.y)).rgb;
-    vec3 t11          = texture(s_lightmap, vec2(h1.x, h1.y)).rgb;
+    vec3 t00          = textureLod(s_lightmap, vec2(h0.x, h0.y), 0.0).rgb;
+    vec3 t10          = textureLod(s_lightmap, vec2(h1.x, h0.y), 0.0).rgb;
+    vec3 t01          = textureLod(s_lightmap, vec2(h0.x, h1.y), 0.0).rgb;
+    vec3 t11          = textureLod(s_lightmap, vec2(h1.x, h1.y), 0.0).rgb;
     return g0.y * (g0.x * t00 + g1.x * t10) +
            g1.y * (g0.x * t01 + g1.x * t11);
 }
@@ -434,6 +434,28 @@ void main()
 #endif
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
         base_color *= base_color_sample.rgb;
+#endif
+    }
+
+    // Sampled fragment alpha for alpha-test / screen-door discards and
+    // for the alpha_blend pass, taken as soon as its inputs are known: the
+    // discard below runs before the lighting. The contributing factors are
+    // material.opacity, the vertex color alpha (if present), and the
+    // base color texture's alpha (if sampled). v_texcoord_0/1 fall back
+    // to (0.5, 0.5) when the corresponding varying is not present, so
+    // the sample call is always legal.
+    // material.input_sources.y names where the alpha comes from, the way
+    // input_sources.x does for the base color.
+    float sampled_alpha;
+    if (material.input_sources.y == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
+        sampled_alpha = v_color.a;
+    } else {
+        sampled_alpha = material.opacity;
+#ifdef ERHE_USE_VERTEX_VARYING_COLOR
+        sampled_alpha *= v_color.a;
+#endif
+#ifdef ERHE_USE_BASE_COLOR_TEXTURE
+        sampled_alpha *= texture_channel_value(base_color_sample, material.texture_channels.w);
 #endif
     }
 
@@ -679,6 +701,33 @@ void main()
 #  endif
 #endif // ERHE_USES_LIT_LOCALS
 
+    // Alpha-test / screen-door discard, ahead of the ambient term and the
+    // light loops: a discarded fragment pays for the material inputs only.
+    // Placed after every derivative the lit path takes (the implicit-LOD
+    // material texture samples above, the shadow receiver plane and the
+    // specular anti-aliasing derivatives), so those stay in uniform control
+    // flow; the ambient / light terms below take no derivatives: the
+    // lightmap, DDGI and shadow-map reads there select level 0 explicitly.
+#if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST
+    if (sampled_alpha < material.alpha_cutoff) {
+        discard;
+    }
+#elif ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR
+    {
+        const float bayer4[16] = float[16](
+             0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
+            12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
+             3.0/16.0, 11.0/16.0,  1.0/16.0,  9.0/16.0,
+            15.0/16.0,  7.0/16.0, 13.0/16.0,  5.0/16.0
+        );
+        ivec2 pix       = ivec2(gl_FragCoord.xy) & ivec2(3);
+        float threshold = bayer4[pix.y * 4 + pix.x];
+        if (sampled_alpha < threshold) {
+            discard;
+        }
+    }
+#endif
+
     vec3 color;
 #if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_UNLIT
     color = base_color;
@@ -718,7 +767,7 @@ void main()
             // window checkbox); off = plain bilinear.
             ambient_term = ((light_block.lightmap_flags & 1u) != 0u)
                 ? sample_lightmap_bicubic(lightmap_uv)
-                : texture(s_lightmap, lightmap_uv).rgb;
+                : textureLod(s_lightmap, lightmap_uv, 0.0).rgb;
             lightmap_valid = true;
         } else if (v_lightmap_scale_offset.x < 0.0) {
             // Sentinel for a lightmapped world-space tile piece whose tile is
@@ -909,47 +958,6 @@ void main()
 #endif
 
     float exposure = camera.cameras[c_view_index].exposure;
-
-    // Sampled fragment alpha for alpha-test / screen-door discards and
-    // for the alpha_blend pass. The contributing factors are
-    // material.opacity, the vertex color alpha (if present), and the
-    // base color texture's alpha (if sampled). v_texcoord_0/1 fall back
-    // to (0.5, 0.5) when the corresponding varying is not present, so
-    // the sample call is always legal.
-    // material.input_sources.y names where the alpha comes from, the way
-    // input_sources.x does for the base color.
-    float sampled_alpha;
-    if (material.input_sources.y == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
-        sampled_alpha = v_color.a;
-    } else {
-        sampled_alpha = material.opacity;
-#ifdef ERHE_USE_VERTEX_VARYING_COLOR
-        sampled_alpha *= v_color.a;
-#endif
-#ifdef ERHE_USE_BASE_COLOR_TEXTURE
-        sampled_alpha *= texture_channel_value(base_color_sample, material.texture_channels.w);
-#endif
-    }
-
-#if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST
-    if (sampled_alpha < material.alpha_cutoff) {
-        discard;
-    }
-#elif ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR
-    {
-        const float bayer4[16] = float[16](
-             0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
-            12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
-             3.0/16.0, 11.0/16.0,  1.0/16.0,  9.0/16.0,
-            15.0/16.0,  7.0/16.0, 13.0/16.0,  5.0/16.0
-        );
-        ivec2 pix       = ivec2(gl_FragCoord.xy) & ivec2(3);
-        float threshold = bayer4[pix.y * 4 + pix.x];
-        if (sampled_alpha < threshold) {
-            discard;
-        }
-    }
-#endif
 
     // Upper bound for the lit colour this shader emits.
     //

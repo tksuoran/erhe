@@ -62,7 +62,17 @@ auto Shader_key::get_defines() const -> std::vector<std::pair<std::string, std::
     return defines;
 }
 
-[[nodiscard]] auto Shader_key::describe() const -> std::string
+[[nodiscard]] auto Shader_key::get_blending_class() const -> erhe::primitive::Blending_class
+{
+    // Not value_or(): its argument would construct a Material_values on
+    // every call, and this runs per bucket per draw.
+    const erhe::primitive::Material_blending_mode mode = blending_mode.has_value()
+        ? blending_mode.value()
+        : erhe::primitive::Material_values{}.blending_mode;
+    return erhe::primitive::get_blending_class(mode);
+}
+
+auto Shader_key::describe() const -> std::string
 {
     const std::vector<std::pair<std::string, std::string>> defines = get_defines();
     std::stringstream ss;

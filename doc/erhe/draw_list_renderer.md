@@ -62,7 +62,7 @@ previous frame:
 - Shadow map rendering (triangle fill; all three caster variants: depth-only,
   depth-only + distance technique, point-light cube; material ignored except
   opacity / blending classification).
-- Main color rendering (triangle fill, opaque and translucent).
+- Main color rendering (triangle fill, opaque, alpha tested and translucent).
 
 ### Not covered
 
@@ -98,10 +98,11 @@ Bucket identity, which draw list identity mirrors, is defined by
   the pass "environment" key)
 - `negative_determinant` flag (mirrored transforms select the front-face
   flipped pipeline variant)
-- blending mode (opaque vs translucent, via `Blending_mode_policy`). Note the
-  null-material case: `derive(nullptr)` yields no blending mode, which is
-  excluded from opaque passes and included in translucent passes
-  (`mesh_memory.cpp` policy switch); R1 reproduces this.
+- blending class (opaque, alpha tested or translucent, via
+  `Blending_mode_policy`; `erhe::primitive::Blending_class`). A primitive
+  without a material classifies as the default material record, opaque,
+  in both paths (doc/erhe/scene_renderer.md "Draw order of the blending
+  classes").
 
 Mesh layer id is not part of bucket identity (content and controller meshes
 share buckets); R13 adds it to draw list identity deliberately (Q3).
@@ -129,7 +130,7 @@ content fill opaque / translucent, from `app_rendering.cpp` /
 | `SHADER_DEBUG` | 0 for covered passes (the bone N.V pass has an override - not covered) | Debug UI | **Fixed to 0** - non-zero falls back to `Forward_renderer` |
 | Force-enable mask | 0 for content fill; shadow: `VARIANT_DEPTH_ONLY` (directional / spot), `+ VARIANT_SHADOW_DISTANCE` when the distance technique is active, `VARIANT_SHADOW_CUBE` for point-light cube faces (on a cull_none base pipeline); `EDGE_LINES_FROM_ID` toggled onto the fill passes when the ID-buffer edge method is active (fallback while active - Q9); other masks (`SOLID_WIREFRAME`, `EDGE_LINES_CORNER_CAP`, `VARIANT_BRUSH_PREVIEW`) belong to passes that are not covered | Light type per shadow pass; graphics preset; editor settings toggles | **Baked as a shadow sub-variant axis** {depth-only, depth-only+distance, cube} - resolved per shadow list, selected by the caller per shadow pass; `EDGE_LINES_FROM_ID` takes the fallback (Q9) |
 | Force-disable mask | Always 0 in the editor | - | **Fixed to 0** |
-| `Blending_mode_policy` | `opaque_primitives_only` / `translucent_primitives_only` for fill passes; opaque-only for shadow | Static per pass | **Already baked** - this is the draw list's blending classification (R7) |
+| `Blending_mode_policy` | `opaque_primitives_only` / `alpha_tested_primitives_only` / `translucent_primitives_only` for fill passes; opaque-only for shadow | Static per pass | **Already baked** - this is the draw list's blending classification (R7) |
 | `Item_filter` | Selected / not-selected / visible splits | Selection and visibility change constantly | Not a shader input - see Q1 / Q2 |
 | `base_render_pipelines` | Static pass definitions (depth / stencil / raster state) | Never at runtime | Supplied by the caller at draw time; pipeline resolution cached per (draw list x pass) |
 | `shader_stages_override`, `color_blend_override` | Only passes that are not covered (selection stencil mask, macOS GL edge lines) | - | **Not supported** - such passes use the fallback |
@@ -258,9 +259,9 @@ Registration:
   primitive of the object it determines the draw list(s) the primitive belongs
   to (creating draw lists on demand), and appends a `Draw_list_entry` per
   (primitive x draw list). The classification mirrors `bucket_primitives()`
-  (same skips: null primitive, null renderable mesh, zero index count; same
-  null-material blending classification - no blend mode means excluded from
-  opaque, included in translucent).
+  (same skips: null primitive, null renderable mesh, zero index count; the
+  same blending classification, `erhe::primitive::get_blending_class()`,
+  which classifies a primitive without a material as opaque).
 - R1a (rebuildability, resolves Q7): `Draw_list_scene` retains, for every
   registered object, a record sufficient to re-run its classification from
   scratch (the `Draw_list_object` keeps the create-info-level inputs, not just
@@ -356,13 +357,15 @@ Drawing:
   layer subsets: content plus controller for content fill, rendertarget alone
   for the rendertarget pass). Because layer id is part of draw list identity
   (R13), layer selection selects whole lists - it is never a per-entry test.
-- R7 (blending class selection): `draw()` takes a blending-class selector -
-  opaque only, translucent only, or both - because the editor's opaque and
-  translucent content fills are separate composition passes with other passes
-  (sky, grid, edge lines) in between, and the rendertarget pass uses
-  `allow_all`. When both are selected in one call, all opaque lists are drawn
-  before all translucent lists. Translucent draw order within the class is
-  implementation-defined (see C1).
+- R7 (blending class selection): `draw()` takes a blending-class selector
+  (`Draw_blending_selection`) - opaque only, alpha tested only, translucent
+  only, or all - because the editor's opaque, alpha-tested and translucent
+  content fills are separate composition passes with other passes (edge
+  lines, sky, grid) in between, and the rendertarget pass uses `allow_all`.
+  When all are selected in one call, the classes are drawn in
+  `erhe::primitive::blending_class_draw_order`: all opaque lists, then all
+  alpha-tested lists, then all translucent lists. Draw order within a class
+  is implementation-defined (see C1).
 - R7a (draw-time flag filtering, resolves Q1 / Q2): `draw()` accepts a filter
   with `Item_filter` semantics (require-set / require-clear bit masks)
   evaluated against each entry's mirrored flag bits (R12a) while the indirect

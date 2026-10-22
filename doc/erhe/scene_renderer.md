@@ -146,6 +146,35 @@ color attribute that input on its own, the factor and the texture unread;
 an ordinary material take its base color from `primvars:displayColor`, which
 slot 1 above can only do because its own base color is white.
 
+### Draw order of the blending classes
+
+The color draws classify each primitive by `erhe::primitive::Blending_class`
+(doc/erhe/primitive.md "Blending classes"): `bucket_primitives()` through
+`Shader_key::get_blending_class()`, the draw lists through
+`get_blending_class(const Material*)`, so both paths agree, a primitive
+without a material included. `Blending_mode_policy` selects one class
+(`opaque_primitives_only`, `alpha_tested_primitives_only`,
+`translucent_primitives_only`) or all of them (`allow_all`), and
+`Draw_blending_selection` does the same for the draw lists. A pass that
+takes several classes draws them in `blending_class_draw_order` - opaque,
+alpha tested, translucent - in `Forward_renderer::render()` and in
+`Draw_list_scene::draw_color()` alike, so a single `allow_all` pass (the
+previews, `src/example`) keeps every discarding draw after every opaque one.
+Opaque and alpha-tested draws are drawn with blending off, translucent ones
+with `color_blend_premultiplied`, unless the pass overrides the blend state.
+
+`standard.frag` computes the fragment alpha right after the base color and
+runs the alpha-test / screen-door discard after the material inputs and the
+derivatives the lit path takes (the implicit-LOD material texture samples,
+the shadow receiver plane, the specular anti-aliasing derivatives below),
+before the ambient term and the light loops: a discarded fragment is not
+lit, and every derivative stays in uniform control flow.
+
+Shadow casters are opaque only (both the draw lists and the bucket path):
+the position-only caster variants have no alpha test, so alpha-tested and
+translucent primitives cast no shadow, and the shadow lists hold no
+discarding draw.
+
 ### Specular anti-aliasing
 
 `anisotropic_brdf()` (`res/shaders/erhe_bxdf.glsl`) widens its GGX lobe by a

@@ -254,8 +254,8 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     // Draw-list path (doc/erhe/draw_list_renderer.md section 9.4): route to
     // the scene's persistent draw lists when the gate is on and this pass is
     // fully expressible with them - polygon fill, no shader debug, no shader
-    // / blend overrides, no forced shader bits, and a plain opaque /
-    // translucent / allow_all blending policy. Everything else takes the
+    // / blend overrides, no forced shader bits, and a plain opaque / alpha
+    // tested / translucent / allow_all blending policy. Everything else takes the
     // bucket path, prepared here.
     const erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
     const erhe::scene_renderer::Shader_debug effective_shader_debug = data.shader_debug_override.has_value()
@@ -272,6 +272,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
         (data.shader_key_force_disable_mask == 0u) &&
         (
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only) ||
+            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only) ||
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only) ||
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::allow_all)
         );
@@ -483,9 +484,10 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
         ERHE_VERIFY(draw_list_scene != nullptr);
         const erhe::scene_renderer::Draw_blending_selection blending =
-            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only     ) ? erhe::scene_renderer::Draw_blending_selection::opaque_only :
-            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only) ? erhe::scene_renderer::Draw_blending_selection::translucent_only :
-                                                                                                                     erhe::scene_renderer::Draw_blending_selection::both;
+            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only      ) ? erhe::scene_renderer::Draw_blending_selection::opaque_only :
+            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only) ? erhe::scene_renderer::Draw_blending_selection::alpha_tested_only :
+            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only ) ? erhe::scene_renderer::Draw_blending_selection::translucent_only :
+                                                                                                                      erhe::scene_renderer::Draw_blending_selection::all;
         // The views and depth conventions the pass's culling view was built
         // from (Composer::add_cull_views()).
         const erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);

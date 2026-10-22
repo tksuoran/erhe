@@ -247,7 +247,7 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
             lists.push_back({
                 {"purpose",              erhe::scene_renderer::c_str(key.purpose)},
                 {"mobility",             erhe::scene_renderer::c_str(key.mobility)},
-                {"blending",             erhe::scene_renderer::c_str(key.blending)},
+                {"blending",             erhe::primitive::c_str(key.blending)},
                 {"layer_id",             static_cast<uint64_t>(key.layer_id)},
                 {"negative_determinant", key.negative_determinant},
                 {"entry_count",          draw_list.entries.size()},

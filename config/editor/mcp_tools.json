@@ -2458,7 +2458,7 @@
           "type": "array"
         },
         "blending_mode": {
-          "description": "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test discard in the opaque pass",
+          "description": "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test write depth and discard in the alpha-tested pass, drawn after the opaque pass with blending off",
           "enum": [
             "opaque",
             "alpha_blend",
@@ -2844,7 +2844,7 @@
           "type": "array"
         },
         "blending_mode": {
-          "description": "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test discard in the opaque pass",
+          "description": "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test write depth and discard in the alpha-tested pass, drawn after the opaque pass with blending off",
           "enum": [
             "opaque",
             "alpha_blend",
