@@ -226,10 +226,17 @@ converts only the Apple presentation clock. Android needs
 
 ## VRR-aware tier
 
-Tiers W and A assume a periodic vsync grid (`V(j) = phase + j*period`), so
-variable refresh rate displays are outside their model. Tier S survives VRR
-because it never assumes a grid, and is the fallback there. A tier that
-paces a variable-rate display on purpose has no design yet.
+The pacer paces a variable refresh rate display the host declares
+(`Present_display_kind::variable_refresh`, `doc/frame_pacing/algorithm.md`
+deviation 24, claim C30): no grid tracking, targets within the display's
+maximum refresh interval, no `guard` in the cadence tests. Metal tier M
+declares it for a fullscreen window on a screen whose refresh-interval
+range is not a single value ([../erhe/metal_backend.md](../erhe/metal_backend.md)
+"Frame pacing", [frame_pacing_adaptive_sync.md](frame_pacing_adaptive_sync.md)).
+Open: the Vulkan backends report `fixed_grid` everywhere (a
+`VK_EXT_present_timing` variable `refreshInterval` or the platform's VRR
+state would feed the same declaration); tier S survives VRR because it never
+assumes a grid.
 
 ## Display and display-mode change handling
 

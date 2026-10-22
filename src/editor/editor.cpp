@@ -4,6 +4,7 @@
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_version/version.hpp"
 #include "erhe_graphics/surface.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
 #include "app_context.hpp"
 #include "config/generated/add_cameras_args.hpp"
 #include "config/generated/add_cameras_args_serialization.hpp"
@@ -834,6 +835,54 @@ public:
             !m_app_context.OpenXR &&
             (m_frame_activity != Frame_activity::hidden) &&
             (m_graphics_device->get_frame_pacing_tier() == tier);
+    }
+
+    // The frame pacer's presentation setup for the window display's
+    // presentation (claim C30, doc/plans/frame_pacing_adaptive_sync.md).
+    // A presentation path that honors target present times shows its
+    // deadline offset in the feedback (Metal tier M), starting from the
+    // deadline the device's present calibration measured, with the estimate
+    // ceiling half a period above it; elsewhere the pacer keeps its fixed
+    // initial value. On a variable refresh rate display driven fullscreen
+    // the pacer tracks no grid (set_display), and the calibration - measured
+    // on the windowed compositor, about one refresh period - is not its
+    // deadline: there the image only has to be complete about 1 ms before
+    // its target, and the estimator never decays below its seed, so the
+    // seed is the pacer's uncalibrated default
+    // (Frame_pacer_tunables::deadline_offset_initial), raised by evidence.
+    void apply_display_presentation(const erhe::graphics::Display_presentation& presentation)
+    {
+        const bool variable_refresh =
+            (presentation.kind == erhe::frame_pacing::Present_display_kind::variable_refresh) &&
+            (presentation.maximum_refresh_interval > 0.0);
+        erhe::frame_pacing::Deadline_offset_setup deadline_offset{};
+        if (m_graphics_device->is_present_target_time_honored()) {
+            deadline_offset.source        = erhe::frame_pacing::Deadline_offset_source::estimated;
+            deadline_offset.present_queue = erhe::frame_pacing::Present_queue_kind::fifo;
+            const erhe::graphics::Present_calibration& calibration = m_graphics_device->get_present_calibration();
+            if (calibration.valid && !variable_refresh) {
+                deadline_offset.calibrated_period = calibration.period;
+                deadline_offset.initial           = calibration.deadline_offset;
+                deadline_offset.maximum           = calibration.deadline_offset + (0.5 * calibration.period);
+            }
+            // The GPU pre-warm fill starts here and the pacer learns the
+            // one that raises the clock (claim C26); 2.3 ms raised it on an
+            // M4 Pro. The kernel rate is measured even when the rest of the
+            // calibration is not valid.
+            deadline_offset.upshift_prewarm = (calibration.prewarm_seconds_per_iteration > 0.0) ? 0.002 : 0.0;
+        }
+        m_frame_pacing_observer.set_deadline_offset(deadline_offset);
+        if (variable_refresh) {
+            m_frame_pacing_observer.set_display(erhe::frame_pacing::Present_display_kind::variable_refresh, presentation.maximum_refresh_interval);
+        } else {
+            m_frame_pacing_observer.set_display(erhe::frame_pacing::Present_display_kind::fixed_grid, 0.0);
+        }
+        log_frame_pacing->info(
+            "frame pacing: display {} (max refresh interval {:.3f} ms), deadline offset seed {}",
+            variable_refresh ? "variable refresh" : "fixed grid",
+            presentation.maximum_refresh_interval * 1000.0,
+            (deadline_offset.initial > 0.0) ? "present calibration" : "pacer default"
+        );
     }
 
     // M1: the pacing half of the device frame start, the analogue of
@@ -3174,30 +3223,18 @@ public:
                 m_app_context.lightmap_window         = m_lightmap_window.get();
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
-                // A presentation path that honors target present times shows
-                // its deadline offset in the feedback (Metal tier M), starting
-                // from the deadline the device's present calibration measured,
-                // with the estimate ceiling half a period above it; elsewhere
-                // the pacer keeps its fixed initial value.
+                // The pacer's presentation setup follows the window display's
+                // presentation (fixed grid or variable refresh, claim C30):
+                // applied now and on every change the device reports (display,
+                // mode or fullscreen change; main thread, SDL event poll).
                 {
-                    erhe::frame_pacing::Deadline_offset_setup deadline_offset{};
-                    if (m_graphics_device->is_present_target_time_honored()) {
-                        deadline_offset.source = erhe::frame_pacing::Deadline_offset_source::estimated;
-                        deadline_offset.present_queue = erhe::frame_pacing::Present_queue_kind::fifo;
-                        const erhe::graphics::Present_calibration& calibration = m_graphics_device->get_present_calibration();
-                        if (calibration.valid) {
-                            deadline_offset.calibrated_period = calibration.period;
-                            deadline_offset.initial           = calibration.deadline_offset;
-                            deadline_offset.maximum           = calibration.deadline_offset + (0.5 * calibration.period);
+                    erhe::graphics::Display_refresh_resolver& resolver = m_graphics_device->get_display_refresh_resolver();
+                    apply_display_presentation(resolver.get_presentation());
+                    resolver.set_presentation_callback(
+                        [this](const erhe::graphics::Display_presentation& presentation) {
+                            apply_display_presentation(presentation);
                         }
-                        // The GPU pre-warm fill starts here and the pacer
-                        // learns the one that raises the clock (claim C26);
-                        // 2.3 ms raised it on an M4 Pro. The kernel rate is
-                        // measured even when the rest of the calibration
-                        // is not valid.
-                        deadline_offset.upshift_prewarm = (calibration.prewarm_seconds_per_iteration > 0.0) ? 0.002 : 0.0;
-                    }
-                    m_frame_pacing_observer.set_deadline_offset(deadline_offset);
+                    );
                 }
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -3956,6 +3993,8 @@ public:
         // use-after-free that would occur if the device destructor ran the
         // same handlers after their owning parts were gone.
         if (m_graphics_device) {
+            // The presentation callback reaches this editor's pacer.
+            m_graphics_device->get_display_refresh_resolver().set_presentation_callback({});
             m_graphics_device->wait_idle();
         }
 

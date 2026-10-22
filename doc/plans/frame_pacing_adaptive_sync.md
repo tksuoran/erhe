@@ -1,6 +1,10 @@
 # Frame pacing on Adaptive-Sync displays (Metal tier M)
 
-Status: proposed
+Status: in progress
+
+Built: detection, pacer and editor wiring; loops Medium holds 120 Hz
+fullscreen in every session. Open: a load just inside one period
+(clustered) is history-dependent at N=1 / N=2 (see "Verification").
 
 Tier M (`doc/erhe/metal_backend.md` "Frame pacing", algorithm in
 `doc/frame_pacing/algorithm.md`, Metal iteration log in
@@ -118,13 +122,59 @@ VRR arm at N=1 with 8.333 ms deltas and the deadline offset at its initial
 value, no repeats during the heavy configuration; the fixed-grid claims are
 unchanged.
 
-Next, the Metal detection step: detect the VRR presentation (NSScreen
-refresh-interval range, fullscreen direct to display) and call
-`set_display`. On VRR fullscreen the true deadline is about 1 ms, and the
-deadline offset estimator never decays below its initial value (the
-initial value is also its floor), so the host must not seed the windowed
-compositor's calibration (T + 1.3 ms = 9.63 ms at 120 Hz) there: it uses a
-VRR-appropriate seed, or runs the present calibration in that mode.
+The Metal backend detects the VRR presentation (the NSScreen
+refresh-interval range of the window's screen, and the fullscreen state;
+`doc/erhe/metal_backend.md` "Frame pacing"), and the editor passes it to the
+pacer with `set_display` (`doc/frame_pacing/inputs.md` "Display kind"). On
+VRR fullscreen the true deadline is about 1 ms and the deadline offset
+estimator never decays below its initial value, which is also its floor, so
+the editor seeds `Frame_pacer_tunables::deadline_offset_initial` there
+instead of the windowed compositor's calibration (T + 1.3 ms = 9.63 ms at
+120 Hz).
+
+## Verification
+
+Live, 2026-10-22, Release Metal (`build_xcode_metal`), M4 Pro, external
+48-120 Hz panel at 3840x1440 @ 120 Hz, Bistro at the bench camera; per
+config 10 s settle, then a 5 s pacing capture. Fullscreen detection log:
+"display presentation: variable refresh (fullscreen; display refresh
+interval 8.333 ... 20.833 ms = 48.0 ... 120.0 Hz)"; windowed: "fixed grid
+(windowed; ...)".
+
+| session | config (in order) | present delta median (p5 / p95), ms | within 0.1 ms of 8.333 | N | GPU span median (p5 / p95), ms | GPU clock |
+|---|---|---|---|---|---|---|
+| A fullscreen | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.51 | 1.00 |
+| | clustered | 16.667 (16.15 / 17.02) | 0 % | 2 | 8.01 | 0.98 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.51 | 1.00 |
+| B fullscreen, heavy first | loops 43 lights | 16.656 (16.43 / 16.89) | 0 % | 2 | 10.55 (10.34 / 11.46) | 0.99 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.34 (6.30 / 6.47) | 0.99 |
+| | clustered | 16.667 (16.34 / 16.97) | 0 % | 2 | 8.19 (7.73 / 10.84) | 0.91 |
+| C fullscreen | clustered (first) | 16.667 (16.23 / 17.00) | 0 % | 2 | 7.81 (7.63 / 10.81) | 0.97 |
+| | loops Medium | 8.344 (8.344 / 8.344) | 100 % | 1 | 6.31 (6.28 / 6.53) | 0.99 |
+| | clustered | 8.344 (8.344 / 8.344) | 100 % | 1 | 7.67 (7.62 / 7.70) | 1.00 |
+| windowed | loops Medium | 8.344 (8.344 / 8.344) | - | 1 | 4.05 | 0.97 |
+| | clustered | 8.344 (8.344 / 8.344) | - | 1 | 4.72 | 0.97 |
+
+Fullscreen, the grid estimate stays 8.333 ms and the deadline offset at
+its initial value (`deadline_offset_initial`) in every config; the display shows each frame 8.344 ms after the
+previous one (its actual minimum interval), which the phase tracking of
+on-time displays follows. Windowed, the grid estimate is 8.344 ms with the
+calibrated deadline offset (9.03 ms), as before.
+
+- The drift is gone: no session's grid estimate moved, and loops Medium
+  holds 120 Hz after the heavy configuration (B) as in a fresh session.
+- Loops 43 lights (10.5 ms of GPU) runs at N=2 with 16.7 ms deltas, as
+  its load requires.
+- Clustered (GPU span 7.67 ms at N=1, 0.66 ms margin) is borderline and
+  still history-dependent: 1 of 4 visits holds N=1 at 120 Hz, 3 stay at
+  N=2. At N=2 its GPU span has a tail (p95 10.8 ms against 7.7 ms at N=1),
+  and those frames lie beyond the N=1 period, so they reset the upshift
+  dwell. On a VRR display an integer cadence is the wrong model for such a
+  load: a frame slightly over T could display when ready (about 8.5 ms,
+  ~118 Hz) instead of waiting for a second period. A continuous VRR
+  cadence (period = max(T, the frame's predicted time)) is open.
+- Not re-gated: the built-in ProMotion panel in fullscreen (its range
+  makes it a variable refresh display too) and the 60 Hz modes.
 
 ## Goal and gate
 

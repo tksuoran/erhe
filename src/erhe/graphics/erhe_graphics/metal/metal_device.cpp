@@ -315,16 +315,27 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     // (display_refresh_resolver.hpp). The only source on Metal.
     if (context_window != nullptr) {
         Device* const owner_device = &m_device;
-        const auto feed_window_period = [context_window, owner_device]() {
+        Device_impl* const device_impl = this;
+        const auto feed_window_period = [context_window, owner_device, device_impl]() {
             const std::string display_name = context_window->get_display_name();
             owner_device->get_display_refresh_resolver().set_window_period(
                 context_window->get_display_refresh_period_seconds(),
                 display_name.c_str(),
                 context_window->enumerate_displays().size()
             );
+            // The display's presentation (claim C30): a variable refresh rate
+            // display driven fullscreen has no grid for the pacer to track.
+            // Re-read with the period: on a display change, a mode change and
+            // entering or leaving fullscreen.
+            if ((device_impl->m_surface != nullptr) && !device_impl->m_surface->get_impl().is_headless()) {
+                owner_device->get_display_refresh_resolver().set_window_presentation(
+                    device_impl->m_surface->get_impl().query_display_presentation()
+                );
+            }
         };
         feed_window_period();
         context_window->register_display_changed_callback(feed_window_period);
+        m_frame_pacing_window = context_window;
     }
     // The init calibration is a Vulkan swapchain feature; without it the
     // resolver must not stay in its calibrating state, which holds the pacer
@@ -386,6 +397,10 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
 
 Device_impl::~Device_impl() noexcept
 {
+    // The display changed callback reaches this device and its surface.
+    if (m_frame_pacing_window != nullptr) {
+        m_frame_pacing_window->register_display_changed_callback({});
+    }
     if (m_present_feedback != nullptr) {
         m_present_feedback->detach();
     }

@@ -9,6 +9,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Display_presentation` (`kind`, `minimum_refresh_interval`,
+  `maximum_refresh_interval`, `fullscreen`),
+  `Display_refresh_resolver::set_window_presentation`,
+  `get_presentation`, `set_presentation_callback` and
+  `Display_refresh_report::presentation`: how the window's display presents
+  (fixed grid, or a variable refresh rate display driven fullscreen; Metal
+  reads the NSScreen refresh-interval range, doc/erhe/metal_backend.md
+  "Frame pacing").
 - `erhe::frame_pacing`: `Present_display_kind` (`fixed_grid`,
   `variable_refresh`), `Frame_pacer_tunables::display` and
   `max_refresh_interval`, and

@@ -431,6 +431,30 @@ editor's pre-warm depends on alone (not on the calibration's validity). The fill
 learned by the pacer (`doc/frame_pacing/algorithm.md` deviation 20): with
 clear-only frames the governor ignores even 8 ms of the kernel per frame.
 
+The window source also reports how the window's display presents
+(`erhe::graphics::Display_presentation`, `Surface_impl::query_display_presentation`):
+the `NSScreen` `minimumRefreshInterval` / `maximumRefreshInterval` of the
+window's screen and whether the window is fullscreen. A screen whose
+interval range is not a single value is a variable refresh rate display
+(Adaptive-Sync, ProMotion); driven fullscreen it shows each drawable at its
+`presentDrawable:atTime:` target, or when the drawable is ready if later,
+with no compositor grid, so the presentation is `variable_refresh` with the
+range. A window on the same display presents through the compositor's fixed
+grid (measured on a 48-120 Hz panel: 8.344 ms windowed), so a windowed
+presentation is `fixed_grid`. It is re-read with the window period on a
+display change, a mode change and entering or leaving fullscreen (the
+window's display changed callback, which also fires on
+`SDL_EVENT_WINDOW_ENTER_FULLSCREEN` / `LEAVE_FULLSCREEN`), logged on each
+change (`erhe.graphics.display_refresh`, "display presentation: variable
+refresh (fullscreen; display refresh interval 8.333 ... 20.833 ms = 48.0 ...
+120.0 Hz)"), reported by MCP `get_frame_pacing_status`
+`display_refresh.presentation`, and handed to the resolver's presentation
+callback (what the editor does with it: `doc/frame_pacing/inputs.md`
+"Display kind"). The SDL fullscreen state is taken as direct to display:
+what puts the compositor back in the path of a fullscreen window - an
+overlay window, a non-opaque layer, the menu bar revealed - is not detected.
+The Vulkan backend (MoltenVK, KosmicKrisp) reports `fixed_grid`.
+
 The device logs the machine's thermal state at init and on every change
 (`erhe::graphics::get_thermal_state`, `NSProcessInfo.thermalState`); MCP
 `get_frame_pacing_status` reports it as `thermal_state`, and the live gate

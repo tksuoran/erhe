@@ -32,6 +32,15 @@
 // thread (display change events), the Vulkan source and the present
 // bookkeeping on the thread that presents, the GPU frame ends on the thread
 // that harvests the frame brackets.
+//
+// The resolver also keeps how the window's display presents
+// (Display_presentation): a fixed refresh grid, or a variable refresh rate
+// (Adaptive-Sync) display the window drives directly (fullscreen), which has
+// no grid for the frame pacer to track (doc/frame_pacing/algorithm.md
+// deviation 24). The backend reports it with the window source; a change is
+// logged and handed to the presentation callback.
+
+#include "erhe_frame_pacing/frame_pacer.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -92,9 +101,28 @@ enum class Display_refresh_present_kind : unsigned int {
 [[nodiscard]] auto c_str(Display_refresh_mode              value) -> const char*;
 [[nodiscard]] auto c_str(Display_refresh_calibration_phase value) -> const char*;
 
+// How the window's display presents (claim C30). variable_refresh: an
+// Adaptive-Sync display the window drives directly (fullscreen): it shows
+// an image when the image's target time arrives, no earlier than
+// minimum_refresh_interval after the previous one, and repeats the previous
+// image after maximum_refresh_interval. fixed_grid: a refresh grid (a
+// compositor, or a fixed-rate display); the intervals are the display's
+// range where known (0 = unknown).
+class Display_presentation
+{
+public:
+    erhe::frame_pacing::Present_display_kind kind                    {erhe::frame_pacing::Present_display_kind::fixed_grid};
+    double                                   minimum_refresh_interval{0.0}; // seconds
+    double                                   maximum_refresh_interval{0.0}; // seconds
+    bool                                     fullscreen              {false};
+
+    [[nodiscard]] auto operator==(const Display_presentation& other) const -> bool = default;
+};
+
 class Display_refresh_report
 {
 public:
+    Display_presentation              presentation                   {};
     Display_refresh_policy            policy                         {Display_refresh_policy::automatic};
     double                            override_period_seconds        {0.0}; // 0 = none
     std::size_t                       display_count                  {0};   // displays the window system reports; 0 = unknown
@@ -118,11 +146,22 @@ public:
 class Display_refresh_resolver
 {
 public:
-    using Apply_callback = std::function<void(double period_seconds)>;
+    using Apply_callback        = std::function<void(double period_seconds)>;
+    using Presentation_callback = std::function<void(const Display_presentation& presentation)>;
 
     explicit Display_refresh_resolver(std::shared_ptr<spdlog::logger> logger);
 
     void set_apply_callback(Apply_callback callback);
+
+    // Called with the window display's presentation whenever it changes
+    // (set_window_presentation), on the caller's thread, outside the lock.
+    void set_presentation_callback(Presentation_callback callback);
+
+    // The window's display presentation (the backend's window source; on
+    // Metal the NSScreen refresh-interval range and the fullscreen state).
+    // Logged and handed to the presentation callback when it changes.
+    void set_window_presentation(const Display_presentation& presentation);
+    [[nodiscard]] auto get_presentation() const -> Display_presentation;
 
     // The graphics config choice: which source decides, and the override
     // rate (seconds per refresh; 0 = none). A forced source that is not
@@ -210,6 +249,9 @@ private:
     std::shared_ptr<spdlog::logger> m_logger;
     mutable std::mutex              m_mutex;
     Apply_callback                  m_apply_callback;
+    Presentation_callback           m_presentation_callback;
+    Display_presentation            m_presentation{};
+    bool                            m_presentation_known{false};
 
     Display_refresh_policy m_policy{Display_refresh_policy::automatic};
     double                 m_override_period{0.0};

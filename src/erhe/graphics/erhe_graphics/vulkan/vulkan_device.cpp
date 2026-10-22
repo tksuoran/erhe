@@ -270,6 +270,11 @@ void Device_impl::reset_device_frame_command_pool(size_t index)
 
 Device_impl::~Device_impl() noexcept
 {
+    // The display changed callback (vulkan_device_init.cpp) reaches this
+    // device's display refresh resolver.
+    if (m_context_window != nullptr) {
+        m_context_window->register_display_changed_callback({});
+    }
     static_cast<void>(device_wait_idle());
 
 #if defined(__APPLE__)
