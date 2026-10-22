@@ -313,9 +313,119 @@ protected:
         return glm::dvec3{glm::vec3{transforms.world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}};
     }
 
+    // Whether the fp32 get_spot_attenuation() of standard.frag is nonzero at
+    // world_position (always for point lights and unbounded spot lights,
+    // which the binner lists without a cone test).
+    [[nodiscard]] auto spot_attenuation_nonzero(const std::size_t slot, const glm::vec3& world_position) const -> bool
+    {
+        const erhe::scene::Light_snapshot& light = *m_light_projections.light_projection_transforms[slot].light;
+        if ((light.get_light_type() != erhe::scene::Light_type::spot) || (light.get_range() <= 0.0f)) {
+            return true;
+        }
+        // As Light_buffer writes direction_and_outer_spot_cos and as the
+        // shader evaluates it.
+        const float     outer_cos      = std::cos(light.get_outer_spot_angle() * 0.5f);
+        const glm::vec3 spot_direction = glm::normalize(light.get_light_frame().direction);
+        const glm::vec3 point_to_light = glm::vec3{get_light_position(slot)} - world_position;
+        // The host compiler may contract the normalize / dot multiply-adds
+        // here (this file is not built with -ffp-contract=off). That is
+        // harmless: the binner's cone is widened by 2^-16 in cosine space,
+        // far beyond the ulps that contraction changes, so this models the
+        // shader within the margin either way.
+        const float     actual_cos     = glm::dot(glm::normalize(spot_direction), glm::normalize(point_to_light));
+        return actual_cos > outer_cos;
+    }
+
+    // Every cull of the cone test, checked directly: for every closed
+    // cluster (interior tile, not slice 0) and every bounded spot light
+    // whose range sphere reaches the cluster's widened bounds but which the
+    // cluster does not list, no point of the widened bounds (corners and a
+    // 9 x 9 grid on each face) has nonzero fp32 spot attenuation.
+    void check_cone_culls()
+    {
+        ASSERT_EQ(m_binner.get_overflow_cluster_count(), 0u) << "a capacity cut is not a cull";
+        std::vector<std::byte> inputs(m_binner.get_input_byte_count());
+        m_binner.write_inputs(std::span<std::byte>{inputs});
+        const auto read_vec4 = [&inputs](const std::size_t index) -> glm::vec4 {
+            glm::vec4 value{};
+            std::memcpy(&value, inputs.data() + (erhe::scene_renderer::c_light_cluster_bin_header_uvec4_count * sizeof(glm::uvec4)) + (index * sizeof(glm::vec4)), sizeof(value));
+            return value;
+        };
+        const glm::uvec4      counts      = m_binner.get_grid().counts;
+        const uint32_t        tiles_x     = counts.x;
+        const uint32_t        tiles_y     = counts.y;
+        const uint32_t        slice_count = counts.z;
+        const std::size_t     light_base  = slice_count + (2 * (static_cast<std::size_t>(tiles_x) + 1) * (static_cast<std::size_t>(tiles_y) + 1));
+        const Category_ranges ranges{m_light_projections.light_partition};
+        const glm::dmat4      world_from_node{m_camera_snapshot.world_from_node()};
+        std::size_t culls  = 0;
+        std::size_t points = 0;
+        for (uint32_t k = 1; k < slice_count; ++k) {
+            const glm::vec4 slice = read_vec4(k);
+            for (uint32_t iy = 1; (iy + 1) < tiles_y; ++iy) {
+                for (uint32_t ix = 1; (ix + 1) < tiles_x; ++ix) {
+                    glm::vec3 lo{0.0f};
+                    glm::vec3 hi{0.0f};
+                    for (uint32_t c = 0; c < 4; ++c) {
+                        const std::size_t corner    = ((static_cast<std::size_t>(iy + (c >> 1u)) * (tiles_x + 1)) + ix + (c & 1u));
+                        const glm::vec3   origin    {read_vec4(slice_count + (2 * corner) + 0)};
+                        const glm::vec3   direction {read_vec4(slice_count + (2 * corner) + 1)};
+                        const glm::vec3   p0        = origin + (slice.x * direction);
+                        const glm::vec3   p1        = origin + (slice.y * direction);
+                        lo = (c == 0) ? glm::min(p0, p1) : glm::min(lo, glm::min(p0, p1));
+                        hi = (c == 0) ? glm::max(p0, p1) : glm::max(hi, glm::max(p0, p1));
+                    }
+                    lo -= glm::vec3{slice.z};
+                    hi += glm::vec3{slice.z};
+                    const std::size_t               cluster = (((static_cast<std::size_t>(k) * tiles_y) + iy) * tiles_x) + ix;
+                    const std::span<const uint32_t> slots   = m_binner.get_cluster_slots(cluster);
+                    for (std::size_t slot = ranges.begin[0]; slot < ranges.begin[2]; ++slot) {
+                        const glm::vec4 light = read_vec4(light_base + (slot - ranges.begin[0]));
+                        if (light.w < 0.0f) {
+                            continue;
+                        }
+                        const glm::vec3 offset   = glm::vec3{light} - glm::clamp(glm::vec3{light}, lo, hi);
+                        const bool      in_range = glm::dot(offset, offset) <= (light.w * light.w);
+                        if (!in_range || std::binary_search(slots.begin(), slots.end(), static_cast<uint32_t>(slot))) {
+                            continue;
+                        }
+                        ++culls;
+                        bool lit = false;
+                        for (int axis = 0; (axis < 3) && !lit; ++axis) {
+                            for (int side = 0; (side < 2) && !lit; ++side) {
+                                for (int i = 0; (i < 9) && !lit; ++i) {
+                                    for (int j = 0; (j < 9) && !lit; ++j) {
+                                        const glm::dvec3 l{lo};
+                                        const glm::dvec3 h{hi};
+                                        glm::dvec3 t{0.0};
+                                        t[axis]           = static_cast<double>(side);
+                                        t[(axis + 1) % 3] = static_cast<double>(i) / 8.0;
+                                        t[(axis + 2) % 3] = static_cast<double>(j) / 8.0;
+                                        const glm::dvec3 node_position = l + (t * (h - l)); // i, j in {0, 8} are the corners
+                                        const glm::vec3  world_position{world_from_node * glm::dvec4{node_position, 1.0}};
+                                        ++points;
+                                        lit = spot_attenuation_nonzero(slot, world_position);
+                                        EXPECT_FALSE(lit)
+                                            << "cluster " << cluster << " culls spot slot " << slot << " but its bounds point ("
+                                            << world_position.x << ", " << world_position.y << ", " << world_position.z << ") is lit";
+                                    }
+                                }
+                            }
+                        }
+                        if (lit && (++m_failures >= 20)) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        EXPECT_GT(culls, 100u) << "the cone test must cull";
+        static_cast<void>(points);
+    }
+
     // Every binned light reaching world_position (distance below its range,
-    // or no range at all) must be in the list of the cluster the shader
-    // picks for it.
+    // or no range at all, and inside a spot light's cone) must be in the list
+    // of the cluster the shader picks for it.
     void check_position(const glm::vec3& world_position)
     {
         if (m_failures >= 20) {
@@ -330,7 +440,9 @@ protected:
         for (std::size_t slot = ranges.begin[0]; slot < ranges.begin[4]; ++slot) {
             const erhe::scene::Light_snapshot& light = *m_light_projections.light_projection_transforms[slot].light;
             const double range = static_cast<double>(light.get_range());
-            const bool reaches = (range <= 0.0) || (glm::distance(glm::dvec3{world_position}, get_light_position(slot)) < range);
+            const bool reaches =
+                ((range <= 0.0) || (glm::distance(glm::dvec3{world_position}, get_light_position(slot)) < range)) &&
+                spot_attenuation_nonzero(slot, world_position);
             if (!reaches) {
                 continue;
             }
@@ -571,6 +683,119 @@ TEST_F(Light_cluster_test, overflow_keeps_lowest_slots)
         }
     }
     check_layout();
+}
+
+TEST_F(Light_cluster_test, spot_cone_lists_are_conservative)
+{
+    // Spot lights from a hair-thin cone to wider than a hemisphere; positions
+    // inside each cone just within its outer angle, from next to the apex to
+    // the end of the range: every one reaching a position with nonzero spot
+    // attenuation is in that position's cluster.
+    make_camera(erhe::scene::Projection::Type::perspective_vertical);
+    make_lights(4, 0.5f, 8.0f);
+    std::mt19937 random{4711u};
+    std::uniform_real_distribution<float> x_distribution{-12.0f, 12.0f};
+    std::uniform_real_distribution<float> y_distribution{ -4.0f,  6.0f};
+    std::uniform_real_distribution<float> z_distribution{-30.0f,  8.0f};
+    std::uniform_real_distribution<float> range_distribution{1.0f, 12.0f};
+    for (const float outer_degrees : {0.5f, 2.0f, 10.0f, 30.0f, 60.0f, 90.0f, 120.0f, 170.0f, 179.0f, 179.9f, 180.0f, 180.1f, 181.0f, 200.0f, 270.0f, 359.0f}) {
+        for (std::size_t i = 0; i < 3; ++i) {
+            const glm::vec3 position{x_distribution(random), y_distribution(random), z_distribution(random)};
+            const glm::vec3 target  {x_distribution(random), y_distribution(random), z_distribution(random)};
+            std::shared_ptr<erhe::scene::Light> light = make_scene_light(erhe::scene::Light_type::spot, position, target, range_distribution(random), Cast_shadow::no);
+            light->set_inner_spot_angle(0.8f * glm::radians(outer_degrees));
+            light->set_outer_spot_angle(glm::radians(outer_degrees));
+            m_lights.push_back(light);
+        }
+    }
+    resolve_and_apply(vulkan_conventions());
+    bin(Light_cluster_config{});
+    check_layout();
+
+    std::uniform_real_distribution<double> azimuth_distribution{0.0, 2.0 * glm::pi<double>()};
+    const Category_ranges ranges{m_light_projections.light_partition};
+    for (std::size_t slot = ranges.begin[0]; slot < ranges.begin[2]; ++slot) {
+        const erhe::scene::Light_snapshot& light = *m_light_projections.light_projection_transforms[slot].light;
+        const double range = static_cast<double>(light.get_range());
+        if (range <= 0.0) {
+            continue;
+        }
+        const glm::dvec3 apex       = get_light_position(slot);
+        const glm::dvec3 axis       = -glm::normalize(glm::dvec3{light.get_light_frame().direction});
+        const glm::dvec3 helper     = (std::abs(axis.y) < 0.9) ? glm::dvec3{0.0, 1.0, 0.0} : glm::dvec3{1.0, 0.0, 0.0};
+        const glm::dvec3 u          = glm::normalize(glm::cross(axis, helper));
+        const glm::dvec3 v          = glm::cross(axis, u);
+        const double     half_angle = std::min(0.5 * static_cast<double>(light.get_outer_spot_angle()), glm::pi<double>());
+        for (const double angle_fraction : {0.0, 0.5, 0.9, 0.99, 0.9999, 0.999999}) {
+            for (const double distance_fraction : {1.0e-4, 1.0e-3, 1.0e-2, 0.1, 0.5, 0.9, 0.999}) {
+                for (std::size_t i = 0; i < 4; ++i) {
+                    const double     theta     = angle_fraction * half_angle;
+                    const double     phi       = azimuth_distribution(random);
+                    const glm::dvec3 direction = (std::cos(theta) * axis) + (std::sin(theta) * ((std::cos(phi) * u) + (std::sin(phi) * v)));
+                    check_position(glm::vec3{apex + ((distance_fraction * range) * direction)});
+                }
+            }
+        }
+    }
+    check_sampled_positions();
+    check_cone_culls();
+}
+
+TEST_F(Light_cluster_test, spot_cone_culls_clusters_behind_and_beside)
+{
+    // Spot lights 10 m in front of the camera on its axis, pointing away
+    // from it, with a range reaching back past the camera: the clusters
+    // behind the apex and beside a narrow cone do not list them, the
+    // clusters inside the cone do.
+    make_camera(erhe::scene::Projection::Type::perspective_vertical);
+    const glm::vec3 eye    {3.0f, 2.0f, 5.0f};
+    const glm::vec3 forward = glm::normalize(glm::vec3{-1.0f, 0.5f, -6.0f} - eye);
+    const glm::vec3 right   = glm::normalize(glm::cross(forward, glm::vec3{0.0f, 1.0f, 0.0f}));
+    const glm::vec3 apex    = eye + (10.0f * forward);
+    m_lights.clear();
+    const auto add_spot = [&](const float outer_degrees) -> std::shared_ptr<erhe::scene::Light> {
+        std::shared_ptr<erhe::scene::Light> light = make_scene_light(erhe::scene::Light_type::spot, apex, apex + forward, 20.0f, Cast_shadow::no);
+        light->set_inner_spot_angle(0.5f * glm::radians(outer_degrees));
+        light->set_outer_spot_angle(glm::radians(outer_degrees));
+        m_lights.push_back(light);
+        return light;
+    };
+    const std::shared_ptr<erhe::scene::Light> narrow     = add_spot( 10.0f); // half angle 5 degrees
+    const std::shared_ptr<erhe::scene::Light> wide       = add_spot(170.0f); // half angle 85 degrees
+    const std::shared_ptr<erhe::scene::Light> very_wide  = add_spot(240.0f); // half angle 120 degrees
+    resolve_and_apply(vulkan_conventions());
+    bin(Light_cluster_config{});
+    check_layout();
+
+    const auto is_listed = [&](const std::shared_ptr<erhe::scene::Light>& light, const glm::vec3& position) -> bool {
+        const std::size_t slot = m_light_set.find_slot(light->get_id());
+        EXPECT_NE(slot, SIZE_MAX);
+        const uint32_t cluster = get_cluster_at(position);
+        EXPECT_NE(m_binner.get_grid().counts.z, 1u);
+        const std::span<const uint32_t> slots = m_binner.get_cluster_slots(cluster);
+        return std::binary_search(slots.begin(), slots.end(), static_cast<uint32_t>(slot));
+    };
+    const glm::vec3 inside = eye + (15.0f * forward);
+    const glm::vec3 behind = eye + ( 5.0f * forward);                   // in range, behind the apex
+    const glm::vec3 beside = eye + (15.0f * forward) + (6.0f * right);  // in range, 50 degrees off the axis
+    const glm::vec3 side   = apex + (6.0f * right) + (0.5f * forward);  // 85 degrees off the axis
+    for (const std::shared_ptr<erhe::scene::Light>& light : {narrow, wide, very_wide}) {
+        EXPECT_TRUE(is_listed(light, inside)) << light->get_outer_spot_angle();
+    }
+    EXPECT_FALSE(is_listed(narrow,    behind));
+    EXPECT_FALSE(is_listed(narrow,    beside));
+    EXPECT_FALSE(is_listed(wide,      behind));
+    EXPECT_TRUE (is_listed(wide,      beside));
+    EXPECT_FALSE(is_listed(very_wide, behind)); // 180 degrees off the axis, outside the 120 degree half angle
+    EXPECT_TRUE (is_listed(very_wide, beside));
+    EXPECT_TRUE (is_listed(very_wide, side));
+
+    // The listed positions are reached with nonzero spot attenuation; the
+    // culled ones are not (the conservative direction is checked by
+    // spot_cone_lists_are_conservative).
+    check_position(inside);
+    check_position(beside);
+    check_position(side);
 }
 
 TEST_F(Light_cluster_test, single_cluster_grid)

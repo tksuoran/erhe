@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Light_cluster_binner` input layout adds per-slot
+  spot cones (axis * sin, cot) after the light spheres; the lists cone-cull
+  closed clusters (doc/erhe/scene_renderer.md `Light_cluster_binner`).
 - `erhe::scene_renderer`: selectable specular anti-aliasing of the
   anisotropic BRDF (doc/erhe/scene_renderer.md "Specular anti-aliasing").
   `Specular_anti_aliasing` (`off`, `normal_kernel`, `finite_difference`)

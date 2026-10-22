@@ -188,8 +188,10 @@ projections of the frame are final) and before the first color pass:
   time the count changes); MCP `get_light_cluster_stats` reports the same
   values (V6). The cluster header carries no per-cluster overflow mark: the
   fragment lookup reads the cut list as any other.
-- Spot cone tests against the AABB are a later refinement (phase 5); the
-  sphere bound is exact for the range window and conservative for the cone.
+- A spot light that passes the sphere test of a closed cluster is also
+  tested by its widened cone against the bounding sphere of the cluster's
+  bounds (phase 5; `doc/erhe/scene_renderer.md` `Light_cluster_binner`),
+  with 16 more bytes of input per binned light.
 
 A `Light_cluster_binner` CPU implementation of the same tests over the same
 inputs is the reference: the unit tests run it, and MCP
@@ -381,10 +383,49 @@ binning equals loop mode with the same 43 lights shaded.
    views with the eye offsets and field of view of a Quest 3 into a layered
    target, each eye's image identical to the single-cluster grid's) and a
    Quest run (needs the user with the headset).
-5. **Refinements, each only when V5 shows it pays:** spot cone vs AABB;
-   skip binning on unchanged inputs (C4); shared-memory light tiles in the
+5. **Refinements, each only when V5 shows it pays:** spot cone (built,
+   see "Phase 5 spot cone" below); skip binning on unchanged inputs (C4); shared-memory light tiles in the
    cluster loop for scenes with hundreds of lights; splitting `Light` into a
    shading record and a shadow record indexed by shadow slot (Open, item 1).
+
+Phase 5 spot cone (built): a spot light that passes the sphere test of a
+closed cluster is tested by its cone against the sphere around the
+cluster's bounds (`doc/erhe/scene_renderer.md` `Light_cluster_binner`
+holds the test and its fp32 margins). Gates (Debug, M4 Pro, Metal and
+MoltenVK):
+
+- V2: `get_light_cluster_check` 0 mismatches on the default scene with 16
+  added spot and point lights (four Camera A poses) and on Bistro (bench
+  and street camera).
+- V1: loop and clustered mode byte-identical on the default scene with the
+  16 added lights (gate cameras a and b; CPU and GPU binning) and on Bistro
+  with all 43 lights within the loop limits; validation clean.
+- `Light_cluster_test` `spot_cone_lists_are_conservative` (outer angles
+  0.5 to 359 degrees, positions just inside the outer angle from 1e-4 to
+  0.999 of the range) and `spot_cone_culls_clusters_behind_and_beside`;
+  `Light_cluster_gpu_test` `gpu_spot_cones_equal_cpu` (the same angle range
+  plus outer-angle sweeps in 2^-20 relative steps that straddle the fp32
+  tangency decision of target clusters).
+
+Measurements, Bistro at the bench camera, Release Metal, fullscreen
+3840 x 1440 at 120 Hz (viewport 2224 x 1360, 18480 clusters), Medium
+shadow counts with all 43 lights in clustered mode, `Viewport window`
+fragment phase from Metal System Trace (medians over about 300 frames):
+
+| | listed entries | longest list | fragment ms | vertex ms |
+|---|---|---|---|---|
+| sphere only | 113561 | 20 | 4.67-4.75 | 2.00-2.04 |
+| sphere and cone | 109538 | 20 | 4.32 | 2.00 |
+| loops Medium (16 shaded), same sessions | - | - | 4.10-4.18 | 2.00 |
+| clustered, shadows off: before / after | - | - | 3.81 / 3.63 | 2.0 |
+
+At the windowed 1334 x 1120 viewport the listed entries fall from 57449 to
+55733 at the bench camera and from 91342 to 58220 at the street camera
+(longest lists 22 and 27, unchanged). Clustered mode with all 43 lights now
+costs 0.15 ms of fragment time over loop mode with 16 (was 0.57 ms). The
+3.5 % fewer list entries remove 7 % of the fragment time; which of the
+removed entries carry that cost (shadow-mapped spot lights, overdrawn
+foliage fragments) is not measured.
 
 ## Verification
 

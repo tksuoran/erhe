@@ -3,14 +3,16 @@
 // One dispatch per binned view per frame, one invocation per cluster. Each
 // computes its cluster's widened view-space bounds from the tile corner rays
 // and the slice depths, walks the spot and point slots in ascending order,
-// tests each light's range sphere against the bounds and appends the passing
-// slots to its list at a fixed offset. The walk in slot order makes the list
+// tests each light's range sphere against the bounds (and a spot light's
+// widened cone against the bounding sphere of a closed cluster) and appends
+// the passing slots to its list at a fixed offset. The walk in slot order makes the list
 // ascending and the category counts a running tally.
 //
 // The tests and their evaluation order are those of the CPU binner
 // (src/erhe/scene_renderer/erhe_scene_renderer/light_cluster.cpp:
 // get_open_sides, nearest_on_axis, sphere_reaches_slice,
-// sphere_reaches_bounds, Light_cluster_binner::bin_prepared), with every
+// sphere_reaches_bounds, cone_reaches_bounds,
+// Light_cluster_binner::bin_prepared), with every
 // intermediate declared precise so no multiply-add is contracted: the lists
 // are the CPU's lists.
 //
@@ -24,6 +26,9 @@
 //   data[slice] = near depth, far depth, widening, 0
 //   data[slices + 2 corner + 0 / 1] = corner ray origin / direction
 //   data[slices + 2 corners + light] = centre, radius (< 0 unbounded)
+//   data[slices + 2 corners + light count + light] = spot cone: axis times
+//       the sine of the widened half angle, its cotangent (0 for point
+//       lights)
 // light_cluster_bin_output.data[] (light_cluster.hpp layout): three uints
 //   per cluster (list offset, spot counts, point counts), then the lists,
 //   two 16-bit slots per uint.
@@ -95,6 +100,70 @@ bool sphere_reaches_bounds(vec4 light, vec3 lo, vec3 hi, uint open)
     return distance_squared <= radius_squared;
 }
 
+// The widened spot cone (apex light.xyz; cone.xyz axis * sin(a), cone.w
+// cot(a)) against the bounding sphere of a closed cluster's widened bounds;
+// light_cluster.cpp cone_reaches_bounds() documents the test.
+bool cone_reaches_bounds(vec4 light, vec4 cone, vec3 lo, vec3 hi)
+{
+    precise float ex        = (hi.x - lo.x) * 0.5;
+    precise float ey        = (hi.y - lo.y) * 0.5;
+    precise float ez        = (hi.z - lo.z) * 0.5;
+    precise float bx        = lo.x + ex;
+    precise float by        = lo.y + ey;
+    precise float bz        = lo.z + ez;
+    precise float exy       = ex + ey;
+    precise float l1        = exy + ez;
+    float         e_max     = max(ex, max(ey, ez));
+    precise float l_max     = e_max * 1.7320509;
+    float         r_bound   = min(l1, l_max);
+    precise float r         = r_bound * 1.0009765625;
+    precise float vx        = bx - light.x;
+    precise float vy        = by - light.y;
+    precise float vz        = bz - light.z;
+    precise float ax        = vx * cone.x;
+    precise float ay        = vy * cone.y;
+    precise float az        = vz * cone.z;
+    precise float axy       = ax + ay;
+    precise float along_s   = axy + az;
+    precise float cx0       = vy * cone.z;
+    precise float cx1       = vz * cone.y;
+    precise float cy0       = vz * cone.x;
+    precise float cy1       = vx * cone.z;
+    precise float cz0       = vx * cone.y;
+    precise float cz1       = vy * cone.x;
+    precise float cx        = cx0 - cx1;
+    precise float cy        = cy0 - cy1;
+    precise float cz        = cz0 - cz1;
+    precise float cxx       = cx * cx;
+    precise float cyy       = cy * cy;
+    precise float czz       = cz * cz;
+    precise float cxy       = cxx + cyy;
+    precise float perp_s_sq = cxy + czz;
+    precise float cot_sq    = cone.w * cone.w;
+    precise float lateral   = perp_s_sq * cot_sq;
+    precise float t         = r + along_s;
+    precise float tt        = t * t;
+    if (cone.w >= 0.0) {
+        if (t < 0.0) {
+            return false;
+        }
+        if (lateral > tt) {
+            return false;
+        }
+        if (along_s < 0.0) {
+            precise float along_sq   = along_s * along_s;
+            precise float inv_sin_sq = 1.0 + cot_sq;
+            precise float back       = along_sq * inv_sin_sq;
+            precise float rr         = r * r;
+            if (back > rr) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return !((t < 0.0) && (lateral < tt));
+}
+
 void main()
 {
     if (gl_LocalInvocationIndex == 0u) {
@@ -127,6 +196,8 @@ void main()
         vec4 slice        = light_cluster_bin_input.data[k];
         uint corner_base  = slice_count;
         uint light_base   = slice_count + (2u * (tiles_x + 1u) * (tiles_y + 1u));
+        uint cone_base    = light_base + (slot_end - slot_begin);
+        uint spot_end     = header1.z; // the first point slot
         uint corner_0     = (iy * (tiles_x + 1u)) + ix;
         vec3 lo = vec3(0.0);
         vec3 hi = vec3(0.0);
@@ -158,9 +229,11 @@ void main()
         uint pending     = 0u;
         for (uint slot = slot_begin; slot < slot_end; ++slot) {
             vec4 light = light_cluster_bin_input.data[light_base + (slot - slot_begin)];
+            // The cone test only for closed clusters and spot lights.
             bool reaches = (light.w < 0.0) || (
                 sphere_reaches_slice(light, k, slice.x, slice.y) &&
-                sphere_reaches_bounds(light, lo_w, hi_w, open)
+                sphere_reaches_bounds(light, lo_w, hi_w, open) &&
+                ((slot >= spot_end) || (open != 0u) || cone_reaches_bounds(light, light_cluster_bin_input.data[cone_base + (slot - slot_begin)], lo_w, hi_w))
             );
             if (!reaches) {
                 continue;
