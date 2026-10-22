@@ -272,16 +272,7 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     m_gpu_cull_check = make_gpu_cull_check();
 }
 
-Draw_list_scene::~Draw_list_scene() noexcept
-{
-    // A count readback no later frame decoded (the GPU path was switched
-    // off, or the scene is destroyed with frames in flight).
-    for (Gpu_count_readback& readback : m_gpu_count_readbacks) {
-        if (readback.pending) {
-            finish_count_readback(readback);
-        }
-    }
-}
+Draw_list_scene::~Draw_list_scene() noexcept = default;
 
 void Draw_list_scene::assert_render_phase()
 {

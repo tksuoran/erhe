@@ -754,7 +754,12 @@ Drawing:
   every `gpu` frame copies the count buffer to host memory, and the
   classification of the frame that reuses its frame slot (the frame retired)
   decodes it into per-view drawn / filtered counts
-  (`get_retired_gpu_shadow_counts()`). `Shadow_renderer::Cull_views` keeps
+  (`get_retired_gpu_shadow_counts()`). The copy lands in a persistent
+  host-readable buffer of the `Draw_list_scene`, one per frame slot, outside
+  the ring buffers (a ring range is reclaimed once its acquire frame
+  completes, so it cannot hold bytes until a later frame reads them); each
+  slot's buffer grows to its largest count copy and is only regrown when no
+  readback is pending in it. `Shadow_renderer::Cull_views` keeps
   the views of the caller's recent fits (`fitted_frames`), and `draw()`
   fills the entry and culled counts of its `Shadow_draw_statistics` from the retired frame's counts by that
   frame's passes (`gpu_counts_frame_index`; frames in flight late; MCP

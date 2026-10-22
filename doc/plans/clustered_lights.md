@@ -427,11 +427,3 @@ binning equals loop mode with the same 43 lights shaded.
    not pursued), so on Bistro the far shadow-mapped point lights keep their
    cube faces while near lights shade unshadowed; clustered mode makes the
    near lights lit, not shadowed.
-3. `Draw_list_scene::generate_gpu_shadow_commands()`
-   (`draw_list_scene_gpu_cull.cpp`) keeps its per-frame count readback in a
-   `CPU_read` ring range acquired at frame F and released when the frame
-   reusing the slot decodes it. The ring treats the bytes as free once F
-   completes, so a wrap before the decode (or a scene that skips frames)
-   can overwrite the counts. The light binner's counters use a persistent
-   per-view buffer instead (`Light_cluster_view_state`); the cull counts
-   get the same fix in a separate change.
