@@ -11,7 +11,15 @@
 ✓clustered-lights-review{©User:keep-loop-path(perf-compare)+fixed-cluster-capacity+warning}
 ✓clustered-lights-phase-1{c34473e04;light_array_block-binding-9;all-gates-identical-Metal+MoltenVK;ctest-1766+1769;GL-not-run}+028ab410b{composite_input-layout-before-pipeline(MoltenVK-validation-abort-pre-existing)}
 ✓clustered-lights-phase-2{41066df11;CPU-binner+LIGHT_SHADING_CLUSTERED;V1-identical+V4-0-variants;9-binner-tests;fable-review-no-blockers-10-fixes(capacity-clamp+slice-0-open-xy+tightness-tests+v1->v2-max_light_count-migration);ctest-Metal-1775+MoltenVK-1790}
-⚡clustered-lights-phase-3{GPU-binning;via-harness}
+✓clustered-lights-phase-3{57e1914ce;GPU-binner-light_cluster_bin.comp+bit-identical-CPU(precise+ffp-contract-off);light_cluster_binning-setting(gpu-default);MCP-get_light_cluster_check/stats+set_light_cluster_binning;V2-0-mismatch;overflow-readback-persistent-per-slot-buffer}
+✓specular-AA-modes{2d45ce87b;©User:3-modes-variant-axis(off|normal_kernel-default|finite_difference);fixes-fwidth-in-non-uniform-loop;axis-only-on-anisotropic-keys;previews-follow-preset}
+✓cull-count-readback-fix{1d37e3407;persistent-per-slot-buffer¬ring-hold}
+✓bistro-fullscreen-perf{memory-bank/local/bistro_fullscreen_perf_2026_10_22.md+bistro_metal_trace_2026_10_22.md;finding:pacer-tier-M-breaks-on-Adaptive-Sync-fullscreen(94/52fps-while-GPU-fits)->NOT-YET-ADDRESSED}
+✓spot-cone-test{dfa188a72;clustered-fragment-4.7->4.3ms-fullscreen}
+✓discard-ordering{cb163a0bb;©User:discard-draws-as-late-as-possible;Blending_class{opaque,alpha_tested,translucent};alpha-tested-pass-after-opaque-blend-off;discard-before-lighting;-0.24ms}
+✓light-record-hot/cold{e98c62b26;©User:pack-per-light-incl-shadow;48B-shading+208B-shadowed-hot+128B-cold;apply-skips-unshadowed(R--0.1..0.3ms);fragment-loops-4.18->4.0ms}
+⚡re-trace+re-evaluate{fullscreen-Bistro;then-rank-next:pacer-VRR|MSAA|foliage-shadows|interpolants|material-record}
+?found-not-fixed{alpha-tested-casters-cast-no-shadows;Bistro-image-run-to-run-nondeterminism;selection-stencil-mask-depth-only-alpha-tested-full-quad;windowed-viewport+27%-vs-headless-same-size}
 ?shadow-cache-remaining{per-light-caster-test;skinned-pose-serial;fit-skip}
 
 [TASK::bistro-load]{started-2026-10-18;branch=render-thread;via-harness;doc/plans/bistro_load_profiling.md}
