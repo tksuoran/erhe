@@ -52,6 +52,20 @@ enum class Deadline_offset_source : unsigned int {
     estimated
 };
 
+// The display the host presents to (doc/frame_pacing/algorithm.md
+// deviation 24, claim C30).
+enum class Present_display_kind : unsigned int {
+    // A periodic vsync grid: a compositor, or a fixed-rate display mode. The
+    // pacer tracks the grid from presentation feedback (deviations 10, 12).
+    fixed_grid = 0,
+    // A variable refresh rate (Adaptive-Sync) display driven directly: it
+    // shows an image when its target time arrives (or when the image is
+    // ready, if later), no earlier than its minimum refresh interval
+    // (refresh_period) after the previous image, and repeats the previous
+    // image after max_refresh_interval. There is no grid to track.
+    variable_refresh
+};
+
 // All quantitative behavior knobs. Durations are in seconds, fractions are of
 // the display refresh period T. Defaults match the verified reference model.
 class Frame_pacer_tunables
@@ -122,6 +136,15 @@ public:
     double      grid_period_max_dev{0.005};     // tracked period clamp, fraction of the reference period
     std::size_t grid_reseed_window{16};         // feedback-delta samples backing the gross-error re-seed
     double      grid_reseed_dev   {0.02};       // re-seed when median delta-derived period deviates this much
+    // The display (C30). On variable_refresh refresh_period is the display's
+    // minimum refresh interval and stays the grid period (no re-seed, no
+    // period tracking), a late display re-anchors the slot cursor only, no
+    // target lies more than max_refresh_interval after the previous one, the
+    // cadence tests drop the guard allowance (a late frame costs its
+    // lateness, not a refresh), and a frame the display could not show at
+    // its target (a repeat in between) is no deadline offset evidence.
+    Present_display_kind display             {Present_display_kind::fixed_grid};
+    double               max_refresh_interval{0.0}; // variable_refresh: the longest interval the display holds an image (s), > 0
 };
 
 // Result of Frame_pacer::schedule() for one frame.
@@ -287,6 +310,10 @@ private:
     void               on_pressure_downshift(double gpu_end_time);
     void               reset_dwell          ();
     void               update_deadline_offset(std::int64_t frame_id, double achieved_present_time, double previous_display_time);
+    void               on_variable_refresh_feedback(std::int64_t frame_id, double achieved_present_time);
+    [[nodiscard]] auto is_variable_refresh  () const -> bool;
+    [[nodiscard]] auto cadence_guard        () const -> double; // C30: the cadence tests' jitter allowance
+    [[nodiscard]] auto vrr_slots_max        () const -> std::int64_t; // C30: most slots between two targets without a repeat
     [[nodiscard]] auto deadline_evidence    () -> double;
 
     Frame_pacer_tunables m_tunables;

@@ -98,8 +98,33 @@ and the pacer stays at N=1 with 9.72 ms deltas; at the live load of 7.2 ms
 it stays mostly at N=2 with 16.7 ms deltas. The controls: the same 6.5 ms
 load and spike on the windowed compositor's fixed grid and the VRR display
 without a disturbance hold 120 Hz, and the 7.2 ms load on the fixed grid
-stays at N=2 (the guard rule). C30 is an expected failure (XFAIL in the
-sim, `DISABLED_` in the C++ suite) until the fix.
+stays at N=2 (the guard rule).
+
+## Fix
+
+The pacer takes the display kind from the host
+(`Frame_pacer_tunables::display` `Present_display_kind::variable_refresh`
+and `max_refresh_interval`, set through the observer's
+`Frame_pacing_observer::set_display`, whose change recreates the pacer;
+`doc/frame_pacing/algorithm.md` deviation 24). On a VRR display the period
+is the minimum refresh interval for good (no re-seed, no PLL period
+branch), late displays re-anchor the slot cursor only, the cadence stays
+no target lies more than the maximum refresh interval after the previous
+one (the display would repeat the previous image in between), the cadence
+tests drop the `guard` allowance, and a frame the display could not show at
+its target (within one period of the previous display, or a repeat in
+between) is no deadline offset evidence. C30 passes in both suites: every
+VRR arm at N=1 with 8.333 ms deltas and the deadline offset at its initial
+value, no repeats during the heavy configuration; the fixed-grid claims are
+unchanged.
+
+Next, the Metal detection step: detect the VRR presentation (NSScreen
+refresh-interval range, fullscreen direct to display) and call
+`set_display`. On VRR fullscreen the true deadline is about 1 ms, and the
+deadline offset estimator never decays below its initial value (the
+initial value is also its floor), so the host must not seed the windowed
+compositor's calibration (T + 1.3 ms = 9.63 ms at 120 Hz) there: it uses a
+VRR-appropriate seed, or runs the present calibration in that mode.
 
 ## Goal and gate
 

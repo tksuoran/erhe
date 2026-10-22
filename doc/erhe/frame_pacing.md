@@ -36,7 +36,12 @@ suite (`erhe_frame_pacing_tests`) green.
   from measured backpressure blocking ("slop"). Requires plain-FIFO
   backpressure; on fifo_latest_ready the servo winds to nothing (C21a).
   Pure like `Frame_pacer`; reference model `SlopServo` in the sim.
-- `Frame_pacer_tunables` - all quantitative knobs with verified defaults.
+- `Frame_pacer_tunables` - all quantitative knobs with verified defaults,
+  and the host's description of the presentation path: `present_queue`,
+  `deadline_offset_source`, and `display` (`Present_display_kind`
+  `fixed_grid` | `variable_refresh` with `max_refresh_interval`; an
+  Adaptive-Sync display driven directly has no grid to track,
+  doc/frame_pacing/algorithm.md deviation 24).
 - `Schedule_decision` - per-frame output: release time, target slot and
   presentation time (FR3), predicted display time and duration (FR4), and the
   present-wait clamp id (FR5).
@@ -77,8 +82,10 @@ Build with `-DERHE_BUILD_TESTS=ON`; run `erhe_frame_pacing_tests`.
 
 ## Dependencies
 
-None (standard library only). This is deliberate: the isolation requirement
-in `doc/frame_pacing/requirements.md` (unit and smoke testable without GPU or
+`erhe::profile` (profiling zones) and `erhe::verify` (`ERHE_VERIFY` on
+invalid tunables), both private; nothing that needs a GPU or a display. This
+is deliberate: the isolation requirement in
+`doc/frame_pacing/requirements.md` (unit and smoke testable without GPU or
 display).
 
 ## Future work

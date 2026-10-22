@@ -1686,28 +1686,38 @@ enum class C30_display : unsigned int {
     variable_refresh  // Adaptive-Sync 48-120 Hz, fullscreen direct to display
 };
 
+// Whether the pacer is told the display kind (the control withholds it).
+enum class C30_pacer_told : unsigned int {
+    display_kind = 0,
+    nothing
+};
+
+constexpr double c30_period = 1.0 / 120.0;
+constexpr double c30_deadline_offset_initial = c30_period + (1.3 * ms); // the Dell calibration + 0.3 ms
+
 // Claim C30 scenario: the Dell tier M tunables (present calibration of the
 // windowed compositor, pre-warm on), GPU work work_ms at full clock with a
-// heavier stretch [heavy_first, heavy_last) of heavy_ms (none when empty), the GPU clock at
-// 0.8 of its maximum at N>=2 (IOReport, live); on the VRR display (48-120 Hz,
-// direct to display, 1 ms deadline) or on the windowed compositor's fixed
-// grid.
+// heavier stretch [heavy_first, heavy_last) of heavy_ms (none when empty),
+// the GPU clock at 0.8 of its maximum at N>=2 (IOReport, live); on the VRR
+// display (48-120 Hz, direct to display, 1 ms deadline) or on the windowed
+// compositor's fixed grid.
 auto run_c30(
-    const unsigned int seed,
-    const double       work_ms,
-    const std::int64_t heavy_first,
-    const std::int64_t heavy_last,
-    const double       heavy_ms,
-    const C30_display  display
+    const unsigned int   seed,
+    const double         work_ms,
+    const std::int64_t   heavy_first,
+    const std::int64_t   heavy_last,
+    const double         heavy_ms,
+    const C30_display    display,
+    const C30_pacer_told told = C30_pacer_told::display_kind
 ) -> std::vector<Frame_record>
 {
-    const double t       = 1.0 / 120.0;
+    const double t       = c30_period;
     const double dpe_cal = t + (1.0 * ms);
     Scenario scenario;
     scenario.frame_count                            = 6000;
     scenario.plant.tunables.refresh_period          = t;
     scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
-    scenario.plant.tunables.deadline_offset_initial = dpe_cal + (0.3 * ms);
+    scenario.plant.tunables.deadline_offset_initial = c30_deadline_offset_initial;
     scenario.plant.tunables.deadline_offset_max     = dpe_cal + (0.3 * ms) + (0.5 * t);
     scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
     scenario.plant.tunables.upshift_prewarm_seconds = 2.3 * ms;
@@ -1719,6 +1729,10 @@ auto run_c30(
         scenario.pool_latch_lead            = 0.0;
         scenario.vrr_min_interval           = t;
         scenario.vrr_max_interval           = 1.0 / 48.0;
+        if (told == C30_pacer_told::display_kind) {
+            scenario.plant.tunables.display              = erhe::frame_pacing::Present_display_kind::variable_refresh;
+            scenario.plant.tunables.max_refresh_interval = 1.0 / 48.0;
+        }
     } else {
         scenario.plant.true_deadline_offset = dpe_cal;
         scenario.pool_latch_lead            = dpe_cal - (1.8 * ms);
@@ -1734,68 +1748,128 @@ auto run_c30(
     return run_scenario(scenario, pacer);
 }
 
-// C30 goal: N=1 after frame 3000 and at least 99 % of the present deltas
-// within 0.1 ms of T.
-void expect_c30_120_hz(const std::vector<Frame_record>& records, const char* arm)
+// Present deltas after frame 3000 within 0.1 ms of T, and their median.
+auto c30_exact_deltas(const std::vector<Frame_record>& records, double& median) -> std::size_t
 {
-    const double t = 1.0 / 120.0;
-    ASSERT_GT(records.size(), 3001u);
     std::vector<double> deltas;
     std::size_t exact = 0;
     for (std::size_t i = 3001; i < records.size(); ++i) {
         const double delta = records[i].display_time - records[i - 1].display_time;
         deltas.push_back(delta);
-        if (std::abs(delta - t) < (0.1 * ms)) {
+        if (std::abs(delta - c30_period) < (0.1 * ms)) {
             ++exact;
         }
     }
     std::sort(deltas.begin(), deltas.end());
+    median = deltas.empty() ? 0.0 : deltas[deltas.size() / 2];
+    return exact;
+}
+
+// C30 goal: N=1 after frame 3000, at least 99 % of the present deltas
+// within 0.1 ms of T, and the deadline offset estimate within guard of its
+// initial value (pre-fix the VRR arms raised it from 9.6 to 13.2 ms).
+void expect_c30_120_hz(const std::vector<Frame_record>& records, const char* arm)
+{
+    ASSERT_GT(records.size(), 3001u);
+    double median = 0.0;
+    const std::size_t exact = c30_exact_deltas(records, median);
+    const std::size_t count = records.size() - 3001;
+    double deadline_offset_max = 0.0;
+    for (std::size_t i = 3000; i < records.size(); ++i) {
+        deadline_offset_max = std::max(deadline_offset_max, records[i].deadline_offset);
+    }
     EXPECT_EQ(vsync_values(records, 3000), (std::set<int>{1})) << arm << ": N=1";
-    EXPECT_GE(static_cast<double>(exact), 0.99 * static_cast<double>(deltas.size()))
-        << arm << ": " << exact << "/" << deltas.size() << " present deltas within 0.1 ms of T, median "
-        << (deltas[deltas.size() / 2] / ms) << " ms";
+    EXPECT_GE(static_cast<double>(exact), 0.99 * static_cast<double>(count))
+        << arm << ": " << exact << "/" << count << " present deltas within 0.1 ms of T, median "
+        << (median / ms) << " ms";
+    EXPECT_LE(deadline_offset_max, c30_deadline_offset_initial + Frame_pacer_tunables{}.guard)
+        << arm << ": deadline offset " << (deadline_offset_max / ms) << " ms";
 }
 
 } // anonymous namespace
 
-TEST(Frame_pacer_claims, c30_variable_refresh_display_controls)
-{
-    // The C30 load holds 120 Hz on the windowed compositor's fixed grid with
-    // the startup spike, and on the VRR display without a disturbance.
-    expect_c30_120_hz(run_c30(3001, 6.5, 30, 60, 20.0, C30_display::fixed_grid), "fixed grid, startup spike");
-    expect_c30_120_hz(run_c30(3001, 6.5, 0, 0, 0.0, C30_display::variable_refresh), "VRR without a disturbance");
-    // The live load (7.2 ms) stays at N=2 on the fixed grid: the cadence
-    // tests add guard to the stage times (q95(g) + guard > T), correct there
-    // (a frame that misses its vsync by a little costs a whole refresh).
-    // Probes back to N=1 are allowed (C10 backoff); at least 90 % of the
-    // frames after frame 3000 stay at N=2.
-    const std::vector<Frame_record> fixed_live = run_c30(3001, 7.2, 0, 0, 0.0, C30_display::fixed_grid);
-    ASSERT_GT(fixed_live.size(), 3000u);
-    std::size_t at_two = 0;
-    for (std::size_t i = 3000; i < fixed_live.size(); ++i) {
-        if (fixed_live[i].vsyncs == 2) {
-            ++at_two;
-        }
-    }
-    EXPECT_GE(static_cast<double>(at_two), 0.9 * static_cast<double>(fixed_live.size() - 3000)) << "fixed grid, live load: " << at_two << " frames at N=2";
-}
-
-// Claim C30 is ahead of its fix: it fails on the current pacer and stays
-// DISABLED_ until the fix lands (doc/plans/frame_pacing_adaptive_sync.md;
-// run with --gtest_also_run_disabled_tests to see the failure).
-TEST(Frame_pacer_claims, DISABLED_c30_variable_refresh_display)
+TEST(Frame_pacer_claims, c30_variable_refresh_display)
 {
     // Live (Metal tier M, Release, Bistro, 3840x1440 @ 120 Hz fullscreen,
     // Adaptive-Sync 48-120 Hz): presentedTime deltas 10.6-11.8 ms or
     // 16-20 ms while the GPU frame (7.2-7.6 ms) fits 8.33 ms; history
     // dependent. A VRR display has no grid: late frames display when ready
     // and below the 48 Hz floor the display repeats the previous image, so
-    // the gross-error re-seed (C16) takes those deltas for the display's
-    // period, and once re-seeded the display honors the pacer's own grid
-    // (doc/plans/frame_pacing_adaptive_sync.md "Mechanism").
+    // the gross-error re-seed (C16) took those deltas for the display's
+    // period, and once re-seeded the display honored the pacer's own grid
+    // (doc/plans/frame_pacing_adaptive_sync.md "Mechanism"). Told the
+    // display kind, the pacer keeps the period, keeps its targets within the
+    // display's maximum interval of each other and drops the cadence tests'
+    // guard allowance (algorithm.md deviation 24).
+
+    // Controls: the load holds 120 Hz on the windowed compositor's fixed
+    // grid with the startup spike, and on the VRR display without one.
+    expect_c30_120_hz(run_c30(3001, 6.5, 30, 60, 20.0, C30_display::fixed_grid), "fixed grid, startup spike");
+    expect_c30_120_hz(run_c30(3001, 6.5, 0, 0, 0.0, C30_display::variable_refresh), "VRR without a disturbance");
+    // Control: the pacer not told the display is VRR drifts (the live failure).
+    {
+        const std::vector<Frame_record> drifted = run_c30(3001, 6.5, 30, 60, 20.0, C30_display::variable_refresh, C30_pacer_told::nothing);
+        ASSERT_GT(drifted.size(), 3001u);
+        double median = 0.0;
+        const std::size_t exact = c30_exact_deltas(drifted, median);
+        EXPECT_LT(exact, (drifted.size() - 3001) / 2) << "pacer not told: the grid drifts, median " << (median / ms) << " ms";
+        EXPECT_GT(median, 1.02 * c30_period) << "pacer not told: the grid drifts";
+    }
+    // The live load (7.2 ms) stays at N=2 on the fixed grid: the cadence
+    // tests add guard to the stage times (q95(g) + guard > T), correct there
+    // (a frame that misses its vsync by a little costs a whole refresh).
+    // Probes back to N=1 are allowed (C10 backoff); at least 90 % of the
+    // frames after frame 3000 stay at N=2.
+    {
+        const std::vector<Frame_record> fixed_live = run_c30(3001, 7.2, 0, 0, 0.0, C30_display::fixed_grid);
+        ASSERT_GT(fixed_live.size(), 3000u);
+        std::size_t at_two = 0;
+        for (std::size_t i = 3000; i < fixed_live.size(); ++i) {
+            if (fixed_live[i].vsyncs == 2) {
+                ++at_two;
+            }
+        }
+        EXPECT_GE(static_cast<double>(at_two), 0.9 * static_cast<double>(fixed_live.size() - 3000)) << "fixed grid, live load: " << at_two << " frames at N=2";
+    }
+
     expect_c30_120_hz(run_c30(3001, 6.5, 30, 60, 20.0, C30_display::variable_refresh), "VRR after a startup spike");
-    expect_c30_120_hz(run_c30(3001, 6.5, 30, 600, 16.0, C30_display::variable_refresh), "VRR after a heavy configuration");
-    // The live load: the N=2 trap. On VRR a late frame costs only its own
-    // lateness, so the fix is a VRR-scoped guard allowance.
-    expect_c30_120_hz(run_c30(3001, 7.2, 0, 0, 0.0, C30_display::variable_refresh), "VRR live load (N=2 trap)");
+    {
+        // A 1 s stall (one frame at k=500): the target spacing bound must not
+        // hold the cursor to the stale target before it (it caught up one
+        // slot per frame: 115 frames targeted before their release).
+        const std::vector<Frame_record> stall = run_c30(3001, 6.5, 500, 501, 1000.0, C30_display::variable_refresh);
+        std::size_t behind = 0;
+        for (std::size_t i = 501; i < stall.size(); ++i) {
+            if (stall[i].target_time < (stall[i].release - (0.1 * ms))) {
+                ++behind;
+            }
+        }
+        std::size_t off_period = 0;
+        for (std::size_t i = 511; i < stall.size(); ++i) {
+            if (std::abs((stall[i].display_time - stall[i - 1].display_time) - c30_period) >= (0.1 * ms)) {
+                ++off_period;
+            }
+        }
+        EXPECT_LE(behind, 3u) << "VRR after a 1 s stall: frames targeted before their release";
+        EXPECT_EQ(off_period, 0u) << "VRR after a 1 s stall: present deltas off T from frame 510";
+    }
+    {
+        const std::vector<Frame_record> heavy = run_c30(3001, 6.5, 30, 600, 16.0, C30_display::variable_refresh);
+        expect_c30_120_hz(heavy, "VRR after a heavy configuration");
+        // During it: 16 ms of work at the N>=2 clock (0.8) takes 20 ms and
+        // chooses N=3 (25 ms targets); a target more than the maximum
+        // refresh interval after the previous one would make the display
+        // repeat the previous image (without the target spacing bound: 271
+        // of 509 deltas at 29.17 ms). The frames fit the maximum interval,
+        // so none may repeat.
+        std::size_t repeats = 0;
+        for (std::size_t i = 91; i < 600; ++i) {
+            if ((heavy[i].display_time - heavy[i - 1].display_time) > ((1.0 / 48.0) + 1e-6)) {
+                ++repeats;
+            }
+        }
+        EXPECT_EQ(repeats, 0u) << "VRR heavy configuration: present deltas beyond the maximum refresh interval";
+    }
+    // The live load: the N=2 trap on the fixed-grid rules.
+    expect_c30_120_hz(run_c30(3001, 7.2, 0, 0, 0.0, C30_display::variable_refresh), "VRR live load (the N=2 trap)");
 }

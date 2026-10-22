@@ -8,10 +8,7 @@ listed in doc/frame_pacing/algorithm.md section 8) against a deterministic plant
 No real GPU, display, or wall clock is involved; runs are reproducible.
 
 Usage: python scripts/frame_pacing_sim.py
-Exit code 0 iff all claims pass. A claim introduced ahead of its fix is
-checked with check_expected_failure() and reported as XFAIL without failing
-the run; it fails the run once it passes (XPASS), until it is made a plain
-check.
+Exit code 0 iff all claims pass.
 """
 
 import heapq
@@ -108,6 +105,17 @@ class Tunables:
     grid_period_max_dev: float = 0.005  # tracked period clamp, fraction of the reference period
     grid_reseed_window: int = 16    # feedback-delta samples backing the gross-error re-seed
     grid_reseed_dev: float = 0.02   # re-seed when median delta-derived period deviates this much
+    # C30: the display the host presents to. 'fixed_grid' - a periodic vsync
+    # grid (a compositor, or a fixed-rate mode). 'variable_refresh' - an
+    # Adaptive-Sync display direct to display: it shows an image when its
+    # target arrives (or when it is ready, if later), no earlier than its
+    # minimum refresh interval (T) after the previous one, and repeats the
+    # previous image after max_refresh_interval. There is no grid to track:
+    # the period is T, presented deltas are no period evidence, a late frame
+    # costs its lateness instead of a refresh, and a cadence beyond
+    # max_refresh_interval would be broken up by the display's repeats.
+    display: str = 'fixed_grid'
+    max_refresh_interval: float = 0.0  # 'variable_refresh': the longest interval the display holds an image [s]
 
     @property
     def H(self):     return self.H_frac * self.T
@@ -148,6 +156,8 @@ class ScheduleDecision:
 class FramePacer:
     def __init__(self, tun: Tunables, nominal_phase: float = 0.0):
         self.tun = tun
+        # C30: a variable refresh display needs its maximum refresh interval.
+        assert tun.display != 'variable_refresh' or tun.max_refresh_interval > 0.0
         self.phase = nominal_phase        # estimated vsync grid phase
         self.period = tun.T               # estimated vsync grid period (tracked)
         self.period_ref = tun.T           # PLL clamp center (nominal until a re-seed replaces it)
@@ -249,11 +259,26 @@ class FramePacer:
             return self.forced[1]
         return self.m
 
+    def _variable_refresh(self):
+        return self.tun.display == 'variable_refresh'
+
+    def _cadence_guard(self):
+        # The jitter allowance of the cadence tests (W, the reactive
+        # attribution): on a fixed grid a frame that misses its vsync by a
+        # little costs a whole refresh; on a VRR display it costs only its
+        # own lateness (C30), so the allowance is 0 there.
+        return 0.0 if self._variable_refresh() else self.tun.guard
+
+    def _vrr_slots_max(self):
+        # C30: the most slots between two targets the display shows without
+        # a repeat of the previous image in between.
+        return max(1, math.floor(self.tun.max_refresh_interval / self.period + 1e-9))
+
     def _W(self):
-        return max(self._q(self.c_win, 0.0), self._q(self.g_win, 0.0)) + self.tun.guard
+        return max(self._q(self.c_win, 0.0), self._q(self.g_win, 0.0)) + self._cadence_guard()
 
     def _W_cadence(self):
-        return max(self._q(self.c_cad, 0.0), self._q(self.g_cad, 0.0)) + self.tun.guard
+        return max(self._q(self.c_cad, 0.0), self._q(self.g_cad, 0.0)) + self._cadence_guard()
 
     def set_min_vsyncs(self, n):
         self.N_min_app = max(1, n)
@@ -282,6 +307,11 @@ class FramePacer:
 
     def schedule(self, frame_id, now):
         t = self.tun
+        # C30: the slots between consecutive targets. On a VRR display a
+        # cadence beyond the display's maximum refresh interval is spaced at
+        # the bound (the display would repeat the previous image in between);
+        # the cadence N itself still drives the cadence tests.
+        spacing = min(self.N, self._vrr_slots_max()) if self._variable_refresh() else self.N
         if self.completed < t.K_seed:
             # Cold start seed phase: open loop, release immediately (FR7).
             j = max(self.last_slot + 1, math.ceil((now - self.phase) / self.period))
@@ -315,7 +345,7 @@ class FramePacer:
                             anchor = max(anchor + 1, min(self.frame_slot[i], anchor + self.frame_N.get(i, self.N)))
                     else:
                         anchor += self.frame_N.get(i, self.N)
-                anchor += self.N
+                anchor += spacing
                 # The last_slot+1 floor must NOT apply here (deviation 11):
                 # on a dropping presentation path (fifo_latest_ready) an app
                 # running faster than refresh consumes less than one display
@@ -341,8 +371,21 @@ class FramePacer:
             typical = self._L_typical() + self._margin()
             while self.V(j) - self.dpe - typical < now - t.guard:
                 j += 1
+            if self._variable_refresh() and self.last_slot >= 0:
+                # C30: a target more than the display's maximum refresh
+                # interval after the previous one makes the display repeat
+                # the previous image in between and hold this one to the
+                # repeat plus a minimum interval. A frame that cannot make
+                # the nearer slot displays when it is ready instead, which on
+                # a VRR display costs only its lateness. The bound counts
+                # from the previous target or from now, whichever is later:
+                # after a stall the stale target would pin every target
+                # behind the release (the cursor catching up one slot per
+                # frame).
+                base = max(self.last_slot, math.floor((now - self.phase) / self.period))
+                j = max(self.last_slot + 1, min(j, base + self._vrr_slots_max()))
             release = max(now, self.V(j) - self.dpe - budget)
-        self.j_next = j + self.N
+        self.j_next = j + spacing
         self.last_slot = j
         self.frame_N[frame_id] = self.N
         self.frame_prewarm[frame_id] = self.prewarm_left > 0
@@ -363,11 +406,11 @@ class FramePacer:
         return ScheduleDecision(
             frame_id=frame_id, release=release, target_slot=j,
             target_time=self.V(j), pred_display=self.V(j),
-            pred_dur=self.N * self.period, N=self.N,
+            pred_dur=spacing * self.period, N=self.N,
             # FR5 clamp: Q* images between completion and display, plus the
             # images a deadline offset of one or more cadence periods holds
             # in the queue by itself (C22).
-            wait_id=frame_id - 1 - t.Q_star - math.floor(self.dpe / (self.N * self.period)),
+            wait_id=frame_id - 1 - t.Q_star - math.floor(self.dpe / (spacing * self.period)),
             prewarm=(self.prewarm_fill if self.prewarm_left > 0 else 0.0),
             hold_until=hold_until)
 
@@ -462,7 +505,7 @@ class FramePacer:
             self.upshift_time = None
 
         if (self.consec_miss >= t.M
-                and self.streak_attr + t.guard > self.N * self.period):
+                and self.streak_attr + self._cadence_guard() > self.N * self.period):
             # Reactive downshift: sustained overload evidenced by the missed
             # frames' own stage times (attribution excludes timing-only misses
             # and cascades behind a single spike).
@@ -611,6 +654,11 @@ class FramePacer:
         # than the clamp band, re-seed the period and phase from the
         # measurement and re-center the clamp on the measured period.
         prev_display = self.fb_raw_prev  # newest earlier display (C22 cascade test)
+        if self._variable_refresh():
+            self.fb_raw_prev = t_present
+            self._on_variable_refresh_feedback(frame_id, t_present)
+            self._update_dpe(frame_id, t_present, prev_display)
+            return
         if self.fb_raw_prev is not None:
             dt = t_present - self.fb_raw_prev
             dn = round(dt / self.period)
@@ -656,6 +704,31 @@ class FramePacer:
             self.last_fb = (frame_id, achieved)
         self._update_dpe(frame_id, t_present, prev_display)
 
+    def _on_variable_refresh_feedback(self, frame_id, t_present):
+        # C30: a VRR display has no grid. The period stays T (the minimum
+        # refresh interval): presented deltas are the pacer's own targets or
+        # a late frame's ready time, never period evidence, so neither the
+        # gross-error re-seed nor the PLL period branch runs. The phase
+        # follows on-time displays only (innovation within guard).
+        t = self.tun
+        target = self.frame_target_time.get(frame_id)
+        nearest = round((t_present - self.phase) / self.period)
+        err = t_present - (self.phase + nearest * self.period)
+        if target is not None and t_present > target + t.guard:
+            # A late display re-anchors the slot cursor only: the first slot
+            # at or after it, the earliest the display can show the next image at the
+            # pacer's period. Re-basing the phase on it instead moves every
+            # in-flight target and costs more refreshes (measured in the
+            # plant: mean present delta 8.59 against 8.50 ms with a 20 ms
+            # frame every 50).
+            achieved = self.frame_slot[frame_id] + math.ceil((t_present - target) / self.period - 1e-9)
+        else:
+            if abs(err) < t.guard:
+                self.phase += t.grid_gain * err
+            achieved = round((t_present - self.phase) / self.period)
+        if self.last_fb is None or frame_id > self.last_fb[0]:
+            self.last_fb = (frame_id, achieved)
+
     def _update_dpe(self, frame_id, t_present, prev_display):
         # delta_pe estimator (C22, algorithm doc "Deadline offset estimation").
         # A frame displayed after its target although its slot was free (the
@@ -672,6 +745,15 @@ class FramePacer:
         half = 0.5 * self.period
         if prev_display is not None and prev_display > target - half:
             return                       # slot taken: a cascade, not a deadline outcome
+        if self._variable_refresh() and prev_display is not None and (
+                prev_display > target - self.period or
+                target - prev_display > t.max_refresh_interval):
+            # C30: the VRR display could not show the frame at its target -
+            # within a minimum interval of the previous image, or after a
+            # repeat of it (more than the maximum interval between them,
+            # which holds the frame to the repeat plus a minimum interval).
+            # A cascade, not a deadline outcome.
+            return
         self.dpe_samples.append((target - self.frame_gpu_end[frame_id], t_present > target + half))
         # Evidence: the largest margin of a late frame whose band (it and the
         # dpe_band - 1 samples of next smaller margin) holds dpe_min_late late
@@ -1233,25 +1315,11 @@ def stepped(base_fn, high_fn, first, last=None):
 # ---------------------------------------------------------------------------
 
 RESULTS = []
-EXPECTED_FAILURES = []
 
 
 def check(claim, cond, detail):
     RESULTS.append((claim, bool(cond), detail))
     print(f"  [{'PASS' if cond else 'FAIL'}] {claim}: {detail}")
-
-
-def check_expected_failure(claim, cond, detail, plan):
-    """A claim introduced before its fix: the check states the goal and is
-    known to fail on the current pacer (XFAIL). Passing (XPASS) fails the
-    run - the fix commit replaces this call with check(). `plan` names the
-    plan document that holds the fix."""
-    if cond:
-        RESULTS.append((claim, False, detail))
-        print(f"  [XPASS] {claim}: {detail} - passes now; make it a plain check ({plan})")
-    else:
-        EXPECTED_FAILURES.append((claim, detail, plan))
-        print(f"  [XFAIL] {claim}: {detail} (expected before the fix, {plan})")
 
 
 def steady_frames(recs, start, n_expect):
@@ -2398,21 +2466,28 @@ def c30_variable_refresh_display():
     # 8.333 / 20.833 ms): presentedTime deltas steady at 10.6-11.8 ms or
     # 16-20 ms while the GPU frame (7.2-7.6 ms) fits 8.33 ms; the pacer's
     # grid period followed them, and the outcome depended on the session's
-    # history. Windowed, the compositor's fixed 8.344 ms grid holds 120 Hz.
-    # A VRR display has no grid: a late frame displays when it is ready,
-    # and below the 48 Hz floor the display repeats the previous image
-    # 20.833 ms after it, holding the next one to 29.17 ms. The gross-error
-    # re-seed (C16) reads those deltas as the display's period; once
-    # re-seeded, the display honors every target on the pacer's own grid
-    # and nothing pulls the period back (doc/plans/frame_pacing_adaptive_sync.md
-    # "Mechanism"). Goal: N=1 at 8.33 ms present deltas.
-    plan = "doc/plans/frame_pacing_adaptive_sync.md"
+    # history. A VRR display has no grid: a late frame displays when it is
+    # ready, and below the 48 Hz floor the display repeats the previous
+    # image 20.833 ms after it, holding the next one to 29.17 ms. The
+    # gross-error re-seed (C16) read those deltas as the display's period;
+    # once re-seeded, the display honored every target on the pacer's own
+    # grid and nothing pulled the period back
+    # (doc/plans/frame_pacing_adaptive_sync.md "Mechanism"). With the host's
+    # display kind ('variable_refresh', max_refresh_interval) the period stays
+    # T, targets stay within the maximum interval of each other, and the
+    # cadence tests drop the guard allowance (a late frame costs its
+    # lateness, not a refresh).
     T = 1.0 / 120.0
     dpe_cal = T + 1.0 * MS   # the Dell compositor deadline (present calibration, windowed)
-    def arm(seed, work_ms, heavy, display_kind, dvfs_low=0.8, n=6000):
+    def arm(seed, work_ms, heavy, display_kind, pacer_display=None, dvfs_low=0.8, n=6000):
         tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_cal + 0.3 * MS,
                        dpe_max=dpe_cal + 0.3 * MS + 0.5 * T, present_queue='fifo',
                        prewarm_seconds=2.3 * MS)
+        # The pacer is told the display kind (pacer_display: the control
+        # that withholds it).
+        if (pacer_display or display_kind) == 'variable_refresh':
+            tun.display = 'variable_refresh'
+            tun.max_refresh_interval = 1.0 / 48.0
         rng = random.Random(seed)
         rw = random.Random(seed + 1)
         def work(k, n_used):
@@ -2429,14 +2504,18 @@ def c30_variable_refresh_display():
                       dvfs=True, dvfs_low=dvfs_low, **display)
         return run(sc)
     def summary(result):
+        # Goal: N=1 after frame 3000, >= 99 % of the present deltas within
+        # 0.1 ms of T, and the deadline offset estimate within guard of its
+        # initial value (pre-fix the VRR arms raised it from 9.6 to 13.2 ms).
         recs, pacer = result
         tail = recs[3000:]
         deltas = sorted(b.disp_time - a.disp_time for a, b in zip(tail, tail[1:]))
         exact = sum(1 for d in deltas if abs(d - T) < 0.1 * MS)
-        ok = ({r.N for r in tail} == {1}) and (exact >= 0.99 * len(deltas))
+        dpe_ok = pacer.dpe <= pacer.tun.dpe_hat + pacer.tun.guard
+        ok = ({r.N for r in tail} == {1}) and (exact >= 0.99 * len(deltas)) and dpe_ok
         detail = (f"N after frame 3000: {sorted({r.N for r in tail})}, present delta median "
                   f"{deltas[len(deltas) // 2] * 1000:.3f} ms, {exact}/{len(deltas)} within 0.1 ms of T, "
-                  f"grid period {pacer.period * 1000:.3f} ms")
+                  f"grid period {pacer.period * 1000:.3f} ms, deadline offset {pacer.dpe * 1000:.2f} ms")
         return ok, detail
     # Controls: the same load (6.5 ms) and startup spike on the windowed
     # compositor's fixed grid, and on the VRR display without a spike.
@@ -2444,20 +2523,49 @@ def c30_variable_refresh_display():
     check("C30 control: fixed grid, startup spike: 120 Hz", ok, detail)
     ok, detail = summary(arm(3001, 6.5, None, 'variable_refresh'))
     check("C30 control: VRR without a disturbance: 120 Hz", ok, detail)
-    # A startup spike (scene load): its late frames display when ready
-    # (20 ms deltas, dn = 2, samples 10 ms) and N=3 sits below the VRR
-    # floor (29.17 ms deltas, samples 9.72 ms) - the period re-seeds.
+    # Control: the VRR display with the pacer not told (the live failure) -
+    # the startup spike's late frames display when ready (20 ms deltas,
+    # 10 ms samples) and N=3 sits below the VRR floor (29.17 ms deltas,
+    # 9.72 ms samples): the period re-seeds and stays.
+    result = arm(3001, 6.5, (30, 60, 20.0), 'variable_refresh', pacer_display='fixed_grid')
+    ok, detail = summary(result)
+    check("C30 control: pacer not told the display is VRR: the grid drifts (the live failure)",
+          (not ok) and result[1].period > 1.02 * T, detail)
+    # A startup spike (scene load).
     ok, detail = summary(arm(3001, 6.5, (30, 60, 20.0), 'variable_refresh'))
-    check_expected_failure("C30 VRR after a startup spike: 120 Hz", ok, detail, plan)
+    check("C30 VRR after a startup spike: 120 Hz", ok, detail)
+    # A 1 s stall (one frame at k=500): the target spacing bound must not
+    # hold the cursor to the stale target before it (it caught up one slot
+    # per frame: 115 frames targeted before their release).
+    recs_stall, _ = arm(3001, 6.5, (500, 501, 1000.0), 'variable_refresh', n=1500)
+    behind = [r.k for r in recs_stall[501:] if r.target_time < r.release - 0.1 * MS]
+    stall_deltas = [b.disp_time - a.disp_time for a, b in zip(recs_stall[510:], recs_stall[511:])]
+    stall_exact = sum(1 for d in stall_deltas if abs(d - T) < 0.1 * MS)
+    check("C30 VRR after a 1 s stall: the cursor is back on time at once",
+          len(behind) <= 3 and stall_exact == len(stall_deltas),
+          f"{len(behind)} frames after the stall targeted before their release, "
+          f"{stall_exact}/{len(stall_deltas)} deltas within 0.1 ms of T from frame 510")
     # A heavy configuration first (live: loops with all 43 lights), then back.
-    ok, detail = summary(arm(3001, 6.5, (30, 600, 16.0), 'variable_refresh'))
-    check_expected_failure("C30 VRR after a heavy configuration: 120 Hz", ok, detail, plan)
-    # The live load (7.2 ms): the N=2 trap (50-60 fps). The cadence tests
-    # add guard to the stage times (q95(g) + guard > T), so the margin AIMD's
-    # near-misses count as pressure and a miss streak attributes to load. On
-    # the fixed grid that is correct and stays: a frame that misses its
-    # vsync by a little costs a whole refresh there. On the VRR display it
-    # costs only its own lateness - the fix is a VRR-scoped guard allowance.
+    result = arm(3001, 6.5, (30, 600, 16.0), 'variable_refresh')
+    ok, detail = summary(result)
+    check("C30 VRR after a heavy configuration: 120 Hz", ok, detail)
+    # During it: 16 ms of work at the N>=2 clock (0.8) takes 20 ms and
+    # chooses N=3 (25 ms targets); a target more than the maximum refresh
+    # interval after the previous one would make the display repeat the
+    # previous image (without the target spacing bound: 271 of 509 deltas
+    # at 29.17 ms). The frames fit the maximum interval, so none may repeat.
+    heavy = result[0][90:600]
+    deltas = [b.disp_time - a.disp_time for a, b in zip(heavy, heavy[1:])]
+    repeats = sum(1 for d in deltas if d > 1.0 / 48.0 + 1e-6)
+    check("C30 VRR heavy configuration: no repeats of the previous image", repeats == 0,
+          f"{repeats}/{len(deltas)} present deltas beyond the maximum refresh interval, "
+          f"mean delta {sum(deltas) / len(deltas) * 1000:.2f} ms, N {sorted({r.N for r in heavy})}")
+    # The live load (7.2 ms): the N=2 trap (50-60 fps). On a fixed grid the
+    # cadence tests add guard to the stage times (q95(g) + guard > T), so
+    # the margin AIMD's near-misses count as pressure and a miss streak
+    # attributes to load. That is correct there and stays: a frame that
+    # misses its vsync by a little costs a whole refresh. On the VRR display
+    # it costs only its own lateness and the allowance is 0.
     recs_fixed, _ = arm(3001, 7.2, None, 'fixed_grid')
     # Probes back to N=1 are allowed (C10 backoff); at least 90 % of the
     # frames after frame 3000 stay at N=2.
@@ -2466,7 +2574,8 @@ def c30_variable_refresh_display():
           at_two >= 0.9 * len(recs_fixed[3000:]),
           f"{at_two}/{len(recs_fixed[3000:])} frames at N=2 after frame 3000")
     ok, detail = summary(arm(3001, 7.2, None, 'variable_refresh'))
-    check_expected_failure("C30 VRR live load (N=2 trap): 120 Hz", ok, detail, plan)
+    check("C30 VRR live load (the N=2 trap): 120 Hz", ok, detail)
+
 
 def main():
     c1_recs, tun = c1_steady()
@@ -2502,9 +2611,6 @@ def main():
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")
-    if EXPECTED_FAILURES:
-        print(f"{len(EXPECTED_FAILURES)} expected failures (claims ahead of their fix):",
-              ", ".join(c for c, _, _ in EXPECTED_FAILURES))
     if failed:
         print("FAILED:", ", ".join(failed))
         return 1

@@ -1,4 +1,5 @@
 #include "erhe_frame_pacing/frame_pacer.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -115,6 +116,8 @@ auto Sample_window::quantile(const double p, const double fallback) const -> dou
 Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nominal_grid_phase)
     : m_tunables{tunables}
 {
+    // C30: a variable refresh display needs its maximum refresh interval.
+    ERHE_VERIFY((m_tunables.display != Present_display_kind::variable_refresh) || (m_tunables.max_refresh_interval > 0.0));
     const double t    = m_tunables.refresh_period;
     m_hysteresis      = m_tunables.hysteresis_frac * t;
     m_margin_min      = m_tunables.margin_min_frac * t;
@@ -213,7 +216,28 @@ auto Frame_pacer::margin_in_use() const -> double
 auto Frame_pacer::throughput_statistic() const -> double
 {
     const double p = m_tunables.quantile_p;
-    return std::max(m_cpu_window.quantile(p, 0.0), m_gpu_window.quantile(p, 0.0)) + m_tunables.guard;
+    return std::max(m_cpu_window.quantile(p, 0.0), m_gpu_window.quantile(p, 0.0)) + cadence_guard();
+}
+
+auto Frame_pacer::is_variable_refresh() const -> bool
+{
+    return m_tunables.display == Present_display_kind::variable_refresh;
+}
+
+auto Frame_pacer::cadence_guard() const -> double
+{
+    // The jitter allowance of the cadence tests (W, the reactive
+    // attribution): on a fixed grid a frame that misses its vsync by a
+    // little costs a whole refresh; on a VRR display it costs only its own
+    // lateness (C30), so the allowance is 0 there.
+    return is_variable_refresh() ? 0.0 : m_tunables.guard;
+}
+
+auto Frame_pacer::vrr_slots_max() const -> std::int64_t
+{
+    // C30: the most slots between two targets the display shows without a
+    // repeat of the previous image in between.
+    return std::max<std::int64_t>(1, static_cast<std::int64_t>(std::floor((m_tunables.max_refresh_interval / m_grid_period) + 1e-9)));
 }
 
 auto Frame_pacer::entry_for(const std::int64_t frame_id) -> Frame_entry&
@@ -281,6 +305,13 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
 {
     std::int64_t slot    = 0;
     double       release = now;
+    // C30: the slots between consecutive targets. On a VRR display a cadence
+    // beyond the display's maximum refresh interval is spaced at the bound
+    // (the display would repeat the previous image in between); the
+    // cadence N itself still drives the cadence tests.
+    const std::int64_t spacing = is_variable_refresh()
+        ? std::min<std::int64_t>(m_vsyncs, vrr_slots_max())
+        : static_cast<std::int64_t>(m_vsyncs);
 
     if (m_completed_frames < static_cast<std::int64_t>(m_tunables.cold_start_seed_frames)) {
         // Cold start seed phase: open loop, release immediately (FR7).
@@ -320,7 +351,7 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
                     anchor = std::max(anchor + 1, std::min(entry->target_slot, anchor + entry->vsyncs));
                 }
             }
-            anchor += m_vsyncs;
+            anchor += spacing;
             // The last_slot+1 floor must NOT apply here (deviation 11): on a
             // dropping presentation path (fifo_latest_ready) an app running
             // faster than refresh consumes less than one display slot per
@@ -346,10 +377,24 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
         while ((slot_time(slot) - m_deadline_offset - typical) < (now - m_tunables.guard)) {
             ++slot;
         }
+        if (is_variable_refresh() && (m_last_slot >= 0)) {
+            // C30: a target more than the display's maximum refresh interval
+            // after the previous one makes the display repeat the previous
+            // image in between and hold this one to the repeat plus a
+            // minimum interval. A frame that cannot make the nearer slot
+            // displays when it is ready instead, which on a VRR display
+            // costs only its lateness. The bound counts from the previous
+            // target or from now, whichever is later: after a stall the
+            // stale target would pin every target behind the release (the
+            // cursor catching up one slot per frame).
+            const std::int64_t now_slot = static_cast<std::int64_t>(std::floor((now - m_grid_phase) / m_grid_period));
+            const std::int64_t base     = std::max(m_last_slot, now_slot);
+            slot = std::max(m_last_slot + 1, std::min(slot, base + vrr_slots_max()));
+        }
         release = std::max(now, slot_time(slot) - m_deadline_offset - budget);
     }
 
-    m_next_slot     = slot + m_vsyncs;
+    m_next_slot     = slot + spacing;
     m_has_next_slot = true;
     m_last_slot     = slot;
 
@@ -365,14 +410,14 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
     decision.target_slot        = slot;
     decision.target_time        = slot_time(slot);
     decision.predicted_display  = slot_time(slot);
-    decision.predicted_duration = static_cast<double>(m_vsyncs) * m_grid_period;
+    decision.predicted_duration = static_cast<double>(spacing) * m_grid_period;
     decision.vsyncs_per_frame   = m_vsyncs;
     // FR5 clamp: at most Q* images between completion and display, plus
     // the images a deadline offset of one or more cadence periods holds in
     // the queue by itself (each must be complete delta_pe before its vsync,
     // so frame k is released before frame k - 1 - Q* can have displayed).
     const std::int64_t deadline_images = static_cast<std::int64_t>(
-        std::floor(m_deadline_offset / (static_cast<double>(m_vsyncs) * m_grid_period))
+        std::floor(m_deadline_offset / (static_cast<double>(spacing) * m_grid_period))
     );
     decision.wait_id            = frame_id - 1 - static_cast<std::int64_t>(m_tunables.target_queued_images) - deadline_images;
     // Present-request holdback deadline (C15 mitigation): hold the request
@@ -500,7 +545,7 @@ void Frame_pacer::on_gpu_done(
     if (m_cadence_gpu_window.count() >= m_tunables.cadence_min_samples) {
         const double p = m_tunables.quantile_p;
         const double w_here =
-            std::max(m_cadence_cpu_window.quantile(p, 0.0), m_cadence_gpu_window.quantile(p, 0.0)) + m_tunables.guard;
+            std::max(m_cadence_cpu_window.quantile(p, 0.0), m_cadence_gpu_window.quantile(p, 0.0)) + cadence_guard();
         required_vsyncs_here = std::clamp(
             static_cast<int>(std::ceil(w_here / m_grid_period)),
             m_min_vsyncs,
@@ -517,7 +562,7 @@ void Frame_pacer::on_gpu_done(
 
     if (
         (m_consecutive_misses >= m_tunables.reactive_miss_threshold) &&
-        ((m_streak_attribution + m_tunables.guard) > cadence_budget)
+        ((m_streak_attribution + cadence_guard()) > cadence_budget)
     ) {
         // Reactive downshift: sustained overload evidenced by the missed
         // frames' own stage times.
@@ -722,6 +767,13 @@ void Frame_pacer::on_present_feedback(const std::int64_t frame_id, const double 
     // latest_ready engine dropped give no feedback): the deadline estimator
     // needs to know whether this frame's target slot was still free.
     const double previous_display_time = m_has_raw_feedback ? m_raw_feedback_previous : 0.0;
+    if (is_variable_refresh()) {
+        m_has_raw_feedback      = true;
+        m_raw_feedback_previous = achieved_present_time;
+        on_variable_refresh_feedback(frame_id, achieved_present_time);
+        update_deadline_offset(frame_id, achieved_present_time, previous_display_time);
+        return;
+    }
     if (m_has_raw_feedback) {
         const double       dt = achieved_present_time - m_raw_feedback_previous;
         const std::int64_t dn = static_cast<std::int64_t>(std::round(dt / m_grid_period));
@@ -787,6 +839,41 @@ void Frame_pacer::on_present_feedback(const std::int64_t frame_id, const double 
     update_deadline_offset(frame_id, achieved_present_time, previous_display_time);
 }
 
+void Frame_pacer::on_variable_refresh_feedback(const std::int64_t frame_id, const double achieved_present_time)
+{
+    // C30: a VRR display has no grid. The period stays refresh_period (the
+    // minimum refresh interval): presented deltas are the pacer's own
+    // targets or a late frame's ready time, never period evidence, so
+    // neither the gross-error re-seed nor the PLL period branch runs. The
+    // phase follows on-time displays only (innovation within guard).
+    const Frame_entry* entry = find_entry(frame_id);
+    std::int64_t achieved_slot = 0;
+    if ((entry != nullptr) && (achieved_present_time > (entry->target_time + m_tunables.guard))) {
+        // A late display re-anchors the slot cursor only: the late frame's
+        // own slot S' is the first slot at or after its display, and the
+        // next image goes at S' + 1 (the display shows nothing sooner than a
+        // minimum interval after it). Re-basing the phase on the display
+        // instead moves every in-flight target and costs more refreshes
+        // (measured in the plant: mean present delta 8.59 against 8.50 ms
+        // with a 20 ms frame every 50).
+        achieved_slot = entry->target_slot + static_cast<std::int64_t>(
+            std::ceil(((achieved_present_time - entry->target_time) / m_grid_period) - 1e-9)
+        );
+    } else {
+        const double nearest_slot = std::round((achieved_present_time - m_grid_phase) / m_grid_period);
+        const double error        = achieved_present_time - (m_grid_phase + (nearest_slot * m_grid_period));
+        if (std::abs(error) < m_tunables.guard) {
+            m_grid_phase += m_tunables.grid_tracker_gain * error;
+        }
+        achieved_slot = static_cast<std::int64_t>(std::round((achieved_present_time - m_grid_phase) / m_grid_period));
+    }
+    if (!m_has_feedback || (frame_id > m_feedback_frame_id)) {
+        m_has_feedback      = true;
+        m_feedback_frame_id = frame_id;
+        m_feedback_slot     = achieved_slot;
+    }
+}
+
 void Frame_pacer::update_deadline_offset(const std::int64_t frame_id, const double achieved_present_time, const double previous_display_time)
 {
     // delta_pe estimator (algorithm.md section 3.3), for a presentation path
@@ -810,6 +897,21 @@ void Frame_pacer::update_deadline_offset(const std::int64_t frame_id, const doub
     const double half_period = 0.5 * m_grid_period;
     if (previous_display_time > (entry.target_time - half_period)) {
         return; // the target slot was taken: a cascade, not a deadline outcome
+    }
+    if (
+        is_variable_refresh() &&
+        (previous_display_time > 0.0) &&
+        (
+            (previous_display_time > (entry.target_time - m_grid_period)) ||
+            ((entry.target_time - previous_display_time) > m_tunables.max_refresh_interval)
+        )
+    ) {
+        // C30: the VRR display could not show the frame at its target -
+        // within a minimum interval of the previous image, or after a repeat
+        // of it (more than the maximum interval between them, which holds
+        // the frame to the repeat plus a minimum interval). A cascade, not a
+        // deadline outcome.
+        return;
     }
 
     Deadline_sample& sample = m_deadline_samples[m_deadline_sample_head];
