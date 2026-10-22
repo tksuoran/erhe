@@ -86,6 +86,12 @@ public:
     double                                       cpu_time_us      {0.0};
     double                                       total_cpu_time_us{0.0};
     std::size_t                                  execute_count    {0};
+    // The view's light cluster binning (doc/plans/clustered_lights.md C4):
+    // the stats known at this frame (for gpu binning those of the newest
+    // retired frame, stats.frame_index), and the binning dispatch's GPU time
+    // of the latest completed measurement (0 with cpu binning).
+    erhe::scene_renderer::Light_cluster_stats    light_cluster_stats{};
+    uint64_t                                     light_cluster_gpu_time_ns{0};
 };
 
 // Helper rendergraph node calling Shadow_renderer
@@ -302,9 +308,11 @@ private:
     // Render phase, after publish_light_copies(): the frame's light array
     // and light cluster lists of this view (Light_buffer::write_view(),
     // doc/plans/clustered_lights.md C3, C4), binned for the view's render
-    // camera (not the shadow fit override camera). Logs the cluster
-    // overflow count each time it changes.
-    void write_light_view(Shadow_frame_result& result);
+    // camera (not the shadow fit override camera) on the GPU or the CPU
+    // (Render_settings::light_cluster_binning). Logs the cluster overflow
+    // count each time it changes.
+    void write_light_view(Shadow_frame_result& result, erhe::graphics::Command_buffer& command_buffer);
+    erhe::scene_renderer::Light_cluster_view_state            m_light_cluster_view_state;
     std::size_t                                               m_light_cluster_overflow_count{0};
 
     std::shared_ptr<erhe::scene::Light>                       m_headlight;

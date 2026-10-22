@@ -9,6 +9,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -36,16 +37,6 @@ public:
         begin[3] = begin[2] + partition.per_type_shadow   [2];
         begin[4] = begin[3] + partition.per_type_nonshadow[2];
     }
-    [[nodiscard]] auto get_category(const std::size_t slot) const -> std::size_t
-    {
-        for (std::size_t category = 0; category < 4; ++category) {
-            if (slot < begin[category + 1]) {
-                return category;
-            }
-        }
-        ERHE_FATAL("slot %zu is not a binned light", slot);
-    }
-
     std::size_t begin[5];
 };
 
@@ -83,6 +74,94 @@ void write_uint(const std::span<std::byte> out, const std::size_t uint_index, co
     return glm::dvec3{glm::vec3{transforms.world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}};
 }
 
+// Open sides of a cluster's bounds (C2): the outer tiles reach past the
+// frustum's sides, slice 0 reaches toward and behind the camera and sideways.
+// light_cluster_bin.comp uses the same bits.
+constexpr uint32_t c_open_min_x = 1u << 0u;
+constexpr uint32_t c_open_max_x = 1u << 1u;
+constexpr uint32_t c_open_min_y = 1u << 2u;
+constexpr uint32_t c_open_max_y = 1u << 3u;
+constexpr uint32_t c_open_max_z = 1u << 4u;
+
+// write_inputs() header[2].y bits.
+constexpr uint32_t c_flag_x_min_at_left   = 1u << 0u;
+constexpr uint32_t c_flag_y_min_at_bottom = 1u << 1u;
+
+// The fp32 tests below are the ones res/shaders/light_cluster_bin.comp runs,
+// operation for operation (the shader declares every intermediate precise;
+// this file is compiled without floating-point contraction), so the CPU and
+// GPU lists agree bit for bit.
+
+[[nodiscard]] auto get_open_sides(
+    const uint32_t ix,
+    const uint32_t iy,
+    const uint32_t k,
+    const uint32_t tiles_x,
+    const uint32_t tiles_y,
+    const uint32_t flags
+) -> uint32_t
+{
+    const bool x_min_at_left   = ((flags & c_flag_x_min_at_left)   != 0u);
+    const bool y_min_at_bottom = ((flags & c_flag_y_min_at_bottom) != 0u);
+    uint32_t open = 0u;
+    if (ix == 0u)             { open |= x_min_at_left   ? c_open_min_x : c_open_max_x; }
+    if (ix == (tiles_x - 1u)) { open |= x_min_at_left   ? c_open_max_x : c_open_min_x; }
+    if (iy == 0u)             { open |= y_min_at_bottom ? c_open_min_y : c_open_max_y; }
+    if (iy == (tiles_y - 1u)) { open |= y_min_at_bottom ? c_open_max_y : c_open_min_y; }
+    if (k == 0u) {
+        // Slice 0 takes every fragment nearer than the near plane, behind
+        // the camera included (clip w <= 0 has no meaningful tile, so the
+        // lookup puts it in some slice 0 tile).
+        open |= c_open_min_x | c_open_max_x | c_open_min_y | c_open_max_y | c_open_max_z;
+    }
+    return open;
+}
+
+// The point of [lo, hi] nearest to c, with the sides whose bit (min_bit,
+// max_bit) is set in open unbounded.
+[[nodiscard]] auto nearest_on_axis(const float c, const float lo, const float hi, const uint32_t open, const uint32_t min_bit, const uint32_t max_bit) -> float
+{
+    if ((open & min_bit) != 0u) {
+        return ((open & max_bit) != 0u) ? c : std::min(c, hi);
+    }
+    if ((open & max_bit) != 0u) {
+        return std::max(c, lo);
+    }
+    return std::min(std::max(c, lo), hi);
+}
+
+// Whether a light sphere (centre, radius; radius < 0 unbounded) can reach
+// slice k spanning view depths [d0, d1].
+[[nodiscard]] auto sphere_reaches_slice(const glm::vec4& light, const uint32_t k, const float d0, const float d1) -> bool
+{
+    const float depth = -light.z;
+    const float radius = light.w;
+    const float depth_far  = depth + radius;
+    const float depth_near = depth - radius;
+    if ((k > 0u) && (depth_far < d0)) {
+        return false;
+    }
+    return !(depth_near > d1);
+}
+
+// Whether a light sphere touches a cluster's widened bounds.
+[[nodiscard]] auto sphere_reaches_bounds(const glm::vec4& light, const glm::vec3& lo, const glm::vec3& hi, const uint32_t open) -> bool
+{
+    const float nx = nearest_on_axis(light.x, lo.x, hi.x, open, c_open_min_x, c_open_max_x);
+    const float ny = nearest_on_axis(light.y, lo.y, hi.y, open, c_open_min_y, c_open_max_y);
+    const float nz = nearest_on_axis(light.z, lo.z, hi.z, open, 0u,           c_open_max_z); // the far side is never open
+    const float ox = light.x - nx;
+    const float oy = light.y - ny;
+    const float oz = light.z - nz;
+    const float xx = ox * ox;
+    const float yy = oy * oy;
+    const float zz = oz * oz;
+    const float xy = xx + yy;
+    const float distance_squared = xy + zz;
+    const float radius_squared   = light.w * light.w;
+    return distance_squared <= radius_squared;
+}
+
 } // anonymous namespace
 
 auto get_cluster_slot_end(const Light_layer_partition& partition) -> std::size_t
@@ -112,8 +191,8 @@ void write_single_cluster(const Light_layer_partition& partition, const std::spa
 }
 
 void Light_cluster_binner::build_grid(
-    const Light_projections&   light_projections,
-    const Light_cluster_view&  view,
+    const Light_projections&    light_projections,
+    const Light_cluster_view&   view,
     const Light_cluster_config& config
 )
 {
@@ -125,14 +204,13 @@ void Light_cluster_binner::build_grid(
     const glm::mat4  clip_from_node  = camera.projection().clip_from_node_transform(view.viewport, view.reverse_depth, view.depth_range, view.conventions).get_matrix();
     const glm::mat4& world_from_node = camera.world_from_node();
     const glm::vec3  view_origin     = get_view_origin(world_from_node);
-    m_node_from_world = glm::inverse(glm::dmat4{world_from_node});
+    const glm::dmat4 node_from_world = glm::inverse(glm::dmat4{world_from_node});
     // The bins compare node-space depths and positions with light ranges in
     // world units, and the fragment lookup takes view depth as a dot product
     // with the node z axis: both assume the camera's world_from_node carries
     // no scale (a rotation and a translation). A scaled camera node scales
     // every cluster bound against the ranges, so its lists are not
     // conservative; the grid does not support one.
-    m_view_origin     = glm::dvec3{view_origin};
 
     m_grid.clip_from_cluster_relative = glm::mat4{get_clip_from_view_relative(clip_from_node, world_from_node, view_origin)};
     m_grid.view_origin = glm::vec4{view_origin, 0.0f};
@@ -140,9 +218,9 @@ void Light_cluster_binner::build_grid(
     // z row of node_from_world's linear part dotted with p_c (the camera
     // position is the node origin); view depth is its negation.
     m_grid.view_axis = glm::vec4{
-        static_cast<float>(m_node_from_world[0][2]),
-        static_cast<float>(m_node_from_world[1][2]),
-        static_cast<float>(m_node_from_world[2][2]),
+        static_cast<float>(node_from_world[0][2]),
+        static_cast<float>(node_from_world[1][2]),
+        static_cast<float>(node_from_world[2][2]),
         0.0f
     };
 
@@ -151,59 +229,85 @@ void Light_cluster_binner::build_grid(
     const uint32_t tiles_x = static_cast<uint32_t>((width  + config.tile_size - 1) / config.tile_size);
     const uint32_t tiles_y = static_cast<uint32_t>((height + config.tile_size - 1) / config.tile_size);
 
-    // Slices: from the near plane to the farthest view depth a binned light
-    // reaches.
-    m_near = std::max(static_cast<double>(camera.projection().get_z_near()), 1.0e-3);
-    double far = m_near;
+    m_capacity = static_cast<std::size_t>(std::clamp(config.capacity, 1, 0xffff));
     const Category_bounds bounds{light_projections.light_partition};
+    ERHE_VERIFY(light_projections.light_projection_transforms.size() >= bounds.begin[4]);
+    for (std::size_t i = 0; i < 5; ++i) {
+        m_category_begin[i] = static_cast<uint32_t>(bounds.begin[i]);
+    }
+
+    // The light spheres in the cluster camera's node space (composed in
+    // double, rounded once), and the slices: from the near plane to the
+    // farthest view depth a binned light reaches.
+    const double near = std::max(static_cast<double>(camera.projection().get_z_near()), 1.0e-3);
+    double far = near;
+    m_lights.clear();
     for (std::size_t slot = bounds.begin[0]; slot < bounds.begin[4]; ++slot) {
         const erhe::scene::Light_projection_transforms& transforms = light_projections.light_projection_transforms[slot];
-        const double range = static_cast<double>(transforms.light->get_range());
+        const double     range  = static_cast<double>(transforms.light->get_range());
+        const glm::dvec3 centre = glm::dvec3{node_from_world * glm::dvec4{get_light_position(transforms), 1.0}};
         if (range <= 0.0) {
+            // No range: inverse square with no cutoff reaches every fragment.
+            m_lights.push_back(glm::vec4{glm::vec3{centre}, -1.0f});
             continue;
         }
-        const glm::dvec3 centre = glm::dvec3{m_node_from_world * glm::dvec4{get_light_position(transforms), 1.0}};
-        far = std::max(far, -centre.z + (range * (1.0 + c_bound_widening)));
+        const double radius = range * (1.0 + c_bound_widening);
+        m_lights.push_back(glm::vec4{glm::vec3{centre}, static_cast<float>(radius)});
+        far = std::max(far, -centre.z + radius);
     }
-    const uint32_t slice_count = (far > (m_near * (1.0 + c_bound_widening)))
+    const uint32_t slice_count = (far > (near * (1.0 + c_bound_widening)))
         ? static_cast<uint32_t>(config.slice_count)
         : 1u;
-    const double log_ratio = std::log2(far / m_near);
+    const double log_ratio = std::log2(far / near);
     const double scale     = (slice_count > 1) ? (static_cast<double>(slice_count) / log_ratio) : 0.0;
-    const double bias      = -std::log2(m_near) * scale;
-    m_grid.slices = glm::vec4{static_cast<float>(scale), static_cast<float>(bias), static_cast<float>(m_near), 0.0f};
+    const double bias      = -std::log2(near) * scale;
+    m_grid.slices = glm::vec4{static_cast<float>(scale), static_cast<float>(bias), static_cast<float>(near), 0.0f};
     m_grid.counts = glm::uvec4{tiles_x, tiles_y, slice_count, 0u};
 
-    // Slice k spans [m_slice_depths[k], m_slice_depths[k + 1]]; slice 0
-    // starts at the camera (it takes the fragments nearer than the near
-    // plane), the last one ends at far.
-    m_slice_depths.resize(slice_count + 1);
-    m_slice_depths[0] = 0.0;
-    for (uint32_t k = 1; k < slice_count; ++k) {
-        m_slice_depths[k] = m_near * std::exp2((static_cast<double>(k) / static_cast<double>(slice_count)) * log_ratio);
+    // Slice k spans view depths [d_k, d_k+1]; slice 0 starts at the camera
+    // (it takes the fragments nearer than the near plane), the last one ends
+    // at far. The bounds widening scales with the slice's far depth.
+    m_slices.resize(slice_count);
+    double d0 = 0.0;
+    for (uint32_t k = 0; k < slice_count; ++k) {
+        const double d1 = ((k + 1) < slice_count)
+            ? near * std::exp2((static_cast<double>(k + 1) / static_cast<double>(slice_count)) * log_ratio)
+            : std::max(far, near);
+        const double widening = c_bound_widening * std::max(d1, 1.0e-3);
+        m_slices[k] = glm::vec4{static_cast<float>(d0), static_cast<float>(d1), static_cast<float>(widening), 0.0f};
+        d0 = d1;
     }
-    m_slice_depths[slice_count] = std::max(far, m_near);
 
     // Tile corner rays: corner (ix, iy) is at normalized device position
     // (-1 + 2 ix / tiles_x, -1 + 2 iy / tiles_y), the tile lookup's
     // boundaries.
     const glm::dmat4 C{clip_from_node};
-    m_corner_origins   .resize((tiles_x + 1) * (tiles_y + 1));
-    m_corner_directions.resize((tiles_x + 1) * (tiles_y + 1));
+    m_corners.resize(2 * (tiles_x + 1) * (tiles_y + 1));
     for (uint32_t iy = 0; iy <= tiles_y; ++iy) {
         const double y = -1.0 + ((2.0 * static_cast<double>(iy)) / static_cast<double>(tiles_y));
         for (uint32_t ix = 0; ix <= tiles_x; ++ix) {
-            const double     x       = -1.0 + ((2.0 * static_cast<double>(ix)) / static_cast<double>(tiles_x));
-            const glm::dvec3 at_0    = unproject_at_z(C, x, y,  0.0);
-            const glm::dvec3 at_1    = unproject_at_z(C, x, y, -1.0);
-            const std::size_t corner = (iy * (tiles_x + 1)) + ix;
-            m_corner_origins   [corner] = at_0;
-            m_corner_directions[corner] = at_1 - at_0;
+            const double      x      = -1.0 + ((2.0 * static_cast<double>(ix)) / static_cast<double>(tiles_x));
+            const glm::dvec3  at_0   = unproject_at_z(C, x, y,  0.0);
+            const glm::dvec3  at_1   = unproject_at_z(C, x, y, -1.0);
+            const std::size_t corner = (static_cast<std::size_t>(iy) * (tiles_x + 1)) + ix;
+            m_corners[(2 * corner) + 0] = glm::vec4{glm::vec3{at_0}, 0.0f};
+            m_corners[(2 * corner) + 1] = glm::vec4{glm::vec3{at_1 - at_0}, 0.0f};
         }
     }
     // Which view-space side the first tile column / row faces, at depth 1.
-    m_x_min_at_left   = unproject_at_z(C, -1.0, 0.0, -1.0).x < unproject_at_z(C, 1.0, 0.0, -1.0).x;
-    m_y_min_at_bottom = unproject_at_z(C, 0.0, -1.0, -1.0).y < unproject_at_z(C, 0.0, 1.0, -1.0).y;
+    const bool x_min_at_left   = unproject_at_z(C, -1.0, 0.0, -1.0).x < unproject_at_z(C, 1.0, 0.0, -1.0).x;
+    const bool y_min_at_bottom = unproject_at_z(C, 0.0, -1.0, -1.0).y < unproject_at_z(C, 0.0, 1.0, -1.0).y;
+    m_open_flags = (x_min_at_left ? c_flag_x_min_at_left : 0u) | (y_min_at_bottom ? c_flag_y_min_at_bottom : 0u);
+}
+
+void Light_cluster_binner::prepare(
+    const Light_projections&    light_projections,
+    const Light_cluster_view&   view,
+    const Light_cluster_config& config
+)
+{
+    ERHE_PROFILE_FUNCTION();
+    build_grid(light_projections, view, config);
 }
 
 void Light_cluster_binner::bin(
@@ -212,82 +316,75 @@ void Light_cluster_binner::bin(
     const Light_cluster_config& config
 )
 {
-    ERHE_PROFILE_FUNCTION();
+    prepare(light_projections, view, config);
+    bin_prepared();
+}
 
-    build_grid(light_projections, view, config);
+void Light_cluster_binner::bin_prepared()
+{
+    ERHE_PROFILE_FUNCTION();
 
     const uint32_t    tiles_x       = m_grid.counts.x;
     const uint32_t    tiles_y       = m_grid.counts.y;
     const uint32_t    slice_count   = m_grid.counts.z;
     const std::size_t cluster_count = m_grid.get_cluster_count();
-    const Category_bounds bounds{light_projections.light_partition};
-    ERHE_VERIFY(light_projections.light_projection_transforms.size() >= bounds.begin[4]);
-    constexpr double infinity = std::numeric_limits<double>::infinity();
+    const uint32_t    first_slot    = m_category_begin[0];
+
+    // Every cluster's widened bounds, as light_cluster_bin.comp computes
+    // them per invocation.
+    m_cluster_min .resize(cluster_count);
+    m_cluster_max .resize(cluster_count);
+    m_cluster_open.resize(cluster_count);
+    for (uint32_t k = 0; k < slice_count; ++k) {
+        const glm::vec4& slice = m_slices[k];
+        for (uint32_t iy = 0; iy < tiles_y; ++iy) {
+            for (uint32_t ix = 0; ix < tiles_x; ++ix) {
+                const std::size_t corner_0 = (static_cast<std::size_t>(iy) * (tiles_x + 1)) + ix;
+                glm::vec3 lo{0.0f};
+                glm::vec3 hi{0.0f};
+                for (uint32_t c = 0; c < 4; ++c) {
+                    const std::size_t corner    = corner_0 + (((c & 2u) != 0u) ? (tiles_x + 1) : 0u) + (c & 1u);
+                    const glm::vec3   origin    {m_corners[(2 * corner) + 0]};
+                    const glm::vec3   direction {m_corners[(2 * corner) + 1]};
+                    const glm::vec3   step_0    = slice.x * direction;
+                    const glm::vec3   step_1    = slice.y * direction;
+                    const glm::vec3   p0        = origin + step_0;
+                    const glm::vec3   p1        = origin + step_1;
+                    if (c == 0) {
+                        lo = glm::min(p0, p1);
+                        hi = glm::max(p0, p1);
+                    } else {
+                        lo = glm::min(lo, glm::min(p0, p1));
+                        hi = glm::max(hi, glm::max(p0, p1));
+                    }
+                }
+                const std::size_t cluster = (((static_cast<std::size_t>(k) * tiles_y) + iy) * tiles_x) + ix;
+                m_cluster_min [cluster] = lo - glm::vec3{slice.z};
+                m_cluster_max [cluster] = hi + glm::vec3{slice.z};
+                m_cluster_open[cluster] = get_open_sides(ix, iy, k, tiles_x, tiles_y, m_open_flags);
+            }
+        }
+    }
 
     m_hits.clear();
-    for (std::size_t slot = bounds.begin[0]; slot < bounds.begin[4]; ++slot) {
-        const erhe::scene::Light_projection_transforms& transforms = light_projections.light_projection_transforms[slot];
-        const double range = static_cast<double>(transforms.light->get_range());
-        if (range <= 0.0) {
-            // No range: inverse square with no cutoff reaches every fragment.
+    for (std::size_t light_index = 0, light_end = m_lights.size(); light_index < light_end; ++light_index) {
+        const glm::vec4& light = m_lights[light_index];
+        const uint32_t   slot  = first_slot + static_cast<uint32_t>(light_index);
+        if (light.w < 0.0f) {
             for (std::size_t cluster = 0; cluster < cluster_count; ++cluster) {
-                m_hits.push_back(Hit{.cluster = static_cast<uint32_t>(cluster), .slot = static_cast<uint32_t>(slot)});
+                m_hits.push_back(Hit{.cluster = static_cast<uint32_t>(cluster), .slot = slot});
             }
             continue;
         }
-        const glm::dvec3 centre = glm::dvec3{m_node_from_world * glm::dvec4{get_light_position(transforms), 1.0}};
-        const double     radius = range * (1.0 + c_bound_widening);
-        const double     depth  = -centre.z;
         for (uint32_t k = 0; k < slice_count; ++k) {
-            const double d0 = m_slice_depths[k];
-            const double d1 = m_slice_depths[k + 1];
-            // Slice 0 is open toward the camera and behind it (it takes every
-            // fragment nearer than the near plane), so a light behind the
-            // camera can reach it.
-            if ((((k > 0) && ((depth + radius) < d0))) || ((depth - radius) > d1)) {
+            if (!sphere_reaches_slice(light, k, m_slices[k].x, m_slices[k].y)) {
                 continue;
             }
-            const double widening = c_bound_widening * std::max(d1, 1.0e-3);
-            for (uint32_t iy = 0; iy < tiles_y; ++iy) {
-                for (uint32_t ix = 0; ix < tiles_x; ++ix) {
-                    glm::dvec3 min_corner{ infinity};
-                    glm::dvec3 max_corner{-infinity};
-                    for (uint32_t cy = iy; cy <= (iy + 1); ++cy) {
-                        for (uint32_t cx = ix; cx <= (ix + 1); ++cx) {
-                            const std::size_t corner = (cy * (tiles_x + 1)) + cx;
-                            const glm::dvec3 p0 = m_corner_origins[corner] + (d0 * m_corner_directions[corner]);
-                            const glm::dvec3 p1 = m_corner_origins[corner] + (d1 * m_corner_directions[corner]);
-                            min_corner = glm::min(min_corner, glm::min(p0, p1));
-                            max_corner = glm::max(max_corner, glm::max(p0, p1));
-                        }
-                    }
-                    // Open boundary clusters (C2): the outer tiles reach past
-                    // the frustum's sides. Slice 0 reaches toward and behind
-                    // the camera and is open sideways in every tile: a
-                    // fragment behind the camera (clip w <= 0) has no
-                    // meaningful tile, and the lookup puts it in some slice 0
-                    // tile, which then has to list every light that reaches
-                    // the slice's depth range. Slice 0 is the thinnest slice,
-                    // so this costs little.
-                    if (ix == 0)             { if (m_x_min_at_left)   { min_corner.x = -infinity; } else { max_corner.x = infinity; } }
-                    if (ix == (tiles_x - 1)) { if (m_x_min_at_left)   { max_corner.x =  infinity; } else { min_corner.x = -infinity; } }
-                    if (iy == 0)             { if (m_y_min_at_bottom) { min_corner.y = -infinity; } else { max_corner.y = infinity; } }
-                    if (iy == (tiles_y - 1)) { if (m_y_min_at_bottom) { max_corner.y =  infinity; } else { min_corner.y = -infinity; } }
-                    if (k == 0) {
-                        min_corner.x = -infinity;
-                        min_corner.y = -infinity;
-                        max_corner.x =  infinity;
-                        max_corner.y =  infinity;
-                        max_corner.z =  infinity;
-                    }
-                    min_corner -= glm::dvec3{widening};
-                    max_corner += glm::dvec3{widening};
-                    const glm::dvec3 nearest  = glm::clamp(centre, min_corner, max_corner);
-                    const glm::dvec3 offset   = centre - nearest;
-                    if (glm::dot(offset, offset) <= (radius * radius)) {
-                        const std::size_t cluster = (((static_cast<std::size_t>(k) * tiles_y) + iy) * tiles_x) + ix;
-                        m_hits.push_back(Hit{.cluster = static_cast<uint32_t>(cluster), .slot = static_cast<uint32_t>(slot)});
-                    }
+            const std::size_t slice_begin = static_cast<std::size_t>(k) * tiles_y * tiles_x;
+            const std::size_t slice_end   = slice_begin + (static_cast<std::size_t>(tiles_y) * tiles_x);
+            for (std::size_t cluster = slice_begin; cluster < slice_end; ++cluster) {
+                if (sphere_reaches_bounds(light, m_cluster_min[cluster], m_cluster_max[cluster], m_cluster_open[cluster])) {
+                    m_hits.push_back(Hit{.cluster = static_cast<uint32_t>(cluster), .slot = slot});
                 }
             }
         }
@@ -295,7 +392,7 @@ void Light_cluster_binner::bin(
 
     // Counting sort by cluster. The hits are in ascending slot order (the
     // walk above), and the scatter keeps that order per cluster.
-    const std::size_t capacity = static_cast<std::size_t>(std::clamp(config.capacity, 1, 0xffff));
+    const std::size_t capacity = m_capacity;
     m_cluster_counts.assign(cluster_count, 0u);
     for (const Hit& hit : m_hits) {
         ++m_cluster_counts[hit.cluster];
@@ -324,8 +421,56 @@ void Light_cluster_binner::bin(
         }
         m_sorted_slots[m_cluster_offsets[hit.cluster] + cursor] = hit.slot;
         ++cursor;
-        ++m_category_counts[(hit.cluster * 4) + bounds.get_category(hit.slot)];
+        std::size_t category = 0;
+        while (hit.slot >= m_category_begin[category + 1]) {
+            ++category;
+        }
+        ++m_category_counts[(hit.cluster * 4) + category];
     }
+}
+
+auto Light_cluster_binner::get_input_byte_count() const -> std::size_t
+{
+    const std::size_t vec4_count = m_slices.size() + m_corners.size() + std::max(m_lights.size(), std::size_t{1});
+    return (c_light_cluster_bin_header_uvec4_count * sizeof(glm::uvec4)) + (vec4_count * sizeof(glm::vec4));
+}
+
+void Light_cluster_binner::write_inputs(const std::span<std::byte> out) const
+{
+    ERHE_VERIFY(out.size_bytes() >= get_input_byte_count());
+    const std::size_t cluster_count = m_grid.get_cluster_count();
+    const std::array<glm::uvec4, c_light_cluster_bin_header_uvec4_count> header{
+        glm::uvec4{m_grid.counts.x, m_grid.counts.y, m_grid.counts.z, static_cast<uint32_t>(m_capacity)},
+        glm::uvec4{m_category_begin[0], m_category_begin[1], m_category_begin[2], m_category_begin[3]},
+        glm::uvec4{
+            m_category_begin[4],
+            m_open_flags,
+            static_cast<uint32_t>(c_light_cluster_header_uint_count * cluster_count),
+            static_cast<uint32_t>(get_fixed_list_stride())
+        }
+    };
+    std::size_t offset = 0;
+    std::memcpy(out.data() + offset, header.data(), sizeof(header));
+    offset += sizeof(header);
+    std::memcpy(out.data() + offset, m_slices.data(), m_slices.size() * sizeof(glm::vec4));
+    offset += m_slices.size() * sizeof(glm::vec4);
+    std::memcpy(out.data() + offset, m_corners.data(), m_corners.size() * sizeof(glm::vec4));
+    offset += m_corners.size() * sizeof(glm::vec4);
+    if (m_lights.empty()) {
+        std::memset(out.data() + offset, 0, sizeof(glm::vec4));
+    } else {
+        std::memcpy(out.data() + offset, m_lights.data(), m_lights.size() * sizeof(glm::vec4));
+    }
+}
+
+auto Light_cluster_binner::get_fixed_list_stride() const -> std::size_t
+{
+    return (m_capacity + 1) / 2;
+}
+
+auto Light_cluster_binner::get_fixed_byte_count() const -> std::size_t
+{
+    return m_grid.get_cluster_count() * (c_light_cluster_header_uint_count + get_fixed_list_stride()) * sizeof(uint32_t);
 }
 
 auto Light_cluster_binner::get_byte_count() const -> std::size_t
@@ -368,6 +513,12 @@ auto Light_cluster_binner::get_cluster_slots(const std::size_t cluster) const ->
     const std::size_t begin = m_cluster_offsets[cluster];
     const std::size_t end   = m_cluster_offsets[cluster + 1];
     return std::span<const uint32_t>{m_sorted_slots.data() + begin, end - begin};
+}
+
+auto Light_cluster_binner::get_cluster_category_counts(const std::size_t cluster) const -> std::span<const uint32_t>
+{
+    ERHE_VERIFY(((cluster + 1) * 4) <= m_category_counts.size());
+    return std::span<const uint32_t>{m_category_counts.data() + (cluster * 4), 4};
 }
 
 } // namespace erhe::scene_renderer

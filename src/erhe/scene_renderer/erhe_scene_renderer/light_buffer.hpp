@@ -11,6 +11,7 @@
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/light_cluster.hpp"
+#include "erhe_scene_renderer/light_cluster_gpu_binner.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_scene_renderer/light_set.hpp"
 
@@ -292,11 +293,10 @@ public:
     bool                              written{false};
     Light_cluster_grid                grid{};
     erhe::graphics::Ring_buffer_range lights;
+    // CPU_write (CPU binning, compact lists; the single-cluster grid) or
+    // GPU_access (GPU binning, fixed-offset lists, written by the binning
+    // dispatch before the frame's first pass).
     erhe::graphics::Ring_buffer_range clusters;
-    // From the binning (C4): clusters whose list hit the capacity, and the
-    // longest list the grid asked for. 0 for the single-cluster grid.
-    std::size_t                       overflow_cluster_count{0};
-    std::size_t                       max_list_length       {0};
 };
 
 // Selects camera for which the shadow frustums are fitted
@@ -495,9 +495,15 @@ public:
     // light array and light cluster lists into light_projections.view_buffers
     // (doc/plans/clustered_lights.md C3, C4). The lights are binned into the
     // cluster grid of cluster_view when the partition's light shading is
-    // clustered and cluster_view names a camera; otherwise the view gets the
-    // single-cluster grid.
-    void write_view(Light_projections& light_projections, const Light_cluster_view& cluster_view);
+    // clustered and cluster_view names a camera, by the GPU binner when
+    // binning selects gpu and it can (Light_view_binning), else by the CPU
+    // binner; otherwise the view gets the single-cluster grid. The stats go
+    // to binning.view_state.
+    void write_view(
+        Light_projections&        light_projections,
+        const Light_cluster_view& cluster_view,
+        const Light_view_binning& binning = Light_view_binning{}
+    );
 
     // Writes the light header from the resolved slots in light_projections
     // (Light_projections::apply), and binds the view's light array and

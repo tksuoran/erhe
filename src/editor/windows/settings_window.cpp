@@ -24,6 +24,7 @@
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "config/generated/culling_classification.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
+#include "config/generated/light_cluster_binning.hpp"
 #include "config/generated/graph_node_previews_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
 #include "config/generated/hotbar_config_serialization.hpp"
@@ -637,6 +638,11 @@ void Settings_window::imgui()
             // lists' publish (doc/plans/culling.md phase 5).
             static_cast<void>(imgui_enum_combo("##", settings.culling_classification));
         }, "Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU (devices with native multi-draw indirect and first-instance record indexing; others use the CPU). The CPU result drives the draws in both modes.");
+        add_entry("Light Cluster Binning", [&settings](){
+            // The render settings snapshot carries the value to the shadow
+            // render nodes' light binning (doc/plans/clustered_lights.md C4).
+            static_cast<void>(imgui_enum_combo("##", settings.light_cluster_binning));
+        }, "Where the light cluster lists of clustered light shading are binned: a compute pass on the GPU, or the CPU on the render thread. Both produce the same lists.");
         add_config_section(settings.camera_controls);
         // Default Visual Style for new viewports - shown near the top since it
         // is one of the more commonly edited sections.

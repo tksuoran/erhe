@@ -345,6 +345,9 @@ private:
     auto action_set_shadow_maps_frozen    (const nlohmann::json& args) -> std::string;
     auto action_set_shadow_map_cache_enabled(const nlohmann::json& args) -> std::string;
     auto query_cull_classification_check  (const nlohmann::json& args) -> std::string;
+    auto action_set_light_cluster_binning (const nlohmann::json& args) -> std::string;
+    auto query_light_cluster_stats        (const nlohmann::json& args) -> std::string;
+    auto query_light_cluster_check        (const nlohmann::json& args) -> std::string;
     auto action_reset_composition_pass_stats(const nlohmann::json& args) -> std::string;
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;
@@ -813,6 +816,10 @@ private:
     const Queued_request*                            m_cull_check_request{nullptr};
     std::chrono::steady_clock::time_point            m_cull_check_enqueued_at{};
     std::string                                      m_cull_check_scene_name;
+    // get_light_cluster_check in flight (main thread only): the request
+    // whose re-runs poll the GPU binner's check.
+    const Queued_request*                            m_light_cluster_check_request{nullptr};
+    std::chrono::steady_clock::time_point            m_light_cluster_check_enqueued_at{};
     const Queued_request*                            m_irradiance_query_request{nullptr};
     std::chrono::steady_clock::time_point            m_irradiance_query_enqueued_at{};
     nlohmann::json                                   m_irradiance_query_header;

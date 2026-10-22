@@ -34,6 +34,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/light_buffer.hpp
     erhe_scene_renderer/light_cluster.cpp
     erhe_scene_renderer/light_cluster.hpp
+    erhe_scene_renderer/light_cluster_gpu_binner.cpp
+    erhe_scene_renderer/light_cluster_gpu_binner.hpp
     erhe_scene_renderer/light_set.cpp
     erhe_scene_renderer/light_set.hpp
     erhe_scene_renderer/material_buffer.cpp
@@ -133,6 +135,23 @@ source_group("codegen generated" FILES ${_scene_renderer_gen}/mesh_memory_config
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 erhe_target_settings(${_target} "erhe")
+
+# The light binner's fp32 tests are the ones res/shaders/light_cluster_bin.comp
+# evaluates with every intermediate precise (doc/plans/clustered_lights.md C4):
+# no multiply-add may be fused, so the CPU and GPU lists agree bit for bit.
+# Clang fuses by default (-ffp-contract=on, also clang-cl under /fp:precise)
+# and GCC too (-ffp-contract=fast); MSVC cl does not without /fp:contract.
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    if (CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+        set(_erhe_no_fp_contract "/clang:-ffp-contract=off")
+    else ()
+        set(_erhe_no_fp_contract "-ffp-contract=off")
+    endif ()
+    set_source_files_properties(
+        erhe_scene_renderer/light_cluster.cpp
+        PROPERTIES COMPILE_OPTIONS "${_erhe_no_fp_contract}"
+    )
+endif ()
 
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")
     add_subdirectory(test)

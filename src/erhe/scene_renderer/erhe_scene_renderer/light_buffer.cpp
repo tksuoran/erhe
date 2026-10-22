@@ -11,6 +11,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
@@ -756,20 +757,27 @@ void Light_buffer::write_light_array(
 
 void Light_view_buffers::reset()
 {
-    written                = false;
-    grid                   = Light_cluster_grid{};
-    lights                 = erhe::graphics::Ring_buffer_range{};
-    clusters               = erhe::graphics::Ring_buffer_range{};
-    overflow_cluster_count = 0;
-    max_list_length        = 0;
+    written  = false;
+    grid     = Light_cluster_grid{};
+    lights   = erhe::graphics::Ring_buffer_range{};
+    clusters = erhe::graphics::Ring_buffer_range{};
 }
 
-void Light_buffer::write_view(Light_projections& light_projections, const Light_cluster_view& cluster_view)
+void Light_buffer::write_view(
+    Light_projections&        light_projections,
+    const Light_cluster_view& cluster_view,
+    const Light_view_binning& binning
+)
 {
     ERHE_PROFILE_FUNCTION();
 
     Light_view_buffers& view = light_projections.view_buffers;
     ERHE_VERIFY(!view.written);
+
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    if (binning.view_state != nullptr) {
+        binning.view_state->retire(frame_index);
+    }
 
     const std::size_t light_count      = get_light_count(&light_projections);
     const std::size_t array_byte_count = get_light_array_bytes(light_count);
@@ -783,22 +791,53 @@ void Light_buffer::write_view(Light_projections& light_projections, const Light_
     // Every slot a cluster list names is in the light array written above.
     ERHE_VERIFY(get_cluster_slot_end(partition) <= light_count);
     if ((partition.light_shading == Light_shading::clustered) && (cluster_view.camera != nullptr)) {
+        const bool gpu =
+            (binning.binning        == Light_cluster_binning::gpu) &&
+            (binning.gpu_binner     != nullptr) &&
+            binning.gpu_binner->is_supported() &&
+            (binning.command_buffer != nullptr) &&
+            (binning.view_state     != nullptr);
+        if (gpu) {
+            // Fixed-offset lists into device memory; the dispatch fills them
+            // (C3, C4). The CPU binner only builds the grid and the inputs.
+            m_binner.prepare(light_projections, cluster_view, m_light_interface.cluster_config);
+            view.grid = m_binner.get_grid();
+            const std::size_t byte_count = m_binner.get_fixed_byte_count();
+            view.clusters = m_light_cluster_buffer.acquire(erhe::graphics::Ring_buffer_usage::GPU_access, byte_count);
+            view.clusters.bytes_gpu_used(byte_count);
+            view.clusters.close();
+            binning.gpu_binner->dispatch(
+                *binning.command_buffer,
+                m_binner,
+                *view.clusters.get_buffer()->get_buffer(),
+                view.clusters.get_byte_start_offset_in_buffer(),
+                byte_count,
+                *binning.view_state,
+                frame_index,
+                binning.label
+            );
+            view.clusters.release();
+            view.written = true;
+            return;
+        }
         m_binner.bin(light_projections, cluster_view, m_light_interface.cluster_config);
-        view.grid                   = m_binner.get_grid();
-        view.overflow_cluster_count = m_binner.get_overflow_cluster_count();
-        view.max_list_length        = m_binner.get_max_list_length();
+        view.grid = m_binner.get_grid();
         const std::size_t byte_count = m_binner.get_byte_count();
         view.clusters = m_light_cluster_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
         m_binner.write(view.clusters.get_span());
         view.clusters.bytes_written(byte_count);
+        if (binning.view_state != nullptr) {
+            binning.view_state->set_cpu_stats(frame_index, &m_binner);
+        }
     } else {
-        view.grid                   = Light_cluster_grid{};
-        view.overflow_cluster_count = 0;
-        view.max_list_length        = 0;
+        view.grid = Light_cluster_grid{};
         const std::size_t byte_count = get_single_cluster_byte_count(partition);
         view.clusters = m_light_cluster_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
         write_single_cluster(partition, view.clusters.get_span());
         view.clusters.bytes_written(byte_count);
+        if (binning.view_state != nullptr) {
+            binning.view_state->set_cpu_stats(frame_index, nullptr);
+        }
     }
     view.clusters.close();
     view.clusters.release();
