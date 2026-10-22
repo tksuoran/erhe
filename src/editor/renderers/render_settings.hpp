@@ -6,6 +6,7 @@
 #include "config/generated/debug_visualizations_style.hpp"
 #include "config/generated/graphics_preset_entry.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
+#include "config/generated/light_cluster_binning.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/ray_trace_config.hpp"
 #include "config/generated/render_style_appearance.hpp"
@@ -59,6 +60,7 @@ public:
     bool                       exclude_unlit_primitives       {true};
     Indirect_diffuse_source    indirect_diffuse_source        {Indirect_diffuse_source::ambient};
     Culling_classification     culling_classification         {Culling_classification::cpu};
+    Light_cluster_binning      light_cluster_binning          {Light_cluster_binning::gpu};
     bool                       lightmap_bicubic_sampling      {true}; // Lightmap_config::bicubic_sampling
 
     // App_settings::graphics

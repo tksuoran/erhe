@@ -75,6 +75,7 @@ erhe_target_sources_grouped(
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl
     res/shaders/erhe_light_cluster.glsl
+    res/shaders/light_cluster_bin.comp
     res/shaders/erhe_math.glsl
     res/shaders/erhe_ray_hit.glsl
     res/shaders/erhe_srgb.glsl
@@ -971,6 +972,8 @@ set(_config_sources
     ${_config_out}/indirect_diffuse_source.cpp
     ${_config_out}/culling_classification.hpp
     ${_config_out}/culling_classification.cpp
+    ${_config_out}/light_cluster_binning.hpp
+    ${_config_out}/light_cluster_binning.cpp
     ${_config_out}/radiance_cascades_merge_mode.hpp
     ${_config_out}/radiance_cascades_merge_mode.cpp
     ${_config_out}/radiance_cascades_direction_jitter.hpp

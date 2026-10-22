@@ -544,6 +544,8 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     // into it.)
     result.light_projections.clear();
     result.draw_statistics.clear();
+    result.light_cluster_stats       = erhe::scene_renderer::Light_cluster_stats{};
+    result.light_cluster_gpu_time_ns = 0;
     // Execute draws only what this hook fitted for this frame.
     m_frame_passes.frame_index = frame_index;
     m_frame_passes.parameters.reset();
@@ -634,7 +636,7 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
         result.light_projections.shadow_distance_texture = {};
         result.light_projections.shadow_cube_texture     = {};
         publish_light_copies(result, light_set, *camera);
-        write_light_view(result);
+        write_light_view(result, command_buffer);
         return;
     }
 
@@ -819,10 +821,10 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     m_context.shadow_renderer->fit(m_frame_passes.parameters.value(), m_cull_views);
     m_distance_fallback_light_ids = result.light_projections.distance_fallback_light_ids;
     publish_light_copies(result, light_set, *camera);
-    write_light_view(result);
+    write_light_view(result, command_buffer);
 }
 
-void Shadow_render_node::write_light_view(Shadow_frame_result& result)
+void Shadow_render_node::write_light_view(Shadow_frame_result& result, erhe::graphics::Command_buffer& command_buffer)
 {
     const erhe::scene_renderer::Light_cluster_view cluster_view{
         .camera        = m_scene_view.get_render_camera(),
@@ -831,26 +833,47 @@ void Shadow_render_node::write_light_view(Shadow_frame_result& result)
         .depth_range   = m_scene_view.get_depth_range(),
         .conventions   = m_scene_view.get_conventions()
     };
-    m_context.shadow_renderer->get_light_buffer().write_view(result.light_projections, cluster_view);
+    // The editor's codegen enum mirrors the library enum value for value.
+    static_assert(static_cast<unsigned int>(Light_cluster_binning::cpu) == static_cast<unsigned int>(erhe::scene_renderer::Light_cluster_binning::cpu));
+    static_assert(static_cast<unsigned int>(Light_cluster_binning::gpu) == static_cast<unsigned int>(erhe::scene_renderer::Light_cluster_binning::gpu));
+    static_assert(static_cast<unsigned int>(erhe::scene_renderer::Light_cluster_binning::count) == 2u);
+    const unsigned int binning_value = static_cast<unsigned int>(m_context.render_settings->light_cluster_binning);
+    ERHE_VERIFY(binning_value < static_cast<unsigned int>(erhe::scene_renderer::Light_cluster_binning::count));
+    m_context.shadow_renderer->get_light_buffer().write_view(
+        result.light_projections,
+        cluster_view,
+        erhe::scene_renderer::Light_view_binning{
+            .binning        = static_cast<erhe::scene_renderer::Light_cluster_binning>(binning_value),
+            .gpu_binner     = m_context.light_cluster_gpu_binner,
+            .command_buffer = &command_buffer,
+            .view_state     = &m_light_cluster_view_state,
+            .label          = m_scene_view.get_settings_key()
+        }
+    );
+    const erhe::scene_renderer::Light_cluster_stats& stats = m_light_cluster_view_state.get_stats();
+    result.light_cluster_stats       = stats;
+    result.light_cluster_gpu_time_ns = m_light_cluster_view_state.get_gpu_time_ns();
 
-    // A comparison with the previous frame's count, for one log line per
+    // A comparison with the previously logged count, for one log line per
     // change. Binning reruns every frame (its inputs move with every camera
     // and light change), and the overflow count is a result of that binning
-    // with no change event of its own; the comparison only gates the log,
-    // the count itself is derived by this frame's binning.
-    const erhe::scene_renderer::Light_view_buffers& view_buffers = result.light_projections.view_buffers;
-    if (view_buffers.overflow_cluster_count != m_light_cluster_overflow_count) {
-        m_light_cluster_overflow_count = view_buffers.overflow_cluster_count;
+    // (for gpu binning read back with the retired frame) with no change
+    // event of its own; the comparison only gates the log, the count itself
+    // is derived by the binning.
+    if (stats.valid && (stats.overflow_cluster_count != m_light_cluster_overflow_count)) {
+        m_light_cluster_overflow_count = stats.overflow_cluster_count;
         if (m_light_cluster_overflow_count > 0) {
             log_render->warn(
-                "Light clusters: {} clusters of {} exceed the capacity ({} lights); the longest list asks for {} lights",
+                "Light clusters ({}, {} binning): {} clusters of {} exceed the capacity ({} lights); the longest list asks for {} lights",
+                m_scene_view.get_settings_key(),
+                erhe::scene_renderer::c_str(stats.binning),
                 m_light_cluster_overflow_count,
-                view_buffers.grid.get_cluster_count(),
-                m_context.program_interface->light_interface.cluster_config.capacity,
-                view_buffers.max_list_length
+                stats.cluster_count,
+                stats.capacity,
+                stats.max_list_length
             );
         } else {
-            log_render->info("Light clusters: no cluster exceeds the capacity");
+            log_render->info("Light clusters ({}): no cluster exceeds the capacity", m_scene_view.get_settings_key());
         }
     }
 }

@@ -23,9 +23,12 @@
 #include "renderers/composition_pass.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "config/generated/culling_classification.hpp"
+#include "config/generated/light_cluster_binning.hpp"
+#include "config/generated/light_shading_mode.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
+#include "erhe_scene_renderer/light_cluster_gpu_binner.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
@@ -547,6 +550,159 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"command_gpu_time_ns",     check.command_gpu_time_ns},
         {"command_views",           std::move(command_views)},
         {"command_mismatches",      std::move(command_mismatches)}
+    }).dump();
+}
+
+auto Mcp_server::action_set_light_cluster_binning(const json& args) -> std::string
+{
+    // The MCP counterpart of the Settings window's Light Cluster Binning
+    // combo (doc/plans/clustered_lights.md C4): edits the live editor
+    // setting, which the next frame's render settings snapshot carries to the
+    // shadow render nodes' binning.
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("set_light_cluster_binning: editor settings not available");
+    }
+    if (args.contains("mode")) {
+        const json& value = args["mode"];
+        Light_cluster_binning parsed{};
+        if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+            return make_error_content("set_light_cluster_binning: 'mode' must be \"cpu\" or \"gpu\"");
+        }
+        m_context.editor_settings->light_cluster_binning = parsed;
+    }
+    const erhe::scene_renderer::Light_cluster_gpu_binner* binner = m_context.light_cluster_gpu_binner;
+    return make_json_content(json{
+        {"mode",          std::string{to_string(m_context.editor_settings->light_cluster_binning)}},
+        {"gpu_supported", (binner != nullptr) && binner->is_supported()}
+    }).dump();
+}
+
+auto Mcp_server::query_light_cluster_stats(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    // Per shadow render node (one per scene view), the light cluster binning
+    // stats its frame result of the last rendered frame carries
+    // (doc/plans/clustered_lights.md C4, V6): for gpu binning those of the
+    // newest retired frame at that point.
+    if (m_context.app_rendering == nullptr) {
+        return make_error_content("get_light_cluster_stats: App_rendering not available");
+    }
+    json views = json::array();
+    for (const std::shared_ptr<Shadow_render_node>& node : m_context.app_rendering->get_all_shadow_nodes()) {
+        if (!node) {
+            continue;
+        }
+        const Shadow_frame_result* const result = node->get_frame_result(m_context.last_rendered_frame_index);
+        json view_json{
+            {"scene_view",          node->get_scene_view().get_settings_key()},
+            {"rendered_last_frame", result != nullptr}
+        };
+        if ((result != nullptr) && result->light_cluster_stats.valid) {
+            const erhe::scene_renderer::Light_cluster_stats& stats = result->light_cluster_stats;
+            view_json["frame_index"]            = stats.frame_index;
+            view_json["binning"]                = erhe::scene_renderer::c_str(stats.binning);
+            view_json["tiles_x"]                = stats.counts.x;
+            view_json["tiles_y"]                = stats.counts.y;
+            view_json["slices"]                 = stats.counts.z;
+            view_json["cluster_count"]          = stats.cluster_count;
+            view_json["binned_light_count"]     = stats.binned_light_count;
+            view_json["capacity"]               = stats.capacity;
+            view_json["overflow_cluster_count"] = stats.overflow_cluster_count;
+            view_json["max_list_length"]        = stats.max_list_length;
+            view_json["gpu_time_ns"]            = result->light_cluster_gpu_time_ns;
+        }
+        views.push_back(view_json);
+    }
+    const erhe::scene_renderer::Light_cluster_gpu_binner* binner = m_context.light_cluster_gpu_binner;
+    json reply{
+        {"gpu_supported", (binner != nullptr) && binner->is_supported()},
+        {"views",         std::move(views)}
+    };
+    if (m_context.editor_settings != nullptr) {
+        reply["binning_setting"] = std::string{to_string(m_context.editor_settings->light_cluster_binning)};
+    }
+    if (m_context.app_settings != nullptr) {
+        reply["light_shading"] = std::string{to_string(m_context.app_settings->graphics.current_graphics_preset.light_shading)};
+    }
+    return make_json_content(reply).dump();
+}
+
+auto Mcp_server::query_light_cluster_check(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    // Compares the GPU light cluster lists of one frame with the CPU
+    // binner's lists of the same inputs (doc/plans/clustered_lights.md V2):
+    // the first pass requests the check and defers; the re-runs poll until
+    // the checked frame retired.
+    erhe::scene_renderer::Light_cluster_gpu_binner* binner = m_context.light_cluster_gpu_binner;
+    const bool continuation =
+        (m_light_cluster_check_request != nullptr) &&
+        (m_light_cluster_check_request == m_current_request) &&
+        (m_light_cluster_check_enqueued_at == m_current_request->enqueued_at);
+    if (!continuation) {
+        // The request waits for the next frame a view is binned on the GPU;
+        // it fails only when no frame can be.
+        if ((binner == nullptr) || !binner->is_supported()) {
+            return make_error_content("get_light_cluster_check: the device has no GPU light binning (light_cluster_bin.comp did not build)");
+        }
+        if ((m_context.editor_settings == nullptr) || (m_context.editor_settings->light_cluster_binning != Light_cluster_binning::gpu)) {
+            return make_error_content("get_light_cluster_check: the light cluster binning setting is cpu (set_light_cluster_binning mode=gpu first)");
+        }
+        if ((m_context.app_settings == nullptr) || (m_context.app_settings->graphics.current_graphics_preset.light_shading != Light_shading_mode::clustered)) {
+            return make_error_content("get_light_cluster_check: the graphics preset's light_shading is loops (set_graphics_preset light_shading=clustered first)");
+        }
+        binner->request_check();
+        m_light_cluster_check_request     = m_current_request;
+        m_light_cluster_check_enqueued_at = m_current_request->enqueued_at;
+        m_defer_current_request           = true;
+        return {};
+    }
+
+    erhe::scene_renderer::Light_cluster_check check{};
+    const erhe::scene_renderer::Light_cluster_check_state state = binner->poll_check(check);
+    if (state == erhe::scene_renderer::Light_cluster_check_state::pending) {
+        m_defer_current_request = true;
+        return {};
+    }
+    m_light_cluster_check_request = nullptr;
+    if (state != erhe::scene_renderer::Light_cluster_check_state::complete) {
+        return make_error_content("get_light_cluster_check: the check was dropped");
+    }
+
+    json views = json::array();
+    for (const erhe::scene_renderer::Light_cluster_view_check& view : check.views) {
+        json mismatches = json::array();
+        for (const erhe::scene_renderer::Light_cluster_mismatch& mismatch : view.mismatches) {
+            mismatches.push_back(json{
+                {"cluster",          mismatch.cluster},
+                {"cpu_counts",       mismatch.cpu_counts},
+                {"gpu_counts",       mismatch.gpu_counts},
+                {"cpu_slots",        mismatch.cpu_slots},
+                {"gpu_slots",        mismatch.gpu_slots},
+                {"gpu_offset_wrong", mismatch.gpu_offset_wrong}
+            });
+        }
+        views.push_back(json{
+            {"scene_view",          view.label},
+            {"tiles_x",             view.counts.x},
+            {"tiles_y",             view.counts.y},
+            {"slices",              view.counts.z},
+            {"cluster_count",       view.cluster_count},
+            {"binned_light_count",  view.binned_light_count},
+            {"listed_count",        view.listed_count},
+            {"mismatch_count",      view.mismatch_count},
+            {"cpu_overflow_count",  view.cpu_overflow_count},
+            {"gpu_overflow_count",  view.gpu_overflow_count},
+            {"cpu_max_list_length", view.cpu_max_list_length},
+            {"gpu_max_list_length", view.gpu_max_list_length},
+            {"mismatches",          std::move(mismatches)}
+        });
+    }
+    return make_json_content(json{
+        {"frame_index",    check.frame_index},
+        {"view_count",     check.views.size()},
+        {"mismatch_count", check.mismatch_count},
+        {"views",          std::move(views)}
     }).dump();
 }
 

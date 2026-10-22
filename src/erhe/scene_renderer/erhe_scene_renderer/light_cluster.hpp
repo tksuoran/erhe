@@ -89,29 +89,71 @@ public:
 [[nodiscard]] auto get_single_cluster_byte_count(const Light_layer_partition& partition) -> std::size_t;
 void write_single_cluster(const Light_layer_partition& partition, std::span<std::byte> out);
 
-// The CPU light binner (C4): tests every spot and point light's range sphere
+// The GPU binner's input block (Light_cluster_gpu_binner, res/shaders/
+// light_cluster_bin.comp): c_light_cluster_bin_header_uvec4_count uvec4
+// headers, then vec4 data. Light_cluster_binner::write_inputs() documents the
+// contents.
+inline constexpr std::size_t c_light_cluster_bin_header_uvec4_count = 3;
+
+// The light binner (C4): tests every spot and point light's range sphere
 // against every cluster's view-space bounds and lists the passing slots per
-// cluster in ascending order. Keeps its buffers across calls (cleared,
-// capacity kept), so a steady-state frame allocates nothing.
+// cluster in ascending order. prepare() builds the grid and the fp32 inputs
+// of the tests (cluster bounds from tile corner rays and slice depths, light
+// spheres in the cluster camera's node space); bin_prepared() runs the tests
+// on the CPU. The GPU binner (Light_cluster_gpu_binner) runs the same tests,
+// in the same fp32 operations, on the inputs write_inputs() writes, so both
+// produce the same lists bit for bit. Keeps its buffers across calls
+// (cleared, capacity kept), so a steady-state frame allocates nothing.
 class Light_cluster_binner
 {
 public:
-    // Builds the grid for view and bins the lights of light_projections
-    // (Light_projections::apply() of this frame) into it.
+    // Builds the grid for view and the fp32 test inputs from the lights of
+    // light_projections (Light_projections::apply() of this frame).
+    void prepare(const Light_projections& light_projections, const Light_cluster_view& view, const Light_cluster_config& config);
+    // Runs the tests of the last prepare() on the CPU.
+    void bin_prepared();
+    // prepare() and bin_prepared().
     void bin(const Light_projections& light_projections, const Light_cluster_view& view, const Light_cluster_config& config);
 
     [[nodiscard]] auto get_grid                  () const -> const Light_cluster_grid& { return m_grid; }
+    // Most lights one cluster lists (the configured capacity, clamped to
+    // [1, 65535]), from the last prepare().
+    [[nodiscard]] auto get_capacity              () const -> std::size_t               { return m_capacity; }
+    // Spot and point slots the last prepare() bins.
+    [[nodiscard]] auto get_binned_light_count    () const -> std::size_t               { return m_lights.size(); }
+
+    // The GPU binner's input block for the last prepare():
+    //   header[0] = tiles x, tiles y, slices, capacity
+    //   header[1] = the first slot of spot shadow-mapped, spot unshadowed,
+    //               point shadow-mapped, point unshadowed lights
+    //   header[2] = one past the last binned slot, open-side flags (bit 0:
+    //               the first tile column faces node-space -x, bit 1: the
+    //               first tile row faces -y), the first list uint, list
+    //               stride in uints (get_fixed_list_stride())
+    //   data[slice]                            = slice near depth, far depth, widening, 0
+    //   data[slices + 2 corner + 0 / 1]        = corner ray origin (view depth 0) / direction (per unit depth)
+    //   data[slices + 2 corners + binned slot] = light centre (node space), radius (< 0: unbounded)
+    [[nodiscard]] auto get_input_byte_count      () const -> std::size_t;
+    void write_inputs(std::span<std::byte> out) const;
+    // The fixed-offset layout the GPU binner writes (C3): cluster headers,
+    // then get_fixed_list_stride() uints per cluster at cluster order.
+    [[nodiscard]] auto get_fixed_list_stride     () const -> std::size_t;
+    [[nodiscard]] auto get_fixed_byte_count      () const -> std::size_t;
+
+    // From the last bin_prepared():
     [[nodiscard]] auto get_byte_count            () const -> std::size_t;
-    // Clusters whose list was cut at the capacity by the last bin().
+    // Clusters whose list was cut at the capacity.
     [[nodiscard]] auto get_overflow_cluster_count() const -> std::size_t               { return m_overflow_cluster_count; }
-    // Longest list the last bin() asked for, before the capacity cut.
+    // Longest list the grid asked for, before the capacity cut.
     [[nodiscard]] auto get_max_list_length       () const -> std::size_t               { return m_max_list_length; }
-    // The cluster data of the last bin() (light cluster block layout).
+    // The cluster data, compact lists (light cluster block layout).
     void write(std::span<std::byte> out) const;
 
-    // The lights of one cluster, from the last bin(): ascending slots.
-    // Tests and diagnostics.
-    [[nodiscard]] auto get_cluster_slots(std::size_t cluster) const -> std::span<const uint32_t>;
+    // The lights of one cluster: ascending slots. Tests and diagnostics.
+    [[nodiscard]] auto get_cluster_slots          (std::size_t cluster) const -> std::span<const uint32_t>;
+    // Spot shadow-mapped, spot unshadowed, point shadow-mapped, point
+    // unshadowed counts of one cluster's list.
+    [[nodiscard]] auto get_cluster_category_counts(std::size_t cluster) const -> std::span<const uint32_t>;
 
 private:
     class Hit
@@ -123,22 +165,25 @@ private:
 
     void build_grid(const Light_projections& light_projections, const Light_cluster_view& view, const Light_cluster_config& config);
 
-    Light_cluster_grid     m_grid{};
-    glm::dmat4             m_node_from_world{1.0};
-    glm::dvec3             m_view_origin{0.0};
-    double                 m_near{1.0};
-    std::vector<double>    m_slice_depths;     // slice_count + 1 boundaries
-    std::vector<glm::dvec3> m_corner_origins;  // (tiles_x + 1) * (tiles_y + 1): corner ray at view depth 0
-    std::vector<glm::dvec3> m_corner_directions; // corner ray per unit of view depth
-    bool                   m_x_min_at_left{true};
-    bool                   m_y_min_at_bottom{true};
-    std::vector<Hit>       m_hits;
-    std::vector<uint32_t>  m_cluster_counts;   // per cluster, before the capacity cut
-    std::vector<uint32_t>  m_cluster_offsets;  // per cluster + 1, into m_sorted_slots
-    std::vector<uint32_t>  m_sorted_slots;     // after the capacity cut
-    std::vector<uint32_t>  m_category_counts;  // 4 per cluster, after the capacity cut
-    std::size_t            m_overflow_cluster_count{0};
-    std::size_t            m_max_list_length{0};
+    Light_cluster_grid      m_grid{};
+    std::size_t             m_capacity{1};
+    uint32_t                m_category_begin[5]{};
+    uint32_t                m_open_flags{0};
+    // The fp32 test inputs (write_inputs()).
+    std::vector<glm::vec4>  m_slices;          // per slice: near depth, far depth, widening, 0
+    std::vector<glm::vec4>  m_corners;         // per corner: origin, direction
+    std::vector<glm::vec4>  m_lights;          // per binned slot: centre, radius
+    // Per cluster: the widened bounds and the open-side flags.
+    std::vector<glm::vec3>  m_cluster_min;
+    std::vector<glm::vec3>  m_cluster_max;
+    std::vector<uint32_t>   m_cluster_open;
+    std::vector<Hit>        m_hits;
+    std::vector<uint32_t>   m_cluster_counts;   // per cluster, before the capacity cut
+    std::vector<uint32_t>   m_cluster_offsets;  // per cluster + 1, into m_sorted_slots
+    std::vector<uint32_t>   m_sorted_slots;     // after the capacity cut
+    std::vector<uint32_t>   m_category_counts;  // 4 per cluster, after the capacity cut
+    std::size_t             m_overflow_cluster_count{0};
+    std::size_t             m_max_list_length{0};
 };
 
 } // namespace erhe::scene_renderer

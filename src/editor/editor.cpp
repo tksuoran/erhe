@@ -218,6 +218,7 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/cull_frame_registry.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
+#include "erhe_scene_renderer/light_cluster_gpu_binner.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
@@ -2867,6 +2868,17 @@ public:
             }
             ERHE_INIT_STEP_END
 
+            // The GPU light binning of clustered views (doc/plans/
+            // clustered_lights.md C4), shared by every Shadow_render_node.
+            ERHE_INIT_STEP_BEGIN("Light_cluster_gpu_binner")
+            {
+                m_light_cluster_gpu_binner = std::make_unique<erhe::scene_renderer::Light_cluster_gpu_binner>(
+                    *m_graphics_device.get(),
+                    std::filesystem::path{"res"} / std::filesystem::path{"shaders"}
+                );
+            }
+            ERHE_INIT_STEP_END
+
             ERHE_INIT_STEP_BEGIN("Texel_renderer")
             {
                 m_texel_renderer = std::make_unique<erhe::scene_renderer::Texel_renderer>(
@@ -4022,6 +4034,7 @@ public:
         m_app_context.forward_renderer         = m_forward_renderer      .get();
         m_app_context.shadow_renderer          = m_shadow_renderer       .get();
         m_app_context.gpu_cull_classifier      = m_gpu_cull_classifier   .get();
+        m_app_context.light_cluster_gpu_binner = m_light_cluster_gpu_binner.get();
         m_app_context.cull_frame_registry      = m_cull_frame_registry   .get();
         m_app_context.texel_renderer           = m_texel_renderer        .get();
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
@@ -5263,6 +5276,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Draw_list_renderer>         m_draw_list_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >           m_shadow_renderer;
     std::unique_ptr<erhe::scene_renderer::Gpu_cull_classifier>        m_gpu_cull_classifier;
+    std::unique_ptr<erhe::scene_renderer::Light_cluster_gpu_binner>   m_light_cluster_gpu_binner;
     std::unique_ptr<erhe::scene_renderer::Cull_frame_registry>        m_cull_frame_registry;
     std::unique_ptr<erhe::scene_renderer::Texel_renderer >            m_texel_renderer;
     std::unique_ptr<erhe::scene_renderer::Mesh_memory     >           m_mesh_memory;

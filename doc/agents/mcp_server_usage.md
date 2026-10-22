@@ -210,6 +210,53 @@ chunk_begin, cpu_count, gpu_count, command_mismatch_count}]` (the first few).
 recorded) and `gpu_bounds_write_count` (the list bounds ranges written to
 the GPU bounds buffers; unchanged on an idle scene).
 
+### get_light_cluster_check
+
+The gate of the GPU light binning
+([clustered_lights.md](../plans/clustered_lights.md) V2,
+[scene_renderer.md](../erhe/scene_renderer.md) `Light_cluster_gpu_binner`):
+the render phase of the first frame binned on the GPU whose render phase
+starts after the request (at least one frame after the one being prepared)
+bins every GPU-binned view's inputs on the CPU as well and copies the view's
+GPU lists and overflow counters to host memory; once the frame retired,
+every cluster's category counts and slots are compared. A new request
+replaces an earlier one. Errors when the binning pipeline did not build,
+the `light_cluster_binning` setting is cpu (`set_light_cluster_binning`
+`mode=gpu` first) or the graphics preset's `light_shading` is `loops`
+(`set_graphics_preset` `light_shading=clustered` first); waits a few frames.
+
+```bash
+py -3 scripts/mcp_call.py get_light_cluster_check
+```
+
+Returns: `{frame_index, view_count, mismatch_count, views: [{scene_view,
+tiles_x, tiles_y, slices, cluster_count, binned_light_count, listed_count,
+mismatch_count, cpu_overflow_count, gpu_overflow_count,
+cpu_max_list_length, gpu_max_list_length, mismatches: [{cluster,
+cpu_counts, gpu_counts, cpu_slots, gpu_slots, gpu_offset_wrong}]}]}`.
+The gate is `mismatch_count` 0 with `view_count` >= 1 and `listed_count` > 0
+in the views that matter (a scene without spot or point lights checks empty
+lists). `mismatch_count` counts the clusters whose GPU list
+differs, plus each view whose GPU overflow count or longest list differs
+from the CPU's. `listed_count` is the list entries over all clusters.
+
+### get_light_cluster_stats
+
+The light cluster binning of each scene view (one shadow render node per
+view; [clustered_lights.md](../plans/clustered_lights.md) C4, V6) as the
+frame results of the last rendered frame carry it.
+
+Returns: `{binning_setting, gpu_supported, light_shading, views:
+[{scene_view, rendered_last_frame, frame_index, binning, tiles_x, tiles_y,
+slices, cluster_count, binned_light_count, capacity, overflow_cluster_count,
+max_list_length, gpu_time_ns}]}`. With `gpu` binning `frame_index` names
+the retired frame whose counters were read back (frames in flight earlier);
+with `cpu` it is the frame itself. A view in loop mode or without a camera
+reports the single-cluster grid (1 x 1 x 1). `overflow_cluster_count` > 0
+also logs a warning in `editor.render`, once each time the count changes.
+`gpu_time_ns` is the view's binning dispatch (`Gpu_timer` `Light cluster
+binning <view>`, latest completed measurement).
+
 ### get_scene_materials
 
 List all materials in a scene's content library.
@@ -550,6 +597,19 @@ frame's render
 settings snapshot carries it to the draw lists' publish; a device without the
 GPU path's capability keeps the CPU path (`get_draw_lists`
 `cull_classification` reports what was published). Omit `mode` to query.
+
+Returns: `{mode, gpu_supported}`.
+
+### set_light_cluster_binning
+
+Set `Editor_settings_config::light_cluster_binning` (the live setting, as the
+Settings window's Light Cluster Binning combo edits it; saved only by a
+Settings window save): `mode` `gpu` (default; a compute pass per clustered
+view, `res/shaders/light_cluster_bin.comp`) or `cpu` (the CPU binner on the
+render thread) ([clustered_lights.md](../plans/clustered_lights.md) C4). The
+next frame's render settings snapshot carries it to the shadow render
+nodes; a device whose binning pipeline did not build bins on the CPU. Both
+modes produce the same lists. Omit `mode` to query.
 
 Returns: `{mode, gpu_supported}`.
 

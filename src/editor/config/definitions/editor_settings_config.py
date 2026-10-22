@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=6,
+    version=7,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -149,6 +149,20 @@ struct("Editor_settings_config",
             default="Culling_classification::cpu",
             short_desc="Culling Classification",
             long_desc="Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU that generates the shadow passes' draw commands too (devices with native multi-draw indirect with a GPU-read draw count and first-instance record indexing; others use the CPU). The color passes are drawn from the CPU result in both modes.",
+            visible=True,
+            developer=True
+        ),
+        # Where the light cluster lists of clustered views are binned
+        # (doc/plans/clustered_lights.md C4). gpu runs the binning as a
+        # compute pass; cpu bins on the render thread (the reference
+        # get_light_cluster_check compares the GPU lists with).
+        field(
+            "light_cluster_binning",
+            EnumRef("Light_cluster_binning"),
+            added_in=7,
+            default="Light_cluster_binning::gpu",
+            short_desc="Light Cluster Binning",
+            long_desc="Where the light cluster lists of clustered light shading are binned: a compute pass on the GPU, or the CPU on the render thread. Both produce the same lists.",
             visible=True,
             developer=True
         ),

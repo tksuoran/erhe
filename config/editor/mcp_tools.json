@@ -8927,6 +8927,35 @@
     "name": "get_cull_classification_check"
   },
   {
+    "description": "Set the editor's light cluster binning setting (Editor_settings_config::light_cluster_binning, doc/plans/clustered_lights.md C4; the live setting, saved only by a Settings window save): gpu (default) bins each clustered view's spot and point lights into its cluster grid with a compute pass (res/shaders/light_cluster_bin.comp) writing fixed-offset lists into device memory; cpu bins them with the CPU binner (Light_cluster_binner) on the render thread. Both produce the same lists (get_light_cluster_check). Takes effect at the next frame's render settings snapshot; a device whose binning pipeline did not build bins on the CPU (gpu_supported false). Only views whose graphics preset light_shading is clustered are binned. Omit mode to read the setting.",
+    "inputSchema": {
+      "properties": {
+        "mode": {
+          "description": "\"cpu\" or \"gpu\"",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_light_cluster_binning"
+  },
+  {
+    "description": "Light cluster binning stats per scene view (one shadow render node per view; doc/plans/clustered_lights.md C4, V6), from the frame results of the last rendered frame: binning (cpu or gpu), frame_index (the frame the values were binned in: for gpu binning the newest retired frame, whose overflow counters were read back), tiles_x / tiles_y / slices and cluster_count of the view's grid (1 x 1 x 1 for the single-cluster grid of loop mode or an unbinned view), binned_light_count (spot and point lights), capacity (lights per cluster list), overflow_cluster_count (clusters whose list was cut at the capacity; nonzero logs a warning once each time it changes) and max_list_length (the longest list the grid asked for, before the cut), and gpu_time_ns (the view's binning dispatch, latest completed measurement). Also binning_setting, gpu_supported and the preset's light_shading. A view that did not render in the last frame reports rendered_last_frame false and no stats.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_light_cluster_stats"
+  },
+  {
+    "description": "Diagnostic gate of the GPU light binning (doc/plans/clustered_lights.md V2): requests that the render phase of the first frame binned on the GPU after the request (at least one frame after the one being prepared) bin every GPU-binned view's inputs on the CPU as well (Light_cluster_binner, the reference) and copy the view's GPU lists and overflow counters to host memory (a new request replaces an earlier one); once the frame retired, every cluster's category counts and slots are compared. Returns frame_index, view_count, mismatch_count (clusters whose GPU list differs, plus views whose GPU overflow count or longest list differs from the CPU's; 0 is the gate) and per view scene_view, tiles_x / tiles_y / slices, cluster_count, binned_light_count, listed_count (list entries over all clusters), mismatch_count, cpu_/gpu_overflow_count, cpu_/gpu_max_list_length and the first mismatches {cluster, cpu_counts, gpu_counts, cpu_slots, gpu_slots, gpu_offset_wrong}. Errors when the binning pipeline did not build, the light_cluster_binning setting is cpu (set_light_cluster_binning mode=gpu first) or the graphics preset's light_shading is loops. The call waits a few frames.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_light_cluster_check"
+  },
+  {
     "name": "set_shadow_map_cache_enabled",
     "description": "Switch the shadow map cache for the rest of this editor run (session-only, never persisted; default enabled): enabled, each shadow pass (2D layer or cube face) is redrawn only when its light, its matrices, the shadow configuration or the scene's published draw lists changed since it was drawn, and scenes with skinned objects draw every pass. get_scene_lights reports the kept passes per light (shadow_cached, shadow_cube_cached_faces). Use to compare images and costs against every pass drawn.",
     "inputSchema": {

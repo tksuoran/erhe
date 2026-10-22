@@ -130,8 +130,8 @@ Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
   spot unshadowed counts, the point shadow-mapped | point unshadowed counts
   (16 bits each) - followed by the lists, two 16-bit light slots per uint,
   ascending, at most `cluster_capacity` (default 64) per cluster. The CPU
-  binner packs the lists compactly; the GPU binner (phase 3) writes them at
-  fixed per-cluster offsets, which the same header format expresses.
+  binner packs the lists compactly; the GPU binner writes them at fixed
+  per-cluster offsets, which the same header format expresses.
 - Directional lights and lights with `range <= 0` are not binned: they
   reach every fragment. They keep their slots and are looped by the header's
   runtime counts (directional) or listed in every cluster (unbounded spot /
@@ -142,7 +142,7 @@ Bistro's viewport at 1334x1120 is 21 x 18 x 24 = 9072 clusters.
   shaded slot. Its cost is the loop path's; it keeps the bind group complete
   and the shader single-path.
 
-Storage per view and frame in flight at fixed offsets (phase 3): 12 header
+Storage per view and frame in flight at fixed offsets (GPU binning): 12 header
 bytes per cluster plus `cluster_capacity / 2` uints - 9072 x (12 + 128)
 bytes = 1.3 MB for Bistro's viewport. The cluster buffer is a `GPU_access` ring range acquired
 by the render phase per view and frame, the precedent being the GPU cull
@@ -154,35 +154,52 @@ Binning runs on the render thread in the rendergraph pre-execute callback,
 once per binned view per frame, after the shadow fit (the light set and
 projections of the frame are final) and before the first color pass:
 
-- One compute invocation per cluster. The invocation computes its
-  cluster's view-space AABB from the grid parameters and the cluster
-  camera's projection (open on the boundary sides, C2), then
-  walks the spot and point slots in ascending order, tests each light's
-  range sphere (centre in view space, radius `range` times `1 + 2^-10` so a
-  fragment that rounds across a cluster boundary still finds every light
-  that reaches it) against the AABB, and appends passing slots. The walk in
-  slot order makes each list ascending and the category counts a running
-  tally, with no atomics and no sort.
+- The CPU builds the grid and the fp32 inputs of the tests
+  (`Light_cluster_binner::prepare()`): per slice its near and far depth and
+  the bounds widening, per tile corner the view-space ray, and per binned
+  slot the light's range sphere in the cluster camera's node space (centre,
+  radius `range` times `1 + 2^-10` so a fragment that rounds across a
+  cluster boundary still finds every light that reaches it). It computes
+  the light centres anyway, to find `z_cluster_far` before the grid exists,
+  so they are uploaded with the other inputs (16 bytes per light) instead of
+  being recomputed by a separate dispatch: one dispatch per view.
+- One compute invocation per cluster (`res/shaders/light_cluster_bin.comp`).
+  The invocation computes its cluster's view-space bounds from the corner
+  rays and the slice depths (open on the boundary sides, C2), then walks
+  the spot and point slots in ascending order, tests each light's sphere
+  against the bounds, and appends passing slots. The walk in slot order
+  makes each list ascending and the category counts a running tally, with
+  no atomics and no sort. The tests are the CPU binner's fp32 operations
+  with every intermediate `precise`, so both binners produce the same lists
+  bit for bit (up to denormal flushing, which matters only for radii around
+  1e-19). The fixed-offset lists cost `cluster_count * (3 + ceil(capacity /
+  2)) * 4` bytes per view per frame in flight: 1.3 MB for Bistro's
+  viewport, about 7 MB at 3840 x 2160.
 - Each cluster holds at most `cluster_capacity` lights (a renderer config
   value, default 64); the limit is fixed (user decision). A cluster whose
-  list would exceed it stores the first `cluster_capacity` slots and sets
-  its overflow bit, and the binning pass counts overflowing clusters into a
-  per-frame counter read back with the retired frame. A frame whose count is
-  nonzero logs a warning naming the view, the count and the largest list
-  length the grid asked for, once each time the count changes; MCP
-  `get_light_cluster_stats` reports the same values (V6).
+  list would exceed it stores the first `cluster_capacity` slots and counts
+  as overflowing: the binning pass accumulates the overflowing clusters and
+  the longest list asked for into a per-frame counter (shared-memory
+  reduction per workgroup, one atomic per workgroup), copied into the
+  view's persistent host-readable readback buffer (one slot per frame in
+  flight, outside the ring buffers) and read when the view's next frame in
+  that slot starts binning (the frame has retired then). A count that changes logs a warning naming the
+  view, the count and the largest list length the grid asked for (once each
+  time the count changes); MCP `get_light_cluster_stats` reports the same
+  values (V6). The cluster header carries no per-cluster overflow mark: the
+  fragment lookup reads the cut list as any other.
 - Spot cone tests against the AABB are a later refinement (phase 5); the
   sphere bound is exact for the range window and conservative for the cone.
-- The view-space light centres are computed once per view, in a first
-  small dispatch (one invocation per light) into a scratch range, so the
-  per-cluster loop reads a 16-byte `vec4` per light instead of a 416-byte
-  `Light`.
 
 A `Light_cluster_binner` CPU implementation of the same tests over the same
 inputs is the reference: the unit tests run it, and MCP
 `get_light_cluster_check` compares the GPU lists of the retired frame with
 it cluster by cluster (V2), as `get_cull_classification_check` does for the
-GPU cull masks.
+GPU cull masks. The editor setting `light_cluster_binning` (`gpu` default,
+`cpu`; Settings window, MCP `set_light_cluster_binning`) selects the binner;
+in `gpu` mode the CPU binner's tests run only for the check. Every backend
+with compute storage blocks bins on the GPU; a device whose binning
+pipeline does not build bins on the CPU.
 
 Binning reruns every frame; the inputs change with every camera move and
 every light edit, and the dispatch is a few microseconds against a pass of
@@ -262,7 +279,7 @@ unshadowed counts stay with it.
 ## Phases
 
 Each phase is one commit (or a short series), reviewed, with its gates.
-Phases 1 (the light array as a storage block, C3) and 2 are built.
+Phases 1 (the light array as a storage block, C3), 2 and 3 are built.
 
 Phase 2 (CPU binning and the clustered shader path) is built; the code is
 described in [../erhe/scene_renderer.md](../erhe/scene_renderer.md)
@@ -301,6 +318,44 @@ the phase log's R):
 with all 43, 3.66 ms clustered (43); render thread CPU 1.44-1.60 / 1.83 /
 2.50 ms - the CPU binner costs about 1 ms per frame (it tests every tile of
 every slice a light's depth range spans), which phase 3 removes.
+
+Phase 3 (GPU binning) is built; the code is described in
+[../erhe/scene_renderer.md](../erhe/scene_renderer.md)
+(`Light_cluster_gpu_binner`, `Light_cluster_view_state`,
+`Light_cluster_binner`). Gates passed on the phase 3 change (headless Metal
+and windowed MoltenVK, Debug, M4 Pro):
+
+- V2: `get_light_cluster_check` 0 mismatches on the default scene with 16
+  added spot and point lights (Camera A at four poses) and on Bistro (two
+  camera poses, both viewports of the session), on Metal and MoltenVK; the
+  overflow counters agree with the CPU's at the default capacity and at
+  capacity 8.
+- V1 with GPU lists: the default scene (gate cameras a and b) and Bistro
+  with all 43 lights within the loop limits byte-identical between loop
+  and clustered mode, on Metal and MoltenVK (validation clean). With the
+  16 added lights camera a is identical and camera b differs in 196 pixels
+  (Open, item 3); with the specular anti-aliasing call removed both are
+  identical, and the CPU and GPU binners' images are identical in every
+  case.
+- V6: Bistro has no overflowing cluster at capacity 64 (longest list 22 at
+  the bench camera, 27 at a street camera); at capacity 8 the stats report
+  1180 / 7016 overflowing clusters and the warning logs once per change.
+- `erhe_scene_renderer_gpu_tests` `Light_cluster_gpu_test`: GPU lists equal
+  the CPU lists cluster by cluster on a synthetic set of 80 spot and point
+  lights, at the default capacity and at capacity 3 (overflow counters
+  equal), and with point lights whose radius sweeps +/- 4 ulps around the
+  distance to a cluster's bounds (the sweeps straddle the decision; a
+  shader that fuses the distance's multiply-adds fails this test).
+
+Phase 3 measurements (the V5 recipe of phase 2, Release headless Metal, one
+session): `Viewport window` GPU 3.48-3.49 ms loops Medium, 4.23 ms loops with
+all 43, 3.64 ms clustered (43) with either binner; the binning dispatch
+13-14 us for Bistro's viewport (9072 clusters, 43 lights) and 3 us for an
+empty 378-cluster view; render thread CPU (R) 1.57-1.76 ms loops Medium,
+1.97 ms loops with all 43, 1.93-1.95 ms clustered with GPU binning, 2.17 ms
+clustered with CPU binning (whose tests now run over precomputed cluster
+bounds; phase 2's binner measured 2.50 ms). R in clustered mode with GPU
+binning equals loop mode with the same 43 lights shaded.
 
 2. **CPU binning and the clustered shader path.** Grid (C2), cluster block
    (C3), the light array written once per view per frame and bound by that
@@ -366,3 +421,23 @@ every slice a light's depth range spans), which phase 3 removes.
    not pursued), so on Bistro the far shadow-mapped point lights keep their
    cube faces while near lights shade unshadowed; clustered mode makes the
    near lights lit, not shadowed.
+3. `anisotropic_brdf()` (`erhe_bxdf.glsl`) takes `fwidth()` of the per-light
+   half vector for its specular anti-aliasing, inside the light loops. In
+   clustered mode a 2x2 quad whose pixels read different cluster lists (or
+   the same lists at different offsets) evaluates that derivative across
+   different loop iterations, so the result differs from the loop path at
+   some pixels of anisotropic materials (the default scene with 16 added
+   spot and point lights, gate camera b on Metal: 196 pixels, most 1 LSB, a
+   few up to about 60 along one edge). The derivative is undefined there in both paths (the
+   loop bodies are non-uniform control flow); the fix is a per-fragment
+   kernel roughness from derivatives taken before the light loops (for
+   example the shading normal's, as Filament does), which changes the
+   anisotropic specular anti-aliasing for both paths.
+4. `Draw_list_scene::generate_gpu_shadow_commands()`
+   (`draw_list_scene_gpu_cull.cpp`) keeps its per-frame count readback in a
+   `CPU_read` ring range acquired at frame F and released when the frame
+   reusing the slot decodes it. The ring treats the bytes as free once F
+   completes, so a wrap before the decode (or a scene that skips frames)
+   can overwrite the counts. The light binner's counters use a persistent
+   per-view buffer instead (`Light_cluster_view_state`); the cull counts
+   get the same fix in a separate change.

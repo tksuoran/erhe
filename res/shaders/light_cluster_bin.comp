@@ -1,0 +1,205 @@
+// GPU light binning (doc/plans/clustered_lights.md C3, C4).
+//
+// One dispatch per binned view per frame, one invocation per cluster. Each
+// computes its cluster's widened view-space bounds from the tile corner rays
+// and the slice depths, walks the spot and point slots in ascending order,
+// tests each light's range sphere against the bounds and appends the passing
+// slots to its list at a fixed offset. The walk in slot order makes the list
+// ascending and the category counts a running tally.
+//
+// The tests and their evaluation order are those of the CPU binner
+// (src/erhe/scene_renderer/erhe_scene_renderer/light_cluster.cpp:
+// get_open_sides, nearest_on_axis, sphere_reaches_slice,
+// sphere_reaches_bounds, Light_cluster_binner::bin_prepared), with every
+// intermediate declared precise so no multiply-add is contracted: the lists
+// are the CPU's lists.
+//
+// light_cluster_bin_input (Light_cluster_binner::write_inputs()):
+//   header[0] = tiles x, tiles y, slices, capacity
+//   header[1] = first slot of spot shadow-mapped, spot unshadowed, point
+//               shadow-mapped, point unshadowed lights
+//   header[2] = end of the binned slots, flags (bit 0 the first tile column
+//               faces -x, bit 1 the first row faces -y), first list uint,
+//               list stride in uints
+//   data[slice] = near depth, far depth, widening, 0
+//   data[slices + 2 corner + 0 / 1] = corner ray origin / direction
+//   data[slices + 2 corners + light] = centre, radius (< 0 unbounded)
+// light_cluster_bin_output.data[] (light_cluster.hpp layout): three uints
+//   per cluster (list offset, spot counts, point counts), then the lists,
+//   two 16-bit slots per uint.
+// light_cluster_bin_counters.counters[0] = clusters whose list exceeded the
+//   capacity, [1] = the longest list asked for (before the capacity cut).
+
+layout(local_size_x = ERHE_LIGHT_CLUSTER_BIN_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+const uint c_open_min_x = 1u;
+const uint c_open_max_x = 2u;
+const uint c_open_min_y = 4u;
+const uint c_open_max_y = 8u;
+const uint c_open_max_z = 16u;
+
+shared uint s_overflow_count;
+shared uint s_max_list_length;
+
+uint get_open_sides(uint ix, uint iy, uint k, uint tiles_x, uint tiles_y, uint flags)
+{
+    bool x_min_at_left   = ((flags & 1u) != 0u);
+    bool y_min_at_bottom = ((flags & 2u) != 0u);
+    uint open = 0u;
+    if (ix == 0u)              { open |= x_min_at_left   ? c_open_min_x : c_open_max_x; }
+    if (ix == (tiles_x - 1u))  { open |= x_min_at_left   ? c_open_max_x : c_open_min_x; }
+    if (iy == 0u)              { open |= y_min_at_bottom ? c_open_min_y : c_open_max_y; }
+    if (iy == (tiles_y - 1u))  { open |= y_min_at_bottom ? c_open_max_y : c_open_min_y; }
+    if (k == 0u) {
+        open |= c_open_min_x | c_open_max_x | c_open_min_y | c_open_max_y | c_open_max_z;
+    }
+    return open;
+}
+
+float nearest_on_axis(float c, float lo, float hi, uint open, uint min_bit, uint max_bit)
+{
+    if ((open & min_bit) != 0u) {
+        return ((open & max_bit) != 0u) ? c : min(c, hi);
+    }
+    if ((open & max_bit) != 0u) {
+        return max(c, lo);
+    }
+    return min(max(c, lo), hi);
+}
+
+bool sphere_reaches_slice(vec4 light, uint k, float d0, float d1)
+{
+    precise float depth      = -light.z;
+    precise float depth_far  = depth + light.w;
+    precise float depth_near = depth - light.w;
+    if ((k > 0u) && (depth_far < d0)) {
+        return false;
+    }
+    return !(depth_near > d1);
+}
+
+bool sphere_reaches_bounds(vec4 light, vec3 lo, vec3 hi, uint open)
+{
+    float nx = nearest_on_axis(light.x, lo.x, hi.x, open, c_open_min_x, c_open_max_x);
+    float ny = nearest_on_axis(light.y, lo.y, hi.y, open, c_open_min_y, c_open_max_y);
+    float nz = nearest_on_axis(light.z, lo.z, hi.z, open, 0u,           c_open_max_z); // the far side is never open
+    precise float ox = light.x - nx;
+    precise float oy = light.y - ny;
+    precise float oz = light.z - nz;
+    precise float xx = ox * ox;
+    precise float yy = oy * oy;
+    precise float zz = oz * oz;
+    precise float xy = xx + yy;
+    precise float distance_squared = xy + zz;
+    precise float radius_squared   = light.w * light.w;
+    return distance_squared <= radius_squared;
+}
+
+void main()
+{
+    if (gl_LocalInvocationIndex == 0u) {
+        s_overflow_count  = 0u;
+        s_max_list_length = 0u;
+    }
+    barrier();
+
+    uvec4 header0       = light_cluster_bin_input.header[0];
+    uvec4 header1       = light_cluster_bin_input.header[1];
+    uvec4 header2       = light_cluster_bin_input.header[2];
+    uint  tiles_x       = header0.x;
+    uint  tiles_y       = header0.y;
+    uint  slice_count   = header0.z;
+    uint  capacity      = header0.w;
+    uint  slot_begin    = header1.x;
+    uint  slot_end      = header2.x;
+    uint  flags         = header2.y;
+    uint  list_base     = header2.z;
+    uint  list_stride   = header2.w;
+    uint  cluster_count = tiles_x * tiles_y * slice_count;
+    uint  cluster       = gl_GlobalInvocationID.x;
+
+    if (cluster < cluster_count) {
+        uint ix = cluster % tiles_x;
+        uint t  = cluster / tiles_x;
+        uint iy = t % tiles_y;
+        uint k  = t / tiles_y;
+
+        vec4 slice        = light_cluster_bin_input.data[k];
+        uint corner_base  = slice_count;
+        uint light_base   = slice_count + (2u * (tiles_x + 1u) * (tiles_y + 1u));
+        uint corner_0     = (iy * (tiles_x + 1u)) + ix;
+        vec3 lo = vec3(0.0);
+        vec3 hi = vec3(0.0);
+        for (uint c = 0u; c < 4u; ++c) {
+            uint corner = corner_0 + (((c & 2u) != 0u) ? (tiles_x + 1u) : 0u) + (c & 1u);
+            vec3 origin    = light_cluster_bin_input.data[corner_base + (2u * corner) + 0u].xyz;
+            vec3 direction = light_cluster_bin_input.data[corner_base + (2u * corner) + 1u].xyz;
+            precise vec3 step_0 = slice.x * direction;
+            precise vec3 step_1 = slice.y * direction;
+            precise vec3 p0     = origin + step_0;
+            precise vec3 p1     = origin + step_1;
+            if (c == 0u) {
+                lo = min(p0, p1);
+                hi = max(p0, p1);
+            } else {
+                lo = min(lo, min(p0, p1));
+                hi = max(hi, max(p0, p1));
+            }
+        }
+        precise vec3 lo_w = lo - vec3(slice.z);
+        precise vec3 hi_w = hi + vec3(slice.z);
+        uint open = get_open_sides(ix, iy, k, tiles_x, tiles_y, flags);
+
+        uint list_offset = list_base + (cluster * list_stride);
+        uint total       = 0u;
+        uint stored      = 0u;
+        uint counts[4]   = uint[4](0u, 0u, 0u, 0u);
+        uint category    = 0u;
+        uint pending     = 0u;
+        for (uint slot = slot_begin; slot < slot_end; ++slot) {
+            vec4 light = light_cluster_bin_input.data[light_base + (slot - slot_begin)];
+            bool reaches = (light.w < 0.0) || (
+                sphere_reaches_slice(light, k, slice.x, slice.y) &&
+                sphere_reaches_bounds(light, lo_w, hi_w, open)
+            );
+            if (!reaches) {
+                continue;
+            }
+            ++total;
+            if (stored >= capacity) {
+                continue;
+            }
+            // The category: the last range whose first slot is <= slot.
+            while ((category < 3u) && (slot >= header1[category + 1u])) {
+                ++category;
+            }
+            ++counts[category];
+            if ((stored & 1u) == 0u) {
+                pending = slot;
+            } else {
+                light_cluster_bin_output.data[list_offset + (stored >> 1u)] = pending | (slot << 16u);
+            }
+            ++stored;
+        }
+        if ((stored & 1u) != 0u) {
+            light_cluster_bin_output.data[list_offset + (stored >> 1u)] = pending;
+        }
+        uint header_index = ERHE_LIGHT_CLUSTER_HEADER_UINT_COUNT * cluster;
+        light_cluster_bin_output.data[header_index + 0u] = list_offset;
+        light_cluster_bin_output.data[header_index + 1u] = counts[0] | (counts[1] << 16u);
+        light_cluster_bin_output.data[header_index + 2u] = counts[2] | (counts[3] << 16u);
+
+        if (total > capacity) {
+            atomicAdd(s_overflow_count, 1u);
+        }
+        atomicMax(s_max_list_length, total);
+    }
+
+    barrier();
+    if (gl_LocalInvocationIndex == 0u) {
+        if (s_overflow_count > 0u) {
+            atomicAdd(light_cluster_bin_counters.counters[0], s_overflow_count);
+        }
+        atomicMax(light_cluster_bin_counters.counters[1], s_max_list_length);
+    }
+}

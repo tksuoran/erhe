@@ -9,6 +9,21 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: GPU light binning (doc/plans/clustered_lights.md
+  phase 3). `light_cluster_gpu_binner.hpp`: `Light_cluster_gpu_binner`
+  (the compute pipeline of `res/shaders/light_cluster_bin.comp`;
+  `dispatch()`, `is_supported()`, `request_check()` / `poll_check()`),
+  `Light_cluster_binning` (`cpu`, `gpu`) and `c_str()`,
+  `Light_cluster_stats`, `Light_cluster_view_state` (`retire()`,
+  `set_cpu_stats()`, `get_stats()`, `get_gpu_time_ns()`),
+  `Light_view_binning`, `Light_cluster_check`, `Light_cluster_view_check`,
+  `Light_cluster_mismatch`, `Light_cluster_check_state`.
+  `Light_cluster_binner::prepare()` / `bin_prepared()` (the grid and fp32
+  inputs, then the CPU tests; `bin()` does both), `get_capacity()`,
+  `get_binned_light_count()`, `get_input_byte_count()` / `write_inputs()`,
+  `get_fixed_list_stride()` / `get_fixed_byte_count()`,
+  `get_cluster_category_counts()`; `c_light_cluster_bin_header_uvec4_count`.
+
 - `erhe::scene_renderer`: clustered light shading (doc/plans/clustered_lights.md
   phase 2). `Light_shading` (`loops`, `clustered`);
   `Light_count_limits::max_light_count` (bound on the shaded total) and
@@ -512,6 +527,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Light_buffer::write_view()` takes a
+  `Light_view_binning` (default: CPU binning, no stats): with
+  `Light_cluster_binning::gpu`, a supported `Light_cluster_gpu_binner`, the
+  frame's command buffer and a `Light_cluster_view_state`, the view's lists
+  are binned by a compute dispatch into a `GPU_access` range at fixed
+  per-cluster offsets. `Light_cluster_binner`'s tests are fp32 (the GPU
+  binner's operations), over inputs composed in double and rounded once.
+
 - `erhe::scene_renderer`: `Light_interface`'s constructor takes a
   `Light_cluster_config`. `Light_buffer_ranges` gains `clusters` (the
   single-cluster grid `update()` wrote) and `view_lights` /
@@ -820,6 +843,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   six-plane array.
 
 ### Removed
+
+- `erhe::scene_renderer`: `Light_view_buffers::overflow_cluster_count` and
+  `max_list_length` (the binning stats are `Light_cluster_view_state::
+  get_stats()`).
 
 - `erhe::scene_renderer`: `Draw_list_scene::record_cull_classification()`,
   `Gpu_cull_classifier::record_pending()` and `add_pending_scene()` (the

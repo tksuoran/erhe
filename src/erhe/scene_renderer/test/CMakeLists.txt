@@ -47,6 +47,7 @@ if (TARGET erhe::gpu_test_support)
         shadow_gpu_test_fixture.cpp
         shadow_gpu_test_fixture.hpp
         test_content_line_width_gpu.cpp
+        test_light_cluster_gpu.cpp
         test_material_set_gpu.cpp
         test_shadow_gpu.cpp
     )
