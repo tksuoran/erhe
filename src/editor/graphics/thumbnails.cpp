@@ -119,6 +119,23 @@ Thumbnails::Thumbnails(
             on_items_removed(*message.removed.get());
         }
     );
+    // A graphics preset change (e.g. its specular anti-aliasing mode, which
+    // selects the shader variants thumbnails draw with) changes how every
+    // item renders: every shown slot re-renders on its next draw().
+    m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
+        [this](Graphics_settings_message&) {
+            on_graphics_settings_changed();
+        }
+    );
+}
+
+void Thumbnails::on_graphics_settings_changed()
+{
+    for (Thumbnail& thumbnail : m_thumbnails) {
+        if (thumbnail.item_id != 0) {
+            thumbnail.stale = true;
+        }
+    }
 }
 
 Thumbnails::~Thumbnails() noexcept

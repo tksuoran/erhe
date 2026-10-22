@@ -148,6 +148,37 @@ the light axes of an environment key from the partition's `light_shading`
 The light-count axes below (the partition, the light array layout
 invariant and its literal loop bounds) apply to the loop path only.
 
+### Specular anti-aliasing (`SPECULAR_ANTI_ALIASING`)
+
+The integer axis `ERHE_SPECULAR_ANTI_ALIASING` is the
+`erhe::scene_renderer::Specular_anti_aliasing` value (0 off, 1
+normal_kernel, 2 finite_difference; doc/erhe/scene_renderer.md "Specular
+anti-aliasing"), from the editor's graphics preset field
+`specular_anti_aliasing`. Each variant holds only its mode's code, so the
+off and normal_kernel variants carry none of finite_difference's per
+fragment state (two `mat3` neighbour frames, two view vectors, two position
+offsets) and no per-light normalizes.
+
+The environment key carries the preset's mode (`Forward_renderer` and
+`Draw_list_renderer` parameters `specular_anti_aliasing`, `Color_environment`,
+`Prewarm_parameters`); `set_specular_anti_aliasing_axis()` keeps it only on
+keys whose shader calls `anisotropic_brdf()` (`BXDF_MODEL`
+`anisotropic_brdf` or `anisotropic_engine_ready` with the tangent and
+bitangent varyings) and sets 0 on every other key. `Shader_key::derive()`
+applies it, and it is applied again after anything that changes a key's
+varying bits or lays the environment over it: `bucket_primitives()` and the
+prewarm's extra materials after the force masks, `apply_render_environment()`
+in `forward_renderer.cpp` and `Draw_list_scene::resolve_color_stages()`.
+The axis therefore always follows the key's final bits.
+
+Variant cost: one extra variant per anisotropic variant per mode in use;
+isotropic, slope, unlit, depth, shadow and ID variants never multiply.
+Prewarm (`prewarm.cpp`, `Scene_preview::prewarm_variants()`) warms the
+preset's mode only. Switching the mode compiles the
+anisotropic variants of the new mode once (the default scene: one variant
+per switch, `Shader_variant_cache miss` in the log) and switching back
+compiles none.
+
 The four light-count axes per type are populated from
 `compute_light_layer_partition(lights)`, which returns a
 `Light_layer_partition { per_type_shadow[4], per_type_nonshadow[4] }`.

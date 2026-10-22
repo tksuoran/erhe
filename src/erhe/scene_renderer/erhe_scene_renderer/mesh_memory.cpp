@@ -1266,6 +1266,10 @@ void bucket_primitives(
             }
             shader_key.bool_mask |=  boolean_mask_force_enable;
             shader_key.bool_mask &= ~boolean_mask_force_disable;
+            // The specular anti-aliasing axis follows the key's final varying
+            // bits (after the force masks), as apply_render_environment() and
+            // the draw-list resolution apply it.
+            set_specular_anti_aliasing_axis(shader_key, get_specular_anti_aliasing(environment_shader_key));
             switch (blending_mode_policy) {
                 case Blending_mode_policy::not_set: {
                     ERHE_FATAL("Blending_mode_policy::not_set");

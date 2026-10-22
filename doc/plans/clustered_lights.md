@@ -333,10 +333,16 @@ and windowed MoltenVK, Debug, M4 Pro):
 - V1 with GPU lists: the default scene (gate cameras a and b) and Bistro
   with all 43 lights within the loop limits byte-identical between loop
   and clustered mode, on Metal and MoltenVK (validation clean). With the
-  16 added lights camera a is identical and camera b differs in 196 pixels
-  (Open, item 3); with the specular anti-aliasing call removed both are
-  identical, and the CPU and GPU binners' images are identical in every
-  case.
+  16 added lights camera a was identical and camera b differed in 196
+  pixels: `anisotropic_brdf()` took `fwidth()` of the per-light half vector
+  inside the light loops, where a quad whose pixels read different cluster
+  lists differences different lights. The BRDF now takes its kernel from
+  derivatives formed once per fragment
+  ([../erhe/scene_renderer.md](../erhe/scene_renderer.md) "Specular
+  anti-aliasing"), and with 16 added spot and point lights both cameras are
+  byte-identical between loop and clustered mode in all three specular
+  anti-aliasing modes, on Metal and MoltenVK. The CPU and GPU binners'
+  images are identical in every case.
 - V6: Bistro has no overflowing cluster at capacity 64 (longest list 22 at
   the bench camera, 27 at a street camera); at capacity 8 the stats report
   1180 / 7016 overflowing clusters and the warning logs once per change.
@@ -421,19 +427,7 @@ binning equals loop mode with the same 43 lights shaded.
    not pursued), so on Bistro the far shadow-mapped point lights keep their
    cube faces while near lights shade unshadowed; clustered mode makes the
    near lights lit, not shadowed.
-3. `anisotropic_brdf()` (`erhe_bxdf.glsl`) takes `fwidth()` of the per-light
-   half vector for its specular anti-aliasing, inside the light loops. In
-   clustered mode a 2x2 quad whose pixels read different cluster lists (or
-   the same lists at different offsets) evaluates that derivative across
-   different loop iterations, so the result differs from the loop path at
-   some pixels of anisotropic materials (the default scene with 16 added
-   spot and point lights, gate camera b on Metal: 196 pixels, most 1 LSB, a
-   few up to about 60 along one edge). The derivative is undefined there in both paths (the
-   loop bodies are non-uniform control flow); the fix is a per-fragment
-   kernel roughness from derivatives taken before the light loops (for
-   example the shading normal's, as Filament does), which changes the
-   anisotropic specular anti-aliasing for both paths.
-4. `Draw_list_scene::generate_gpu_shadow_commands()`
+3. `Draw_list_scene::generate_gpu_shadow_commands()`
    (`draw_list_scene_gpu_cull.cpp`) keeps its per-frame count readback in a
    `CPU_read` ring range acquired at frame F and released when the frame
    reusing the slot decodes it. The ring treats the bytes as free once F

@@ -3,7 +3,8 @@
 # Light / Camera nodes resolved and projected without a shadow map; the
 # membership and slot logic of Material_set is pure bookkeeping over
 # shared_ptr<Material>, so it is tested with no window, no device, no scene
-# and no draw list (doc/erhe/draw_list_material_set.md R16).
+# and no draw list (doc/erhe/draw_list_material_set.md R16); the shader key
+# axes (test_shader_key.cpp) are derived from a Material and a Vertex_format.
 set(_target "erhe_scene_renderer_tests")
 add_executable(${_target}
     main.cpp
@@ -12,6 +13,7 @@ add_executable(${_target}
     test_cull_lanes.cpp
     test_light_cluster.cpp
     test_material_set.cpp
+    test_shader_key.cpp
 )
 
 target_link_libraries(${_target}

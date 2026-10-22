@@ -165,7 +165,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(VERTEX_POSITION_ENCODING)                 \
     X(VERTEX_TEXCOORD_ENCODING)                 \
     X(VERTEX_TBN_ENCODING)                      \
-    X(VERTEX_JOINT_WEIGHTS_ENCODING)
+    X(VERTEX_JOINT_WEIGHTS_ENCODING)            \
+    X(SPECULAR_ANTI_ALIASING)
 
 enum class Shader_bool : uint32_t {
 #define ERHE_X(PARAM) PARAM,
@@ -360,6 +361,30 @@ void set_light_partition_axes(Shader_key& key, const Light_layer_partition& part
     const Light_count_limits&                            light_count_limits,
     std::size_t                                          light_array_capacity
 ) -> Light_layer_partition;
+
+// Specular anti-aliasing of anisotropic_brdf() in standard.frag
+// (doc/erhe/scene_renderer.md "Specular anti-aliasing"), the
+// SPECULAR_ANTI_ALIASING variant axis; the values match the
+// ERHE_SPECULAR_ANTI_ALIASING_* constants of res/shaders/erhe_bxdf.glsl.
+enum class Specular_anti_aliasing : uint32_t
+{
+    off               = 0, // no kernel
+    normal_kernel     = 1, // per fragment, from the shading normal's screen space derivatives
+    finite_difference = 2  // per light, from the half vector at the fragment and at its x / y neighbours
+};
+
+// Sets the SPECULAR_ANTI_ALIASING axis of a key whose material and varying
+// axes are already set: mode when the key's shader calls anisotropic_brdf()
+// (BXDF_MODEL anisotropic_brdf or anisotropic_engine_ready with the tangent
+// and bitangent varyings), off otherwise, so only those variants multiply.
+// Shader_key::derive() applies it to the environment's value; a caller that
+// sets the environment axes on a derived key, or changes its varying bits
+// (the force masks), calls it again afterwards with the environment's
+// value, so the axis always follows the key's final bits.
+void set_specular_anti_aliasing_axis(Shader_key& key, Specular_anti_aliasing mode);
+
+// The SPECULAR_ANTI_ALIASING axis value of a key.
+[[nodiscard]] auto get_specular_anti_aliasing(const Shader_key& key) -> Specular_anti_aliasing;
 
 // ERHE_SHADOW_DEPTH_BITS variant axis value of a shadow map depth format:
 // the depth bit count of a fixed-point (UNORM) format (16 or 24), 32 for a

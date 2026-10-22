@@ -79,6 +79,13 @@ auto App_settings::get_ui_scale() const -> float
     return imgui.font_size / 16.0f;
 }
 
+// The preset's Specular_anti_aliasing_mode values are the
+// SPECULAR_ANTI_ALIASING axis values (erhe::scene_renderer::
+// Specular_anti_aliasing); the renderers' callers cast one to the other.
+static_assert(static_cast<uint32_t>(Specular_anti_aliasing_mode::off)               == static_cast<uint32_t>(erhe::scene_renderer::Specular_anti_aliasing::off));
+static_assert(static_cast<uint32_t>(Specular_anti_aliasing_mode::normal_kernel)     == static_cast<uint32_t>(erhe::scene_renderer::Specular_anti_aliasing::normal_kernel));
+static_assert(static_cast<uint32_t>(Specular_anti_aliasing_mode::finite_difference) == static_cast<uint32_t>(erhe::scene_renderer::Specular_anti_aliasing::finite_difference));
+
 auto get_light_count_limits(const Graphics_preset_entry& graphics_preset, const int max_light_count) -> erhe::scene_renderer::Light_count_limits
 {
     auto count = [](const int value) -> std::size_t { return static_cast<std::size_t>(std::max(0, value)); };

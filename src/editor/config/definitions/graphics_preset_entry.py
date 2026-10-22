@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=4,
+    version=5,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -48,5 +48,9 @@ struct("Graphics_preset_entry",
         # clustered, every active light is shaded and the unshadowed counts
         # above are not used; the shadow counts apply in both modes.
         field("light_shading", EnumRef("Light_shading_mode"), added_in=4, default="Light_shading_mode::loops", short_desc="Light Shading"),
+        # Specular anti-aliasing of the anisotropic BRDF (v5;
+        # doc/erhe/scene_renderer.md "Specular anti-aliasing"). Older presets
+        # read the default.
+        field("specular_anti_aliasing", EnumRef("Specular_anti_aliasing_mode"), added_in=5, default="Specular_anti_aliasing_mode::normal_kernel", short_desc="Specular Anti-aliasing"),
     ],
 )

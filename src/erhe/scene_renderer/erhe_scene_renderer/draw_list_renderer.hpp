@@ -66,6 +66,9 @@ public:
         uint32_t                                               shadow_bias{1};
         uint32_t                                               shadow_technique{0};
         uint32_t                                               shadow_depth_bits{0};
+        // ERHE_SPECULAR_ANTI_ALIASING variant axis of the variants that call
+        // anisotropic_brdf() (set_specular_anti_aliasing_axis()).
+        Specular_anti_aliasing                                 specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
         // .x: 0xffffffffu = no active joint for the joint_weight_ramp debug
         // mode ("missing data" magenta), anything else = one is active and
         // marked per-slot in the joint buffer (see debug_target_joint).

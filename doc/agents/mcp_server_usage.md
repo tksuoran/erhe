@@ -567,7 +567,10 @@ light type limits `directional_shadow_light_count`,
 renderer's `max_light_count`), `light_shading` (`loops` | `clustered`:
 clustered shades every active light from per-fragment light cluster lists and
 ignores the unshadowed counts, [shader_variants.md](../erhe/shader_variants.md)
-"Light shading"), `use_draw_lists`. Omitted arguments keep their values, so `{}` queries. The edited preset goes
+"Light shading"), `specular_anti_aliasing` (`off` | `normal_kernel` |
+`finite_difference`: the anisotropic BRDF's specular anti-aliasing,
+[scene_renderer.md](../erhe/scene_renderer.md) "Specular anti-aliasing"),
+`use_draw_lists`. Omitted arguments keep their values, so `{}` queries. The edited preset goes
 through `Graphics_settings::apply_preset()`, the same apply as a Settings
 window preset edit (limits clamp; the shadow maps are reconfigured on the next
 frame, logged as `Reconfiguring N shadow render node(s) from preset ...`). The

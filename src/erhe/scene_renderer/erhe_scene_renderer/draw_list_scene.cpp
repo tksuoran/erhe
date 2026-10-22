@@ -242,6 +242,7 @@ auto Color_environment::make_environment_key() const -> Shader_key
     key.set(Shader_int::SHADOW_BIAS,                              shadow_bias);
     key.set(Shader_int::SHADOW_TECHNIQUE,                         shadow_technique);
     key.set(Shader_int::SHADOW_DEPTH_BITS,                        shadow_depth_bits);
+    key.set(Shader_int::SPECULAR_ANTI_ALIASING,                   static_cast<uint32_t>(specular_anti_aliasing));
     key.set(Shader_bool::USE_DDGI,                                ddgi_enabled);
     return key;
 }
@@ -1546,6 +1547,9 @@ auto Draw_list_scene::resolve_color_stages(
             key.int_values[i] = env.int_values[i];
         }
     }
+    // The specular anti-aliasing axis reaches only the keys whose shader
+    // calls anisotropic_brdf().
+    set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(env));
     key.set(Shader_int::SHADER_MULTIVIEW_COUNT, static_cast<uint32_t>(multiview_count));
 
     const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);

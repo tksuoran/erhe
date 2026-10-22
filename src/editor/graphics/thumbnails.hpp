@@ -85,6 +85,9 @@ public:
     // message size.
     void on_close_scene  (erhe::Item_host* closing_host);
     void on_items_removed(const Removed_items& removed);
+    // Graphics preset change: every occupied slot is marked stale, so its
+    // next draw() re-renders it with the new settings.
+    void on_graphics_settings_changed();
 
     // The callback is NOT invoked from inside draw(): it is stored in a
     // thumbnail slot and invoked later from update() -- typically on the
@@ -111,6 +114,7 @@ private:
     App_context&                             m_context;
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
+    erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
     erhe::graphics::Device&                  m_graphics_device;
     std::shared_ptr<erhe::graphics::Texture> m_color_texture;
     erhe::graphics::Sampler                  m_color_sampler;

@@ -14,7 +14,7 @@ ImGui window implementations for the editor UI, including viewport display, prop
 
 - **`Property_editor`** -- Base class providing `Editor_state` (clean/dirty) tracking for property editing workflows.
 
-- **`Settings_window`** -- Application-wide settings UI for graphics presets, physics, icons, and ImGui configuration. Can trigger graphics settings changes via `App_message_bus`.
+- **`Settings_window`** -- Application-wide settings UI for graphics presets (shadow, light count and specular anti-aliasing fields), physics, icons, and ImGui configuration. Can trigger graphics settings changes via `App_message_bus`.
 
 - **`Viewport_config_window`** -- Configures rendering options for a viewport (grid, shadows, selection outline, etc.).
 
