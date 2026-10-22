@@ -1121,18 +1121,21 @@ private:
     std::unique_ptr<erhe::graphics::Gpu_timer>                       m_gpu_command_timer;
     // Per frame slot: the count readback of the slot's last frame with
     // GPU-generated shadow commands, until decode_retired_gpu_shadow_counts()
-    // of the frame reusing the slot (capacity kept), and the decoded counts.
+    // of the frame reusing the slot, and the decoded counts. Each slot owns a
+    // persistent host-readable buffer outside the ring buffers: a ring range
+    // held across frames is reclaimed as soon as its acquire frame completes.
+    // The buffer grows to the slot's high-water count bytes (capacity kept);
+    // a slot is regrown only when no readback is pending in it.
     class Gpu_count_readback
     {
     public:
-        erhe::graphics::Ring_buffer_range range;
-        uint64_t                          frame_index{0};
-        std::size_t                       view_count {0};
-        std::vector<uint32_t>             job_views;
-        bool                              pending    {false};
+        std::unique_ptr<erhe::graphics::Buffer> buffer;
+        std::size_t                             byte_count {0};
+        uint64_t                                frame_index{0};
+        std::size_t                             view_count {0};
+        std::vector<uint32_t>                   job_views;
+        bool                                    pending    {false};
     };
-    // Closes and releases a pending readback (decode and destruction alike).
-    void finish_count_readback(Gpu_count_readback& readback);
     std::vector<Gpu_count_readback>                                  m_gpu_count_readbacks;
     std::vector<Gpu_shadow_view_counts>                              m_retired_gpu_shadow_view_counts;
     Retired_gpu_shadow_counts                                        m_retired_gpu_shadow_counts{};

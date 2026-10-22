@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstring>
 #include <limits>
 #include <mutex>
@@ -724,17 +725,30 @@ void Draw_list_scene::generate_gpu_shadow_commands(
         }
         Gpu_count_readback& readback = m_gpu_count_readbacks[frame_index % slot_count];
         // The slot's previous readback was decoded at this frame's
-        // classification.
+        // classification, so its buffer is free to write (and to regrow).
         ERHE_VERIFY(!readback.pending);
-        readback.range = classifier.get_readback_buffer().acquire(Ring_buffer_usage::CPU_read, count_bytes);
-        {
-            Blit_command_encoder blit = device.make_blit_command_encoder(command_buffer);
-            blit.copy_from_buffer(
-                count_buffer_object, m_gpu_count_byte_offset,
-                readback.range.get_buffer()->get_buffer(), readback.range.get_byte_start_offset_in_buffer(),
-                count_bytes
+        if (!readback.buffer || (readback.buffer->get_capacity_byte_count() < count_bytes)) {
+            // A multiple of every nonCoherentAtomSize, so the whole buffer
+            // can be invalidated at the decode.
+            constexpr std::size_t min_capacity = 256;
+            const std::size_t     capacity     = std::bit_ceil(std::max(count_bytes, min_capacity));
+            readback.buffer = std::make_unique<Buffer>(
+                device,
+                Buffer_create_info{
+                    .capacity_byte_count                    = capacity,
+                    .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                    .usage                                  = Buffer_usage::transfer_dst,
+                    .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+                    .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                    .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene shadow count readback"}
+                }
             );
         }
+        {
+            Blit_command_encoder blit = device.make_blit_command_encoder(command_buffer);
+            blit.copy_from_buffer(count_buffer_object, m_gpu_count_byte_offset, readback.buffer.get(), 0, count_bytes);
+        }
+        readback.byte_count  = count_bytes;
         readback.frame_index = frame_index;
         readback.view_count  = view_count;
         readback.job_views.clear();
@@ -767,8 +781,11 @@ void Draw_list_scene::decode_retired_gpu_shadow_counts(const uint64_t frame_inde
     // (Device::acquire_frame_slot() waited for it).
     ERHE_VERIFY((readback.frame_index + m_gpu_count_readbacks.size()) <= frame_index);
     ERHE_PROFILE_FUNCTION();
-    const std::span<std::byte> data = readback.range.get_span();
-    ERHE_VERIFY(data.size_bytes() >= (readback.job_views.size() * Gpu_cull_classifier::count_bytes_per_job));
+    const std::size_t          capacity = readback.buffer->get_capacity_byte_count();
+    const std::span<std::byte> data     = readback.buffer->map_bytes(0, capacity);
+    readback.buffer->invalidate(0, capacity);
+    ERHE_VERIFY(readback.byte_count == (readback.job_views.size() * Gpu_cull_classifier::count_bytes_per_job));
+    ERHE_VERIFY(data.size_bytes() >= readback.byte_count);
     m_retired_gpu_shadow_view_counts.assign(readback.view_count, Gpu_shadow_view_counts{});
     for (std::size_t job_index = 0, job_end = readback.job_views.size(); job_index < job_end; ++job_index) {
         std::array<uint32_t, 2> counts{0u, 0u};
@@ -783,18 +800,7 @@ void Draw_list_scene::decode_retired_gpu_shadow_counts(const uint64_t frame_inde
         .views       = std::span<const Gpu_shadow_view_counts>{m_retired_gpu_shadow_view_counts}
     };
     m_has_retired_gpu_shadow_counts = true;
-    finish_count_readback(readback);
-}
-
-void Draw_list_scene::finish_count_readback(Gpu_count_readback& readback)
-{
-    // A CPU_read range is closed with the bytes the GPU wrote before its
-    // release (Ring_buffer_range::release() requires a closed range).
-    ERHE_VERIFY(readback.pending);
-    readback.range.bytes_gpu_used(readback.range.get_span().size_bytes());
-    readback.range.close();
-    readback.range.release();
-    readback.range   = erhe::graphics::Ring_buffer_range{};
+    readback.buffer->unmap();
     readback.pending = false;
 }
 
