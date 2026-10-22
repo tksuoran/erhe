@@ -75,6 +75,11 @@ Program_interface::Program_interface(
             {.binding_point = light_buffer_binding_point,         .type = to_binding_type(light_interface.light_block),          .stage_flags = Stage::vertex | Stage::fragment},
             // light_array: the lights of light_block (doc/plans/clustered_lights.md C3).
             {.binding_point = light_array_buffer_binding_point,   .type = to_binding_type(light_interface.light_array_block),    .stage_flags = Stage::vertex | Stage::fragment},
+            // light_shadowed_array: the hot records of the shadow-mapped lights (the
+            // shadow-mapped light loops in standard.frag, the distance caster).
+            {.binding_point = light_shadowed_array_buffer_binding_point,     .type = to_binding_type(light_interface.light_shadowed_array_block),     .stage_flags = Stage::fragment},
+            // light_shadow_world_array: the world-space shadow transforms (shadow_debug.vert, shader debug shadowmap_texels).
+            {.binding_point = light_shadow_world_array_buffer_binding_point, .type = to_binding_type(light_interface.light_shadow_world_array_block), .stage_flags = Stage::vertex | Stage::fragment},
             // light_cluster: the light cluster lists standard.frag's clustered path reads (C3).
             {.binding_point = light_cluster_buffer_binding_point, .type = to_binding_type(light_interface.light_cluster_block),  .stage_flags = Stage::fragment},
             // light_control: depth_to_color.frag only.
@@ -235,6 +240,8 @@ auto Program_interface::make_prototype(
     create_info.extra_include_paths = config.shader_paths;
     create_info.struct_types.push_back(&material_interface.material_struct);
     create_info.struct_types.push_back(&light_interface.light_struct);
+    create_info.struct_types.push_back(&light_interface.light_shadowed_struct);
+    create_info.struct_types.push_back(&light_interface.light_shadow_world_struct);
     create_info.struct_types.push_back(&camera_interface.camera_struct);
     create_info.struct_types.push_back(&cube_interface.cube_instance_struct);
     create_info.struct_types.push_back(&cube_interface.cube_control_struct);
@@ -247,6 +254,8 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&material_interface.material_block);
     create_info.add_interface_block(&light_interface.light_block);
     create_info.add_interface_block(&light_interface.light_array_block);
+    create_info.add_interface_block(&light_interface.light_shadowed_array_block);
+    create_info.add_interface_block(&light_interface.light_shadow_world_array_block);
     create_info.add_interface_block(&light_interface.light_cluster_block);
     create_info.add_interface_block(&light_interface.light_control_block);
     create_info.add_interface_block(&camera_interface.camera_block);

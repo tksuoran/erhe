@@ -198,8 +198,11 @@ took the frame's GPU time from 123 to 40 ms on Metal and from 108 to
 ## Light array layout invariant
 
 The shaded lights are one array, `light_array.lights` (a storage block at
-binding 9; the counts and the rest of the light state are the `light_block`
-uniform block), ordered type-major: directional, spot, point. Within each
+binding 9 holding each light's shading record; the shadow-mapped lights'
+hot and cold records are `light_shadowed_array` (binding 11) and
+`light_shadow_world_array` (binding 12), indexed by shadow record, and the
+counts and the rest of the light state are the `light_block` uniform block;
+doc/erhe/scene_renderer.md "Light records"), ordered type-major: directional, spot, point. Within each
 type's range, shadow-mapped lights occupy the prefix (indices
 `0 .. SHADOWMAPPED_COUNT - 1` of the range); non-shadow-mapped lights follow
 (indices `SHADOWMAPPED_COUNT .. SHADOWMAPPED_COUNT + NOT_SHADOWMAPPED_COUNT - 1`).

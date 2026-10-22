@@ -30,42 +30,67 @@ namespace erhe::scene_renderer {
 
 class Shadow_renderer;
 
+// The light records (doc/erhe/scene_renderer.md "Light records"), split by
+// what the fragment light loops read (hot) and what only the caster pass and
+// the debug views read (cold). All members are vec4 / mat4, so the std430
+// layouts carry no padding.
+//
+// Shading record of every shaded light (light_array_block, GLSL struct Light,
+// 48 bytes, indexed by slot): the unshadowed loops and the ray-hit loops.
 class Light_struct
 {
 public:
-    std::size_t clip_from_world;                // mat4
-    std::size_t texture_from_world;             // mat4
-    std::size_t world_from_texture;             // mat4
     std::size_t position_and_inner_spot_cos;    // vec4 (vec3, float)
     std::size_t direction_and_outer_spot_cos;   // vec4 (vec3, float)
-    std::size_t radiance_and_range;             // vec4 (float, float, padding, padding )
-    // shadow_index = the dense shadow-array-layer that the shadow
-    // renderer wrote this light's shadow map into. Different from the
-    // light's UBO `index` slot whenever a preceding type bucket has
-    // non-shadow lights (those skip the shadow array layer). Read by
-    // the fragment shader as `array_layer = float(shadow_index.x)`.
-    // packed[1] = point shadow cube index, packed[2] = 1 when the
-    // distance technique's ray spread condition holds for the light
-    // (Light_shadow_limits::distance_rays_valid), packed[3] reserved.
-    std::size_t shadow_index_packed;            // uvec4 (shadow_index, cube index, distance rays valid, padding)
-    // The light's shadow view origin and its view-relative light matrices
-    // (doc/erhe/shadows.md "View-relative positions"). view_origin is the
-    // position of the light camera (world_from_light_camera[3]; for spot
-    // and point lights the light position), the view origin of this light's
-    // shadow passes. The two matrices are texture_from_world and its inverse
-    // with the world translated so that view_origin is at the origin,
-    // composed in double (get_clip_from_view_relative()); the caster passes
-    // and the receiver read the same bits. Point lights use view_origin only.
-    // view_origin.w is the light's raster vertex depth bound
+    std::size_t radiance_and_range;             // vec4 (intensity * color, range)
+};
+
+// Hot record of a shadow-mapped light (light_shadowed_array_block, GLSL
+// struct Light_shadowed, 208 bytes): the shading fields and everything the
+// fragment's shadow lookup reads, so a shadow-mapped light's loop iteration
+// reads one contiguous record. Indexed by shadow record index: 2D shadow map
+// layer i for i < Light_projections::shadow_map_2d_slots.size(), else point
+// shadow cube i - shadow_map_2d_slots.size(); the slot ordering (type major,
+// shadow-mapped prefix per type) makes it the slot less the unshadowed slots
+// before it (erhe_light_shadow_record() in erhe_light_record.glsl,
+// get_shadow_record_index()).
+class Light_shadowed_struct
+{
+public:
+    std::size_t position_and_inner_spot_cos;    // vec4, as Light_struct
+    std::size_t direction_and_outer_spot_cos;   // vec4, as Light_struct
+    std::size_t radiance_and_range;             // vec4, as Light_struct
+    // The light camera position (world_from_light_camera[3]; the light
+    // position for spot and point lights), the view origin of this light's
+    // shadow passes; w: the raster vertex depth bound
     // (Light_shadow_limits::raster_vertex_depth, doc/erhe/shadows.md
     // "Minimum bias").
     std::size_t view_origin;                    // vec4 (xyz, raster vertex depth bound)
-    // x: the light's caster vertex rounding bound
-    // (Light_shadow_limits::caster_vertex_rounding, doc/erhe/shadows.md
-    // "Minimum bias", position term), world units; yzw reserved (0).
-    std::size_t shadow_limits;                  // vec4 (caster vertex rounding, 0, 0, 0)
+    // x: the caster vertex rounding bound (Light_shadow_limits::
+    // caster_vertex_rounding, world units); y: the 2D shadow map array layer;
+    // z: the point shadow cube index; w: 1 when the distance technique's ray
+    // spread condition holds (Light_shadow_limits::distance_rays_valid), else
+    // 0. The layer and cube are small integers, exact in float, and the
+    // shader samples with them as floats.
+    std::size_t shadow_params;                  // vec4 (caster vertex rounding, layer, cube, distance rays valid)
+    // The light's view-relative matrices (doc/erhe/shadows.md "View-relative
+    // positions"): texture_from_world and its inverse with the world
+    // translated so that view_origin is at the origin, composed in double
+    // (get_clip_from_view_relative()); the caster passes and the receiver read
+    // the same bits. Identity for point lights, which read none of them.
     std::size_t texture_from_view_relative;     // mat4
     std::size_t view_relative_from_texture;     // mat4
+};
+
+// Cold record of a shadow-mapped light (light_shadow_world_array_block, GLSL
+// struct Light_shadow_world, 128 bytes, indexed like Light_shadowed): the
+// world-space shadow transforms only the shadow debug views read (shader
+// debug shadowmap_texels, shadow_debug.vert).
+class Light_shadow_world_struct
+{
+public:
+    std::size_t texture_from_world;             // mat4
+    std::size_t world_from_texture;             // mat4
 };
 
 class Light_block
@@ -118,10 +143,15 @@ public:
     std::size_t  cluster_slices;                     // vec4 (scale, bias, near, 0)
     std::size_t  cluster_counts;                     // uvec4 (tiles x, tiles y, slices, 0)
 
-    Light_struct light;
-    // Offset of lights[] in light_array_block (the shaded lights in slot
-    // order, an unsized storage array).
+    Light_struct              light;
+    Light_shadowed_struct     shadowed;
+    Light_shadow_world_struct shadow_world;
+    // Offsets of the unsized arrays in their storage blocks: lights[] in
+    // light_array_block (slot order), lights[] in light_shadowed_array_block
+    // and transforms[] in light_shadow_world_array_block (shadow record order).
     std::size_t  light_struct;
+    std::size_t  shadowed_struct;
+    std::size_t  shadow_world_struct;
 };
 
 static constexpr uint32_t c_texture_heap_slot_shadow_compare   {0};
@@ -175,14 +205,20 @@ public:
     // The header: counts, ambient, DDGI volume, shadow map sentinels (std140).
     erhe::graphics::Shader_resource light_block;
     erhe::graphics::Shader_resource light_control_block;
-    // The lights in slot order (std430, readonly, unsized; doc/plans/
-    // clustered_lights.md C3): light_array.lights[slot].
+    // The light records (std430, readonly, unsized; doc/erhe/scene_renderer.md
+    // "Light records"): light_array.lights[slot] (Light_struct),
+    // light_shadowed_array.lights[record] (Light_shadowed_struct) and
+    // light_shadow_world_array.transforms[record] (Light_shadow_world_struct).
     erhe::graphics::Shader_resource light_array_block;
+    erhe::graphics::Shader_resource light_shadowed_array_block;
+    erhe::graphics::Shader_resource light_shadow_world_array_block;
     // The light cluster lists (std430, readonly, unsized uint array, layout
     // in light_cluster.hpp): light_cluster.data[].
     erhe::graphics::Shader_resource light_cluster_block;
     Light_cluster_config            cluster_config;
     erhe::graphics::Shader_resource light_struct;
+    erhe::graphics::Shader_resource light_shadowed_struct;
+    erhe::graphics::Shader_resource light_shadow_world_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
     // Per-pass shadow map resolution in texels: the 2D map's for the
@@ -278,7 +314,7 @@ public:
 // 180 degrees or wider.
 [[nodiscard]] auto get_spot_distance_min_resolution(float outer_spot_angle, erhe::scene::Shadow_map_footprint footprint) -> float;
 
-// The light array and the light cluster lists of one view for one frame
+// The light records and the light cluster lists of one view for one frame
 // (doc/plans/clustered_lights.md C3), written once by Light_buffer::
 // write_view() and bound by every pass of the view. The ranges are closed and
 // released when written: the ring reclaims them once the frame completes, and
@@ -293,6 +329,8 @@ public:
     bool                              written{false};
     Light_cluster_grid                grid{};
     erhe::graphics::Ring_buffer_range lights;
+    erhe::graphics::Ring_buffer_range shadowed;
+    erhe::graphics::Ring_buffer_range shadow_worlds;
     // CPU_write (CPU binning, compact lists; the single-cluster grid) or
     // GPU_access (GPU binning, fixed-offset lists, written by the binning
     // dispatch before the frame's first pass).
@@ -364,10 +402,13 @@ public:
     // order (Shadow_renderer iterates these).
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     // Parallel to light_projection_transforms: composed once per apply(), so
-    // the per-pass Light_buffer::update() only copies them.
+    // the per-pass Light_buffer::update() only copies them. Only the
+    // shadow-mapped slots are composed (they go to the shadow records); the
+    // other slots keep the default-constructed values.
     std::vector<Light_view_relative_transforms>           light_view_relative_transforms;
     // Parallel to light_projection_transforms as well: the per-light bias
-    // limits (Light_shadow_limits), derived once per apply().
+    // limits (Light_shadow_limits), derived once per apply() for the
+    // shadow-mapped slots; the other slots keep the defaults.
     std::vector<Light_shadow_limits>                      light_shadow_limits;
     // Ids of the shadow-mapped spot lights whose distance_rays_valid was
     // false at this / the previous report_distance_fallbacks(), for one log
@@ -460,8 +501,8 @@ public:
     }
 };
 
-// The ranges one Light_buffer::update() writes: the light_block header and
-// the light_array_block lights. Bound together by bind_light_buffer() and
+// The ranges one Light_buffer::update() writes: the light_block header, the
+// three light record arrays and the light_cluster_block lists. Bound together by bind_light_buffer() and
 // released together.
 class Light_buffer_ranges
 {
@@ -470,12 +511,12 @@ public:
 
     erhe::graphics::Ring_buffer_range header;
     // Written by this update(), or empty when the projections carry the
-    // view's buffers (Light_view_buffers), which view_lights and
-    // view_clusters then point at.
+    // view's buffers (Light_view_buffers), which view_buffers then points at.
     erhe::graphics::Ring_buffer_range lights;
+    erhe::graphics::Ring_buffer_range shadowed;
+    erhe::graphics::Ring_buffer_range shadow_worlds;
     erhe::graphics::Ring_buffer_range clusters;
-    const erhe::graphics::Ring_buffer_range* view_lights  {nullptr};
-    const erhe::graphics::Ring_buffer_range* view_clusters{nullptr};
+    const Light_view_buffers*         view_buffers{nullptr};
 };
 
 class Light_buffer
@@ -558,13 +599,26 @@ public:
 
 private:
     [[nodiscard]] auto get_light_count       (const Light_projections* light_projections) const -> std::size_t;
-    [[nodiscard]] auto get_light_array_bytes (std::size_t light_count) const -> std::size_t;
-    void write_light_array(const Light_projections* light_projections, std::size_t light_count, std::span<std::byte> out) const;
+    [[nodiscard]] auto get_shadow_count(const Light_projections* light_projections, std::size_t light_count) const -> std::size_t;
+    [[nodiscard]] auto get_array_bytes (std::size_t offset, const erhe::graphics::Shader_resource& record, std::size_t count) const -> std::size_t;
+    // Writes the three light record arrays of light_count shaded lights and
+    // shadow_count shadow-mapped ones into out_lights, out_shadowed and
+    // out_shadow_worlds (each at least one zero record).
+    void write_light_records(
+        const Light_projections*         light_projections,
+        std::size_t                      light_count,
+        std::size_t                      shadow_count,
+        erhe::graphics::Ring_buffer_range& out_lights,
+        erhe::graphics::Ring_buffer_range& out_shadowed,
+        erhe::graphics::Ring_buffer_range& out_shadow_worlds
+    );
 
     erhe::graphics::Device&                  m_graphics_device;
     Light_interface&                         m_light_interface;
     erhe::graphics::Ring_buffer_client       m_light_buffer;
     erhe::graphics::Ring_buffer_client       m_light_array_buffer;
+    erhe::graphics::Ring_buffer_client       m_light_shadowed_buffer;
+    erhe::graphics::Ring_buffer_client       m_light_shadow_world_buffer;
     erhe::graphics::Ring_buffer_client       m_light_cluster_buffer;
     Light_cluster_binner                     m_binner;
     erhe::graphics::Ring_buffer_client       m_control_buffer;

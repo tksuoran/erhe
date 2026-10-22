@@ -187,7 +187,7 @@ Placements: --root-offset translates the station root (R7: 1000,0,1000
 order (the station light is deleted and created again after them):
 unshadowed = a non-shadow directional light, which takes a slot of the
 directional bucket, so a spot or point station light's UBO slot differs
-from its shadow layer (shadow_index_packed.x / .y; a directional station
+from its shadow layer (Light_shadowed shadow_params.y / .z; a directional station
 light keeps slot = layer = 0, its bucket puts shadow-mapped lights first);
 shadowed = that plus a second shadow-casting light of the measured type,
 above the station and shining up, so the station light's layer is 1. Each
@@ -1736,8 +1736,8 @@ def parse_root_offset(text):
 
 def light_indirection(entry):
     """(UBO slot, shadow layer) of a shadow_lights entry: the 2D array layer
-    (shadow_index_packed.x) or, for a point light, the cube index
-    (shadow_index_packed.y)."""
+    (Light_shadowed shadow_params.y) or, for a point light, the cube index
+    (shadow_params.z)."""
     layer = entry.get("cube_index") if entry.get("type") == "point" else entry.get("layer")
     return int(entry["slot"]), int(layer)
 

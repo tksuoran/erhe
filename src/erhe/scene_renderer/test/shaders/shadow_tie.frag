@@ -51,6 +51,6 @@ void main()
     // screen-space derivatives of the view-relative position (position is
     // linear in gl_FragCoord inside a band, and no quad straddles two bands).
     vec4  receiver_plane  = get_receiver_geometric_normal(position.xyz, vertex_rounding);
-    float visibility      = sample_light_visibility(position.xyz, vertex_rounding, 0u, receiver_plane);
+    float visibility      = sample_light_visibility(position.xyz, vertex_rounding, 0u, 0u, receiver_plane);
     out_color = vec4(visibility, float(shadow_tie_reference_depth_ulps()), 0.0, 1.0);
 }

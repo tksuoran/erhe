@@ -19,10 +19,14 @@ namespace erhe::scene_renderer {
 #define glyph_buffer_binding_point         8
 
 // The lights of light_block in a storage block (doc/plans/clustered_lights.md
-// C3). Metal maps a GLSL binding to the buffer index; 9-12 are the free
-// indices below its reserved ones.
+// C3). Metal maps a GLSL binding to the buffer index; 9-12 are the indices
+// below its reserved ones.
 #define light_array_buffer_binding_point   9
 // The light cluster lists (doc/plans/clustered_lights.md C3).
 #define light_cluster_buffer_binding_point 10
+// The hot records of the shadow-mapped lights (Light_shadowed_struct) and
+// their cold world-space shadow transforms (Light_shadow_world_struct).
+#define light_shadowed_array_buffer_binding_point     11
+#define light_shadow_world_array_buffer_binding_point 12
 
 } // namespace erhe::scene_renderer

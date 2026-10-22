@@ -47,7 +47,8 @@ Per frame, for each scene view:
    miss.
 4. The forward pass samples the shadow map in
    `sample_light_visibility()` (`res/shaders/erhe_light.glsl`) using
-   `texture_from_world` from the light UBO/SSBO.
+   the light's hot record (`light_shadowed_array`, doc/erhe/scene_renderer.md
+   "Light records").
 
 Steps 1-4 above describe the **2D depth array** path used by directional and
 spot lights. Spot lights use a single perspective shadow map built directly
@@ -425,15 +426,16 @@ with the distance from the world origin.
   errors is bounded by the same combination of their bounds. `v_position`
   stays the absolute world position for lighting, DDGI, texgen and
   `Shader_debug::world_position`.
-- **Light block.** Per light, composed once per frame by
+- **Hot shadowed record.** Per shadow-mapped light, composed once per frame by
   `Light_projections::apply()` (`light_view_relative_transforms`, parallel to
-  the slots) and copied into the light block per pass: `view_origin` (the light camera position,
+  the slots) and copied into the light's hot record
+  (doc/erhe/scene_renderer.md "Light records"): `view_origin` (the light camera position,
   `world_from_light_camera[3]`; the light position for spot and point
   lights), `texture_from_view_relative` (`get_texture_from_clip()` times
   `get_clip_from_view_relative()` of the light camera, in double) and its
   double inverse `view_relative_from_texture`. The shadow pass camera block is
   composed from the same fp32 inputs with the same function, so the caster
-  pass and the receiver use the same rows. `shadow_limits.x` is the light's
+  pass and the receiver use the same rows. `shadow_params.x` is the light's
   caster vertex rounding bound (`Light_shadow_limits::caster_vertex_rounding`,
   "Minimum bias"), the largest `get_vertex_position_rounding()` any caster
   vertex of the light's passes can have: per caster mesh
@@ -530,14 +532,14 @@ geometric normal (`get_receiver_geometric_normal()`). 1.0 = lit.
 `Shader_debug::shadow_visibility` (30) replaces the fragment color with the
 visibility of one light (1 = lit, 0 = shadowed), sampled regardless of N.L.
 The light is `light_block.shadow_debug_light_index`, an index into
-`light_block.lights` (the bucketed slot order: directional, spot, point, each
+`light_array.lights` (the bucketed slot order: directional, spot, point, each
 shadow-mapped first; `Light_projection_transforms::index`), carried from
 `Base_render_parameters::shadow_debug_light_index` through
 `Light_buffer::update()` into the std140 padding after
 `brdf_phi_incident_phi`. `standard.frag` finds the slot's bucket from the
 `ERHE_LIGHT_COUNT_*` counts and calls `sample_light_visibility()` for a
 shadow-mapped directional or spot light and `sample_point_light_visibility()`
-(cube layer `shadow_index_packed.y`) for a shadow-mapped point light; any
+(cube layer: the hot record's `shadow_params.z`) for a shadow-mapped point light; any
 other slot reads 1. Viewports use slot 0; `render_scene_image` takes the light
 by name or id (`doc/editor/rendergraph.md` "Scene image capture").
 
@@ -671,7 +673,7 @@ all light-space quantities below; directions are the same in every
 translated frame), the plane is the row vector
 `pi = (N, -dot(N, P))`, which is 0 on homogeneous points `(x, 1)` of the
 plane. With `W = view_relative_from_texture` (the inverse of
-`texture_from_view_relative`, both in the light block), a homogeneous texture
+`texture_from_view_relative`, both in the hot record), a homogeneous texture
 point `h` maps to the point `W h`, so the plane in homogeneous texture coordinates is
 `pi' = transpose(W) * pi = (a, b, c, e)`: `dot(pi', h) = 0`. The light
 texture coordinates the shader compares are the post-divide
@@ -845,8 +847,8 @@ depth coefficient of the receiver plane in texture space.
   as `v_position_rounding` ("View-relative positions"); the caster's
   vertices are unknown to the receiver, so `Light_projections::apply()`
   bounds them over the light's casters as
-  `Light_shadow_limits::caster_vertex_rounding` = `V_c` (the light block's
-  `shadow_limits.x`, the largest `get_vertex_position_rounding()` over the
+  `Light_shadow_limits::caster_vertex_rounding` = `V_c` (the hot record's
+  `shadow_params.x`, the largest `get_vertex_position_rounding()` over the
   corners of every caster's node-space bounds). The caster vertices move the
   stored plane by at most `V_c`. The receiver point is interpolated from its
   own vertices and moved into the light's frame, which puts it off the
@@ -881,7 +883,7 @@ depth coefficient of the receiver plane in texture space.
   is affine, so `Light_projections::apply()` takes `Z` as the largest
   `|depth|` over the corners of the caster bounds (at least 1), once per light
   and apply(), in double relative to the light's view origin
-  (`Light_shadow_limits::raster_vertex_depth`, in the light block's
+  (`Light_shadow_limits::raster_vertex_depth`, in the hot record's
   `view_origin.w`). The spot passes do not depth clamp ("Shadow pass
   mechanics"), so their `Z` is 1. The distance technique and the point cube
   store plane distances, not the rasterized depth, so the raster term does not
@@ -1157,8 +1159,8 @@ cone of 180 degrees. The map resolution is shared by every directional and
 spot light while the cone is per light, and no resolution serves a cone near
 180 degrees, so the condition is enforced per light, where the spot
 projection is computed: `Light_projections::apply()` evaluates it
-(`Light_shadow_limits::distance_rays_valid`, in the light block's
-`shadow_index_packed.z`), and a spot light whose map is too coarse for its
+(`Light_shadow_limits::distance_rays_valid`, in the hot record's
+`shadow_params.w`), and a spot light whose map is too coarse for its
 cone is sampled with the depth technique. The distance variant of
 `sample_light_visibility()` compiles both techniques, and its caster pass
 writes the depth map as well as the distance map. `Shadow_renderer` logs each
@@ -1220,7 +1222,7 @@ the per-face coordinate flip, is in
   displaced. A shader-side `gl_Position.y` negate is deliberately not used: it
   is unconditional, and so wrong on bottom_left OpenGL.
 - **Receiver.** `sample_point_light_visibility()` (`erhe_light.glsl`) fetches,
-  at the light's cube layer (`shadow_index_packed.y`), the texel that contains
+  at the light's cube layer (the hot record's `shadow_params.z`), the texel that contains
   the receiver direction at its centre (`get_point_shadow_texel_centre()`,
   `erhe_point_shadow.glsl`, shared with the caster) and compares the receiver
   plane's distance on that centre ray - one-sided, like the 2D tap offsets -
@@ -1236,7 +1238,7 @@ the per-face coordinate flip, is in
   (`standard.frag`). 1.0 = lit.
 - **Indexing.** Shadow-casting point lights get a dense `point_shadow_index`
   (cube-array base) in `Light_projections::apply()`, written to
-  `shadow_index_packed.y`; their 2D `shadow_index` stays `max()` so the 2D shadow
+  the hot record's `shadow_params.z`; their 2D `shadow_index` stays `max()` so the 2D shadow
   loop and 2D receiver sampling skip them for free. Point is the last
   shadow-bearing bucket, so it does not shift directional/spot 2D layer indices.
   A fallback 1x1 cube (cleared to `1e30`) is bound when no real cube exists.
@@ -1311,7 +1313,7 @@ of `head_on_floor`, `contact_blocks`, `thin_walls` and `cube_seams` (R7).
 `--extra-light` puts lights ahead of the station light in the scene's light
 order: `unshadowed` a non-shadow directional light, which takes a slot of the
 directional bucket, so a spot or point station light's UBO slot differs from
-its shadow layer (`shadow_index_packed.x` / `.y`); `shadowed` adds a second
+its shadow layer (the hot record's `shadow_params.y` / `.z`); `shadowed` adds a second
 shadow-casting light of the measured type, so the station light's layer is 1.
 Each render's slot and layer are checked against that.
 
@@ -1503,7 +1505,7 @@ minimum).
 | `src/erhe/scene/erhe_scene/light_frustum_fit.hpp` | `Shadow_frustum_fit_debug_data`, `Shadow_fit_step` |
 | `src/erhe/math/erhe_math/math_util.cpp` | Convex hull clip, point-in-hull, rotating calipers, F_shadow open planes (`build_shadow_caster_volume_planes`) + silhouette side planes (`build_shadow_caster_silhouette`), AABB-vs-convex-volume cull (`aabb_in_convex_volume`), half-space intersection to polyhedron (`convex_polyhedron_from_planes`) |
 | `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow pass, caster gathering, depth clamp pipeline, scissor border; distance-technique variant (color writes + `VARIANT_SHADOW_DISTANCE` + map resolution); point-light cube pass (6 faces, `VARIANT_SHADOW_CUBE`, framebuffer_origin-gated `clip_space_y_flip`) |
-| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light block and light array (per light `view_origin`, `texture_from_view_relative`, `view_relative_from_texture`), shadow samplers; `s_shadow_distance` + distance fallback, `shadow_map_resolution` control field (2D map or cube face resolution); `point_shadow_index` assignment, `shadow_cube_texture` + 1x1 fallback cube |
+| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light block, light records (per shadow-mapped light `view_origin`, `texture_from_view_relative`, `view_relative_from_texture`), shadow samplers; `s_shadow_distance` + distance fallback, `shadow_map_resolution` control field (2D map or cube face resolution); `point_shadow_index` assignment, `shadow_cube_texture` + 1x1 fallback cube |
 | `src/erhe/scene_renderer/erhe_scene_renderer/camera_buffer.cpp` | `get_view_origin()`, `get_clip_from_view_relative()`; camera block `view_origin`, `clip_from_view_relative` |
 | `src/erhe/scene_renderer/erhe_scene_renderer/program_interface.cpp` | Bind group layout: `s_shadow_compare` / `s_shadow_no_compare` (depth) + `s_shadow_distance` (color) + `s_shadow_cube` (R32F cube array) sampler bindings |
 | `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance path (`get_shadow_distance_tap`), reference depth clamp; `sample_point_light_visibility` (texel-centre fetch, receiver-plane reference, derived radial bias) |
