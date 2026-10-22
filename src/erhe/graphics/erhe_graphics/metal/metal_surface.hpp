@@ -10,6 +10,7 @@ namespace CA { class MetalLayer; }
 namespace erhe::graphics {
 
 class Device_impl;
+class Display_presentation;
 enum class Frame_pacing_tier : unsigned int;
 class Surface_create_info;
 class Swapchain;
@@ -52,6 +53,15 @@ public:
     // (metal_device_present_calibration.cpp), which presents before the
     // application's event loop first runs. No-op off the main thread.
     void service_main_run_loop();
+    // How the window's display presents (claim C30): the NSScreen
+    // refresh-interval range of the window's screen and the window's
+    // fullscreen state. A screen whose minimum and maximum refresh
+    // intervals differ is a variable refresh rate (Adaptive-Sync,
+    // ProMotion) display; driven fullscreen it shows each image at its
+    // target time with no compositor grid, while a window on the same
+    // display presents through the compositor's fixed grid (measured on a
+    // 48-120 Hz panel: 8.344 ms windowed). Main thread.
+    [[nodiscard]] auto query_display_presentation() const -> Display_presentation;
 
 private:
     Device_impl&               m_device_impl;

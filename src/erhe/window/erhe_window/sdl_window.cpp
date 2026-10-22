@@ -1223,11 +1223,16 @@ void Context_window::handle_sdl_event(void* sdl_event)
             }
             case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
             case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
-            case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED: {
+            case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED:
+            case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+            case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN: {
                 // The window is on another display, or its display changed
                 // mode: the refresh rate the frame pacer runs on may differ.
-                // The mode events arrive for every display; the callback
-                // re-reads the window's own display and decides.
+                // Entering or leaving fullscreen changes how the display
+                // presents (a variable refresh rate display has no grid when
+                // driven fullscreen). The mode events arrive for every
+                // display; the callback re-reads the window's own display
+                // and decides.
                 if (m_display_changed_callback) {
                     m_display_changed_callback();
                 }

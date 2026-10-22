@@ -88,6 +88,47 @@ void Display_refresh_resolver::set_apply_callback(Apply_callback callback)
     m_apply_callback = std::move(callback);
 }
 
+void Display_refresh_resolver::set_presentation_callback(Presentation_callback callback)
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    m_presentation_callback = std::move(callback);
+}
+
+void Display_refresh_resolver::set_window_presentation(const Display_presentation& presentation)
+{
+    Presentation_callback callback;
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        if (m_presentation_known && (presentation == m_presentation)) {
+            return;
+        }
+        m_presentation       = presentation;
+        m_presentation_known = true;
+        const bool variable = (presentation.kind == erhe::frame_pacing::Present_display_kind::variable_refresh);
+        const double min_hz = (presentation.maximum_refresh_interval > 0.0) ? (1.0 / presentation.maximum_refresh_interval) : 0.0;
+        const double max_hz = (presentation.minimum_refresh_interval > 0.0) ? (1.0 / presentation.minimum_refresh_interval) : 0.0;
+        m_logger->info(
+            "display presentation: {} ({}; display refresh interval {:.3f} ... {:.3f} ms = {:.1f} ... {:.1f} Hz)",
+            variable ? "variable refresh" : "fixed grid",
+            presentation.fullscreen ? "fullscreen" : "windowed",
+            presentation.minimum_refresh_interval * 1000.0,
+            presentation.maximum_refresh_interval * 1000.0,
+            min_hz,
+            max_hz
+        );
+        callback = m_presentation_callback;
+    }
+    if (callback) {
+        callback(presentation);
+    }
+}
+
+auto Display_refresh_resolver::get_presentation() const -> Display_presentation
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    return m_presentation;
+}
+
 auto Display_refresh_resolver::agree(const double a, const double b) -> bool
 {
     if ((a <= 0.0) || (b <= 0.0)) {
@@ -626,6 +667,7 @@ auto Display_refresh_resolver::get_report() const -> Display_refresh_report
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     Display_refresh_report report{};
+    report.presentation                    = m_presentation;
     report.policy                          = m_policy;
     report.override_period_seconds         = m_override_period;
     report.display_count                   = m_display_count;

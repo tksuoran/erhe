@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal/metal_surface.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/metal/metal_swapchain.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -9,6 +10,7 @@
 #include <QuartzCore/QuartzCore.hpp>
 
 #import <QuartzCore/CAMetalLayer.h>
+#import <AppKit/AppKit.h>
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
 #   include <SDL3/SDL.h>
@@ -117,6 +119,43 @@ auto Surface_impl::get_backbuffer_height() const -> int
     return (m_surface_create_info.context_window != nullptr)
         ? m_surface_create_info.context_window->get_height()
         : 0;
+}
+
+auto Surface_impl::query_display_presentation() const -> Display_presentation
+{
+    Display_presentation presentation{};
+    erhe::window::Context_window* const context_window = m_surface_create_info.context_window;
+    if (context_window == nullptr) {
+        return presentation;
+    }
+    presentation.fullscreen = context_window->is_fullscreen();
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    SDL_Window* const sdl_window = static_cast<SDL_Window*>(context_window->get_sdl_window());
+    if (sdl_window == nullptr) {
+        return presentation;
+    }
+    NSWindow* const ns_window = (__bridge NSWindow*)SDL_GetPointerProperty(
+        SDL_GetWindowProperties(sdl_window), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr
+    );
+    NSScreen* const screen = (ns_window != nil) ? [ns_window screen] : nil;
+    if (screen == nil) {
+        return presentation;
+    }
+    if (@available(macOS 12.0, *)) {
+        presentation.minimum_refresh_interval = static_cast<double>([screen minimumRefreshInterval]);
+        presentation.maximum_refresh_interval = static_cast<double>([screen maximumRefreshInterval]);
+    }
+    // A fixed-rate screen reports equal intervals; the margin keeps a
+    // rounding difference between the two from reading as a range.
+    constexpr double variable_range_ratio = 1.01;
+    const bool variable_range =
+        (presentation.minimum_refresh_interval > 0.0) &&
+        (presentation.maximum_refresh_interval > (presentation.minimum_refresh_interval * variable_range_ratio));
+    if (variable_range && presentation.fullscreen) {
+        presentation.kind = erhe::frame_pacing::Present_display_kind::variable_refresh;
+    }
+#endif
+    return presentation;
 }
 
 } // namespace erhe::graphics

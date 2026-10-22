@@ -317,6 +317,9 @@ private:
     // Feeds the window-side display refresh source to the resolver and
     // resolves m_frame_pacing_tier; constructor tail, after the surface.
     void init_frame_pacing(erhe::window::Context_window* context_window);
+    // The window whose display changed callback init_frame_pacing registers
+    // (cleared in ~Device_impl: the callback reaches this device).
+    erhe::window::Context_window* m_frame_pacing_window{nullptr};
     // Tier M: measures the compositor's request window and deadline on the
     // window's layer before the first frame (metal_device_present_calibration.cpp)
     // and stores the result in Device::get_present_calibration().

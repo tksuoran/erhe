@@ -163,9 +163,10 @@ public:
     // Name of the display the window is on (platform string); empty when
     // unknown.
     [[nodiscard]] auto get_display_name() const -> std::string;
-    // Called from poll_events() when the window moved to another display or
-    // the display it is on changed mode: the refresh rate above may have
-    // changed.
+    // Called from poll_events() when the window moved to another display,
+    // the display it is on changed mode, or the window entered or left
+    // fullscreen: the refresh rate above, or how the display presents, may
+    // have changed.
     void register_display_changed_callback(std::function<void()> callback);
     // Every display the window system reports, with its current mode and
     // which one hosts the window; empty when unknown.

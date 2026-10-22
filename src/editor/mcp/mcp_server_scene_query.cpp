@@ -2844,7 +2844,11 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
             {"calibration_locked_deltas",     refresh.locked_delta_count},
             {"calibration_locked_cluster",    refresh.locked_cluster_count},
             {"resolved_period_ms",            refresh.resolved_period_seconds * 1000.0},
-            {"resolved_source",               erhe::graphics::c_str(refresh.resolved_source)}
+            {"resolved_source",               erhe::graphics::c_str(refresh.resolved_source)},
+            {"presentation",                  (refresh.presentation.kind == erhe::frame_pacing::Present_display_kind::variable_refresh) ? "variable_refresh" : "fixed_grid"},
+            {"presentation_fullscreen",       refresh.presentation.fullscreen},
+            {"min_refresh_interval_ms",       refresh.presentation.minimum_refresh_interval * 1000.0},
+            {"max_refresh_interval_ms",       refresh.presentation.maximum_refresh_interval * 1000.0}
         };
         // The present calibration (erhe::graphics::Present_calibration) with
         // every raw sample: the compositor's request window and deadline
