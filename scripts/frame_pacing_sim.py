@@ -8,7 +8,10 @@ listed in doc/frame_pacing/algorithm.md section 8) against a deterministic plant
 No real GPU, display, or wall clock is involved; runs are reproducible.
 
 Usage: python scripts/frame_pacing_sim.py
-Exit code 0 iff all claims pass.
+Exit code 0 iff all claims pass. A claim introduced ahead of its fix is
+checked with check_expected_failure() and reported as XFAIL without failing
+the run; it fails the run once it passes (XPASS), until it is made a plain
+check.
 """
 
 import heapq
@@ -893,6 +896,19 @@ class Scenario:
                                          # ProMotion panel); the blocked CPU
                                          # also delays the next decision.
     pool_latch_lead: float = 0.0
+    vrr_min_interval: float = 0.0        # C30: variable refresh rate display
+                                         # (Adaptive-Sync, fullscreen direct to
+                                         # display). > 0: no vsync grid - an
+                                         # image displays once it is ready
+                                         # (dpe_true before) and its target
+                                         # time has arrived, no earlier than
+                                         # vrr_min_interval after the previous
+                                         # refresh; without a new image the
+                                         # display repeats the previous one
+                                         # vrr_max_interval after the previous
+                                         # refresh. Live: NSScreen 8.333 /
+                                         # 20.833 ms (48-120 Hz).
+    vrr_max_interval: float = 0.0
     latency_includes_waits: bool = False # C28 control: the host's latency input counts the involuntary waits (pre-C28)
     slop_servo: bool = False             # C19..C21: release comes from the
                                          # tier S slop-servo sleep instead of
@@ -964,6 +980,7 @@ def run(sc: Scenario):
     dvfs_prev = True                     # ... the one before it ...
     dvfs_since = 0.0                     # ... and since when it holds
     gpu_busy_until = 0.0                 # C26: end of pre-warm work on the GPU
+    vrr_refresh = None                   # C30: time of the VRR display's latest refresh
 
     def maybe_skip(slot):
         # C17: scanout-side skip - the present op stays on cadence but
@@ -1114,6 +1131,22 @@ def run(sc: Scenario):
                     if not blacked_out:
                         push(p_dt, 'present', (p_id, p_dt))
             pending_disp = (k, max(prev_disp_slot + 1, earliest))
+        elif sc.vrr_min_interval > 0.0:
+            # C30: VRR display - the refresh follows the image, not a grid.
+            # The target is honored (presentDrawable:atTime:); a late image
+            # displays when it is ready, not at a later vsync.
+            want = max(dec.target_time, avail + sc.dpe_true)
+            if vrr_refresh is not None:
+                while want > vrr_refresh + sc.vrr_max_interval:
+                    vrr_refresh += sc.vrr_max_interval   # repeat of the previous image
+                want = max(want, vrr_refresh + sc.vrr_min_interval)
+            vrr_refresh = want
+            # i: the nominal slot, for rec_slot in the frame record only (the
+            # VRR display has no slots).
+            i = round((want - sc.true_phase) / t.T)
+            disp_time[k], prev_disp_slot = want, i
+            if not blacked_out:
+                push(want, 'present', (k, want))
         else:
             if sc.inert_target or sc.slop_servo:
                 # Inert-target engine (C15): earliest feasible vsync, the
@@ -1200,11 +1233,25 @@ def stepped(base_fn, high_fn, first, last=None):
 # ---------------------------------------------------------------------------
 
 RESULTS = []
+EXPECTED_FAILURES = []
 
 
 def check(claim, cond, detail):
     RESULTS.append((claim, bool(cond), detail))
     print(f"  [{'PASS' if cond else 'FAIL'}] {claim}: {detail}")
+
+
+def check_expected_failure(claim, cond, detail, plan):
+    """A claim introduced before its fix: the check states the goal and is
+    known to fail on the current pacer (XFAIL). Passing (XPASS) fails the
+    run - the fix commit replaces this call with check(). `plan` names the
+    plan document that holds the fix."""
+    if cond:
+        RESULTS.append((claim, False, detail))
+        print(f"  [XPASS] {claim}: {detail} - passes now; make it a plain check ({plan})")
+    else:
+        EXPECTED_FAILURES.append((claim, detail, plan))
+        print(f"  [XFAIL] {claim}: {detail} (expected before the fix, {plan})")
 
 
 def steady_frames(recs, start, n_expect):
@@ -2344,6 +2391,83 @@ def c29_clock_records_by_workload():
           f"upshifts {ups}, N after frame 3000: {sorted(n_fix)}, {slips} slips after frame 540")
 
 
+def c30_variable_refresh_display():
+    print("C30 variable refresh rate display (Adaptive-Sync, fullscreen direct to display)")
+    # Live (Metal tier M, Release, Bistro, external panel at 3840x1440 @
+    # 120 Hz, fullscreen; NSScreen minimum / maximum refresh interval
+    # 8.333 / 20.833 ms): presentedTime deltas steady at 10.6-11.8 ms or
+    # 16-20 ms while the GPU frame (7.2-7.6 ms) fits 8.33 ms; the pacer's
+    # grid period followed them, and the outcome depended on the session's
+    # history. Windowed, the compositor's fixed 8.344 ms grid holds 120 Hz.
+    # A VRR display has no grid: a late frame displays when it is ready,
+    # and below the 48 Hz floor the display repeats the previous image
+    # 20.833 ms after it, holding the next one to 29.17 ms. The gross-error
+    # re-seed (C16) reads those deltas as the display's period; once
+    # re-seeded, the display honors every target on the pacer's own grid
+    # and nothing pulls the period back (doc/plans/frame_pacing_adaptive_sync.md
+    # "Mechanism"). Goal: N=1 at 8.33 ms present deltas.
+    plan = "doc/plans/frame_pacing_adaptive_sync.md"
+    T = 1.0 / 120.0
+    dpe_cal = T + 1.0 * MS   # the Dell compositor deadline (present calibration, windowed)
+    def arm(seed, work_ms, heavy, display_kind, dvfs_low=0.8, n=6000):
+        tun = Tunables(T=T, dpe_source='estimated', dpe_hat=dpe_cal + 0.3 * MS,
+                       dpe_max=dpe_cal + 0.3 * MS + 0.5 * T, present_queue='fifo',
+                       prewarm_seconds=2.3 * MS)
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        def work(k, n_used):
+            if heavy is not None and heavy[0] <= k < heavy[1]:
+                return max(0.5, rw.gauss(heavy[2], 0.1)) * MS
+            return max(0.5, rw.gauss(work_ms, 0.1)) * MS
+        if display_kind == 'variable_refresh':
+            # Direct to display: the image must be complete ~1 ms before it shows.
+            display = dict(vrr_min_interval=T, vrr_max_interval=1.0 / 48.0, dpe_true=1.0 * MS,
+                           drawable_pool=3, pool_latch_lead=0.0)
+        else:
+            display = dict(dpe_true=dpe_cal, drawable_pool=3, pool_latch_lead=dpe_cal - 1.8 * MS)
+        sc = Scenario("c30", n, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work,
+                      dvfs=True, dvfs_low=dvfs_low, **display)
+        return run(sc)
+    def summary(result):
+        recs, pacer = result
+        tail = recs[3000:]
+        deltas = sorted(b.disp_time - a.disp_time for a, b in zip(tail, tail[1:]))
+        exact = sum(1 for d in deltas if abs(d - T) < 0.1 * MS)
+        ok = ({r.N for r in tail} == {1}) and (exact >= 0.99 * len(deltas))
+        detail = (f"N after frame 3000: {sorted({r.N for r in tail})}, present delta median "
+                  f"{deltas[len(deltas) // 2] * 1000:.3f} ms, {exact}/{len(deltas)} within 0.1 ms of T, "
+                  f"grid period {pacer.period * 1000:.3f} ms")
+        return ok, detail
+    # Controls: the same load (6.5 ms) and startup spike on the windowed
+    # compositor's fixed grid, and on the VRR display without a spike.
+    ok, detail = summary(arm(3001, 6.5, (30, 60, 20.0), 'fixed_grid'))
+    check("C30 control: fixed grid, startup spike: 120 Hz", ok, detail)
+    ok, detail = summary(arm(3001, 6.5, None, 'variable_refresh'))
+    check("C30 control: VRR without a disturbance: 120 Hz", ok, detail)
+    # A startup spike (scene load): its late frames display when ready
+    # (20 ms deltas, dn = 2, samples 10 ms) and N=3 sits below the VRR
+    # floor (29.17 ms deltas, samples 9.72 ms) - the period re-seeds.
+    ok, detail = summary(arm(3001, 6.5, (30, 60, 20.0), 'variable_refresh'))
+    check_expected_failure("C30 VRR after a startup spike: 120 Hz", ok, detail, plan)
+    # A heavy configuration first (live: loops with all 43 lights), then back.
+    ok, detail = summary(arm(3001, 6.5, (30, 600, 16.0), 'variable_refresh'))
+    check_expected_failure("C30 VRR after a heavy configuration: 120 Hz", ok, detail, plan)
+    # The live load (7.2 ms): the N=2 trap (50-60 fps). The cadence tests
+    # add guard to the stage times (q95(g) + guard > T), so the margin AIMD's
+    # near-misses count as pressure and a miss streak attributes to load. On
+    # the fixed grid that is correct and stays: a frame that misses its
+    # vsync by a little costs a whole refresh there. On the VRR display it
+    # costs only its own lateness - the fix is a VRR-scoped guard allowance.
+    recs_fixed, _ = arm(3001, 7.2, None, 'fixed_grid')
+    # Probes back to N=1 are allowed (C10 backoff); at least 90 % of the
+    # frames after frame 3000 stay at N=2.
+    at_two = sum(1 for r in recs_fixed[3000:] if r.N == 2)
+    check("C30 control: fixed grid, live load: N=2 (the guard rule holds there)",
+          at_two >= 0.9 * len(recs_fixed[3000:]),
+          f"{at_two}/{len(recs_fixed[3000:])} frames at N=2 after frame 3000")
+    ok, detail = summary(arm(3001, 7.2, None, 'variable_refresh'))
+    check_expected_failure("C30 VRR live load (N=2 trap): 120 Hz", ok, detail, plan)
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -2374,9 +2498,13 @@ def main():
     c27_steady_clock_records()
     c28_latency_per_visit()
     c29_clock_records_by_workload()
+    c30_variable_refresh_display()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")
+    if EXPECTED_FAILURES:
+        print(f"{len(EXPECTED_FAILURES)} expected failures (claims ahead of their fix):",
+              ", ".join(c for c, _, _ in EXPECTED_FAILURES))
     if failed:
         print("FAILED:", ", ".join(failed))
         return 1

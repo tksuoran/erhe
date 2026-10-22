@@ -34,6 +34,73 @@ Metal.
 - N=2 trap: when frames land at two refreshes, the GPU clock drops to about
   0.8 (IOReport), the frames get slower, and the pacer stays at 50-60 fps.
 
+## Mechanism
+
+The drift enters through two channels in `Frame_pacer::on_present_feedback`.
+
+- **PLL creep (bounded).** On a VRR display feedback is never earlier than
+  the target: an on-time frame displays at its target, a late one when it is
+  ready. The PLL's period branch therefore only sees non-negative
+  innovations and creeps the period up, to 8.338-8.359 ms in the plant -
+  bounded by its clamp of 0.5 % of the reference period.
+- **Gross-error re-seed (unbounded).** The re-seed
+  (`doc/frame_pacing/algorithm.md` deviation 12, claim C16) takes a period sample from each
+  feedback delta, `dt / round(dt / period)` for `1 <= round(dt / period)
+  <= 4`, and re-seeds when the median of its 16-sample window deviates from
+  the tracked period by more than 2 %. It replaces the period *and* the
+  reference period (`m_grid_period_ref`), so the clamp re-centres on what it
+  measured. On a fixed grid every delta is a multiple of the true period, so
+  the samples are the true period whatever the load does.
+- On a VRR display the deltas are not multiples of anything. A late frame
+  displays when it is ready, not at the next vsync: a 20 ms frame at N=1
+  gives `dt` = 20 ms, `round(20 / 8.33)` = 2, a 10 ms sample; 11 ms frames
+  give 11 ms samples. A cadence below the display's 48 Hz floor (N=3 at
+  120 Hz, 25 ms targets) makes the display repeat the previous image
+  20.833 ms after it and hold the next image to 20.833 + 8.333 = 29.17 ms.
+  29.17 / 8.333 = 3.5 exactly, a rounding boundary: the delta counts as
+  three periods (a 9.72 ms sample) only because the PLL creep already put
+  the tracked period above 8.333 ms. Once such samples hold a majority of
+  the 16-sample window, its median re-seeds the period to 10-11 ms or
+  9.72 ms. The disturbances that produce them are a scene load, a heavy
+  configuration, or the cold start's downshift to N=3.
+- Once re-seeded, the display honors every target on the pacer's own grid
+  (`presentDrawable:atTime:`), so every delta equals the tracked period and
+  confirms it. A delta shorter than the tracked period never arrives (the
+  targets are spaced by it), so nothing pulls the period back to 8.33 ms.
+  The estimate only ratchets upward, and the outcome depends on the
+  session's history: the same configuration holds 120 Hz in a session
+  without the disturbance and runs at 1 / (re-seeded period) in one with it.
+- The cadence budgets quantize by the tracked period (deviation 12), so a
+  re-seeded 9.72 ms period holds N=1 at 103 fps and N=2 at 19.44 ms
+  (51 fps).
+
+The N=2 trap at the live load (GPU 7.2-7.6 ms) is a separate mechanism and
+is not VRR-specific in the plant: the cadence tests add `guard` (1 ms) to
+the stage times (`W = max(q_p(c), q_p(g)) + guard`, the reactive
+attribution `streak_attr + guard > N * period`), so with q95(g) above
+7.33 ms N=1 is infeasible by the pacer's rule. The margin AIMD keeps
+producing near-misses (its ~1 % equilibrium rate), which count as pressure,
+and a miss streak after an upshift attributes to load: the pacer returns to
+N=2. On a fixed grid this is correct and stays: a frame that misses its
+vsync by a little costs a whole refresh there. On a VRR display such a
+frame costs only its own lateness, so the fix for the trap is a guard
+allowance scoped to VRR. The live windowed result ("Observed behaviour")
+does not contradict the fixed-grid trap: the windowed viewport is smaller
+(1334x1120 against 2224x1360 fullscreen) and its GPU span was 4.5-6.1 ms,
+against 7.36-8.10 ms fullscreen.
+
+Claim C30 (`scripts/frame_pacing_sim.py`, `erhe_frame_pacing_tests`
+`DISABLED_c30_variable_refresh_display`) reproduces both with a VRR display
+model in the plant (`vrr_min_interval` / `vrr_max_interval`, 8.333 /
+20.833 ms, 1 ms deadline, GPU clock 0.8 at N>=2): after a startup spike or
+a heavy configuration at 6.5 ms of GPU work the period re-seeds to 9.72 ms
+and the pacer stays at N=1 with 9.72 ms deltas; at the live load of 7.2 ms
+it stays mostly at N=2 with 16.7 ms deltas. The controls: the same 6.5 ms
+load and spike on the windowed compositor's fixed grid and the VRR display
+without a disturbance hold 120 Hz, and the 7.2 ms load on the fixed grid
+stays at N=2 (the guard rule). C30 is an expected failure (XFAIL in the
+sim, `DISABLED_` in the C++ suite) until the fix.
+
 ## Goal and gate
 
 Fullscreen on the Adaptive-Sync display, tier M (or the tier `auto` picks)
