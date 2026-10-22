@@ -146,6 +146,14 @@ public:
     // panel); the blocked CPU also delays the next decision.
     int                                     drawable_pool{0};
     double                                  pool_latch_lead{0.0};
+    // Claim C30: variable refresh rate display (Adaptive-Sync, fullscreen
+    // direct to display). > 0: no vsync grid - an image displays once it is
+    // ready (true_deadline_offset before) and its target time has arrived,
+    // no earlier than vrr_min_interval after the previous refresh; without a
+    // new image the display repeats the previous one vrr_max_interval after
+    // the previous refresh. Live: NSScreen 8.333 / 20.833 ms (48-120 Hz).
+    double                                  vrr_min_interval{0.0};
+    double                                  vrr_max_interval{0.0};
     // Claims C19..C21: release comes from the tier S slop-servo sleep
     // instead of the Frame_pacer decision; the presentation target is
     // ignored (plain FIFO displays at the earliest feasible vsync).
@@ -265,6 +273,8 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
     double       dvfs_previous  = 1.0;  // ... the one before it ...
     double       dvfs_since     = 0.0;  // ... and since when it holds
     double       gpu_busy_until = 0.0;  // C26: end of pre-warm work on the GPU
+    bool         has_vrr_refresh = false; // C30: the VRR display has refreshed ...
+    double       vrr_refresh     = 0.0;   // ... and this is its latest refresh
     std::int64_t pending_display_id  = 0;
     std::int64_t pending_display_slot= 0;
     std::mt19937 skip_engine{scenario.skip_seed};
@@ -478,6 +488,22 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
             has_pending_display  = true;
             pending_display_id   = k;
             pending_display_slot = std::max(prev_display_slot + 1, earliest);
+        } else if (scenario.vrr_min_interval > 0.0) {
+            // C30: VRR display - the refresh follows the image, not a grid.
+            // The target is honored (presentDrawable:atTime:); a late image
+            // displays when it is ready, not at a later vsync.
+            double shown = std::max(decision.target_time, available + dpe);
+            if (has_vrr_refresh) {
+                while (shown > (vrr_refresh + scenario.vrr_max_interval)) {
+                    vrr_refresh += scenario.vrr_max_interval; // repeat of the previous image
+                }
+                shown = std::max(shown, vrr_refresh + scenario.vrr_min_interval);
+            }
+            has_vrr_refresh = true;
+            vrr_refresh     = shown;
+            display_time[static_cast<std::size_t>(k)] = shown;
+            prev_display_slot = static_cast<std::int64_t>(std::round((shown - phase) / t)); // nominal slot, records only
+            push_present(k, shown);
         } else {
             std::int64_t display_slot = prev_display_slot + 1;
             // Slop-servo mode (P4.1): plain FIFO has no target at all -
