@@ -136,6 +136,8 @@ Frame_pacer::Frame_pacer(const Frame_pacer_tunables& tunables, const double nomi
     m_min_vsyncs      = m_tunables.min_vsyncs;
     m_margin          = m_tunables.margin_initial_frac * t;
     m_streak_attribution = std::numeric_limits<double>::infinity();
+    m_backlog            = 0.0;
+    m_backlog_growing    = false;
     m_dwell_required     = m_tunables.upshift_dwell_time;
     m_prewarm_fill       = m_tunables.upshift_prewarm_seconds;
 
@@ -233,6 +235,69 @@ auto Frame_pacer::cadence_guard() const -> double
     return is_variable_refresh() ? 0.0 : m_tunables.guard;
 }
 
+auto Frame_pacer::vrr_overload() const -> bool
+{
+    // C31: the downshift test on a VRR display. A frame beyond the period
+    // costs its lateness only, so the cost of a cadence is the queue's
+    // backlog: the sum of the stage times' excess over the cadence period,
+    // drained by the slack of the frames within it. Tail frames build a
+    // backlog the next frames drain; load beyond the period builds it
+    // without bound. The cadence is overloaded once the backlog exceeds one
+    // cadence period - the cost of the longer cadence on every frame - while
+    // it is still building: the latest frame added to a backlog that earlier
+    // frames left. An impulse (a stall, a single spike on a drained queue)
+    // builds it in one frame and the frames after it drain it.
+    return m_backlog_growing && (m_backlog > (static_cast<double>(m_vsyncs) * m_grid_period));
+}
+
+auto Frame_pacer::upshift_survival() const -> double
+{
+    // The time an upshift must hold before it counts as surviving (C10
+    // backoff): 4*T_up. On a VRR display without the hysteresis band a load
+    // at the shorter cadence's throughput limit reverts on the backlog's
+    // random walk, often later than 4*T_up; with a fixed window every such
+    // revert found the backoff reset. There the window is 4x the dwell that
+    // admitted the upshift, so each revert doubles the next window too (C31).
+    return is_variable_refresh() ? (4.0 * m_dwell_required) : (4.0 * m_tunables.upshift_dwell_time);
+}
+
+auto Frame_pacer::upshift_hysteresis() const -> double
+{
+    // The upshift test's hysteresis width H (deviation 15): on a fixed grid
+    // a frame past the shorter cadence's period costs a whole refresh, so
+    // load within H below it parks at the longer cadence (C4). On a VRR
+    // display such a frame costs only its own lateness, while staying at the
+    // longer cadence costs a whole period on every frame; a frame predicted
+    // to fit the period is evidence for the shorter cadence (C31). The
+    // quantile gap stays: the upshift needs every dwell frame within the
+    // period, the predictive downshift q_p beyond it.
+    return is_variable_refresh() ? 0.0 : m_hysteresis;
+}
+
+auto Frame_pacer::target_spacing(const int vsyncs) const -> std::int64_t
+{
+    // C30: the slots between consecutive targets at a cadence. On a VRR
+    // display a cadence beyond the display's maximum refresh interval is
+    // spaced at the bound (the display would repeat the previous image in
+    // between); the cadence itself still drives the cadence tests.
+    return is_variable_refresh()
+        ? std::min<std::int64_t>(vsyncs, vrr_slots_max())
+        : static_cast<std::int64_t>(vsyncs);
+}
+
+auto Frame_pacer::upshift_shortens_spacing() const -> bool
+{
+    // C31: the pre-warm (C26) raises the clock for the shorter interval
+    // between targets at N-1 and runs in the GPU's idle gap at N. On a VRR
+    // display a cadence beyond the spacing bound leaves the targets where
+    // they are (N and N-1 both at the bound): there is no shorter interval
+    // to prepare for and no idle gap to fill, and the extra work only delays
+    // the next frame (past the maximum refresh interval in the plant: a
+    // repeat of the previous image). Such an upshift switches without a
+    // pre-warm.
+    return target_spacing(m_vsyncs - 1) < target_spacing(m_vsyncs);
+}
+
 auto Frame_pacer::vrr_slots_max() const -> std::int64_t
 {
     // C30: the most slots between two targets the display shows without a
@@ -298,6 +363,8 @@ void Frame_pacer::notify_swapchain_recreated(const double nominal_grid_phase)
     m_deadline_sample_count = 0;
     m_consecutive_misses  = 0;
     m_streak_attribution  = std::numeric_limits<double>::infinity();
+    m_backlog             = 0.0;
+    m_backlog_growing     = false;
     reset_dwell();
 }
 
@@ -305,13 +372,7 @@ auto Frame_pacer::schedule(const std::int64_t frame_id, const double now) -> Sch
 {
     std::int64_t slot    = 0;
     double       release = now;
-    // C30: the slots between consecutive targets. On a VRR display a cadence
-    // beyond the display's maximum refresh interval is spaced at the bound
-    // (the display would repeat the previous image in between); the
-    // cadence N itself still drives the cadence tests.
-    const std::int64_t spacing = is_variable_refresh()
-        ? std::min<std::int64_t>(m_vsyncs, vrr_slots_max())
-        : static_cast<std::int64_t>(m_vsyncs);
+    const std::int64_t spacing = target_spacing(m_vsyncs);
 
     if (m_completed_frames < static_cast<std::int64_t>(m_tunables.cold_start_seed_frames)) {
         // Cold start seed phase: open loop, release immediately (FR7).
@@ -515,6 +576,14 @@ void Frame_pacer::on_gpu_done(
         m_consecutive_misses = 0;
         m_streak_attribution = std::numeric_limits<double>::infinity();
     }
+    // C31: the queue backlog at the current cadence (leaky: a frame within
+    // the period drains it by its slack). Building: this frame added to a
+    // backlog earlier frames left.
+    if (n_used == m_vsyncs) {
+        const double excess = std::max(cpu_duration, gpu_duration) - (static_cast<double>(m_vsyncs) * m_grid_period);
+        m_backlog_growing   = (excess > 0.0) && (m_backlog > 0.0);
+        m_backlog           = std::max(0.0, m_backlog + excess);
+    }
 
     const double w_statistic = throughput_statistic();
 
@@ -555,12 +624,20 @@ void Frame_pacer::on_gpu_done(
 
     // Upshift survival: no pressure-driven revert for 4*T_up after an
     // upshift means the new cadence holds - future upshifts are cheap.
-    if (m_has_upshift_time && ((gpu_end_time - m_upshift_time) >= (4.0 * m_tunables.upshift_dwell_time))) {
+    if (m_has_upshift_time && ((gpu_end_time - m_upshift_time) >= upshift_survival())) {
         m_dwell_required   = m_tunables.upshift_dwell_time;
         m_has_upshift_time = false;
     }
 
-    if (
+    if (is_variable_refresh() && vrr_overload()) {
+        // C31: on a VRR display the backlog test replaces both downshift
+        // paths; one cadence at a time (the test repeats at the next).
+        on_pressure_downshift(gpu_end_time);
+        change_cadence(m_vsyncs + 1, false);
+        m_consecutive_misses = 0;
+        m_streak_attribution = std::numeric_limits<double>::infinity();
+    } else if (
+        !is_variable_refresh() &&
         (m_consecutive_misses >= m_tunables.reactive_miss_threshold) &&
         ((m_streak_attribution + cadence_guard()) > cadence_budget)
     ) {
@@ -571,6 +648,7 @@ void Frame_pacer::on_gpu_done(
         m_consecutive_misses = 0;
         m_streak_attribution = std::numeric_limits<double>::infinity();
     } else if (
+        !is_variable_refresh() &&
         (required_vsyncs_here > m_vsyncs) &&
         m_cadence_pressure &&
         ((m_completed_frames - m_last_pressure_frame) <= static_cast<std::int64_t>(m_tunables.history))
@@ -621,7 +699,7 @@ void Frame_pacer::on_gpu_done(
             // recorded at N-1 - fits N-1's budget. A pre-warm that does not
             // get there is a failed upshift (backoff, C10).
             const double prewarmed_stage = std::max(at_next(cpu_duration, cpu_clock_ratio, m_cpu_clock_windows[next_index]), gpu_duration);
-            if (prewarmed_stage <= (next_period - m_hysteresis)) {
+            if (prewarmed_stage <= (next_period - upshift_hysteresis())) {
                 m_prewarm_left = 0;
                 change_cadence(m_vsyncs - 1, true);
                 m_has_upshift_time = true;
@@ -645,7 +723,7 @@ void Frame_pacer::on_gpu_done(
         );
         m_last_upshift_stage_time = stage_time;
         const bool   beyond_period  = stage_time > next_period;
-        const bool   in_band        = !beyond_period && (stage_time > (next_period - m_hysteresis));
+        const bool   in_band        = !beyond_period && (stage_time > (next_period - upshift_hysteresis()));
         ++m_dwell_frames;
         if (in_band) {
             ++m_dwell_frames_loaded;
@@ -656,7 +734,7 @@ void Frame_pacer::on_gpu_done(
         } else {
             m_dwell += elapsed;
             if (m_dwell >= m_dwell_required) {
-                if ((m_prewarm_fill > 0.0) && (gpu_clock_ratio > 0.0)) {
+                if ((m_prewarm_fill > 0.0) && (gpu_clock_ratio > 0.0) && upshift_shortens_spacing()) {
                     m_prewarm_left = m_tunables.upshift_prewarm_frames;
                     reset_dwell();
                 } else {
@@ -706,7 +784,7 @@ void Frame_pacer::on_pressure_downshift(const double gpu_end_time)
     // probed an infeasible cadence: double the price of the next probe.
     // Geometric backoff converges (finitely many probes) at persistently
     // borderline load while staying adaptive to real drops (claim C10).
-    if (m_has_upshift_time && ((gpu_end_time - m_upshift_time) < (4.0 * m_tunables.upshift_dwell_time))) {
+    if (m_has_upshift_time && ((gpu_end_time - m_upshift_time) < upshift_survival())) {
         m_dwell_required  *= 2.0;
         m_has_upshift_time = false;
     }
@@ -735,6 +813,8 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     m_cadence_cpu_window.clear();
     m_cadence_gpu_window.clear();
     m_cadence_pressure = false;
+    m_backlog          = 0.0;
+    m_backlog_growing  = false;
     // A cadence's latency window holds the current visit only (C28):
     // samples of an earlier visit (the startup spike at N=1) kept the release
     // budget at the old latency for a whole window after an upshift, and a

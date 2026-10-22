@@ -191,6 +191,8 @@ class FramePacer:
         self._reset_dwell()
         self.consec_miss = 0
         self.streak_attr = float('inf')   # min over streak of max(c,g)
+        self.backlog = 0.0                # C31: the queue backlog the stage times build at the current cadence
+        self.backlog_growing = False      # C31: the latest frame at the current cadence added to it
         self.last_pressure = -10**9       # completed-count of last (near-)miss
         self.last_fb = None               # (frame_id, achieved_slot)
         # Upshift backoff: an upshift reverted by pressure within the
@@ -269,6 +271,62 @@ class FramePacer:
         # own lateness (C30), so the allowance is 0 there.
         return 0.0 if self._variable_refresh() else self.tun.guard
 
+    def _vrr_overload(self):
+        # C31: the downshift test on a VRR display. A frame beyond the period
+        # costs its lateness only, so the cost of a cadence is the queue's
+        # backlog: the sum of the stage times' excess over the cadence
+        # period, drained by the slack of the frames within it. Tail frames
+        # build a backlog the next frames drain; load beyond the period
+        # builds it without bound. The cadence is overloaded once the
+        # backlog exceeds one cadence period - the cost of the longer
+        # cadence on every frame - while it is still building: the latest
+        # frame added to a backlog that earlier frames left. An impulse (a
+        # stall, a single spike on a drained queue) builds it in one frame
+        # and the frames after it drain it.
+        return self.backlog_growing and (self.backlog > self.N * self.period)
+
+    def _upshift_survival(self):
+        # The time an upshift must hold before it counts as surviving (C10
+        # backoff): 4*T_up. On a VRR display without the hysteresis band a
+        # load at the shorter cadence's throughput limit reverts on the
+        # backlog's random walk, often later than 4*T_up; with a fixed window
+        # every such revert found the backoff reset and the pacer probed
+        # every few seconds for good. There the window is 4x the dwell that
+        # admitted the upshift, so each revert doubles the next window too
+        # and the probes stay finite (C31).
+        if self._variable_refresh():
+            return 4.0 * self.dwell_required
+        return 4.0 * self.tun.T_up
+
+    def _upshift_hysteresis(self):
+        # The upshift test's hysteresis width H (deviation 15): on a fixed
+        # grid a frame past the shorter cadence's period costs a whole
+        # refresh, so load within H below it parks at the longer cadence
+        # (C4). On a VRR display such a frame costs only its own lateness,
+        # while staying at the longer cadence costs a whole period on every
+        # frame; a frame predicted to fit the period is evidence for the
+        # shorter cadence (C31). The quantile gap stays: the upshift needs
+        # every dwell frame within the period, the downshift q_p beyond it.
+        return 0.0 if self._variable_refresh() else self.tun.H
+
+    def _spacing(self, n):
+        # C30: the slots between consecutive targets at cadence n. On a VRR
+        # display a cadence beyond the display's maximum refresh interval is
+        # spaced at the bound (the display would repeat the previous image
+        # in between); the cadence itself still drives the cadence tests.
+        return min(n, self._vrr_slots_max()) if self._variable_refresh() else n
+
+    def _upshift_shortens_spacing(self):
+        # C31: the pre-warm (C26) raises the clock for the shorter interval
+        # between targets at N-1 and runs in the GPU's idle gap at N. On a
+        # VRR display a cadence beyond the spacing bound leaves the targets
+        # where they are (N and N-1 both at the bound): there is no shorter
+        # interval to prepare for and no idle gap to fill, and the extra
+        # work only delays the next frame (past the maximum refresh interval
+        # in the plant: a repeat of the previous image). Such an upshift
+        # switches without a pre-warm.
+        return self._spacing(self.N - 1) < self._spacing(self.N)
+
     def _vrr_slots_max(self):
         # C30: the most slots between two targets the display shows without
         # a repeat of the previous image in between.
@@ -297,6 +355,8 @@ class FramePacer:
         self.last_fb = None
         self.consec_miss = 0
         self.streak_attr = float('inf')
+        self.backlog = 0.0
+        self.backlog_growing = False
         self._reset_dwell()
         # The deadline offset belongs to the presentation path, which a
         # recreation may change (model section 9).
@@ -307,11 +367,7 @@ class FramePacer:
 
     def schedule(self, frame_id, now):
         t = self.tun
-        # C30: the slots between consecutive targets. On a VRR display a
-        # cadence beyond the display's maximum refresh interval is spaced at
-        # the bound (the display would repeat the previous image in between);
-        # the cadence N itself still drives the cadence tests.
-        spacing = min(self.N, self._vrr_slots_max()) if self._variable_refresh() else self.N
+        spacing = self._spacing(self.N)
         if self.completed < t.K_seed:
             # Cold start seed phase: open loop, release immediately (FR7).
             j = max(self.last_slot + 1, math.ceil((now - self.phase) / self.period))
@@ -471,6 +527,14 @@ class FramePacer:
         else:
             self.consec_miss = 0
             self.streak_attr = float('inf')
+        # C31: the queue backlog at the current cadence (leaky: a frame
+        # within the period drains it by its slack).
+        if n_used == self.N:
+            excess = max(c, g) - self.N * self.period
+            # Building: this frame added to a backlog earlier frames left (a
+            # single frame's excess on an empty queue is an impulse).
+            self.backlog_growing = (excess > 0.0) and (self.backlog > 0.0)
+            self.backlog = max(0.0, self.backlog + excess)
 
         W = self._W()
         self.stats[frame_id] = dict(self_miss=self_miss, s=s, W=W,
@@ -500,11 +564,19 @@ class FramePacer:
         # Upshift survival: no pressure-driven revert for 4*T_up after an
         # upshift means the new cadence holds - future upshifts are cheap.
         if (self.upshift_time is not None
-                and (gpu_end - self.upshift_time) >= 4.0 * t.T_up):
+                and (gpu_end - self.upshift_time) >= self._upshift_survival()):
             self.dwell_required = t.T_up
             self.upshift_time = None
 
-        if (self.consec_miss >= t.M
+        if self._variable_refresh() and self._vrr_overload():
+            # C31: on a VRR display the backlog test replaces both downshift
+            # paths; one cadence at a time (the test repeats at the next).
+            self._on_pressure_downshift(gpu_end)
+            self._change_cadence(self.N + 1)
+            self.consec_miss = 0
+            self.streak_attr = float('inf')
+        elif ((not self._variable_refresh())
+                and self.consec_miss >= t.M
                 and self.streak_attr + self._cadence_guard() > self.N * self.period):
             # Reactive downshift: sustained overload evidenced by the missed
             # frames' own stage times (attribution excludes timing-only misses
@@ -513,7 +585,8 @@ class FramePacer:
             self._change_cadence(max(self.N + 1, n_req_cadence))
             self.consec_miss = 0
             self.streak_attr = float('inf')
-        elif (n_req_cadence > self.N
+        elif ((not self._variable_refresh())
+                and n_req_cadence > self.N
                 and pressure_here
                 and (self.completed - self.last_pressure) <= t.history):
             # Predictive downshift needs PRESSURE evidence (a recent miss or
@@ -560,7 +633,7 @@ class FramePacer:
                 # raised clock; switch once it - and the CPU's at the clock
                 # recorded at N-1 - fits N-1's budget. A pre-warm that does
                 # not get there is a failed upshift (backoff, C10).
-                if max(at_next(c, cpu_clock, self.cpu_clock_by_N), g) <= next_period - t.H:
+                if max(at_next(c, cpu_clock, self.cpu_clock_by_N), g) <= next_period - self._upshift_hysteresis():
                     self.prewarm_left = 0
                     self._change_cadence(self.N - 1, upshift=True)
                     self.upshift_time = gpu_end
@@ -576,14 +649,14 @@ class FramePacer:
             stage = max(at_next(c, cpu_clock, self.cpu_clock_by_N), at_next(g, clock, self.clock_by_N))
             beyond = stage > next_period
             self.dwell_frames += 1
-            if not beyond and stage > next_period - t.H:
+            if not beyond and stage > next_period - self._upshift_hysteresis():
                 self.dwell_loaded += 1
             if beyond or self.dwell_loaded > math.floor((1.0 - t.q_up) * self.dwell_frames):
                 self._reset_dwell()
             else:
                 self.dwell += elapsed
                 if self.dwell >= self.dwell_required:
-                    if (self.prewarm_fill > 0.0) and (clock > 0.0):
+                    if (self.prewarm_fill > 0.0) and (clock > 0.0) and self._upshift_shortens_spacing():
                         self.prewarm_left = t.prewarm_frames
                         self._reset_dwell()
                     else:
@@ -603,7 +676,7 @@ class FramePacer:
         # probe. Geometric backoff converges (finitely many probes) at
         # persistently borderline load while staying adaptive to real drops.
         if (self.upshift_time is not None
-                and (gpu_end - self.upshift_time) < 4.0 * self.tun.T_up):
+                and (gpu_end - self.upshift_time) < self._upshift_survival()):
             self.dwell_required *= 2.0
             self.upshift_time = None
 
@@ -625,6 +698,8 @@ class FramePacer:
         self.c_cad.clear()
         self.g_cad.clear()
         self.cadence_pressure = False
+        self.backlog = 0.0
+        self.backlog_growing = False
         win = self.L_win.get(n_new)
         if t.latency_per_visit:
             if not seed_measured:
@@ -890,6 +965,11 @@ class Scenario:
                                          # heads for dvfs_idle at any cadence (live: the empty
                                          # editor before a scene opens, 0.21 at N=1)
     dvfs_idle: float = 0.21
+    dvfs_dip: tuple = None               # C31: (probability, factor, seed) - at N>=2 without
+                                         # pre-warm a frame runs at the governor's clock times
+                                         # factor with this probability (live, Bistro clustered
+                                         # at N=2: clock median 0.91-0.97, p5 0.67; the span
+                                         # tail p95 10.8 ms is the clock, the work stays 7.5 ms)
     forced_range: tuple = None           # (first, last) frames with corruption
     recreate_at: int = None              # swapchain recreation at this frame
     lazy_gpu:    bool = False            # C9: GPU measurements delivered via the
@@ -1063,6 +1143,7 @@ def run(sc: Scenario):
     dvfs_since = 0.0                     # ... and since when it holds
     gpu_busy_until = 0.0                 # C26: end of pre-warm work on the GPU
     vrr_refresh = None                   # C30: time of the VRR display's latest refresh
+    dip_rng = random.Random(sc.dvfs_dip[2]) if sc.dvfs_dip is not None else None  # C31
 
     def maybe_skip(slot):
         # C17: scanout-side skip - the present op stays on cadence but
@@ -1114,8 +1195,12 @@ def run(sc: Scenario):
         g_work = g
         clock = 0.0
         if sc.dvfs:
-            g = g / dvfs_clock
             clock = dvfs_clock
+            if dip_rng is not None:
+                dip = dip_rng.random() < sc.dvfs_dip[0]
+                if dip and (dec.N >= 2) and (dec.prewarm <= 0.0):
+                    clock = dvfs_clock * sc.dvfs_dip[1]
+            g = g / clock
         elif sc.gpu_clock_fn is not None:
             # C25: g is the work at full clock; a clocked-down GPU takes longer.
             ratio = sc.gpu_clock_fn(k, dec.N)
@@ -2577,6 +2662,139 @@ def c30_variable_refresh_display():
     check("C30 VRR live load (the N=2 trap): 120 Hz", ok, detail)
 
 
+def c31_variable_refresh_borderline():
+    print("C31 borderline load on a variable refresh rate display (the upshift hysteresis band)")
+    # Live (Metal tier M, Release, Bistro clustered, fullscreen on the
+    # 48-120 Hz panel, after C30): GPU work 7.5-7.7 ms at full clock (0.66 ms
+    # inside T). At N=1 the span is 7.67 ms (p95 7.70) and 120 Hz holds; at
+    # N=2 the GPU clock spreads over 0.67-0.99 (median 0.91-0.97), the span
+    # tail reaches 10.8 ms - all of it the clock: span x clock never exceeds
+    # 7.8 ms. The pacer came to N=2 at the startup or at a configuration
+    # switch and stayed there in 3 of 4 visits (60 Hz). The upshift test
+    # predicts the work at N=1's clock (C25) correctly, 7.5-7.7 ms, but half
+    # of those frames lie inside the hysteresis band (T - H = 7.5 ms ... T),
+    # beyond the 1 - q_up allowance, so the dwell resets. The band alone
+    # keeps this load at N=2: the arm without the clock dip fails the same
+    # way.
+    T = 1.0 / 120.0
+    def arm(seed, disturbance, display_kind, dip=True, n1_cost=0.0, n=6000):
+        # The live VRR tunables: deadline offset seed the pacer default
+        # (2.5 ms; the direct-to-display deadline is ~1 ms), pre-warm on.
+        # n1_cost: the share of the frames at N=1 whose GPU time is 1/0.85 of
+        # the work, not reported as clock (contention, thermal, work that
+        # scales with the rate) - a cost the prediction at N=2 cannot see.
+        tun = Tunables(T=T, dpe_source='estimated', present_queue='fifo', prewarm_seconds=2.3 * MS)
+        if display_kind == 'variable_refresh':
+            tun.display = 'variable_refresh'
+            tun.max_refresh_interval = 1.0 / 48.0
+            display = dict(vrr_min_interval=T, vrr_max_interval=1.0 / 48.0, dpe_true=1.0 * MS,
+                           drawable_pool=3, pool_latch_lead=0.0)
+        else:
+            dpe_cal = T + 1.0 * MS
+            tun.dpe_hat = dpe_cal + 0.3 * MS
+            tun.dpe_max = dpe_cal + 0.3 * MS + 0.5 * T
+            display = dict(dpe_true=dpe_cal, drawable_pool=3, pool_latch_lead=dpe_cal - 1.8 * MS)
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        rc = random.Random(seed + 3)
+        def work(k, n_used):
+            if disturbance is not None and disturbance[0] <= k < disturbance[1]:
+                return 20.0 * MS
+            w = max(0.5, rw.gauss(7.6, 0.05)) * MS
+            if (n_used == 1) and (rc.random() < n1_cost):
+                w = w / 0.85
+            return w
+        sc = Scenario("c31", n, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work,
+                      dvfs=True, dvfs_low=0.94, dvfs_dip=((0.12, 0.72, seed + 2) if dip else None), **display)
+        return run(sc)
+    def changes_after(recs, start=3000):
+        return sum(1 for a, b in zip(recs[start:], recs[start + 1:]) if a.N != b.N)
+    def summary(result):
+        recs, pacer = result
+        tail = recs[3000:]
+        deltas = sorted(b.disp_time - a.disp_time for a, b in zip(tail, tail[1:]))
+        exact = sum(1 for d in deltas if abs(d - T) < 0.1 * MS)
+        changes = changes_after(recs)
+        dpe_ok = pacer.dpe <= pacer.tun.dpe_hat + pacer.tun.guard
+        ok = ({r.N for r in tail} == {1}) and (exact >= 0.99 * len(deltas)) and dpe_ok and (changes == 0)
+        detail = (f"N {sorted({r.N for r in tail})}, {changes} changes, median "
+                  f"{deltas[len(deltas) // 2] * 1000:.3f} ms, {exact}/{len(deltas)} exact, "
+                  f"dpe {pacer.dpe * 1000:.2f} ms")
+        return ok, detail
+    seeds = (3101, 3201, 3301)
+    def all_seeds(claim, fn):
+        results = [fn(seed) for seed in seeds]
+        check(claim, all(ok for ok, _ in results), "; ".join(f"s{seed}: {d}" for seed, (_, d) in zip(seeds, results)))
+    all_seeds("C31 control: VRR, the load from N=1 without a disturbance: 120 Hz",
+              lambda seed: summary(arm(seed, None, 'variable_refresh')))
+    def fixed(seed):
+        recs, _ = arm(seed, (30, 60), 'fixed_grid')
+        at_two = sum(1 for r in recs[3000:] if r.N == 2)
+        return at_two >= 0.9 * len(recs[3000:]), f"{at_two}/{len(recs[3000:])} at N=2"
+    all_seeds("C31 control: fixed grid, the same load: N=2 (q95 + guard beyond T)", fixed)
+    # Starting at N=2: the startup spike (scene load) downshifts first.
+    all_seeds("C31 VRR, starting at N=2 (startup spike): 120 Hz",
+              lambda seed: summary(arm(seed, (30, 60), 'variable_refresh')))
+    all_seeds("C31 VRR, starting at N=2, no clock dip at N=2 (the band alone): 120 Hz",
+              lambda seed: summary(arm(seed, (30, 60), 'variable_refresh', dip=False)))
+    # Starting at N=1: a configuration switch (10 frames of 20 ms) after
+    # 1500 frames at N=1 downshifts.
+    all_seeds("C31 VRR, starting at N=1 (configuration switch): 120 Hz",
+              lambda seed: summary(arm(seed, (1500, 1510), 'variable_refresh')))
+    # A cost at N=1 the prediction at N=2 cannot see. Without the band the
+    # upshift admits N=1; a q_p downshift statistic and two attributed
+    # misses then sent the pacer back on its 10 % tail (nearly no frame
+    # displays late at N=1: the next frames' slack absorbs the tail), the
+    # revert came after the upshift's survival window, the backoff reset,
+    # and the pacer flapped about once a second for good. 10 %: N=1 holds;
+    # every frame (a load that does not fit at N=1): a bounded number of
+    # probes, then N=2.
+    all_seeds("C31 VRR, an unobserved cost on 10 % of the N=1 frames: N=1 holds, no flapping",
+              lambda seed: summary(arm(seed, (30, 60), 'variable_refresh', n1_cost=0.1)))
+    def unfit(seed):
+        recs, _ = arm(seed, (30, 60), 'variable_refresh', n1_cost=1.0)
+        changes = changes_after(recs)
+        at_two = sum(1 for r in recs[3000:] if r.N == 2)
+        return (changes <= 2) and (at_two >= 0.95 * len(recs[3000:])), \
+            f"{changes} changes after frame 3000, {at_two}/{len(recs[3000:])} at N=2"
+    all_seeds("C31 VRR, an unobserved cost on every N=1 frame (N=1 does not fit): bounded probes, N=2", unfit)
+    # Overload response: the backlog test must not leave real overload at
+    # N=1 (7.0 ms of work, then at frame 2000 a step to 9 ms, or to 8.0 ms
+    # with 30 % of the frames 1.5 ms heavier - mean 8.45 ms, beyond T). The
+    # backlog crosses one period after T / (mean - T) frames on average
+    # (12 at 9 ms, 70 at 8.45 ms); the latency until then stays below 25 ms
+    # (the N=2 latency is 15-16 ms).
+    def step(seed, step_ms, tail_p, n=4000):
+        tun = Tunables(T=T, dpe_source='estimated', present_queue='fifo', prewarm_seconds=2.3 * MS,
+                       display='variable_refresh', max_refresh_interval=1.0 / 48.0)
+        rng = random.Random(seed)
+        rw = random.Random(seed + 1)
+        def work(k, n_used):
+            if k < 2000:
+                return max(0.5, rw.gauss(7.0, 0.05)) * MS
+            w = max(0.5, rw.gauss(step_ms, 0.3))
+            if rw.random() < tail_p:
+                w += 1.5
+            return w * MS
+        sc = Scenario("c31s", n, gauss_fn(rng, 1.0, 0.2), None, tun=tun, g_at_cadence_fn=work, dvfs=True, dvfs_low=0.94,
+                      vrr_min_interval=T, vrr_max_interval=1.0 / 48.0, dpe_true=1.0 * MS, drawable_pool=3, pool_latch_lead=0.0)
+        recs, _ = run(sc)
+        down = next((r.k - 2000 for r in recs[2000:] if r.N > 1), None)
+        seg = recs[2000:2001 + (down if down is not None else 2000)]
+        latency = max(r.disp_time - r.cpu_start for r in seg)
+        return down, latency, {r.N for r in recs[-1000:]}
+    def step_check(step_ms, tail_p, max_frames):
+        def fn(seed):
+            down, latency, n_tail = step(seed, step_ms, tail_p)
+            ok = (down is not None) and (down <= max_frames) and (latency <= 25.0 * MS) and (n_tail == {2})
+            return ok, f"downshift after {down} frames, max latency {latency * 1000:.1f} ms, N at the end {sorted(n_tail)}"
+        return fn
+    all_seeds("C31 VRR overload: a step to 9 ms downshifts within 20 frames", step_check(9.0, 0.0, 20))
+    # (The mean-8.45 ms backlog is a random walk with 0.12 ms of drift and
+    # ~0.75 ms of spread per frame: crossings spread over 30-150 frames.)
+    all_seeds("C31 VRR overload: a step to a mean of 8.45 ms (30 % tail) downshifts within 200 frames", step_check(8.0, 0.3, 200))
+
+
 def main():
     c1_recs, tun = c1_steady()
     c2_step_up()
@@ -2608,6 +2826,7 @@ def main():
     c28_latency_per_visit()
     c29_clock_records_by_workload()
     c30_variable_refresh_display()
+    c31_variable_refresh_borderline()
     failed = [c for c, ok, _ in RESULTS if not ok]
     print()
     print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")

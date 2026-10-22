@@ -14,6 +14,7 @@
 #include <memory>
 #include <random>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace {
@@ -1872,4 +1873,257 @@ TEST(Frame_pacer_claims, c30_variable_refresh_display)
     }
     // The live load: the N=2 trap on the fixed-grid rules.
     expect_c30_120_hz(run_c30(3001, 7.2, 0, 0, 0.0, C30_display::variable_refresh), "VRR live load (the N=2 trap)");
+}
+
+namespace {
+
+// Where claim C31's VRR arm starts: at N=1 (no disturbance), at N=2 (a
+// startup spike) or at N=1 then downshifted (a configuration switch).
+enum class C31_disturbance : unsigned int {
+    none = 0,
+    startup_spike,        // frames 30-60 at 20 ms
+    configuration_switch  // frames 1500-1510 at 20 ms, after 1500 frames at N=1
+};
+
+// Whether 12 % of the N>=2 frames run at 0.72 of the governor's clock.
+enum class C31_clock_dip : unsigned int {
+    on = 0,
+    off
+};
+
+// Claim C31 scenario: the live VRR tunables (deadline offset seed the
+// pacer default, pre-warm on), GPU work 7.6 ms at full clock (Bistro
+// clustered), the GPU clock at 0.94 of its maximum at N>=2 with 12 % of the
+// frames at 0.72 of that (IOReport, live); on the VRR display or on the
+// windowed compositor's fixed grid (C30_display). n1_cost: the share of the
+// N=1 frames whose GPU time is 1/0.85 of the work, not reported as clock (a
+// cost the prediction at N=2 cannot see).
+auto run_c31(
+    const unsigned int    seed,
+    const C31_disturbance disturbance,
+    const C30_display     display,
+    const C31_clock_dip   clock_dip = C31_clock_dip::on,
+    const double          n1_cost   = 0.0
+) -> std::vector<Frame_record>
+{
+    const double t = c30_period;
+    Scenario scenario;
+    scenario.frame_count                            = 6000;
+    scenario.plant.tunables.refresh_period          = t;
+    scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.plant.tunables.upshift_prewarm_seconds = 2.3 * ms;
+    scenario.drawable_pool                          = 3;
+    scenario.dvfs                                   = true;
+    scenario.dvfs_low                               = 0.94;
+    if (clock_dip == C31_clock_dip::on) {
+        scenario.dvfs_dip_probability = 0.12;
+        scenario.dvfs_dip_factor      = 0.72;
+        scenario.dvfs_dip_seed        = seed + 2;
+    }
+    if (display == C30_display::variable_refresh) {
+        scenario.plant.tunables.display              = erhe::frame_pacing::Present_display_kind::variable_refresh;
+        scenario.plant.tunables.max_refresh_interval = 1.0 / 48.0;
+        scenario.plant.true_deadline_offset          = 1.0 * ms;
+        scenario.pool_latch_lead                     = 0.0;
+        scenario.vrr_min_interval                    = t;
+        scenario.vrr_max_interval                    = 1.0 / 48.0;
+    } else {
+        const double dpe_cal = t + (1.0 * ms);
+        scenario.plant.tunables.deadline_offset_initial = dpe_cal + (0.3 * ms);
+        scenario.plant.tunables.deadline_offset_max     = dpe_cal + (0.3 * ms) + (0.5 * t);
+        scenario.plant.true_deadline_offset             = dpe_cal;
+        scenario.pool_latch_lead                        = dpe_cal - (1.8 * ms);
+    }
+    std::int64_t first = 0;
+    std::int64_t last  = 0;
+    if (disturbance == C31_disturbance::startup_spike) {
+        first = 30;
+        last  = 60;
+    } else if (disturbance == C31_disturbance::configuration_switch) {
+        first = 1500;
+        last  = 1510;
+    }
+    scenario.cpu_duration = make_gauss(seed, 1.0, 0.2);
+    auto work_engine = std::make_shared<std::mt19937>(seed + 1);
+    auto cost_engine = std::make_shared<std::mt19937>(seed + 3);
+    scenario.gpu_duration_at_cadence = [work_engine, cost_engine, first, last, n1_cost](const std::int64_t k, const int vsyncs) mutable -> double {
+        if ((k >= first) && (k < last)) {
+            return 20.0 * ms;
+        }
+        std::normal_distribution<double> work{7.6, 0.05};
+        std::uniform_real_distribution<double> uniform{0.0, 1.0};
+        double duration = std::max(0.5, work(*work_engine)) * ms;
+        const double draw = uniform(*cost_engine);
+        if ((vsyncs == 1) && (draw < n1_cost)) {
+            duration = duration / 0.85;
+        }
+        return duration;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    return run_scenario(scenario, pacer);
+}
+
+auto c31_changes_after(const std::vector<Frame_record>& records, const std::size_t from) -> std::size_t
+{
+    std::size_t changes = 0;
+    for (std::size_t i = from + 1; i < records.size(); ++i) {
+        if (records[i].vsyncs != records[i - 1].vsyncs) {
+            ++changes;
+        }
+    }
+    return changes;
+}
+
+// C31 goal: the C30 goal (N=1 after frame 3000, at least 99 % of the
+// present deltas within 0.1 ms of T) with no cadence change after frame
+// 3000 and the deadline offset estimate within guard of its initial value.
+void expect_c31_120_hz(const std::vector<Frame_record>& records, const std::string& arm)
+{
+    ASSERT_GT(records.size(), 3001u);
+    double median = 0.0;
+    const std::size_t exact = c30_exact_deltas(records, median);
+    const std::size_t count = records.size() - 3001;
+    double deadline_offset_max = 0.0;
+    for (std::size_t i = 3000; i < records.size(); ++i) {
+        deadline_offset_max = std::max(deadline_offset_max, records[i].deadline_offset);
+    }
+    EXPECT_EQ(vsync_values(records, 3000), (std::set<int>{1})) << arm << ": N=1";
+    EXPECT_EQ(c31_changes_after(records, 3000), 0u) << arm << ": cadence changes after frame 3000";
+    EXPECT_GE(static_cast<double>(exact), 0.99 * static_cast<double>(count))
+        << arm << ": " << exact << "/" << count << " present deltas within 0.1 ms of T, median "
+        << (median / ms) << " ms";
+    EXPECT_LE(deadline_offset_max, Frame_pacer_tunables{}.deadline_offset_initial + Frame_pacer_tunables{}.guard)
+        << arm << ": deadline offset " << (deadline_offset_max / ms) << " ms";
+}
+
+auto c31_frames_at(const std::vector<Frame_record>& records, const int vsyncs) -> std::size_t
+{
+    std::size_t at = 0;
+    for (std::size_t i = 3000; i < records.size(); ++i) {
+        if (records[i].vsyncs == vsyncs) {
+            ++at;
+        }
+    }
+    return at;
+}
+
+// C31 overload response: 7.0 ms of GPU work, then at frame 2000 a step to
+// step_ms (sd 0.3 ms) with a share tail_share of the frames 1.5 ms heavier.
+// Returns the frames from the step to the first frame at N>1 (-1: none) and
+// the largest release-to-display latency until then.
+auto run_c31_step(const unsigned int seed, const double step_ms, const double tail_share, double& max_latency) -> std::int64_t
+{
+    const double t = c30_period;
+    Scenario scenario;
+    scenario.frame_count                            = 4000;
+    scenario.plant.tunables.refresh_period          = t;
+    scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+    scenario.plant.tunables.present_queue           = erhe::frame_pacing::Present_queue_kind::fifo;
+    scenario.plant.tunables.upshift_prewarm_seconds = 2.3 * ms;
+    scenario.plant.tunables.display                 = erhe::frame_pacing::Present_display_kind::variable_refresh;
+    scenario.plant.tunables.max_refresh_interval    = 1.0 / 48.0;
+    scenario.plant.true_deadline_offset             = 1.0 * ms;
+    scenario.drawable_pool                          = 3;
+    scenario.pool_latch_lead                        = 0.0;
+    scenario.vrr_min_interval                       = t;
+    scenario.vrr_max_interval                       = 1.0 / 48.0;
+    scenario.dvfs                                   = true;
+    scenario.dvfs_low                               = 0.94;
+    scenario.cpu_duration = make_gauss(seed, 1.0, 0.2);
+    auto work_engine = std::make_shared<std::mt19937>(seed + 1);
+    scenario.gpu_duration_at_cadence = [work_engine, step_ms, tail_share](const std::int64_t k, const int) mutable -> double {
+        if (k < 2000) {
+            std::normal_distribution<double> work{7.0, 0.05};
+            return std::max(0.5, work(*work_engine)) * ms;
+        }
+        std::normal_distribution<double> work{step_ms, 0.3};
+        std::uniform_real_distribution<double> uniform{0.0, 1.0};
+        double duration = std::max(0.5, work(*work_engine));
+        if (uniform(*work_engine) < tail_share) {
+            duration += 1.5;
+        }
+        return duration * ms;
+    };
+    Frame_pacer pacer{scenario.plant.tunables};
+    const std::vector<Frame_record> records = run_scenario(scenario, pacer);
+    std::int64_t down = -1;
+    max_latency = 0.0;
+    for (std::size_t i = 2000; i < records.size(); ++i) {
+        max_latency = std::max(max_latency, records[i].display_time - records[i].cpu_start);
+        if (records[i].vsyncs > 1) {
+            down = static_cast<std::int64_t>(i) - 2000;
+            break;
+        }
+    }
+    EXPECT_EQ(vsync_values(records, records.size() - 1000), (std::set<int>{2})) << "C31 overload: N=2 at the end (seed " << seed << ")";
+    return down;
+}
+
+} // anonymous namespace
+
+TEST(Frame_pacer_claims, c31_variable_refresh_borderline)
+{
+    // Live (Metal tier M, Release, Bistro clustered, fullscreen on the
+    // 48-120 Hz panel, after C30): GPU work 7.5-7.7 ms at full clock. At N=1
+    // the span is 7.67 ms and 120 Hz holds; at N=2 the GPU clock spreads
+    // over 0.67-0.99 and the span tail reaches 10.8 ms, all of it the clock.
+    // The pacer came to N=2 at the startup or a configuration switch and
+    // stayed there in 3 of 4 visits: the upshift test predicts the work at
+    // N=1's clock (C25) correctly, but half of those frames lie in the
+    // hysteresis band (T - H ... T), beyond the 1 - q_up allowance, so the
+    // dwell resets (the band alone: the arm without the clock dip fails the
+    // same way). On a VRR display the upshift test has no band, the queue
+    // backlog replaces both downshift tests, and the upshift survival window
+    // scales with the dwell (algorithm.md deviation 25).
+    for (const unsigned int seed : {3101u, 3201u, 3301u}) {
+        const std::string s = " (seed " + std::to_string(seed) + ")";
+        // Controls: the load holds N=1 on the VRR display without a
+        // disturbance; on the fixed grid it stays at N=2 (q95 + guard beyond T).
+        expect_c31_120_hz(run_c31(seed, C31_disturbance::none, C30_display::variable_refresh), "VRR without a disturbance" + s);
+        {
+            const std::vector<Frame_record> fixed = run_c31(seed, C31_disturbance::startup_spike, C30_display::fixed_grid);
+            ASSERT_GT(fixed.size(), 3000u);
+            EXPECT_GE(static_cast<double>(c31_frames_at(fixed, 2)), 0.9 * static_cast<double>(fixed.size() - 3000)) << "fixed grid: frames at N=2" << s;
+        }
+        expect_c31_120_hz(run_c31(seed, C31_disturbance::startup_spike, C30_display::variable_refresh), "VRR starting at N=2 (startup spike)" + s);
+        expect_c31_120_hz(
+            run_c31(seed, C31_disturbance::startup_spike, C30_display::variable_refresh, C31_clock_dip::off),
+            "VRR starting at N=2, no clock dip (the band alone)" + s
+        );
+        expect_c31_120_hz(run_c31(seed, C31_disturbance::configuration_switch, C30_display::variable_refresh), "VRR starting at N=1 (configuration switch)" + s);
+        // A cost at N=1 the prediction at N=2 cannot see: on 10 % of the N=1
+        // frames N=1 holds without flapping (the next frames' slack absorbs
+        // the tail); on every N=1 frame (N=1 does not fit) a bounded number
+        // of probes, then N=2.
+        expect_c31_120_hz(
+            run_c31(seed, C31_disturbance::startup_spike, C30_display::variable_refresh, C31_clock_dip::on, 0.1),
+            "VRR, unobserved cost on 10 % of the N=1 frames" + s
+        );
+        {
+            const std::vector<Frame_record> unfit = run_c31(seed, C31_disturbance::startup_spike, C30_display::variable_refresh, C31_clock_dip::on, 1.0);
+            ASSERT_GT(unfit.size(), 3000u);
+            EXPECT_LE(c31_changes_after(unfit, 3000), 2u) << "VRR, unobserved cost on every N=1 frame: cadence changes after frame 3000" << s;
+            EXPECT_GE(static_cast<double>(c31_frames_at(unfit, 2)), 0.95 * static_cast<double>(unfit.size() - 3000)) << "VRR, unobserved cost on every N=1 frame: frames at N=2" << s;
+        }
+        // Overload response: the backlog crosses one period after
+        // T / (mean - T) frames on average (12 at 9 ms, 70 at a mean of
+        // 8.45 ms; that backlog is a random walk with ~0.75 ms of spread per
+        // frame, so its crossings spread over 30-150 frames); the latency
+        // until then stays below 25 ms (15-16 ms at N=2).
+        {
+            double latency = 0.0;
+            const std::int64_t down = run_c31_step(seed, 9.0, 0.0, latency);
+            EXPECT_GE(down, 0) << "VRR overload, step to 9 ms: downshift" << s;
+            EXPECT_LE(down, 20) << "VRR overload, step to 9 ms: frames to the downshift" << s;
+            EXPECT_LE(latency, 25.0 * ms) << "VRR overload, step to 9 ms: latency" << s;
+        }
+        {
+            double latency = 0.0;
+            const std::int64_t down = run_c31_step(seed, 8.0, 0.3, latency);
+            EXPECT_GE(down, 0) << "VRR overload, mean 8.45 ms: downshift" << s;
+            EXPECT_LE(down, 200) << "VRR overload, mean 8.45 ms: frames to the downshift" << s;
+            EXPECT_LE(latency, 25.0 * ms) << "VRR overload, mean 8.45 ms: latency" << s;
+        }
+    }
 }
