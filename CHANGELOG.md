@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::frame_pacing`: `Present_display_kind` (`fixed_grid`,
+  `variable_refresh`), `Frame_pacer_tunables::display` and
+  `max_refresh_interval`, and
+  `Frame_pacing_observer::set_display(Present_display_kind, double)`: the
+  host declares an Adaptive-Sync display driven directly, which has no grid
+  to track (doc/frame_pacing/algorithm.md deviation 24, claim C30).
 - `erhe::primitive`: `Blending_class` (`opaque`, `alpha_tested`,
   `translucent`), `get_blending_class(Material_blending_mode)`,
   `get_blending_class(const Material*)` (no material classifies as opaque),

@@ -81,6 +81,14 @@ public:
     // the host knows its presentation path. Main thread; a change recreates
     // the pacer at the next tick().
     void set_deadline_offset(const Deadline_offset_setup& setup);
+
+    // The display the host presents to (claim C30): variable_refresh for an
+    // Adaptive-Sync display driven directly, with its maximum refresh
+    // interval in seconds (> 0); the refresh period passed to tick() is then
+    // its minimum refresh interval. fixed_grid ignores max_refresh_interval.
+    // Main thread, on a display or mode change (not per frame); a change
+    // recreates the pacer at the next tick(), like a refresh period change.
+    void set_display(Present_display_kind display, double max_refresh_interval);
     [[nodiscard]] auto get_min_vsyncs   () const -> int { return m_min_vsyncs_request.load(std::memory_order_relaxed); }
 
 private:
@@ -105,6 +113,10 @@ private:
     double                       m_refresh_period{0.0};
     Deadline_offset_setup        m_deadline_offset_setup{};
     Deadline_offset_setup        m_pacer_deadline_offset_setup{};
+    Present_display_kind         m_display                    {Present_display_kind::fixed_grid};
+    double                       m_max_refresh_interval       {0.0};
+    Present_display_kind         m_pacer_display              {Present_display_kind::fixed_grid};
+    double                       m_pacer_max_refresh_interval {0.0};
     Schedule_decision            m_last_decision{};
     std::atomic<int>             m_min_vsyncs_request{1};
     int                          m_min_vsyncs_applied{1};
