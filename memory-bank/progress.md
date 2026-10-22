@@ -18,7 +18,7 @@
 ✓spot-cone-test{dfa188a72;clustered-fragment-4.7->4.3ms-fullscreen}
 ✓discard-ordering{cb163a0bb;©User:discard-draws-as-late-as-possible;Blending_class{opaque,alpha_tested,translucent};alpha-tested-pass-after-opaque-blend-off;discard-before-lighting;-0.24ms}
 ✓light-record-hot/cold{e98c62b26;©User:pack-per-light-incl-shadow;48B-shading+208B-shadowed-hot+128B-cold;apply-skips-unshadowed(R--0.1..0.3ms);fragment-loops-4.18->4.0ms}
-⚡re-trace+re-evaluate{fullscreen-Bistro;then-rank-next:pacer-VRR|MSAA|foliage-shadows|interpolants|material-record}
+✓re-trace{HEAD-c8c3a775e;GPU-frame-7.2-loops/7.6-clustered-fits-8.33;fps-85-94-only-pacer-on-Adaptive-Sync;ranked:1-pacer-VRR(NEXT;doc/plans/frame_pacing_adaptive_sync.md)|2-MSAA-1.1-1.4ms|3-shadow-lookups-0.66ms|4-tiling-2ms-unmeasured|5-interpolants<=0.3|6-material-record<=0.2|7-foliage-casts-no-shadows(shadow_renderer.cpp:358,1404-opaque_primitives_only)}
 ?found-not-fixed{alpha-tested-casters-cast-no-shadows;Bistro-image-run-to-run-nondeterminism;selection-stencil-mask-depth-only-alpha-tested-full-quad;windowed-viewport+27%-vs-headless-same-size}
 ?shadow-cache-remaining{per-light-caster-test;skinned-pose-serial;fit-skip}
 
