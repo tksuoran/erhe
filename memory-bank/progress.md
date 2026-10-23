@@ -7,7 +7,9 @@
 ✓option-A{0c5ff5285;Indirect_count_draws-API+Metal-raw-MSL-ICB-kernel+Vk/GL-forward;consumer-switched(one-call-site);shadow-pipelines-opt-in;opus-review:folded-2-commits-into-1(gap:gpu-setting-reached-fatal-stub)+5-fixes;gates:Metal-default/heavy/Bistro-0-mismatch-cpu==gpu;KK-default/heavy;Metal-gpu-tests-193/193;Draw_indirect_test-8/8}
 ✓per-shadow-pass-ICB{92033e2c9;Draw_list_scene::prepare_gpu_shadow_pass-before-each-pass-render-encoder;set=slot+sequence(most-recent-prepare-verified);table-ranges-linear-per-frame;Bistro-ICB-66560->5120-commands(46->3.6MB)/slot;test-set_per_pass;gates-identical-Metal-3-scenes+KK-2;opus-review-approve+nits-applied}
 ✓SECTION-6-DONE-2026-10-23
-⚡Metal-4-backend{plan-sec-7;separate-backend;first-commit=device+MTL4CommandQueue/cb/allocator+commit-feedback}
+✓metal4-scaffold{5d27306ab;ERHE_GRAPHICS_API=metal4-defines-METAL(family)+METAL4;metal4/-copy-of-metal/(55-files;normalised-diff=2-strings);bridges-METAL4-first;configure_xcode_metal4.sh+METAL_BACKEND=metal4-test-script;doc/erhe/metal4_backend.md-migration-table;ctest-1800/1800-both-trees;opus-review-approve}
+!FOUND::MTL4CommandQueue-commits-only-MTL4CommandBuffers->only-MTL4-encoders->only-ArgumentTable-binding(no-setBytes)=>first-MTL4-commit-must-be-whole-submission-core{queue+cb+allocator+commit-feedback+residency-set+argument-tables+encoders+barriers+present};then-counter-heaps;then-MTL4Compiler;then-ICB-check
+⚡metal4-submission-core{coder-briefed-2026-10-23;gate=ctest-1800+image-md5==Metal-3+gpu-culling-check+pacing-status}
 
 [TASK::bistro-gpu]{started-2026-10-21;branch=render-thread;Release-Metal-M4-Pro-Dell-120Hz}
 ✓profile{Bistro-GPU~6.5ms(viewport-4.3+point-faces-2.15+spot-0.3);R-2.15ms;main-0.38ms;no-meaningful-M/R-overlap(GPU-bound)}
