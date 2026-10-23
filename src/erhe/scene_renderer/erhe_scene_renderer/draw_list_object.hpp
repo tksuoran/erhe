@@ -73,6 +73,14 @@ public:
     // bounds of Draw_list_content_changes).
     erhe::math::Aabb                      world_aabb          {};
     bool                                  has_world_aabb      {false};
+    // Skinned objects (their entries carry no bounds): the joint poses
+    // (Joint_pose::world_from_bind, the object's skin's joints in order) and
+    // the posed world bounds as of the last publish that drew the object's
+    // shadow entries, valid while has_published_pose (Draw_list_scene::
+    // publish(), the old bounds of Draw_list_content_changes).
+    std::vector<glm::mat4>                published_pose;
+    erhe::math::Aabb                      published_pose_aabb {};
+    bool                                  has_published_pose  {false};
     // Every entry belonging to this object, for O(entries of this object)
     // unregister / flag update / rebuild.
     std::vector<Draw_list_entry_location> locations;

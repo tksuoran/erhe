@@ -807,6 +807,13 @@ auto encode_implicit_sum_joint_weights(const glm::vec4& sorted_weights) -> std::
     const int32_t sum = quantized[0] + quantized[1] + quantized[2];
     if (sum > one) {
         quantized[0] = std::max(int32_t{0}, quantized[0] - (sum - one));
+    } else if ((sum < one) && !(sorted_weights[3] > 0.0f)) {
+        // No fourth influence: the rounding shortfall goes to the largest
+        // stored weight instead of to the reconstructed fourth, whose joint
+        // (an unused slot) must keep weight zero for the joint bounding
+        // boxes to bound the vertex (doc/erhe/primitive.md "Skinning
+        // weights").
+        quantized[0] += one - sum;
     }
     return std::array<uint16_t, 3>{
         static_cast<uint16_t>(quantized[0]),

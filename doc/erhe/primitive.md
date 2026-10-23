@@ -40,6 +40,27 @@ volume computation, and PBR material definitions.
 - Where the base color and the fragment alpha come from is a material property of its own: `base_color_source` and `opacity_source`, each an `erhe::primitive::Material_input_source`. `value` is the material's own - the factor, times the slot's texture where one is bound, times the mesh's vertex color where the mesh carries one - and is what every glTF material and every plain `UsdPreviewSurface` wants; it is the default and the multiply is unchanged by this property. `vertex_color` is the mesh's color attribute alone: the factor and the texture of that input are not read at all. A `UsdPreviewSurface` input fed by a `UsdPrimvarReader` of `displayColor` / `displayOpacity` is what names it (`doc/erhe/usd.md`); glTF has no form for it, so a glTF material never authors one and the exporter writes nothing new. The pair travels to the shader as the `uvec2 input_sources` of the material record.
 - A bound normal texture is decoded as `texel * normal_texture_decode_scale + normal_texture_decode_bias`, two `vec4` properties whose defaults `(2, 2, 2, 2)` and `(-1, -1, -1, -1)` are the mapping glTF fixes and UsdPreviewSurface's fallbacks, so a material that authors neither decodes a 0..1 map into -1..1. USD carries them as the normal slot's `UsdUVTexture` `inputs:scale` and `inputs:bias`; glTF has no field for either, so a glTF import and export leave both at the defaults. The scalar `normal_texture_scale` is a different thing and stays what glTF's `normalTexture.scale` is: the bumpiness multiplier the shader applies to the decoded X and Y.
 
+## Skinning weights
+
+The builder writes `WEIGHTS_0` - the set the skinning shader blends with
+(`erhe_skinning.glsl`, a plain weighted sum of four joint matrices) -
+normalized (`normalize_joint_weights()`): negative and non-finite weights
+become 0, the rest are divided by their sum, and a vertex whose sum is
+then 0 gets weight 1 on its first influence (slot 0, the joint `JOINTS_0`
+names there; a vertex without joint values is built as joint 0 at weight
+1). Every built skinned vertex is therefore a convex combination of its
+joints' posed images, which `Buffer_mesh::joint_bounding_boxes` relies on:
+`include_vertex_in_joint_bounding_boxes()` adds a vertex to the box of
+every joint the normalized weights give a positive weight (and, for the
+boxes' other consumers, every positive `WEIGHTS_1` joint), at the build and
+from in-place vertex edits. Storage keeps the sum exact: unorm8 weights
+are rounded to sum to exactly 255 (`quantize_joint_weights_unorm8()`, largest
+remainder; a zero weight stays zero), and the unorm16 implicit-sum encoding
+(`encode_implicit_sum_joint_weights()`) of a vertex with fewer than four
+influences gives the rounding shortfall to the largest stored weight, so
+the reconstructed fourth weight is zero. `WEIGHTS_1` is written as
+authored (the shader does not read it).
+
 ## Blending classes
 
 `Blending_class` (`enums.hpp`) is the draw order class of a

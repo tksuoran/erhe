@@ -3,6 +3,7 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
 
 #include "erhe_buffer/ibuffer.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
@@ -14,6 +15,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <random>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -101,6 +103,97 @@ void decode_tbn_quaternion(
 {
     const glm::vec3 n = glm::normalize(normal);
     return glm::normalize(tangent - n * glm::dot(n, tangent));
+}
+
+// The joint boxes follow the built skinning (doc/erhe/primitive.md
+// "Skinning weights"): the joints that the normalized WEIGHTS_0 give a
+// positive weight get the vertex, and a vertex without joint values goes to
+// joint 0.
+TEST(AttributeEncodings, joint_bounding_boxes_follow_skinning)
+{
+    GEO::Mesh mesh;
+    mesh.vertices.create_vertices(4);
+    erhe::geometry::Mesh_attributes attributes{mesh};
+    attributes.vertex_joint_indices_0.set(0, GEO::vec4u{2, 1, 0, 0});
+    attributes.vertex_joint_weights_0.set(0, GEO::vec4f{0.75f, 0.25f, 0.0f, 0.0f});
+    attributes.vertex_joint_indices_0.set(1, GEO::vec4u{1, 0, 0, 0});
+    attributes.vertex_joint_weights_0.set(1, GEO::vec4f{1.0f, 0.0f, 0.0f, 0.0f});
+    // Vertex 2 has no joint values: joint 0 at weight one.
+    // Vertex 3: no positive weight, so weight one on its first influence.
+    attributes.vertex_joint_indices_0.set(3, GEO::vec4u{2, 1, 0, 0});
+    attributes.vertex_joint_weights_0.set(3, GEO::vec4f{-1.0f, 0.0f, 0.0f, 0.0f});
+
+    erhe::primitive::Buffer_mesh buffer_mesh;
+    const glm::vec3 p0{1.0f, 2.0f, 3.0f};
+    const glm::vec3 p1{-1.0f, 0.0f, 0.5f};
+    const glm::vec3 p2{4.0f, 4.0f, 4.0f};
+    const glm::vec3 p3{0.0f, -2.0f, 0.0f};
+    erhe::primitive::include_vertex_in_joint_bounding_boxes(buffer_mesh, attributes, 0, p0);
+    erhe::primitive::include_vertex_in_joint_bounding_boxes(buffer_mesh, attributes, 1, p1);
+    erhe::primitive::include_vertex_in_joint_bounding_boxes(buffer_mesh, attributes, 2, p2);
+    erhe::primitive::include_vertex_in_joint_bounding_boxes(buffer_mesh, attributes, 3, p3);
+    ASSERT_EQ(buffer_mesh.joint_bounding_boxes.size(), 3u);
+    // Joint 0: only vertex 2 (zero weights add nothing).
+    EXPECT_EQ(buffer_mesh.joint_bounding_boxes[0].min, p2);
+    EXPECT_EQ(buffer_mesh.joint_bounding_boxes[0].max, p2);
+    // Joint 1: vertices 0 and 1.
+    EXPECT_EQ(buffer_mesh.joint_bounding_boxes[1].min, glm::min(p0, p1));
+    EXPECT_EQ(buffer_mesh.joint_bounding_boxes[1].max, glm::max(p0, p1));
+    // Joint 2: vertices 0 and 3.
+    EXPECT_EQ(buffer_mesh.joint_bounding_boxes[2].min, glm::min(p0, p3));
+    EXPECT_EQ(buffer_mesh.joint_bounding_boxes[2].max, glm::max(p0, p3));
+}
+
+// Build-time weight normalization: negative and non-finite weights drop,
+// the rest sum to one, an all-zero vertex takes its first influence.
+TEST(AttributeEncodings, joint_weights_are_normalized)
+{
+    using erhe::primitive::normalize_joint_weights;
+    const GEO::vec4f half = normalize_joint_weights(GEO::vec4f{0.5f, 0.0f, 0.0f, 0.0f});
+    EXPECT_EQ(half[0], 1.0f);
+    EXPECT_EQ(half[1], 0.0f);
+    const GEO::vec4f mixed = normalize_joint_weights(GEO::vec4f{0.3f, -0.2f, 0.3f, std::nanf("")});
+    EXPECT_FLOAT_EQ(mixed[0], 0.5f);
+    EXPECT_EQ(mixed[1], 0.0f);
+    EXPECT_FLOAT_EQ(mixed[2], 0.5f);
+    EXPECT_EQ(mixed[3], 0.0f);
+    const GEO::vec4f none = normalize_joint_weights(GEO::vec4f{0.0f, -1.0f, 0.0f, 0.0f});
+    EXPECT_EQ(none[0], 1.0f);
+    EXPECT_EQ(none[1] + none[2] + none[3], 0.0f);
+}
+
+// unorm8 storage of normalized weights sums to exactly 255 and keeps zero
+// weights zero; the implicit-sum encoding of a vertex with fewer than four
+// influences reconstructs a fourth weight of exactly zero.
+TEST(AttributeEncodings, joint_weight_quantization_is_exact)
+{
+    std::mt19937 random{99u};
+    std::uniform_real_distribution<float> weight{0.0f, 1.0f};
+    for (int n = 0; n < 2000; ++n) {
+        GEO::vec4f raw{weight(random), weight(random), weight(random), (n % 2 == 0) ? 0.0f : weight(random)};
+        if (n % 3 == 0) {
+            raw[1] = 0.0f;
+        }
+        const GEO::vec4f normalized = erhe::primitive::normalize_joint_weights(raw);
+        const std::array<uint8_t, 4> units = erhe::primitive::quantize_joint_weights_unorm8(normalized);
+        int sum = 0;
+        for (std::size_t i = 0; i < 4; ++i) {
+            sum += units[i];
+            if (normalized[static_cast<GEO::index_t>(i)] == 0.0f) {
+                EXPECT_EQ(units[i], 0u);
+            }
+        }
+        EXPECT_EQ(sum, 255);
+
+        const erhe::primitive::Joint_influences influences = erhe::primitive::sort_joint_influences(
+            glm::vec4{0.0f, 1.0f, 2.0f, 3.0f},
+            glm::vec4{normalized[0], normalized[1], normalized[2], normalized[3]}
+        );
+        if (influences.weights[3] == 0.0f) {
+            const std::array<uint16_t, 3> encoded = erhe::primitive::encode_implicit_sum_joint_weights(influences.weights);
+            EXPECT_EQ(static_cast<int>(encoded[0]) + static_cast<int>(encoded[1]) + static_cast<int>(encoded[2]), 65535);
+        }
+    }
 }
 
 } // namespace

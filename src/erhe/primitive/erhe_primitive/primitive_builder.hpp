@@ -8,6 +8,7 @@
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/vertex_attribute_info.hpp"
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <string_view>
@@ -278,5 +279,33 @@ auto build_buffer_mesh(
     std::shared_ptr<Primitive_render_shape>* out_optimized_shape = nullptr,
     std::string_view                         name                = {}
 ) -> bool;
+
+// The skinning weights the build writes for one vertex's WEIGHTS_0 (what the
+// shader reads; doc/erhe/primitive.md "Skinning weights"): negative and
+// non-finite weights become 0, the rest are divided by their sum, and a
+// vertex whose sum is then 0 gets weight 1 on its first influence (slot 0,
+// whatever joint JOINTS_0 names there). The result sums to one, so a skinned
+// position is a convex combination of its joints' images.
+[[nodiscard]] auto normalize_joint_weights(const GEO::vec4f& weights) -> GEO::vec4f;
+
+// The four unorm8 values of normalized weights (normalize_joint_weights()),
+// rounded so that they sum to exactly 255 (largest remainder): the shader's
+// decode then sums to one up to float rounding, and a zero weight stays zero.
+[[nodiscard]] auto quantize_joint_weights_unorm8(const GEO::vec4f& normalized_weights) -> std::array<uint8_t, 4>;
+
+// Adds a vertex at its bind-space position to buffer_mesh.joint_bounding_boxes
+// the way the build skins it: the joints that the built JOINTS_0 / WEIGHTS_0
+// give a positive weight (a vertex without values is built as joint 0 at
+// weight one, weights normalized by normalize_joint_weights()) and, as
+// before, the joints with a positive JOINTS_1 / WEIGHTS_1 weight (which the
+// shader does not read; other consumers of the boxes use them). Used by the
+// build and by in-place vertex edits of a built mesh (the editor's vertex
+// drag).
+void include_vertex_in_joint_bounding_boxes(
+    Buffer_mesh&                     buffer_mesh,
+    erhe::geometry::Mesh_attributes& mesh_attributes,
+    GEO::index_t                     vertex,
+    const glm::vec3&                 position
+);
 
 } // namespace erhe::primitive

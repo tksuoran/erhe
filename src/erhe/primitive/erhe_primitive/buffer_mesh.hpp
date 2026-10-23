@@ -105,6 +105,10 @@ public:
     // transformed by the mesh node, so it cannot bound a skinned mesh.
     //
     // Empty when the source geometry has no joint attributes.
+    // Conservative for every mesh the primitive builder builds: it
+    // normalizes WEIGHTS_0 (normalize_joint_weights()), so every skinned
+    // vertex is a convex combination. Meshes built without joint attributes
+    // (and the triangle-soup path) have none.
     std::vector<erhe::math::Aabb> joint_bounding_boxes;
 
     Index_range               triangle_fill_indices   {};

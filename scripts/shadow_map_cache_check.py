@@ -19,7 +19,9 @@ B's reach to A's and a caster removed beside A must redraw only the faces of
 the lights whose reach the caster's old or new bounds are in
 (get_scene_lights shadow_cube_face_draw_counts): every face of the other
 light is kept. Selecting the caster beside A (a flag the caster filter does
-not read) must keep every face of both. The captures with the cache on and off must again be
+not read) must keep every face of both. A skinned figure imported beside B,
+kept static, keeps every face of both, and a joint rotation and a vertex
+drag on it redraw only B's faces. The captures with the cache on and off must again be
 identical.
 
 Needs Pillow and numpy. Example:
@@ -40,6 +42,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bistro_frame_bench as bench  # noqa: E402  (mcp(), wait_for_ready(), scene_names())
 
 STATUS_BAR_ROWS = 24
+# A skinned (and animated, not playing) glTF: the skinned caster steps.
+SKINNED_GLB = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 
 
 def pixel_diff(path_a, path_b, ignore_bottom=STATUS_BAR_ROWS):
@@ -154,6 +158,32 @@ def main():
             position = [start[k] + ((end[k] - start[k]) * t) for k in range(3)]
             call("set_node_transform", scene_name=scene, node_name=node_name, space="world", translation=position, rotation_xyzw=identity)
 
+    def wait_until_idle(timeout_s=60.0):
+        start = time.time()
+        time.sleep(0.5)
+        while (time.time() - start) < timeout_s:
+            status = call("get_async_status")
+            if isinstance(status, dict) and (status.get("asset_loads", 0) + status.get("queued_operations", 0) + status.get("pending_scene_commits", 0)) == 0:
+                return
+            time.sleep(0.25)
+        print("async work did not settle")
+
+    def import_skinned_beside_b():
+        call("import_gltf", scene_name=scene, path=SKINNED_GLB)
+        wait_until_idle()
+        call("set_node_transform", scene_name=scene, node_name="RiggedFigure.glb", space="world",
+             translation=beside(light_b, 0.5, -0.9, 0.0), rotation_xyzw=identity, scale=[0.5, 0.5, 0.5])
+
+    def drag_skinned_vertices():
+        # A vertex drag on the skinned mesh: the dragged vertices' joint
+        # boxes grow with them during the drag, the commit rebuilds the
+        # primitive.
+        call("select_mesh_components", scene_name=scene, node_name="Proxy", mode="vertex", vertices=[0, 1, 2, 3])
+        for i in range(1, 6):
+            call("transform_selection", space="global", translation=[0.0, 0.0, 0.02 * i], end_edit=(i == 5))
+        wait_until_idle()
+        call("set_mesh_component_mode", mode="object")
+
     box_a_start = beside(light_a, 0.3, -0.6, 0.1)
     box_b_start = beside(light_b, -0.3, -0.6, 0.1)
     # (tag, edit, the lights whose faces may redraw, the lights whose faces must all be kept)
@@ -171,6 +201,16 @@ def main():
         ("move_b_to_a",     lambda: call("set_node_transform", scene_name=scene, node_name="Box B", space="world",
                                          translation=beside(light_a, -0.3, -0.6, 0.1), rotation_xyzw=identity),        ["Point A", "Point B"], []),
         ("remove_beside_a", lambda: call("delete_nodes", scene_name=scene, names=["Box A"]),                           ["Point A"], ["Point B"]),
+        # A skinned caster beside B: its entries are never culled, so its
+        # posed bounds decide the faces it reaches. Imported (the frames
+        # before its geometry carries per-joint bounds name no bounds, so
+        # every pass may redraw), left static (every face of both kept),
+        # then posed through a joint.
+        ("skinned_add",     import_skinned_beside_b,                                                                   ["Point B"], []),
+        ("skinned_static",  lambda: None,                                                                              [], ["Point A", "Point B"]),
+        ("skinned_pose",    lambda: call("set_node_transform", scene_name=scene, node_name="arm_joint_L_2", space="local",
+                                         translation=[0.0, 0.2445, 0.0], rotation_xyzw=[0.0, 0.0, 0.38268343, 0.92387953]), ["Point B"], ["Point A"]),
+        ("skinned_vertex_drag", drag_skinned_vertices,                                                                 ["Point B"], ["Point A"]),
     ]
     for tag, edit, may_redraw, must_keep in light_steps:
         call("set_shadow_map_cache_enabled", enabled=True)

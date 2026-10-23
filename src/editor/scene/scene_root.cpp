@@ -2142,7 +2142,10 @@ void Scene_root::publish_draw_lists(const uint64_t frame_index, const std::size_
     // The joint slot rewrite reads the skinned meshes' primitives, which a
     // worker may be replacing (the same reason flush_draw_lists() locks).
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
-    m_draw_list_scene->publish(frame_index, frames_in_flight, classification);
+    // The poses snapshot_render_settings() captured for this frame: the
+    // shadow cache compares them with the last publish's
+    // (doc/erhe/shadows.md "Shadow map cache").
+    m_draw_list_scene->publish(frame_index, frames_in_flight, classification, get_render_joint_poses(frame_index));
 }
 
 auto Scene_root::is_content_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh) const -> bool

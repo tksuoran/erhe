@@ -181,13 +181,12 @@ void Shadow_map_cache::clear()
 void Shadow_map_cache::begin_frame(
     const Configuration&                         configuration,
     const std::span<const erhe::scene::Layer_id> layers,
-    const bool                                   usable,
     const Draw_list_content_changes&             content,
     const erhe::Item_filter&                     filter
 )
 {
     const bool same_layers = std::equal(layers.begin(), layers.end(), m_layers.begin(), m_layers.end());
-    bool forget_all = !usable || !m_usable || !(configuration == m_configuration) || !same_layers;
+    bool forget_all = !m_usable || !(configuration == m_configuration) || !same_layers;
     if (!forget_all && (content.serial != m_content_serial)) {
         // The passes hold the content of m_content_serial: the published
         // changes describe the step from base_serial only. A frame this
@@ -196,12 +195,15 @@ void Shadow_map_cache::begin_frame(
             (content.base_serial != m_content_serial) ||
             content.unbounded ||
             (content.changed_bounds == nullptr) ||
-            (content.flag_changed_bounds == nullptr)
+            (content.flag_changed_bounds == nullptr) ||
+            (content.skinned_changed_bounds == nullptr)
         ) {
             forget_all = true;
         } else {
-            forget_reached(m_passes_2d,  *content.changed_bounds);
-            forget_reached(m_cube_faces, *content.changed_bounds);
+            forget_reached(m_passes_2d,  *content.changed_bounds,         Entry_culling::culled);
+            forget_reached(m_cube_faces, *content.changed_bounds,         Entry_culling::culled);
+            forget_reached(m_passes_2d,  *content.skinned_changed_bounds, Entry_culling::unculled);
+            forget_reached(m_cube_faces, *content.skinned_changed_bounds, Entry_culling::unculled);
             // A flags change alters a pass only through the caster filter
             // (the shadow shaders read no flag-dependent record field): an
             // entry the filter accepts (or rejects) before and after draws
@@ -223,8 +225,8 @@ void Shadow_map_cache::begin_frame(
                 m_filtered_flag_changes.extent_y[n] = flag_bounds.extent_y[i];
                 m_filtered_flag_changes.extent_z[n] = flag_bounds.extent_z[i];
             }
-            forget_reached(m_passes_2d,  m_filtered_flag_changes);
-            forget_reached(m_cube_faces, m_filtered_flag_changes);
+            forget_reached(m_passes_2d,  m_filtered_flag_changes, Entry_culling::culled);
+            forget_reached(m_cube_faces, m_filtered_flag_changes, Entry_culling::culled);
         }
     }
     if (forget_all) {
@@ -237,15 +239,39 @@ void Shadow_map_cache::begin_frame(
     if (!same_layers) {
         m_layers.assign(layers.begin(), layers.end());
     }
-    m_usable = usable;
+    m_usable = true;
 }
 
-void Shadow_map_cache::forget_reached(std::vector<Pass>& passes, const Draw_list_bounds& changed_bounds)
+void Shadow_map_cache::forget_reached(std::vector<Pass>& passes, const Draw_list_bounds& changed_bounds, const Entry_culling entry_culling)
 {
+    if (changed_bounds.extent_x.empty()) {
+        return;
+    }
     // A changed entry whose old and new bounds both miss a pass's view was
-    // culled from the pass before and after the change.
+    // culled from the pass before and after the change. An unculled entry
+    // (skinned) is drawn into every pass, and what of it lands in the map is
+    // what the pass's clip volume holds: the planes of a 2D pass are its clip
+    // volume (a depth-clamped pass's side planes are), and a cube face's is
+    // inside its octant and inside the sphere through its far corners
+    // (radius range * sqrt(3): the face frustum's far plane is at the range,
+    // its far corners beyond it), with a margin for rounding.
     for (Pass& pass : passes) {
-        if (pass.valid && cull_lanes::reaches_view(pass.view, changed_bounds, m_reach_scratch)) {
+        if (!pass.valid) {
+            continue;
+        }
+        bool reached = false;
+        if ((entry_culling == Entry_culling::unculled) && (pass.view.kind == Cull_view_kind::cube_face)) {
+            Cull_view_tests octant = pass.view;
+            // sqrt(3): the distance from a face frustum's apex to its far
+            // corners in units of its far plane distance (the range); the
+            // 0.1 % margin covers the rounding of the face projection.
+            constexpr float far_corner_radius_scale = 1.7320508f * 1.001f;
+            octant.sphere.radius = pass.view.sphere.radius * far_corner_radius_scale;
+            reached = cull_lanes::reaches_view(octant, changed_bounds, m_reach_scratch);
+        } else {
+            reached = cull_lanes::reaches_view(pass.view, changed_bounds, m_reach_scratch);
+        }
+        if (reached) {
             pass.valid = false;
         }
     }
@@ -978,12 +1004,10 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         parameters.draw_list_scene->has_gpu_shadow_commands(m_graphics_device.get_frame_index());
 
     // The maps keep the passes whose inputs did not change since they were
-    // drawn (Shadow_map_cache). Joint poses carry no serial: a scene with
-    // skinned objects draws every pass.
+    // drawn (Shadow_map_cache).
     Shadow_map_cache* const map_cache = (parameters.draw_list_scene != nullptr) ? parameters.map_cache : nullptr;
     if (map_cache != nullptr) {
         const uint64_t frame_index = m_graphics_device.get_frame_index();
-        const bool     usable      = !parameters.draw_list_scene->has_published_skinned_objects(frame_index);
         const Draw_list_content_changes content = parameters.draw_list_scene->get_published_content_changes(frame_index);
         map_cache->begin_frame(
             Shadow_map_cache::Configuration{
@@ -1003,7 +1027,6 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                 .scene_instance        = content.scene_instance
             },
             parameters.draw_list_layers,
-            usable,
             content,
             shadow_filter
         );

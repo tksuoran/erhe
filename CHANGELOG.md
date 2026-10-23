@@ -9,6 +9,20 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `normalize_joint_weights()`,
+  `quantize_joint_weights_unorm8()` and
+  `include_vertex_in_joint_bounding_boxes()`: the builder writes `WEIGHTS_0`
+  normalized (unorm8 summing to exactly 255) and builds the joint boxes from
+  the same weights, so they bound every built skinned vertex
+  (doc/erhe/primitive.md "Skinning weights").
+
+- `erhe::scene_renderer`: `Draw_list_content_changes::skinned_changed_bounds`
+  (old and new posed bounds of skinned shadow casters whose captured joint
+  poses changed) and `Draw_list_object::published_pose`,
+  `published_pose_aabb`, `has_published_pose`; the shadow map cache keeps
+  passes in scenes with skinned objects (doc/erhe/shadows.md "Shadow map
+  cache").
+
 - `erhe::scene_renderer`: `Draw_list_content_changes` and
   `Draw_list_scene::get_published_content_changes()`: per publish, the old
   and new bounds of the shadow-list entries changed since the publish
@@ -603,6 +617,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::primitive`: the primitive builder normalizes `WEIGHTS_0` (skinned
+  meshes whose authored weights did not sum to one, or whose unorm8
+  rounding did not, render slightly differently); the joint boxes include a
+  vertex without joint values in joint 0's box;
+  `encode_implicit_sum_joint_weights()` reconstructs a fourth weight of
+  exactly zero for vertices with fewer than four influences.
+
+- `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
+  captured joint poses (`std::span<const Joint_pose>`).
+
 - `erhe::scene_renderer`: `Shadow_map_cache` keeps a pass through draw-list
   changes whose old and new bounds miss the pass's culling view (the
   content serial left its configuration; doc/erhe/shadows.md "Shadow map
@@ -979,6 +1003,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::scene_renderer`: `Draw_list_scene::has_published_skinned_objects()`
+  (skinned objects no longer disable the shadow map cache).
 - `erhe::scene_renderer`: `Draw_list_scene::get_published_content_serial()`
   (replaced by `get_published_content_changes()`).
 - `erhe::primitive`: `needs_translucent_pass()` (replaced by

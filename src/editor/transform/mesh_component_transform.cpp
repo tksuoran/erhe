@@ -23,6 +23,7 @@
 #include "erhe_item/item_host.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -533,10 +534,13 @@ void Mesh_component_transform::capture_start()
         group.world_from_node = node->world_from_node();
         group.node_from_world = node->node_from_world();
         group.before_bounding_box = erhe::math::Aabb{};
+        group.before_joint_bounding_boxes.clear();
         {
             const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
             if ((group.primitive_index < primitives.size()) && primitives[group.primitive_index].primitive && primitives[group.primitive_index].primitive->render_shape) {
-                group.before_bounding_box = primitives[group.primitive_index].primitive->render_shape->get_renderable_mesh().bounding_box;
+                const erhe::primitive::Buffer_mesh& buffer_mesh = primitives[group.primitive_index].primitive->render_shape->get_renderable_mesh();
+                group.before_bounding_box = buffer_mesh.bounding_box;
+                group.before_joint_bounding_boxes.assign(buffer_mesh.joint_bounding_boxes.begin(), buffer_mesh.joint_bounding_boxes.end());
             }
         }
         const GEO::Mesh& geo_mesh = group.geometry->get_mesh();
@@ -1750,7 +1754,14 @@ void Mesh_component_transform::write_vertex(App_context& context, const Group& g
     if ((group.primitive_index >= primitives.size()) || !primitives[group.primitive_index].primitive || !primitives[group.primitive_index].primitive->render_shape) {
         return;
     }
-    primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh().bounding_box.include(local_position);
+    erhe::primitive::Buffer_mesh& buffer_mesh = primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh();
+    buffer_mesh.bounding_box.include(local_position);
+    // A skinned mesh is bounded per joint (the posed bounds of the shadow
+    // map cache and Mesh::get_aabb_world()): the joints the vertex follows
+    // grow with it, until the commit's rebuild computes them exactly.
+    if (!buffer_mesh.joint_bounding_boxes.empty()) {
+        erhe::primitive::include_vertex_in_joint_bounding_boxes(buffer_mesh, group.geometry->get_attributes(), vertex, local_position);
+    }
 }
 
 void Mesh_component_transform::notify_group_bounds(const Group& group)
@@ -2487,11 +2498,15 @@ void Mesh_component_transform::cancel(App_context& context)
                 write_vertex(context, group, group.vertices[i], group.before_local[i]);
             }
             update_group_normals(context, group, Normal_source::stored_attributes);
-            // The in-place edit's primitive stays: its box, grown by the
-            // drag, goes back to what it was at begin().
+            // The in-place edit's primitive stays: its box and its per-joint
+            // boxes, grown by the drag, go back to what they were at begin();
+            // the bounds notification below carries the change to the draw
+            // lists (and the shadow map cache's posed bounds).
             const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
             if ((group.primitive_index < primitives.size()) && primitives[group.primitive_index].primitive && primitives[group.primitive_index].primitive->render_shape) {
-                primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh().bounding_box = group.before_bounding_box;
+                erhe::primitive::Buffer_mesh& buffer_mesh = primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh();
+                buffer_mesh.bounding_box = group.before_bounding_box;
+                buffer_mesh.joint_bounding_boxes.assign(group.before_joint_bounding_boxes.begin(), group.before_joint_bounding_boxes.end());
             }
             notify_group_bounds(group);
         }

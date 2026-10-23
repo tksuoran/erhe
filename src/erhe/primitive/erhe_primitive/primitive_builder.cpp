@@ -441,31 +441,105 @@ void Build_context_root::calculate_joint_bounding_volumes(erhe::geometry::Mesh_a
         return;
     }
 
-    const auto include = [this](const uint32_t joint_index, const glm::vec3 position) {
+    for (GEO::index_t vertex : mesh.vertices) {
+        const glm::vec3 position = to_glm_vec3(get_pointf(mesh.vertices, vertex));
+        include_vertex_in_joint_bounding_boxes(buffer_mesh, mesh_attributes, vertex, position);
+    }
+}
+
+void include_vertex_in_joint_bounding_boxes(
+    Buffer_mesh&                     buffer_mesh,
+    erhe::geometry::Mesh_attributes& mesh_attributes,
+    const GEO::index_t               vertex,
+    const glm::vec3&                 position
+)
+{
+    const auto include = [&buffer_mesh, &position](const uint32_t joint_index) {
         if (joint_index >= buffer_mesh.joint_bounding_boxes.size()) {
             buffer_mesh.joint_bounding_boxes.resize(joint_index + 1);
         }
         buffer_mesh.joint_bounding_boxes[joint_index].include(position);
     };
-
-    for (GEO::index_t vertex : mesh.vertices) {
-        const glm::vec3 position = to_glm_vec3(get_pointf(mesh.vertices, vertex));
-        for (std::size_t usage_index = 0; usage_index < 2; ++usage_index) {
-            const std::optional<GEO::vec4u> joint_indices = mesh_attributes.vertex_joint_indices(usage_index).try_get(vertex);
-            const std::optional<GEO::vec4f> joint_weights = mesh_attributes.vertex_joint_weights(usage_index).try_get(vertex);
-            if (!joint_indices.has_value() || !joint_weights.has_value()) {
-                continue;
-            }
-            for (std::size_t i = 0; i < 4; ++i) {
-                // A zero weight contributes nothing to the posed position, so
-                // that joint must not be allowed to inflate the bound.
-                if (joint_weights.value()[static_cast<GEO::index_t>(i)] == 0.0f) {
-                    continue;
-                }
-                include(joint_indices.value()[static_cast<GEO::index_t>(i)], position);
+    // JOINTS_0 / WEIGHTS_0 exactly as Build_context writes them
+    // (build_vertex_joint_indices(), build_vertex_joint_weights()).
+    {
+        const std::optional<GEO::vec4u> joint_indices = mesh_attributes.vertex_joint_indices(0).try_get(vertex);
+        const std::optional<GEO::vec4f> joint_weights = mesh_attributes.vertex_joint_weights(0).try_get(vertex);
+        const GEO::vec4u indices = joint_indices.has_value() ? joint_indices.value() : GEO::vec4u{0, 0, 0, 0};
+        const GEO::vec4f weights = normalize_joint_weights(joint_weights.has_value() ? joint_weights.value() : GEO::vec4f{1.0f, 0.0f, 0.0f, 0.0f});
+        for (GEO::index_t i = 0; i < 4; ++i) {
+            // A zero weight contributes nothing to the posed position, so
+            // that joint must not be allowed to inflate the bound.
+            if (weights[i] > 0.0f) {
+                include(indices[i]);
             }
         }
     }
+    {
+        const std::optional<GEO::vec4u> joint_indices = mesh_attributes.vertex_joint_indices(1).try_get(vertex);
+        const std::optional<GEO::vec4f> joint_weights = mesh_attributes.vertex_joint_weights(1).try_get(vertex);
+        if (joint_indices.has_value() && joint_weights.has_value()) {
+            for (GEO::index_t i = 0; i < 4; ++i) {
+                if (joint_weights.value()[i] > 0.0f) {
+                    include(joint_indices.value()[i]);
+                }
+            }
+        }
+    }
+}
+
+auto normalize_joint_weights(const GEO::vec4f& weights) -> GEO::vec4f
+{
+    GEO::vec4f result{0.0f, 0.0f, 0.0f, 0.0f};
+    float sum = 0.0f;
+    for (GEO::index_t i = 0; i < 4; ++i) {
+        const float weight = weights[i];
+        result[i] = (std::isfinite(weight) && (weight > 0.0f)) ? weight : 0.0f;
+        sum += result[i];
+    }
+    if (!(sum > 0.0f) || !std::isfinite(sum)) {
+        return GEO::vec4f{1.0f, 0.0f, 0.0f, 0.0f};
+    }
+    for (GEO::index_t i = 0; i < 4; ++i) {
+        result[i] /= sum;
+    }
+    return result;
+}
+
+auto quantize_joint_weights_unorm8(const GEO::vec4f& normalized_weights) -> std::array<uint8_t, 4>
+{
+    std::array<int, 4>   units{};
+    std::array<float, 4> remainders{};
+    int total = 0;
+    for (std::size_t i = 0; i < 4; ++i) {
+        const float scaled = std::clamp(normalized_weights[static_cast<GEO::index_t>(i)], 0.0f, 1.0f) * 255.0f;
+        units[i]      = static_cast<int>(std::floor(scaled));
+        remainders[i] = scaled - static_cast<float>(units[i]);
+        total += units[i];
+    }
+    // The floors sum to at most 255 and fall short by less than four units;
+    // give one unit each to the largest remainders. A weight of zero has no
+    // remainder, and the remainders sum to the shortfall, so at least as
+    // many weights as there are missing units have a positive remainder:
+    // a zero weight stays zero.
+    while (total < 255) {
+        std::size_t best = 0;
+        for (std::size_t i = 1; i < 4; ++i) {
+            if (remainders[i] > remainders[best]) {
+                best = i;
+            }
+        }
+        if (!(remainders[best] > 0.0f)) {
+            break; // (unreachable for normalized input)
+        }
+        ++units[best];
+        remainders[best] = 0.0f;
+        ++total;
+    }
+    return std::array<uint8_t, 4>{
+        static_cast<uint8_t>(units[0]), static_cast<uint8_t>(units[1]),
+        static_cast<uint8_t>(units[2]), static_cast<uint8_t>(units[3])
+    };
 }
 
 Primitive_builder::Primitive_builder(
@@ -942,6 +1016,20 @@ void Build_context::build_vertex_joint_weights(size_t usage_index)
 {
     std::optional<GEO::vec4f> vertex_joint_weights = mesh_attributes.vertex_joint_weights(usage_index).try_get(mesh_vertex);
     GEO::vec4f joint_weights = vertex_joint_weights.has_value() ? vertex_joint_weights.value() : GEO::vec4f{1.0f, 0.0f, 0.0f, 0.0f};
+    // WEIGHTS_0 is what the shader blends with: normalized here, so every
+    // built skinned vertex is a convex combination of its joints' images
+    // (the joint bounding boxes rely on it). unorm8 storage is rounded to sum
+    // to exactly 255. WEIGHTS_1 is written as authored (the shader does not
+    // read it).
+    if (usage_index == 0) {
+        joint_weights = normalize_joint_weights(joint_weights);
+        if (root.vertex_attributes.joint_weights[usage_index].format == erhe::dataformat::Format::format_8_vec4_unorm) {
+            const std::array<uint8_t, 4> units = quantize_joint_weights_unorm8(joint_weights);
+            for (GEO::index_t i = 0; i < 4; ++i) {
+                joint_weights[i] = erhe::dataformat::unorm8_to_float(units[i]);
+            }
+        }
+    }
     attribute_writers.joint_weights_0->write(root.vertex_attributes.joint_weights[usage_index], joint_weights);
 }
 
