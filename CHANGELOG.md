@@ -9,6 +9,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: GPU-counted multi-draws prepared in a compute pass:
+  `Indirect_count_draws` (`indirect_count_draws.hpp`, with
+  `Indirect_count_draws_prepare_info`, `Indirect_count_draw_job`,
+  `Indirect_count_index_buffer`, `Indirect_count_draw_set`),
+  `Compute_command_encoder::prepare_indexed_indirect_count_draws()`,
+  `Render_command_encoder::multi_draw_indexed_primitives_indirect_count(set,
+  job_index)`, `Indirect_count_draw_support` and
+  `Base_render_pipeline_create_info::indirect_count_draws`. Metal now reports
+  `Device_info::use_draw_indirect_count` (an indirect command buffer encoded
+  by a kernel); its older `multi_draw_indexed_primitives_indirect_count()`
+  overload stays fatal (doc/erhe/graphics.md "Draw count from the GPU").
+
 - `erhe::scene_renderer`: `Shadow_fit_cache`, `Caster_extents_identity`
   (`caster_extents_identity.hpp`), `Shadow_bounds::extents_identity`,
   `Shadow_renderer::Render_parameters::fit_cache`, the trailing

@@ -397,7 +397,10 @@ Shadow_renderer::Shadow_renderer(
                 .input_assembly    = Input_assembly_state::triangle,
                 .rasterization     = rasterization.with_depth_bias().with_winding_flip_if(m_y_flip),
                 .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-                .bind_group_layout = m_bind_group_layout
+                .bind_group_layout = m_bind_group_layout,
+                // GPU-generated shadow commands are drawn as prepared count
+                // draws (Draw_list_scene::draw_list_gpu_chunks()).
+                .indirect_count_draws = erhe::graphics::Indirect_count_draw_support::enabled
             }
         };
     };

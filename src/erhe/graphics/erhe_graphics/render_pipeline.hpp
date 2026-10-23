@@ -30,15 +30,16 @@ class Vertex_input_state;
 class Base_render_pipeline_create_info
 {
 public:
-    erhe::utility::Debug_label debug_label         {};
+    erhe::utility::Debug_label  debug_label         {};
 
-    Input_assembly_state       input_assembly      {};
-    Multisample_state          multisample         {};
-    Viewport_depth_range_state viewport_depth_range{};
-    Rasterization_state        rasterization       {};
-    Depth_stencil_state        depth_stencil       {};
-    const Bind_group_layout*   bind_group_layout   {nullptr};
-    const Color_blend_state*   color_blend         {nullptr};
+    Input_assembly_state        input_assembly      {};
+    Multisample_state           multisample         {};
+    Viewport_depth_range_state  viewport_depth_range{};
+    Rasterization_state         rasterization       {};
+    Depth_stencil_state         depth_stencil       {};
+    const Bind_group_layout*    bind_group_layout   {nullptr};
+    const Color_blend_state*    color_blend         {nullptr};
+    Indirect_count_draw_support indirect_count_draws{Indirect_count_draw_support::disabled};
 };
 
 class Render_pipeline_create_info

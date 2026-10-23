@@ -14,6 +14,7 @@ class Bind_group_layout;
 class Buffer;
 class Command_buffer;
 class Device;
+class Indirect_count_draw_set;
 class Render_pass;
 class Render_pipeline;
 class Render_pipeline_state;
@@ -74,8 +75,9 @@ public:
     // uint32), clamped to max_draw_count: the commands at indirect_offset in
     // the bound draw_indirect buffer. Needs Device_info::
     // use_draw_indirect_count (Vulkan vkCmdDrawIndexedIndirectCount, GL
-    // glMultiDrawElementsIndirectCount); a device without it (Metal, the null
-    // device) never selects a path that calls it (verified).
+    // glMultiDrawElementsIndirectCount). Metal has no draw of this form (its
+    // count draws are prepared, below) and the null device has no count path:
+    // both stop with a fatal error.
     void multi_draw_indexed_primitives_indirect_count(
         Primitive_type           primitive_type,
         erhe::dataformat::Format index_type,
@@ -85,6 +87,17 @@ public:
         std::uintptr_t           max_draw_count,
         std::uintptr_t           stride
     ) const;
+
+    // Draws job job_index of a set prepared by Compute_command_encoder::
+    // prepare_indexed_indirect_count_draws() for this frame: the job's
+    // commands with the GPU-read count, from the job's index buffer, with
+    // the encoder's pipeline, vertex buffers and bindings. Every backend with
+    // Device_info::use_draw_indirect_count: the count draw above (Vulkan,
+    // OpenGL; binds the set's index and command buffers) or the job's range
+    // of the indirect command buffer the prepare step encoded (Metal, where
+    // ERHE_DRAW_ID reads 0 in every command: name records by first_instance,
+    // Device_info::record_indexing).
+    void multi_draw_indexed_primitives_indirect_count(const Indirect_count_draw_set& set, uint32_t job_index);
 
     void dump_state(const char* label) const;
 

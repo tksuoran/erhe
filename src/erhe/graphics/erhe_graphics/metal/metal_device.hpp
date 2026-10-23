@@ -21,6 +21,7 @@ typedef int GLint;
 namespace MTL { class ArgumentEncoder; }
 namespace MTL { class Device; }
 namespace MTL { class CommandQueue; }
+namespace MTL { class ComputePipelineState; }
 namespace MTL { class Event; }
 namespace MTL { class Library; }
 namespace MTL { class LogState; }
@@ -183,6 +184,7 @@ public:
     void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
     void submit_command_buffer_and_wait(Command_buffer& command_buffer);
     void add_completion_handler    (std::function<void(Device_impl&)> callback);
+    [[nodiscard]] auto get_indirect_count_encode_pipeline() const -> MTL::ComputePipelineState* { return m_indirect_count_encode_pipeline; }
     void on_thread_enter           ();
     // No per-context resources in the Metal backend; see Device::Device.
     void create_per_context_resources() {}
@@ -350,6 +352,10 @@ private:
         unsigned long             destination_pixel_format{0};
         MTL::RenderPipelineState* pipeline                {nullptr};
     };
+    // The kernel of Indirect_count_draws (metal_indirect_count_draws.hpp),
+    // compiled at construction; null when it failed (no
+    // use_draw_indirect_count).
+    MTL::ComputePipelineState*             m_indirect_count_encode_pipeline{nullptr};
     std::mutex                             m_blit_framebuffer_mutex;
     MTL::Library*                          m_blit_framebuffer_library{nullptr};
     std::vector<Blit_framebuffer_pipeline> m_blit_framebuffer_pipelines;

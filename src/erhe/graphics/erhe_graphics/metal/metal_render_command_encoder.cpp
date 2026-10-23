@@ -6,6 +6,7 @@
 #include "erhe_graphics/metal/metal_texture.hpp"
 #include "erhe_graphics/metal/metal_helpers.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
+#include "erhe_graphics/metal/metal_indirect_count_draws.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/metal/metal_bind_group_layout.hpp"
 #include "erhe_graphics/buffer.hpp"
@@ -109,6 +110,8 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
     }
 
     encoder->setRenderPipelineState(impl.get_pso());
+    m_pipeline_supports_indirect_count_draws =
+        (pipeline.get_create_info().base.indirect_count_draws == Indirect_count_draw_support::enabled);
 
     if (impl.get_depth_stencil() != nullptr) {
         encoder->setDepthStencilState(impl.get_depth_stencil());
@@ -301,6 +304,10 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     }
 
     encoder->setRenderPipelineState(pso);
+    // This path never sets supportIndirectCommandBuffers: only a
+    // Render_pipeline created with Indirect_count_draw_support::enabled
+    // draws prepared count draws.
+    m_pipeline_supports_indirect_count_draws = false;
     pso->release();
 
     // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage.
@@ -581,9 +588,63 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect_count(
     static_cast<void>(count_offset);
     static_cast<void>(max_draw_count);
     static_cast<void>(stride);
-    // A caller selects the count path only with Device_info::
-    // use_draw_indirect_count, which this backend never reports.
-    ERHE_FATAL("multi_draw_indexed_primitives_indirect_count: Metal has no GPU-read draw count path (Device_info::use_draw_indirect_count is false)");
+    // Metal cannot draw with a GPU-read count from the command buffer
+    // directly: its count draws are prepared into an indirect command buffer
+    // in a compute pass (Compute_command_encoder::
+    // prepare_indexed_indirect_count_draws()) and drawn by the
+    // Indirect_count_draw_set overload.
+    ERHE_FATAL("multi_draw_indexed_primitives_indirect_count: Metal draws GPU-counted multi-draws only from a prepared Indirect_count_draw_set");
+}
+
+void Render_command_encoder_impl::execute_indirect_count_draws(
+    const Indirect_count_draws& draws,
+    const std::size_t           slot,
+    const uint32_t              job_index
+)
+{
+    MTL::RenderCommandEncoder* const encoder = Render_pass_impl::get_active_mtl_encoder();
+    if (encoder == nullptr) {
+        ERHE_FATAL("multi_draw_indexed_primitives_indirect_count: no active encoder");
+    }
+    const Indirect_count_draws::Slot&                         slot_data = draws.get_slot(slot);
+    const Indirect_count_draws_impl::Slot_resources&          resources = draws.get_impl().get_slot_resources(slot);
+    ERHE_VERIFY(resources.encoded && (resources.encoded_frame == slot_data.frame_index));
+    ERHE_VERIFY((resources.icb != nullptr) && (resources.range_buffer != nullptr));
+    const Indirect_count_draw_job&     job          = slot_data.jobs[job_index];
+    const Indirect_count_index_buffer& index_buffer = slot_data.index_buffers[job.index_buffer];
+    MTL::Buffer* const mtl_index_buffer = index_buffer.buffer->get_impl().get_mtl_buffer();
+    ERHE_VERIFY(mtl_index_buffer != nullptr);
+    // The commands inherit the bound pipeline, which must have been created
+    // with supportIndirectCommandBuffers (Indirect_count_draw_support).
+    ERHE_VERIFY(m_pipeline_supports_indirect_count_draws);
+
+    // The commands reach the index buffer by address only, and the ICB is
+    // not bound: make both resident for this MTL encoder, once each (the
+    // last ones made resident are remembered per MTL encoder).
+    if (m_resident_encoder != encoder) {
+        m_resident_encoder      = encoder;
+        m_resident_icb          = nullptr;
+        m_resident_index_buffer = nullptr;
+    }
+    if (m_resident_index_buffer != mtl_index_buffer) {
+        encoder->useResource(mtl_index_buffer, MTL::ResourceUsageRead, MTL::RenderStageVertex);
+        m_resident_index_buffer = mtl_index_buffer;
+    }
+    if (m_resident_icb != resources.icb) {
+        encoder->useResource(resources.icb, MTL::ResourceUsageRead, MTL::RenderStageVertex | MTL::RenderStageFragment);
+        m_resident_icb = resources.icb;
+    }
+    // The commands inherit the encoder's buffer bindings, the push constant
+    // (ERHE_DRAW_ID) at index 15 among them: one value for all of them,
+    // 0 here (records are named by first_instance).
+    static constexpr NS::UInteger metal_push_constant_index = 15;
+    const int32_t draw_id = 0;
+    encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
+    encoder->executeCommandsInBuffer(
+        resources.icb,
+        resources.range_buffer,
+        static_cast<NS::UInteger>(job_index) * sizeof(MTL::IndirectCommandBufferExecutionRange)
+    );
 }
 
 void Render_command_encoder_impl::dump_state(const char* label) const

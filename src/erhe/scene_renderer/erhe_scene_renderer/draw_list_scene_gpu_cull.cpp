@@ -3,6 +3,7 @@
 
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 
 #include "erhe_graphics/blit_command_encoder.hpp"
@@ -13,6 +14,7 @@
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/indirect_count_draws.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_profile/profile.hpp"
@@ -562,6 +564,8 @@ void Draw_list_scene::generate_gpu_shadow_commands(
     // dense command range, starting at a multiple of 32 (its pass bit words
     // start at command offset / 32). Persistent scratch, capacity kept.
     m_gpu_shadow_jobs.clear();
+    m_gpu_indirect_count_jobs.clear();
+    m_gpu_indirect_count_index_buffers.clear();
     m_gpu_shadow_job_list_count = list_count;
     m_gpu_shadow_job_lookup.assign(view_count * list_count, c_no_gpu_shadow_job);
     constexpr uint32_t command_alignment = Gpu_cull_classifier::job_command_alignment;
@@ -582,6 +586,26 @@ void Draw_list_scene::generate_gpu_shadow_commands(
                 continue;
             }
             m_gpu_shadow_job_lookup[(view_index * list_count) + list_index] = static_cast<uint32_t>(m_gpu_shadow_jobs.size());
+            // The list's index buffer in the prepare's table (Mesh_memory
+            // pools hold several buffers; a frame uses few, so a linear
+            // search).
+            const erhe::graphics::Buffer* const index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
+            ERHE_VERIFY(index_buffer != nullptr);
+            uint32_t index_buffer_index = 0;
+            while (
+                (index_buffer_index < m_gpu_indirect_count_index_buffers.size()) &&
+                (m_gpu_indirect_count_index_buffers[index_buffer_index].buffer != index_buffer)
+            ) {
+                ++index_buffer_index;
+            }
+            if (index_buffer_index == m_gpu_indirect_count_index_buffers.size()) {
+                m_gpu_indirect_count_index_buffers.push_back(
+                    Indirect_count_index_buffer{
+                        .buffer     = index_buffer,
+                        .index_type = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer)
+                    }
+                );
+            }
             for (std::size_t begin = 0; begin < list_entry_count; begin += max_per_chunk) {
                 const std::size_t end = std::min(list_entry_count, begin + max_per_chunk);
                 const uint32_t job_entry_count = static_cast<uint32_t>(end - begin);
@@ -590,6 +614,11 @@ void Draw_list_scene::generate_gpu_shadow_commands(
                     .entry_begin    = slot.entry_offsets[list_index] + static_cast<uint32_t>(begin),
                     .entry_count    = job_entry_count,
                     .command_offset = command_count
+                });
+                m_gpu_indirect_count_jobs.push_back(Indirect_count_draw_job{
+                    .command_offset = command_count,
+                    .max_draw_count = job_entry_count,
+                    .index_buffer   = index_buffer_index
                 });
                 command_count  += ((job_entry_count + command_alignment - 1) / command_alignment) * command_alignment;
                 max_job_entries = std::max(max_job_entries, job_entry_count);
@@ -710,8 +739,38 @@ void Draw_list_scene::generate_gpu_shadow_commands(
         }
     }
     // Compaction writes -> the shadow passes' indirect command and count
-    // reads, and the count (and the check's) copies below.
-    command_buffer.memory_barrier(Memory_barrier_mask::command_barrier_bit | Memory_barrier_mask::pixel_buffer_barrier_bit);
+    // reads, the prepare step's reads (Metal's encoding kernel) and the
+    // count (and the check's) copies below.
+    command_buffer.memory_barrier(
+        Memory_barrier_mask::command_barrier_bit |
+        Memory_barrier_mask::shader_storage_barrier_bit |
+        Memory_barrier_mask::pixel_buffer_barrier_bit
+    );
+
+    // The shadow passes draw the jobs as prepared count draws: on Metal the
+    // prepare encodes the surviving commands into an indirect command
+    // buffer (its own encoder, ordered after the compaction by the encoder
+    // fence); elsewhere it only records the parameters.
+    {
+        if (!m_gpu_indirect_count_draws) {
+            m_gpu_indirect_count_draws = std::make_unique<Indirect_count_draws>(device, erhe::utility::Debug_label{"Shadow GPU commands"});
+        }
+        Compute_command_encoder encoder = device.make_compute_command_encoder(command_buffer);
+        m_gpu_indirect_count_draw_set = encoder.prepare_indexed_indirect_count_draws(
+            *m_gpu_indirect_count_draws,
+            Indirect_count_draws_prepare_info{
+                .frame_index         = frame_index,
+                .primitive_type      = Primitive_type::triangle,
+                .index_buffers       = m_gpu_indirect_count_index_buffers,
+                .command_buffer      = command_buffer_object,
+                .command_byte_offset = m_gpu_command_byte_offset,
+                .count_buffer        = count_buffer_object,
+                .count_byte_offset   = m_gpu_count_byte_offset,
+                .count_byte_stride   = Gpu_cull_classifier::count_bytes_per_job,
+                .jobs                = m_gpu_indirect_count_jobs
+            }
+        );
+    }
 
     // The frame's counts, for the pass statistics: copied to host memory,
     // decoded by the classification of the frame that reuses this frame

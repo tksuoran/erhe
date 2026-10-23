@@ -5,6 +5,7 @@
 #include "erhe_graphics/clock_monitor_apple.hpp"
 #include "erhe_graphics/metal/metal_gpu_prewarm.hpp"
 #include "erhe_graphics/metal/metal_gpu_timer.hpp"
+#include "erhe_graphics/metal/metal_indirect_count_draws.hpp"
 #include "erhe_graphics/metal/metal_scoped_debug_group.hpp"
 #include "erhe_graphics/metal/metal_helpers.hpp"
 #include "erhe_graphics/metal/metal_surface.hpp"
@@ -230,6 +231,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.min_acceleration_structure_vertex_stride = 12;
     m_info.ray_query_disabled_by_capture_layer      = m_mtl_device->supportsRaytracing() && gpu_capture_layer;
     m_info.use_multi_draw_indirect_core             = false;
+    // The GPU-read draw count: prepared count draws (Indirect_count_draws),
+    // whose encoding kernel is raw MSL compiled here.
+    m_indirect_count_encode_pipeline = make_indirect_count_encode_pipeline(m_mtl_device);
+    m_info.use_draw_indirect_count                  = (m_indirect_count_encode_pipeline != nullptr);
+    log_startup->info(
+        "Draw indirect count: {} (indirect command buffer encoded by a kernel, Indirect_count_draws)",
+        m_info.use_draw_indirect_count
+    );
     m_info.uniform_buffer_offset_alignment          = 256;
     m_info.shader_storage_buffer_offset_alignment   = 256;
     m_info.max_uniform_buffer_bindings              = 31;
@@ -420,6 +429,10 @@ Device_impl::~Device_impl() noexcept
     if (m_blit_framebuffer_library != nullptr) {
         m_blit_framebuffer_library->release();
         m_blit_framebuffer_library = nullptr;
+    }
+    if (m_indirect_count_encode_pipeline != nullptr) {
+        m_indirect_count_encode_pipeline->release();
+        m_indirect_count_encode_pipeline = nullptr;
     }
     if (m_texture_argument_encoder != nullptr) {
         m_texture_argument_encoder->release();

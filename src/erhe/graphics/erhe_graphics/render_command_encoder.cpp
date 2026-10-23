@@ -1,5 +1,8 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_graphics/indirect_count_draws.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_render_command_encoder.hpp"
@@ -129,6 +132,33 @@ void Render_command_encoder::multi_draw_indexed_primitives_indirect_count(
         max_draw_count,
         stride
     );
+}
+
+void Render_command_encoder::multi_draw_indexed_primitives_indirect_count(const Indirect_count_draw_set& set, const uint32_t job_index)
+{
+    ERHE_VERIFY(set.draws != nullptr);
+    const Indirect_count_draws::Slot& slot = set.draws->get_slot(set.slot);
+    ERHE_VERIFY(slot.prepared);
+    ERHE_VERIFY(job_index < slot.jobs.size());
+#if defined(ERHE_GRAPHICS_API_METAL)
+    m_impl->execute_indirect_count_draws(*set.draws, set.slot, job_index);
+#else
+    // The native count draw over the job's commands.
+    const Indirect_count_draw_job&     job          = slot.jobs[job_index];
+    const Indirect_count_index_buffer& index_buffer = slot.index_buffers[job.index_buffer];
+    constexpr std::size_t              stride       = sizeof(Draw_indexed_primitives_indirect_command);
+    set_index_buffer(index_buffer.buffer);
+    set_buffer(Buffer_target::draw_indirect, slot.command_buffer);
+    m_impl->multi_draw_indexed_primitives_indirect_count(
+        slot.primitive_type,
+        index_buffer.index_type,
+        slot.command_byte_offset + (static_cast<std::size_t>(job.command_offset) * stride),
+        *slot.count_buffer,
+        slot.count_byte_offset + (static_cast<std::size_t>(job_index) * slot.count_byte_stride),
+        job.max_draw_count,
+        stride
+    );
+#endif
 }
 
 void Render_command_encoder::dump_state(const char* label) const

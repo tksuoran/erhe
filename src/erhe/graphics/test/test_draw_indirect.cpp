@@ -11,6 +11,7 @@
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/fragment_output.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
+#include "erhe_graphics/indirect_count_draws.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -21,12 +22,12 @@
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -78,14 +79,29 @@ namespace erhe::graphics::test {
 // (Device_info::record_indexing == Record_indexing::first_instance; skipped
 // elsewhere). Its expected image is computed; it has no golden.
 //
-// Count variants (draw_indexed_indirect_count, draw_indexed_indirect_count_zero):
-// the compute pass writes all three commands, and
-// multi_draw_indexed_primitives_indirect_count draws them with max_draw_count
-// 3 and the draw count read from a count buffer holding 2 (columns 0 and 1
-// drawn, column 2 clear) or 0 (nothing drawn): the GPU-read count, not the
-// maximum, decides (Device_info::use_draw_indirect_count; skipped elsewhere).
-// Their expected images are computed (the count-2 image is not the golden of
-// any CPU-count variant).
+// Count variants (draw_indexed_indirect_count, draw_indexed_indirect_count_zero,
+// draw_indexed_indirect_count_two_jobs): the compute pass writes every command
+// slot, a second compute encoder prepares the jobs
+// (Compute_command_encoder::prepare_indexed_indirect_count_draws) and the
+// render pass draws each job with multi_draw_indexed_primitives_indirect_count
+// (set, job): max_draw_count 3 per job and the draw count read from the job's
+// entry of a count buffer (stride 8, the second word a decoy), so the
+// GPU-read count, not the maximum, decides (Device_info::
+// use_draw_indirect_count; skipped elsewhere). Prepared draws carry no
+// per-draw ERHE_DRAW_ID on Metal, so these variants place and color quad q by
+// ERHE_PRIMITIVE_INDEX, the command's first_instance q (Color_source::
+// first_instance; needs Record_indexing::first_instance), and do not check
+// that ERHE_DRAW_ID counts up within a count draw (no consumer of the count
+// draws relies on it). One job of three slots with count 2 draws columns 0
+// and 1; with count 0 nothing. Two jobs: job 0 at command 0 (slots 0..2 =
+// quads 0, 1, 2) with count 1 from index buffer 0, job 1 at command 4 (slots
+// 4..6 = copies 0, 1, 2 of index buffer 1 with base vertex 0; slot 3 unused)
+// with count 2. Index buffer 1 is 16-bit and its copy c holds the absolute
+// vertices of quad (c + 2) % 3, so job 1 draws quads 2 and 0 in columns 2
+// and 0: columns 0 and 2 drawn, column 1 clear. A job range read from the
+// wrong offset, the wrong job's count or the wrong index buffer (or index
+// type) draws column 1, loses column 2 or draws the wrong quad heights.
+// Expected images are computed.
 // -----------------------------------------------------------------------------
 
 namespace {
@@ -97,20 +113,21 @@ constexpr int      c_height       = 48;
 constexpr int      c_row_step     = c_height / c_column_count; // quad q starts at image row 16 q
 constexpr uint32_t c_command_words = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command) / sizeof(uint32_t);
 
-// Command q: index_count 6, instance_count 1, first_index 6 q,
-// base_vertex BASE_VERTEX_STEP q, base_instance FIRST_INSTANCE_BIAS -
-// FIRST_INSTANCE_STEP q.
+// Command slot s draws index copy q = QUAD_OF_SLOT: index_count 6,
+// instance_count 1, first_index 6 q, base_vertex BASE_VERTEX_OF_SLOT,
+// base_instance FIRST_INSTANCE_OF_SLOT (expressions in s and q).
 constexpr const char* c_command_compute_source = R"glsl(
 layout(local_size_x = 1) in;
 void main()
 {
-    uint q    = gl_GlobalInvocationID.x;
-    uint base = q * COMMAND_WORDS;
+    uint s    = gl_GlobalInvocationID.x;
+    uint q    = QUAD_OF_SLOT;
+    uint base = s * COMMAND_WORDS;
     Commands.data[base + 0u] = 6u;
     Commands.data[base + 1u] = 1u;
     Commands.data[base + 2u] = q * 6u;
-    Commands.data[base + 3u] = q * BASE_VERTEX_STEP;
-    Commands.data[base + 4u] = FIRST_INSTANCE_BIAS - (q * FIRST_INSTANCE_STEP);
+    Commands.data[base + 3u] = BASE_VERTEX_OF_SLOT;
+    Commands.data[base + 4u] = FIRST_INSTANCE_OF_SLOT;
 }
 )glsl";
 
@@ -122,7 +139,12 @@ void main()
 {
     vec4  p            = Vertices.data[gl_VertexID];
     float column_width = 2.0 / float(COLUMN_COUNT);
-    gl_Position = vec4(-1.0 + ((float(ERHE_DRAW_ID) + p.x) * column_width), p.y, 0.0, 1.0);
+#if COLUMN_FROM_PRIMITIVE_INDEX
+    float column       = float(ERHE_PRIMITIVE_INDEX);
+#else
+    float column       = float(ERHE_DRAW_ID);
+#endif
+    gl_Position = vec4(-1.0 + ((column + p.x) * column_width), p.y, 0.0, 1.0);
 #if COLOR_FROM_PRIMITIVE_INDEX
     v_draw_id   = int(ERHE_PRIMITIVE_INDEX);
 #else
@@ -147,11 +169,40 @@ enum class Indexing : unsigned int
 };
 
 // What colors a column: the draw's position, or the record index its
-// command's first_instance names (reversed: command q names record 2 - q).
+// command's first_instance names (reversed: command q names record 2 - q;
+// first_instance: command for quad q names record q, which also places the
+// quad in column q).
 enum class Color_source : unsigned int
 {
     draw_id,
-    first_instance_reversed
+    first_instance_reversed,
+    first_instance
+};
+
+// A count variant's job: command slots [command_offset, command_offset + 3)
+// drawn with the GPU-read count from index buffer index_buffer (0 or 1).
+class Count_job
+{
+public:
+    uint32_t command_offset{0};
+    uint32_t count         {0};
+    uint32_t index_buffer  {0};
+};
+
+constexpr uint32_t c_count_job_slots       = 3;
+constexpr uint32_t c_count_words_per_job   = 2; // {count, decoy}
+constexpr uint32_t c_count_decoy           = 0xdeadbeefu;
+
+// The count variants' command slots and which quad each draws.
+class Count_setup
+{
+public:
+    uint32_t               command_slots{c_count_job_slots};
+    std::string            quad_of_slot {"s"};
+    // Empty: the defaults (base vertex 3 q, first instance q).
+    std::string            base_vertex_of_slot;
+    std::string            first_instance_of_slot;
+    std::vector<Count_job> jobs;
 };
 
 constexpr std::array<std::array<uint8_t, 4>, c_column_count> c_column_colors{{
@@ -172,17 +223,15 @@ class Draw_indirect_test : public Gpu_test
 protected:
     // Write draw_count commands with a compute pass, draw them with
     // multi_draw_indexed_primitives_indirect and return the read-back target
-    // (memory rows) in pixels. With count_buffer_value, write all
-    // c_column_count commands and draw them with
-    // multi_draw_indexed_primitives_indirect_count (max_draw_count
-    // c_column_count, the count buffer holding the value; draw_count is the
-    // value).
+    // (memory rows) in pixels. With count_setup, write its command slots,
+    // prepare its jobs and draw each with the prepared
+    // multi_draw_indexed_primitives_indirect_count (draw_count unused).
     void draw(
-        const uint32_t                draw_count,
-        const Indexing                indexing,
-        const Color_source            color_source,
-        const std::optional<uint32_t> count_buffer_value,
-        std::vector<uint8_t>&         pixels
+        const uint32_t            draw_count,
+        const Indexing            indexing,
+        const Color_source        color_source,
+        const Count_setup* const  count_setup,
+        std::vector<uint8_t>&     pixels
     )
     {
         erhe::graphics::Device& graphics_device = device();
@@ -211,16 +260,35 @@ protected:
             }
         }
         const uint32_t base_vertex_step = (indexing == Indexing::indexed) ? 3u : 0u;
-        const bool     reversed         = (color_source == Color_source::first_instance_reversed);
-        const uint32_t first_instance_bias = reversed ? static_cast<uint32_t>(c_column_count - 1) : 0u;
-        const uint32_t first_instance_step = reversed ? 1u : 0u;
+        const bool        reversed               = (color_source == Color_source::first_instance_reversed);
+        const bool        by_first_instance      = (color_source == Color_source::first_instance);
+        const std::string first_instance_of_quad = reversed ? std::string{"(2u - q)"} : (by_first_instance ? std::string{"q"} : std::string{"0u"});
+        const uint32_t    command_write_count    = (count_setup != nullptr) ? count_setup->command_slots : draw_count;
 
         const std::size_t vertex_bytes  = vertices.size() * sizeof(glm::vec4);
         const std::size_t index_bytes   = indices.size() * sizeof(uint32_t);
-        const std::size_t command_bytes = static_cast<std::size_t>(c_column_count) * sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
+        const std::size_t command_bytes = static_cast<std::size_t>(std::max<uint32_t>(command_write_count, 1u)) * sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
 
         const std::shared_ptr<erhe::graphics::Buffer> vertex_buffer = make_host_buffer(vertex_bytes, erhe::graphics::Buffer_usage::storage, "draw indirect vertices");
         const std::shared_ptr<erhe::graphics::Buffer> index_buffer  = make_host_buffer(index_bytes,  erhe::graphics::Buffer_usage::index,   "draw indirect indices");
+        // The count variants' second index buffer (same contents).
+        // The count variants' second index buffer: 16-bit, copy c holds
+        // the absolute vertices of quad (c + 2) % 3 (drawn with base vertex
+        // 0), so a job drawn from the wrong index buffer draws the wrong
+        // quads.
+        std::vector<uint16_t> indices_1;
+        if (indexing == Indexing::indexed) {
+            for (uint32_t copy = 0; copy < static_cast<uint32_t>(c_column_count); ++copy) {
+                const uint32_t quad = (copy + 2u) % static_cast<uint32_t>(c_column_count);
+                for (const uint32_t corner : { 0u, 1u, 2u, 0u, 2u, 3u }) {
+                    indices_1.push_back(static_cast<uint16_t>((4u * quad) + corner));
+                }
+            }
+        } else {
+            indices_1.resize(indices.size(), 0);
+        }
+        const std::size_t index_bytes_1 = indices_1.size() * sizeof(uint16_t);
+        const std::shared_ptr<erhe::graphics::Buffer> index_buffer_1 = make_host_buffer(index_bytes_1, erhe::graphics::Buffer_usage::index, "draw indirect indices 1");
         const std::shared_ptr<erhe::graphics::Buffer> command_buffer_object = make_host_buffer(
             command_bytes,
             erhe::graphics::Buffer_usage::indirect | erhe::graphics::Buffer_usage::storage,
@@ -237,22 +305,31 @@ protected:
             index_buffer->unmap();
         }
         {
+            const std::span<std::byte> mapped = index_buffer_1->map_bytes(0, index_bytes_1);
+            std::memcpy(mapped.data(), indices_1.data(), index_bytes_1);
+            index_buffer_1->unmap();
+        }
+        {
             // Zero commands draw nothing, so a missing compute write shows.
             const std::span<std::byte> mapped = command_buffer_object->map_bytes(0, command_bytes);
             std::memset(mapped.data(), 0, command_bytes);
             command_buffer_object->unmap();
         }
-        // The count variants' draw count, read by the GPU.
+        // The count variants' draw counts, read by the GPU: per job {count,
+        // decoy}.
         std::shared_ptr<erhe::graphics::Buffer> count_buffer_object{};
-        if (count_buffer_value.has_value()) {
-            ASSERT_EQ(count_buffer_value.value(), draw_count);
-            count_buffer_object = make_host_buffer(sizeof(uint32_t), erhe::graphics::Buffer_usage::indirect | erhe::graphics::Buffer_usage::storage, "draw indirect count");
-            const uint32_t             value  = count_buffer_value.value();
-            const std::span<std::byte> mapped = count_buffer_object->map_bytes(0, sizeof(value));
-            std::memcpy(mapped.data(), &value, sizeof(value));
+        if (count_setup != nullptr) {
+            std::vector<uint32_t> counts;
+            for (const Count_job& job : count_setup->jobs) {
+                counts.push_back(job.count);
+                counts.push_back(c_count_decoy);
+            }
+            const std::size_t count_bytes = std::max<std::size_t>(counts.size() * sizeof(uint32_t), sizeof(uint32_t));
+            count_buffer_object = make_host_buffer(count_bytes, erhe::graphics::Buffer_usage::indirect | erhe::graphics::Buffer_usage::storage, "draw indirect count");
+            const std::span<std::byte> mapped = count_buffer_object->map_bytes(0, count_bytes);
+            std::memcpy(mapped.data(), counts.data(), counts.size() * sizeof(uint32_t));
             count_buffer_object->unmap();
         }
-        const uint32_t command_write_count = count_buffer_value.has_value() ? static_cast<uint32_t>(c_column_count) : draw_count;
 
         // Compute pass writing the commands.
         erhe::graphics::Shader_resource commands_block{
@@ -283,9 +360,9 @@ protected:
             c_command_compute_source,
             {
                 { "COMMAND_WORDS",       std::to_string(c_command_words) + "u" },
-                { "BASE_VERTEX_STEP",    std::to_string(base_vertex_step) + "u" },
-                { "FIRST_INSTANCE_BIAS", std::to_string(first_instance_bias) + "u" },
-                { "FIRST_INSTANCE_STEP", std::to_string(first_instance_step) + "u" }
+                { "QUAD_OF_SLOT",           ((count_setup != nullptr) && !count_setup->quad_of_slot.empty())           ? count_setup->quad_of_slot           : std::string{"s"} },
+                { "BASE_VERTEX_OF_SLOT",    ((count_setup != nullptr) && !count_setup->base_vertex_of_slot.empty())    ? count_setup->base_vertex_of_slot    : ("(q * " + std::to_string(base_vertex_step) + "u)") },
+                { "FIRST_INSTANCE_OF_SLOT", ((count_setup != nullptr) && !count_setup->first_instance_of_slot.empty()) ? count_setup->first_instance_of_slot : first_instance_of_quad }
             },
             {},
             { &commands_block },
@@ -324,7 +401,8 @@ protected:
             .name             = "draw_indirect",
             .defines          = {
                 { "COLUMN_COUNT",                std::to_string(c_column_count) },
-                { "COLOR_FROM_PRIMITIVE_INDEX", reversed ? "1" : "0" }
+                { "COLOR_FROM_PRIMITIVE_INDEX",  (reversed || by_first_instance) ? "1" : "0" },
+                { "COLUMN_FROM_PRIMITIVE_INDEX", by_first_instance ? "1" : "0" }
             },
             .interface_blocks = { &vertices_block },
             .fragment_outputs = &fragment_outputs,
@@ -362,11 +440,31 @@ protected:
         pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
         pipeline_create_info.base.bind_group_layout                 = &draw_layout;
         pipeline_create_info.base.color_blend                       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+        pipeline_create_info.base.indirect_count_draws              = (count_setup != nullptr) ? erhe::graphics::Indirect_count_draw_support::enabled : erhe::graphics::Indirect_count_draw_support::disabled;
         pipeline_create_info.shader_stages                          = &shader_stages;
         pipeline_create_info.vertex_input                           = nullptr;
         pipeline_create_info.set_format_from_render_pass(descriptor);
         const erhe::graphics::Render_pipeline pipeline{graphics_device, pipeline_create_info};
         ASSERT_TRUE(pipeline.is_valid()) << "draw indirect pipeline is not valid";
+
+        // The count variants' prepared draws.
+        erhe::graphics::Indirect_count_draws              count_draws{graphics_device, erhe::utility::Debug_label{"draw indirect count"}};
+        std::vector<erhe::graphics::Indirect_count_draw_job> count_draw_jobs;
+        if (count_setup != nullptr) {
+            for (const Count_job& job : count_setup->jobs) {
+                count_draw_jobs.push_back(
+                    erhe::graphics::Indirect_count_draw_job{
+                        .command_offset = job.command_offset,
+                        .max_draw_count = c_count_job_slots,
+                        .index_buffer   = job.index_buffer
+                    }
+                );
+            }
+        }
+        const std::array<erhe::graphics::Indirect_count_index_buffer, 2> count_index_buffers{{
+            { .buffer = index_buffer.get(),   .index_type = erhe::dataformat::Format::format_32_scalar_uint },
+            { .buffer = index_buffer_1.get(), .index_type = erhe::dataformat::Format::format_16_scalar_uint }
+        }};
 
         submit_and_wait(
             [&](erhe::graphics::Command_buffer& command_buffer) {
@@ -376,6 +474,26 @@ protected:
                     encoder.set_compute_pipeline(*program.pipeline);
                     encoder.set_buffer(erhe::graphics::Buffer_target::storage, command_buffer_object.get(), 0, command_bytes, 0);
                     encoder.dispatch_compute(command_write_count, 1, 1);
+                }
+                erhe::graphics::Indirect_count_draw_set count_draw_set{};
+                if (count_setup != nullptr) {
+                    // The command writes -> the prepare step's reads.
+                    command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit);
+                    erhe::graphics::Compute_command_encoder encoder = graphics_device.make_compute_command_encoder(command_buffer);
+                    count_draw_set = encoder.prepare_indexed_indirect_count_draws(
+                        count_draws,
+                        erhe::graphics::Indirect_count_draws_prepare_info{
+                            .frame_index         = graphics_device.get_frame_index(),
+                            .primitive_type      = erhe::graphics::Primitive_type::triangle,
+                            .index_buffers       = count_index_buffers,
+                            .command_buffer      = command_buffer_object.get(),
+                            .command_byte_offset = 0,
+                            .count_buffer        = count_buffer_object.get(),
+                            .count_byte_offset   = 0,
+                            .count_byte_stride   = c_count_words_per_job * sizeof(uint32_t),
+                            .jobs                = count_draw_jobs
+                        }
+                    );
                 }
                 command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::command_barrier_bit);
                 {
@@ -387,19 +505,13 @@ protected:
                     encoder.set_bind_group_layout(&draw_layout);
                     encoder.set_render_pipeline(pipeline);
                     encoder.set_buffer(erhe::graphics::Buffer_target::storage, vertex_buffer.get(), 0, vertex_bytes, 0);
-                    encoder.set_index_buffer(index_buffer.get());
-                    encoder.set_buffer(erhe::graphics::Buffer_target::draw_indirect, command_buffer_object.get());
-                    if (count_buffer_object) {
-                        encoder.multi_draw_indexed_primitives_indirect_count(
-                            erhe::graphics::Primitive_type::triangle,
-                            erhe::dataformat::Format::format_32_scalar_uint,
-                            0,
-                            *count_buffer_object,
-                            0,
-                            c_column_count,
-                            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-                        );
+                    if (count_setup != nullptr) {
+                        for (uint32_t job = 0; job < static_cast<uint32_t>(count_setup->jobs.size()); ++job) {
+                            encoder.multi_draw_indexed_primitives_indirect_count(count_draw_set, job);
+                        }
                     } else {
+                        encoder.set_index_buffer(index_buffer.get());
+                        encoder.set_buffer(erhe::graphics::Buffer_target::draw_indirect, command_buffer_object.get());
                         encoder.multi_draw_indexed_primitives_indirect(
                             erhe::graphics::Primitive_type::triangle,
                             erhe::dataformat::Format::format_32_scalar_uint,
@@ -416,17 +528,17 @@ protected:
         ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_width) * static_cast<std::size_t>(c_height) * 4u);
     }
 
-    // Column c < draw_count holds color c (color 2 - c for
+    // Column c in drawn_columns (bit c) holds color c (color 2 - c for
     // first_instance_reversed) in image rows [16 c, 48) and the clear color
     // above; the other columns are clear. Exact per texel; an empty
     // golden_name skips the golden comparison.
-    void check(const std::vector<uint8_t>& pixels, const uint32_t draw_count, const Color_source color_source, std::string_view golden_name)
+    void check(const std::vector<uint8_t>& pixels, const uint32_t drawn_columns, const Color_source color_source, std::string_view golden_name)
     {
         std::vector<uint8_t> expected(static_cast<std::size_t>(c_width) * static_cast<std::size_t>(c_height) * 4u);
         for (int y = 0; y < c_height; ++y) {
             for (int x = 0; x < c_width; ++x) {
                 const int                    column = x / c_column_width;
-                const bool                   drawn  = (column < static_cast<int>(draw_count)) && (y >= (column * c_row_step));
+                const bool                   drawn  = ((drawn_columns & (1u << static_cast<uint32_t>(column))) != 0) && (y >= (column * c_row_step));
                 const int                    record = (color_source == Color_source::first_instance_reversed) ? (c_column_count - 1 - column) : column;
                 const std::array<uint8_t, 4> color  = drawn ? c_column_colors[static_cast<std::size_t>(record)] : std::array<uint8_t, 4>{ 0, 0, 0, 255 };
                 const std::size_t            base   = ((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_width)) + static_cast<std::size_t>(x)) * 4u;
@@ -434,7 +546,11 @@ protected:
             }
         }
         const std::vector<uint8_t> image_rows = memory_rows_to_image_rows(pixels, static_cast<std::size_t>(c_width) * 4u, c_height);
-        expect_rgba8_near(image_rows, expected, c_width, c_height, 1, golden_name.empty() ? std::string_view{(color_source == Color_source::first_instance_reversed) ? "draw_indirect_first_instance" : "draw_indirect_count"} : golden_name);
+        const std::string_view     name       =
+            !golden_name.empty()                                           ? golden_name :
+            (color_source == Color_source::first_instance_reversed)        ? std::string_view{"draw_indirect_first_instance"} :
+                                                                             std::string_view{"draw_indirect_count"};
+        expect_rgba8_near(image_rows, expected, c_width, c_height, 1, name);
 
         if (!golden_name.empty()) {
             expect_image_matches_golden(golden_name, c_width, c_height, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
@@ -449,22 +565,28 @@ protected:
     void run(const uint32_t draw_count, const Indexing indexing, const Color_source color_source, std::string_view golden_name)
     {
         std::vector<uint8_t> pixels;
-        draw(draw_count, indexing, color_source, std::nullopt, pixels);
+        draw(draw_count, indexing, color_source, nullptr, pixels);
         if (HasFatalFailure()) {
             return;
         }
-        check(pixels, draw_count, color_source, golden_name);
+        check(pixels, (1u << draw_count) - 1u, color_source, golden_name);
     }
 
-    // Three commands, drawn with the GPU-read count gpu_count.
-    void run_count(const uint32_t gpu_count)
+    // The prepared count draws of count_setup; drawn_columns as in check().
+    void run_count(const Count_setup& count_setup, const uint32_t drawn_columns)
     {
+        if (!device().get_info().use_draw_indirect_count) {
+            GTEST_SKIP() << "Device_info::use_draw_indirect_count not available on this device";
+        }
+        if (device().get_info().record_indexing != erhe::graphics::Record_indexing::first_instance) {
+            GTEST_SKIP() << "Record_indexing::first_instance not available on this device";
+        }
         std::vector<uint8_t> pixels;
-        draw(gpu_count, Indexing::indexed, Color_source::draw_id, gpu_count, pixels);
+        draw(0, Indexing::indexed, Color_source::first_instance, &count_setup, pixels);
         if (HasFatalFailure()) {
             return;
         }
-        check(pixels, gpu_count, Color_source::draw_id, {});
+        check(pixels, drawn_columns, Color_source::first_instance, {});
     }
 };
 
@@ -510,19 +632,33 @@ TEST_F(Draw_indirect_test, draw_indexed_indirect_first_instance)
 // max_draw_count 3: columns 0 and 1, column 2 clear.
 TEST_F(Draw_indirect_test, draw_indexed_indirect_count)
 {
-    if (!device().get_info().use_draw_indirect_count) {
-        GTEST_SKIP() << "Device_info::use_draw_indirect_count not available on this device";
-    }
-    run_count(2);
+    run_count(Count_setup{.jobs = { Count_job{.command_offset = 0, .count = 2, .index_buffer = 0} }}, 0b011u);
 }
 
 // The same with a GPU-read count of 0: nothing drawn.
 TEST_F(Draw_indirect_test, draw_indexed_indirect_count_zero)
 {
-    if (!device().get_info().use_draw_indirect_count) {
-        GTEST_SKIP() << "Device_info::use_draw_indirect_count not available on this device";
-    }
-    run_count(0);
+    run_count(Count_setup{.jobs = { Count_job{.command_offset = 0, .count = 0, .index_buffer = 0} }}, 0b000u);
+}
+
+// Two jobs with their own command offset, count and index buffer (16-bit,
+// permuted): job 0 draws column 0, job 1 (slots 4.. = quads 2, 0, 1)
+// columns 2 and 0.
+TEST_F(Draw_indirect_test, draw_indexed_indirect_count_two_jobs)
+{
+    run_count(
+        Count_setup{
+            .command_slots          = 7,
+            .quad_of_slot           = "((s < 4u) ? (s % 3u) : (s - 4u))",
+            .base_vertex_of_slot    = "((s < 4u) ? (q * 3u) : 0u)",
+            .first_instance_of_slot = "((s < 4u) ? q : ((q + 2u) % 3u))",
+            .jobs                   = {
+                Count_job{.command_offset = 0, .count = 1, .index_buffer = 0},
+                Count_job{.command_offset = 4, .count = 2, .index_buffer = 1}
+            }
+        },
+        0b101u
+    );
 }
 
 } // namespace erhe::graphics::test

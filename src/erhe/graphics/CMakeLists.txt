@@ -64,6 +64,7 @@ erhe_target_sources_grouped(
     erhe_graphics/image_writer.hpp
     erhe_graphics/image_writer_fpng.hpp
     erhe_graphics/image_writer_null.hpp
+    erhe_graphics/indirect_count_draws.hpp
     erhe_graphics/multi_copy_buffer.cpp
     erhe_graphics/multi_copy_buffer.hpp
     erhe_graphics/native_format.hpp
@@ -288,6 +289,7 @@ erhe_target_sources_grouped(
     erhe_graphics/device.cpp
     erhe_graphics/display_refresh_resolver.cpp
     erhe_graphics/gpu_timer.cpp
+    erhe_graphics/indirect_count_draws.cpp
     erhe_graphics/native_format.cpp
     erhe_graphics/render_command_encoder.cpp
     erhe_graphics/render_pass.cpp
@@ -513,6 +515,8 @@ if (ERHE_GRAPHICS_API_METAL)
         erhe_graphics/metal/metal_gpu_timer.hpp
         erhe_graphics/metal/metal_helpers.cpp
         erhe_graphics/metal/metal_helpers.hpp
+        erhe_graphics/metal/metal_indirect_count_draws.cpp
+        erhe_graphics/metal/metal_indirect_count_draws.hpp
         erhe_graphics/metal/metal_error_handler.mm
         erhe_graphics/metal/metal_implementation.mm
         erhe_graphics/metal/metal_render_command_encoder.cpp
