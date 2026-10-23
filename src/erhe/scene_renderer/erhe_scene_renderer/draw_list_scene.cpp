@@ -2812,8 +2812,14 @@ void Draw_list_scene::prepare_shadow_bounds(
     const bool same_selection =
         (slot.caster_filter == selection.caster_filter) &&
         std::equal(slot.layers.begin(), slot.layers.end(), selection.layers.begin(), selection.layers.end());
-    if (same_selection && (slot.serial == m_shadow_bounds_serial) && update_skinned_shadow_bounds(slot)) {
-        return;
+    if (same_selection && (slot.serial == m_shadow_bounds_serial)) {
+        if (update_skinned_shadow_bounds(slot)) {
+            return;
+        }
+        // A skinned object's posed bounds became valid or invalid, which
+        // adds or drops it: a change of what the gather reads, so every
+        // slot gathers again and the extents identity moves.
+        mark_shadow_bounds_changed();
     }
     gather_shadow_bounds(selection, slot);
 }
@@ -2837,6 +2843,21 @@ void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_selection& select
     slot.layers.assign(selection.layers.begin(), selection.layers.end());
     slot.caster_filter = selection.caster_filter;
     slot.serial        = m_shadow_bounds_serial;
+
+    // The same state and selection gather the same extents (the slots of
+    // the frames in flight each gather them): one identity for all of them.
+    const bool same_extents =
+        (m_extents_serial != 0) &&
+        (m_extents_bounds_serial == m_shadow_bounds_serial) &&
+        (m_extents_caster_filter == selection.caster_filter) &&
+        std::equal(m_extents_layers.begin(), m_extents_layers.end(), selection.layers.begin(), selection.layers.end());
+    if (!same_extents) {
+        ++m_extents_serial;
+        m_extents_bounds_serial = m_shadow_bounds_serial;
+        m_extents_caster_filter = selection.caster_filter;
+        m_extents_layers.assign(selection.layers.begin(), selection.layers.end());
+    }
+    slot.bounds.extents_identity = Caster_extents_identity{.scene_instance = m_scene_instance, .serial = m_extents_serial};
 
     Shadow_bounds& bounds = slot.bounds;
     bounds.caster_world_aabbs.clear();

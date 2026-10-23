@@ -213,6 +213,8 @@ private:
     erhe::scene_renderer::Shadow_renderer::Cull_views         m_cull_views;
     // What the maps hold from earlier frames (render thread).
     erhe::scene_renderer::Shadow_map_cache                    m_map_cache;
+    // What the fit derived from the casters per light (render thread).
+    erhe::scene_renderer::Shadow_fit_cache                    m_fit_cache;
     // Render_parameters::mesh_spans of the frame's parameters (the editor
     // hands Shadow_renderer no meshes: it reads the prepared bounds and
     // casters).

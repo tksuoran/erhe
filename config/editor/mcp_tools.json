@@ -8972,6 +8972,22 @@
     }
   },
   {
+    "name": "set_shadow_fit_cache_enabled",
+    "description": "Switch the shadow fit cache for the rest of this editor run (session-only, never persisted; default enabled): enabled, a shadow-mapped light whose shadow view origin and the scene's prepared caster extents are unchanged since its last fit reuses its caster vertex rounding (a pass over every caster per light) instead of computing it again. get_scene_lights reports per light whether the last rendered frame reused it (shadow_fit_reused) and which computation it holds (shadow_fit_serial: equal in two queries means no refit in between). Use to compare images and render-thread fit cost against every light fitted from scratch.",
+    "inputSchema": {
+      "properties": {
+        "enabled": {
+          "description": "true = reuse unchanged per-light fit results, false = compute every light every frame",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "set_shadow_maps_frozen",
     "description": "Measurement switch for the rest of this editor run (session-only, never persisted): while frozen, the shadow render nodes record no shadow passes and the shadow maps keep what the last drawn frame left in them; the light projections are still fitted and published every frame. Use to measure what a perfect shadow map cache would save (GPU time, render-thread time, achieved cadence). Shadows go stale while frozen if lights or casters move.",
     "inputSchema": {

@@ -160,10 +160,15 @@ public:
     // cache would save. Never persisted.
     bool shadow_maps_frozen_session{false};
 
-    // Session-only switch of the shadow map cache (doc/plans/
-    // shadow_map_cache.md), set by the MCP set_shadow_map_cache_enabled
+    // Session-only switch of the shadow map cache (doc/erhe/shadows.md
+    // "Shadow map cache"), set by the MCP set_shadow_map_cache_enabled
     // tool to compare against every pass drawn. Never persisted.
     bool shadow_map_cache_session{true};
+
+    // Session-only switch of the shadow fit cache (doc/erhe/shadows.md
+    // "Shadow fit cache"), set by the MCP set_shadow_fit_cache_enabled tool
+    // to compare against every light fitted from scratch. Never persisted.
+    bool shadow_fit_cache_session{true};
 
     // Node tree (ephemeral UI state, not persisted)
     bool node_tree_show_all          {false};

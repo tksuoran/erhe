@@ -348,6 +348,11 @@ public:
         // (Shadow_map_cache); passes whose inputs are unchanged are not
         // drawn. Null: every pass draws.
         Shadow_map_cache*                                                  map_cache{nullptr};
+        // What fit() derived from the casters for each light, kept between
+        // frames (Shadow_fit_cache, reused while the light's view origin and
+        // the prepared caster extents are unchanged). Null: computed every
+        // frame.
+        Shadow_fit_cache*                                                  fit_cache{nullptr};
 
         // Unlit (KHR_materials_unlit) primitives are backdrop geometry (sky
         // domes, emissive decals), not occluders: skip them when bucketing

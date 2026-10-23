@@ -23,15 +23,30 @@ repeatedly removing the vertex whose removal adds the least area and replacing
 its two edges with their intersection point, which grows the volume outward
 only. Verify that no caster is culled that was previously kept.
 
-## Temporal whole-fit skip
+## Temporal directional fit skip
 
-With camera, lights and all caster / receiver world AABBs unchanged since the
-previous frame, reuse the previous fit output entirely: caster filter, per-box
-clip, calipers and box assembly. This needs cheap change detection (revision
-counters bumped on node transform, hierarchy and geometry change). Do the
-whole-fit skip only - finer caching interacts with texel snapping. The receiver
-cache already skips the receiver hulls on unchanged inputs, including across
-camera movement, so this item is about the remaining per-light work.
+The caster-derived per-light limits are reused between frames
+([../erhe/shadows.md](../erhe/shadows.md) "Shadow fit cache"), and spot and
+point projections are a few matrix products. What still runs every frame is
+the directional tight fit: with the camera, the light and the prepared
+caster / receiver bounds unchanged (the camera snapshot, the light snapshot
+and `Shadow_bounds::extents_identity` plus the AABBs' serial), reuse its
+output entirely - caster filter, per-box clip, calipers and box assembly.
+Do the whole-fit skip only - finer caching interacts with texel snapping. The
+receiver cache already skips the receiver hulls on unchanged inputs,
+including across camera movement.
+
+## Skinned casters in the position rounding bound
+
+The caster vertex rounding term of the minimum bias
+([../erhe/shadows.md](../erhe/shadows.md) "Minimum bias") takes each caster's
+extent from its mesh node transform and rest-pose node extent. Skinned casters
+are posed by their joints (`world_from_bind`) and glTF ignores the mesh node
+transform for them, so a figure whose joints carry it far from its mesh node
+gets a bound computed at the wrong place. Derive skinned casters' extents from
+the posed joint boxes, and let the pose compare in `Draw_list_scene::publish()`
+move `Shadow_bounds::extents_identity` so the shadow fit cache refits on pose
+changes.
 
 ## QuickHull library work
 

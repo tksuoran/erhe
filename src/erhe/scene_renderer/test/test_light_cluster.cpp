@@ -830,3 +830,94 @@ TEST_F(Light_cluster_test, single_cluster_grid)
         EXPECT_EQ(cluster_index(grid, origin, position), 0u);
     }
 }
+
+// Shadow_fit_cache (doc/erhe/shadows.md "Shadow fit cache"): a second apply()
+// with the same lights and the same caster extents identity reuses every
+// shadow-mapped light's caster vertex rounding, bit for bit; a moved light
+// refits alone; another extents identity refits every light.
+TEST_F(Light_cluster_test, shadow_fit_cache_reuses_unchanged_lights)
+{
+    make_camera(erhe::scene::Projection::Type::perspective_vertical);
+    make_lights(6, 0.5f, 8.0f);
+    Light_count_limits limits{};
+    limits.per_type_shadow[0] = 1;
+    limits.per_type_shadow[1] = 2;
+    limits.per_type_shadow[2] = 2;
+    limits.max_light_count    = 1024;
+    for (std::size_t t = 0; t < 3; ++t) {
+        limits.per_type_unshadowed[t] = limits.max_light_count;
+    }
+    std::vector<erhe::scene_renderer::Caster_vertex_extent> extents;
+    for (int i = 0; i < 20; ++i) {
+        extents.push_back(
+            erhe::scene_renderer::Caster_vertex_extent{
+                .world_from_node_linear = glm::mat3{1.0f + (0.1f * static_cast<float>(i))},
+                .world_translation      = glm::vec3{static_cast<float>(i) - 10.0f, 1.5f, -3.0f * static_cast<float>(i)},
+                .node_abs_extent        = glm::vec3{0.5f, 1.0f + static_cast<float>(i), 0.25f}
+            }
+        );
+    }
+    const Backend_conventions backend = vulkan_conventions();
+    erhe::scene_renderer::Shadow_fit_cache fit_cache;
+    const auto apply = [&](erhe::scene_renderer::Shadow_fit_cache* cache, const erhe::scene_renderer::Caster_extents_identity identity) {
+        m_light_set.invalidate();
+        static_cast<void>(m_light_set.resolve(std::span<const std::shared_ptr<erhe::scene::Light>>{m_lights}, limits, c_light_array_capacity));
+        m_light_projections.apply(
+            m_light_set, &m_camera_snapshot, m_viewport, erhe::math::Viewport{0, 0, 1024, 1024},
+            std::shared_ptr<erhe::graphics::Texture>{}, backend.reverse_depth, backend.depth_range, backend.conventions,
+            {}, {}, nullptr, erhe::scene::Shadow_map_footprint{}, extents, cache, identity
+        );
+    };
+    const auto roundings = [&]() -> std::vector<float> {
+        std::vector<float> values;
+        for (const erhe::scene_renderer::Light_shadow_limits& light_limits : m_light_projections.light_shadow_limits) {
+            values.push_back(light_limits.caster_vertex_rounding);
+        }
+        return values;
+    };
+    const erhe::scene_renderer::Caster_extents_identity identity{.scene_instance = 1, .serial = 7};
+    apply(nullptr, identity);
+    const std::size_t shadow_mapped =
+        m_light_set.get_shadow_map_2d_slots().size() + m_light_set.get_point_shadow_slots().size();
+    const std::vector<float> reference = roundings();
+    apply(&fit_cache, identity);
+    EXPECT_EQ(m_light_projections.fit_reused_count, 0u);
+    EXPECT_EQ(roundings(), reference);
+    const std::vector<uint64_t> first_serials = m_light_projections.light_fit_serials;
+    apply(&fit_cache, identity);
+    EXPECT_GT(shadow_mapped, 0u);
+    EXPECT_EQ(m_light_projections.fit_reused_count, m_light_projections.shadow_map_2d_slots.size() + m_light_projections.point_shadow_slots.size());
+    EXPECT_EQ(roundings(), reference);
+    EXPECT_EQ(m_light_projections.light_fit_serials, first_serials);
+
+    // Move the first shadow-mapped point light: it alone refits.
+    ASSERT_FALSE(m_light_projections.point_shadow_slots.empty());
+    const std::size_t moved_slot = m_light_projections.point_shadow_slots.front();
+    const std::size_t moved_id   = m_light_projections.light_projection_transforms[moved_slot].light->get_id();
+    for (const std::shared_ptr<erhe::scene::Light>& light : m_lights) {
+        if (light->get_id() == moved_id) {
+            const glm::vec3 position = glm::vec3{light->world_from_node()[3]} + glm::vec3{0.5f, 0.0f, 0.0f};
+            light->set_world_from_node(erhe::math::create_look_at(position, position + glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}));
+        }
+    }
+    apply(&fit_cache, identity);
+    const std::vector<float> moved_cached = roundings();
+    for (std::size_t slot = 0; slot < m_light_projections.light_fit_reused.size(); ++slot) {
+        const bool is_shadow_mapped = m_light_projections.light_projection_transforms[slot].is_shadow_mapped();
+        if (!is_shadow_mapped) {
+            continue;
+        }
+        const bool is_moved = (m_light_projections.light_projection_transforms[slot].light->get_id() == moved_id);
+        EXPECT_EQ(m_light_projections.light_fit_reused[slot] != 0, !is_moved) << "slot " << slot;
+    }
+    apply(nullptr, identity);
+    EXPECT_EQ(moved_cached, roundings());
+
+    // Another extents identity: every light refits.
+    apply(&fit_cache, erhe::scene_renderer::Caster_extents_identity{.scene_instance = 1, .serial = 8});
+    EXPECT_EQ(m_light_projections.fit_reused_count, 0u);
+    // Unknown identity: nothing is reused.
+    apply(&fit_cache, erhe::scene_renderer::Caster_extents_identity{});
+    apply(&fit_cache, erhe::scene_renderer::Caster_extents_identity{});
+    EXPECT_EQ(m_light_projections.fit_reused_count, 0u);
+}

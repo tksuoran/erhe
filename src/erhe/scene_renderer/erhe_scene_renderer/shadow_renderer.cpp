@@ -675,6 +675,8 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
     std::span<const erhe::math::Aabb>     caster_world_aabbs{};
     std::span<const erhe::math::Aabb>     receiver_world_aabbs{};
     std::span<const Caster_vertex_extent> caster_vertex_extents{};
+    // Known for the prepared bounds only: the bucket path gathers per frame.
+    Caster_extents_identity               caster_extents_identity{};
     if ((parameters.shadow_bounds != nullptr) || (parameters.draw_list_scene != nullptr)) {
         // The prepare phase gathered the bounds from the registered objects
         // into this frame's slot (Draw_list_scene::prepare_shadow_bounds);
@@ -682,8 +684,9 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
         const Shadow_bounds& shadow_bounds = (parameters.shadow_bounds != nullptr)
             ? *parameters.shadow_bounds
             : parameters.draw_list_scene->get_shadow_bounds(m_graphics_device.get_frame_index());
-        caster_world_aabbs    = shadow_bounds.caster_world_aabbs;
-        caster_vertex_extents = shadow_bounds.caster_vertex_extents;
+        caster_world_aabbs      = shadow_bounds.caster_world_aabbs;
+        caster_vertex_extents   = shadow_bounds.caster_vertex_extents;
+        caster_extents_identity = shadow_bounds.extents_identity;
         if (gather_receivers) {
             receiver_world_aabbs = shadow_bounds.receiver_world_aabbs;
         }
@@ -781,7 +784,9 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
         receiver_world_aabbs,
         parameters.fit_settings,
         parameters.shadow_map_footprint,
-        caster_vertex_extents
+        caster_vertex_extents,
+        parameters.fit_cache,
+        caster_extents_identity
     );
 
     // Make the distance map (if any) reachable to the forward pass'

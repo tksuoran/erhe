@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/caster_extents_identity.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/draw_list_object.hpp"
 #include "erhe_scene_renderer/joint_poses.hpp"
@@ -205,6 +206,12 @@ public:
     std::vector<erhe::math::Aabb>     caster_world_aabbs;
     std::vector<erhe::math::Aabb>     receiver_world_aabbs;
     std::vector<Caster_vertex_extent> caster_vertex_extents;
+    // What caster_vertex_extents were gathered from: equal for two gathers
+    // of the same scene state (m_shadow_bounds_serial) and selection, so
+    // Light_projections::apply() can reuse what it derived from them
+    // (Shadow_fit_cache). The skinned posed bounds rewritten in place by
+    // every prepare change the AABBs only, never the extents.
+    Caster_extents_identity           extents_identity{};
 };
 
 // What one Draw_list_scene is built from.
@@ -1108,6 +1115,12 @@ private:
     // One per frame in flight (sized by the first publish()).
     std::vector<Draw_list_slot>                                      m_draw_list_slots;
     uint64_t                                                         m_shadow_bounds_serial{1};
+    // Shadow_bounds::extents_identity: the serial and selection of the last
+    // gather, and the identity serial handed out for them.
+    uint64_t                                                         m_extents_bounds_serial{0};
+    erhe::Item_filter                                                m_extents_caster_filter{};
+    std::vector<erhe::scene::Layer_id>                               m_extents_layers;
+    uint64_t                                                         m_extents_serial{0};
     std::size_t                                                      m_shadow_bounds_gather_count{0};
 
     // GPU classification (doc/plans/culling.md phase 5), main thread. The

@@ -632,6 +632,19 @@ redrawn in between, whichever frames the queries read.
 
 Returns: `{enabled}`.
 
+### set_shadow_fit_cache_enabled
+
+Session-only switch of the shadow fit cache
+(`App_settings::shadow_fit_cache_session`, default on; `doc/erhe/shadows.md`
+"Shadow fit cache"): `enabled` false computes every shadow-mapped light's
+caster-derived limits every frame. `get_scene_lights` reports per light
+whether the last rendered frame reused them (`shadow_fit_reused`) and which
+computation they are (`shadow_fit_serial`: equal in two queries means the
+light was not refitted in between).
+`scripts/shadow_map_cache_check.py` compares captures with it on and off.
+
+Returns: `{enabled}`.
+
 ### set_shadow_maps_frozen
 
 Measurement switch, session-only (`App_settings::shadow_maps_frozen_session`,

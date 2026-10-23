@@ -416,6 +416,22 @@ auto Mcp_server::action_set_shadow_map_cache_enabled(const json& args) -> std::s
     }).dump();
 }
 
+auto Mcp_server::action_set_shadow_fit_cache_enabled(const json& args) -> std::string
+{
+    if (m_context.app_settings == nullptr) {
+        return make_error_content("Editor settings not available");
+    }
+    if (!args.contains("enabled") || !args["enabled"].is_boolean()) {
+        return make_error_content("enabled (boolean) is required");
+    }
+    // Session-only; the next frame's render settings snapshot carries it to
+    // the shadow render nodes.
+    m_context.app_settings->shadow_fit_cache_session = args["enabled"].get<bool>();
+    return make_json_content({
+        {"enabled", m_context.app_settings->shadow_fit_cache_session}
+    }).dump();
+}
+
 auto Mcp_server::action_set_culling_classification(const json& args) -> std::string
 {
     // The MCP counterpart of the Settings window's Culling Classification
@@ -1667,6 +1683,14 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                 constexpr std::size_t no_index = std::numeric_limits<std::size_t>::max();
                 light_json["shaded"]        = (transforms->index != no_index);
                 light_json["shadow_mapped"] = transforms->is_shadow_mapped();
+                // Whether the fit reused the light's caster-derived limits
+                // (Shadow_fit_cache) in the frame these projections are from.
+                if (transforms->index < light_projections->light_fit_reused.size()) {
+                    light_json["shadow_fit_reused"] = (light_projections->light_fit_reused[transforms->index] != 0);
+                }
+                if (transforms->index < light_projections->light_fit_serials.size()) {
+                    light_json["shadow_fit_serial"] = light_projections->light_fit_serials[transforms->index];
+                }
                 if (transforms->shadow_index != no_index) {
                     light_json["shadow_index"] = transforms->shadow_index;
                     if (draw_statistics != nullptr) {

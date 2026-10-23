@@ -452,10 +452,52 @@ the cache on equal captures with every pass drawn after caster, light,
 cone and camera edits; a drag, an add, a removal and a move of casters
 beside one of two point lights redraw only the faces of the light they
 reach, and a static skinned figure keeps every face while a joint rotation
-or a vertex drag on it redraws only the faces of the light beside it. Measured on Bistro (Release Metal, M4 Pro, 4 point and 4 spot shadow
+or a vertex drag on it redraws only the faces of the light beside it.
+Measured on Bistro (Release Metal, M4 Pro, 4 point and 4 spot shadow
 lights, static scene): GPU span 6.4 -> 4.3 ms, render-thread `execute`
-2.1 -> 0.8 ms per frame. The remaining work (fit skip) is
-[../plans/shadow_map_cache.md](../plans/shadow_map_cache.md).
+2.1 -> 0.8 ms per frame.
+
+### Shadow fit cache
+
+What `Shadow_renderer::fit()` derives from the casters per shadow-mapped
+light is kept between frames. A spot or point light's projection and shadow
+camera are a few matrix products of its snapshot (light frame, cone, range)
+and the frame's depth convention, recomputed every frame; the per-light work
+that scales with the scene is `Light_shadow_limits::caster_vertex_rounding`,
+a pass over every caster's `Caster_vertex_extent` ("Minimum bias", position
+term). It is a function of the light's view origin and the extents alone,
+so `Shadow_fit_cache` (owned by `Shadow_render_node`, passed as
+`Render_parameters::fit_cache` into `Light_projections::apply()`) keeps it
+per light id with the view origin it was computed for, and reuses it while
+the view origin is bitwise equal and the extents' identity is unchanged.
+Reused values are the same bits the computation gives.
+
+The identity (`Caster_extents_identity`, carried by `Shadow_bounds::
+extents_identity`) comes from the draw-list scene's prepared bounds:
+`Draw_list_scene::gather_shadow_bounds()` hands out a new identity serial
+whenever it gathers from another scene state (`m_shadow_bounds_serial`,
+moved by every change the gather reads - membership, flags, world AABBs,
+node extents, node transforms - and by a skinned object's posed bounds
+becoming valid or invalid) or another selection, and the same identity to
+every frame-in-flight slot that gathers the same state; the skinned posed
+bounds rewritten in place by every prepare are AABBs, never extents. The
+bucket path gathers per frame and has no identity: it computes every frame.
+A changed identity forgets every entry; an entry no `apply()` used (a light
+removed or no longer shadow-mapped) is dropped at the end of that
+`apply()`, so the entries stay bounded and steady frames allocate nothing.
+
+Every light type takes the cache, but a directional light's view origin
+follows the camera, so its value is reused only while the camera is still;
+the directional tight fit itself (caster filter, clip, calipers) and the
+depth-clamp raster bound run every frame. The reuse is reported per light
+by `Light_projections::light_fit_reused` / `light_fit_serials` (MCP
+`get_scene_lights` `shadow_fit_reused`, `shadow_fit_serial`), and MCP
+`set_shadow_fit_cache_enabled` switches it for a session (default on;
+`scripts/shadow_map_cache_check.py` checks a static frame reuses every
+light, a moved light refits alone, and captures equal those with the cache
+off). Measured on Bistro (Release Metal, Tracy, 8 shadow-mapped spot and
+point lights, 3852 casters): `fit` 94 us mean / 76 us median per frame
+without the cache, 6.3 us / 3.0 us with it.
 
 ### Empty border and receiver coverage
 
