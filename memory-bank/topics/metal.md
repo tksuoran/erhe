@@ -133,6 +133,7 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 !MTL4-CommitOptions-reuse-across-commits->feedback-never-fires(wait_idle-hangs)->one-per-commit
 !MTL4-barriers::stage-scoped-not-resource-scoped;barrierAfterEncoderStages=intra-pass-only;between-encoders-only-barrierAfterQueueStages-or-fences->explicit-usage-pairs-collapse-to-one-narrowed-queue-barrier-per-encoder-start
 !©User-2026-10-23::no-backend-hazard-tracking(M2+R-record-concurrently);application-chains-usage_before/after;unconditional-encoder-start-barrier=band-aid-to-remove
+!Vulkan-parity-baseline::attachment-usage_before/after(pre-pass-transition+post-pass-barrier)+memory_barrier(mask;src=ALL_COMMANDS)+transition_texture_layout/cmd_texture_barrier+blit-encoder-internal-transitions=what-every-backend-must-honour;Metal-4-maps-them-to-pending-stage-barriers(92938afb5-API-adds-narrowing-only)
 !MTL4-queue-wait(event)-holds-ALL-later-commits{pre-warm-now-gates-next-frame;XR-producer-must-commit-before-consumer}
 
 !MTL4CounterHeap-timestamps=ticks-of-queryTimestampFrequency(24MHz-mach_absolute_time)¬ns{sampleTimestamps+CommitFeedback-GPU-times-are-ns}->3c2bafd67-converts
