@@ -12,12 +12,16 @@ add_executable(${_deviceless_target}
     test_shader_resource_size.cpp
 )
 
-# Spirv_cache exists only with glslang; the pipeline cache file is Vulkan's.
+# Spirv_cache exists only with glslang; the pipeline cache file is Vulkan's,
+# the pipeline archive file Metal 4's.
 if (ERHE_SPIRV)
     target_sources(${_deviceless_target} PRIVATE test_spirv_cache.cpp)
 endif ()
 if (ERHE_GRAPHICS_API STREQUAL "vulkan")
     target_sources(${_deviceless_target} PRIVATE test_pipeline_cache_file.cpp)
+endif ()
+if (ERHE_GRAPHICS_API STREQUAL "metal4")
+    target_sources(${_deviceless_target} PRIVATE test_metal4_pipeline_archive_file.cpp)
 endif ()
 
 target_link_libraries(${_deviceless_target}

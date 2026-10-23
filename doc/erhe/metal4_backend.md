@@ -13,10 +13,10 @@ its order and its verification are in `doc/plans/metal_backend.md` section 7
 Commands are recorded into `MTL4::CommandBuffer`s and committed on an
 `MTL4::CommandQueue`, resources are resident through a residency set,
 encoders bind through argument tables and order their work with explicit
-barriers, and drawables are presented through the queue (the sections
-below). Shaders and pipelines still come from the Metal 3 API (MSL compiled
-with `newLibrary`, `newRenderPipelineState` / `newComputePipelineState`), which
-the MTL4 encoders accept. Everything else `doc/erhe/metal_backend.md`
+barriers, drawables are presented through the queue, and libraries and
+pipeline states come from an `MTL4::Compiler` backed by a pipeline archive
+that persists across runs (the sections below). Everything else
+`doc/erhe/metal_backend.md`
 describes (shader translation, the buffer index layout, the texture heap
 layout, the swapchain, frame pacing and the present calibration, the
 GPU-read draw count, GPU timers, deferred destruction) applies unchanged
@@ -107,9 +107,10 @@ everything the Metal 3 completed handlers did:
 - resolves the command buffer's GPU timer samples;
 - returns what the recording held: runs its callbacks (staging buffer
   releases, the windowed capture's completion), releases the objects its
-  commands reference (MTL4 command buffers retain nothing: the per-call render
-  and compute pipeline states and depth stencil states, texture views, all
-  through `Command_buffer_impl::retain_until_completed`), returns its argument
+  commands reference (MTL4 command buffers retain nothing: the texture views
+  created per call, through `Command_buffer_impl::retain_until_completed`;
+  pipeline and depth stencil states live in `Pipeline_state_cache`, "Shaders
+  and pipelines"), returns its argument
   tables, inline constant chunks and the recording;
 - counts the completion against the frame the commit was charged to.
 
@@ -434,10 +435,156 @@ converts them with `1e9 / queryTimestampFrequency`, which puts timer results
 and Tracy zone times in the nanosecond time base of the Tracy context's
 `sampleTimestamps` calibration pair.
 
+## Shaders and pipelines
+
+`Pipeline_compiler` (`metal4_pipeline_compiler.hpp`) owns the device's one
+`MTL4::Compiler`, created from an `MTL4::CompilerDescriptor` in the
+`Device_impl` constructor right after the queue, before any library or
+pipeline. Every library and pipeline state of the backend is created through
+it, from any thread (`MTL4::Compiler` is thread safe; the statistics are
+under a mutex). `~Device_impl` writes the archive and destroys the compiler
+after its first `wait_idle`; pipeline states do not depend on the compiler,
+so the ones released after it (the `blit_framebuffer` pipelines, the
+completion handlers drained at the end) are unaffected.
+
+- Libraries: the GLSL -> SPIR-V -> MSL path is unchanged
+  (`doc/erhe/metal_backend.md` "Shader Compilation Pipeline"). The MSL goes
+  into an `MTL4::LibraryDescriptor` with default `MTL::CompileOptions`, the
+  options of the Metal 3 backend's `newLibrary`, so the `precise` helpers
+  keep their source pragmas ("Precise arithmetic" there), and
+  `compiler->newLibrary` compiles it. Each stage keeps an
+  `MTL4::LibraryFunctionDescriptor` naming `main0` (it retains its library)
+  where Metal 3 keeps an `MTL::Function`.
+- Render pipelines: `MTL4::RenderPipelineDescriptor` and
+  `newRenderPipelineState(descriptor, compilerTaskOptions)`, from
+  `Render_pipeline_impl`, from `Render_command_encoder::set_render_pipeline_state`
+  through `Pipeline_state_cache` (below) and for `blit_framebuffer`.
+- Compute pipelines: `MTL4::ComputePipelineDescriptor` with the function
+  descriptor and a label, from `Compute_pipeline_impl`,
+  `set_compute_pipeline_state` through `Pipeline_state_cache` and the
+  raw-MSL kernels (the GPU-read draw
+  count encode kernel, the pre-warm kernel;
+  `Pipeline_compiler::new_compute_pipeline_from_source`). The threadgroup
+  size stays a dispatch argument, as on Metal 3. The present calibration
+  probes only clear their drawables and have no pipeline.
+
+`set_render_pipeline_state` and `set_compute_pipeline_state` take a
+pipeline state description per bind, and the debug renderer's wide lines
+and the content wide lines bind one every frame. `Pipeline_state_cache`
+(`metal4_pipeline_state_cache.hpp`, owned by `Device_impl`, one mutex for
+the main and the render thread), the counterpart of the Vulkan backend's
+pipeline map, creates each distinct one once and keeps it for the device's
+lifetime: render pipelines keyed on the stage function descriptors (which
+the entry retains), the pass's color formats and sample count,
+alpha-to-coverage / alpha-to-one, the blend state without its constant and
+the vertex input layout; depth stencil states keyed on the
+`Depth_stencil_state` and whether the pass has depth / stencil; compute
+pipelines on the function descriptor. `Device::clear_render_pipeline_cache`
+(after a shader reload) releases the entries frame-deferred. Measured on the
+heavy scene with three meshes selected and physics on, 3 minutes, Release:
+without the cache 215879 pipeline creations (about ten per frame, each a
+compiler call and a serializer capture) and resident memory growing from
+316 to 336 MB; with it 75 creations in the whole run and 322 to 328 MB. The
+archive is 3.28 MB in both runs: the serializer does not duplicate an
+identical pipeline.
+
+Where each field of the Metal 3 descriptors went:
+
+| Metal 3 | MTL4 |
+| :--- | :--- |
+| `vertexFunction`, `fragmentFunction`, `computeFunction` (`MTL::Function`) | `vertexFunctionDescriptor`, `fragmentFunctionDescriptor`, `computeFunctionDescriptor` (`MTL4::LibraryFunctionDescriptor`: library + name) |
+| `supportIndirectCommandBuffers` (bool) | `supportIndirectCommandBuffers` (`MTL4::IndirectCommandBufferSupportState`), set from `Indirect_count_draw_support` as before |
+| color attachment pixel format, blend factors and operations, write mask | the same on `MTL4::RenderPipelineColorAttachmentDescriptor`; `blendingEnabled` becomes `blendingState` (`MTL4::BlendState`) |
+| `sampleCount` | `rasterSampleCount` |
+| `alphaToCoverageEnabled`, `alphaToOneEnabled` | `alphaToCoverageState`, `alphaToOneState` |
+| `vertexDescriptor` | `vertexDescriptor` (the same `MTL::VertexDescriptor`) |
+| `depthAttachmentPixelFormat`, `stencilAttachmentPixelFormat` | none: an MTL4 render pipeline is not tied to depth / stencil formats; the depth stencil state (`MTL::DepthStencilDescriptor`, unchanged) still follows the pass's formats |
+| `label` (set only for `blit_framebuffer`) | `label` on `MTL4::PipelineDescriptor`, the shader stages name for every pipeline |
+| `binaryArchives` (not used) | none on the descriptor: the lookup archive is in `MTL4::CompilerTaskOptions` |
+
+Neither backend sets `inputPrimitiveTopology`, rasterization or vertex
+amplification state, shader validation or reflection options
+(`MTL4::PipelineOptions`), which stay at their defaults. The Bistro viewport
+pass costs the same as before the port (GPU timers, Release, headless
+pacing off: 3.47 - 3.53 ms against 3.45 - 3.54 ms in the loops Medium
+preset), and the image gates match.
+
+### Pipeline archive
+
+The compiler descriptor carries an `MTL4::PipelineDataSetSerializer`
+configured to capture binaries, which keeps the GPU binaries of every
+pipeline the compiler creates. Every creation passes `MTL4::CompilerTaskOptions`
+whose `lookupArchives` holds the archive loaded at device creation, so a
+pipeline the archive holds is not compiled again; such a pipeline is still
+captured (one created by `MTL4::Archive::newRenderPipelineState` directly is
+not, measured). `~Device_impl` serializes the capture with
+`serializeAsArchiveAndFlushToURL`. The archive therefore holds the pipelines
+of the last run: pipelines only an earlier run used are dropped.
+
+The file is `<cwd>/pipeline_cache/metal4_<FNV-1a 64 of the GPU name>_<OS
+build>.mtl4archive` (`kern.osversion`, which names the Metal compiler that
+produced the binaries), beside the Vulkan backend's `vk_*.bin`
+(`doc/erhe/vulkan_backend.md` "Pipeline cache persistence") and gitignored
+with it. A `.manifest` file beside it holds the archive's size and FNV-1a
+64 content hash (`metal4_pipeline_archive_file.hpp`), and the archive is
+opened only when the manifest matches: `MTL::Device::newArchive` returns an
+error for a truncated archive but crashes (SIGSEGV inside Metal) on a file
+that is not an archive at all, measured with 5 bytes and with 4 KiB of
+random data. An absent, truncated, modified or foreign file is ignored with
+the warning `Metal 4 pipeline archive <path> ignored (<reason>); it is
+rewritten at exit`, every pipeline compiles, and the file is replaced at
+exit. The archive and manifest are installed from temporary files, the old
+manifest removed first, so an interrupted write leaves an archive without a
+matching manifest; the next write removes the temporary files a crashed
+write left (`<name>.<pid>.tmp` of a process that no longer runs). Editors
+running at the same time (the `mcp_server_tests` fixtures) each write the
+whole file; whichever pair is installed last wins, and a mixed pair fails
+the manifest check and is rebuilt. The file functions take no Metal objects and are tested
+in `erhe_graphics_tests` (`test_metal4_pipeline_archive_file.cpp`).
+
+Pipelines are keyed by content: with one fragment shader edited (a constant
+in `text.frag`), a warm start of the default scene reported 59 created, 58
+from archive, and the scene images stayed identical.
+
+At the end of device frame 300 (or at device destruction when the run is
+shorter) the device logs one summary line; each pipeline is created once
+(`Render_pipeline`, `Compute_pipeline`, `Pipeline_state_cache`), so the
+count is of distinct pipelines:
+
+```
+Metal 4 pipelines at startup: <n> created, <k> from archive, <t> ms pipeline compile; <m> libraries, <u> ms library compile
+```
+
+"from archive" counts the creations the loaded archive held, found by
+asking the archive itself before the compile; only creations before the
+summary pay that probe (about 0.06 ms each in a standalone check). The write logs `Metal 4
+pipeline archive <path>: wrote <bytes> bytes (<n> pipeline creations this
+run) in <t> ms`.
+
+Measured (M4 Pro, macOS 27, default scene, editor started from the
+repo root, time from launch to `Main loop: completed frame 12`):
+
+| Run | Release | Debug |
+| :--- | :--- | :--- |
+| Cold (no archive) | 59 created, 0 from archive, 168 - 173 ms pipeline compile; frame 12 at 1.67 - 1.81 s | 59 created, 0 from archive, 174 - 177 ms; frame 12 at 6.46 - 6.59 s |
+| Warm | 59 created, 59 from archive, 6.9 - 7.2 ms; frame 12 at 1.53 - 1.59 s | 59 created, 59 from archive, 7.6 - 7.7 ms; frame 12 at 6.35 - 6.44 s |
+
+The archive is 2.9 MB; checking it at start takes under 25 ms (Debug),
+writing it 90 - 140 ms. The 282 libraries compile in about 8 ms in every run
+because the system's Metal shader cache serves the MSL compile; it does not
+serve MTL4 pipeline compiles (a standalone check: unique pipelines take
+about 8 ms each on every run without the archive, 0.06 ms with it).
+
+Pipelines are created synchronously, at `Render_pipeline` construction or
+when a `Base_render_pipeline` first creates the variant a draw needs.
+`MTL4::CompilerTask` (the completion-handler overloads of the compiler)
+would let creation run in the background, but a draw that finds its pipeline
+pending has nowhere to go: `Render_pipeline` has no pending state on any
+backend, so it is a follow-up ("Future work"), not part of this port.
+
 ## Migration status
 
-One row per subsystem. "Metal 3 code" means the subsystem is the unchanged copy
-of the Metal 3 backend.
+One row per subsystem; every subsystem is on the MTL4 API.
 
 | Subsystem | State |
 | :--- | :--- |
@@ -446,13 +593,15 @@ of the Metal 3 backend.
 | Render, compute and blit encoders, barriers | MTL4 ("Encoders and barriers"); barriers from the application's declarations, the per-dispatch barrier conservative |
 | Swapchain, drawable, frame pacing | MTL4 ("Present"); tier M runs and calibrates; the frame pacing live gate (`doc/plans/frame_pacing_metal.md`, Dell 120 Hz, with the C26 pre-warm) is pending: it needs the user at the display |
 | Counter heaps (GPU timers, Tracy GPU zones) | MTL4 `MTL4CounterHeap` ("GPU timers"); in a Tracy build the default scene shows the same GPU zones as Metal 3 (`Main`, `Post_processing`, `Overlay`) on the program timeline, with medians 0.73 / 0.32 / 0.15 ms, the same as Metal 3's (Release, windowed, unpaced) |
-| `MTL4Compiler` (shaders, pipelines) | Metal 3 code (`newLibrary`, `newRenderPipelineState`) |
+| `MTL4Compiler` (shaders, pipelines), `MTL4Archive` | MTL4 ("Shaders and pipelines"); the image gates, the Bistro image and the GPU culling check match the Metal 3 compiled build; the archive serves every pipeline of a warm start |
 | GPU-read draw count (`executeCommandsInBuffer`) | MTL4 encoders and residency; verified by the `Draw_indirect_test` count tests |
 
 ## Future work
 
-The ports and checks of `doc/plans/metal_backend.md` section 7: the
-`MTL4Compiler` port, narrowing the barriers and the frame pacing live gate.
+The checks of `doc/plans/metal_backend.md` section 7: narrowing the barriers
+and the frame pacing live gate. Pipeline creation through `MTL4::CompilerTask`
+(asynchronous, "Shaders and pipelines") needs a pending state for
+`Render_pipeline` that draws skip.
 In the unpaced Release bench (`scripts/render_thread_bench.py`, default
 scene, pipelined, windowed, `displaySyncEnabled` off) the median frame is at
 Metal 3's, but the mean is not (2.0 - 2.4 ms against 1.6 - 1.8 ms): about

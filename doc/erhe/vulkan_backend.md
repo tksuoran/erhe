@@ -607,8 +607,10 @@ a warm file the first-frame pipeline compilation that dominates start-up on
 tile-based mobile drivers (Adreno on Quest) becomes a cache lookup. The
 read / write functions take no Vulkan handles and are covered by
 `erhe_graphics_tests` (`test_pipeline_cache_file.cpp`); `Spirv_cache` is
-covered there too (`test_spirv_cache.cpp`). The Metal backend has no
-equivalent yet (`MTLBinaryArchive`, `doc/plans/audit_2026_09_30_followups.md`).
+covered there too (`test_spirv_cache.cpp`). The Metal 4 backend's
+equivalent is its pipeline archive (`doc/erhe/metal4_backend.md` "Pipeline
+archive"); the Metal 3 backend has none
+(`doc/plans/audit_2026_09_30_followups.md`).
 
 `Shader_stages_impl` (`vulkan_shader_stages.cpp`) calls `vkCreateShaderModule`
 for each stage's SPIR-V and exposes `get_vertex_module()` /

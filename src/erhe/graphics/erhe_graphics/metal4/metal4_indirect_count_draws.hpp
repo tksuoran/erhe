@@ -15,11 +15,13 @@ namespace MTL { class IndirectCommandBuffer; }
 
 namespace erhe::graphics {
 
+class Pipeline_compiler;
+
 // Compiles the kernel that encodes prepared count draws into an indirect
 // command buffer (raw MSL: SPIR-V cannot express command_buffer). Null when
 // the library or the pipeline fails; the device then reports no
 // use_draw_indirect_count.
-[[nodiscard]] auto make_indirect_count_encode_pipeline(MTL::Device* device) -> MTL::ComputePipelineState*;
+[[nodiscard]] auto make_indirect_count_encode_pipeline(Pipeline_compiler& pipeline_compiler) -> MTL::ComputePipelineState*;
 
 // Metal half of Indirect_count_draws: per frame-in-flight slot, the indirect
 // command buffer the kernel encodes the jobs' commands into, the buffer of

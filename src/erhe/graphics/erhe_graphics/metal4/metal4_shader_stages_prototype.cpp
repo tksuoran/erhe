@@ -1,6 +1,7 @@
 #include "erhe_graphics/metal4/metal4_shader_stages.hpp"
 #include "erhe_graphics/metal4/metal4_acceleration_structure.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_compiler.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/metal4/metal4_bind_group_layout.hpp"
 #include "erhe_graphics/device.hpp"
@@ -22,14 +23,14 @@ namespace {
 
 auto compile_spirv_to_mtl_function(
     Device&                          device,
-    MTL::Device*                     mtl_device,
+    Pipeline_compiler&               pipeline_compiler,
     std::span<const unsigned int>    spirv,
     const std::string&               shader_name,
     const char*                      stage_name,
     const Bind_group_layout*         bind_group_layout,
     MTL::Library*&                   out_library,
     std::array<uint32_t, 3>*         out_workgroup_size = nullptr
-) -> MTL::Function*
+) -> MTL4::LibraryFunctionDescriptor*
 {
     if (spirv.empty()) {
         return nullptr;
@@ -294,27 +295,20 @@ auto compile_spirv_to_mtl_function(
         log_program->info("  {} SSBO '{}': glsl_binding={} -> metal_buffer={}", stage_name, resource.name, glsl_binding, metal_index);
     }
 
-    NS::Error* error = nullptr;
-    NS::String* msl_source = NS::String::alloc()->init(msl.c_str(), NS::UTF8StringEncoding);
-    MTL::CompileOptions* options = MTL::CompileOptions::alloc()->init();
-
-    out_library = mtl_device->newLibrary(msl_source, options, &error);
-
-    options->release();
-    msl_source->release();
-
+    // The MSL compiles with default MTL::CompileOptions, as the Metal 3
+    // backend's newLibrary does (doc/erhe/metal_backend.md "Precise
+    // arithmetic": the fp pragmas are in the source).
+    std::string error;
+    out_library = pipeline_compiler.new_library(msl, shader_name, error);
     if (out_library == nullptr) {
-        const char* error_str = (error != nullptr) ? error->localizedDescription()->utf8String() : "unknown error";
-        std::string error_msg = fmt::format("MTL {} library compilation failed for '{}': {}", stage_name, shader_name, error_str);
+        std::string error_msg = fmt::format("MTL {} library compilation failed for '{}': {}", stage_name, shader_name, error);
         log_program->error("{}", error_msg);
         device.shader_error(error_msg, msl);
         return nullptr;
     }
 
     // SPIRV-Cross generates entry point named "main0"
-    NS::String* entry_name = NS::String::string("main0", NS::UTF8StringEncoding);
-    MTL::Function* function = out_library->newFunction(entry_name);
-
+    MTL4::LibraryFunctionDescriptor* const function = pipeline_compiler.new_function_descriptor(out_library, "main0");
     if (function == nullptr) {
         NS::Array* function_names = out_library->functionNames();
         std::string available;
@@ -424,17 +418,12 @@ auto Shader_stages_prototype_impl::link_program() -> bool
         return false;
     }
 
-    Device_impl& device_impl = m_device.get_impl();
-    MTL::Device* mtl_device = device_impl.get_mtl_device();
-    if (mtl_device == nullptr) {
-        m_failed = true;
-        return false;
-    }
+    Pipeline_compiler& pipeline_compiler = m_device.get_impl().get_pipeline_compiler();
 
     // Compile each stage into its own MTL::Library
     m_vertex_function = compile_spirv_to_mtl_function(
         m_device,
-        mtl_device,
+        pipeline_compiler,
         m_glslang_shader_stages.get_spirv_binary(Shader_type::vertex_shader),
         m_create_info.name,
         "Vertex",
@@ -444,7 +433,7 @@ auto Shader_stages_prototype_impl::link_program() -> bool
 
     m_fragment_function = compile_spirv_to_mtl_function(
         m_device,
-        mtl_device,
+        pipeline_compiler,
         m_glslang_shader_stages.get_spirv_binary(Shader_type::fragment_shader),
         m_create_info.name,
         "Fragment",
@@ -454,7 +443,7 @@ auto Shader_stages_prototype_impl::link_program() -> bool
 
     m_compute_function = compile_spirv_to_mtl_function(
         m_device,
-        mtl_device,
+        pipeline_compiler,
         m_glslang_shader_stages.get_spirv_binary(Shader_type::compute_shader),
         m_create_info.name,
         "Compute",
@@ -495,17 +484,17 @@ auto Shader_stages_prototype_impl::get_dependency_paths() -> std::vector<std::fi
     return m_paths;
 }
 
-auto Shader_stages_prototype_impl::get_vertex_function() const -> MTL::Function*
+auto Shader_stages_prototype_impl::get_vertex_function() const -> MTL4::LibraryFunctionDescriptor*
 {
     return m_vertex_function;
 }
 
-auto Shader_stages_prototype_impl::get_fragment_function() const -> MTL::Function*
+auto Shader_stages_prototype_impl::get_fragment_function() const -> MTL4::LibraryFunctionDescriptor*
 {
     return m_fragment_function;
 }
 
-auto Shader_stages_prototype_impl::get_compute_function() const -> MTL::Function*
+auto Shader_stages_prototype_impl::get_compute_function() const -> MTL4::LibraryFunctionDescriptor*
 {
     return m_compute_function;
 }

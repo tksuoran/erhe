@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_gpu_prewarm.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_compiler.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
 #include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -49,21 +50,10 @@ Gpu_prewarm::Gpu_prewarm(Device_impl& device_impl)
     : m_device_impl{device_impl}
 {
     MTL::Device* const device = device_impl.get_mtl_device();
-    Scoped_transient_object_pool object_pool{};
-    NS::Error* error = nullptr;
-    MTL::Library* const library = device->newLibrary(NS::String::string(c_prewarm_msl, NS::UTF8StringEncoding), nullptr, &error);
-    if (library == nullptr) {
-        log_context->warn("GPU pre-warm: kernel compile failed: {}", (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)");
-        return;
-    }
-    MTL::Function* const function = library->newFunction(NS::String::string("gpu_prewarm", NS::UTF8StringEncoding));
-    m_pipeline = (function != nullptr) ? device->newComputePipelineState(function, &error) : nullptr;
-    if (function != nullptr) {
-        function->release();
-    }
-    library->release();
+    std::string error;
+    m_pipeline = device_impl.get_pipeline_compiler().new_compute_pipeline_from_source(c_prewarm_msl, "gpu_prewarm", "gpu_prewarm", error);
     if (m_pipeline == nullptr) {
-        log_context->warn("GPU pre-warm: pipeline failed: {}", (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)");
+        log_context->warn("GPU pre-warm: pipeline failed: {}", error);
         return;
     }
     // The output (never written) and the iteration counts, one per dispatch

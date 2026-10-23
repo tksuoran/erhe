@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_compute_command_encoder.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_state_cache.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/metal4/metal4_acceleration_structure.hpp"
 #include "erhe_graphics/metal4/metal4_command_buffer.hpp"
@@ -113,23 +114,9 @@ Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
     }
     // The cb is owned by Command_buffer, not by this encoder; nothing
     // to commit here. submit_command_buffers takes care of commit.
-    release_owned_pipeline_state();
+    m_pipeline_state = nullptr;
     m_mtl_command_buffer  = nullptr;
     m_argument_table      = nullptr;
-}
-
-void Compute_command_encoder_impl::release_owned_pipeline_state()
-{
-    // Only pipeline states created here (set_compute_pipeline_state, the
-    // dynamic-state path) are owned; borrowed ones from a long-lived
-    // Compute_pipeline_impl must not be released. An owned one is handed to
-    // the command buffer, which releases it once the GPU has completed it
-    // (MTL4 command buffers retain nothing), as the render path does.
-    if ((m_pipeline_state != nullptr) && m_owns_pipeline_state) {
-        m_command_buffer.get_impl().retain_until_completed(m_pipeline_state);
-    }
-    m_pipeline_state      = nullptr;
-    m_owns_pipeline_state = false;
 }
 
 void Compute_command_encoder_impl::set_buffer(
@@ -236,25 +223,20 @@ void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipe
     }
 
     const Shader_stages_impl& stages_impl = data.shader_stages->get_impl();
-    MTL::Function* compute_function = stages_impl.get_compute_function();
+    MTL4::LibraryFunctionDescriptor* compute_function = stages_impl.get_compute_function();
     if (compute_function == nullptr) {
         log_startup->error("Metal: no compute function for '{}'", data.shader_stages->name());
         ERHE_FATAL("Metal: no compute function");
     }
     m_threadgroup_size = stages_impl.get_compute_workgroup_size();
 
-    Device_impl& device_impl = m_device.get_impl();
-    MTL::Device* mtl_device = device_impl.get_mtl_device();
-    ERHE_VERIFY(mtl_device != nullptr);
-
-    release_owned_pipeline_state();
-    NS::Error* error = nullptr;
-    m_pipeline_state = mtl_device->newComputePipelineState(compute_function, &error);
+    // One pipeline state per compute function for the device's lifetime
+    // (Pipeline_state_cache); the encoder borrows it as it borrows a
+    // Compute_pipeline's.
+    m_pipeline_state = m_device.get_impl().get_pipeline_state_cache().get_compute_pipeline(*data.shader_stages);
     if (m_pipeline_state == nullptr) {
-        const char* error_str = (error != nullptr) ? error->localizedDescription()->utf8String() : "unknown";
-        ERHE_FATAL("Metal compute pipeline state creation failed: %s", error_str);
+        ERHE_FATAL("Metal compute pipeline state creation failed for '%s'", data.shader_stages->name().c_str());
     }
-    m_owns_pipeline_state = true;
 
     m_encoder->setComputePipelineState(m_pipeline_state);
 
@@ -276,11 +258,7 @@ void Compute_command_encoder_impl::set_compute_pipeline(const Compute_pipeline& 
     if (mtl_pipeline == nullptr) {
         return;
     }
-    // A pipeline an earlier set_compute_pipeline_state created goes to the
-    // command buffer before m_pipeline_state is overwritten.
-    release_owned_pipeline_state();
-    m_pipeline_state      = mtl_pipeline;
-    m_owns_pipeline_state = false;
+    m_pipeline_state = mtl_pipeline;
     m_encoder->setComputePipelineState(m_pipeline_state);
 
     // Carry the shader's declared local workgroup size so dispatch_compute can
@@ -325,7 +303,7 @@ void Compute_command_encoder_impl::encode_indirect_count_draws(Indirect_count_dr
     // The kernel binds its own pipeline: drop the erhe one, so a further
     // dispatch_compute() without a new set_compute_pipeline() fails loudly
     // instead of running the kernel's pipeline.
-    release_owned_pipeline_state();
+    m_pipeline_state = nullptr;
     before_dispatch();
     // The kernel rewrites the slot's indirect command buffer and range
     // buffer, which the draws of an earlier prepare of the slot read in

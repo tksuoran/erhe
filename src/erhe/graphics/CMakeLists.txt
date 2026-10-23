@@ -513,6 +513,12 @@ if (ERHE_GRAPHICS_API_METAL4)
         erhe_graphics/metal4/metal4_device.cpp
         erhe_graphics/metal4/metal4_device.hpp
         erhe_graphics/metal4/metal4_device_present_calibration.cpp
+        erhe_graphics/metal4/metal4_pipeline_archive_file.cpp
+        erhe_graphics/metal4/metal4_pipeline_archive_file.hpp
+        erhe_graphics/metal4/metal4_pipeline_compiler.cpp
+        erhe_graphics/metal4/metal4_pipeline_compiler.hpp
+        erhe_graphics/metal4/metal4_pipeline_state_cache.cpp
+        erhe_graphics/metal4/metal4_pipeline_state_cache.hpp
         erhe_graphics/metal4/metal4_pixel_format_table.cpp
         erhe_graphics/metal4/metal4_pixel_format_table.hpp
         erhe_graphics/metal4/metal4_gpu_prewarm.cpp

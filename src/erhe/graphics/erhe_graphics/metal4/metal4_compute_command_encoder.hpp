@@ -58,7 +58,6 @@ private:
     // Dispatches of one MTL4 compute encoder run concurrently: every
     // dispatch after the first starts with an intra-encoder barrier.
     void before_dispatch();
-    void release_owned_pipeline_state();
 
     MTL4::ComputeCommandEncoder* m_encoder             {nullptr};
     MTL4::ArgumentTable*         m_argument_table      {nullptr};
@@ -67,7 +66,6 @@ private:
     std::size_t                  m_timer_end_sample    {0};
     const Bind_group_layout*     m_bind_group_layout   {nullptr};
     MTL::ComputePipelineState*   m_pipeline_state      {nullptr};
-    bool                         m_owns_pipeline_state {false};
     // Per-group thread dimensions for dispatchThreadgroups(), taken from the
     // bound shader's layout(local_size_*). Defaults to 1x1x1 until a pipeline
     // is set.
