@@ -21,7 +21,8 @@
 ✓re-trace{HEAD-c8c3a775e;GPU-frame-7.2-loops/7.6-clustered-fits-8.33;fps-85-94-only-pacer-on-Adaptive-Sync;ranked:1-pacer-VRR(NEXT;doc/plans/frame_pacing_adaptive_sync.md)|2-MSAA-1.1-1.4ms|3-shadow-lookups-0.66ms|4-tiling-2ms-unmeasured|5-interpolants<=0.3|6-material-record<=0.2|7-foliage-casts-no-shadows(shadow_renderer.cpp:358,1404-opaque_primitives_only)}
 ✓pacer-VRR{38e88de0d+b5aca3e23+ac2c92b0f+2894d95f8;fullscreen-Adaptive-Sync-120Hz-clustered+loops-Medium;C30+C31;open-in-plan}
 ?found-not-fixed{windowed-tier-M-deadline-offset-estimate-11.7-12.7ms-vs-calibration-9.62(2026-10-22);alpha-tested-casters-cast-no-shadows;Bistro-image-run-to-run-nondeterminism;selection-stencil-mask-depth-only-alpha-tested-full-quad;windowed-viewport+27%-vs-headless-same-size}
-?shadow-cache-remaining{per-light-caster-test;skinned-pose-serial;fit-skip}
+✓shadow-cache-per-light-caster-test{defbb58b7;changed-bounds-per-publish+flag-bits-filtered-by-caster-filter;reaches_view;gate-13/13-0px;refresh_object_records-stale-bounds-fixed}
+?shadow-cache-remaining{skinned-pose-serial;fit-skip}
 
 [TASK::bistro-load]{started-2026-10-18;branch=render-thread;via-harness;doc/plans/bistro_load_profiling.md}
 ✓profile+rank{4d0c4eb8a;Release+Debug;tracy-captures;proposal-6-items}
