@@ -139,5 +139,7 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 !MTL4-queue->wait(drawable)-holds-the-whole-commit+all-later-commits->take-drawable-at-first-use(prefix-commit-before-swapchain-pass;24faccd5f);gap-between-the-two-commits=gpu_idle_time(else-pacer-reads-presentation-wait-as-GPU-load)
 !MTL4-drawable-wait-tail::1-in-12-nextDrawable-6-8ms-with-displaySync-off(Metal-3:11/1211)->open
 !GPU-tests::pacing-tier-must-be-off(calibration-2s-Metal/6s-MoltenVK-per-process;967d47edf)
+!ring-buffer-range::cancel()-on-a-closed-WRITTEN-range-makes-no-sync-entry->space-stays-allocated;release()-after-close(8e0aaf42b-texture-heap+imgui)
+!GPU-test-isolation::Gpu_test-fixture-snapshots-Device::get_debug_state-and-fails-on-growth(leaks-show-as-bytes_in_use)
 
 [OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:test-run-restructure->present-calibration-cache->hazard-tracking->MTL4Compiler;pacing-live-gate-pending-user}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
