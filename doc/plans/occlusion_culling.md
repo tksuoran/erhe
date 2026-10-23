@@ -23,6 +23,13 @@ Sketch:
    This step is what makes the scheme worthwhile; without it the result is a
    worse form of hardware occlusion queries.
 
+## Prerequisites
+
+Decision (user, 2026-10-23): this plan starts only after the Metal backend
+has the GPU-read draw count (`doc/plans/metal_backend.md` section 6,
+option A) and Metal 4 (section 7 there), so the occlusion pass is built
+once for Vulkan, OpenGL 4.6 and Metal.
+
 ## Starting point
 
 This plan is phase 7 of [culling.md](culling.md); phases 1 to 6 are done and
@@ -43,8 +50,7 @@ are described there. What the occlusion pass builds on:
   `multi_draw_indexed_primitives_indirect_count()`. It needs
   `Device_info::use_draw_indirect_count` (Vulkan with
   `VK_KHR_draw_indirect_count`, GL 4.6); Metal and the null device stay on
-  the CPU path. Check what the session's device reports before choosing
-  where to develop.
+  the CPU path until `doc/plans/metal_backend.md` section 6 lands.
 - The color passes still draw CPU-written commands under `gpu`: their
   primitive records are patched per pass, so a GPU-written command cannot
   name a shared record (culling.md "Open", the color passes item). Step 7

@@ -151,9 +151,15 @@ depth-stencil, depth bias, clip mode, cull mode, winding and fill mode
 `supportIndirectCommandBuffers`; index buffers the commands reference need
 `useResource:` (a residency set under MTL4).
 
-Options, to decide before building:
+Decision (user, 2026-10-23): option A. It is the first item of the work
+queue, before raster occlusion culling
+([occlusion_culling.md](occlusion_culling.md)), together with section 7
+(Metal 4); which of the two is built first, or both together, is the
+planner's choice (section 7 "Order").
 
-- A (recommended): a preparation hook, now simpler. A Metal-only MSL kernel
+Options considered:
+
+- A (chosen): a preparation hook, now simpler. A Metal-only MSL kernel
   runs right after `cull_compact.comp` in the same compute pass, one thread
   per command slot: it encodes the job's surviving commands into an ICB and
   writes `{command_offset, count}` per job into a range buffer. The in-pass
@@ -184,3 +190,57 @@ culled ones only. An offline MSL compile check needs
 Verification: `Draw_indirect_test.draw_indexed_indirect_count` and
 `_count_zero`, then the GPU culling gates of `doc/plans/culling.md` with
 `culling_classification` `gpu` on Metal.
+
+## 7. Metal 4
+
+Decision (user, 2026-10-23): the backend supports Metal 4 (the `MTL4*`
+API, macOS 26). Raster occlusion culling starts only once Metal has both
+the GPU-read draw count (section 6) and Metal 4.
+
+What changes (the MTL4 model; agfx's Metal 4 backend is a reference,
+`doc/reference/agfx_comparison.md`):
+
+- Command submission: `MTL4CommandQueue`, `MTL4CommandBuffer` recorded into
+  an `MTL4CommandAllocator` (one per frame slot and recording thread, reset
+  when the slot's frame has completed), commits with `MTL4CommitFeedback`
+  in place of completed handlers (frame retirement, deferred destruction,
+  the GPU timer resolve, the frame pacing GPU times).
+- Binding: `MTL4ArgumentTable` (GPU addresses and resource IDs) replaces
+  per-encoder `setBuffer` / `setVertexBytes`; push constants (index 15,
+  `ERHE_DRAW_ID`) need a new home.
+- Residency: `MTLResidencySet` replaces `useResource` (the texture heap's
+  per-encode loops, the ICB's index buffers).
+- Hazards: no automatic hazard tracking; explicit stage-to-stage barriers
+  (`barrierAfterQueueStages` / encoder barriers) where the backend relies on
+  Metal's tracking today, and the inter-encoder fence.
+- Drawables: the queue waits on and signals the drawable
+  (`waitForDrawable` / `signalDrawable`); the present path, presented
+  handlers and tier M frame pacing (`doc/erhe/metal_backend.md` "Frame
+  pacing") move with it.
+- Timestamps: `MTL4CounterHeap` replaces the counter sample buffers of the
+  GPU timers and the Tracy GPU zones (`doc/erhe/metal_backend.md` "GPU
+  timers").
+- Shaders and pipelines: `MTL4Compiler` / `MTL4Archive` (relates to the open
+  `MTLBinaryArchive` item); `MTL4RenderPipelineDescriptor`.
+- The GPU-read draw count carries over: `MTL4RenderCommandEncoder` has
+  `executeCommandsInBuffer(icb, indirectRangeBuffer)` with the range buffer
+  as a GPU address (pinned metal-cpp `metal-cpp_27` has the `MTL4*`
+  headers).
+
+Decisions for the planner and the user before building:
+
+- Order: section 6 first on the current API, then Metal 4 (the count path
+  is ported with the rest); Metal 4 first, then section 6 written once on
+  MTL4; or both together. Section 6 on the current API is the smaller first
+  step and is verified by the existing tests before the port.
+- Whether the Metal 3 path is kept beside Metal 4 (macOS before 26) or
+  replaced.
+- Migration granularity: the whole backend at once, or MTL4 command
+  buffers and queue first with the existing encoders where MTL4 allows
+  mixing.
+
+Verification: the Metal ctest suite, the Metal image and race gates
+(`doc/editor/render_thread.md` "Metal"), the frame pacing live gates
+(`doc/plans/frame_pacing_metal.md`), GPU timers and Tracy GPU zones, then
+section 6's verification on MTL4.
+
