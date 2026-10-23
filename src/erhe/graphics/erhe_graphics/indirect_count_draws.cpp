@@ -2,7 +2,9 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_verify/verify.hpp"
 
-#if defined(ERHE_GRAPHICS_API_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL4)
+# include "erhe_graphics/metal4/metal4_indirect_count_draws.hpp"
+#elif defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_indirect_count_draws.hpp"
 #else
 namespace erhe::graphics {

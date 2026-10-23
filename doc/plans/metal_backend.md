@@ -259,7 +259,7 @@ Decisions (user, 2026-10-23):
   tests; then Metal 4, which ports the count path with the rest
   (`executeCommandsInBuffer` exists on `MTL4RenderCommandEncoder`).
 - Metal 4 is a separate backend beside Metal 3: its own
-  `ERHE_GRAPHICS_LIBRARY` value and source directory, gated by the same
+  `ERHE_GRAPHICS_API` value and source directory, gated by the same
   Metal ctest suite, image, race and pacing gates as it grows, with the
   Metal 3 tree staying green throughout. Whether Metal 3 is then removed is
   decided once Metal 4 passes those gates.
@@ -276,4 +276,12 @@ Verification: the Metal ctest suite, the Metal image and race gates
 (`doc/editor/render_thread.md` "Metal"), the frame pacing live gates
 (`doc/plans/frame_pacing_metal.md`), GPU timers and Tracy GPU zones, then
 section 6's verification on MTL4.
+
+State: the backend exists as `ERHE_GRAPHICS_API=metal4` (build tree
+`build_xcode_metal4`, sources `src/erhe/graphics/erhe_graphics/metal4/`),
+still the Metal 3 code in every subsystem and passing the same tests; its
+current document, with the define rule and the per-subsystem migration
+status, is `doc/erhe/metal4_backend.md`. Next: the first row of that table
+(device + `MTL4CommandQueue` / command buffer / allocator + commit
+feedback).
 

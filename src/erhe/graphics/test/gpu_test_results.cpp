@@ -24,6 +24,8 @@ namespace {
     return "vulkan";
 #elif defined(ERHE_GRAPHICS_API_OPENGL)
     return "opengl";
+#elif defined(ERHE_GRAPHICS_API_METAL4)
+    return "metal4";
 #elif defined(ERHE_GRAPHICS_API_METAL)
     return "metal";
 #else

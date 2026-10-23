@@ -5,9 +5,11 @@ Author + emit the Metal pixel-format texture-capability table.
 This script encodes the "Texture capabilities by pixel format" tables from
 Apple's "Metal Feature Set Tables" PDF (Metal-Feature-Set-Tables.pdf, dated
 "February 5, 2026" in-document) as an explicit per-format / per-family
-capability matrix, then writes the standalone C++ table:
+capability matrix, then writes the standalone C++ table for both Metal
+backends:
 
     src/erhe/graphics/erhe_graphics/metal/metal_pixel_format_table.cpp
+    src/erhe/graphics/erhe_graphics/metal4/metal4_pixel_format_table.cpp
 
 The matrix below is hand-transcribed from the PDF text. Each capability cell is
 a short string built from the legend letters:
@@ -178,7 +180,7 @@ def mask(s):
         m |= BIT[ch]
     return m
 
-def emit_cpp(path):
+def emit_cpp(path, backend):
     rows = []
     for name in sorted(TABLE.keys()):
         vals = TABLE[name]
@@ -190,7 +192,7 @@ def emit_cpp(path):
     lines.append('// Source: Apple "Metal Feature Set Tables" (Metal-Feature-Set-Tables.pdf).')
     lines.append('// Do not edit by hand; edit the generator and re-run.')
     lines.append('')
-    lines.append('#include "erhe_graphics/metal/metal_pixel_format_table.hpp"')
+    lines.append(f'#include "erhe_graphics/{backend}/{backend}_pixel_format_table.hpp"')
     lines.append('')
     lines.append('#include <Metal/Metal.hpp>')
     lines.append('')
@@ -288,7 +290,8 @@ def emit_cpp(path):
 if __name__ == '__main__':
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, '..', '..'))
-    out = os.path.join(repo, 'src', 'erhe', 'graphics', 'erhe_graphics',
-                       'metal', 'metal_pixel_format_table.cpp')
-    n = emit_cpp(out)
-    print(f'wrote {n} format rows to {out}')
+    for backend in ('metal', 'metal4'):
+        out = os.path.join(repo, 'src', 'erhe', 'graphics', 'erhe_graphics',
+                           backend, f'{backend}_pixel_format_table.cpp')
+        n = emit_cpp(out, backend)
+        print(f'wrote {n} format rows to {out}')

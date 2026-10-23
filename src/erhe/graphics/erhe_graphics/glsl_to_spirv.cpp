@@ -13,7 +13,9 @@
 #if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_API_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL4)
+# include "erhe_graphics/metal4/metal4_shader_stages.hpp"
+#elif defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_shader_stages.hpp"
 #endif
 #if defined(ERHE_GRAPHICS_API_NONE)

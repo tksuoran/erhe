@@ -6,7 +6,9 @@
 #if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_scoped_debug_group.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_API_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL4)
+# include "erhe_graphics/metal4/metal4_scoped_debug_group.hpp"
+#elif defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_scoped_debug_group.hpp"
 #endif
 #if defined(ERHE_GRAPHICS_API_NONE)

@@ -8,7 +8,9 @@
 #if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_API_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL4)
+# include "erhe_graphics/metal4/metal4_texture.hpp"
+#elif defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_texture.hpp"
 #endif
 #if defined(ERHE_GRAPHICS_API_NONE)

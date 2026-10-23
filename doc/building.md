@@ -135,7 +135,7 @@ attempt and the launch must be retried.
 
 | Option | Description | Recognized values | Default |
 | :--- | :--- | :--- | :--- |
-| `ERHE_GRAPHICS_API` | Graphics backend | `opengl` (not on Apple platforms), `vulkan`, `metal` (macOS only), `none` (headless) | `vulkan` |
+| `ERHE_GRAPHICS_API` | Graphics backend | `opengl` (not on Apple platforms), `vulkan`, `metal` (macOS only), `metal4` (macOS only; Metal 4 backend in progress), `none` (headless) | `vulkan` |
 | `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `glfw` (deprecated), `none` (headless) | `sdl` |
 | `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `box3d`, `none` | `jolt` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` | `bvh` |
@@ -169,6 +169,8 @@ override several of them (they pass e.g. `-DERHE_PROFILE_LIBRARY=tracy`,
 disabling unused features and selecting different backends.
 
 ### Notes on Specific Options
+
+**ERHE_GRAPHICS_API** -- Each value defines `ERHE_GRAPHICS_API_<VALUE>` for every target; `metal4` also defines the Metal family define `ERHE_GRAPHICS_API_METAL` (the rule is in `doc/erhe/metal4_backend.md` "Defines").
 
 **ERHE_BUILD_TESTS** -- Builds the gtest suites (see `doc/testing.md`). Every configure wrapper passes extra arguments through to cmake, so `scripts\configure_vs2026_opengl.bat -DERHE_BUILD_TESTS=ON` (or `bash scripts/configure_ninja_linux_vulkan.sh -DERHE_BUILD_TESTS=ON`) enables them in a regular build tree. The `erhe_tests` target then builds every test executable, and `ctest --test-dir <build_dir> -C <config>` runs them; `--label-exclude "gpu|editor"` leaves out the tests that need a graphics device or a running editor, which is what CI runs.
 
@@ -243,3 +245,14 @@ themselves (see `doc/agents/windows.md`):
 
 -   `scripts\configure_ninja_win_vulkan.bat` / `scripts\build_ninja_win_vulkan.bat <target>` -- MSVC `cl`
 -   `scripts\configure_ninja_win_clang.bat` / `scripts\build_ninja_win_clang.bat <target>` -- clang-cl (also regenerates `compile_commands.json` for clangd)
+
+## macOS Build Scripts
+
+-   `scripts/configure_xcode_metal.sh` -- Metal backend (`build_xcode_metal`)
+-   `scripts/configure_xcode_metal4.sh` -- Metal 4 backend (`build_xcode_metal4`, `ERHE_GRAPHICS_API=metal4`)
+-   `scripts/configure_xcode_metal_asan.sh` -- Metal with AddressSanitizer
+-   `scripts/configure_xcode_metal_headless.sh` -- Headless Metal (`doc/erhe/metal_headless.md`)
+-   `scripts/configure_xcode_vulkan.sh` -- Vulkan backend (MoltenVK or KosmicKrisp)
+-   `scripts/configure_xcode_vulkan_asan.sh` -- Vulkan with AddressSanitizer
+-   `scripts/configure_xcode_vulkan_minimal.sh` -- Vulkan with optional libraries off
+-   `scripts/run_graphics_tests_metal.sh` -- configures, builds and runs the graphics tests serially on `build_xcode_metal`; `METAL_BACKEND=metal4` selects `build_xcode_metal4`

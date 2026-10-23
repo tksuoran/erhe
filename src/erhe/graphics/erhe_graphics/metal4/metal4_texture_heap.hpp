@@ -1,0 +1,75 @@
+#pragma once
+
+#include "erhe_graphics/texture_heap.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
+namespace MTL { class ArgumentEncoder; }
+namespace MTL { class Buffer; }
+namespace MTL { class Texture; }
+namespace MTL { class SamplerState; }
+
+namespace erhe::graphics {
+
+class Texture_heap_impl final
+{
+public:
+    Texture_heap_impl(
+        Device&                    device,
+        const Texture&             fallback_texture,
+        const Sampler&             fallback_sampler,
+        const Bind_group_layout*   bind_group_layout,
+        std::size_t                max_textures = 4096
+    );
+    ~Texture_heap_impl() noexcept;
+
+    void reset_heap       (Command_buffer& command_buffer);
+    auto allocate         (const Texture* texture, const Sampler* sampler) -> uint64_t;
+    auto get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t;
+    auto bind             (Render_command_encoder& encoder) -> std::size_t;
+    auto bind             (Compute_command_encoder& encoder) -> std::size_t;
+    void unbind           (Command_buffer& command_buffer);
+
+private:
+    void encode_argument_buffer();
+
+    Device&                          m_device;
+    const Texture&                   m_fallback_texture;
+    const Sampler&                   m_fallback_sampler;
+    std::size_t                      m_used_slot_count    {0};
+    std::vector<const Texture*>      m_textures;
+    std::vector<const Sampler*>      m_samplers;
+
+    // Argument buffer state -- created once at construction, never changes
+    MTL::ArgumentEncoder*            m_argument_encoder{nullptr};
+    uint32_t                         m_argument_buffer_index{14}; // [[buffer(N)]]
+    uint32_t                         m_array_base_texture_id{0};
+    uint32_t                         m_array_base_sampler_id{0};
+
+    // Number of (texture, sampler) pairs the argument buffer's arrays can
+    // hold -- the array_size of the texture-heap sampler declaration. Slot
+    // index array_size would land on the first entry of the sampler array
+    // (m_array_base_sampler_id), so allocate() must refuse past this point;
+    // Metal's argument buffer validation catches the overrun as
+    // "Trying to set a Texture at index N but the argument buffer has a
+    // Sampler at this index".
+    std::size_t                      m_slot_capacity{0};
+    bool                             m_reported_full{false};
+
+    // Per-frame state
+    // The argument buffer lives in a ring buffer range, which stays valid
+    // only through the frame that allocated it: the ring reclaims by frame,
+    // and once later ranges of that ring retire, the space is reused. So the
+    // argument buffer is encoded again in every frame that binds the heap
+    // (m_argument_buffer_frame), not only when the slots change (m_dirty).
+    // Reusing an older frame's range read whatever the ring wrote there
+    // since: a garbage texture reference and a GPU address fault.
+    Ring_buffer_range                m_argument_buffer_range;
+    uint64_t                         m_argument_buffer_frame{0};
+    bool                             m_dirty{true};
+};
+
+} // namespace erhe::graphics

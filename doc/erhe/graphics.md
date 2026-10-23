@@ -24,7 +24,7 @@ the header brings `erhe_item/item.hpp` and the property system with it; code
 that only passes a `Texture` by pointer or `shared_ptr`, or implements
 `Texture_reference`, forward-declares it or includes `texture_reference.hpp`.
 No header outside `src/erhe/graphics/` includes a backend header
-(`erhe_graphics/vulkan/`, `gl/`, `metal/`, `null/`).
+(`erhe_graphics/vulkan/`, `gl/`, `metal/`, `metal4/`, `null/`).
 
 ## Interface and backend targets
 
@@ -569,7 +569,7 @@ before it (no render encoder open).
 - **External:** glm, fmt, mango, concurrentqueue and glslang (with `ERHE_SPIRV`) on the interface target; volk and VMA (Vulkan), metal-cpp and SPIRV-Cross (Metal) on the backend target, selected at CMake time
 
 ## Notes
-- All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), and `null/` (headless).
+- All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), `metal4/` (Metal 4, `doc/erhe/metal4_backend.md`), and `null/` (headless).
 - `ERHE_WINDOW_LIBRARY=none` is a separate axis from the graphics API: the Vulkan and Metal backends both run surfaceless, rendering into an emulated swapchain of offscreen images (`vulkan/vulkan_emulated_swapchain.*`, the ring inside `metal/metal_swapchain.*`) that `Device::capture_last_frame` reads back synchronously.
 - The OpenGL backend requires OpenGL 4.5 with direct state access (DSA) as a hard minimum; device creation fails on older contexts, and there are no non-DSA or GL 4.1 fallback paths.
 - `Shader_resource` is used to programmatically build GLSL interface declarations from C++, keeping shader sources and C++ code in sync without reflection. For sampler declarations it is an implementation detail of `Bind_group_layout`.

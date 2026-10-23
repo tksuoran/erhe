@@ -1,0 +1,445 @@
+#pragma once
+
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_graphics/metal4/metal4_pixel_format_table.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_pool.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
+
+#include <array>
+#include <functional>
+#include <memory>
+#include <condition_variable>
+#include <mutex>
+#include <optional>
+#include <vector>
+
+typedef int GLint;
+
+namespace MTL { class ArgumentEncoder; }
+namespace MTL { class Device; }
+namespace MTL { class CommandQueue; }
+namespace MTL { class ComputePipelineState; }
+namespace MTL { class Event; }
+namespace MTL { class Library; }
+namespace MTL { class LogState; }
+namespace MTL { class RenderPipelineState; }
+namespace MTL { class SamplerState; }
+namespace MTL { class SharedEvent; }
+
+namespace erhe::dataformat {
+    enum class Format : unsigned int;
+}
+
+namespace erhe::frame_pacing { class Frame_time_recorder; }
+namespace erhe::graphics { class Clock_monitor; class Gpu_prewarm; }
+namespace erhe::window { class Context_window; }
+
+namespace erhe::graphics {
+
+class Frame_state;
+class Frame_end_info;
+class Gpu_timer_sample_pool;
+class Render_pass_impl;
+class Ring_buffer_client;
+class Surface;
+class Swapchain;
+
+// Mirrors Vulkan's Device_frame_state. Tracks lifecycle of new-style
+// begin_swapchain_frame / end_swapchain_frame API, and backs
+// is_in_device_frame / is_in_swapchain_frame.
+enum class Device_frame_state : uint8_t
+{
+    idle,
+    waited,
+    recording,
+    in_swapchain_frame
+};
+
+// The state of one frame-in-flight slot and the id of the frame that holds
+// it (valid while state != idle). See the Vulkan Device_frame_slot.
+class Device_frame_slot
+{
+public:
+    Device_frame_state state   {Device_frame_state::idle};
+    uint64_t           frame_id{0};
+};
+
+// Presentation feedback of the drawables a device presents (frame pacing
+// tier M, doc/erhe/metal_backend.md "Frame pacing"): the presented handler
+// of each drawable writes the frame's achieved present time and wakes
+// present waits. Metal runs presented handlers on a thread of its own, up to
+// a few refresh periods after the presenting command buffer completed, so
+// possibly after the device is gone: the handlers share ownership of this
+// object, and detach() at device teardown cuts it from the frame time
+// recorder. Thread-safe: every member is under m_mutex.
+class Present_feedback
+{
+public:
+    explicit Present_feedback(erhe::frame_pacing::Frame_time_recorder& recorder);
+
+    // The presenting thread, before the commit that hands the drawable over.
+    void note_present(std::int64_t frame_id);
+
+    // The presented handler. presented_time is the drawable's presentedTime
+    // (0: never displayed); target_time the frame's target present time (0:
+    // none) and period the refresh period it was set for, to detect targets
+    // the system did not honor.
+    void on_presented(std::int64_t frame_id, double presented_time, double target_time, double period);
+
+    // Blocks until the presented handler of frame_id has run (the drawable
+    // was displayed or dropped). unsupported when frame_id never presented.
+    [[nodiscard]] auto wait_for_displayed(std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
+
+    void detach();
+
+private:
+    static constexpr std::size_t s_early_check_count = 240; // targeted frames before the honored-target check
+
+    std::mutex                               m_mutex;
+    std::condition_variable                  m_displayed;
+    erhe::frame_pacing::Frame_time_recorder* m_recorder           {nullptr};
+    std::int64_t                             m_newest_presented_id{-1}; // newest frame whose drawable was handed over
+    std::int64_t                             m_newest_displayed_id{-1}; // newest frame whose presented handler ran
+    std::size_t                              m_targeted_count     {0};
+    std::size_t                              m_early_count        {0};  // displayed a refresh or more before the target
+    // Consecutive drawables with presentedTime 0: the compositor shows no
+    // frame of an occluded window (and of none while the display sleeps).
+    static constexpr std::size_t s_undisplayed_log_count = 30;
+    std::size_t                              m_undisplayed_streak {0};
+};
+
+class Device;
+class Device_impl final
+{
+public:
+    Device_impl   (Device& device, const Surface_create_info& surface_create_info, const Graphics_config& graphics_config = {});
+    Device_impl   (const Device_impl&) = delete;
+    void operator=(const Device_impl&) = delete;
+    Device_impl   (Device_impl&&)      = delete;
+    void operator=(Device_impl&&)      = delete;
+    ~Device_impl() noexcept;
+
+                  void wait_for_frame_start(uint64_t frame_id);
+    [[nodiscard]] auto acquire_frame_slot  (uint64_t frame_id) -> bool;
+    [[nodiscard]] auto begin_frame() -> bool;
+    [[nodiscard]] auto end_frame  () -> bool;
+    [[nodiscard]] auto end_frame  (uint64_t frame_id) -> bool;
+    [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
+    [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
+
+    void               wait_idle            ();
+    void               clear_render_pipeline_cache();
+    [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
+    [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
+
+    // Per-frame command buffer accounting (any thread, under
+    // m_completion_mutex). submit_command_buffers() counts each command
+    // buffer it commits against the frame the command buffer was begun in;
+    // the command buffer's addCompletedHandler (an arbitrary Metal dispatch
+    // thread) counts its completion. A frame retires once it has ended and
+    // every command buffer committed for it has completed - not when the
+    // first one does: a frame has several (uploads, render-to-texture
+    // passes, the swapchain pass), and the releases its completion runs
+    // (texture and buffer releases, ring buffer ranges) must wait for all.
+    void note_command_buffer_committed  (uint64_t frame_index);
+    void notify_command_buffer_completed(uint64_t frame_index);
+    // Blocks until every command buffer committed for frame_index has
+    // completed on the GPU. The frame must have ended (all its command
+    // buffers committed).
+    void wait_for_frame_gpu_completion  (uint64_t frame_index);
+
+    // Presented-frame throttle. A command buffer that presents a drawable
+    // normally completes at its GPU end (measured: 16 ms before the drawable
+    // is displayed), but when presentation stalls these never retire.
+    // Without a bound the main loop keeps submitting frames until the
+    // command queue's in-flight limit (maxCommandBufferCount, 64) is
+    // reached, at which point
+    // MTL::CommandQueue::commandBuffer() blocks inside the driver and the
+    // process is wedged until presentation resumes - observed live: a
+    // presentation stall left the editor hung in Command_buffer::begin() for
+    // two hours, until a display wake released the drawables and all 64
+    // queued command buffers drained at once.
+    //
+    // begin_swapchain waits here instead: normal FIFO backpressure at
+    // s_max_frames_in_flight, and if presentation is not progressing the wait
+    // times out and the frame is reported as non-renderable, so the tick keeps
+    // running (input, UI, non-present GPU work) and recovers as soon as
+    // presentation resumes.
+    [[nodiscard]] auto wait_for_presented_frame_slot() -> bool;
+    void               note_presented_frame_submitted();
+    void               note_presented_frame_completed();
+
+    void start_frame_capture       ();
+    void end_frame_capture         ();
+
+    // Active render pass of the calling thread. Per thread: each thread
+    // records into its own command buffer (the editor's main thread and
+    // render thread record render passes concurrently), and a draw or debug
+    // group must reach the encoder of its own thread's pass.
+    static thread_local Render_pass_impl* s_active_render_pass;
+    [[nodiscard]] auto get_command_buffer(unsigned int thread_slot) -> Command_buffer&;
+    void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
+    void submit_command_buffer_and_wait(Command_buffer& command_buffer);
+    void add_completion_handler    (std::function<void(Device_impl&)> callback);
+    [[nodiscard]] auto get_indirect_count_encode_pipeline() const -> MTL::ComputePipelineState* { return m_indirect_count_encode_pipeline; }
+    void on_thread_enter           ();
+    // No per-context resources in the Metal backend; see Device::Device.
+    void create_per_context_resources() {}
+
+    [[nodiscard]] auto get_surface                        () -> Surface*;
+    // Windowed screenshot capture (Device::capture_last_frame /
+    // request_frame_capture): arm-then-collect through the swapchain, see
+    // Swapchain_impl::record_capture.
+    [[nodiscard]] auto capture_last_frame                 (int& out_width, int& out_height, erhe::dataformat::Format& out_format, std::vector<std::byte>& out_pixels) -> bool;
+    [[nodiscard]] auto request_frame_capture              () -> bool;
+    [[nodiscard]] auto get_native_handles                 () const -> Native_device_handles;
+    [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
+    [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
+    [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
+    // The frame of the calling role (Device::get_frame_index()). The render
+    // role gets m_render_frame_id (which only it writes, so it reads it
+    // without a lock), every other caller reads under m_frame_id_mutex.
+    [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
+    // True once end_frame() ended the frame (every command buffer of it is
+    // submitted; the GPU may still run it). Any thread: reads
+    // m_render_frame_id under m_frame_id_mutex.
+    [[nodiscard]] auto is_frame_ended                     (uint64_t frame) const -> bool;
+    [[nodiscard]] auto get_number_of_frames_in_flight     () const -> std::size_t;
+    // Conservative: see Device::is_frame_completed().
+    [[nodiscard]] auto is_frame_completed                 (uint64_t frame) const -> bool;
+    [[nodiscard]] auto wait_for_displayed_frame           (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
+                  void set_present_target_time            (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
+    [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
+    [[nodiscard]] auto is_present_target_time_honored     () const -> bool;
+    // The pipeline of a blit_framebuffer between attachments of different
+    // formats (Blit_command_encoder_impl): a full-screen triangle that reads
+    // the source texels, for a normalized or float destination format.
+    // Created on first use per destination MTL::PixelFormat; nullptr (logged)
+    // when the pipeline cannot be built.
+    [[nodiscard]] auto get_blit_framebuffer_pipeline      (unsigned long destination_pixel_format) -> MTL::RenderPipelineState*;
+    [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
+    [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
+    [[nodiscard]] auto make_render_command_encoder        (Command_buffer& command_buffer) -> Render_command_encoder;
+    [[nodiscard]] auto get_format_properties              (erhe::dataformat::Format format) const -> Format_properties;
+    [[nodiscard]] auto probe_image_format_support         (erhe::dataformat::Format format, uint64_t usage_mask) const -> bool;
+    [[nodiscard]] auto get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>;
+                  void sort_depth_stencil_formats         (std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const;
+    [[nodiscard]] auto choose_depth_stencil_format        (const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format;
+    [[nodiscard]] auto choose_depth_stencil_format        (unsigned int sort_flags, int requested_sample_count) const -> erhe::dataformat::Format;
+    [[nodiscard]] auto get_shader_monitor                 () -> Shader_monitor&;
+    [[nodiscard]] auto get_info                           () const -> const Device_info&;
+    [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
+    // Could report MTLDevice recommendedMaxWorkingSetSize/currentAllocatedSize;
+    // zeros = unknown until someone needs it there.
+    [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget { return {}; }
+
+    void reset_shader_stages_state_tracker();
+    [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
+
+    [[nodiscard]] auto get_mtl_device              () const -> MTL::Device*;
+    [[nodiscard]] auto get_mtl_command_queue       () const -> MTL::CommandQueue*;
+    [[nodiscard]] auto get_default_sampler_state   () const -> MTL::SamplerState*;
+    [[nodiscard]] auto get_gpu_timer_sample_pool   () -> Gpu_timer_sample_pool&;
+
+    // Texture argument buffer support
+    [[nodiscard]] auto get_texture_argument_encoder() const -> MTL::ArgumentEncoder*;
+                  void set_texture_argument_encoder(MTL::ArgumentEncoder* encoder);
+
+    // Argument buffer resource index mapping (GLSL binding -> arg buffer id)
+    struct Texture_arg_buffer_layout
+    {
+        uint32_t shadow_compare_texture_id    {0xFFFFFFFFu};
+        uint32_t shadow_compare_sampler_id    {0xFFFFFFFFu};
+        uint32_t shadow_no_compare_texture_id {0xFFFFFFFFu};
+        uint32_t shadow_no_compare_sampler_id {0xFFFFFFFFu};
+        uint32_t material_texture_base_id     {0xFFFFFFFFu};
+        uint32_t material_sampler_base_id     {0xFFFFFFFFu};
+        uint32_t argument_buffer_index        {2}; // [[buffer(N)]]
+        bool     valid{false};
+    };
+    [[nodiscard]] auto get_texture_arg_buffer_layout() const -> const Texture_arg_buffer_layout&;
+                  void set_texture_arg_buffer_layout(const Texture_arg_buffer_layout& layout);
+
+private:
+    void frame_completed(uint64_t completed_frame);
+
+    // running: retire ended frames whose committed command buffers have all
+    // completed. idle: the caller has drained the queue (wait_idle), so every
+    // ended frame is retired, whether or not its completion callbacks have
+    // run yet.
+    enum class Gpu_queue_state : unsigned int
+    {
+        running = 0,
+        idle    = 1
+    };
+
+    // Retire the ended frames whose command buffers have completed (see
+    // note_command_buffer_committed) and run frame_completed() for each,
+    // in frame id order. Called every frame from end_frame() -- mirroring the
+    // Vulkan backend, whose end_frame()/update_frame_completion() drives
+    // frame_completed() -- and also from begin_frame() for contract
+    // symmetry. The editor's per-frame loop calls end_frame() but not
+    // begin_frame(), so the end_frame() drain is the one that actually
+    // recycles ring buffers and fires completion handlers per frame.
+    // Retires, in id order, the frames before ended_frame_bound (frames
+    // that have ended) whose command buffers have all completed - or, with
+    // Gpu_queue_state::idle, every one of them.
+    void drain_completed_frames(Gpu_queue_state gpu_queue_state, uint64_t ended_frame_bound);
+
+    class Completion_handler
+    {
+    public:
+        uint64_t                          frame_number;
+        std::function<void(Device_impl&)> callback;
+    };
+
+    // Per-(thread_slot) bag of cbs allocated this frame. Each entry is
+    // tagged with the frame index of allocation so frame_completed() can
+    // drop entries whose frame's GPU work has retired. Mirrors Vulkan's
+    // Per_thread_command_pool except there is no MTLCommandPool to reset
+    // -- MTL::CommandBuffer allocation goes straight through the queue.
+    class Per_thread_command_buffers
+    {
+    public:
+        class Allocated_command_buffer
+        {
+        public:
+            uint64_t                        frame_index{0};
+            std::unique_ptr<Command_buffer> command_buffer;
+        };
+        std::vector<Allocated_command_buffer> allocated;
+    };
+
+    static constexpr unsigned int s_number_of_thread_slots = 8;
+
+    // Feeds the window-side display refresh source to the resolver and
+    // resolves m_frame_pacing_tier; constructor tail, after the surface.
+    void init_frame_pacing(erhe::window::Context_window* context_window);
+    // The window whose display changed callback init_frame_pacing registers
+    // (cleared in ~Device_impl: the callback reaches this device).
+    erhe::window::Context_window* m_frame_pacing_window{nullptr};
+    // Tier M: measures the compositor's request window and deadline on the
+    // window's layer before the first frame (metal4_device_present_calibration.cpp)
+    // and stores the result in Device::get_present_calibration().
+    void run_present_calibration();
+
+    Device&                          m_device;
+    Frame_pacing_tier                m_frame_pacing_tier{Frame_pacing_tier::off};
+    // Null without a CAMetalLayer (headless).
+    std::shared_ptr<Present_feedback> m_present_feedback;
+    // Tier M: the GPU clock per presented frame (clock_monitor_apple.hpp);
+    // null elsewhere. Shared with the presenting command buffers'
+    // completion handlers.
+    std::shared_ptr<Clock_monitor> m_clock_monitor;
+    // Tier M: the GPU pre-warm kernel (metal4_gpu_prewarm.hpp); null elsewhere.
+    std::unique_ptr<Gpu_prewarm>   m_gpu_prewarm;
+    // The FR3 target present time of one frame (set_present_target_time),
+    // applied when that frame's drawable is presented. Render thread only,
+    // like the Vulkan backend's.
+    std::int64_t                     m_present_target_frame_id    {-1};
+    double                           m_present_target_time_seconds{0.0};
+    // Seconds before the target vsync to request a tier M present, from the
+    // present calibration; empty without one (a quarter period is used).
+    std::optional<double>            m_present_request_offset;
+
+    class Blit_framebuffer_pipeline
+    {
+    public:
+        unsigned long             destination_pixel_format{0};
+        MTL::RenderPipelineState* pipeline                {nullptr};
+    };
+    // The kernel of Indirect_count_draws (metal4_indirect_count_draws.hpp),
+    // compiled at construction; null when it failed (no
+    // use_draw_indirect_count).
+    MTL::ComputePipelineState*             m_indirect_count_encode_pipeline{nullptr};
+    std::mutex                             m_blit_framebuffer_mutex;
+    MTL::Library*                          m_blit_framebuffer_library{nullptr};
+    std::vector<Blit_framebuffer_pipeline> m_blit_framebuffer_pipelines;
+    std::unique_ptr<Surface>         m_surface;
+    Shader_monitor                   m_shader_monitor;
+    Device_info                      m_info;
+    Graphics_config                  m_graphics_config;
+    // Resolved once at construction; indexes the pixel-format capability table.
+    metal::Gpu_family                m_gpu_family{metal::Gpu_family::metal3};
+    // Runtime capability the static feature-set table cannot express: linear
+    // filtering of 32-bit float color formats (true on all Apple-silicon GPUs).
+    // Queried once and applied on top of the table in get_format_properties().
+    bool                             m_supports_32bit_float_filtering{false};
+    [[nodiscard]] auto get_frame_slot_index(uint64_t frame_id) const -> std::size_t;
+    // Frame ids, as in the Vulkan backend: m_frame_id_mutex guards every
+    // write of the two and every read by a thread that does not write the
+    // member (the main thread acquires frames, the render thread ends them).
+    mutable std::mutex               m_frame_id_mutex;
+    // The oldest open frame (end_frame() ends it), or the next frame to be
+    // acquired when none is open. Frame ids start at 1. Written by the role
+    // that ends frames.
+    uint64_t                         m_render_frame_id{1};
+    // The newest acquired frame (0: none yet). Written by acquire_frame_slot.
+    uint64_t                         m_prepare_frame_id{0};
+    // Serializes drain_completed_frames() (the render role's end_frame and
+    // wait_idle on any thread). Lock order: m_completion_run_mutex, then
+    // m_completion_mutex / m_completion_handler_mutex / m_frame_id_mutex.
+    std::mutex                       m_completion_run_mutex;
+    // add_completion_handler() runs on any thread (main thread in M2, the
+    // render thread, loaders); frame_completed() moves the due entries to
+    // m_completion_handler_scratch under the lock and runs them outside it,
+    // since a callback may register a handler itself (a texture release).
+    std::mutex                       m_completion_handler_mutex;
+    std::vector<Completion_handler>  m_completion_handlers;
+    std::vector<Completion_handler>  m_completion_handler_scratch;
+    std::vector<uint64_t>            m_retired_frames_scratch;
+    // GPU-completion tracking (note_command_buffer_committed /
+    // notify_command_buffer_completed), guarded by m_completion_mutex: per
+    // frame with committed command buffers not yet retired, how many were
+    // committed and how many have completed. drain_completed_frames()
+    // retires frames in id order and calls frame_completed() on each, which
+    // recycles the ring buffer ranges pinned to that frame and runs its
+    // completion handlers.
+    class Frame_command_buffer_count
+    {
+    public:
+        uint64_t frame_index{0};
+        uint32_t committed  {0};
+        uint32_t completed  {0};
+    };
+    mutable std::mutex                      m_completion_mutex;
+    std::vector<Frame_command_buffer_count> m_frame_command_buffer_counts;
+    std::condition_variable                 m_command_buffer_completed; // with m_completion_mutex
+    // One past the highest frame retired (same meaning as the Vulkan
+    // backend's watermark); under m_completion_mutex. Only ever moves
+    // forward.
+    uint64_t                                m_latest_completed_frame{0};
+
+    // Frames that presented a drawable and have not completed yet. See
+    // wait_for_presented_frame_slot().
+    static constexpr int     s_max_frames_in_flight{3};
+
+    std::array<Device_frame_slot, s_max_frames_in_flight> m_frame_slots{};
+    std::mutex               m_presented_frames_mutex;
+    std::condition_variable  m_presented_frames_cv;
+    int                      m_presented_frames_in_flight{0};
+    MTL::Device*             m_mtl_device          {nullptr};
+    MTL::CommandQueue*       m_mtl_command_queue   {nullptr};
+    MTL::SamplerState*       m_default_sampler_state{nullptr};
+    MTL::LogState*           m_mtl_log_state        {nullptr};
+    MTL::ArgumentEncoder*    m_texture_argument_encoder{nullptr};
+    Texture_arg_buffer_layout m_texture_arg_buffer_layout;
+    Ring_buffer_pool         m_ring_buffer_pool{m_device, 4 * 1024 * 1024};
+    // Declared before the command buffers: a cb destroyed unsubmitted
+    // returns its sample chunk to the pool.
+    std::unique_ptr<Gpu_timer_sample_pool> m_gpu_timer_sample_pool;
+
+    // Per-thread Command_buffer storage. get_command_buffer(slot)
+    // allocates a Command_buffer here; frame_completed sweeps entries
+    // whose frame_index has retired. Guarded by m_per_thread_mutex.
+    std::array<Per_thread_command_buffers, s_number_of_thread_slots> m_per_thread_command_buffers;
+    std::mutex m_per_thread_mutex;
+};
+
+void install_metal_error_handler(Device& device);
+
+} // namespace erhe::graphics

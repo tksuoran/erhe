@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `ERHE_GRAPHICS_API=metal4` selects the Metal 4 backend
+  (`doc/erhe/metal4_backend.md`), which defines `ERHE_GRAPHICS_API_METAL4` in
+  addition to the Metal family define `ERHE_GRAPHICS_API_METAL`.
 - `erhe::graphics`: GPU-counted multi-draws prepared in a compute pass:
   `Indirect_count_draws` (`indirect_count_draws.hpp`, with
   `Indirect_count_draws_prepare_info`, `Indirect_count_draw_job`,

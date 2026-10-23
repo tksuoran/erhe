@@ -51,7 +51,7 @@ set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or n
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                        "freetype" "freetype;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or none"                                      "fastgltf" "fastgltf;none")
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
-set_option(ERHE_GRAPHICS_API               "Graphics library to use with erhe. Either vulkan, opengl, metal or none"    "vulkan"   "opengl;vulkan;metal;none")
+set_option(ERHE_GRAPHICS_API               "Graphics library to use with erhe. Either vulkan, opengl, metal, metal4 or none" "vulkan" "opengl;vulkan;metal;metal4;none")
 set_option(ERHE_MALLOC_LIBRARY             "Memory allocator library. Either mimalloc, jemalloc or none"                "none"     "mimalloc;jemalloc;none")
 set_option(ERHE_NAVIGATION_LIBRARY         "Navigation mesh library. Either recastnavigation or none"                   "none"     "recastnavigation;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt, box3d or none"               "jolt"     "jolt;box3d;none")
@@ -486,7 +486,7 @@ CPMAddPackage(
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
 # Force ERHE_SPIRV on for Metal and Vulkan before the glslang fetch
-if (${ERHE_GRAPHICS_API} STREQUAL "metal" OR ${ERHE_GRAPHICS_API} STREQUAL "vulkan")
+if (${ERHE_GRAPHICS_API} STREQUAL "metal" OR ${ERHE_GRAPHICS_API} STREQUAL "metal4" OR ${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     set(ERHE_SPIRV "ON" CACHE STRING "Enable SPIR-V" FORCE)
 endif ()
 
@@ -583,13 +583,23 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
     )
-elseif (${ERHE_GRAPHICS_API} STREQUAL "metal")
+elseif ((${ERHE_GRAPHICS_API} STREQUAL "metal") OR (${ERHE_GRAPHICS_API} STREQUAL "metal4"))
     if (NOT APPLE)
-        message(FATAL_ERROR "Metal backend is only available on Apple platforms (macOS, iOS)")
+        message(FATAL_ERROR "Metal backends are only available on Apple platforms (macOS, iOS)")
     endif()
-    message(STATUS "Erhe configured to use Metal as graphics API.")
+    # ERHE_GRAPHICS_API_METAL names the Metal family (shared by the metal and
+    # metal4 backends: shader path, window flag, every "is this Metal" site);
+    # ERHE_GRAPHICS_API_METAL4 additionally selects the Metal 4 backend
+    # (src/erhe/graphics/erhe_graphics/metal4/, doc/erhe/metal4_backend.md).
     set(ERHE_GRAPHICS_API_METAL TRUE)
     add_definitions(-DERHE_GRAPHICS_API_METAL)
+    if (${ERHE_GRAPHICS_API} STREQUAL "metal4")
+        message(STATUS "Erhe configured to use Metal 4 as graphics API.")
+        set(ERHE_GRAPHICS_API_METAL4 TRUE)
+        add_definitions(-DERHE_GRAPHICS_API_METAL4)
+    else ()
+        message(STATUS "Erhe configured to use Metal as graphics API.")
+    endif ()
     CPMAddPackage(
         NAME              metal-cpp
         GITHUB_REPOSITORY bkaradzic/metal-cpp
