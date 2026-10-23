@@ -3,11 +3,13 @@
 Status: in progress
 
 The cache is built (`doc/erhe/shadows.md` "Shadow map cache"): a pass is
-kept while its light, its matrix and the frame's configuration - including
-the content serial of the published draw lists - are unchanged.
+kept while its light, its matrix, its culling view and the frame's
+configuration are unchanged and no draw-list change since it was drawn
+reaches its culling view (the per-light caster test).
 `scripts/shadow_map_cache_check.py` is its image gate (cache on against
-every pass drawn, after caster, light, cone and camera edits). What remains
-is finer invalidation.
+every pass drawn, after caster, light, cone and camera edits; casters
+dragged, added, removed and moved beside one of two point lights keep the
+other light's faces). What remains is skinned casters and the fit.
 
 ## Bistro measurements (Release Metal, M4 Pro, Dell at 120 Hz)
 
@@ -36,23 +38,11 @@ camera-dependent: they are kept only while the camera is still.
 
 ## Remaining work
 
-1. **Per-light caster test.** Any draw-list change (a caster drag, a
-   selection flag) forgets every pass. The draw-list scene is the single
-   funnel for caster changes (`write_object_transform`,
-   `write_object_bounds`, `set_object_flags`, `add_entries`,
-   `remove_entries`, `release_object`): record the changed objects' old
-   and new world bounds per frame (an empty list in a static frame), test
-   them against each pass's cull view (sphere / octant for cube faces,
-   frustum for spot and directional - the classification lane code) and
-   forget only the passes they reach. The content serial then leaves the
-   configuration and becomes the fast path (unchanged: no bounds test).
-   Gate: a drag beside one point light keeps the other lights' passes
-   (`get_scene_lights` kept flags), images identical to every pass drawn.
-2. **Skinned casters.** Skinned objects disable the cache: joint poses have
+1. **Skinned casters.** Skinned objects disable the cache: joint poses have
    no serial. A pose serial at the change sites (animation player, IK and
-   rigging tools) plus posed bounds for the per-light test of item 1 would
+   rigging tools) plus posed bounds for the per-light caster test would
    keep the passes no animated caster reaches.
-3. **Fit skip.** The shadow fit (`fit`, 0.2-0.45 ms on the render thread)
+2. **Fit skip.** The shadow fit (`fit`, 0.2-0.45 ms on the render thread)
    still runs every frame; for spot and point lights whose snapshot is
    unchanged the projections could be reused
    (`doc/plans/shadows.md` "Temporal whole-fit skip").

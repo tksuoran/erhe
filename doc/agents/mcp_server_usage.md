@@ -623,7 +623,11 @@ Session-only switch of the shadow map cache
 "Shadow map cache"): `enabled` false draws every shadow pass every frame.
 `get_scene_lights` reports per shadow-mapped light the passes the last
 rendered frame kept: `shadow_cached` (2D layer, 0 / 1) and
-`shadow_cube_cached_faces` (point cube, bit f = face f).
+`shadow_cube_cached_faces` (point cube, bit f = face f), and how often the
+cache's owner has drawn each pass since the cache was created (cumulative):
+`shadow_draw_count` (2D layer) and `shadow_cube_face_draw_counts` (six
+counts, +X -X +Y -Y +Z -Z). A count that moved between two queries was
+redrawn in between, whichever frames the queries read.
 `scripts/shadow_map_cache_check.py` compares captures with it on and off.
 
 Returns: `{enabled}`.

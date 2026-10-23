@@ -8957,7 +8957,7 @@
   },
   {
     "name": "set_shadow_map_cache_enabled",
-    "description": "Switch the shadow map cache for the rest of this editor run (session-only, never persisted; default enabled): enabled, each shadow pass (2D layer or cube face) is redrawn only when its light, its matrices, the shadow configuration or the scene's published draw lists changed since it was drawn, and scenes with skinned objects draw every pass. get_scene_lights reports the kept passes per light (shadow_cached, shadow_cube_cached_faces). Use to compare images and costs against every pass drawn.",
+    "description": "Switch the shadow map cache for the rest of this editor run (session-only, never persisted; default enabled): enabled, each shadow pass (2D layer or cube face) is redrawn only when its light, its matrices or the shadow configuration changed, or a draw-list change reached its culling view, since it was drawn, and scenes with skinned objects draw every pass. get_scene_lights reports the kept passes per light (shadow_cached, shadow_cube_cached_faces) and the cumulative draws of each pass (shadow_draw_count, shadow_cube_face_draw_counts). Use to compare images and costs against every pass drawn.",
     "inputSchema": {
       "properties": {
         "enabled": {

@@ -12,6 +12,16 @@ rows, which show frame times, are excluded). Each step also reports how many
 pixels changed against the previous step, so a step that changes nothing is
 visible as such, and which passes the cache kept.
 
+A second sequence checks the per-light caster test: two shadowed point
+lights A and B whose ranges do not overlap, each with a caster beside it.
+A drag beside A, a caster added and removed beside B, a caster moved from
+B's reach to A's and a caster removed beside A must redraw only the faces of
+the lights whose reach the caster's old or new bounds are in
+(get_scene_lights shadow_cube_face_draw_counts): every face of the other
+light is kept. Selecting the caster beside A (a flag the caster filter does
+not read) must keep every face of both. The captures with the cache on and off must again be
+identical.
+
 Needs Pillow and numpy. Example:
   python3 scripts/shadow_map_cache_check.py --editor build_xcode_metal/bin/Release/editor
 """
@@ -90,6 +100,17 @@ def main():
 
     failed = []
     previous = None
+
+    def compare(tag):
+        """Captures with the cache on, then off; returns (mismatch, without_cache path)."""
+        with_cache = os.path.join(out_dir, f"{tag}_cache.png")
+        call("capture_screenshot", path=with_cache)
+        call("set_shadow_map_cache_enabled", enabled=False)
+        time.sleep(args.settle_s)
+        without_cache = os.path.join(out_dir, f"{tag}_no_cache.png")
+        call("capture_screenshot", path=without_cache)
+        return pixel_diff(with_cache, without_cache), without_cache
+
     for tag, edit in steps:
         call("set_shadow_map_cache_enabled", enabled=True)
         time.sleep(args.settle_s * 2.0)
@@ -97,16 +118,88 @@ def main():
         time.sleep(args.settle_s)
         lights = call("get_scene_lights", scene_name=scene).get("lights", [])
         kept = sum(bin(int(light.get("shadow_cube_cached_faces") or 0)).count("1") + int(light.get("shadow_cached") or 0) for light in lights)
-        with_cache = os.path.join(out_dir, f"{tag}_cache.png")
-        call("capture_screenshot", path=with_cache)
-        call("set_shadow_map_cache_enabled", enabled=False)
-        time.sleep(args.settle_s)
-        without_cache = os.path.join(out_dir, f"{tag}_no_cache.png")
-        call("capture_screenshot", path=without_cache)
-        mismatch = pixel_diff(with_cache, without_cache)
+        mismatch, without_cache = compare(tag)
         changed = pixel_diff(previous, without_cache) if previous else None
         print(f"{tag:14s} cache vs no cache: {mismatch} differing pixels; changed against the previous step: {changed}; passes kept: {kept}")
         if mismatch != 0:
+            failed.append(tag)
+        previous = without_cache
+
+    # Per-light caster test. A and B: point lights 3 m apart with range 1.2,
+    # each with a box caster beside it (below and to the side: the faces
+    # the box reaches are named in the reply).
+    light_a = [-1.5, 0.9, 0.0]
+    light_b = [1.5, 0.9, 0.0]
+    for name, position in (("Point A", light_a), ("Point B", light_b)):
+        call("create_light", scene_name=scene, type="point", name=name, position=position, range=1.2, intensity=3.0)
+
+    def beside(light, dx, dy, dz):
+        return [light[0] + dx, light[1] + dy, light[2] + dz]
+
+    for name, position in (("Box A", beside(light_a, 0.3, -0.6, 0.1)), ("Box B", beside(light_b, -0.3, -0.6, 0.1))):
+        call("create_shape", scene_name=scene, shape="box", name=name, size=[0.2, 0.2, 0.2], position=position, motion_mode="none")
+    time.sleep(args.settle_s * 4.0)
+
+    def face_counts():
+        lights = call("get_scene_lights", scene_name=scene).get("lights", [])
+        counts = {}
+        for light in lights:
+            if light.get("name") in ("Point A", "Point B"):
+                counts[light["name"]] = (light.get("shadow_cube_face_draw_counts"), light.get("shadow_mapped"))
+        return counts
+
+    def drag(node_name, start, end, frames=6):
+        for i in range(1, frames + 1):
+            t = i / frames
+            position = [start[k] + ((end[k] - start[k]) * t) for k in range(3)]
+            call("set_node_transform", scene_name=scene, node_name=node_name, space="world", translation=position, rotation_xyzw=identity)
+
+    box_a_start = beside(light_a, 0.3, -0.6, 0.1)
+    box_b_start = beside(light_b, -0.3, -0.6, 0.1)
+    # (tag, edit, the lights whose faces may redraw, the lights whose faces must all be kept)
+    # The removals take the last caster of the list first (Box C), then Box A
+    # after Box B moved beside A: removing an entry moves the list's last
+    # entry into its place (a swap-remove), which redraws the passes the
+    # moved entry reaches (its draw order changed), so Box B is beside A when
+    # Box A goes.
+    light_steps = [
+        ("drag_beside_a",   lambda: drag("Box A", box_a_start, beside(light_a, 0.3, -0.6, -0.2)),                     ["Point A"], ["Point B"]),
+        ("select_beside_a", lambda: call("select_items", scene_name=scene, paths=["Box A"]),                          [], ["Point A", "Point B"]),
+        ("add_beside_b",    lambda: call("create_shape", scene_name=scene, shape="box", name="Box C", size=[0.2, 0.2, 0.2],
+                                         position=beside(light_b, 0.2, 0.6, -0.2), motion_mode="none"),                 ["Point B"], ["Point A"]),
+        ("remove_beside_b", lambda: call("delete_nodes", scene_name=scene, names=["Box C"]),                           ["Point B"], ["Point A"]),
+        ("move_b_to_a",     lambda: call("set_node_transform", scene_name=scene, node_name="Box B", space="world",
+                                         translation=beside(light_a, -0.3, -0.6, 0.1), rotation_xyzw=identity),        ["Point A", "Point B"], []),
+        ("remove_beside_a", lambda: call("delete_nodes", scene_name=scene, names=["Box A"]),                           ["Point A"], ["Point B"]),
+    ]
+    for tag, edit, may_redraw, must_keep in light_steps:
+        call("set_shadow_map_cache_enabled", enabled=True)
+        time.sleep(args.settle_s * 2.0)
+        before = face_counts()
+        edit()
+        time.sleep(args.settle_s * 2.0)
+        after = face_counts()
+        redrawn = {}
+        ok = True
+        for name in ("Point A", "Point B"):
+            if (name not in before) or (name not in after) or (not before[name][1]) or (before[name][0] is None) or (after[name][0] is None):
+                print(f"{tag}: {name} is not a shadow-mapped point light with draw counts: {before.get(name)} / {after.get(name)}")
+                ok = False
+                continue
+            redrawn[name] = [face for face in range(6) if after[name][0][face] != before[name][0][face]]
+        if ok:
+            for name in must_keep:
+                if redrawn[name]:
+                    print(f"{tag}: faces {redrawn[name]} of {name} redrawn, expected all kept")
+                    ok = False
+            for name in may_redraw:
+                if not redrawn[name]:
+                    print(f"{tag}: no face of {name} redrawn, expected the reached faces to redraw")
+                    ok = False
+        mismatch, without_cache = compare(tag)
+        changed = pixel_diff(previous, without_cache) if previous else None
+        print(f"{tag:14s} cache vs no cache: {mismatch} differing pixels; changed against the previous step: {changed}; faces redrawn: {redrawn}")
+        if (mismatch != 0) or not ok:
             failed.append(tag)
         previous = without_cache
 

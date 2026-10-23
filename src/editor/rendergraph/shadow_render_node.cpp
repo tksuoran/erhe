@@ -818,6 +818,11 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
             .shadow_bounds            = &root_draw_list_scene->get_shadow_bounds(frame_index)
         }
     );
+    // With the cache switched off the passes draw every frame without it:
+    // what it held is not kept across the cache-off period.
+    if (!render_settings.shadow_map_cache) {
+        m_map_cache.clear();
+    }
     m_context.shadow_renderer->fit(m_frame_passes.parameters.value(), m_cull_views);
     m_distance_fallback_light_ids = result.light_projections.distance_fallback_light_ids;
     publish_light_copies(result, light_set, *camera);

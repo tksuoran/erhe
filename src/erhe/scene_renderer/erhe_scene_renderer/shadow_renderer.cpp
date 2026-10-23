@@ -166,6 +166,8 @@ void Shadow_draw_statistics::clear()
     shadow_map_2d_cached.clear();
     point_cube_cached_faces.clear();
     cached_pass_count = 0;
+    shadow_map_2d_draw_counts.clear();
+    point_cube_face_draw_counts.clear();
     gpu_counts_frame_index.reset();
 }
 
@@ -179,41 +181,97 @@ void Shadow_map_cache::clear()
 void Shadow_map_cache::begin_frame(
     const Configuration&                         configuration,
     const std::span<const erhe::scene::Layer_id> layers,
-    const bool                                   usable
+    const bool                                   usable,
+    const Draw_list_content_changes&             content,
+    const erhe::Item_filter&                     filter
 )
 {
     const bool same_layers = std::equal(layers.begin(), layers.end(), m_layers.begin(), m_layers.end());
-    if (!usable || !m_usable || !(configuration == m_configuration) || !same_layers) {
+    bool forget_all = !usable || !m_usable || !(configuration == m_configuration) || !same_layers;
+    if (!forget_all && (content.serial != m_content_serial)) {
+        // The passes hold the content of m_content_serial: the published
+        // changes describe the step from base_serial only. A frame this
+        // cache did not see leaves a gap whose changes are unknown.
+        if (
+            (content.base_serial != m_content_serial) ||
+            content.unbounded ||
+            (content.changed_bounds == nullptr) ||
+            (content.flag_changed_bounds == nullptr)
+        ) {
+            forget_all = true;
+        } else {
+            forget_reached(m_passes_2d,  *content.changed_bounds);
+            forget_reached(m_cube_faces, *content.changed_bounds);
+            // A flags change alters a pass only through the caster filter
+            // (the shadow shaders read no flag-dependent record field): an
+            // entry the filter accepts (or rejects) before and after draws
+            // the same.
+            const Draw_list_bounds& flag_bounds = *content.flag_changed_bounds;
+            const std::size_t       flag_count  = flag_bounds.extent_x.size();
+            ERHE_VERIFY((content.flag_changed_old_bits.size() == flag_count) && (content.flag_changed_new_bits.size() == flag_count));
+            m_filtered_flag_changes.resize(0);
+            for (std::size_t i = 0; i < flag_count; ++i) {
+                if (filter(content.flag_changed_old_bits[i]) == filter(content.flag_changed_new_bits[i])) {
+                    continue;
+                }
+                const std::size_t n = m_filtered_flag_changes.extent_x.size();
+                m_filtered_flag_changes.resize(n + 1);
+                m_filtered_flag_changes.center_x[n] = flag_bounds.center_x[i];
+                m_filtered_flag_changes.center_y[n] = flag_bounds.center_y[i];
+                m_filtered_flag_changes.center_z[n] = flag_bounds.center_z[i];
+                m_filtered_flag_changes.extent_x[n] = flag_bounds.extent_x[i];
+                m_filtered_flag_changes.extent_y[n] = flag_bounds.extent_y[i];
+                m_filtered_flag_changes.extent_z[n] = flag_bounds.extent_z[i];
+            }
+            forget_reached(m_passes_2d,  m_filtered_flag_changes);
+            forget_reached(m_cube_faces, m_filtered_flag_changes);
+        }
+    }
+    if (forget_all) {
         // (clear() keeps the vectors' capacity.)
         m_passes_2d.clear();
         m_cube_faces.clear();
     }
-    m_configuration = configuration;
+    m_configuration  = configuration;
+    m_content_serial = content.serial;
     if (!same_layers) {
         m_layers.assign(layers.begin(), layers.end());
     }
     m_usable = usable;
 }
 
+void Shadow_map_cache::forget_reached(std::vector<Pass>& passes, const Draw_list_bounds& changed_bounds)
+{
+    // A changed entry whose old and new bounds both miss a pass's view was
+    // culled from the pass before and after the change.
+    for (Pass& pass : passes) {
+        if (pass.valid && cull_lanes::reaches_view(pass.view, changed_bounds, m_reach_scratch)) {
+            pass.valid = false;
+        }
+    }
+}
+
 auto Shadow_map_cache::is_kept(
-    std::vector<Pass>& passes,
-    const std::size_t  index,
-    const std::size_t  light_id,
-    const glm::mat4&   clip_from_world
+    const std::vector<Pass>& passes,
+    const std::size_t        index,
+    const std::size_t        light_id,
+    const glm::mat4&         clip_from_world,
+    const Cull_view_tests&   view
 ) const -> bool
 {
     if (!m_usable || (index >= passes.size())) {
         return false;
     }
     const Pass& pass = passes[index];
-    return pass.valid && (pass.light_id == light_id) && (pass.clip_from_world == clip_from_world);
+    return pass.valid && (pass.light_id == light_id) && (pass.clip_from_world == clip_from_world) && pass.view.is_same(view);
 }
 
 void Shadow_map_cache::store(
-    std::vector<Pass>& passes,
-    const std::size_t  index,
-    const std::size_t  light_id,
-    const glm::mat4&   clip_from_world
+    std::vector<Pass>&     passes,
+    const std::size_t      index,
+    const std::size_t      light_id,
+    const glm::mat4&       clip_from_world,
+    const Cull_view_tests& view
 )
 {
     if (!m_usable) {
@@ -222,7 +280,15 @@ void Shadow_map_cache::store(
     if (passes.size() <= index) {
         passes.resize(index + 1);
     }
-    passes[index] = Pass{.light_id = light_id, .clip_from_world = clip_from_world, .valid = true};
+    passes[index] = Pass{.light_id = light_id, .clip_from_world = clip_from_world, .view = view, .valid = true};
+}
+
+void Shadow_map_cache::count_drawn(std::vector<uint32_t>& draw_counts, const std::size_t index)
+{
+    if (draw_counts.size() <= index) {
+        draw_counts.resize(index + 1, uint32_t{0});
+    }
+    ++draw_counts[index];
 }
 
 namespace {
@@ -918,6 +984,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
     if (map_cache != nullptr) {
         const uint64_t frame_index = m_graphics_device.get_frame_index();
         const bool     usable      = !parameters.draw_list_scene->has_published_skinned_objects(frame_index);
+        const Draw_list_content_changes content = parameters.draw_list_scene->get_published_content_changes(frame_index);
         map_cache->begin_frame(
             Shadow_map_cache::Configuration{
                 .texture               = parameters.texture.get(),
@@ -933,10 +1000,12 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                 .border_texels         = parameters.shadow_map_footprint.get_border_texels(),
                 .light_camera_viewport = parameters.light_camera_viewport,
                 .point_shadow_viewport = parameters.point_shadow_viewport,
-                .content_serial        = parameters.draw_list_scene->get_published_content_serial(frame_index)
+                .scene_instance        = content.scene_instance
             },
             parameters.draw_list_layers,
-            usable
+            usable,
+            content,
+            shadow_filter
         );
     }
     // (Callers check draw_statistics, which owns flags.)
@@ -955,7 +1024,10 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         const std::size_t light_index  = light_projection_transform->index;
         const std::size_t shadow_index = light_projection_transform->shadow_index;
         const glm::mat4   clip_from_world = light_projection_transform->clip_from_world.get_matrix();
-        if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world)) {
+        const Cull_view_tests pass_view = (map_cache != nullptr)
+            ? parameters.draw_list_scene->get_cull_view_tests(m_graphics_device.get_frame_index(), cull_views.views_2d[shadow_index])
+            : Cull_view_tests{};
+        if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world, pass_view)) {
             if (parameters.draw_statistics != nullptr) {
                 count_cached(parameters.draw_statistics->shadow_map_2d_cached, shadow_index, uint8_t{1});
             }
@@ -1088,7 +1160,8 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         control_range.release();
         camera_range.release();
         if (map_cache != nullptr) {
-            map_cache->store(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world);
+            map_cache->store(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world, pass_view);
+            Shadow_map_cache::count_drawn(map_cache->m_draw_counts_2d, shadow_index);
         }
     }
 
@@ -1157,7 +1230,10 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 
             for (int face = 0; face < 6; ++face) {
                 const std::size_t pass_index = (point_shadow_index * 6) + static_cast<std::size_t>(face);
-                if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key)) {
+                const Cull_view_tests face_view = (map_cache != nullptr)
+                    ? parameters.draw_list_scene->get_cull_view_tests(m_graphics_device.get_frame_index(), cull_views.views_cube[pass_index])
+                    : Cull_view_tests{};
+                if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key, face_view)) {
                     if (parameters.draw_statistics != nullptr) {
                         count_cached(parameters.draw_statistics->point_cube_cached_faces, point_shadow_index, static_cast<uint8_t>(1u << face));
                     }
@@ -1282,7 +1358,8 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                     record_face_statistics(parameters.draw_statistics, pass_index, pass_statistics);
                 }
                 if (map_cache != nullptr) {
-                    map_cache->store(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key);
+                    map_cache->store(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key, face_view);
+                    Shadow_map_cache::count_drawn(map_cache->m_draw_counts_cube, pass_index);
                 }
             }
         }
@@ -1290,6 +1367,10 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 
     if (gpu_counted && (parameters.draw_statistics != nullptr)) {
         apply_gpu_counts(parameters, cull_views, *parameters.draw_statistics);
+    }
+    if ((map_cache != nullptr) && (parameters.draw_statistics != nullptr)) {
+        parameters.draw_statistics->shadow_map_2d_draw_counts  .assign(map_cache->m_draw_counts_2d.begin(),   map_cache->m_draw_counts_2d.end());
+        parameters.draw_statistics->point_cube_face_draw_counts.assign(map_cache->m_draw_counts_cube.begin(), map_cache->m_draw_counts_cube.end());
     }
 
     // R9: bind / unbind stay per pass.

@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace erhe::graphics {
@@ -58,6 +59,31 @@ class Cull_sphere
 public:
     glm::vec3 center{0.0f};
     float     radius{0.0f};
+};
+
+enum class Cull_view_kind : uint8_t
+{
+    planes,    // the planes alone
+    cube_face  // the range sphere first, then the face's octant
+};
+
+// The tests of one culling view (Draw_list_scene::add_cull_view(),
+// add_point_light_cull_views()): what the classification lanes
+// (cull_lanes.hpp) test the entries' bounds against. A planes view with no
+// planes keeps every box (Draw_list_scene::get_cull_view_tests() of
+// Cull_view::none).
+class Cull_view_tests
+{
+public:
+    // Bitwise equal tests (the same boxes pass).
+    [[nodiscard]] auto is_same(const Cull_view_tests& other) const -> bool;
+
+    Draw_purpose             purpose    {Draw_purpose::color};
+    Cull_view_kind           kind       {Cull_view_kind::planes};
+    uint32_t                 plane_count{0}; // planes only
+    std::array<glm::vec4, 6> planes     {};  // planes only
+    Cull_sphere              sphere     {};  // cube_face only
+    uint32_t                 cube_face  {0}; // cube_face only: 0..5 for +X -X +Y -Y +Z -Z
 };
 
 class Draw_statistics
@@ -130,6 +156,31 @@ public:
     std::vector<float> extent_x;
     std::vector<float> extent_y;
     std::vector<float> extent_z;
+};
+
+// What changed in the draw lists of one publish since the publish before it
+// (Draw_list_scene::get_published_content_changes()).
+class Draw_list_content_changes
+{
+public:
+    // Process-unique per Draw_list_scene: serials of different scenes are
+    // unrelated.
+    uint64_t                scene_instance{0};
+    // The content serial of the publish and of the publish before it.
+    uint64_t                serial        {0};
+    uint64_t                base_serial   {0};
+    // A change that names no boxes: every view is reached.
+    bool                    unbounded     {false};
+    // The old and new bounds of the changed entries. The pointers and spans
+    // point into the frame's published slot: valid during that frame's
+    // render phase only.
+    const Draw_list_bounds* changed_bounds{nullptr};
+    // Flags changes: the bounds of the entries whose flags changed, and per
+    // box the flags before and after. A pass whose filter gives the same
+    // answer for both draws the same entries.
+    const Draw_list_bounds*   flag_changed_bounds{nullptr};
+    std::span<const uint64_t> flag_changed_old_bits{};
+    std::span<const uint64_t> flag_changed_new_bits{};
 };
 
 // A group of entries that share one Draw_list_key and can therefore be

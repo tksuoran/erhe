@@ -3,6 +3,8 @@
 #include "erhe_scene_renderer/draw_list_key.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 
+#include "erhe_math/aabb.hpp"
+
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -65,6 +67,12 @@ public:
     // caster vertex rounding input, kept beside the entries' world AABB and
     // rewritten by the same hooks (registration, refresh).
     glm::vec3                             node_abs_extent     {0.0f};
+    // The world AABB the object's entries carry (Draw_list_entry::
+    // world_aabb), valid while has_world_aabb: the entries hold it from
+    // their first write_object_bounds() until remove_entries() (the old
+    // bounds of Draw_list_content_changes).
+    erhe::math::Aabb                      world_aabb          {};
+    bool                                  has_world_aabb      {false};
     // Every entry belonging to this object, for O(entries of this object)
     // unregister / flag update / rebuild.
     std::vector<Draw_list_entry_location> locations;

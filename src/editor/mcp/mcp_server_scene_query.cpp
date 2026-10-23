@@ -1617,6 +1617,11 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
     const auto add_cached = [](json& light_json, const std::vector<uint8_t>& flags, const std::size_t slot, const char* key) {
         light_json[key] = (slot < flags.size()) ? flags[slot] : uint8_t{0};
     };
+    // How often the cache's owner has drawn the light's passes (cumulative;
+    // a count that moved between two queries was redrawn in between).
+    const auto get_draw_count = [](const std::vector<uint32_t>& counts, const std::size_t index) -> uint32_t {
+        return (index < counts.size()) ? counts[index] : uint32_t{0};
+    };
     // Per cube face (+X -X +Y -Y +Z -Z) of a point light: entries drawn and
     // culled, and whether the face had no surviving caster and drew nothing
     // (doc/plans/culling.md phase 3); shadow_cube_skipped when all six did.
@@ -1667,6 +1672,7 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                     if (draw_statistics != nullptr) {
                         add_draw_statistics(light_json, draw_statistics->shadow_map_2d, transforms->shadow_index);
                         add_cached(light_json, draw_statistics->shadow_map_2d_cached, transforms->shadow_index, "shadow_cached");
+                        light_json["shadow_draw_count"] = get_draw_count(draw_statistics->shadow_map_2d_draw_counts, transforms->shadow_index);
                     }
                 }
                 if (transforms->point_shadow_index != no_index) {
@@ -1674,6 +1680,11 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                     if (draw_statistics != nullptr) {
                         add_draw_statistics(light_json, draw_statistics->point_cubes, transforms->point_shadow_index);
                         add_cached(light_json, draw_statistics->point_cube_cached_faces, transforms->point_shadow_index, "shadow_cube_cached_faces");
+                        json face_draw_counts = json::array();
+                        for (std::size_t face = 0; face < 6; ++face) {
+                            face_draw_counts.push_back(get_draw_count(draw_statistics->point_cube_face_draw_counts, (transforms->point_shadow_index * 6) + face));
+                        }
+                        light_json["shadow_cube_face_draw_counts"] = face_draw_counts;
                         add_cube_face_statistics(light_json, *draw_statistics, transforms->point_shadow_index);
                     }
                 }
