@@ -21,6 +21,8 @@ class Frame_end_info;
 class Frame_state;
 class Render_pass;
 class Texture;
+class Texture_subresource_range;
+enum class Barrier_scope : unsigned int;
 enum class Image_layout : unsigned int;
 enum class Memory_barrier_mask : unsigned int;
 
@@ -116,15 +118,54 @@ public:
     void clear_texture            (const Texture& texture, std::array<double, 4> clear_value);
     void transition_texture_layout(const Texture& texture, Image_layout new_layout);
 
+    // Resource barriers (doc/erhe/graphics.md "Resource barriers"). The call
+    // orders the resource's accesses of usage_before, recorded earlier in
+    // this command buffer (or, with Barrier_scope::earlier_submissions, in
+    // work submitted to the queue before it), before its accesses of
+    // usage_after recorded after the call, and makes the earlier writes
+    // visible to them. texture_barrier also performs the layout transition
+    // the usage pair implies on backends with image layouts. Nothing is
+    // inferred: a missing barrier is an application bug. Usages are
+    // Image_usage_flag_bit_mask / Buffer_usage_flag_bit_mask bits, with
+    // optional stage qualifiers (vertex_shader, fragment_shader,
+    // compute_shader) for the shader accesses of each side. Outside of a
+    // render pass only.
+    void texture_barrier(
+        const Texture& texture,
+        std::uint64_t  usage_before,
+        std::uint64_t  usage_after,
+        Barrier_scope  scope
+    );
+    void texture_barrier(const Texture& texture, std::uint64_t usage_before, std::uint64_t usage_after);
+    void texture_barrier(
+        const Texture&                   texture,
+        const Texture_subresource_range& range,
+        std::uint64_t                    usage_before,
+        std::uint64_t                    usage_after,
+        Barrier_scope                    scope
+    );
+    void texture_barrier(
+        const Texture&                   texture,
+        const Texture_subresource_range& range,
+        std::uint64_t                    usage_before,
+        std::uint64_t                    usage_after
+    );
+    void buffer_barrier(const Buffer& buffer, std::uint64_t usage_before, std::uint64_t usage_after, Barrier_scope scope);
+    void buffer_barrier(const Buffer& buffer, std::uint64_t usage_before, std::uint64_t usage_after);
+
     // Option B explicit barrier (between render passes). Inserts a
     // pipeline barrier from usage_before to usage_after into the cb.
     // Must be called outside of a render pass (between
     // Scoped_render_pass destructor and the next constructor).
+    // A global (resource-less) barrier; texture_barrier names the texture
+    // and its layout transition instead.
     void cmd_texture_barrier      (std::uint64_t usage_before, std::uint64_t usage_after);
 
     // glMemoryBarrier-shaped global memory barrier. Records a
     // vkCmdPipelineBarrier2 (Vulkan) or glMemoryBarrier (GL) into the
-    // cb. Must be called outside of a render pass.
+    // cb. Must be called outside of a render pass. The catch-all for
+    // dependencies that name no single resource; texture_barrier /
+    // buffer_barrier state one resource's dependency.
     void memory_barrier           (Memory_barrier_mask barriers);
 
     // The render pass started on this command buffer and not yet ended

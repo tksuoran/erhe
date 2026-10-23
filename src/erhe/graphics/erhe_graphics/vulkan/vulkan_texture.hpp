@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace erhe::graphics {
@@ -39,8 +40,13 @@ public:
     [[nodiscard]] auto get_layer_count() const -> uint32_t;
     [[nodiscard]] auto get_layout     (uint32_t level, uint32_t layer) const -> VkImageLayout;
     void set_layout(uint32_t level, uint32_t layer, VkImageLayout layout);
+    // True for the first call only: Texture_impl::record_usage_barrier
+    // reports a layout mismatch of the image once.
+    [[nodiscard]] auto claim_mismatch_report() -> bool;
 
 private:
+    std::mutex                 m_mismatch_mutex;
+    bool                       m_mismatch_reported{false};
     uint32_t                   m_level_count{0};
     uint32_t                   m_layer_count{0};
     std::vector<VkImageLayout> m_layouts; // index: layer * m_level_count + level
@@ -94,6 +100,25 @@ public:
     // Updates the tracked layout without a barrier, for transitions applied
     // by other means (render pass finalLayout).
     void set_layout       (const Image_subresource_range& range, VkImageLayout layout) const;
+
+    // Command_buffer::texture_barrier: one VkImageMemoryBarrier2 per run of
+    // levels sharing their old layout, per layer, with the given scopes, from
+    // old_layout (UNDEFINED discards the contents) to new_layout. The tracked
+    // layout is a consistency check (doc/erhe/vulkan_backend.md "Image layout
+    // tracking"): a subresource tracked in old_layout or already in new_layout
+    // is expected; any other tracked layout logs a warning (once per image)
+    // and is used as the barrier's oldLayout. Updates the tracked layout to
+    // new_layout.
+    void record_usage_barrier(
+        VkCommandBuffer                command_buffer,
+        const Image_subresource_range& range,
+        VkPipelineStageFlags2          src_stage,
+        VkAccessFlags2                 src_access,
+        VkPipelineStageFlags2          dst_stage,
+        VkAccessFlags2                 dst_access,
+        VkImageLayout                  old_layout,
+        VkImageLayout                  new_layout
+    ) const;
 
     void clear() const;
     void set_buffer       (Buffer& buffer);

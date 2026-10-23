@@ -614,6 +614,28 @@ void Command_buffer_impl::transition_texture_layout(const Texture& /*texture*/, 
     // Metal manages image layouts implicitly. Nothing to record here.
 }
 
+void Command_buffer_impl::texture_barrier(
+    const Texture&                   /*texture*/,
+    const Texture_subresource_range& /*range*/,
+    std::uint64_t                    /*usage_before*/,
+    std::uint64_t                    /*usage_after*/,
+    Barrier_scope                    /*scope*/
+)
+{
+    // Nothing to record: Metal's hazard tracking orders the accesses of a
+    // tracked resource inside one MTL::CommandBuffer, the per-cb
+    // inter-encoder fence (Render_pass_impl / Compute_command_encoder_impl /
+    // Blit_command_encoder_impl) orders every encoder after the previous one,
+    // and committed command buffers run in queue order. Metal has no image
+    // layouts.
+}
+
+void Command_buffer_impl::buffer_barrier(const Buffer& /*buffer*/, std::uint64_t /*usage_before*/, std::uint64_t /*usage_after*/, Barrier_scope /*scope*/)
+{
+    // As texture_barrier: hazard tracking, the inter-encoder fence and queue
+    // order already serialize the accesses.
+}
+
 void Command_buffer_impl::cmd_texture_barrier(std::uint64_t /*usage_before*/, std::uint64_t /*usage_after*/)
 {
     // Metal manages texture barriers implicitly via hazard tracking

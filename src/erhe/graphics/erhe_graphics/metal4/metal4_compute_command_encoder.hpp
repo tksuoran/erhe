@@ -47,6 +47,9 @@ public:
     // encoder at a time on a cb, so at most one is live).
     [[nodiscard]] static auto get_active_mtl_encoder   () noexcept -> MTL4::ComputeCommandEncoder*;
     [[nodiscard]] static auto get_active_argument_table() noexcept -> MTL4::ArgumentTable*;
+    // The Command_buffer the calling thread's open compute encoder records
+    // into; nullptr when none is open.
+    [[nodiscard]] static auto get_active_command_buffer() noexcept -> Command_buffer*;
 
 private:
     // Per thread, as Device_impl::s_active_render_pass.

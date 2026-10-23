@@ -337,7 +337,7 @@ void Swapchain_impl::record_capture(const uint64_t frame_id, Command_buffer_impl
     if (blit == nullptr) {
         return;
     }
-    encode_queue_barrier(blit);
+    command_buffer_impl.encode_start_barriers(blit);
     blit->copyFromTexture(
         texture,
         0, // slice

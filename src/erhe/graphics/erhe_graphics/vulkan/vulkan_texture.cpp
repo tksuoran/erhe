@@ -457,6 +457,14 @@ auto Image_layout_state::get_layout(const uint32_t level, const uint32_t layer) 
     return m_layouts[(static_cast<std::size_t>(layer) * m_level_count) + level];
 }
 
+auto Image_layout_state::claim_mismatch_report() -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mismatch_mutex};
+    const bool first = !m_mismatch_reported;
+    m_mismatch_reported = true;
+    return first;
+}
+
 void Image_layout_state::set_layout(const uint32_t level, const uint32_t layer, const VkImageLayout layout)
 {
     ERHE_VERIFY((level < m_level_count) && (layer < m_layer_count));
@@ -660,6 +668,129 @@ void Texture_impl::transition_layout(const VkCommandBuffer command_buffer, const
     }
     flush();
     set_layout(range, new_layout);
+}
+
+void Texture_impl::record_usage_barrier(
+    const VkCommandBuffer          command_buffer,
+    const Image_subresource_range& range,
+    const VkPipelineStageFlags2    src_stage,
+    const VkAccessFlags2           src_access,
+    const VkPipelineStageFlags2    dst_stage,
+    const VkAccessFlags2           dst_access,
+    const VkImageLayout            old_layout,
+    const VkImageLayout            new_layout
+) const
+{
+    if (m_vk_image == VK_NULL_HANDLE) {
+        return;
+    }
+    ERHE_VERIFY((new_layout != VK_IMAGE_LAYOUT_UNDEFINED) && (new_layout != VK_IMAGE_LAYOUT_PREINITIALIZED));
+
+    const VkImageAspectFlags aspect_mask     = get_vulkan_image_aspect_flags(m_pixelformat);
+    const uint32_t           view_base_level = static_cast<uint32_t>(m_view_base_level);
+    const uint32_t           view_base_layer = static_cast<uint32_t>(m_view_base_array_layer);
+    const bool               discard         = (old_layout == VK_IMAGE_LAYOUT_UNDEFINED);
+
+    // The oldLayout of one subresource's barrier. A tracked layout other
+    // than the usage_before-implied one or new_layout means a chain is
+    // missing between earlier work and this barrier (or a backend-internal
+    // transition moved the subresource); the barrier then names the tracked
+    // layout so the transition stays valid, and the first such subresource
+    // is reported.
+    const auto get_barrier_old_layout = [&](const uint32_t level, const uint32_t layer) -> VkImageLayout {
+        return discard ? VK_IMAGE_LAYOUT_UNDEFINED : get_layout(level, layer);
+    };
+
+    const uint32_t level_end = range.base_level + range.level_count;
+    const uint32_t layer_end = range.base_layer + range.layer_count;
+
+    uint32_t      mismatch_count  = 0;
+    uint32_t      mismatch_level  = 0;
+    uint32_t      mismatch_layer  = 0;
+    VkImageLayout mismatch_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (!discard) {
+        for (uint32_t layer = range.base_layer; layer < layer_end; ++layer) {
+            for (uint32_t level = range.base_level; level < level_end; ++level) {
+                const VkImageLayout tracked = get_layout(level, layer);
+                if ((tracked != old_layout) && (tracked != new_layout)) {
+                    if (mismatch_count == 0) {
+                        mismatch_level  = level;
+                        mismatch_layer  = layer;
+                        mismatch_layout = tracked;
+                    }
+                    ++mismatch_count;
+                }
+            }
+        }
+    }
+
+    constexpr std::size_t batch_capacity = 16;
+    std::array<VkImageMemoryBarrier2, batch_capacity> batch;
+    std::size_t batch_size = 0;
+    const auto flush = [&]() {
+        if (batch_size > 0) {
+            cmd_pipeline_image_barriers2(command_buffer, static_cast<uint32_t>(batch_size), batch.data());
+            batch_size = 0;
+        }
+    };
+
+    for (uint32_t layer = range.base_layer; layer < layer_end; ++layer) {
+        uint32_t run_begin = range.base_level;
+        while (run_begin < level_end) {
+            const VkImageLayout run_layout = get_barrier_old_layout(run_begin, layer);
+            uint32_t run_end = run_begin + 1;
+            while ((run_end < level_end) && (get_barrier_old_layout(run_end, layer) == run_layout)) {
+                ++run_end;
+            }
+            batch[batch_size++] = VkImageMemoryBarrier2{
+                .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .pNext               = nullptr,
+                .srcStageMask        = src_stage,
+                .srcAccessMask       = src_access,
+                .dstStageMask        = dst_stage,
+                .dstAccessMask       = dst_access,
+                .oldLayout           = run_layout,
+                .newLayout           = new_layout,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image               = m_vk_image,
+                .subresourceRange    = {
+                    .aspectMask     = aspect_mask,
+                    .baseMipLevel   = view_base_level + run_begin,
+                    .levelCount     = run_end - run_begin,
+                    .baseArrayLayer = view_base_layer + layer,
+                    .layerCount     = 1
+                }
+            };
+            ERHE_VULKAN_SYNC_TRACE(
+                "[IMG_BARRIER] op=\"texture_barrier\" image=0x{:x} levels={}+{} layer={} old={} new={} src_stage={} dst_stage={}",
+                reinterpret_cast<std::uintptr_t>(m_vk_image),
+                view_base_level + run_begin, run_end - run_begin, view_base_layer + layer,
+                image_layout_str(run_layout),
+                image_layout_str(new_layout),
+                pipeline_stage_flags_str(src_stage),
+                pipeline_stage_flags_str(dst_stage)
+            );
+            if (batch_size == batch_capacity) {
+                flush();
+            }
+            run_begin = run_end;
+        }
+    }
+    flush();
+    set_layout(range, new_layout);
+
+    if ((mismatch_count > 0) && m_layout_state->claim_mismatch_report()) {
+        log_texture->warn(
+            "texture_barrier on '{}': {} subresource(s) tracked in a layout other than the usage_before layout {} (first: level {} layer {} in {}) - a barrier chain is missing (reported once per image)",
+            m_debug_label.data(),
+            mismatch_count,
+            image_layout_str(old_layout),
+            mismatch_level,
+            mismatch_layer,
+            image_layout_str(mismatch_layout)
+        );
+    }
 }
 
 auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool

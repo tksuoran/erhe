@@ -32,6 +32,11 @@ auto Compute_command_encoder_impl::get_active_mtl_encoder() noexcept -> MTL4::Co
     return (s_active_encoder != nullptr) ? s_active_encoder->m_encoder : nullptr;
 }
 
+auto Compute_command_encoder_impl::get_active_command_buffer() noexcept -> Command_buffer*
+{
+    return (s_active_encoder != nullptr) ? &s_active_encoder->m_command_buffer : nullptr;
+}
+
 auto Compute_command_encoder_impl::get_active_argument_table() noexcept -> MTL4::ArgumentTable*
 {
     return (s_active_encoder != nullptr) ? s_active_encoder->m_argument_table : nullptr;
@@ -59,7 +64,7 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
     // Order against all earlier work of the queue (doc/erhe/metal4_backend.md
     // "Barriers"): replaces the Metal 3 inter-encoder fence and hazard
     // tracking.
-    encode_queue_barrier(m_encoder);
+    cb_impl.encode_start_barriers(m_encoder);
 
     // Gpu_timer samples (metal4_gpu_timer.hpp) at the start and end of the
     // encoder.
@@ -85,7 +90,7 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
 
 void Compute_command_encoder_impl::before_dispatch()
 {
-    if (m_dispatch_count > 0) {
+    if ((m_dispatch_count > 0) && is_queue_barrier_enabled()) {
         encode_intra_encoder_barrier(m_encoder);
     }
     ++m_dispatch_count;

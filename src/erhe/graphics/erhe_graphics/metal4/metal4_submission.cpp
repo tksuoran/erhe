@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstdlib>
 #include <cstring>
 
 namespace erhe::graphics {
@@ -37,6 +38,19 @@ void encode_queue_barrier(MTL4::ComputeCommandEncoder* const encoder)
 {
     ERHE_VERIFY(encoder != nullptr);
     encoder->barrierAfterQueueStages(c_all_queue_stages, c_compute_stages, MTL4::VisibilityOptionDevice);
+}
+
+auto is_queue_barrier_enabled() -> bool
+{
+    static const bool enabled = []() -> bool {
+        const char* const value = std::getenv("ERHE_METAL4_EXPLICIT_BARRIERS_ONLY");
+        const bool explicit_only = (value != nullptr) && (value[0] == '1');
+        if (explicit_only) {
+            log_startup->warn("Metal 4: ERHE_METAL4_EXPLICIT_BARRIERS_ONLY=1 - encoders start with the explicit barriers only (test switch)");
+        }
+        return !explicit_only;
+    }();
+    return enabled;
 }
 
 void encode_intra_encoder_barrier(MTL4::ComputeCommandEncoder* const encoder)

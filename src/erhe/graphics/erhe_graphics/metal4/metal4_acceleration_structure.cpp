@@ -243,7 +243,7 @@ void Acceleration_structure_impl::record_build(Command_buffer& command_buffer)
     // so this code never runs under it.
     MTL4::ComputeCommandEncoder* encoder = mtl_cb->computeCommandEncoder();
     ERHE_VERIFY(encoder != nullptr);
-    encode_queue_barrier(encoder);
+    cb_impl.encode_start_barriers(encoder);
     encoder->buildAccelerationStructure(
         m_acceleration_structure,
         descriptor,

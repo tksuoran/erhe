@@ -26,6 +26,8 @@ class Render_pass_impl;
 class Swapchain_impl;
 class Texture;
 enum class Image_layout : unsigned int;
+class Texture_subresource_range;
+enum class Barrier_scope : unsigned int;
 enum class Memory_barrier_mask : unsigned int;
 
 // Backend-private aggregate that Device_impl::submit_command_buffers
@@ -109,6 +111,8 @@ public:
     void upload_to_texture        (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void clear_texture            (const Texture& texture, std::array<double, 4> clear_value);
     void transition_texture_layout(const Texture& texture, Image_layout new_layout);
+    void texture_barrier          (const Texture& texture, const Texture_subresource_range& range, std::uint64_t usage_before, std::uint64_t usage_after, Barrier_scope scope);
+    void buffer_barrier           (const Buffer& buffer, std::uint64_t usage_before, std::uint64_t usage_after, Barrier_scope scope);
     void cmd_texture_barrier      (std::uint64_t usage_before, std::uint64_t usage_after);
     void memory_barrier           (Memory_barrier_mask barriers);
 

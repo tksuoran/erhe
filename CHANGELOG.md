@@ -9,6 +9,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: explicit per-resource barriers (doc/erhe/graphics.md
+  "Resource barriers"): `Command_buffer::texture_barrier(texture, [range,]
+  usage_before, usage_after[, scope])` and
+  `Command_buffer::buffer_barrier(buffer, usage_before, usage_after[, scope])`;
+  `Buffer_usage_flag_bit` / `Buffer_usage_flag_bit_mask` (the accesses of a
+  buffer barrier side); the stage qualifier bits `vertex_shader`,
+  `fragment_shader`, `compute_shader` (and the `shader_stages` mask) in
+  `Image_usage_flag_bit(_mask)` and `Buffer_usage_flag_bit(_mask)`; the
+  `discard` modifier in `Image_usage_flag_bit(_mask)` (usage_before only:
+  drop the contents, still order the named earlier accesses);
+  `Barrier_scope` (`command_buffer`, `earlier_submissions`) with `c_str()`;
+  `Texture_subresource_range`.
 - `erhe::graphics`: present calibration cache (`present_calibration_cache.hpp`,
   doc/erhe/graphics.md "Present calibration cache"): `Present_calibration_key`
   and `query_present_calibration_key()` (Apple: CGDisplay identity and mode,

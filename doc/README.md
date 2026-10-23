@@ -474,6 +474,7 @@ flowchart TD
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
 - [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
+- [plans/resource_barriers.md](plans/resource_barriers.md) (in progress): Explicit resource barriers: chaining the application's dependencies, then removing the Metal 4 unconditional encoder barrier
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (in progress): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (in progress): Rigging tools roadmap (IK, constraints, skinning, drivers)
 - [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (in progress): Rigging Phase 3 - skeleton editing and posing basics requirements

@@ -99,6 +99,34 @@ public:
 // created for, not a conservative ALL_COMMANDS.
 [[nodiscard]] auto buffer_usage_to_vk_stage_access(Buffer_usage usage) -> Vk_stage_access_2;
 
+// Command_buffer::texture_barrier / buffer_barrier (doc/erhe/graphics.md
+// "Resource barriers"). The source side of a barrier keeps only the write
+// accesses of its usages (reads need no availability, the stages carry the
+// write-after-read dependency); the destination side has every access. The
+// shader accesses (sampled, storage, input_attachment; uniform, storage_*,
+// indirect, acceleration_structure_read) take the stages their side's
+// vertex_shader / fragment_shader / compute_shader qualifiers name, every
+// shader stage without one.
+enum class Barrier_side : unsigned int {
+    source,
+    destination
+};
+// present as the source side is the swapchain image's acquire: its stage is
+// COLOR_ATTACHMENT_OUTPUT, the stage the acquire semaphore wait is submitted
+// with, so the barrier chains after that wait; as the destination side, the
+// present semaphore orders it (no stage).
+[[nodiscard]] auto image_usage_to_vk_barrier_scope (uint64_t usage, Barrier_side side) -> Vk_stage_access_2;
+[[nodiscard]] auto buffer_usage_to_vk_barrier_scope(uint64_t usage, Barrier_side side) -> Vk_stage_access_2;
+enum class Image_aspect_kind : unsigned int {
+    color,
+    depth_stencil
+};
+// The layout an image usage implies: UNDEFINED for none (never accessed)
+// and for a usage with the discard modifier (the contents are dropped),
+// GENERAL for storage, host_transfer and any mix of usages without a common
+// optimal layout.
+[[nodiscard]] auto image_usage_to_vk_barrier_layout(uint64_t usage, Image_aspect_kind aspect_kind) -> VkImageLayout;
+
 // Returns the canonical pair of subpass dependencies (EXTERNAL->0, 0->EXTERNAL)
 // used by every render pass we create. The dependencies depend only on whether
 // color and/or depth attachments are present, so the pipeline's compatibility

@@ -162,6 +162,7 @@ if (_gpu_tests_supported)
         test_compute_multi_dispatch.cpp
         test_buffer_bindings.cpp
         test_storage_image.cpp
+        test_resource_barriers.cpp
         test_ray_query.cpp
         test_ray_query_attributes.cpp
     )

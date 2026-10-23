@@ -1,4 +1,6 @@
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/enums.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_command_buffer.hpp"
@@ -16,6 +18,73 @@
 #endif
 
 namespace erhe::graphics {
+
+namespace {
+
+enum class Barrier_side : unsigned int { before, after };
+
+// One side of a texture_barrier (doc/erhe/graphics.md "Resource barriers"):
+// none alone, and on usage_before only; otherwise at least one access, only
+// access and modifier bits, a stage qualifier only with a shader access,
+// discard on usage_before only. user_synchronized (a render pass descriptor
+// modifier) and transient_attachment (a creation flag) are no barrier usage.
+[[nodiscard]] auto is_valid_texture_barrier_usage(const std::uint64_t usage, const Barrier_side side) -> bool
+{
+    using Bits = Image_usage_flag_bit_mask;
+    if (usage == Bits::none) {
+        return side == Barrier_side::before;
+    }
+    constexpr std::uint64_t accesses =
+        Bits::transfer_src     | Bits::transfer_dst             | Bits::sampled          |
+        Bits::storage          | Bits::color_attachment         | Bits::depth_stencil_attachment |
+        Bits::input_attachment | Bits::host_transfer            | Bits::present          |
+        Bits::fragment_density_map;
+    constexpr std::uint64_t shader_accesses = Bits::sampled | Bits::storage | Bits::input_attachment;
+    constexpr std::uint64_t modifiers       = Bits::shader_stages | Bits::discard;
+    if ((usage & accesses) == 0) {
+        return false;
+    }
+    if ((usage & ~(accesses | modifiers)) != 0) {
+        return false;
+    }
+    if (((usage & Bits::shader_stages) != 0) && ((usage & shader_accesses) == 0)) {
+        return false;
+    }
+    if (((usage & Bits::discard) != 0) && (side != Barrier_side::before)) {
+        return false;
+    }
+    return true;
+}
+
+// One side of a buffer_barrier: the rules of the texture side, without
+// discard; the stage qualifiers go with uniform, storage_* and
+// acceleration_structure_read.
+[[nodiscard]] auto is_valid_buffer_barrier_usage(const std::uint64_t usage, const Barrier_side side) -> bool
+{
+    using Bits = Buffer_usage_flag_bit_mask;
+    if (usage == Bits::none) {
+        return side == Barrier_side::before;
+    }
+    constexpr std::uint64_t accesses =
+        Bits::vertex       | Bits::index         | Bits::indirect     | Bits::uniform   |
+        Bits::storage_read | Bits::storage_write | Bits::transfer_src | Bits::transfer_dst |
+        Bits::host_read    | Bits::host_write    |
+        Bits::acceleration_structure_build_input | Bits::acceleration_structure_read | Bits::acceleration_structure_write;
+    constexpr std::uint64_t shader_accesses =
+        Bits::uniform | Bits::storage_read | Bits::storage_write | Bits::acceleration_structure_read;
+    if ((usage & accesses) == 0) {
+        return false;
+    }
+    if ((usage & ~(accesses | Bits::shader_stages)) != 0) {
+        return false;
+    }
+    if (((usage & Bits::shader_stages) != 0) && ((usage & shader_accesses) == 0)) {
+        return false;
+    }
+    return true;
+}
+
+} // anonymous namespace
 
 Command_buffer::Command_buffer(Device& device, erhe::utility::Debug_label debug_label)
     : m_impl{std::make_unique<Command_buffer_impl>(device, std::move(debug_label))}
@@ -126,6 +195,55 @@ void Command_buffer::clear_texture(const Texture& texture, std::array<double, 4>
 void Command_buffer::transition_texture_layout(const Texture& texture, Image_layout new_layout)
 {
     m_impl->transition_texture_layout(texture, new_layout);
+}
+
+void Command_buffer::texture_barrier(
+    const Texture&                   texture,
+    const Texture_subresource_range& range,
+    const std::uint64_t              usage_before,
+    const std::uint64_t              usage_after,
+    const Barrier_scope              scope
+)
+{
+    // Barriers inside a render pass would need a subpass self-dependency
+    // (Vulkan) and are not expressible between encoders (Metal 4).
+    ERHE_VERIFY(m_active_render_pass == nullptr);
+    ERHE_VERIFY(is_valid_texture_barrier_usage(usage_before, Barrier_side::before));
+    ERHE_VERIFY(is_valid_texture_barrier_usage(usage_after,  Barrier_side::after));
+    m_impl->texture_barrier(texture, range, usage_before, usage_after, scope);
+}
+
+void Command_buffer::texture_barrier(
+    const Texture&                   texture,
+    const Texture_subresource_range& range,
+    const std::uint64_t              usage_before,
+    const std::uint64_t              usage_after
+)
+{
+    texture_barrier(texture, range, usage_before, usage_after, Barrier_scope::command_buffer);
+}
+
+void Command_buffer::texture_barrier(const Texture& texture, const std::uint64_t usage_before, const std::uint64_t usage_after, const Barrier_scope scope)
+{
+    texture_barrier(texture, Texture_subresource_range{}, usage_before, usage_after, scope);
+}
+
+void Command_buffer::texture_barrier(const Texture& texture, const std::uint64_t usage_before, const std::uint64_t usage_after)
+{
+    texture_barrier(texture, Texture_subresource_range{}, usage_before, usage_after, Barrier_scope::command_buffer);
+}
+
+void Command_buffer::buffer_barrier(const Buffer& buffer, const std::uint64_t usage_before, const std::uint64_t usage_after, const Barrier_scope scope)
+{
+    ERHE_VERIFY(m_active_render_pass == nullptr);
+    ERHE_VERIFY(is_valid_buffer_barrier_usage(usage_before, Barrier_side::before));
+    ERHE_VERIFY(is_valid_buffer_barrier_usage(usage_after,  Barrier_side::after));
+    m_impl->buffer_barrier(buffer, usage_before, usage_after, scope);
+}
+
+void Command_buffer::buffer_barrier(const Buffer& buffer, const std::uint64_t usage_before, const std::uint64_t usage_after)
+{
+    buffer_barrier(buffer, usage_before, usage_after, Barrier_scope::command_buffer);
 }
 
 void Command_buffer::cmd_texture_barrier(std::uint64_t usage_before, std::uint64_t usage_after)

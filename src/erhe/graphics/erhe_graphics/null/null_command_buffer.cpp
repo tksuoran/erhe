@@ -1,4 +1,5 @@
 #include "erhe_graphics/null/null_command_buffer.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/swapchain.hpp"
 
 namespace erhe::graphics {
@@ -99,6 +100,20 @@ void Command_buffer_impl::clear_texture(const Texture& /*texture*/, std::array<d
 }
 
 void Command_buffer_impl::transition_texture_layout(const Texture& /*texture*/, Image_layout /*new_layout*/)
+{
+}
+
+void Command_buffer_impl::texture_barrier(
+    const Texture&                   /*texture*/,
+    const Texture_subresource_range& /*range*/,
+    std::uint64_t                    /*usage_before*/,
+    std::uint64_t                    /*usage_after*/,
+    Barrier_scope                    /*scope*/
+)
+{
+}
+
+void Command_buffer_impl::buffer_barrier(const Buffer& /*buffer*/, std::uint64_t /*usage_before*/, std::uint64_t /*usage_after*/, Barrier_scope /*scope*/)
 {
 }
 

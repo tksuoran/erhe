@@ -1065,6 +1065,191 @@ auto usage_to_vk_stage_access(const uint64_t usage, const bool is_depth_stencil)
     return {stage, access};
 }
 
+namespace {
+
+constexpr VkAccessFlags2 c_write_accesses =
+    VK_ACCESS_2_SHADER_WRITE_BIT                          |
+    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT                  |
+    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT                |
+    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT        |
+    VK_ACCESS_2_TRANSFER_WRITE_BIT                        |
+    VK_ACCESS_2_HOST_WRITE_BIT                            |
+    VK_ACCESS_2_MEMORY_WRITE_BIT                          |
+    VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+
+// The shader stages the stage qualifiers of one barrier side name; every
+// shader stage without a qualifier. The image and buffer qualifier bits share
+// their positions (enums.hpp).
+[[nodiscard]] auto get_barrier_shader_stages(const uint64_t usage) -> VkPipelineStageFlags2
+{
+    static_assert(Image_usage_flag_bit_mask::vertex_shader   == Buffer_usage_flag_bit_mask::vertex_shader);
+    static_assert(Image_usage_flag_bit_mask::fragment_shader == Buffer_usage_flag_bit_mask::fragment_shader);
+    static_assert(Image_usage_flag_bit_mask::compute_shader  == Buffer_usage_flag_bit_mask::compute_shader);
+    if ((usage & Image_usage_flag_bit_mask::shader_stages) == 0) {
+        return
+            VK_PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS_BIT |
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT           |
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    }
+    VkPipelineStageFlags2 stages = 0;
+    if ((usage & Image_usage_flag_bit_mask::vertex_shader) != 0) {
+        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::fragment_shader) != 0) {
+        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::compute_shader) != 0) {
+        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    }
+    return stages;
+}
+
+[[nodiscard]] auto finish_barrier_scope(const VkPipelineStageFlags2 stage, const VkAccessFlags2 access, const Barrier_side side) -> Vk_stage_access_2
+{
+    return Vk_stage_access_2{
+        .stage  = stage,
+        .access = (side == Barrier_side::source) ? (access & c_write_accesses) : access
+    };
+}
+
+} // anonymous namespace
+
+auto image_usage_to_vk_barrier_scope(const uint64_t usage, const Barrier_side side) -> Vk_stage_access_2
+{
+    VkPipelineStageFlags2 stage  = 0;
+    VkAccessFlags2        access = 0;
+    const VkPipelineStageFlags2 shader_stages = get_barrier_shader_stages(usage);
+    if ((usage & Image_usage_flag_bit_mask::transfer_src) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+        access |= VK_ACCESS_2_TRANSFER_READ_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::transfer_dst) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+        access |= VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::sampled) != 0) {
+        stage  |= shader_stages;
+        access |= VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::storage) != 0) {
+        stage  |= shader_stages;
+        access |= VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::input_attachment) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        access |= VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::color_attachment) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        access |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::depth_stencil_attachment) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+        access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::host_transfer) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_HOST_BIT;
+        access |= VK_ACCESS_2_HOST_READ_BIT | VK_ACCESS_2_HOST_WRITE_BIT;
+    }
+    if ((usage & Image_usage_flag_bit_mask::fragment_density_map) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_FRAGMENT_DENSITY_PROCESS_BIT_EXT;
+        access |= VK_ACCESS_2_FRAGMENT_DENSITY_MAP_READ_BIT_EXT;
+    }
+    if (((usage & Image_usage_flag_bit_mask::present) != 0) && (side == Barrier_side::source)) {
+        // The acquire semaphore wait's stage (Command_buffer_impl submits it
+        // with COLOR_ATTACHMENT_OUTPUT): no access, only the execution chain.
+        stage |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    // none (never accessed) adds no stage; present as the destination is
+    // ordered by the present semaphore.
+    return finish_barrier_scope(stage, access, side);
+}
+
+auto buffer_usage_to_vk_barrier_scope(const uint64_t usage, const Barrier_side side) -> Vk_stage_access_2
+{
+    VkPipelineStageFlags2 stage  = 0;
+    VkAccessFlags2        access = 0;
+    const VkPipelineStageFlags2 shader_stages = get_barrier_shader_stages(usage);
+    if ((usage & Buffer_usage_flag_bit_mask::vertex) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
+        access |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::index) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
+        access |= VK_ACCESS_2_INDEX_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::indirect) != 0) {
+        // DRAW_INDIRECT covers draw, dispatch and draw count reads.
+        stage  |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+        access |= VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::uniform) != 0) {
+        stage  |= shader_stages;
+        access |= VK_ACCESS_2_UNIFORM_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::storage_read) != 0) {
+        stage  |= shader_stages;
+        access |= VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::storage_write) != 0) {
+        stage  |= shader_stages;
+        access |= VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::transfer_src) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+        access |= VK_ACCESS_2_TRANSFER_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::transfer_dst) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+        access |= VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::host_read) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_HOST_BIT;
+        access |= VK_ACCESS_2_HOST_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::host_write) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_HOST_BIT;
+        access |= VK_ACCESS_2_HOST_WRITE_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::acceleration_structure_build_input) != 0) {
+        // Builds read their vertex / index / instance input with SHADER_READ
+        // (buffer_usage_to_vk_stage_access).
+        stage  |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        access |= VK_ACCESS_2_SHADER_READ_BIT;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::acceleration_structure_read) != 0) {
+        stage  |= shader_stages | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        access |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::acceleration_structure_write) != 0) {
+        stage  |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        access |= VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+    }
+    return finish_barrier_scope(stage, access, side);
+}
+
+auto image_usage_to_vk_barrier_layout(const uint64_t usage, const Image_aspect_kind aspect_kind) -> VkImageLayout
+{
+    const bool     is_depth_stencil = (aspect_kind == Image_aspect_kind::depth_stencil);
+    const uint64_t accesses         = usage & ~(Image_usage_flag_bit_mask::shader_stages | Image_usage_flag_bit_mask::discard);
+    if ((accesses == 0) || (accesses == Image_usage_flag_bit_mask::none) || ((usage & Image_usage_flag_bit_mask::discard) != 0)) {
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+    const uint64_t read_only = Image_usage_flag_bit_mask::sampled | Image_usage_flag_bit_mask::input_attachment;
+    if ((accesses & ~read_only) == 0) {
+        return is_depth_stencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    switch (accesses) {
+        case Image_usage_flag_bit_mask::transfer_src:             return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        case Image_usage_flag_bit_mask::transfer_dst:             return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        case Image_usage_flag_bit_mask::color_attachment:         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        case Image_usage_flag_bit_mask::depth_stencil_attachment: return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        case Image_usage_flag_bit_mask::present:                  return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        case Image_usage_flag_bit_mask::fragment_density_map:     return VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT;
+        default:                                                  return VK_IMAGE_LAYOUT_GENERAL; // storage, host_transfer, mixes
+    }
+}
+
 auto buffer_usage_to_vk_stage_access(const Buffer_usage usage) -> Vk_stage_access_2
 {
     using namespace erhe::utility;
