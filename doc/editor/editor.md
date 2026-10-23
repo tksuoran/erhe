@@ -709,9 +709,10 @@ edges of M1 and M2; `frame_render_phase()` sets the render phase from the
 thread that runs it.
 
 **Phase timing.** Every 60 frames `editor.frame` logs `Phase timing (us/frame,
-avg of 60 frames)`, averages per frame of: `M1`, which includes
-`frame_start_wait` (`Device::wait_for_frame_start` plus the M1 pacing steps
-and their waits); `M2`, which includes `slot_acquire`
+avg of 60 frames)`, averages per frame of: `M1`; `frame_start_wait`
+(`Device::wait_for_frame_start` plus the frame pacing steps and their
+waits, run by `start_frame()` before `run()`'s poll, so outside M1 unless
+`frame()` makes its own frame start); `M2`, which includes `slot_acquire`
 (`Device::acquire_frame_slot` alone) and is the sum of six consecutive terms
 (`start`: input dispatch and slot acquire; `upload`: scene commit flush and the asset and texture file load
 ticks; `sim`: animations, pointer, OpenXR poll and actions, node fixed steps
@@ -723,10 +724,12 @@ hotbar, draw list flush, material sets and lightmap prepare); `R`; `swapchain`
 main thread's time blocked joining R of the previous frame (in `join()` at
 the end of M1, or inside the kick with pipelining; R minus `join_wait` is
 the part of R that overlapped the main thread); `handoff`, the kick and join
-latencies; and `full tick`, `frame()` from M1 start to its end (the kick, or
-M3 after it with the ImGui overlap). With pipelining the R terms of a line
-belong to the frames joined in that interval, one frame behind the main
-thread's terms. `run()`'s `poll_events` wait is outside all of them.
+latencies; and `full tick`, from the start of the frame start
+(`frame_start_wait`) through `run()`'s `poll_events` wait to the end of
+`frame()` (the kick, or M3 after it with the ImGui overlap): the main loop
+period. With pipelining the R terms of a line belong to the frames joined
+in that interval, one frame behind the main thread's terms. The
+`poll_events` wait is in no term but the full tick.
 
 **Watchdog and shutdown.** The main-loop stall watchdog
 (`doc/agents/debugging.md` "Main-loop stall watchdog") watches while
