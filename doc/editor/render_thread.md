@@ -507,37 +507,10 @@ for frames 1 to 12; run scripts wait for frame 12.
 - **Measurements still open.** A CPU-bound Release measurement (every
   Release scene measured is GPU-bound, so in Release the R3 gain shows as
   main thread headroom, not in the tick); the Vulkan schedule on macOS,
-  where the windowed tick is bound by the presenting submit (section 4 of
-  the measurements document). The windowed frame pacer check with the
+  where every windowed frame waits for a `CAMetalLayer` drawable inside
+  the presenting submit (section 4 of the measurements document). The windowed frame pacer check with the
   present-timing tiers is covered by the live gates of tier M on Metal and
   tier W on MoltenVK (`doc/plans/frame_pacing_metal.md`).
-- **Measurement follow-ups** (measurements document section 4; each
-  needs a decision before it is built).
-  - Frame pacing with `force_disable_vsync` on Vulkan: the tier resolution
-    (`vulkan_device_init.cpp`) does not read `force_disable_vsync`, so
-    `auto` still selects W or S while `choose_present_mode()` picks
-    `IMMEDIATE`, which has none of the backpressure the pacer needs (the
-    tier S servo sleeps about 4 ms per frame). Resolve the tier to off
-    there, as Metal does (`metal_device.cpp`: `force_disable_vsync` ->
-    tier OFF, logged), or warn.
-  - The phase log's full tick is measured from the top of `frame()`;
-    `frame_start_wait` runs in `start_frame()` before it and is printed
-    only inside the M1 term. Include it, or log the loop period beside it.
-  - Metal emits no Tracy GPU zones; the command buffers' `GPUStartTime` /
-    `GPUEndTime` feed only the frame pacing records and the GPU pre-warm.
-    The `Gpu_timer` results (`doc/erhe/metal_backend.md` "GPU timers") are
-    the per-pass source until then.
-  - Windowed Metal under `force_disable_vsync` (tier OFF,
-    `displaySyncEnabled = NO`, the layer's default drawable count) was
-    measured display-paced in `nextDrawable` (about 8.3 ms per frame at
-    120 Hz) before Metal had frame pacing tiers (2026-10-20); re-measure
-    before deciding anything. Headless Metal is the unpaced tree.
-  - Windowed MoltenVK: the presenting `submit_command_buffers` call takes
-    3-4 ms in some frames (bimodal, a `CAMetalLayer` drawable wait
-    suspected, unverified). The GPU idle gap between the upload and
-    presenting submits is measured and excluded from the pacer's GPU time
-    (`doc/frame_pacing/inputs.md`); the CPU time inside the submit call is
-    not explained.
 - **Render phase cost.** `Shadow_renderer::render` dominates R on scenes
   with many casters while the casters change: the shadow map cache keeps
   unchanged passes and the shadow fit cache reuses the per-light caster
