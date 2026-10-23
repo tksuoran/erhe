@@ -362,10 +362,57 @@ functions, for objects with an entry in a shadow list:
   `flag_changed_new_bits`).
 
 `rebuild_all` (every list recreated), or more than 1024 boxes between two
-publishes, set `unbounded` instead. An entry without bounds (skinned, or a
-mesh without a valid AABB) is the no-bounds sentinel, which every view
-keeps. Joint and material slot rewrites change nothing a shadow pass draws
-(the shadow shaders read no material; skinned scenes do not cache).
+publishes, set `unbounded` instead. An entry without bounds (a mesh
+without a valid AABB) is the no-bounds sentinel, which every view keeps.
+Joint and material slot rewrites change nothing a shadow pass draws (the
+shadow shaders read no material; the joint slot only names where the
+frame's poses are).
+
+**Skinned casters.** A skinned object's entries carry no bounds and are
+never culled: a pass draws whatever of them its clip volume holds, posed by
+the frame's joint poses. `publish()` takes the poses the frame captured
+(`Joint_poses::capture()`, the editor's `Scene_root::
+get_render_joint_poses()`) and compares each skinned shadow caster's
+`world_from_bind` matrices bitwise with the ones it was last published with
+(`Draw_list_object::published_pose`). The poses are what the passes draw
+with, so the compare catches every writer - the animation player, IK and
+rigging tools, MCP pose edits, undo - including the skin's own joint list
+and inverse bind edits, which have no change notification (joint node
+transforms do: `world_from_node_serial`); it is a memcmp over the joints of
+shadow-casting skins, next to the capture that already visits every joint
+each frame. A changed pose records the old and new posed bounds in
+`skinned_changed_bounds` and moves the content serial. The posed bounds are
+each joint's bind-space box of the vertices it influences
+(`Buffer_mesh::joint_bounding_boxes`) posed by the joint's `world_from_bind`:
+a skinned vertex is a convex combination of its joints' posed positions, so
+the union's AABB bounds it. The primitive builder makes that hold for every
+built mesh: it normalizes the weights the shader reads (`WEIGHTS_0`,
+doc/erhe/primitive.md "Skinning weights"), and
+`erhe::primitive::include_vertex_in_joint_bounding_boxes()` builds the boxes
+from the same normalized weights (a vertex without joint values goes to
+joint 0, the built default). The storage rounding leaves no weight on a
+joint outside the boxes: unorm8 weights sum to exactly 255, and the unorm16
+implicit-sum encoding of a vertex with fewer than four influences
+reconstructs a fourth weight of exactly zero in exact arithmetic. What
+remains is the shader's float rounding of the decoded weights: their sum
+is one within a few ulp, which offsets the position by a few ulp of the
+posed position itself (the float precision it has anyway), and the
+implicit-sum fourth weight `max(0, 1 - sum)` can be a few ulp on an unused
+slot's joint, an offset of a few ulp times the distance between that
+joint's and the vertex's posed images - both orders below a texel. A
+primitive without joint boxes (built without joint attributes, or through
+the triangle-soup path, so every pose change of such a mesh forgets every
+pass), an import's frames before its geometry is built, or a box naming a
+joint the skin does not have give the no-bounds sentinel. Adding, removing, moving in a list or reflagging a
+skinned object records the bounds of its last published pose; a geometry
+change (`write_object_bounds`: a rebuilt primitive, the bounds op of a
+vertex edit) records them too and makes the next publish record the new
+posed bounds from the current joint boxes, whatever the pose. The editor's
+vertex drag grows the dragged vertex's joint boxes with the vertex
+(`Mesh_component_transform::write_vertex`) until the commit rebuilds them;
+a cancelled drag restores the boxes it had at the drag's start.
+A skinned mesh whose skin the frame did not capture has no poses: every
+publish records the sentinel (logged once).
 
 At the start of `draw()` the cache compares the published content serial
 with the serial its kept passes hold. Equal: no list changed, no test.
@@ -374,23 +421,25 @@ kept pass - also the passes of lights the frame does not draw - is tested
 against `changed_bounds` with its own stored view (`cull_lanes::
 reaches_view()`, the classification's lanes), and a pass a box reaches is
 forgotten. An entry whose old and new bounds both miss the view was culled
-from the pass before and after the change, so the pass is unchanged. A
+from the pass before and after the change, so the pass is unchanged.
+`skinned_changed_bounds` is tested against each pass's clip volume instead,
+since skinned entries are not culled: a 2D pass's planes (a depth-clamped
+pass's side planes) are its clip volume, and a cube face's lies inside its
+octant and the sphere through the face frustum's far corners (radius range
+times sqrt(3), with a margin), not inside the range sphere. A
 flags change is tested only when the caster filter (`shadow_caster_filter`)
 accepts its old and new flags differently: a selection or hover flag
 leaves every pass (the shadow shaders read no flag-dependent record field).
 Different otherwise (a frame the cache did not draw through, such as a
 frame without shadow passes), or `unbounded`: every pass is forgotten.
 With the cache switched off `Shadow_render_node` clears it every frame, so
-nothing it held survives the cache-off period. Directional
-passes take the same test with their side planes (a depth-clamped pass
-culls on those only) - in practice a camera move redraws them anyway.
+nothing it held survives the cache-off period. Directional passes take the
+same test with their side planes (a depth-clamped pass culls on those
+only) - in practice a camera move redraws them anyway.
 
-Skinned objects in the scene (`Draw_list_scene::
-has_published_skinned_objects()`) disable the cache: joint poses change
-without a list change. The bucket path (no draw-list scene) draws every
-pass. `Shadow_render_node::reconfigure()` clears the cache with the
-textures. The shadow map shaders read no material, so a material edit keeps
-the maps.
+The bucket path (no draw-list scene) draws every pass.
+`Shadow_render_node::reconfigure()` clears the cache with the textures. The
+shadow map shaders read no material, so a material edit keeps the maps.
 
 `Shadow_draw_statistics` reports the kept passes (`shadow_map_2d_cached`,
 `point_cube_cached_faces`, `cached_pass_count`) and the cumulative draws of
@@ -400,11 +449,12 @@ each pass (`shadow_map_2d_draw_counts`, `point_cube_face_draw_counts`), MCP
 `set_shadow_map_cache_enabled` switches the cache for a session (default
 on). `scripts/shadow_map_cache_check.py` is the image gate: captures with
 the cache on equal captures with every pass drawn after caster, light,
-cone and camera edits, and a drag, an add, a removal and a move of casters
+cone and camera edits; a drag, an add, a removal and a move of casters
 beside one of two point lights redraw only the faces of the light they
-reach. Measured on Bistro (Release Metal, M4 Pro, 4 point and 4 spot shadow
+reach, and a static skinned figure keeps every face while a joint rotation
+or a vertex drag on it redraws only the faces of the light beside it. Measured on Bistro (Release Metal, M4 Pro, 4 point and 4 spot shadow
 lights, static scene): GPU span 6.4 -> 4.3 ms, render-thread `execute`
-2.1 -> 0.8 ms per frame. The remaining work (skinned casters, fit skip) is
+2.1 -> 0.8 ms per frame. The remaining work (fit skip) is
 [../plans/shadow_map_cache.md](../plans/shadow_map_cache.md).
 
 ### Empty border and receiver coverage

@@ -322,6 +322,8 @@ void Draw_list_scene::release_object(const uint32_t object_index)
     object.joint_slot       = 0u;
     object.world_aabb       = erhe::math::Aabb{};
     object.has_world_aabb   = false;
+    object.published_pose.clear();
+    object.has_published_pose = false;
     object.alive            = false;
     ++object.generation;
     m_free_object_indices.push_back(object_index);
@@ -440,10 +442,10 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
         const Draw_list_entry& moved = draw_list.entries[last_index];
         // The moved entry draws at another position of its list: a shadow
         // pass it reaches may resolve depth ties differently.
-        if (draw_list.key.purpose == Draw_purpose::shadow) {
-            record_changed_bounds(moved.world_aabb);
-        }
         Draw_list_object&      owner = m_objects[moved.object_index];
+        if (draw_list.key.purpose == Draw_purpose::shadow) {
+            record_changed_object_bounds(owner);
+        }
         bool patched = false;
         for (Draw_list_entry_location& owner_location : owner.locations) {
             if ((owner_location.draw_list_index == location.draw_list_index) && (owner_location.entry_index == last_index)) {
@@ -614,11 +616,20 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     // Skinned entries carry no bounds: they are never culled, and the shadow
     // fit bounds the object from its posed joints at gather time.
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
+    // A skinned object's geometry changed (a rebuilt primitive, a vertex
+    // edit growing its joint boxes): the old posed bounds are recorded here
+    // and the next publish records the new ones from the current joint
+    // boxes (record_skinned_pose_changes()), whatever the pose.
     if (has_shadow_entries(object)) {
         if (object.has_world_aabb) {
             record_changed_object_bounds(object);
         }
-        record_changed_bounds(world_aabb);
+        if (object.mobility != Draw_mobility::skinned) {
+            record_changed_bounds(world_aabb);
+        }
+    }
+    if (object.mobility == Draw_mobility::skinned) {
+        object.has_published_pose = false;
     }
     for (const Draw_list_entry_location& location : object.locations) {
         Draw_list& draw_list = edit_draw_list(location.draw_list_index);
@@ -655,7 +666,9 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
     if (has_shadow_entries(object)) {
         record_changed_object_bounds(object);
-        record_changed_bounds(world_aabb);
+        if (object.mobility != Draw_mobility::skinned) {
+            record_changed_bounds(world_aabb);
+        }
     }
     object.world_aabb     = world_aabb;
     object.has_world_aabb = true;
@@ -690,17 +703,12 @@ void Draw_list_scene::write_object_gpu_slots(const uint32_t object_index)
 void Draw_list_scene::refresh_object_records(const uint32_t object_index)
 {
     Draw_list_object& object = m_objects[object_index];
-    // Same detach race as register_object(): a queued refresh can flush after
-    // the mesh lost its node, with the matching unregister still behind it in
-    // the queue. The records cannot be rewritten without a node transform;
-    // leave them as they are, the unregister removes the entries.
-    {
-        const erhe::scene::Mesh* refresh_mesh = object.info.mesh.get();
-        if (refresh_mesh == nullptr) {
-            return;
-        }
-    }
-    // After the early return above, and before the rewrite: this replays
+    // A registered object keeps its mesh (register_object() verifies it,
+    // release_object() is the only reset), so a queued refresh that flushes
+    // after the mesh left its scene still finds it; the unregister queued
+    // behind it removes the entries.
+    ERHE_VERIFY(object.info.mesh != nullptr);
+    // Before the rewrite: this replays
     // entries against a scene that may have mutated since the refresh was
     // enqueued, so the records may be about to name materials the object did
     // not have. Syncing before the early return would instead release a
@@ -771,7 +779,8 @@ void Draw_list_scene::remove_entries(const uint32_t object_index)
     if (has_shadow_entries(object)) {
         record_changed_object_bounds(object);
     }
-    object.has_world_aabb = false;
+    object.has_world_aabb     = false;
+    object.has_published_pose = false;
     // Remove in reverse so that swap-removes inside the same list never
     // move an entry that this object still has to remove.
     while (!object.locations.empty()) {
@@ -1086,7 +1095,13 @@ void Draw_list_scene::set_object_flags(const Draw_list_object_id id, const uint6
         return;
     }
     if (has_shadow_entries(object)) {
-        record_flags_change(object, object.flag_bits, item_flag_bits);
+        // A skinned object's posed bounds are tested without the caster
+        // filter (skinned_changed_bounds).
+        if (object.mobility == Draw_mobility::skinned) {
+            record_changed_object_bounds(object);
+        } else {
+            record_flags_change(object, object.flag_bits, item_flag_bits);
+        }
     }
     object.flag_bits = item_flag_bits;
     for (const Draw_list_entry_location& location : object.locations) {
@@ -1126,7 +1141,8 @@ void Draw_list_scene::rebuild_all()
 
     for (Draw_list_object& object : m_objects) {
         object.locations.clear();
-        object.has_world_aabb = false;
+        object.has_world_aabb     = false;
+        object.has_published_pose = false;
     }
     // Every list is recreated: the dropped entries are not named.
     m_changes_unbounded = true;
@@ -1410,7 +1426,12 @@ void Draw_list_scene::flush_pending()
 
 // --- Publishing (prepare phase) -------------------------------------------------
 
-void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t frames_in_flight, const Cull_classification classification)
+void Draw_list_scene::publish(
+    const uint64_t                    frame_index,
+    const std::size_t                 frames_in_flight,
+    const Cull_classification         classification,
+    const std::span<const Joint_pose> joint_poses
+)
 {
     ERHE_PROFILE_FUNCTION();
     assert_main_thread();
@@ -1447,8 +1468,13 @@ void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t fram
         effective_classification = Cull_classification::cpu;
     }
     slot.classification             = effective_classification;
-    slot.has_skinned_objects        = !m_skinned_object_indices.empty();
     m_published_cull_classification = effective_classification;
+
+    // A changed pose is a content change: it moves the content serial (no
+    // list is copied for it).
+    if (record_skinned_pose_changes(joint_poses)) {
+        ++m_draw_list_serial;
+    }
 
     // The changes since the previous publish (Draw_list_content_changes); the
     // accumulation restarts (capacity kept).
@@ -1456,10 +1482,12 @@ void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t fram
     slot.changes_unbounded  = m_changes_unbounded;
     slot.changed_bounds.assign(m_changed_bounds);
     slot.flag_changed_bounds.assign(m_flag_changed_bounds);
+    slot.skinned_changed_bounds.assign(m_skinned_changed_bounds);
     slot.flag_changed_old_bits.assign(m_flag_changed_old_bits.begin(), m_flag_changed_old_bits.end());
     slot.flag_changed_new_bits.assign(m_flag_changed_new_bits.begin(), m_flag_changed_new_bits.end());
     m_changed_bounds.resize(0);
     m_flag_changed_bounds.resize(0);
+    m_skinned_changed_bounds.resize(0);
     m_flag_changed_old_bits.clear();
     m_flag_changed_new_bits.clear();
     m_changes_unbounded          = false;
@@ -1530,7 +1558,8 @@ auto Draw_list_scene::get_published_content_changes(const uint64_t frame_index) 
         .changed_bounds        = &slot.changed_bounds,
         .flag_changed_bounds   = &slot.flag_changed_bounds,
         .flag_changed_old_bits = slot.flag_changed_old_bits,
-        .flag_changed_new_bits = slot.flag_changed_new_bits
+        .flag_changed_new_bits = slot.flag_changed_new_bits,
+        .skinned_changed_bounds = &slot.skinned_changed_bounds
     };
 }
 
@@ -1546,8 +1575,142 @@ auto Draw_list_scene::has_shadow_entries(const Draw_list_object& object) const -
 
 void Draw_list_scene::record_changed_object_bounds(const Draw_list_object& object)
 {
+    // A skinned object's entries carry no bounds: what its shadow entries
+    // drew is bounded by the pose they were last published with; never
+    // published, they drew nothing.
+    if (object.mobility == Draw_mobility::skinned) {
+        if (object.has_published_pose) {
+            record_skinned_changed_bounds(object.published_pose_aabb);
+        }
+        return;
+    }
     // Entries whose bounds were never written carry the no-bounds sentinel.
     record_changed_bounds(object.has_world_aabb ? object.world_aabb : erhe::math::Aabb{});
+}
+
+void Draw_list_scene::record_skinned_changed_bounds(const erhe::math::Aabb& aabb)
+{
+    if (!reserve_changed_box()) {
+        return;
+    }
+    const std::size_t count = m_skinned_changed_bounds.extent_x.size();
+    m_skinned_changed_bounds.resize(count + 1);
+    m_skinned_changed_bounds.set(count, aabb);
+}
+
+namespace {
+
+// The world bounds of a skinned mesh posed by poses (its skin's joints in
+// order): per primitive, each joint's bind-space box of the vertices it
+// influences, posed by the joint's world_from_bind. A skinned vertex is a
+// convex combination of its joints' posed positions, each inside its
+// joint's posed box, so it lies inside the union's AABB (the primitive
+// builder normalizes the weights, erhe::primitive::normalize_joint_weights()).
+// Invalid (the no-bounds sentinel: every view) when a primitive has no joint
+// boxes (built without joint attributes, or through the triangle-soup path)
+// or a box names a joint the skin does not have.
+[[nodiscard]] auto get_posed_aabb(const erhe::scene::Mesh& mesh, const std::span<const Joint_pose> poses) -> erhe::math::Aabb
+{
+    erhe::math::Aabb aabb;
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        const erhe::primitive::Primitive* primitive = mesh_primitive.primitive.get();
+        if ((primitive == nullptr) || !primitive->render_shape) {
+            return erhe::math::Aabb{};
+        }
+        const std::vector<erhe::math::Aabb>& joint_boxes = primitive->render_shape->get_renderable_mesh().joint_bounding_boxes;
+        bool primitive_bounded = false;
+        for (std::size_t i = 0, end = joint_boxes.size(); i < end; ++i) {
+            if (!joint_boxes[i].is_valid_3d()) {
+                continue; // the joint influences no vertex of the primitive
+            }
+            if (i >= poses.size()) {
+                return erhe::math::Aabb{}; // a joint index past the skin's joints
+            }
+            aabb.include(joint_boxes[i].transformed_by(poses[i].world_from_bind));
+            primitive_bounded = true;
+        }
+        if (!primitive_bounded) {
+            return erhe::math::Aabb{};
+        }
+    }
+    return aabb;
+}
+
+[[nodiscard]] auto same_pose(const std::vector<glm::mat4>& published, const std::span<const Joint_pose> poses) -> bool
+{
+    if (published.size() != poses.size()) {
+        return false;
+    }
+    for (std::size_t i = 0, end = poses.size(); i < end; ++i) {
+        if (std::memcmp(&published[i], &poses[i].world_from_bind, sizeof(glm::mat4)) != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+auto Draw_list_scene::record_skinned_pose_changes(const std::span<const Joint_pose> joint_poses) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // The poses are what the frame's shadow passes draw the skinned objects
+    // with, and they are a function of the joints' world transforms and of
+    // the skin's own data. Joint node transforms carry a change serial
+    // (Node_transforms::world_from_node_serial), but edits of a skin's joint
+    // list and inverse bind matrices have no change notification, so a
+    // compare against the last published copy is the change detection
+    // (the AGENTS.md exception for state without a notification). It is
+    // O(joints of shadow-casting skins) memcmp per frame with no allocation,
+    // next to the capture that already visits every joint each frame.
+    bool changed = false;
+    for (const uint32_t object_index : m_skinned_object_indices) {
+        Draw_list_object& object = m_objects[object_index];
+        if (!has_shadow_entries(object)) {
+            continue;
+        }
+        const erhe::scene::Mesh* mesh = object.info.mesh.get();
+        // A registered object has its mesh, and its mobility is skinned
+        // exactly when the mesh had a skin at registration; skins are set
+        // before a mesh is registered (imports, rigid skin creation).
+        ERHE_VERIFY((mesh != nullptr) && mesh->skin);
+        const erhe::scene::Skin& skin  = *mesh->skin;
+        const std::size_t        first = skin.skin_data.joint_buffer_index;
+        const std::size_t        count = skin.skin_data.joints.size();
+        if ((first + count) > joint_poses.size()) {
+            // No poses of this frame for the object (its skin is not among
+            // the skins the frame captured): nothing bounds what its entries
+            // draw, so every frame forgets every pass.
+            if (!m_skinned_pose_missing_logged) {
+                log_draw_list->warn(
+                    "Draw_list_scene: skinned mesh '{}' has no captured joint poses this frame (skin '{}' not in the captured skins); the shadow map cache forgets every pass while it lasts",
+                    mesh->get_name(),
+                    skin.get_name()
+                );
+                m_skinned_pose_missing_logged = true;
+            }
+            record_changed_object_bounds(object);
+            record_skinned_changed_bounds(erhe::math::Aabb{});
+            object.has_published_pose = false;
+            changed = true;
+            continue;
+        }
+        const std::span<const Joint_pose> poses = joint_poses.subspan(first, count);
+        if (object.has_published_pose && same_pose(object.published_pose, poses)) {
+            continue;
+        }
+        record_changed_object_bounds(object); // the old pose, when published
+        object.published_pose.resize(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            object.published_pose[i] = poses[i].world_from_bind;
+        }
+        object.published_pose_aabb = get_posed_aabb(*mesh, poses);
+        object.has_published_pose  = true;
+        record_skinned_changed_bounds(object.published_pose_aabb);
+        changed = true;
+    }
+    return changed;
 }
 
 auto Draw_list_scene::reserve_changed_box() -> bool
@@ -1558,10 +1721,11 @@ auto Draw_list_scene::reserve_changed_box() -> bool
     if (m_changes_unbounded) {
         return false;
     }
-    if ((m_changed_bounds.extent_x.size() + m_flag_changed_bounds.extent_x.size()) >= max_changed_boxes) {
+    if ((m_changed_bounds.extent_x.size() + m_flag_changed_bounds.extent_x.size() + m_skinned_changed_bounds.extent_x.size()) >= max_changed_boxes) {
         m_changes_unbounded = true;
         m_changed_bounds.resize(0);
         m_flag_changed_bounds.resize(0);
+        m_skinned_changed_bounds.resize(0);
         m_flag_changed_old_bits.clear();
         m_flag_changed_new_bits.clear();
         return false;
@@ -1591,10 +1755,6 @@ void Draw_list_scene::record_flags_change(const Draw_list_object& object, const 
     m_flag_changed_new_bits.push_back(new_flag_bits);
 }
 
-auto Draw_list_scene::has_published_skinned_objects(const uint64_t frame_index) const -> bool
-{
-    return get_published_slot(frame_index).has_skinned_objects;
-}
 
 auto Draw_list_scene::get_published_draw_lists(const uint64_t frame_index) const -> const std::vector<Draw_list>&
 {

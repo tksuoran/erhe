@@ -4,12 +4,14 @@ Status: in progress
 
 The cache is built (`doc/erhe/shadows.md` "Shadow map cache"): a pass is
 kept while its light, its matrix, its culling view and the frame's
-configuration are unchanged and no draw-list change since it was drawn
-reaches its culling view (the per-light caster test).
+configuration are unchanged and no draw-list change or skinned pose change
+since it was drawn reaches it (the per-light caster test).
 `scripts/shadow_map_cache_check.py` is its image gate (cache on against
 every pass drawn, after caster, light, cone and camera edits; casters
 dragged, added, removed and moved beside one of two point lights keep the
-other light's faces). What remains is skinned casters and the fit.
+other light's faces; a static skinned figure keeps every face, a joint
+rotation redraws only the faces of the light beside it). What remains is
+the fit.
 
 ## Bistro measurements (Release Metal, M4 Pro, Dell at 120 Hz)
 
@@ -38,11 +40,7 @@ camera-dependent: they are kept only while the camera is still.
 
 ## Remaining work
 
-1. **Skinned casters.** Skinned objects disable the cache: joint poses have
-   no serial. A pose serial at the change sites (animation player, IK and
-   rigging tools) plus posed bounds for the per-light caster test would
-   keep the passes no animated caster reaches.
-2. **Fit skip.** The shadow fit (`fit`, 0.2-0.45 ms on the render thread)
+1. **Fit skip.** The shadow fit (`fit`, 0.2-0.45 ms on the render thread)
    still runs every frame; for spot and point lights whose snapshot is
    unchanged the projections could be reused
    (`doc/plans/shadows.md` "Temporal whole-fit skip").

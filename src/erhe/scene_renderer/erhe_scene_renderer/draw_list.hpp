@@ -181,6 +181,12 @@ public:
     const Draw_list_bounds*   flag_changed_bounds{nullptr};
     std::span<const uint64_t> flag_changed_old_bits{};
     std::span<const uint64_t> flag_changed_new_bits{};
+    // Skinned objects' posed bounds (old and new pose, added, removed,
+    // flags): their entries are never culled, so a pass draws whatever of
+    // them its clip volume holds. A box reaches a pass when its clip volume
+    // may hold some of it (a cube face: the octant and the sphere through
+    // the face frustum's far corners instead of the range sphere).
+    const Draw_list_bounds*   skinned_changed_bounds{nullptr};
 };
 
 // A group of entries that share one Draw_list_key and can therefore be

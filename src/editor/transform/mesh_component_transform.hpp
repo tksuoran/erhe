@@ -210,6 +210,10 @@ private:
         // consumers - shadow fit, culling, framing - see the moved
         // geometry); cancel of an in-place edit restores this.
         erhe::math::Aabb                          before_bounding_box;
+        // The renderable mesh's per-joint boxes at begin() (skinned meshes;
+        // write_vertex() grows them with the dragged vertices), restored with
+        // before_bounding_box on cancel. Assigned at begin(), capacity kept.
+        std::vector<erhe::math::Aabb>             before_joint_bounding_boxes;
 
         // The Primitive begin() bracketed with an optimization hold (null when
         // none was taken). Released via release_optimization_hold() on exactly

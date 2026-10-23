@@ -3,6 +3,7 @@
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/draw_list_object.hpp"
+#include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_scene_renderer/cull_classification.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
@@ -431,7 +432,12 @@ public:
     // whose slot copy changed or moved since the slot's last write (a frame
     // in which nothing changed writes nothing), for the render phase's
     // compute classification; refused (logged once), the slot records cpu.
-    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification);
+    // joint_poses: the frame's captured poses (Joint_poses::capture(), the
+    // skins' Skin_data::joint_buffer_index assigned), which the frame's
+    // shadow passes draw the skinned objects with; a skinned object whose
+    // poses differ from the last publish's is a change
+    // (Draw_list_content_changes::skinned_changed_bounds).
+    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification, std::span<const Joint_pose> joint_poses);
     // The classification the last publish() recorded (main thread).
     [[nodiscard]] auto get_cull_classification() const -> Cull_classification { return m_published_cull_classification; }
     // Diagnostics: list bounds ranges publish() wrote to the slots' GPU
@@ -537,9 +543,6 @@ public:
     // publishes than the one before this one are not included: base_serial
     // names the content serial these changes start from.
     [[nodiscard]] auto get_published_content_changes(uint64_t frame_index) const -> Draw_list_content_changes;
-    // Whether skinned objects existed when frame_index was published (their
-    // joint poses change without a list change). Render phase.
-    [[nodiscard]] auto has_published_skinned_objects(uint64_t frame_index) const -> bool;
     // GPU command generation of the shadow passes (doc/plans/culling.md
     // phase 6; render thread, render phase, with the frame's shadow views,
     // before its classification): what every draw_shadow() of frame_index
@@ -906,6 +909,11 @@ private:
     void record_changed_object_bounds(const Draw_list_object& object);
     void record_changed_bounds(const erhe::math::Aabb& aabb);
     void record_flags_change(const Draw_list_object& object, uint64_t old_flag_bits, uint64_t new_flag_bits);
+    void record_skinned_changed_bounds(const erhe::math::Aabb& aabb);
+    // publish(): the skinned objects whose captured poses differ from the
+    // ones they were last published with record their old and new posed
+    // bounds; true when any did.
+    [[nodiscard]] auto record_skinned_pose_changes(std::span<const Joint_pose> joint_poses) -> bool;
     // False (and the changes unbounded) once the boxes of the changes
     // since the last publish reach their limit.
     [[nodiscard]] auto reserve_changed_box() -> bool;
@@ -929,8 +937,6 @@ private:
         bool                   published  {false};
         // The culling classification publish() recorded for the frame.
         Cull_classification    classification{Cull_classification::cpu};
-        // Skinned objects existed at the publish.
-        bool                   has_skinned_objects{false};
         // The changes since the previous publish (Draw_list_content_changes):
         // m_draw_list_serial at that publish, and the accumulated
         // m_changed_bounds / m_changes_unbounded.
@@ -938,6 +944,7 @@ private:
         bool                   changes_unbounded {false};
         Draw_list_bounds       changed_bounds;
         Draw_list_bounds       flag_changed_bounds;
+        Draw_list_bounds       skinned_changed_bounds;
         std::vector<uint64_t>  flag_changed_old_bits;
         std::vector<uint64_t>  flag_changed_new_bits;
         // Per list: its first entry in the lists back to back (the GPU
@@ -985,6 +992,8 @@ private:
     uint64_t                                                         m_scene_instance{0};
     Draw_list_bounds                                                 m_changed_bounds;
     Draw_list_bounds                                                 m_flag_changed_bounds;
+    Draw_list_bounds                                                 m_skinned_changed_bounds;
+    bool                                                             m_skinned_pose_missing_logged{false};
     std::vector<uint64_t>                                            m_flag_changed_old_bits;
     std::vector<uint64_t>                                            m_flag_changed_new_bits;
     bool                                                             m_changes_unbounded{false};

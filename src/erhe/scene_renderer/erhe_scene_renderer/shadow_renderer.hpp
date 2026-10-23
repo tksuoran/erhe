@@ -133,10 +133,10 @@ public:
 // selection and the draw-list scene) equals the one it was drawn under, its
 // light, matrix and culling view equal its own, and no draw-list change
 // since it was drawn reaches its culling view
-// (Draw_list_content_changes). Any change of the configuration
-// forgets every pass. The draw-list path only; a scene with skinned objects
-// draws every pass (joint poses carry no serial). Owned by the caller next
-// to the textures; clear() when they are reallocated. Render thread.
+// (Draw_list_content_changes; skinned objects by their posed bounds). Any
+// change of the configuration forgets every pass. The draw-list path only.
+// Owned by the caller next to the textures; clear() when they are
+// reallocated. Render thread.
 class Shadow_map_cache
 {
 public:
@@ -178,26 +178,35 @@ private:
     };
 
     // Starts a frame: forgets every pass when configuration differs from the
-    // last frame's (or usable is false); otherwise, when the published
-    // content moved, forgets the passes the changes reach (a flags change
-    // only when filter, the passes' caster filter, tells its old and new
-    // flags apart), or every pass when the changes do not start from the
-    // content the passes hold (a frame not drawn through this cache) or name
-    // no boxes.
+    // last frame's (or after clear()); otherwise, when the published content
+    // moved, forgets the passes the changes reach (a flags change only when
+    // filter, the passes' caster filter, tells its old and new flags apart),
+    // or every pass when the changes do not start from the content the
+    // passes hold (a frame not drawn through this cache) or name no boxes.
     void begin_frame(
         const Configuration&                     configuration,
         std::span<const erhe::scene::Layer_id>   layers,
-        bool                                     usable,
         const Draw_list_content_changes&         content,
         const erhe::Item_filter&                 filter
     );
-    void forget_reached(std::vector<Pass>& passes, const Draw_list_bounds& changed_bounds);
+    // How a pass selects the changed boxes' entries: culled by its view
+    // (non-skinned entries), or never culled (skinned entries: the pass
+    // draws whatever of them its clip volume holds, which a cube face's
+    // octant and the sphere through its far corners bound, not its range
+    // sphere).
+    enum class Entry_culling : uint8_t
+    {
+        culled,
+        unculled
+    };
+    void forget_reached(std::vector<Pass>& passes, const Draw_list_bounds& changed_bounds, Entry_culling entry_culling);
     [[nodiscard]] auto is_kept(const std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world, const Cull_view_tests& view) const -> bool;
     void store(std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world, const Cull_view_tests& view);
     static void count_drawn(std::vector<uint32_t>& draw_counts, std::size_t index);
 
     Configuration                       m_configuration{};
     std::vector<erhe::scene::Layer_id>  m_layers;
+    // False until the first begin_frame() after construction or clear().
     bool                                m_usable{false};
     // The content serial of the draw lists the valid passes were drawn
     // from or kept through.
