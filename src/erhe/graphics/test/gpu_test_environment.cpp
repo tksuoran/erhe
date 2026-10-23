@@ -78,6 +78,12 @@ void Gpu_test_environment::SetUp()
     // erhe_graphics/generated/graphics_config.hpp); device.hpp references it
     // unqualified for the same reason.
     Graphics_config graphics_config{};
+    // No frame pacing: the tests never present on a schedule, and the
+    // present calibration a pacing tier runs at device creation (probes
+    // streamed at one per two vsyncs on the hidden window) would cost every
+    // test process about 2 s on Metal and 6 s on MoltenVK before its first
+    // test, which was most of the suite's wall time under ctest.
+    graphics_config.frame_pacing_tier = "off";
 
     erhe::graphics::Device_message_callback message_callback =
         [this](erhe::graphics::Message_severity severity, const std::string& message, const std::string&) {
