@@ -75,6 +75,12 @@
 >C28-upshift-transient-FIXED{root=latency-trap¬CPU-clock:N=1-window-held-startup-samples+waits(clamp/join/acquire)-counted-as-latency->release-immediately-85-120-frames;fix=Frame_time_record::release_wait_time-excluded+per-visit-latency-windows-with-seed-floor;0-skips-after-54-upshifts;excess-0.3-1.1ms;no-QoS/core-request(©User-prefers-none)}
 @open::60Hz+ProMotion-gate-with-this-build->doc/plans/frame_pacing_metal.md-Log
 
+[LANDED_2026-10-23]
+>0c5ff5285::GPU-read-draw-count{plan-sec-6-option-A;erhe::graphics-Indirect_count_draws+Compute_command_encoder::prepare_indexed_indirect_count_draws+Render_command_encoder::multi_draw_indexed_primitives_indirect_count(set,job);Metal=raw-MSL-kernel(2D-slot-x-job-grid;ICB-inheritPipelineState+inheritBuffers;range-buffer;per-frame-slot;1024-command-growth)+executeCommandsInBuffer;Vk/GL=native-count-draw;use_draw_indirect_count-true-on-Metal;Base_render_pipeline_create_info::indirect_count_draws-opt-in(Metal-refuses-supportIndirectCommandBuffers-for-fragment-shaders-with-directly-bound-textures/samplers);Draw_list_scene-shadow-GPU-commands-via-set-on-all-backends;gates:0-mismatch+cpu==gpu-images-default/heavy/Bistro-Metal+default/heavy-KK;Metal-gpu-tests-193/193}
+!ICB-cost::~692B/command{creation-ok-to-4194304;driver-crash-8388608;1048576-range-executes}+setVertexBytes-inherited(ERHE_DRAW_ID-one-value-per-execute=0;records-by-first_instance)
+!Bistro-ICB::66560-commands~46MB/frame-slot(784-jobs-x-chunk-max;832-drawn)->NEXT=per-shadow-pass-encode(©User-2026-10-23)
+@metal-4-decisions-2026-10-23::count-first-then-MTL4;separate-backend-beside-Metal-3(own-ERHE_GRAPHICS_LIBRARY-value+dir);subsystem-by-subsystem-ctest-gated(order-in-plan-sec-7)
+
 [TRAPS]
 !compositor-shows-stretches-of-probes-a-refresh-late-at-any-offset(whole-passes)->judge-by-majority¬unanimity;request-at-target(offset-0)=window-edge
 !probes-committed-before-predecessor-target->late-again(¬deadline-evidence)
@@ -117,4 +123,4 @@ cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permane
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{5-tier-M=NEXT(doc/plans/frame_pacing_metal.md-iterative-sim/pacer/live-gate)+6-option-A/B-user-decision}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{6-per-shadow-pass-ICB-encode=NEXT;then-7-Metal-4-separate-backend}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
