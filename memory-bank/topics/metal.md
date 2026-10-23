@@ -149,4 +149,8 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 [LANDED_2026-10-23d]
 >92938afb5::texture_barrier/buffer_barrier-API(discard;Barrier_scope;validation);29b2b5c65::Metal-4-orders-from-declarations{consumer+producer-barriers;band-aid+ERHE_METAL4_EXPLICIT_BARRIERS_ONLY-gone};aea3e1871-calibration-cache;8e0aaf42b-test-runs;24faccd5f-drawable-at-first-use
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:MTL4Compiler-running;then-user-gates(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)+Metal-3-removal-decision;doc/plans/resource_barriers.md-steps-2-4}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+>4a3bfde32::MTL4Compiler+Pipeline_state_cache+MTL4-archive{all-migration-rows-MTL4}
+!per-bind-PSO-creation::Metal-3-set_render_pipeline_state/set_compute_pipeline_state-create-a-PSO-per-bind(debug-lines,wide-lines,every-frame)->Metal-4-has-Pipeline_state_cache;Metal-3-still-does-it(input-to-keep/remove-decision)
+!MTL::Device::newArchive-segfaults-on-non-archive-bytes->manifest(size+FNV)-checked-first
+
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4-code-COMPLETE;user-gates-pending(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)->Metal-3-decision;doc/plans/resource_barriers.md-steps-2-4(narrowing-measurement-next)}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
