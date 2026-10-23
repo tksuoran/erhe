@@ -279,8 +279,13 @@ Apple documents that precise timestamps may split encoders, which would
 change the cost being measured; relaxed ones may land later or earlier than
 the boundary, so pass times read with them are not directly comparable to
 the Metal 3 backend's sample buffer attachments. The samples are resolved on
-the CPU (`resolveCounterRange`) in the commit feedback, with the same tick
-calibration.
+the CPU (`resolveCounterRange`) in the commit feedback. Counter heap
+timestamps count ticks of `MTL::Device::queryTimestampFrequency` (24 MHz on
+Apple silicon, the `mach_absolute_time` clock), not the nanoseconds of
+`sampleTimestamps` and the commit feedback's `GPUStartTime`; the pool
+converts them with `1e9 / queryTimestampFrequency`, which puts timer results
+and Tracy zone times in the nanosecond time base of the Tracy context's
+`sampleTimestamps` calibration pair.
 
 ## Migration status
 
@@ -289,16 +294,19 @@ of the Metal 3 backend.
 
 | Subsystem | State |
 | :--- | :--- |
-| Device, `MTL4CommandQueue`, `MTL4CommandBuffer`, `MTL4CommandAllocator`, `MTL4CommitFeedback` | MTL4 ("Submission") |
+| Device, `MTL4CommandQueue`, `MTL4CommandBuffer`, `MTL4CommandAllocator`, `MTL4CommitFeedback` | MTL4 ("Submission"); the race gate (`ERHE_USE_TSAN` tree `build_xcode_metal4_tsan`, overlap and pipelining, `doc/agents/macos.md` "ThreadSanitizer") reports nothing |
 | Argument tables (`MTL4ArgumentTable`), residency sets (`MTLResidencySet`) | MTL4 ("Residency", "Binding") |
 | Render, compute and blit encoders, barriers | MTL4 ("Encoders and barriers"); barriers conservative |
-| Swapchain, drawable, frame pacing | MTL4 ("Present"); tier M runs and calibrates; tier M with the C26 pre-warm: MTL4, not live-gated |
-| Counter heaps (GPU timers, Tracy GPU zones) | MTL4 `MTL4CounterHeap` ("GPU timers"); Tracy zone placement not verified |
+| Swapchain, drawable, frame pacing | MTL4 ("Present"); tier M runs and calibrates; the frame pacing live gate (`doc/plans/frame_pacing_metal.md`, Dell 120 Hz, with the C26 pre-warm) is pending: it needs the user at the display |
+| Counter heaps (GPU timers, Tracy GPU zones) | MTL4 `MTL4CounterHeap` ("GPU timers"); in a Tracy build the default scene shows the same GPU zones as Metal 3 (`Main`, `Post_processing`, `Overlay`) on the program timeline, with medians 0.87 / 0.37 / 0.16 ms against Metal 3's 0.73 / 0.32 / 0.15 ms (Release, windowed, unpaced) |
 | `MTL4Compiler` (shaders, pipelines) | Metal 3 code (`newLibrary`, `newRenderPipelineState`) |
 | GPU-read draw count (`executeCommandsInBuffer`) | MTL4 encoders and residency; verified by the `Draw_indirect_test` count tests |
 
 ## Future work
 
 The ports and checks of `doc/plans/metal_backend.md` section 7: the
-`MTL4Compiler` port, narrowing the barriers, Tracy GPU zones in a Tracy
-build, and the image, race and pacing gates.
+`MTL4Compiler` port, narrowing the barriers and the frame pacing live gate.
+In the unpaced Release bench (`scripts/render_thread_bench.py`, default
+scene, pipelined, windowed) the render phase takes 2.9 ms per frame against
+1.65 ms on Metal 3, most of it in the `swapchain` term (2.2 ms against
+1.2 ms); where that time goes is not measured yet.

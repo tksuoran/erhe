@@ -160,7 +160,7 @@ public:
     void discard_command_buffer_samples(const Gpu_timer_command_buffer_samples& samples);
 
 private:
-    [[nodiscard]] auto ticks_to_nanoseconds(uint64_t ticks) -> uint64_t;
+    [[nodiscard]] auto ticks_to_nanoseconds(uint64_t ticks) const -> uint64_t;
     void create_tracy_context();
     // With m_mutex held. last_gpu_time carries the latest zone time across
     // one command buffer's records.
@@ -188,8 +188,11 @@ private:
     std::size_t                            m_chunks_out        {0};
     std::vector<Registered_timer>          m_timers;
     uint64_t                               m_next_timer_serial {1};
-    uint64_t                               m_calibration_cpu_ns{0};
-    uint64_t                               m_calibration_gpu   {0};
+    // MTL4::CounterHeap timestamps count ticks of
+    // MTL::Device::queryTimestampFrequency (24 MHz on Apple silicon, the
+    // mach_absolute_time clock), not the nanoseconds sampleTimestamps and
+    // the commit feedback's GPU times use; ticks times m_ns_per_tick are
+    // nanoseconds in that same time base.
     double                                 m_ns_per_tick       {1.0};
     int                                    m_tracy_context_id  {-1};
     uint16_t                               m_tracy_next_query_id{0};

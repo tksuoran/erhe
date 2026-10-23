@@ -291,6 +291,12 @@ Step (1) landed: MTL4 submission, residency, argument tables, encoders with
 conservative queue barriers, drawables through the queue, GPU timers on
 counter heaps; shaders and pipelines are still the Metal 3 API. Its
 document, with the per-subsystem migration status, is
-`doc/erhe/metal4_backend.md`. Next: (2) the Tracy GPU zone check, then (3)
-`MTL4Compiler`; the image, race and pacing gates as each step lands, and
-narrowing the barriers.
+`doc/erhe/metal4_backend.md`. Gates of step (1): the Metal ctest suite and
+the image gates pass; the race gate reports nothing; step (2) holds: the
+Tracy GPU zones of the default scene match Metal 3's zones in name and
+order of magnitude (counter heap ticks converted with
+`queryTimestampFrequency`, `doc/erhe/metal4_backend.md` "GPU timers"); the
+frame pacing live gate is pending (it needs the user at the display). Next:
+the pacing live gate, then (3) `MTL4Compiler`; the image, race and pacing
+gates as each step lands, narrowing the barriers, and the render phase cost
+(2.9 ms against Metal 3's 1.65 ms per unpaced frame).
