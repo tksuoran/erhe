@@ -187,13 +187,10 @@ if (_gpu_tests_supported)
 
     erhe_target_settings(${_gpu_target} "erhe/tests")
 
-    # The binary creates a VkInstance, so it must not be executed at build
-    # time on a GPU-less builder. Defer enumeration to ctest time. The "gpu"
-    # label lets a device-less machine leave these out (ctest -LE gpu).
-    gtest_discover_tests(${_gpu_target}
-        DISCOVERY_MODE PRE_TEST
-        PROPERTIES LABELS "gpu"
-    )
+    # One ctest test, or one per case with ERHE_GPU_TESTS_PER_PROCESS
+    # (cmake/functions.cmake); labeled "gpu" so a device-less machine leaves
+    # it out (ctest -LE gpu).
+    erhe_add_gpu_test(${_gpu_target})
     add_dependencies(erhe_tests ${_gpu_target})
 else ()
     message(STATUS "erhe_graphics_gpu_tests skipped: no Device bring-up path for ERHE_GRAPHICS_API='${ERHE_GRAPHICS_API}' + ERHE_WINDOW_LIBRARY='${ERHE_WINDOW_LIBRARY}' (need vulkan with any window library, or opengl/metal/metal4 with a non-none window library)")

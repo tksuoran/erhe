@@ -84,6 +84,23 @@ protected:
         build_environment();
     }
 
+    // Device objects go before Gpu_test::TearDown, so their deferred releases
+    // are retired and counted inside this case (doc/testing.md "GPU test
+    // isolation"). Reverse order of creation: the pipeline refers to the
+    // shader stages, which refer to the layout and the blocks.
+    void TearDown() override
+    {
+        m_fallback_sampler.reset();
+        m_fallback_texture.reset();
+        m_readback.reset();
+        m_pipeline.reset();
+        m_shader_stages.reset();
+        m_layout.reset();
+        m_readback_block.reset();
+        m_material_interface.reset();
+        Gpu_test::TearDown();
+    }
+
     void build_environment()
     {
         m_material_interface = std::make_unique<Material_interface>(device(), 256);

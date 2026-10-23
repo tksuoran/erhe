@@ -2,6 +2,7 @@
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/acceleration_structure.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
 
 #include <glm/glm.hpp>
@@ -62,11 +63,18 @@ public:
     std::unique_ptr<erhe::graphics::Compute_pipeline> pipeline;
 };
 
-// Per-test fixture over the process-wide headless Vulkan device. Provides the
-// minimal frame sequence and offscreen-readback helpers shared by the GPU
-// milestones. SetUp clears the runtime validation-message list; TearDown
-// waits the device idle and fails the case for any validation message
-// emitted during the test.
+// Per-test fixture over the process-wide device (Gpu_test_environment).
+// Provides the minimal frame sequence and offscreen-readback helpers shared by
+// the GPU milestones, and isolates the tests of one process from each other
+// (doc/testing.md "GPU test isolation"). SetUp settles the device (waits it
+// idle and retires every deferred release), snapshots its bookkeeping
+// counters (Device::get_debug_state()) and clears the runtime
+// validation-message list. TearDown ends any device frame the test left open
+// and fails the case naming it, settles the device again, drops the render
+// pipeline cache, fails the case when a counter grew past the SetUp snapshot,
+// and fails it for any validation error emitted during the test. Fixtures
+// deriving from this one call Gpu_test::SetUp first and Gpu_test::TearDown
+// last, after releasing their own device objects.
 class Gpu_test : public ::testing::Test
 {
 protected:
@@ -296,6 +304,16 @@ protected:
         std::span<const std::byte> bytes,
         float                      threshold = 0.05f
     );
+
+private:
+    // Waits the device idle and runs empty frames until every deferred
+    // release is retired: completion handlers and ring buffer ranges queued
+    // while no frame was open are keyed to the next frame, which a backend
+    // retires only once that frame ended (Metal, Metal 4; Vulkan's wait_idle
+    // drains them itself). Requires no frame to be open.
+    void settle_device(std::string_view when);
+
+    erhe::graphics::Device_debug_state m_setup_state{};
 };
 
 // --- Ray query ports (doc/plans/graphics_tests_agfx_port.md phase 8) ---

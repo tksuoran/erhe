@@ -223,6 +223,15 @@ auto Ring_buffer::is_idle() const -> bool
     return m_pending_reads.empty() && m_algorithm.is_empty();
 }
 
+auto Ring_buffer::get_bytes_in_use() const -> std::size_t
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    const std::size_t capacity  = m_algorithm.get_capacity_byte_count();
+    const std::size_t write_end = (m_algorithm.get_write_wrap_count() * capacity) + m_algorithm.get_write_position();
+    const std::size_t read_end  = (m_algorithm.get_read_wrap_count()  * capacity) + m_algorithm.get_read_offset();
+    return (write_end > read_end) ? (write_end - read_end) : 0;
+}
+
 auto Ring_buffer::get_last_used_frame() const -> uint64_t
 {
     const std::lock_guard<std::mutex> lock{m_mutex};

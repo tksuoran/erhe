@@ -1351,6 +1351,36 @@ auto Device_impl::is_frame_completed(const uint64_t frame) const -> bool
     return frame < m_latest_completed_frame;
 }
 
+auto Device_impl::get_debug_state() const -> Device_debug_state
+{
+    Device_debug_state state{};
+    uint64_t render_frame_id = 0;
+    {
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        render_frame_id            = m_render_frame_id;
+        state.oldest_open_frame_id = m_render_frame_id;
+        state.open_frame_count     = (m_prepare_frame_id >= m_render_frame_id) ? (m_prepare_frame_id - m_render_frame_id + 1) : 0;
+    }
+    {
+        const std::lock_guard<std::mutex> lock{m_completion_mutex};
+        state.unretired_frame_count = (render_frame_id > m_latest_completed_frame) ? (render_frame_id - m_latest_completed_frame) : 0;
+        for (const Frame_command_buffer_count& entry : m_frame_command_buffer_counts) {
+            if (entry.committed > entry.completed) {
+                state.uncompleted_command_buffer_count += static_cast<std::size_t>(entry.committed - entry.completed);
+            }
+        }
+    }
+    {
+        const std::lock_guard<std::mutex> lock{m_completion_handler_mutex};
+        state.completion_handler_count = m_completion_handlers.size();
+    }
+    const Ring_buffer_pool_usage ring_buffer_usage = m_ring_buffer_pool.get_usage();
+    state.ring_buffer_count        = ring_buffer_usage.buffer_count;
+    state.busy_ring_buffer_count   = ring_buffer_usage.busy_buffer_count;
+    state.ring_buffer_bytes_in_use = ring_buffer_usage.bytes_in_use;
+    return state;
+}
+
 auto Device_impl::allocate_ring_buffer_entry(
     const Buffer_target     buffer_target,
     const Ring_buffer_usage  usage,

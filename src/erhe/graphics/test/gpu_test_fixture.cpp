@@ -28,6 +28,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <ostream>
+#include <sstream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -45,8 +47,72 @@ auto Compute_program::is_valid() const -> bool
     return (shader_stages != nullptr) && (pipeline != nullptr) && pipeline->is_valid();
 }
 
+namespace {
+
+// Empty frames settle_device() runs at most: a release a completion handler
+// queues while it runs is keyed to the next frame again, so a chain of them
+// needs one frame per link. The longest chain the tests produce is short; a
+// leak that never drains is reported by the counter comparison instead.
+constexpr int c_max_settle_frames = 4;
+
+[[nodiscard]] auto is_settled(const erhe::graphics::Device_debug_state& state) -> bool
+{
+    return
+        (state.unretired_frame_count            == 0) &&
+        (state.uncompleted_command_buffer_count == 0) &&
+        (state.completion_handler_count         == 0) &&
+        (state.busy_ring_buffer_count           == 0) &&
+        (state.ring_buffer_bytes_in_use         == 0);
+}
+
+void describe(std::ostream& out, const erhe::graphics::Device_debug_state& state)
+{
+    out <<
+        "open frames "                 << state.open_frame_count <<
+        " (oldest open frame id "      << state.oldest_open_frame_id << ")"
+        ", unretired frames "          << state.unretired_frame_count <<
+        ", uncompleted command buffers " << state.uncompleted_command_buffer_count <<
+        ", completion handlers "       << state.completion_handler_count <<
+        ", ring buffers "              << state.ring_buffer_count <<
+        " (busy "                      << state.busy_ring_buffer_count <<
+        ", bytes in use "              << state.ring_buffer_bytes_in_use << ")";
+}
+
+} // anonymous namespace
+
+void Gpu_test::settle_device(const std::string_view when)
+{
+    erhe::graphics::Device& graphics_device = device();
+    graphics_device.wait_idle();
+    for (int frame = 0; frame < c_max_settle_frames; ++frame) {
+        const erhe::graphics::Device_debug_state state = graphics_device.get_debug_state();
+        if ((state.open_frame_count != 0) || is_settled(state)) {
+            return;
+        }
+        if (!graphics_device.wait_frame()) {
+            ADD_FAILURE() << "GPU test isolation (" << when << "): wait_frame() of a settling frame failed";
+            return;
+        }
+        if (!graphics_device.end_frame()) {
+            ADD_FAILURE() << "GPU test isolation (" << when << "): end_frame() of a settling frame failed";
+            return;
+        }
+        graphics_device.wait_idle();
+    }
+}
+
 void Gpu_test::SetUp()
 {
+    settle_device("SetUp");
+    m_setup_state = device().get_debug_state();
+    // The previous case's TearDown ends every frame it left open, so a frame
+    // open here was opened outside any case (a fixture destructor, an
+    // environment): fail this case rather than let the snapshot carry it.
+    if (m_setup_state.open_frame_count != 0) {
+        ADD_FAILURE() <<
+            "GPU test isolation: " << m_setup_state.open_frame_count <<
+            " device frame(s) already open at SetUp (oldest frame id " << m_setup_state.oldest_open_frame_id << ")";
+    }
     Gpu_test_environment::get().clear_messages();
     Gpu_test_results::get().clear();
 }
@@ -54,7 +120,55 @@ void Gpu_test::SetUp()
 void Gpu_test::TearDown()
 {
     erhe::graphics::Device& graphics_device = device();
-    graphics_device.wait_idle();
+
+    // A test that failed between wait_frame() and end_frame() leaves its
+    // frames open. End them (oldest first, as end_frame requires) so the
+    // next test starts with none open, and fail this one naming them.
+    {
+        const erhe::graphics::Device_debug_state state = graphics_device.get_debug_state();
+        if (state.open_frame_count != 0) {
+            const uint64_t first_frame = state.oldest_open_frame_id;
+            const uint64_t last_frame  = first_frame + state.open_frame_count - 1;
+            ADD_FAILURE() <<
+                "GPU test isolation: the test left " << state.open_frame_count <<
+                " device frame(s) open (frame ids " << first_frame << " to " << last_frame <<
+                "); TearDown ended them";
+            for (uint64_t frame_id = first_frame; frame_id <= last_frame; ++frame_id) {
+                if (!graphics_device.end_frame(frame_id)) {
+                    ADD_FAILURE() << "GPU test isolation: end_frame(" << frame_id << ") of a frame left open failed";
+                }
+            }
+        }
+    }
+
+    // Retire every release the test queued, then drop the render pipelines
+    // it built (Vulkan's pipeline map is keyed on raw handles a driver may
+    // recycle; the destruction is itself a deferred release, so settle
+    // again). The other device-level caches need no reset: see
+    // doc/testing.md "GPU test isolation".
+    settle_device("TearDown");
+    graphics_device.clear_render_pipeline_cache();
+    settle_device("TearDown, after clearing the render pipeline cache");
+
+    {
+        const erhe::graphics::Device_debug_state state = graphics_device.get_debug_state();
+        const bool grew =
+            (state.open_frame_count                 != 0) ||
+            (state.unretired_frame_count            > m_setup_state.unretired_frame_count) ||
+            (state.uncompleted_command_buffer_count > m_setup_state.uncompleted_command_buffer_count) ||
+            (state.completion_handler_count         > m_setup_state.completion_handler_count) ||
+            (state.busy_ring_buffer_count           > m_setup_state.busy_ring_buffer_count) ||
+            (state.ring_buffer_bytes_in_use         > m_setup_state.ring_buffer_bytes_in_use);
+        if (grew) {
+            std::ostringstream message;
+            message << "GPU test isolation: device state did not return to the SetUp snapshot after settling. SetUp: ";
+            describe(message, m_setup_state);
+            message << ". TearDown: ";
+            describe(message, state);
+            ADD_FAILURE() << message.str();
+        }
+    }
+
     const std::vector<Gpu_test_environment::Message> messages = Gpu_test_environment::get().take_messages();
     for (const Gpu_test_environment::Message& message : messages) {
         if (message.first) {

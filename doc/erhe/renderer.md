@@ -147,7 +147,13 @@ Cost: `erhe_renderer_gpu_tests --gtest_filter=*aa_cost*` reports the
 render-pass GPU time of 2000 random wide lines at 1920 x 1080 with
 anti-aliasing off and on (the second draw re-rasterizes the ribbons); the
 accepted cost of the anti-aliased path is about 1.7x the binary path on the
-first machine measured.
+first machine measured (Vulkan and OpenGL, integrated GPU) and 2.0x on an
+Apple M4 Pro (Metal). The test is a regression tripwire, not a benchmark: GPU
+contention or a clock ramp moves a single run's ratio by tens of percent, so
+it fails only when a mode produced no measurement or the ratio exceeds 3.0
+(`c_max_cost_ratio`). The off, on and ratio values are logged to
+`logs/log.txt` and recorded as the test properties `off_ms`, `on_ms` and
+`cost_ratio`.
 
 ## Future work
 

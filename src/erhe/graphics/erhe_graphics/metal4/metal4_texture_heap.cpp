@@ -154,7 +154,17 @@ Texture_heap_impl::~Texture_heap_impl() noexcept
         m_argument_encoder->release();
         m_argument_encoder = nullptr;
     }
-    m_argument_buffer_range.cancel();
+    // Release, not cancel: the encoded argument buffer is closed and a frame
+    // still in flight may read it, so its space returns to the ring buffer
+    // through a sync entry once the current frame retires. cancel() would
+    // make no sync entry and the space would stay allocated until a later
+    // range of the same ring buffer retired past it.
+    if (!m_argument_buffer_range.is_released()) {
+        if ((m_argument_buffer_range.get_buffer() != nullptr) && !m_argument_buffer_range.is_closed()) {
+            m_argument_buffer_range.close();
+        }
+        m_argument_buffer_range.release();
+    }
 }
 
 void Texture_heap_impl::reset_heap(Command_buffer& command_buffer)

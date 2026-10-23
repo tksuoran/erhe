@@ -187,4 +187,20 @@ auto Ring_buffer_pool::get_total_byte_count() const -> std::size_t
     return total;
 }
 
+auto Ring_buffer_pool::get_usage() const -> Ring_buffer_pool_usage
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    Ring_buffer_pool_usage usage{};
+    for (const std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
+        for (const std::unique_ptr<Ring_buffer>& ring_buffer : role_ring_buffers) {
+            ++usage.buffer_count;
+            if (!ring_buffer->is_idle()) {
+                ++usage.busy_buffer_count;
+            }
+            usage.bytes_in_use += ring_buffer->get_bytes_in_use();
+        }
+    }
+    return usage;
+}
+
 } // namespace erhe::graphics

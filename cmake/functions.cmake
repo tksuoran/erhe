@@ -123,3 +123,37 @@ function(erhe_download_pinned_file)
 
   file(RENAME "${_temporary_file}" "${_arg_FILE}")
 endfunction()
+
+# ---- Register a test binary that brings up a graphics Device ----
+
+#[==[
+erhe_add_gpu_test(<target>)
+
+Registers the gtest executable <target> with ctest under the label "gpu"
+(doc/testing.md "Labels" and "Running").
+
+By default the whole binary is ONE ctest test: every case runs in one
+process against one Device, which the shared fixture (Gpu_test,
+src/erhe/graphics/test/gpu_test_fixture.hpp) isolates case by case. Each
+process pays the window and Device bring-up, so this is the fast mode.
+
+With -DERHE_GPU_TESTS_PER_PROCESS=ON each case is discovered as its own ctest
+test (one process per case): slower, but a crash or abort in one case cannot
+take the following cases with it. Discovery runs when ctest runs (PRE_TEST,
+doc/testing.md "Discovery"), never at build time, since the binary creates a
+graphics instance.
+]==]
+function(erhe_add_gpu_test target)
+  if (ERHE_GPU_TESTS_PER_PROCESS STREQUAL "ON")
+    include(GoogleTest)
+    gtest_discover_tests(${target}
+      DISCOVERY_MODE PRE_TEST
+      PROPERTIES LABELS "gpu"
+    )
+  else ()
+    add_test(NAME ${target} COMMAND ${target})
+    # erhe_graphics_gpu_tests takes about 7 s on Metal and 20 s on MoltenVK
+    # in a Debug build; the bound leaves room for a slow software Vulkan.
+    set_tests_properties(${target} PROPERTIES LABELS "gpu" TIMEOUT 900)
+  endif ()
+endfunction()

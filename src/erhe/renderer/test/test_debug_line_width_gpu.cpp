@@ -33,6 +33,7 @@
 #include "erhe_log/log.hpp"
 #include "erhe_math/viewport.hpp"
 
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -805,14 +806,16 @@ TEST_F(Debug_line_width_gpu_test, aa_off_is_binary)
     EXPECT_EQ(count_partial(row), 0);
 }
 
-// Cost gate (plan section "Cost gate"): median render-pass GPU time of 2000
-// random wide lines at 1920 x 1080, anti-aliasing off and on, logged to
-// logs/log.txt of the repository root. The numbers are machine-dependent and recorded in the local
-// memory bank; the test only checks that both modes produced a measurement.
+// Cost tripwire: median render-pass GPU time of 2000 random wide lines at
+// 1920 x 1080, anti-aliasing off and on, logged to logs/log.txt of the
+// repository root and recorded as test properties. The accepted ratio and why
+// the bound is c_max_cost_ratio are in doc/erhe/renderer.md (the "Cost:"
+// paragraph).
 TEST_F(Debug_line_width_gpu_test, aa_cost_benchmark)
 {
-    constexpr int line_count  = 2000;
-    constexpr int frame_count = 21;
+    constexpr int    line_count       = 2000;
+    constexpr int    frame_count      = 21;
+    constexpr double c_max_cost_ratio = 3.0;
     const uint64_t off_ns = measure_pass_ns(Anti_aliasing::off, line_count, frame_count);
     const uint64_t on_ns  = measure_pass_ns(Anti_aliasing::on,  line_count, frame_count);
     EXPECT_GT(off_ns, 0u);
@@ -828,6 +831,10 @@ TEST_F(Debug_line_width_gpu_test, aa_cost_benchmark)
         line_count, frame_count - 1,
         static_cast<double>(off_ns) * 1e-6, static_cast<double>(on_ns) * 1e-6, ratio
     );
+    RecordProperty("off_ms",     fmt::format("{:.3f}", static_cast<double>(off_ns) * 1e-6));
+    RecordProperty("on_ms",      fmt::format("{:.3f}", static_cast<double>(on_ns) * 1e-6));
+    RecordProperty("cost_ratio", fmt::format("{:.3f}", ratio));
+    EXPECT_LE(ratio, c_max_cost_ratio) << "anti-aliased debug lines cost " << ratio << "x the binary path (tripwire " << c_max_cost_ratio << "x)";
 }
 
 } // namespace erhe::renderer::test

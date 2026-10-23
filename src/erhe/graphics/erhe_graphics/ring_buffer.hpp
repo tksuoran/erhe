@@ -66,6 +66,11 @@ public:
     // no in-flight GPU work references this buffer.
     [[nodiscard]] auto is_idle() const -> bool;
 
+    // Bytes between the read and the write position: acquired ranges not yet
+    // retired, plus the skipped tail of a wrap still ahead of the read
+    // position. 0 when is_idle().
+    [[nodiscard]] auto get_bytes_in_use() const -> std::size_t;
+
     // Device frame index of the most recent acquire(); 0 if never acquired.
     [[nodiscard]] auto get_last_used_frame() const -> uint64_t;
 

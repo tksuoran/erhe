@@ -36,6 +36,16 @@ class Ring_buffer;
 // of a newer one. Each role's frames are in order, so each role allocates
 // from its own buffers (worker threads share the main role's). In inline
 // mode, and while the roles are unset, every allocation is the main role's.
+// Ring_buffer_pool::get_usage(): the pool's buffers and how much of them
+// unretired ranges hold (Device_debug_state).
+class Ring_buffer_pool_usage
+{
+public:
+    std::size_t buffer_count     {0};
+    std::size_t busy_buffer_count{0}; // !Ring_buffer::is_idle()
+    std::size_t bytes_in_use     {0}; // sum of Ring_buffer::get_bytes_in_use()
+};
+
 class Ring_buffer_pool
 {
 public:
@@ -55,6 +65,7 @@ public:
 
     [[nodiscard]] auto get_buffer_count() const -> std::size_t;
     [[nodiscard]] auto get_total_byte_count() const -> std::size_t;
+    [[nodiscard]] auto get_usage() const -> Ring_buffer_pool_usage;
 
 private:
     static constexpr std::size_t s_role_count = 2; // main, render

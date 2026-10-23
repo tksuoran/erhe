@@ -1454,6 +1454,20 @@ auto Device_impl::is_frame_completed(const uint64_t frame) const -> bool
     return frame < m_latest_completed_frame;
 }
 
+auto Device_impl::get_debug_state() const -> Device_debug_state
+{
+    Device_debug_state state{};
+    state.oldest_open_frame_id     = m_render_frame_id;
+    state.open_frame_count         = (m_prepare_frame_id >= m_render_frame_id) ? (m_prepare_frame_id - m_render_frame_id + 1) : 0;
+    state.unretired_frame_count    = (m_render_frame_id > m_latest_completed_frame) ? (m_render_frame_id - m_latest_completed_frame) : 0;
+    state.completion_handler_count = m_completion_handlers.size();
+    const Ring_buffer_pool_usage ring_buffer_usage = m_ring_buffer_pool.get_usage();
+    state.ring_buffer_count        = ring_buffer_usage.buffer_count;
+    state.busy_ring_buffer_count   = ring_buffer_usage.busy_buffer_count;
+    state.ring_buffer_bytes_in_use = ring_buffer_usage.bytes_in_use;
+    return state;
+}
+
 auto Device_impl::allocate_ring_buffer_entry(
     const Buffer_target     buffer_target,
     const Ring_buffer_usage ring_buffer_usage,

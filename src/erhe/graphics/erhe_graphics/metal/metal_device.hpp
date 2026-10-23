@@ -236,6 +236,7 @@ public:
     // Could report MTLDevice recommendedMaxWorkingSetSize/currentAllocatedSize;
     // zeros = unknown until someone needs it there.
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget { return {}; }
+    [[nodiscard]] auto get_debug_state                    () const -> Device_debug_state;
 
     void reset_shader_stages_state_tracker();
     [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
@@ -388,7 +389,7 @@ private:
     // render thread, loaders); frame_completed() moves the due entries to
     // m_completion_handler_scratch under the lock and runs them outside it,
     // since a callback may register a handler itself (a texture release).
-    std::mutex                       m_completion_handler_mutex;
+    mutable std::mutex               m_completion_handler_mutex;
     std::vector<Completion_handler>  m_completion_handlers;
     std::vector<Completion_handler>  m_completion_handler_scratch;
     std::vector<uint64_t>            m_retired_frames_scratch;

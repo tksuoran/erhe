@@ -27,8 +27,9 @@ if (TARGET erhe::gpu_test_support)
 
     erhe_target_settings(${_gpu_target} "erhe/tests")
 
-    # Needs a Device: labeled "gpu" so a device-less machine can skip it.
-    include(GoogleTest)
-    gtest_discover_tests(${_gpu_target} PROPERTIES LABELS "gpu")
+    # Needs a Device: labeled "gpu" so a device-less machine can skip it; one
+    # ctest test, or one per case with ERHE_GPU_TESTS_PER_PROCESS
+    # (cmake/functions.cmake).
+    erhe_add_gpu_test(${_gpu_target})
     add_dependencies(erhe_tests ${_gpu_target})
 endif ()
