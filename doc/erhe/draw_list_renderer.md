@@ -700,8 +700,10 @@ Drawing:
   supported on devices with native multi-draw indirect with a GPU-read draw
   count (`erhe::graphics::Device_info::use_draw_indirect_count`) and
   `Record_indexing::first_instance` (the generated commands name records
-  through `first_instance`), so the emulated multi-draw path, Metal and the
-  null device classify and write their commands on the CPU only. `classify_frame_cull_views()` records, after the CPU
+  through `first_instance`), so the emulated multi-draw path, MoltenVK (no
+  count draw) and the null device classify and write their commands on the
+  CPU only; Metal draws the count through an indirect command buffer
+  (`doc/erhe/graphics.md` "Indirect count draws"). `classify_frame_cull_views()` records, after the CPU
   classification, the frame's one dispatch per scene into the frame command
   buffer, outside any render pass and before the first draw: the frame's
   view set (eight `vec4` per view, transcribed from the CPU's view tests:
@@ -723,8 +725,17 @@ Drawing:
   and the job's own dense command range, at a multiple of 32 commands) and
   records the two passes of `cull_compact.comp` after a storage barrier
   (classification writes -> compaction reads), one storage barrier between
-  them, and a command barrier after them (compaction writes -> indirect
-  command and count reads). The pass bits pass runs one invocation per
+  them, and a command and storage barrier after them (compaction writes ->
+  indirect command and count reads, and the prepare step's reads). It then
+  prepares the jobs as `erhe::graphics` indirect count draws
+  (`Compute_command_encoder::prepare_indexed_indirect_count_draws()` in its
+  own compute encoder, on the `Draw_list_scene`'s persistent
+  `Indirect_count_draws`): per job its command offset, chunk entry count and
+  the index of its list's index buffer in a per-frame table of the distinct
+  index buffers (job and index buffer tables are scratch kept with their
+  capacity). On Metal this dispatches the kernel that encodes the surviving
+  commands into an indirect command buffer; elsewhere it records the
+  parameters. The pass bits pass runs one invocation per
   (job, entry): the job's view bit and the selection's `Item_filter`
   (transcribed as 32-bit halves) against the entry's flag bits, collected
   into the job's pass bit words (command offset / 32 on), each word written
@@ -747,12 +758,19 @@ Drawing:
   first-job lookup are render-phase scratch kept with their capacity.
   `draw_shadow()` with a culling view on such a frame verifies its filter,
   layers and chunk size are the selection's and draws each chunk with
-  `multi_draw_indexed_primitives_indirect_count()` over its job's command
-  range and count slot (`max_draw_count` = the chunk's entry count),
-  binding the chunk's shared records as before; no
-  `Draw_indirect_buffer::update()` runs for it, and no per-entry decision:
-  every chunk of a drawn list is one count draw (a zero count draws
-  nothing), the list's pipeline, buffers and command buffer bound once. The
+  `multi_draw_indexed_primitives_indirect_count(set, job)` of the prepared
+  set (the job's command range and count slot, `max_draw_count` = the
+  chunk's entry count; the draw binds the job's index buffer, at offset 0
+  as the CPU path's draws do, and the command buffer itself), binding the
+  chunk's shared records as before; no `Draw_indirect_buffer::update()`
+  runs for it, and no per-entry decision: every chunk of a drawn list is one
+  count draw (a zero count draws nothing), the list's pipeline and vertex
+  buffers bound once. The shadow pipelines are created with
+  `Indirect_count_draw_support::enabled` (Metal's
+  `supportIndirectCommandBuffers`; their shaders bind no textures
+  directly). On Bistro the Metal indirect command buffer reaches 131072
+  commands (90.7 MB) per frame in flight: a job reserves its chunk's whole
+  entry count, rounded to 32, and the buffer grows in powers of two. The
   compaction also writes, per job, the chunk's entries passing the filter;
   every `gpu` frame copies the count buffer to host memory, and the
   classification of the frame that reuses its frame slot (the frame retired)
@@ -949,7 +967,7 @@ at construction from `Primitive_interface::record_indexing`:
   so the record upload is unchanged and the pass writes no commands.
 - Shadow passes under `Record_indexing::draw_position` (null device, devices
   without base instance) and on devices without a GPU-read draw count
-  (Metal) write their records per pass like the color
+  (MoltenVK) write their records per pass like the color
   passes.
 
 ### 9.3 Scene-side hooks and the threading contract

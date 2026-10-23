@@ -1,4 +1,7 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
+#include "erhe_graphics/indirect_count_draws.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_compute_command_encoder.hpp"
@@ -56,6 +59,21 @@ void Compute_command_encoder::set_compute_pipeline(const Compute_pipeline& pipel
 {
     m_impl->set_compute_pipeline(pipeline);
 }
+auto Compute_command_encoder::prepare_indexed_indirect_count_draws(
+    Indirect_count_draws&                    draws,
+    const Indirect_count_draws_prepare_info& prepare_info
+) -> Indirect_count_draw_set
+{
+    ERHE_VERIFY(draws.get_device().get_info().use_draw_indirect_count);
+    const Indirect_count_draw_set set = draws.store(prepare_info);
+#if defined(ERHE_GRAPHICS_API_METAL)
+    // Metal encodes the surviving commands into the slot's indirect command
+    // buffer; the other backends draw from the recorded parameters.
+    m_impl->encode_indirect_count_draws(draws, set.slot);
+#endif
+    return set;
+}
+
 void Compute_command_encoder::dispatch_compute(
     const std::uintptr_t x_size,
     const std::uintptr_t y_size,

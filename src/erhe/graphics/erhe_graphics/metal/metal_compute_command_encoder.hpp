@@ -33,6 +33,9 @@ public:
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
+    // Compute_command_encoder::prepare_indexed_indirect_count_draws: the
+    // encoding dispatch of the prepared slot; unbinds the erhe pipeline.
+    void encode_indirect_count_draws(Indirect_count_draws& draws, std::size_t slot);
 
     // Backend access for Texture_heap_impl::bind(Compute_command_encoder&),
     // which binds the texture argument buffer and useResource()s the heap

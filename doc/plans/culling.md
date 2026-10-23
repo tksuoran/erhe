@@ -259,7 +259,7 @@ Each phase lands on its own, verified, before the next starts.
    window, MCP `set_culling_classification`), which reaches `publish()`
    through the frame's `Render_settings` snapshot and is recorded in the
    published slot; the device capability is native multi-draw indirect plus
-   `Record_indexing::first_instance`, so the emulated path, Metal and the null
+   `Record_indexing::first_instance`, so the emulated path and the null
    device stay on the CPU path (logged once). `publish()` under `gpu` keeps
    one host-visible bounds buffer per frame slot (all lists back to back, two
    `vec4` per entry, a skinned list unbounded) and writes only the lists
@@ -337,7 +337,8 @@ Each phase lands on its own, verified, before the next starts.
    6b, GPU command generation for the shadow passes. Done:
    `Device_info::use_draw_indirect_count` (Vulkan: `VK_KHR_draw_indirect_count`
    enabled, which enables `drawIndirectCount`, on the native multi-draw path;
-   GL 4.6; false on Metal and the null device) and
+   GL 4.6; Metal through indirect command buffers, `doc/plans/metal_backend.md`
+   section 6; false on MoltenVK and the null device) and
    `Render_command_encoder::multi_draw_indexed_primitives_indirect_count()`
    (`doc/erhe/graphics.md` "Draw count from the GPU"); the
    `Gpu_cull_classifier` capability now needs the count draw.

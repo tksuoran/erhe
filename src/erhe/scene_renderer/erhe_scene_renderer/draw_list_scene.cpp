@@ -1928,18 +1928,17 @@ void Draw_list_scene::draw_list_gpu_chunks(
     // (get_retired_gpu_shadow_counts()).
     const std::size_t max_per_chunk = get_records_per_chunk(primitive_buffer);
     const std::size_t entry_count   = draw_list.entries.size();
-    erhe::graphics::Buffer* const        index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
-    const erhe::dataformat::Format       index_format = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer);
-    constexpr std::size_t                command_stride = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
-    const erhe::graphics::Primitive_type topology       = render_pipeline.get_create_info().base.input_assembly.primitive_topology;
+    // The jobs were prepared as triangle draws (shadow casters).
+    ERHE_VERIFY(render_pipeline.get_create_info().base.input_assembly.primitive_topology == erhe::graphics::Primitive_type::triangle);
+    ERHE_VERIFY(m_gpu_indirect_count_draw_set.draws != nullptr);
 
+    // The prepared draw binds the job's index buffer and the command buffer
+    // itself.
     render_encoder.set_render_pipeline(render_pipeline);
-    render_encoder.set_index_buffer(index_buffer);
     for (std::size_t stream_index = 0, stream_end = draw_list.key.buffer_set.vertex_buffers.size(); stream_index < stream_end; ++stream_index) {
         erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(draw_list.key.buffer_set.vertex_buffers[stream_index]);
         render_encoder.set_vertex_buffer(vertex_buffer, 0, static_cast<uint32_t>(stream_index));
     }
-    render_encoder.set_buffer(erhe::graphics::Buffer_target::draw_indirect, m_gpu_command_buffer);
 
     for (std::size_t begin = 0, chunk = 0; begin < entry_count; begin += max_per_chunk, ++chunk) {
         const std::size_t end       = std::min(entry_count, begin + max_per_chunk);
@@ -1949,15 +1948,7 @@ void Draw_list_scene::draw_list_gpu_chunks(
         ERHE_VERIFY(job.entry_count == (end - begin));
         const erhe::graphics::Ring_buffer_range& shared_range = shared_shadow_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, primitive_settings, frame_index);
         primitive_buffer.bind(render_encoder, shared_range);
-        render_encoder.multi_draw_indexed_primitives_indirect_count(
-            topology,
-            index_format,
-            m_gpu_command_byte_offset + (static_cast<std::size_t>(job.command_offset) * command_stride),
-            *m_gpu_count_buffer,
-            m_gpu_count_byte_offset + (job_index * Gpu_cull_classifier::count_bytes_per_job),
-            end - begin,
-            command_stride
-        );
+        render_encoder.multi_draw_indexed_primitives_indirect_count(m_gpu_indirect_count_draw_set, static_cast<uint32_t>(job_index));
         statistics.draw_call_count += 1;
     }
     statistics.draw_list_count += 1;
@@ -2288,6 +2279,7 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     m_gpu_command_byte_offset = 0;
     m_gpu_count_buffer        = nullptr;
     m_gpu_count_byte_offset   = 0;
+    m_gpu_indirect_count_draw_set = erhe::graphics::Indirect_count_draw_set{};
     m_gpu_shadow_jobs.clear();
     for (std::vector<uint64_t>& masks : m_cull_masks) {
         masks.clear();

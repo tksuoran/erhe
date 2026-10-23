@@ -16,6 +16,9 @@ class Compute_pipeline;
 class Compute_pipeline_state;
 class Compute_command_encoder_impl;
 class Device;
+class Indirect_count_draw_set;
+class Indirect_count_draws;
+class Indirect_count_draws_prepare_info;
 class Sampler;
 class Texture;
 
@@ -53,6 +56,19 @@ public:
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
+
+    // Declares this frame's GPU-counted multi-draws (indirect_count_draws.hpp)
+    // after the dispatches that write their commands and counts. On Metal it
+    // dispatches the encoding kernel in this encoder (the bound pipeline and
+    // buffers are left changed: rebind before a further dispatch), so the
+    // producer's writes must be ordered before this encoder the way they are
+    // ordered before a later pass (separate encoder, memory_barrier). Vulkan,
+    // OpenGL and the null device only record the parameters. Needs
+    // Device_info::use_draw_indirect_count.
+    [[nodiscard]] auto prepare_indexed_indirect_count_draws(
+        Indirect_count_draws&                    draws,
+        const Indirect_count_draws_prepare_info& prepare_info
+    ) -> Indirect_count_draw_set;
 
     // The Command_buffer this encoder records into. Mirrors
     // Render_command_encoder::get_command_buffer; needed so callers can

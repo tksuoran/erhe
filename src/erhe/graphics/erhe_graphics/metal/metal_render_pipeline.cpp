@@ -41,6 +41,11 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
     desc->setVertexFunction(vertex_function);
     desc->setFragmentFunction(fragment_function);
+    // Prepared count draws (Indirect_count_draws) execute an indirect
+    // command buffer that inherits the encoder's pipeline, which needs this
+    // on the pipeline. Opt-in: Metal rejects it for a fragment shader with
+    // directly bound textures or samplers.
+    desc->setSupportIndirectCommandBuffers(base.indirect_count_draws == Indirect_count_draw_support::enabled);
 
     // Color attachment pixel formats from create info
     for (unsigned int i = 0; i < create_info.color_attachment_count; ++i) {

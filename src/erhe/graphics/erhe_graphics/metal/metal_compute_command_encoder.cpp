@@ -3,6 +3,7 @@
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
 #include "erhe_graphics/metal/metal_compute_pipeline.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
+#include "erhe_graphics/metal/metal_indirect_count_draws.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_sampler.hpp"
 #include "erhe_graphics/metal/metal_shader_stages.hpp"
@@ -308,6 +309,25 @@ void Compute_command_encoder_impl::dispatch_compute(
     );
 
     m_encoder->dispatchThreadgroups(threads_per_grid, threads_per_threadgroup);
+}
+
+void Compute_command_encoder_impl::encode_indirect_count_draws(Indirect_count_draws& draws, const std::size_t slot)
+{
+    ERHE_VERIFY(m_encoder != nullptr);
+    // The kernel binds its own pipeline: drop the erhe one, so a further
+    // dispatch_compute() without a new set_compute_pipeline() fails loudly
+    // instead of running the kernel's pipeline.
+    if ((m_pipeline_state != nullptr) && m_owns_pipeline_state) {
+        MTL::ComputePipelineState* ps = m_pipeline_state;
+        m_device.get_impl().add_completion_handler(
+            [ps](Device_impl&) {
+                ps->release();
+            }
+        );
+    }
+    m_pipeline_state      = nullptr;
+    m_owns_pipeline_state = false;
+    draws.get_impl().encode(m_encoder, draws.get_slot(slot), slot);
 }
 
 } // namespace erhe::graphics

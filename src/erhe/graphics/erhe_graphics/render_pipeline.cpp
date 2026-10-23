@@ -203,6 +203,7 @@ auto Base_render_pipeline::operator=(Base_render_pipeline&& other) noexcept -> B
     v = erhe::hash::hash(&base.rasterization,        sizeof(Rasterization_state), v);
     v = erhe::hash::hash(&base.depth_stencil,        sizeof(Depth_stencil_state), v);
     v = erhe::hash::hash(&base.bind_group_layout,    sizeof(Bind_group_layout*), v);
+    v = erhe::hash::hash(static_cast<uint8_t>(base.indirect_count_draws), v);
     if (base.color_blend != nullptr) {
         v = erhe::hash::hash(base.color_blend, sizeof(Color_blend_state), v);
     }

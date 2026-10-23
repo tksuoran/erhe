@@ -507,12 +507,55 @@ per-extension structs the device enables) and reports the capability on the
 native multi-draw path only (the emulation issues one draw per command and
 cannot read a GPU count); GL reports it from 4.6 (`glMultiDrawElementsIndirectCount`,
 the count read from the `GL_PARAMETER_BUFFER` binding; the `erhe::gl`
-loader takes the core entry point only); Metal and the null device report
-false and fail fatally if called. A count written by a shader reaches the
+loader takes the core entry point only); Metal reports it when the encoding
+kernel below compiles at device init, and fails fatally in this overload;
+the null device reports false and fails fatally if called. A count written by
+a shader reaches the
 draw after a `Memory_barrier_mask::command_barrier_bit` barrier (Vulkan
 draw-indirect stage, indirect-command-read access; GL
 `GL_COMMAND_BARRIER_BIT`, which covers the parameter buffer). The device
 logs the capability at startup (`Draw indirect count: ...`).
+
+### Indirect count draws
+
+The form every backend with `use_draw_indirect_count` draws (Metal has no
+other): a producer writes, per job, up to `max_draw_count`
+`Draw_indexed_primitives_indirect_command`s at the job's `command_offset` in
+a command buffer and their number into a count buffer, then declares them
+once per frame with `Compute_command_encoder::
+prepare_indexed_indirect_count_draws(draws, prepare_info)` and draws job `j`
+with `Render_command_encoder::multi_draw_indexed_primitives_indirect_count(
+set, j)` inside a later render pass, after the pass has set the pipeline,
+vertex buffers and bindings.
+
+- `Indirect_count_draws(device, debug_label)` is persistent (one per
+  producer): it keeps one slot per frame in flight, selected by
+  `prepare_info.frame_index % get_number_of_frames_in_flight()`, and one
+  prepare per slot per frame. The returned `Indirect_count_draw_set` names
+  the slot and is valid for that frame.
+- `Indirect_count_draws_prepare_info`: the primitive type; the index buffers
+  (`Indirect_count_index_buffer`: buffer, 16- or 32-bit index type; a job
+  names one by index, so jobs of one prepare may draw from different
+  buffers); the command buffer and the byte offset of command 0 (stride 20
+  bytes); the count buffer, its byte offset and the byte stride between jobs'
+  counts (one `uint32_t` read per job, clamped to `max_draw_count`); the jobs
+  (`Indirect_count_draw_job`: `command_offset` in commands, `max_draw_count`,
+  `index_buffer`), whose command ranges do not overlap.
+- The producer's writes are ordered before the prepare's encoder as before any
+  later pass: a separate compute encoder after a memory barrier.
+- Vulkan and OpenGL: the prepare records the parameters; the draw binds the
+  job's index buffer and the command buffer and issues the count draw above.
+- Metal: the prepare dispatches a kernel in the given encoder (which leaves
+  no erhe compute pipeline bound) that encodes each job's commands into an
+  indirect command buffer and writes the job's execution range; the draw
+  executes that range (`doc/erhe/metal_backend.md` "Multi-Draw Indirect").
+  `ERHE_DRAW_ID` reads 0 in every command, so shaders name their records by
+  `first_instance` (`Record_indexing::first_instance`, "Draw records" above).
+  The pipeline must be created with
+  `Base_render_pipeline_create_info::indirect_count_draws =
+  Indirect_count_draw_support::enabled`; Metal rejects that for a fragment
+  shader with directly bound textures or samplers (texture heap samplers are
+  fine). The other backends ignore the field.
 
 ## Dependencies
 - **erhe libraries (interface target, public):** `erhe::circular_ring_buffer`, `erhe::dataformat`, `erhe::frame_pacing`, `erhe::item`, `erhe::math`

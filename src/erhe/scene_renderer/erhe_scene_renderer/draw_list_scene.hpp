@@ -10,6 +10,7 @@
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
+#include "erhe_graphics/indirect_count_draws.hpp"
 #include "erhe_item/item.hpp"
 
 #include <glm/glm.hpp>
@@ -1173,6 +1174,15 @@ private:
     const erhe::graphics::Buffer*                                    m_gpu_count_buffer{nullptr};
     std::size_t                                                      m_gpu_count_byte_offset{0};
     std::unique_ptr<erhe::graphics::Gpu_timer>                       m_gpu_command_timer;
+    // The shadow passes draw the frame's jobs as prepared count draws
+    // (erhe::graphics Indirect_count_draws, one per Draw_list_scene, created
+    // at the first generation): the set prepared for the frame, and the
+    // prepare's job and index buffer tables (persistent scratch, capacity
+    // kept; job j of the set is m_gpu_shadow_jobs[j]).
+    std::unique_ptr<erhe::graphics::Indirect_count_draws>            m_gpu_indirect_count_draws;
+    erhe::graphics::Indirect_count_draw_set                          m_gpu_indirect_count_draw_set{};
+    std::vector<erhe::graphics::Indirect_count_draw_job>             m_gpu_indirect_count_jobs;
+    std::vector<erhe::graphics::Indirect_count_index_buffer>         m_gpu_indirect_count_index_buffers;
     // Per frame slot: the count readback of the slot's last frame with
     // GPU-generated shadow commands, until decode_retired_gpu_shadow_counts()
     // of the frame reusing the slot, and the decoded counts. Each slot owns a

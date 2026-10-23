@@ -571,8 +571,66 @@ indirect buffer on the GPU. Records are named by `Record_indexing::first_instanc
 `use_base_instance` is set. Push constant index 15 still carries `ERHE_DRAW_ID`
 (the command's position) for vertex/compute shaders that read it; fragment
 shaders receive it via an interpolated varying (Metal does not support push
-constants in fragment). There is no GPU-read draw count
-(`use_draw_indirect_count` is false; `doc/plans/metal_backend.md` item 6).
+constants in fragment).
+
+The GPU-read draw count (`use_draw_indirect_count`, `doc/erhe/graphics.md`
+"Indirect count draws") goes through an indirect command buffer (ICB), since
+an ICB command cannot itself be an indirect draw and Metal (3 or 4) has no
+count draw:
+
+- `Device_impl` compiles the kernel `erhe_encode_indexed_indirect_count_draws`
+  from raw MSL at construction (`metal_indirect_count_draws.cpp`; SPIR-V
+  cannot express `command_buffer`) and reports `use_draw_indirect_count` only
+  when the library and pipeline build.
+- `Compute_command_encoder::prepare_indexed_indirect_count_draws` writes the
+  slot's table buffer (shared storage: the ICB's `gpuResourceID`, the index
+  buffers' `gpuAddress` and index size, the jobs) and dispatches the kernel
+  over a (slot, job) grid with `dispatchThreads`, after `useResource(icb,
+  Write)`. Thread (s, j) encodes command `command_offset + s` into the ICB
+  entry of the same index with `render_command::draw_indexed_primitives`
+  (index pointer advanced by `first_index`, base vertex, instance count, base
+  instance) when `s` is below the job's count; thread (0, j) writes the job's
+  `{location, length}` execution range. Entries past a count are never
+  executed - the range excludes them - so they need no `reset()`.
+- `Render_command_encoder::multi_draw_indexed_primitives_indirect_count(set,
+  job)` verifies the bound pipeline supports indirect command buffers, calls
+  `useResource` on the job's index buffer (read, vertex stage) and on the
+  ICB once each per MTL render encoder (the encoder remembers the last ones
+  made resident), sets the push constant to 0 and calls
+  `executeCommandsInBuffer(icb, range_buffer, job * 8)`.
+- The ICB (`drawIndexed`, `inheritPipelineState`, `inheritBuffers`, bind
+  counts 0, private storage), the range buffer (private) and the table buffer
+  exist per frame-in-flight slot of each `Indirect_count_draws`, grow to
+  their high-water mark (the ICB in steps of 1024 commands, the others in
+  powers of two; logged at info) and are released through completion
+  handlers.
+- The commands inherit the encoder's pipeline, depth stencil, cull, winding
+  and fill state (the macOS 26 `inherit*` properties default to true) and
+  every buffer binding, `setVertexBytes` ones included: a value set at index
+  15 before `executeCommandsInBuffer` reaches every command (measured), so
+  `ERHE_DRAW_ID` reads the same value in all of them; records are named by
+  `first_instance`, which reaches `[[instance_id]]`.
+- A pipeline an ICB executes needs `supportIndirectCommandBuffers`, which
+  Metal refuses for a fragment shader with directly bound textures or samplers
+  ("Fragment shader cannot be used with indirect command buffers"), so it is
+  opt-in per pipeline (`Base_render_pipeline_create_info::
+  indirect_count_draws`); without it Metal validation aborts at
+  `executeCommandsInBuffer`. Only a `Render_pipeline` (`set_render_pipeline`)
+  can carry it: the `Render_pipeline_state` path
+  (`set_render_pipeline_state`) builds its pipeline state objects without
+  it.
+- Ordering: the kernel's encoder ends with the command buffer's inter-encoder
+  fence update and the render pass waits on it, as for any compute -> render
+  dependency; the ICB and range buffer are tracked resources.
+- Limits (M4 Pro, macOS 27): an ICB of `drawIndexed` commands takes about 692
+  bytes per command whatever is inherited (968 without inherited pipeline);
+  `newIndirectCommandBuffer` succeeds up to 4194304 commands (2.9 GB) and
+  crashes inside the driver at 8388608; a single 1048576-command range
+  executes correctly under Metal validation. Size producers' command ranges
+  with the 692 bytes per command per frame in flight in mind: the GPU
+  culling's shadow commands reach 131072 commands (90.7 MB) per frame in
+  flight on Bistro (doc/erhe/draw_list_renderer.md "GPU command
+  generation").
 
 ### GPU timers
 

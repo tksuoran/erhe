@@ -179,17 +179,45 @@ Options considered:
   texture heap's per-encode `useResource` loops without it, and
   `MTL4Compiler` / `MTL4Archive` relate to the open `MTLBinaryArchive` item.
 
-Open: the ICB `maxCommandCount` limit on Apple silicon; whether
-`setVertexBytes` push constants are inherited into ICB draws (with
-`first_instance` record indexing they may not be needed); whether an
-inherited pipeline requires every inheritable state inherited before macOS
-26; the cost of `supportIndirectCommandBuffers` on all pipelines versus the
-culled ones only. An offline MSL compile check needs
-`xcodebuild -downloadComponent MetalToolchain`.
+Status (2026-10-23): option A is built. `erhe::graphics` has
+`Indirect_count_draws` (doc/erhe/graphics.md "Indirect count draws"), Metal
+reports `use_draw_indirect_count`, and the GPU culling's shadow passes draw
+their generated commands through it on every backend
+(doc/erhe/draw_list_renderer.md "GPU command generation"). Findings (details
+in `doc/erhe/metal_backend.md` "Multi-Draw Indirect"): an ICB command costs
+about 692 bytes; creation succeeds up to 4194304 commands and a
+1048576-command range executes. `setVertexBytes` bindings are inherited into
+ICB draws (one value for all commands), so `ERHE_DRAW_ID` is not per draw and
+records stay named by `first_instance`. On macOS 26+ the new `inherit*`
+states default to true. `supportIndirectCommandBuffers` cannot be set on
+every pipeline (Metal refuses it for fragment shaders with directly bound
+textures or samplers), so it is opt-in per `Render_pipeline`
+(`Base_render_pipeline_create_info::indirect_count_draws`; the shadow
+pipelines set it).
 
-Verification: `Draw_indirect_test.draw_indexed_indirect_count` and
-`_count_zero`, then the GPU culling gates of `doc/plans/culling.md` with
-`culling_classification` `gpu` on Metal.
+Verification (2026-10-23, M4 Pro): `Draw_indirect_test` count tests (one
+job, count 0, two jobs with a 16-bit permuted second index buffer) pass on
+Metal under Metal API validation and on KosmicKrisp (MoltenVK has no count
+draw and skips them). The culling gates with `culling_classification` `gpu`
+and the shadow map cache off: `get_cull_classification_check` 0 mask and 0
+command mismatches on the default scene (4 jobs), the heavy bench scene (18
+jobs, 6638 commands) and Bistro (784 jobs); `render_scene_image` md5
+identical between `cpu` and `gpu` in one session on all three (Metal) and on
+default and heavy (KosmicKrisp); `get_scene_lights` shadow entry and culled
+counts equal between the modes. ICB high-water: 128 commands on the default
+scene, 32768 (22.7 MB) on heavy, 131072 (90.7 MB) on Bistro, per frame in
+flight (three).
+
+Open (user decision 2026-10-23): the Bistro ICB size follows from each job
+reserving its whole chunk entry count (rounded to 32); sizing by the jobs'
+drawn counts is not possible before the GPU writes them. The ICB now grows
+in steps of 1024 commands instead of doubling (Bistro: 66560 commands,
+about 46 MB per frame in flight). The next commit encodes per shadow pass
+instead of per frame: a compute encoder before each pass's render encoder
+prepares that pass's jobs into one ICB sized to the largest single pass
+(Metal's hazard tracking orders the reuse between passes), which cuts the
+footprint to the per-view share. The `Indirect_count_draws` rule of one
+prepare per slot per frame is relaxed to one per prepare call for that.
 
 ## 7. Metal 4
 
@@ -227,17 +255,24 @@ What changes (the MTL4 model; agfx's Metal 4 backend is a reference,
   as a GPU address (pinned metal-cpp `metal-cpp_27` has the `MTL4*`
   headers).
 
-Decisions for the planner and the user before building:
+Decisions (user, 2026-10-23):
 
-- Order: section 6 first on the current API, then Metal 4 (the count path
-  is ported with the rest); Metal 4 first, then section 6 written once on
-  MTL4; or both together. Section 6 on the current API is the smaller first
-  step and is verified by the existing tests before the port.
-- Whether the Metal 3 path is kept beside Metal 4 (macOS before 26) or
-  replaced.
-- Migration granularity: the whole backend at once, or MTL4 command
-  buffers and queue first with the existing encoders where MTL4 allows
-  mixing.
+- Order: section 6 first on the current API, verified by the existing
+  tests; then Metal 4, which ports the count path with the rest
+  (`executeCommandsInBuffer` exists on `MTL4RenderCommandEncoder`).
+- Metal 4 is a separate backend beside Metal 3: its own
+  `ERHE_GRAPHICS_LIBRARY` value and source directory, gated by the same
+  Metal ctest suite, image, race and pacing gates as it grows, with the
+  Metal 3 tree staying green throughout. Whether Metal 3 is then removed is
+  decided once Metal 4 passes those gates.
+- Granularity: subsystem by subsystem in the new backend, one ctest-gated
+  commit each, in this order: device + `MTL4CommandQueue` / command buffer /
+  allocator + commit feedback; argument tables + residency sets; render,
+  compute and blit encoders + barriers; swapchain and drawable + frame
+  pacing; counter heaps (GPU timers, Tracy GPU zones); `MTL4Compiler`;
+  then the section 6 port. (`MTL4CommandBuffer` yields only `MTL4*`
+  encoders, so mixing Metal 3 encoders into it is not an option; two queues
+  synchronised by `MTLSharedEvent` would be, and is not taken.)
 
 Verification: the Metal ctest suite, the Metal image and race gates
 (`doc/editor/render_thread.md` "Metal"), the frame pacing live gates

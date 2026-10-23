@@ -4,8 +4,12 @@
 #include "erhe_graphics/metal/metal_command_encoder.hpp"
 
 namespace MTL { class Buffer; }
+namespace MTL { class IndirectCommandBuffer; }
+namespace MTL { class RenderCommandEncoder; }
 
 namespace erhe::graphics {
+
+class Indirect_count_draws;
 
 class Render_command_encoder_impl final : public Command_encoder_impl
 {
@@ -52,11 +56,23 @@ public:
         std::uintptr_t           stride
     ) const;
 
+    // Render_command_encoder::multi_draw_indexed_primitives_indirect_count
+    // (prepared set): executes the job's range of the slot's indirect
+    // command buffer.
+    void execute_indirect_count_draws(const Indirect_count_draws& draws, std::size_t slot, uint32_t job_index);
+
 private:
     void apply_viewport();
 
     const Bind_group_layout* m_bind_group_layout{nullptr};
     MTL::Buffer* m_index_buffer    {nullptr};
+    // Prepared count draws: whether the bound pipeline supports indirect
+    // command buffers, and the ICB and index buffer last made resident on
+    // m_resident_encoder (execute_indirect_count_draws()).
+    bool                              m_pipeline_supports_indirect_count_draws{false};
+    const MTL::RenderCommandEncoder*  m_resident_encoder     {nullptr};
+    const MTL::IndirectCommandBuffer* m_resident_icb         {nullptr};
+    const MTL::Buffer*                m_resident_index_buffer{nullptr};
     int          m_viewport_x      {0};
     int          m_viewport_y      {0};
     int          m_viewport_width  {0};

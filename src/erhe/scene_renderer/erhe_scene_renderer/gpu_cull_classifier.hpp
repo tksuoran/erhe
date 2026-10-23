@@ -39,11 +39,13 @@ class Draw_list_scene;
 // count regions.
 //
 // Device capability: native multi-draw indirect with a GPU-read draw count
-// (Device_info::use_draw_indirect_count) and Record_indexing::first_instance
-// (the generated commands name their records through first_instance), plus
-// compute storage blocks. Devices on the emulated multi-draw path, devices
-// on Record_indexing::draw_position (Metal, the null device), devices
-// without the count draw and devices whose pipelines failed to build run the
+// (Device_info::use_draw_indirect_count; the shadow passes draw the commands
+// as erhe::graphics prepared count draws, an indirect command buffer on
+// Metal) and Record_indexing::first_instance (the generated commands name
+// their records through first_instance), plus compute storage blocks.
+// Devices on the emulated multi-draw path, devices on
+// Record_indexing::draw_position (the null device), devices without the
+// count draw (MoltenVK) and devices whose pipelines failed to build run the
 // CPU path only.
 class Gpu_cull_classifier
 {

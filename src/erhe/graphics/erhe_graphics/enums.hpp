@@ -108,6 +108,18 @@ enum class Primitive_type : unsigned int
     triangle_strip = 4
 };
 
+// Whether a render pipeline can draw the commands of a prepared
+// Indirect_count_draw_set (indirect_count_draws.hpp). Metal needs it declared
+// at pipeline creation (supportIndirectCommandBuffers), and rejects it for a
+// fragment shader with directly bound textures or samplers (dedicated
+// Bind_group_layout samplers; texture heap samplers are fine). The other
+// backends ignore it.
+enum class Indirect_count_draw_support : unsigned int
+{
+    disabled = 0,
+    enabled  = 1
+};
+
 enum class Buffer_target : unsigned int
 {
     index         = 0,
