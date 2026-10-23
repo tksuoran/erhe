@@ -2,7 +2,32 @@
 
 #include <glm/glm.hpp>
 
+#include <bit>
+#include <cstring>
+
 namespace erhe::scene_renderer {
+
+auto Cull_view_tests::is_same(const Cull_view_tests& other) const -> bool
+{
+    // Bitwise per float, never the objects' bytes (padding).
+    const auto same_bits = [](const float a, const float b) -> bool {
+        return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b);
+    };
+    if ((purpose != other.purpose) || (kind != other.kind)) {
+        return false;
+    }
+    if (kind == Cull_view_kind::cube_face) {
+        return
+            (cube_face == other.cube_face) &&
+            same_bits(sphere.center.x, other.sphere.center.x) &&
+            same_bits(sphere.center.y, other.sphere.center.y) &&
+            same_bits(sphere.center.z, other.sphere.center.z) &&
+            same_bits(sphere.radius,   other.sphere.radius);
+    }
+    return
+        (plane_count == other.plane_count) &&
+        (std::memcmp(planes.data(), other.planes.data(), plane_count * sizeof(glm::vec4)) == 0);
+}
 
 auto is_blending_class_selected(const Draw_blending_selection selection, const erhe::primitive::Blending_class blending_class) -> bool
 {

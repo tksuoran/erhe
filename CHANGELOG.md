@@ -9,6 +9,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Draw_list_content_changes` and
+  `Draw_list_scene::get_published_content_changes()`: per publish, the old
+  and new bounds of the shadow-list entries changed since the publish
+  before it (or `unbounded`), the flags changes with their old and new bits,
+  its base serial and the scene's process-unique
+  instance; `Draw_list_scene::get_cull_view_tests()`; `Cull_view_kind` and
+  `Cull_view_tests` (namespace scope, were private to `Draw_list_scene`)
+  with `Cull_view_tests::is_same()`; `cull_lanes::reaches_view()` and
+  `cull_lanes::View_reach_scratch`; `Draw_list_object::world_aabb` and
+  `has_world_aabb`; `Shadow_draw_statistics::shadow_map_2d_draw_counts` and
+  `point_cube_face_draw_counts` (cumulative draws per pass).
+
 - `erhe::graphics`: `present_calibration_runner.hpp`
   (`IPresent_calibration_presenter`, `Present_calibration_probe_feedback`,
   `run_present_calibration`, `present_calibration_wait_until`): the
@@ -591,6 +603,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Shadow_map_cache` keeps a pass through draw-list
+  changes whose old and new bounds miss the pass's culling view (the
+  content serial left its configuration; doc/erhe/shadows.md "Shadow map
+  cache").
+
 - `erhe::frame_pacing`: `Frame_pacing_observer::set_display(Present_display_kind,
   double max_refresh_interval, double refresh_granularity)` takes the
   display's update granularity (0 = continuous; claim C32).
@@ -962,6 +979,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::scene_renderer`: `Draw_list_scene::get_published_content_serial()`
+  (replaced by `get_published_content_changes()`).
 - `erhe::primitive`: `needs_translucent_pass()` (replaced by
   `get_blending_class()`).
 - `erhe::scene_renderer`: `Draw_blending` and `c_str(Draw_blending)`

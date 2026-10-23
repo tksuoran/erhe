@@ -267,6 +267,15 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
         ? Shadow_record_upload::shared
         : Shadow_record_upload::per_pass;
     m_gpu_cull_check = make_gpu_cull_check();
+    // Draw_list_content_changes::scene_instance: unique for the process, so a cache
+    // keyed on content serials never mistakes another scene's serial for
+    // this one's.
+    {
+        static std::mutex s_instance_mutex;
+        static uint64_t   s_last_instance{0};
+        const std::lock_guard<std::mutex> lock{s_instance_mutex};
+        m_scene_instance = ++s_last_instance;
+    }
 }
 
 Draw_list_scene::~Draw_list_scene() noexcept = default;
@@ -311,6 +320,8 @@ void Draw_list_scene::release_object(const uint32_t object_index)
     object.info             = Draw_list_object_create_info{};
     object.transform_serial = 0u;
     object.joint_slot       = 0u;
+    object.world_aabb       = erhe::math::Aabb{};
+    object.has_world_aabb   = false;
     object.alive            = false;
     ++object.generation;
     m_free_object_indices.push_back(object_index);
@@ -349,6 +360,9 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
     ERHE_VERIFY(object.alive);
     ERHE_VERIFY(object.locations.empty());
     mark_shadow_bounds_changed();
+    // No entries carry bounds yet: write_object_bounds() below records the
+    // new ones only.
+    object.has_world_aabb = false;
     const erhe::scene::Mesh* mesh = object.info.mesh.get();
     ERHE_VERIFY(mesh != nullptr);
 
@@ -424,6 +438,11 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
     if (location.entry_index != last_index) {
         // Swap-remove: the moved entry's owner must be told its new index.
         const Draw_list_entry& moved = draw_list.entries[last_index];
+        // The moved entry draws at another position of its list: a shadow
+        // pass it reaches may resolve depth ties differently.
+        if (draw_list.key.purpose == Draw_purpose::shadow) {
+            record_changed_bounds(moved.world_aabb);
+        }
         Draw_list_object&      owner = m_objects[moved.object_index];
         bool patched = false;
         for (Draw_list_entry_location& owner_location : owner.locations) {
@@ -595,11 +614,19 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     // Skinned entries carry no bounds: they are never culled, and the shadow
     // fit bounds the object from its posed joints at gather time.
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
+    if (has_shadow_entries(object)) {
+        if (object.has_world_aabb) {
+            record_changed_object_bounds(object);
+        }
+        record_changed_bounds(world_aabb);
+    }
     for (const Draw_list_entry_location& location : object.locations) {
         Draw_list& draw_list = edit_draw_list(location.draw_list_index);
         draw_list.entries[location.entry_index].world_aabb = world_aabb;
         draw_list.bounds.set(location.entry_index, world_aabb);
     }
+    object.world_aabb     = world_aabb;
+    object.has_world_aabb = true;
     // The caster vertex shader's node-space input bound (Caster_vertex_extent).
     glm::vec3 node_abs_extent{0.0f};
     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
@@ -626,6 +653,12 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     // The world bounds move with the node: keep the entries' culling AABB
     // current from the same hook (skinned entries are not culled).
     const erhe::math::Aabb world_aabb = (object.mobility == Draw_mobility::skinned) ? erhe::math::Aabb{} : mesh->get_aabb_world();
+    if (has_shadow_entries(object)) {
+        record_changed_object_bounds(object);
+        record_changed_bounds(world_aabb);
+    }
+    object.world_aabb     = world_aabb;
+    object.has_world_aabb = true;
     for (const Draw_list_entry_location& location : object.locations) {
         write_transform_fields(get_record(location), offsets, *node);
         Draw_list& draw_list = edit_draw_list(location.draw_list_index);
@@ -677,6 +710,11 @@ void Draw_list_scene::refresh_object_records(const uint32_t object_index)
         const Draw_list_entry& entry = m_draw_lists[location.draw_list_index].entries[location.entry_index];
         write_entry_record(object, entry, get_record(location));
     }
+    // The records now hold the node's current transform and claim its
+    // serial below, so a transform op of the same flush skips
+    // write_object_transform(): the bounds (and the node extent) follow the
+    // records here, which also records the old and new bounds as a change.
+    write_object_bounds(object_index);
     const erhe::scene::Mesh* mesh = object.info.mesh.get();
     const erhe::scene::Node* node = mesh;
     object.transform_serial = (node != nullptr) ? node->node_data.transforms.world_from_node_serial : 0u;
@@ -730,6 +768,10 @@ void Draw_list_scene::remove_entries(const uint32_t object_index)
 
     Draw_list_object& object = m_objects[object_index];
     mark_shadow_bounds_changed();
+    if (has_shadow_entries(object)) {
+        record_changed_object_bounds(object);
+    }
+    object.has_world_aabb = false;
     // Remove in reverse so that swap-removes inside the same list never
     // move an entry that this object still has to remove.
     while (!object.locations.empty()) {
@@ -1043,6 +1085,9 @@ void Draw_list_scene::set_object_flags(const Draw_list_object_id id, const uint6
     if (object.flag_bits == item_flag_bits) {
         return;
     }
+    if (has_shadow_entries(object)) {
+        record_flags_change(object, object.flag_bits, item_flag_bits);
+    }
     object.flag_bits = item_flag_bits;
     for (const Draw_list_entry_location& location : object.locations) {
         edit_draw_list(location.draw_list_index).entries[location.entry_index].flag_bits = item_flag_bits;
@@ -1081,7 +1126,10 @@ void Draw_list_scene::rebuild_all()
 
     for (Draw_list_object& object : m_objects) {
         object.locations.clear();
+        object.has_world_aabb = false;
     }
+    // Every list is recreated: the dropped entries are not named.
+    m_changes_unbounded = true;
     // Full rebuild is the one place lists are dropped (also compacts away
     // lists left empty by unregistration).
     m_draw_lists.clear();
@@ -1402,6 +1450,21 @@ void Draw_list_scene::publish(const uint64_t frame_index, const std::size_t fram
     slot.has_skinned_objects        = !m_skinned_object_indices.empty();
     m_published_cull_classification = effective_classification;
 
+    // The changes since the previous publish (Draw_list_content_changes); the
+    // accumulation restarts (capacity kept).
+    slot.change_base_serial = m_published_draw_list_serial;
+    slot.changes_unbounded  = m_changes_unbounded;
+    slot.changed_bounds.assign(m_changed_bounds);
+    slot.flag_changed_bounds.assign(m_flag_changed_bounds);
+    slot.flag_changed_old_bits.assign(m_flag_changed_old_bits.begin(), m_flag_changed_old_bits.end());
+    slot.flag_changed_new_bits.assign(m_flag_changed_new_bits.begin(), m_flag_changed_new_bits.end());
+    m_changed_bounds.resize(0);
+    m_flag_changed_bounds.resize(0);
+    m_flag_changed_old_bits.clear();
+    m_flag_changed_new_bits.clear();
+    m_changes_unbounded          = false;
+    m_published_draw_list_serial = m_draw_list_serial;
+
     if ((slot.serial != m_draw_list_serial) || (slot.lists.size() != m_draw_lists.size())) {
         copy_to_slot(slot);
     }
@@ -1456,9 +1519,76 @@ auto Draw_list_scene::get_published_slot(const uint64_t frame_index) const -> co
     return slot;
 }
 
-auto Draw_list_scene::get_published_content_serial(const uint64_t frame_index) const -> uint64_t
+auto Draw_list_scene::get_published_content_changes(const uint64_t frame_index) const -> Draw_list_content_changes
 {
-    return get_published_slot(frame_index).serial;
+    const Draw_list_slot& slot = get_published_slot(frame_index);
+    return Draw_list_content_changes{
+        .scene_instance = m_scene_instance,
+        .serial         = slot.serial,
+        .base_serial    = slot.change_base_serial,
+        .unbounded             = slot.changes_unbounded,
+        .changed_bounds        = &slot.changed_bounds,
+        .flag_changed_bounds   = &slot.flag_changed_bounds,
+        .flag_changed_old_bits = slot.flag_changed_old_bits,
+        .flag_changed_new_bits = slot.flag_changed_new_bits
+    };
+}
+
+auto Draw_list_scene::has_shadow_entries(const Draw_list_object& object) const -> bool
+{
+    for (const Draw_list_entry_location& location : object.locations) {
+        if (m_draw_lists[location.draw_list_index].key.purpose == Draw_purpose::shadow) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Draw_list_scene::record_changed_object_bounds(const Draw_list_object& object)
+{
+    // Entries whose bounds were never written carry the no-bounds sentinel.
+    record_changed_bounds(object.has_world_aabb ? object.world_aabb : erhe::math::Aabb{});
+}
+
+auto Draw_list_scene::reserve_changed_box() -> bool
+{
+    // A bounded list: past this many boxes between two publishes (a scene
+    // load, a large selection edit) the change names no boxes.
+    constexpr std::size_t max_changed_boxes = 1024;
+    if (m_changes_unbounded) {
+        return false;
+    }
+    if ((m_changed_bounds.extent_x.size() + m_flag_changed_bounds.extent_x.size()) >= max_changed_boxes) {
+        m_changes_unbounded = true;
+        m_changed_bounds.resize(0);
+        m_flag_changed_bounds.resize(0);
+        m_flag_changed_old_bits.clear();
+        m_flag_changed_new_bits.clear();
+        return false;
+    }
+    return true;
+}
+
+void Draw_list_scene::record_changed_bounds(const erhe::math::Aabb& aabb)
+{
+    if (!reserve_changed_box()) {
+        return;
+    }
+    const std::size_t count = m_changed_bounds.extent_x.size();
+    m_changed_bounds.resize(count + 1);
+    m_changed_bounds.set(count, aabb);
+}
+
+void Draw_list_scene::record_flags_change(const Draw_list_object& object, const uint64_t old_flag_bits, const uint64_t new_flag_bits)
+{
+    if (!reserve_changed_box()) {
+        return;
+    }
+    const std::size_t count = m_flag_changed_bounds.extent_x.size();
+    m_flag_changed_bounds.resize(count + 1);
+    m_flag_changed_bounds.set(count, object.has_world_aabb ? object.world_aabb : erhe::math::Aabb{});
+    m_flag_changed_old_bits.push_back(old_flag_bits);
+    m_flag_changed_new_bits.push_back(new_flag_bits);
 }
 
 auto Draw_list_scene::has_published_skinned_objects(const uint64_t frame_index) const -> bool
@@ -2131,6 +2261,15 @@ auto Draw_list_scene::has_cull_view_survivors(const uint64_t frame_index, const 
     }
     verify_cull_view_classified(frame_index, cull_view);
     return m_cull_view_survivors[static_cast<std::size_t>(cull_view)] > 0;
+}
+
+auto Draw_list_scene::get_cull_view_tests(const uint64_t frame_index, const Cull_view cull_view) const -> Cull_view_tests
+{
+    if (cull_view == Cull_view::none) {
+        return Cull_view_tests{};
+    }
+    verify_cull_view_classified(frame_index, cull_view);
+    return m_cull_views[static_cast<std::size_t>(cull_view)];
 }
 
 void Draw_list_scene::verify_cull_view_classified(const uint64_t frame_index, const Cull_view cull_view) const

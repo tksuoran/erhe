@@ -323,31 +323,88 @@ layer or a cube face, the pass's clear included - when
 - the frame's configuration equals the one the pass was drawn under: the
   shadow, distance and cube textures, the rasterizer depth bias, the cull
   mode, the technique, depth clamp, the depth convention, the empty border,
-  both viewports, the draw-list layer selection, and the content serial of
-  the draw lists published for the frame
-  (`Draw_list_scene::get_published_content_serial()`: any change of entries,
-  records - node transforms included -, flags or membership moves it);
+  both viewports, the draw-list layer selection and the draw-list scene
+  (`Draw_list_content_changes::scene_instance`, unique per process: content
+  serials of different scenes are unrelated);
 - the pass's light id and matrix equal its own: `clip_from_world` for a 2D
-  layer, the cube projection translated by the light position for a face.
+  layer, the cube projection translated by the light position for a face;
+- the pass's culling view (`Cull_view_tests`: the planes of a 2D pass, the
+  range sphere and octant of a cube face) is bitwise the one it was drawn
+  with;
+- no draw-list change since it was drawn reaches that view.
 
-A changed configuration forgets every pass; a changed light or matrix
-redraws that light's passes only. A directional light's fitted matrix moves
-with the camera, so its layers redraw on a camera move; spot and point
-projections do not depend on the camera. Skinned objects in the scene
-(`Draw_list_scene::has_published_skinned_objects()`) disable the cache:
-joint poses change without a list change. The bucket path (no draw-list
-scene) draws every pass. `Shadow_render_node::reconfigure()` clears the
-cache with the textures. The shadow map shaders read no material, so a
-material edit keeps the maps.
+A changed configuration forgets every pass; a changed light, matrix or view
+redraws that pass. A directional light's fitted matrix moves with the
+camera, so its layers redraw on a camera move; spot and point projections
+do not depend on the camera.
+
+**Per-light caster test.** A pass draws exactly the entries of the shadow
+lists whose world bounds its culling view keeps (the classification lanes,
+`doc/plans/culling.md`). The draw-list scene is the single funnel of what a
+shadow pass draws, and each publish carries what changed since the publish
+before it (`Draw_list_scene::get_published_content_changes()`, render
+phase, the published slot of the frame): the content serial, the serial of
+the previous publish (`base_serial`) and the changed entries' bounds
+(`changed_bounds`, SoA). The prepare phase records them at the funnel
+functions, for objects with an entry in a shadow list:
+
+- `add_entries` (registration, a re-registration, a membership move): the
+  new bounds;
+- `remove_entries` (unregistration, the old half of a re-registration): the
+  old bounds; the swap-remove moves the list's last entry into the freed
+  index, which changes its draw order, so the moved entry's bounds too;
+- `write_object_transform` and `write_object_bounds` (also the end of
+  `refresh_object_records`, whose records take the node's current
+  transform): the old and the new bounds (`Draw_list_object::world_aabb`,
+  the bounds the entries carry);
+- `set_object_flags`: the bounds the entries carry with the old and the new
+  flags (`flag_changed_bounds`, `flag_changed_old_bits`,
+  `flag_changed_new_bits`).
+
+`rebuild_all` (every list recreated), or more than 1024 boxes between two
+publishes, set `unbounded` instead. An entry without bounds (skinned, or a
+mesh without a valid AABB) is the no-bounds sentinel, which every view
+keeps. Joint and material slot rewrites change nothing a shadow pass draws
+(the shadow shaders read no material; skinned scenes do not cache).
+
+At the start of `draw()` the cache compares the published content serial
+with the serial its kept passes hold. Equal: no list changed, no test.
+Different, and the publish's `base_serial` equals the held serial: every
+kept pass - also the passes of lights the frame does not draw - is tested
+against `changed_bounds` with its own stored view (`cull_lanes::
+reaches_view()`, the classification's lanes), and a pass a box reaches is
+forgotten. An entry whose old and new bounds both miss the view was culled
+from the pass before and after the change, so the pass is unchanged. A
+flags change is tested only when the caster filter (`shadow_caster_filter`)
+accepts its old and new flags differently: a selection or hover flag
+leaves every pass (the shadow shaders read no flag-dependent record field).
+Different otherwise (a frame the cache did not draw through, such as a
+frame without shadow passes), or `unbounded`: every pass is forgotten.
+With the cache switched off `Shadow_render_node` clears it every frame, so
+nothing it held survives the cache-off period. Directional
+passes take the same test with their side planes (a depth-clamped pass
+culls on those only) - in practice a camera move redraws them anyway.
+
+Skinned objects in the scene (`Draw_list_scene::
+has_published_skinned_objects()`) disable the cache: joint poses change
+without a list change. The bucket path (no draw-list scene) draws every
+pass. `Shadow_render_node::reconfigure()` clears the cache with the
+textures. The shadow map shaders read no material, so a material edit keeps
+the maps.
 
 `Shadow_draw_statistics` reports the kept passes (`shadow_map_2d_cached`,
-`point_cube_cached_faces`, `cached_pass_count`), MCP `get_scene_lights` per
-light (`shadow_cached`, `shadow_cube_cached_faces`), and MCP
+`point_cube_cached_faces`, `cached_pass_count`) and the cumulative draws of
+each pass (`shadow_map_2d_draw_counts`, `point_cube_face_draw_counts`), MCP
+`get_scene_lights` per light (`shadow_cached`, `shadow_cube_cached_faces`,
+`shadow_draw_count`, `shadow_cube_face_draw_counts`), and MCP
 `set_shadow_map_cache_enabled` switches the cache for a session (default
-on). Measured on Bistro (Release Metal, M4 Pro, 4 point and 4 spot shadow
+on). `scripts/shadow_map_cache_check.py` is the image gate: captures with
+the cache on equal captures with every pass drawn after caster, light,
+cone and camera edits, and a drag, an add, a removal and a move of casters
+beside one of two point lights redraw only the faces of the light they
+reach. Measured on Bistro (Release Metal, M4 Pro, 4 point and 4 spot shadow
 lights, static scene): GPU span 6.4 -> 4.3 ms, render-thread `execute`
-2.1 -> 0.8 ms per frame. The per-light caster test that keeps the passes of
-lights a moving caster does not reach is
+2.1 -> 0.8 ms per frame. The remaining work (skinned casters, fit skip) is
 [../plans/shadow_map_cache.md](../plans/shadow_map_cache.md).
 
 ### Empty border and receiver coverage

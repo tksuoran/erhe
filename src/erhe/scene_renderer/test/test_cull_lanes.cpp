@@ -281,4 +281,138 @@ TEST(Cull_lanes, write_view_bit_counts_survivors)
     EXPECT_EQ(masks, (std::array<uint64_t, 5>{uint64_t{1} << 7, 0u, uint64_t{1} << 7, uint64_t{1} << 7, uint64_t{1} << 7}));
 }
 
+// One box as its own bounds (reaches_view() of a single change).
+[[nodiscard]] auto single_box(const Boxes& boxes, const std::size_t i) -> Boxes
+{
+    Boxes box;
+    box.add(boxes.center(i), boxes.extent(i));
+    return box;
+}
+
+// reaches_view() answers what the classification lanes answer: per box,
+// and for a set of boxes whether any is kept (the shadow map cache's
+// per-pass test of the changed bounds, doc/erhe/shadows.md "Shadow map
+// cache").
+TEST(Cull_lanes, reaches_view_matches_classification)
+{
+    using erhe::scene_renderer::Cull_view_kind;
+    using erhe::scene_renderer::Cull_view_tests;
+    const Cull_sphere light{.center = glm::vec3{3.25f, -1.5f, 7.75f}, .radius = 10.0f};
+    std::mt19937 random{4242u};
+    std::uniform_real_distribution<float> offset{-14.0f, 14.0f};
+    std::uniform_real_distribution<float> size{0.0f, 3.0f};
+    Boxes boxes;
+    for (int n = 0; n < 500; ++n) {
+        boxes.add(light.center + glm::vec3{offset(random), offset(random), offset(random)}, glm::vec3{size(random), size(random), size(random)});
+    }
+    const Face_classification result = classify(boxes, light);
+    cull_lanes::View_reach_scratch scratch;
+    for (std::size_t face = 0; face < 6; ++face) {
+        const Cull_view_tests view{
+            .purpose   = erhe::scene_renderer::Draw_purpose::shadow,
+            .kind      = Cull_view_kind::cube_face,
+            .sphere    = light,
+            .cube_face = static_cast<uint32_t>(face)
+        };
+        bool any_kept = false;
+        for (std::size_t i = 0; i < boxes.size(); ++i) {
+            const bool kept = (result.face_inside[face][i] != 0);
+            any_kept = any_kept || kept;
+            EXPECT_EQ(cull_lanes::reaches_view(view, single_box(boxes, i).bounds, scratch), kept) << "face " << face << " box " << i;
+        }
+        EXPECT_TRUE(any_kept);
+        EXPECT_EQ(cull_lanes::reaches_view(view, boxes.bounds, scratch), any_kept);
+    }
+
+    // A planes view: the face frustum planes, as a spot pass adds them.
+    const std::array<glm::vec4, 6> planes = make_face_planes(light.center, light.radius, 0);
+    const Cull_view_tests plane_view{
+        .purpose     = erhe::scene_renderer::Draw_purpose::shadow,
+        .kind        = Cull_view_kind::planes,
+        .plane_count = 6,
+        .planes      = planes
+    };
+    std::size_t kept_count = 0;
+    for (std::size_t i = 0; i < boxes.size(); ++i) {
+        uint32_t inside = 1u;
+        for (const glm::vec4& plane : planes) {
+            cull_lanes::plane_lanes(plane, single_box(boxes, i).bounds, 1, &inside);
+        }
+        kept_count += inside;
+        EXPECT_EQ(cull_lanes::reaches_view(plane_view, single_box(boxes, i).bounds, scratch), inside != 0u) << "box " << i;
+    }
+    EXPECT_GT(kept_count, 0u);
+    EXPECT_LT(kept_count, boxes.size());
+}
+
+TEST(Cull_lanes, reaches_view_edge_cases)
+{
+    using erhe::scene_renderer::Cull_view_kind;
+    using erhe::scene_renderer::Cull_view_tests;
+    cull_lanes::View_reach_scratch scratch;
+    const Cull_sphere light_a{.center = glm::vec3{0.0f, 1.0f, 0.0f},  .radius = 5.0f};
+    const Cull_sphere light_b{.center = glm::vec3{20.0f, 1.0f, 0.0f}, .radius = 5.0f};
+    const auto face_view = [](const Cull_sphere& light, const uint32_t face) -> Cull_view_tests {
+        return Cull_view_tests{.purpose = erhe::scene_renderer::Draw_purpose::shadow, .kind = Cull_view_kind::cube_face, .sphere = light, .cube_face = face};
+    };
+
+    // No boxes: nothing changed, no view reached.
+    const Boxes none;
+    EXPECT_FALSE(cull_lanes::reaches_view(face_view(light_a, 0), none.bounds, scratch));
+    EXPECT_FALSE(cull_lanes::reaches_view(Cull_view_tests{}, none.bounds, scratch));
+
+    // A caster beside light A (+X of it): A's +X face only; no face of B.
+    Boxes beside_a;
+    beside_a.add(light_a.center + glm::vec3{2.0f, 0.0f, 0.0f}, glm::vec3{0.25f});
+    for (uint32_t face = 0; face < 6; ++face) {
+        EXPECT_EQ(cull_lanes::reaches_view(face_view(light_a, face), beside_a.bounds, scratch), face == 0) << "face " << face;
+        EXPECT_FALSE(cull_lanes::reaches_view(face_view(light_b, face), beside_a.bounds, scratch)) << "face " << face;
+    }
+
+    // Moved from A's reach to B's: the old box reaches A, the new one B.
+    Boxes moved;
+    moved.add(light_a.center + glm::vec3{2.0f, 0.0f, 0.0f}, glm::vec3{0.25f});
+    moved.add(light_b.center + glm::vec3{-2.0f, 0.0f, 0.0f}, glm::vec3{0.25f});
+    EXPECT_TRUE(cull_lanes::reaches_view(face_view(light_a, 0), moved.bounds, scratch));
+    EXPECT_TRUE(cull_lanes::reaches_view(face_view(light_b, 1), moved.bounds, scratch));
+    EXPECT_FALSE(cull_lanes::reaches_view(face_view(light_b, 0), moved.bounds, scratch));
+
+    // A box without bounds reaches every view.
+    Draw_list_bounds unbounded;
+    unbounded.resize(1);
+    EXPECT_TRUE(cull_lanes::reaches_view(face_view(light_b, 3), unbounded, scratch));
+
+    // A planes view without planes (Cull_view::none) keeps every box.
+    EXPECT_TRUE(cull_lanes::reaches_view(Cull_view_tests{}, beside_a.bounds, scratch));
+}
+
+TEST(Cull_lanes, view_tests_is_same)
+{
+    using erhe::scene_renderer::Cull_view_kind;
+    using erhe::scene_renderer::Cull_view_tests;
+    const Cull_view_tests face{
+        .purpose   = erhe::scene_renderer::Draw_purpose::shadow,
+        .kind      = Cull_view_kind::cube_face,
+        .sphere    = Cull_sphere{.center = glm::vec3{1.0f, 2.0f, 3.0f}, .radius = 4.0f},
+        .cube_face = 2
+    };
+    Cull_view_tests other_face = face;
+    EXPECT_TRUE(face.is_same(other_face));
+    other_face.cube_face = 3;
+    EXPECT_FALSE(face.is_same(other_face));
+    other_face = face;
+    other_face.sphere.radius = 4.5f;
+    EXPECT_FALSE(face.is_same(other_face));
+
+    Cull_view_tests planes{.purpose = erhe::scene_renderer::Draw_purpose::shadow, .kind = Cull_view_kind::planes, .plane_count = 1};
+    planes.planes[0] = glm::vec4{0.0f, 1.0f, 0.0f, -1.0f};
+    Cull_view_tests other_planes = planes;
+    other_planes.planes[3] = glm::vec4{9.0f}; // beyond plane_count: not a test
+    EXPECT_TRUE(planes.is_same(other_planes));
+    other_planes.planes[0].w = -2.0f;
+    EXPECT_FALSE(planes.is_same(other_planes));
+    EXPECT_FALSE(planes.is_same(face));
+    EXPECT_TRUE(Cull_view_tests{}.is_same(Cull_view_tests{}));
+}
+
 } // anonymous namespace

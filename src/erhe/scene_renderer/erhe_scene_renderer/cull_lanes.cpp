@@ -125,4 +125,55 @@ void set_view_bit_lanes(uint64_t* const masks, const std::size_t count, const ui
     }
 }
 
+auto reaches_view(const Cull_view_tests& view, const Draw_list_bounds& bounds, View_reach_scratch& scratch) -> bool
+{
+    const std::size_t count = bounds.extent_x.size();
+    if (count == 0) {
+        return false;
+    }
+    scratch.unbounded.resize(count);
+    scratch.inside.resize(count);
+    uint32_t* const unbounded = scratch.unbounded.data();
+    uint32_t* const inside    = scratch.inside.data();
+    mark_unbounded_lanes(bounds, count, unbounded);
+    if (view.kind == Cull_view_kind::cube_face) {
+        scratch.sphere_inside.resize(count);
+        scratch.distance2.resize(count);
+        scratch.gap_x.resize(count);
+        scratch.gap_y.resize(count);
+        scratch.gap_z.resize(count);
+        const Sphere_gaps gaps{.x = scratch.gap_x.data(), .y = scratch.gap_y.data(), .z = scratch.gap_z.data()};
+        sphere_lanes(view.sphere, bounds, count, gaps, scratch.distance2.data(), scratch.sphere_inside.data());
+        // Face f looks along axis f / 2, toward + for even f (as
+        // Draw_list_scene::classify_cull_views()).
+        const uint32_t axis       = view.cube_face / 2;
+        const float    direction  = ((view.cube_face % 2) == 0) ? 1.0f : -1.0f;
+        const float*   axis_gaps[3]{gaps.x, gaps.y, gaps.z};
+        const float*   centers[3]  {bounds.center_x.data(), bounds.center_y.data(), bounds.center_z.data()};
+        const float*   extents[3]  {bounds.extent_x.data(), bounds.extent_y.data(), bounds.extent_z.data()};
+        cube_face_lanes(
+            centers[axis],
+            extents[axis],
+            view.sphere.center[static_cast<glm::length_t>(axis)],
+            direction,
+            axis_gaps[(axis + 1) % 3],
+            axis_gaps[(axis + 2) % 3],
+            scratch.sphere_inside.data(),
+            count,
+            inside
+        );
+    } else {
+        std::fill(inside, inside + count, uint32_t{1});
+        for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
+            plane_lanes(view.planes[plane_index], bounds, count, inside);
+        }
+    }
+    for (std::size_t i = 0; i < count; ++i) {
+        if ((inside[i] | unbounded[i]) != 0u) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace erhe::scene_renderer::cull_lanes

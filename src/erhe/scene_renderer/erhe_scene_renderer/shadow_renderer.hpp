@@ -9,6 +9,7 @@
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/cull_lanes.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
@@ -113,6 +114,12 @@ public:
     std::vector<uint8_t>         shadow_map_2d_cached;
     std::vector<uint8_t>         point_cube_cached_faces;
     std::size_t                  cached_pass_count{0};
+    // How often the owner of the shadow map cache has drawn each pass
+    // since the cache was created (cumulative, with a cache only): per 2D
+    // layer and per cube face (index cube * 6 + face). A count that moved
+    // between two reads was drawn in between, whatever the frames read.
+    std::vector<uint32_t>        shadow_map_2d_draw_counts;
+    std::vector<uint32_t>        point_cube_face_draw_counts;
     // The frame whose GPU counts the entry and culled counts are (GPU
     // command path only).
     std::optional<uint64_t>      gpu_counts_frame_index{};
@@ -120,15 +127,16 @@ public:
 
 // The contents the shadow maps of one owner (a set of 2D layers and point
 // cubes) hold, so Shadow_renderer::draw() redraws only the passes whose
-// inputs changed (doc/plans/shadow_map_cache.md). A pass - a 2D layer or a
-// cube face - is kept when the frame's configuration (the textures, the
-// rasterizer and technique settings, the viewports, the layer selection and
-// the content serial of the published draw lists) equals the one it was
-// drawn under, and the light and matrices of the pass equal its own. Any
-// change of the configuration forgets every pass. The draw-list path only;
-// a scene with skinned objects draws every pass (joint poses carry no
-// serial). Owned by the caller next to the textures; clear() when they are
-// reallocated. Render thread.
+// inputs changed (doc/erhe/shadows.md "Shadow map cache"). A pass - a 2D
+// layer or a cube face - is kept when the frame's configuration (the
+// textures, the rasterizer and technique settings, the viewports, the layer
+// selection and the draw-list scene) equals the one it was drawn under, its
+// light, matrix and culling view equal its own, and no draw-list change
+// since it was drawn reaches its culling view
+// (Draw_list_content_changes). Any change of the configuration
+// forgets every pass. The draw-list path only; a scene with skinned objects
+// draws every pass (joint poses carry no serial). Owned by the caller next
+// to the textures; clear() when they are reallocated. Render thread.
 class Shadow_map_cache
 {
 public:
@@ -155,27 +163,54 @@ private:
         int                                 border_texels       {0};
         erhe::math::Viewport                light_camera_viewport{};
         erhe::math::Viewport                point_shadow_viewport{};
-        uint64_t                            content_serial      {0};
+        // Draw_list_content_changes::scene_instance.
+        uint64_t                            scene_instance      {0};
     };
     class Pass
     {
     public:
-        std::size_t light_id        {0};
-        glm::mat4   clip_from_world {1.0f};
-        bool        valid           {false};
+        std::size_t     light_id        {0};
+        glm::mat4       clip_from_world {1.0f};
+        // The culling view the pass was drawn with: the entries it drew are
+        // the ones whose bounds this view keeps.
+        Cull_view_tests view            {};
+        bool            valid           {false};
     };
 
     // Starts a frame: forgets every pass when configuration differs from the
-    // last frame's (or usable is false).
-    void begin_frame(const Configuration& configuration, std::span<const erhe::scene::Layer_id> layers, bool usable);
-    [[nodiscard]] auto is_kept(std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world) const -> bool;
-    void store(std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world);
+    // last frame's (or usable is false); otherwise, when the published
+    // content moved, forgets the passes the changes reach (a flags change
+    // only when filter, the passes' caster filter, tells its old and new
+    // flags apart), or every pass when the changes do not start from the
+    // content the passes hold (a frame not drawn through this cache) or name
+    // no boxes.
+    void begin_frame(
+        const Configuration&                     configuration,
+        std::span<const erhe::scene::Layer_id>   layers,
+        bool                                     usable,
+        const Draw_list_content_changes&         content,
+        const erhe::Item_filter&                 filter
+    );
+    void forget_reached(std::vector<Pass>& passes, const Draw_list_bounds& changed_bounds);
+    [[nodiscard]] auto is_kept(const std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world, const Cull_view_tests& view) const -> bool;
+    void store(std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world, const Cull_view_tests& view);
+    static void count_drawn(std::vector<uint32_t>& draw_counts, std::size_t index);
 
     Configuration                       m_configuration{};
     std::vector<erhe::scene::Layer_id>  m_layers;
     bool                                m_usable{false};
+    // The content serial of the draw lists the valid passes were drawn
+    // from or kept through.
+    uint64_t                            m_content_serial{0};
     std::vector<Pass>                   m_passes_2d;
     std::vector<Pass>                   m_cube_faces;
+    cull_lanes::View_reach_scratch      m_reach_scratch;
+    // The flags changes the caster filter tells apart (capacity kept).
+    Draw_list_bounds                    m_filtered_flag_changes;
+    // Shadow_draw_statistics::shadow_map_2d_draw_counts /
+    // point_cube_face_draw_counts (kept by clear()).
+    std::vector<uint32_t>               m_draw_counts_2d;
+    std::vector<uint32_t>               m_draw_counts_cube;
 };
 
 class Shadow_renderer

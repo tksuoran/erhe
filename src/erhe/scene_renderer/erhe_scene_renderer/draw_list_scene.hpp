@@ -515,10 +515,28 @@ public:
     // so a pass can skip its draw setup (Shadow_renderer's empty cube
     // faces). True for Cull_view::none.
     [[nodiscard]] auto has_cull_view_survivors(uint64_t frame_index, Cull_view cull_view) -> bool;
-    // The content serial of the lists publish() published for frame_index:
-    // equal for two frames means no list changed between them (entries,
-    // records - transforms included -, flags, membership). Render phase.
-    [[nodiscard]] auto get_published_content_serial(uint64_t frame_index) const -> uint64_t;
+    // The tests of a view of frame_index's set (render phase, after the
+    // frame's classification); Cull_view::none returns a planes view
+    // without planes, which keeps every box.
+    [[nodiscard]] auto get_cull_view_tests(uint64_t frame_index, Cull_view cull_view) const -> Cull_view_tests;
+    // What changed in the lists publish() published for frame_index since
+    // the publish before it (render phase). The content serial is equal for
+    // two publishes when no list changed between them (entries, records -
+    // transforms included -, flags, membership). Every change that can
+    // change what a shadow pass draws - an entry of a shadow list added,
+    // removed, moved within its list (swap-remove) or its record transform
+    // rewritten - adds the bounds the changed entries carried before and
+    // after the change to changed_bounds (an entry without bounds as the
+    // no-bounds sentinel, which every view keeps); a flags change adds the
+    // entries' bounds with the old and new flags to flag_changed_bounds, so
+    // the consumer tests only the changes its filter tells apart. A change
+    // whose entries cannot be named this way (a rebuild of every list, or
+    // more than 1024 boxes between two publishes) sets unbounded instead.
+    // An entry whose old and new bounds both miss a culling view is culled
+    // from that view before and after the change. Changes of other
+    // publishes than the one before this one are not included: base_serial
+    // names the content serial these changes start from.
+    [[nodiscard]] auto get_published_content_changes(uint64_t frame_index) const -> Draw_list_content_changes;
     // Whether skinned objects existed when frame_index was published (their
     // joint poses change without a list change). Render phase.
     [[nodiscard]] auto has_published_skinned_objects(uint64_t frame_index) const -> bool;
@@ -841,21 +859,6 @@ private:
     // Whether layer_id is in layers (an empty span selects every layer).
     [[nodiscard]] static auto is_layer_selected(std::span<const erhe::scene::Layer_id> layers, erhe::scene::Layer_id layer_id) -> bool;
     [[nodiscard]] static auto make_gpu_cull_check() -> std::shared_ptr<Gpu_cull_check>;
-    enum class Cull_view_kind : uint8_t
-    {
-        planes,    // the planes alone
-        cube_face  // the range sphere first, then the face's octant
-    };
-    class Cull_view_tests
-    {
-    public:
-        Draw_purpose             purpose    {Draw_purpose::color};
-        Cull_view_kind           kind       {Cull_view_kind::planes};
-        uint32_t                 plane_count{0}; // planes only
-        std::array<glm::vec4, 6> planes     {};  // planes only
-        Cull_sphere              sphere     {};  // cube_face only
-        uint32_t                 cube_face  {0}; // cube_face only: 0..5 for +X -X +Y -Y +Z -Z
-    };
     // Starts the view set of frame_index when it is a new frame.
     void begin_cull_frame(uint64_t frame_index);
     // Appends a view (no survivors yet) and returns it for the caller to fill.
@@ -896,6 +899,16 @@ private:
     // Something the shadow bounds gather reads changed: object membership,
     // entries, flags, world AABBs, node extents or node transforms.
     void mark_shadow_bounds_changed() { ++m_shadow_bounds_serial; }
+    // Draw_list_content_changes bookkeeping (prepare phase): whether any
+    // entry of the object is in a shadow list; the bounds the object's
+    // entries carry as a changed box; one changed box.
+    [[nodiscard]] auto has_shadow_entries(const Draw_list_object& object) const -> bool;
+    void record_changed_object_bounds(const Draw_list_object& object);
+    void record_changed_bounds(const erhe::math::Aabb& aabb);
+    void record_flags_change(const Draw_list_object& object, uint64_t old_flag_bits, uint64_t new_flag_bits);
+    // False (and the changes unbounded) once the boxes of the changes
+    // since the last publish reach their limit.
+    [[nodiscard]] auto reserve_changed_box() -> bool;
     void gather_shadow_bounds        (const Shadow_bounds_selection& selection, Shadow_bounds_slot& slot);
     // Rewrites the skinned objects' posed bounds in the slot; false when an
     // object's bounds became valid or invalid (the caller gathers again).
@@ -918,6 +931,15 @@ private:
         Cull_classification    classification{Cull_classification::cpu};
         // Skinned objects existed at the publish.
         bool                   has_skinned_objects{false};
+        // The changes since the previous publish (Draw_list_content_changes):
+        // m_draw_list_serial at that publish, and the accumulated
+        // m_changed_bounds / m_changes_unbounded.
+        uint64_t               change_base_serial{0};
+        bool                   changes_unbounded {false};
+        Draw_list_bounds       changed_bounds;
+        Draw_list_bounds       flag_changed_bounds;
+        std::vector<uint64_t>  flag_changed_old_bits;
+        std::vector<uint64_t>  flag_changed_new_bits;
         // Per list: its first entry in the lists back to back (the GPU
         // bounds and mask layout); and the entries of all lists.
         std::vector<uint32_t>  entry_offsets;
@@ -957,6 +979,16 @@ private:
     // Last value handed out as a Draw_list::serial / Draw_list::identity.
     uint64_t                                                         m_draw_list_serial  {0};
     uint64_t                                                         m_draw_list_identity{0};
+    // Draw_list_content_changes: process-unique id of this scene; the changes since
+    // the last publish (the boxes, capacity kept; a change without boxes);
+    // m_draw_list_serial at the last publish.
+    uint64_t                                                         m_scene_instance{0};
+    Draw_list_bounds                                                 m_changed_bounds;
+    Draw_list_bounds                                                 m_flag_changed_bounds;
+    std::vector<uint64_t>                                            m_flag_changed_old_bits;
+    std::vector<uint64_t>                                            m_flag_changed_new_bits;
+    bool                                                             m_changes_unbounded{false};
+    uint64_t                                                         m_published_draw_list_serial{0};
     std::unordered_map<Draw_list_key, uint32_t, Draw_list_key_hash>  m_draw_list_index_by_key;
     std::vector<Draw_list_object>                                    m_objects;
     std::vector<uint32_t>                                            m_free_object_indices;
