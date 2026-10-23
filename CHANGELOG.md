@@ -19,7 +19,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Base_render_pipeline_create_info::indirect_count_draws`. Metal now reports
   `Device_info::use_draw_indirect_count` (an indirect command buffer encoded
   by a kernel); its older `multi_draw_indexed_primitives_indirect_count()`
-  overload stays fatal (doc/erhe/graphics.md "Draw count from the GPU").
+  overload stays fatal (doc/erhe/graphics.md "Draw count from the GPU"). A
+  frame may prepare any number of sets; `Indirect_count_draw_set::sequence`
+  names the prepare and a set is drawn before the next prepare. The
+  `erhe::scene_renderer` GPU culling prepares one set per shadow pass
+  (`Draw_list_scene::prepare_gpu_shadow_pass()`).
 
 - `erhe::scene_renderer`: `Shadow_fit_cache`, `Caster_extents_identity`
   (`caster_extents_identity.hpp`), `Shadow_bounds::extents_identity`,

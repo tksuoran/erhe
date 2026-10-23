@@ -1069,6 +1069,11 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                 ? m_pipelines_depth_clamp[cull_index]
                 : m_pipelines[cull_index];
 
+        // GPU-generated commands: the pass's jobs are prepared before its
+        // render pass begins.
+        if (gpu_counted) {
+            parameters.draw_list_scene->prepare_gpu_shadow_pass(parameters.command_buffer, cull_views.views_2d[shadow_index], m_graphics_device.get_frame_index());
+        }
         erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{
             *parameters.render_passes[shadow_index].get(),
@@ -1271,6 +1276,11 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                     continue;
                 }
 
+                // GPU-generated commands: a drawn face's jobs are prepared
+                // before its render pass begins (an empty face draws nothing).
+                if (gpu_counted && (((skipped_faces >> face) & 1u) == 0u)) {
+                    parameters.draw_list_scene->prepare_gpu_shadow_pass(parameters.command_buffer, cull_views.views_cube[pass_index], m_graphics_device.get_frame_index());
+                }
                 erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
                 erhe::graphics::Scoped_render_pass scoped_render_pass{
                     *cube_passes[pass_index].get(),

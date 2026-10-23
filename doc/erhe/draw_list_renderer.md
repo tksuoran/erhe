@@ -726,16 +726,20 @@ Drawing:
   records the two passes of `cull_compact.comp` after a storage barrier
   (classification writes -> compaction reads), one storage barrier between
   them, and a command and storage barrier after them (compaction writes ->
-  indirect command and count reads, and the prepare step's reads). It then
-  prepares the jobs as `erhe::graphics` indirect count draws
-  (`Compute_command_encoder::prepare_indexed_indirect_count_draws()` in its
-  own compute encoder, on the `Draw_list_scene`'s persistent
-  `Indirect_count_draws`): per job its command offset, chunk entry count and
-  the index of its list's index buffer in a per-frame table of the distinct
-  index buffers (job and index buffer tables are scratch kept with their
-  capacity). On Metal this dispatches the kernel that encodes the surviving
-  commands into an indirect command buffer; elsewhere it records the
-  parameters. The pass bits pass runs one invocation per
+  indirect command and count reads, and the prepare steps' reads). With the
+  job table it builds the frame's jobs as `erhe::graphics` indirect count
+  draw jobs (command offset, chunk entry count, the index of its list's index
+  buffer in a per-frame table of the distinct index buffers) and, per view,
+  its consecutive jobs. Each shadow pass then prepares only its view's jobs
+  (`Draw_list_scene::prepare_gpu_shadow_pass()`, called by
+  `Shadow_renderer::draw()` before the pass's render pass begins, for drawn
+  passes and non-empty cube faces): the jobs rebased to the view's first
+  command and count slot, through `Compute_command_encoder::
+  prepare_indexed_indirect_count_draws()` in its own compute encoder, on the
+  `Draw_list_scene`'s persistent `Indirect_count_draws` (all tables are
+  scratch kept with their capacity). On Metal this dispatches the kernel that
+  encodes the pass's surviving commands into an indirect command buffer;
+  elsewhere it records the parameters. The pass bits pass runs one invocation per
   (job, entry): the job's view bit and the selection's `Item_filter`
   (transcribed as 32-bit halves) against the entry's flag bits, collected
   into the job's pass bit words (command offset / 32 on), each word written
@@ -758,9 +762,10 @@ Drawing:
   first-job lookup are render-phase scratch kept with their capacity.
   `draw_shadow()` with a culling view on such a frame verifies its filter,
   layers and chunk size are the selection's and draws each chunk with
-  `multi_draw_indexed_primitives_indirect_count(set, job)` of the prepared
-  set (the job's command range and count slot, `max_draw_count` = the
-  chunk's entry count; the draw binds the job's index buffer, at offset 0
+  `multi_draw_indexed_primitives_indirect_count(set, job - first job of the
+  view)` of the pass's set (the job's command range and count slot,
+  `max_draw_count` = the chunk's entry count; the draw binds the job's
+  index buffer, at offset 0
   as the CPU path's draws do, and the command buffer itself), binding the
   chunk's shared records as before; no `Draw_indirect_buffer::update()`
   runs for it, and no per-entry decision: every chunk of a drawn list is one
@@ -768,10 +773,11 @@ Drawing:
   buffers bound once. The shadow pipelines are created with
   `Indirect_count_draw_support::enabled` (Metal's
   `supportIndirectCommandBuffers`; their shaders bind no textures
-  directly). On Bistro the Metal indirect command buffer reaches 131072
-  commands (90.7 MB) per frame in flight: a job reserves its chunk's whole
-  entry count, rounded to 32, and the buffer grows in powers of two. The
-  compaction also writes, per job, the chunk's entries passing the filter;
+  directly). A job reserves its chunk's whole entry count in the indirect
+  command buffer, so preparing per pass sizes the Metal buffer to the
+  largest single pass: 5120 commands (3.6 MB) per frame in flight on
+  Bistro. The compaction also writes, per job, the chunk's entries passing
+  the filter;
   every `gpu` frame copies the count buffer to host memory, and the
   classification of the frame that reuses its frame slot (the frame retired)
   decodes it into per-view drawn / filtered counts

@@ -138,7 +138,8 @@ void Render_command_encoder::multi_draw_indexed_primitives_indirect_count(const 
 {
     ERHE_VERIFY(set.draws != nullptr);
     const Indirect_count_draws::Slot& slot = set.draws->get_slot(set.slot);
-    ERHE_VERIFY(slot.prepared);
+    // An older set's state was replaced by a later prepare (on any slot).
+    ERHE_VERIFY((set.sequence != 0) && (set.sequence == set.draws->get_sequence()) && (slot.sequence == set.sequence));
     ERHE_VERIFY(job_index < slot.jobs.size());
 #if defined(ERHE_GRAPHICS_API_METAL)
     m_impl->execute_indirect_count_draws(*set.draws, set.slot, job_index);

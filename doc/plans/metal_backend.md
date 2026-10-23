@@ -204,20 +204,18 @@ command mismatches on the default scene (4 jobs), the heavy bench scene (18
 jobs, 6638 commands) and Bistro (784 jobs); `render_scene_image` md5
 identical between `cpu` and `gpu` in one session on all three (Metal) and on
 default and heavy (KosmicKrisp); `get_scene_lights` shadow entry and culled
-counts equal between the modes. ICB high-water: 128 commands on the default
-scene, 32768 (22.7 MB) on heavy, 131072 (90.7 MB) on Bistro, per frame in
-flight (three).
+counts equal between the modes.
 
-Open (user decision 2026-10-23): the Bistro ICB size follows from each job
-reserving its whole chunk entry count (rounded to 32); sizing by the jobs'
-drawn counts is not possible before the GPU writes them. The ICB now grows
-in steps of 1024 commands instead of doubling (Bistro: 66560 commands,
-about 46 MB per frame in flight). The next commit encodes per shadow pass
-instead of per frame: a compute encoder before each pass's render encoder
-prepares that pass's jobs into one ICB sized to the largest single pass
-(Metal's hazard tracking orders the reuse between passes), which cuts the
-footprint to the per-view share. The `Indirect_count_draws` rule of one
-prepare per slot per frame is relaxed to one per prepare call for that.
+Footprint (user decision 2026-10-23): each job reserves its whole chunk
+entry count (rounded to 32) in the ICB, and the drawn counts are not known
+before the GPU writes them, so one set per frame needed 131072 commands
+(90.7 MB) per frame in flight on Bistro, 66560 (46 MB) with the ICB growing
+in steps of 1024 commands. The GPU culling therefore prepares one set per
+shadow pass (`Indirect_count_draws` takes any number of prepares per frame;
+a set is drawn before the next prepare): the ICB is sized to the largest
+single pass. High-water per frame in flight, re-measured with the same
+gates (0 mismatches, `cpu` and `gpu` images identical): 1024 commands (0.7
+MB) on the default scene, 2048 (1.4 MB) on heavy, 5120 (3.6 MB) on Bistro.
 
 ## 7. Metal 4
 

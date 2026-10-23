@@ -1930,7 +1930,10 @@ void Draw_list_scene::draw_list_gpu_chunks(
     const std::size_t entry_count   = draw_list.entries.size();
     // The jobs were prepared as triangle draws (shadow casters).
     ERHE_VERIFY(render_pipeline.get_create_info().base.input_assembly.primitive_topology == erhe::graphics::Primitive_type::triangle);
+    // The pass prepared its view's jobs (prepare_gpu_shadow_pass()); job j
+    // of the frame is job j - first_job of the pass's set.
     ERHE_VERIFY(m_gpu_indirect_count_draw_set.draws != nullptr);
+    ERHE_VERIFY(static_cast<std::size_t>(m_gpu_pass_cull_view) == static_cast<std::size_t>(m_gpu_shadow_jobs[first_gpu_job].view));
 
     // The prepared draw binds the job's index buffer and the command buffer
     // itself.
@@ -1948,7 +1951,8 @@ void Draw_list_scene::draw_list_gpu_chunks(
         ERHE_VERIFY(job.entry_count == (end - begin));
         const erhe::graphics::Ring_buffer_range& shared_range = shared_shadow_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, primitive_settings, frame_index);
         primitive_buffer.bind(render_encoder, shared_range);
-        render_encoder.multi_draw_indexed_primitives_indirect_count(m_gpu_indirect_count_draw_set, static_cast<uint32_t>(job_index));
+        ERHE_VERIFY((job_index >= m_gpu_pass_jobs.first_job) && (job_index < (m_gpu_pass_jobs.first_job + m_gpu_pass_jobs.job_count)));
+        render_encoder.multi_draw_indexed_primitives_indirect_count(m_gpu_indirect_count_draw_set, static_cast<uint32_t>(job_index - m_gpu_pass_jobs.first_job));
         statistics.draw_call_count += 1;
     }
     statistics.draw_list_count += 1;
@@ -2280,6 +2284,8 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     m_gpu_count_buffer        = nullptr;
     m_gpu_count_byte_offset   = 0;
     m_gpu_indirect_count_draw_set = erhe::graphics::Indirect_count_draw_set{};
+    m_gpu_pass_cull_view          = Cull_view::none;
+    m_gpu_pass_jobs               = Gpu_shadow_view_jobs{};
     m_gpu_shadow_jobs.clear();
     for (std::vector<uint64_t>& masks : m_cull_masks) {
         masks.clear();

@@ -148,6 +148,8 @@ constexpr std::size_t c_min_command_count  = 64;
 constexpr std::size_t c_command_count_granularity = 1024;
 constexpr std::size_t c_min_job_count      = 16;
 constexpr std::size_t c_min_table_bytes    = 256;
+// Each prepare's table range starts at this alignment (buffer offsets).
+constexpr std::size_t c_table_alignment    = 256;
 
 [[nodiscard]] auto to_mtl_primitive_type_value(const Primitive_type type) -> uint32_t
 {
@@ -238,8 +240,7 @@ Indirect_count_draws_impl::~Indirect_count_draws_impl() noexcept
 void Indirect_count_draws_impl::reserve(
     Slot_resources&   resources,
     const std::size_t command_count,
-    const std::size_t job_count,
-    const std::size_t table_bytes
+    const std::size_t job_count
 )
 {
     MTL::Device* const mtl_device = m_device.get_impl().get_mtl_device();
@@ -282,17 +283,41 @@ void Indirect_count_draws_impl::reserve(
         resources.range_capacity = capacity;
         log_startup->info("Indirect_count_draws '{}': range buffer grown to {} jobs", m_debug_label.string_view(), capacity);
     }
-    if ((resources.table_buffer == nullptr) || (resources.table_capacity < table_bytes)) {
-        const std::size_t capacity = std::bit_ceil(std::max(table_bytes, c_min_table_bytes));
-        release_later(m_device, resources.table_buffer);
-        resources.table_buffer = mtl_device->newBuffer(
-            static_cast<NS::UInteger>(capacity),
-            MTL::ResourceStorageModeShared | MTL::ResourceCPUCacheModeWriteCombined
-        );
-        ERHE_VERIFY(resources.table_buffer != nullptr);
-        resources.table_capacity = capacity;
-        log_startup->info("Indirect_count_draws '{}': table buffer grown to {} bytes", m_debug_label.string_view(), capacity);
+}
+
+auto Indirect_count_draws_impl::allocate_table(
+    Slot_resources&   resources,
+    const uint64_t    frame_index,
+    const std::size_t table_bytes
+) -> std::size_t
+{
+    // Each prepare's table is a range of the slot's table buffer, used
+    // linearly through the frame: the slot's previous frame retired before
+    // this frame acquired the slot, so its ranges are free.
+    if (resources.table_frame != frame_index) {
+        resources.table_frame = frame_index;
+        resources.table_used  = 0;
     }
+    const std::size_t offset = ((resources.table_used + c_table_alignment - 1) / c_table_alignment) * c_table_alignment;
+    if ((resources.table_buffer != nullptr) && ((offset + table_bytes) <= resources.table_capacity)) {
+        resources.table_used = offset + table_bytes;
+        return offset;
+    }
+    // Grow: the frame's earlier tables stay in the old buffer (released
+    // once the frame completed); this one starts the new buffer.
+    MTL::Device* const mtl_device = m_device.get_impl().get_mtl_device();
+    ERHE_VERIFY(mtl_device != nullptr);
+    const std::size_t capacity = std::bit_ceil(std::max({offset + table_bytes, table_bytes, c_min_table_bytes}));
+    release_later(m_device, resources.table_buffer);
+    resources.table_buffer = mtl_device->newBuffer(
+        static_cast<NS::UInteger>(capacity),
+        MTL::ResourceStorageModeShared | MTL::ResourceCPUCacheModeWriteCombined
+    );
+    ERHE_VERIFY(resources.table_buffer != nullptr);
+    resources.table_capacity = capacity;
+    resources.table_used     = table_bytes;
+    log_startup->info("Indirect_count_draws '{}': table buffer grown to {} bytes", m_debug_label.string_view(), capacity);
+    return 0;
 }
 
 void Indirect_count_draws_impl::encode(
@@ -317,19 +342,19 @@ void Indirect_count_draws_impl::encode(
     const std::size_t job_count          = slot.jobs.size();
     const std::size_t index_buffer_bytes = slot.index_buffers.size() * sizeof(Gpu_index_buffer);
     const std::size_t job_bytes          = job_count * sizeof(Gpu_job);
-    const std::size_t index_table_offset = c_icb_argument_bytes;
-    const std::size_t job_table_offset   = index_table_offset + index_buffer_bytes;
-    const std::size_t table_bytes        = job_table_offset + job_bytes;
-    reserve(resources, command_count, job_count, table_bytes);
-    resources.encoded_frame = slot.frame_index;
-    resources.encoded       = true;
+    reserve(resources, command_count, job_count);
+    resources.encoded_sequence = slot.sequence;
     if (job_count == 0) {
         return;
     }
 
-    // The table: written by the CPU into the slot's shared buffer, which
-    // the GPU last read in the frame that used this slot before (retired).
-    std::byte* const table = static_cast<std::byte*>(resources.table_buffer->contents());
+    // The table: written by the CPU into this prepare's range of the slot's
+    // shared table buffer.
+    const std::size_t table_bytes        = c_icb_argument_bytes + index_buffer_bytes + job_bytes;
+    const std::size_t table_offset       = allocate_table(resources, slot.frame_index, table_bytes);
+    const std::size_t index_table_offset = table_offset + c_icb_argument_bytes;
+    const std::size_t job_table_offset   = index_table_offset + index_buffer_bytes;
+    std::byte* const table = static_cast<std::byte*>(resources.table_buffer->contents()) + table_offset;
     const MTL::ResourceID icb_id = resources.icb->gpuResourceID();
     static_assert(sizeof(MTL::ResourceID) <= c_icb_argument_bytes);
     std::memcpy(table, &icb_id, sizeof(icb_id));
@@ -342,7 +367,7 @@ void Indirect_count_draws_impl::encode(
             .index_size = index_size_of(index_buffer.index_type),
             .reserved   = 0
         };
-        std::memcpy(table + index_table_offset + (i * sizeof(Gpu_index_buffer)), &entry, sizeof(entry));
+        std::memcpy(table + c_icb_argument_bytes + (i * sizeof(Gpu_index_buffer)), &entry, sizeof(entry));
     }
     for (std::size_t i = 0; i < job_count; ++i) {
         const Indirect_count_draw_job& job = slot.jobs[i];
@@ -352,7 +377,7 @@ void Indirect_count_draws_impl::encode(
             .index_buffer   = job.index_buffer,
             .reserved       = 0
         };
-        std::memcpy(table + job_table_offset + (i * sizeof(Gpu_job)), &entry, sizeof(entry));
+        std::memcpy(table + c_icb_argument_bytes + index_buffer_bytes + (i * sizeof(Gpu_job)), &entry, sizeof(entry));
     }
     const Gpu_params params{
         .job_count          = static_cast<uint32_t>(job_count),
@@ -366,7 +391,7 @@ void Indirect_count_draws_impl::encode(
     ERHE_VERIFY((command_buffer != nullptr) && (count_buffer != nullptr));
 
     encoder->setComputePipelineState(pipeline);
-    encoder->setBuffer(resources.table_buffer, 0,                                                   0);
+    encoder->setBuffer(resources.table_buffer, static_cast<NS::UInteger>(table_offset),             0);
     encoder->setBuffer(command_buffer,         static_cast<NS::UInteger>(slot.command_byte_offset), 1);
     encoder->setBuffer(count_buffer,           static_cast<NS::UInteger>(slot.count_byte_offset),   2);
     encoder->setBuffer(resources.table_buffer, static_cast<NS::UInteger>(job_table_offset),         3);

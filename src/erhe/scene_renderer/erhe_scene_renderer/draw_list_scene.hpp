@@ -574,6 +574,12 @@ public:
     // in frame_index (render thread, render phase, after the frame's
     // classification).
     [[nodiscard]] auto has_gpu_shadow_commands(uint64_t frame_index) const -> bool;
+    // Prepares the GPU-generated commands of the shadow pass of cull_view
+    // as erhe::graphics indirect count draws (render thread, render phase,
+    // before the pass's render pass begins: records a compute encoder into
+    // command_buffer). A no-op without GPU-generated shadow commands in
+    // frame_index. The pass's draw_shadow() draws from this set.
+    void prepare_gpu_shadow_pass(erhe::graphics::Command_buffer& command_buffer, Cull_view cull_view, uint64_t frame_index);
     // The GPU command generation's per-view counts of the newest frame whose
     // count readback this scene decoded (render thread, render phase): every
     // frame with GPU-generated shadow commands copies its count buffer to
@@ -1174,15 +1180,27 @@ private:
     const erhe::graphics::Buffer*                                    m_gpu_count_buffer{nullptr};
     std::size_t                                                      m_gpu_count_byte_offset{0};
     std::unique_ptr<erhe::graphics::Gpu_timer>                       m_gpu_command_timer;
-    // The shadow passes draw the frame's jobs as prepared count draws
+    // Each shadow pass draws its view's jobs as prepared count draws
     // (erhe::graphics Indirect_count_draws, one per Draw_list_scene, created
-    // at the first generation): the set prepared for the frame, and the
-    // prepare's job and index buffer tables (persistent scratch, capacity
-    // kept; job j of the set is m_gpu_shadow_jobs[j]).
+    // at the first prepare; prepare_gpu_shadow_pass()). The frame's jobs as
+    // prepare jobs (absolute command offsets) and its index buffer table,
+    // built with the job table; per view its consecutive jobs; the current
+    // pass's view, jobs, rebased prepare jobs and set (job j of the frame is
+    // job j - first_job of the set). Persistent scratch, capacity kept.
+    class Gpu_shadow_view_jobs
+    {
+    public:
+        uint32_t first_job{0};
+        uint32_t job_count{0};
+    };
     std::unique_ptr<erhe::graphics::Indirect_count_draws>            m_gpu_indirect_count_draws;
-    erhe::graphics::Indirect_count_draw_set                          m_gpu_indirect_count_draw_set{};
     std::vector<erhe::graphics::Indirect_count_draw_job>             m_gpu_indirect_count_jobs;
     std::vector<erhe::graphics::Indirect_count_index_buffer>         m_gpu_indirect_count_index_buffers;
+    std::vector<Gpu_shadow_view_jobs>                                m_gpu_shadow_view_jobs;
+    Cull_view                                                        m_gpu_pass_cull_view{Cull_view::none};
+    Gpu_shadow_view_jobs                                             m_gpu_pass_jobs{};
+    std::vector<erhe::graphics::Indirect_count_draw_job>             m_gpu_pass_indirect_count_jobs;
+    erhe::graphics::Indirect_count_draw_set                          m_gpu_indirect_count_draw_set{};
     // Per frame slot: the count readback of the slot's last frame with
     // GPU-generated shadow commands, until decode_retired_gpu_shadow_counts()
     // of the frame reusing the slot, and the decoded counts. Each slot owns a

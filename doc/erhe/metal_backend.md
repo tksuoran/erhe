@@ -582,9 +582,11 @@ count draw:
   from raw MSL at construction (`metal_indirect_count_draws.cpp`; SPIR-V
   cannot express `command_buffer`) and reports `use_draw_indirect_count` only
   when the library and pipeline build.
-- `Compute_command_encoder::prepare_indexed_indirect_count_draws` writes the
-  slot's table buffer (shared storage: the ICB's `gpuResourceID`, the index
-  buffers' `gpuAddress` and index size, the jobs) and dispatches the kernel
+- `Compute_command_encoder::prepare_indexed_indirect_count_draws` writes its
+  own range of the slot's table buffer (shared storage, used linearly through
+  the frame, since the CPU writes all of a frame's tables before the GPU runs
+  any: the ICB's `gpuResourceID`, the index buffers' `gpuAddress` and index
+  size, the jobs) and dispatches the kernel
   over a (slot, job) grid with `dispatchThreads`, after `useResource(icb,
   Write)`. Thread (s, j) encodes command `command_offset + s` into the ICB
   entry of the same index with `render_command::draw_indexed_primitives`
@@ -600,7 +602,9 @@ count draw:
   `executeCommandsInBuffer(icb, range_buffer, job * 8)`.
 - The ICB (`drawIndexed`, `inheritPipelineState`, `inheritBuffers`, bind
   counts 0, private storage), the range buffer (private) and the table buffer
-  exist per frame-in-flight slot of each `Indirect_count_draws`, grow to
+  exist per frame-in-flight slot of each `Indirect_count_draws` and are
+  reused by every prepare of the frame (the ICB and range buffer sized to
+  the largest set, the table buffer to a frame's sets); they grow to
   their high-water mark (the ICB in steps of 1024 commands, the others in
   powers of two; logged at info) and are released through completion
   handlers.
@@ -619,18 +623,28 @@ count draw:
   can carry it: the `Render_pipeline_state` path
   (`set_render_pipeline_state`) builds its pipeline state objects without
   it.
-- Ordering: the kernel's encoder ends with the command buffer's inter-encoder
-  fence update and the render pass waits on it, as for any compute -> render
-  dependency; the ICB and range buffer are tracked resources.
+- Ordering: every compute encoder waits on the command buffer's
+  inter-encoder fence at its start and updates it at its end; every render
+  pass waits on it at the vertex and fragment stages and updates it after
+  the fragment stage. A prepare after a render pass therefore starts after
+  that pass's fragment work (its kernel cannot overwrite the ICB or range
+  buffer under the previous set's draws), and the next render pass starts its
+  vertex work after the kernel. The ICB and the range buffer are tracked
+  resources besides (`useResource` write in the kernel's encoder, read in
+  the render encoder; the range buffer bound in both), so Metal's hazard
+  tracking orders the same accesses. `Draw_indirect_test.
+  draw_indexed_indirect_count_set_per_pass` draws two sets rebased to the same
+  ICB entries in two render passes and fails if either pass reads the other
+  set's commands.
 - Limits (M4 Pro, macOS 27): an ICB of `drawIndexed` commands takes about 692
   bytes per command whatever is inherited (968 without inherited pipeline);
   `newIndirectCommandBuffer` succeeds up to 4194304 commands (2.9 GB) and
   crashes inside the driver at 8388608; a single 1048576-command range
   executes correctly under Metal validation. Size producers' command ranges
   with the 692 bytes per command per frame in flight in mind: the GPU
-  culling's shadow commands reach 131072 commands (90.7 MB) per frame in
-  flight on Bistro (doc/erhe/draw_list_renderer.md "GPU command
-  generation").
+  culling prepares one set per shadow pass, which keeps Bistro's ICB at 5120
+  commands (3.6 MB) per frame in flight (doc/erhe/draw_list_renderer.md "GPU
+  command generation").
 
 ### GPU timers
 
