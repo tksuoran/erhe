@@ -49,7 +49,7 @@
 ✓phase-5{ffa58f817;Gpu_cull_classifier+cull_classify.comp;per-slot-bounds-buffer;per-batch-mask-regions;MCP-check-0-mismatches;review-fixes:per-list-writes+no-dispatch-barrier+check-waits-for-gpu-frame+generations+cull_classification.hpp+enum-static_asserts}
 ✓phase-6a{9d21b1bd9;pre_execute hook+callback;Cull_frame_registry;review-fixes:registry-not-classifier-owned+callback-VERIFY+one-timer+params-once+one-color-view-source+cull_view-in-prepared;headset-per-eye-unculled=open}
 ✓phase-6b{GPU-shadow-commands;count-draw;review-fixes:no-per-entry-CPU-loop+readback-stats+index-clamp-refusal+flat-dispatch+chunk-size-once+split_uint64}
-?phase-7{occlusion;queued-first-2026-10-23;doc/plans/occlusion_culling.md}
+?phase-7{occlusion;queued-after-Metal-draw-count+Metal-4(2026-10-23);doc/plans/occlusion_culling.md}
 ✓gpu-shutdown-fix{d00438512}
 ✓perf-summary-report{memory-bank/local/culling_perf_2026_10_17.md;plan-6b-numbers-c66811366}
 
