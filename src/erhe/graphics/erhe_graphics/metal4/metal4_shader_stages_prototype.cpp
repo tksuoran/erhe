@@ -1,0 +1,519 @@
+#include "erhe_graphics/metal4/metal4_shader_stages.hpp"
+#include "erhe_graphics/metal4/metal4_acceleration_structure.hpp"
+#include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/metal4/metal4_bind_group_layout.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/glsl_format_source.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/shader_resource.hpp"
+
+#include <Metal/Metal.hpp>
+
+#include <fmt/format.h>
+#include <spirv_msl.hpp>
+
+#include <algorithm>
+#include <array>
+
+namespace erhe::graphics {
+
+namespace {
+
+auto compile_spirv_to_mtl_function(
+    Device&                          device,
+    MTL::Device*                     mtl_device,
+    std::span<const unsigned int>    spirv,
+    const std::string&               shader_name,
+    const char*                      stage_name,
+    const Bind_group_layout*         bind_group_layout,
+    MTL::Library*&                   out_library,
+    std::array<uint32_t, 3>*         out_workgroup_size = nullptr
+) -> MTL::Function*
+{
+    if (spirv.empty()) {
+        return nullptr;
+    }
+
+    spirv_cross::CompilerMSL compiler(spirv.data(), spirv.size());
+    spirv_cross::CompilerMSL::Options msl_options;
+    msl_options.platform = spirv_cross::CompilerMSL::Options::macOS;
+    // Metal 3 is required: full mutable aliasing of argument buffer descriptors
+    // (used by our bindless texture heap) only works on MSL 3+. MSL 3.2 lets
+    // SPIRV-Cross emit the helpers for `precise` arithmetic as inlinable
+    // functions with scoped fp pragmas instead of [[clang::optnone]] calls
+    // (doc/erhe/metal_backend.md "Precise arithmetic").
+    msl_options.set_msl_version(3, 2);
+    msl_options.argument_buffers = true;
+    msl_options.argument_buffers_tier = spirv_cross::CompilerMSL::Options::ArgumentBuffersTier::Tier2;
+    msl_options.force_active_argument_buffer_resources = true;
+    compiler.set_msl_options(msl_options);
+
+    // Keep descriptor set 0 (UBOs/SSBOs) as discrete individual [[buffer(N)]] bindings
+    compiler.add_discrete_descriptor_set(0);
+
+    // Move all sampled images to a non-discrete descriptor set for argument buffer.
+    // SPIRV-Cross kMaxArgumentBuffers = 8, so set must be 0-7.
+    // Set 0 is discrete (UBOs/SSBOs). We use set 7 for textures.
+    static constexpr uint32_t texture_descriptor_set = 7;
+
+    // Fixed Metal buffer indices -- UBOs/SSBOs use identity mapping (GLSL binding = Metal index).
+    // These higher indices are reserved for the argument buffer and push
+    // constant; c_metal_acceleration_structure_buffer_index (13) is reserved
+    // for the ray query top level acceleration structure the same way.
+    static constexpr uint32_t metal_arg_buffer_index    = 14;
+    static constexpr uint32_t metal_push_constant_index = 15;
+
+    spv::ExecutionModel exec_model = compiler.get_execution_model();
+
+    // Capture the compute local workgroup size from the SPIR-V execution mode.
+    // erhe's dispatch_compute() takes workgroup COUNTS (GL/Vulkan
+    // glDispatchCompute semantics) and relies on the shader's declared
+    // layout(local_size_*) for the per-group thread dimensions. Metal does not
+    // bake the threadgroup size into the pipeline; it must be supplied to
+    // dispatchThreadgroups() at dispatch time. Read it here (where the SPIR-V is
+    // available) so the encoder can forward it.
+    if ((exec_model == spv::ExecutionModelGLCompute) && (out_workgroup_size != nullptr)) {
+        (*out_workgroup_size)[0] = std::max(1u, compiler.get_execution_mode_argument(spv::ExecutionModeLocalSize, 0));
+        (*out_workgroup_size)[1] = std::max(1u, compiler.get_execution_mode_argument(spv::ExecutionModeLocalSize, 1));
+        (*out_workgroup_size)[2] = std::max(1u, compiler.get_execution_mode_argument(spv::ExecutionModeLocalSize, 2));
+    }
+
+    {
+        spirv_cross::ShaderResources pre_resources = compiler.get_shader_resources();
+
+        // Sampled images split into two paths on Metal:
+        //
+        //   - **Texture-heap samplers** (e.g. `s_textures[64]` for the bindless
+        //     material texture array) go into an argument buffer at
+        //     descriptor set 7. The texture heap encodes them via an
+        //     MTL::ArgumentEncoder and binds the buffer at [[buffer(14)]].
+        //
+        //   - **Dedicated named samplers** (e.g. `s_shadow_compare`,
+        //     `s_depth`, `s_input`) stay in the discrete set 0 with explicit
+        //     [[texture(N)]]/[[sampler(N)]] bindings. They are bound by
+        //     Render_command_encoder::set_sampled_image() at draw time via
+        //     setFragmentTexture / setFragmentSamplerState. The Metal slot
+        //     index is the original SPIRV/GLSL binding number (which is
+        //     the user-facing binding_point + sampler_binding_offset, so
+        //     the host side and the shader side agree).
+        //
+        // The classification is driven by the explicit
+        // Shader_resource::get_is_texture_heap() flag on each sampler member
+        // of the default uniform block. We do NOT use array-ness as a proxy:
+        // a dedicated sampler may legitimately be declared as an array of size
+        // 1 (or even larger), and a texture-heap sampler may have any size.
+        //
+        // Vertex shaders don't sample textures; their sampled_image
+        // declarations (injected via default_uniform_block) are unused. Keep
+        // them in the discrete set 0 so they don't create an argument buffer.
+        if (exec_model == spv::ExecutionModelFragment || exec_model == spv::ExecutionModelGLCompute) {
+            // Build a name -> is_texture_heap lookup from the bind group
+            // layout's default uniform block. If no layout was supplied
+            // (e.g. compute-only shaders that don't sample textures), the
+            // lookup is empty and every sampled image falls through to
+            // the discrete-set path.
+            auto is_texture_heap_sampler = [bind_group_layout](const std::string& name) -> bool {
+                if (bind_group_layout == nullptr) {
+                    return false;
+                }
+                const Shader_resource& default_uniform_block = bind_group_layout->get_default_uniform_block();
+                for (const std::unique_ptr<Shader_resource>& member : default_uniform_block.get_members()) {
+                    if ((member->get_type() == Shader_resource::Type::sampler) && (member->get_name() == name)) {
+                        return member->get_is_texture_heap();
+                    }
+                }
+                return false;
+            };
+
+            std::vector<std::pair<uint32_t, const spirv_cross::Resource*>> sorted_images;
+            for (const spirv_cross::Resource& resource : pre_resources.sampled_images) {
+                uint32_t binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+                sorted_images.push_back({binding, &resource});
+            }
+            std::sort(sorted_images.begin(), sorted_images.end());
+
+            // Classify and place each sampled image either into the texture
+            // descriptor set (argument buffer) or into discrete set 0
+            // (direct [[texture(N)]]/[[sampler(N)]] bindings).
+            uint32_t arg_offset = 0;
+            for (const auto& [binding, resource_ptr] : sorted_images) {
+                const spirv_cross::SPIRType& type = compiler.get_type(resource_ptr->type_id);
+                uint32_t array_size = type.array.empty() ? 1 : type.array[0];
+                if (array_size == 0) {
+                    array_size = 1;
+                }
+                const bool is_texture_heap = is_texture_heap_sampler(resource_ptr->name);
+                if (is_texture_heap) {
+                    // Texture-heap sampler: move into argument buffer.
+                    compiler.set_decoration(resource_ptr->id, spv::DecorationDescriptorSet, texture_descriptor_set);
+                    spirv_cross::MSLResourceBinding rb{};
+                    rb.stage       = exec_model;
+                    rb.desc_set    = texture_descriptor_set;
+                    rb.binding     = binding;
+                    rb.count       = array_size;
+                    rb.msl_texture = arg_offset;
+                    rb.msl_sampler = arg_offset + array_size;
+                    compiler.add_msl_resource_binding(rb);
+                    arg_offset += 2 * array_size;
+                } else {
+                    // Dedicated sampler: keep in discrete set 0 with a direct
+                    // [[texture(N)]]/[[sampler(M)]] binding.
+                    //
+                    // The texture index matches the SPIRV binding, so
+                    // set_sampled_image() can use the same number on the host
+                    // side. The sampler index cannot: Metal only accepts
+                    // [[sampler(M)]] for M in [0, 15], while the SPIRV binding
+                    // is offset past the buffer bindings and runs out of that
+                    // range with far fewer than 16 samplers declared. So the
+                    // sampler index comes from the bind group layout's compact
+                    // dedicated-sampler allocation, which set_sampled_image()
+                    // queries the same way.
+                    const uint32_t msl_sampler = (bind_group_layout != nullptr)
+                        ? bind_group_layout->get_impl().get_metal_sampler_slot(binding)
+                        : binding;
+                    spirv_cross::MSLResourceBinding rb{};
+                    rb.stage       = exec_model;
+                    rb.desc_set    = 0;
+                    rb.binding     = binding;
+                    rb.count       = array_size;
+                    rb.msl_texture = binding;
+                    rb.msl_sampler = msl_sampler;
+                    compiler.add_msl_resource_binding(rb);
+                }
+            }
+        }
+
+        // Set explicit Metal buffer indices for all resources so that
+        // GLSL binding N maps to Metal [[buffer(N)]] (identity mapping).
+        // This eliminates the need for runtime remapping.
+        for (const spirv_cross::Resource& resource : pre_resources.uniform_buffers) {
+            uint32_t glsl_binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage      = exec_model;
+            rb.desc_set   = 0;
+            rb.binding    = glsl_binding;
+            rb.msl_buffer = glsl_binding;
+            compiler.add_msl_resource_binding(rb);
+        }
+        for (const spirv_cross::Resource& resource : pre_resources.storage_buffers) {
+            uint32_t glsl_binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage      = exec_model;
+            rb.desc_set   = 0;
+            rb.binding    = glsl_binding;
+            rb.msl_buffer = glsl_binding;
+            compiler.add_msl_resource_binding(rb);
+        }
+        // Storage images (load/store image2D, used by the atmosphere LUT compute
+        // shaders) live in the discrete set 0 with a direct [[texture(N)]] slot.
+        // Pin msl_texture = GLSL binding so Compute_command_encoder::set_storage_image()
+        // can bind the same slot on the host side. The compute shaders declare no
+        // sampled images, so the texture index space is owned by the storage images.
+        for (const spirv_cross::Resource& resource : pre_resources.storage_images) {
+            uint32_t binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage       = exec_model;
+            rb.desc_set    = 0;
+            rb.binding     = binding;
+            rb.msl_texture = binding;
+            compiler.add_msl_resource_binding(rb);
+        }
+        // Ray query top level acceleration structures become direct
+        // [[buffer(N)]] kernel parameters (raytracing::acceleration_structure)
+        // in the discrete set 0. Without a remap SPIRV-Cross auto-assigns N,
+        // colliding with the identity-mapped UBO/SSBO indices; pin the
+        // reserved index that Compute_command_encoder_impl::
+        // set_acceleration_structure binds.
+        for (const spirv_cross::Resource& resource : pre_resources.acceleration_structures) {
+            uint32_t glsl_binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage      = exec_model;
+            rb.desc_set   = 0;
+            rb.binding    = glsl_binding;
+            rb.msl_buffer = c_metal_acceleration_structure_buffer_index;
+            compiler.add_msl_resource_binding(rb);
+        }
+        for (const spirv_cross::Resource& resource : pre_resources.push_constant_buffers) {
+            static_cast<void>(resource);
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage      = exec_model;
+            rb.desc_set   = spirv_cross::kPushConstDescSet;
+            rb.binding    = spirv_cross::kPushConstBinding;
+            rb.msl_buffer = metal_push_constant_index;
+            compiler.add_msl_resource_binding(rb);
+        }
+
+        // Argument buffer for texture descriptor set -> fixed index 14
+        {
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage      = exec_model;
+            rb.desc_set   = texture_descriptor_set;
+            rb.binding    = spirv_cross::kArgumentBufferBinding;
+            rb.msl_buffer = metal_arg_buffer_index;
+            compiler.add_msl_resource_binding(rb);
+        }
+    }
+
+    std::string msl;
+    try {
+        msl = compiler.compile();
+    } catch (const spirv_cross::CompilerError& e) {
+        std::string error_msg = fmt::format("SPIR-V -> MSL {} compilation failed for '{}': {}", stage_name, shader_name, e.what());
+        log_program->error("{}", error_msg);
+        device.shader_error(error_msg, "");
+        return nullptr;
+    }
+
+    if (msl.empty()) {
+        return nullptr;
+    }
+
+    log_program->info("{} MSL for '{}' compiled successfully ({} bytes):\n{}", stage_name, shader_name, msl.size(), msl);
+
+    // Log resource bindings for debugging
+    spirv_cross::ShaderResources resources = compiler.get_shader_resources();
+    for (const spirv_cross::Resource& resource : resources.uniform_buffers) {
+        uint32_t glsl_binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+        uint32_t metal_index  = compiler.get_automatic_msl_resource_binding(resource.id);
+        log_program->info("  {} UBO '{}': glsl_binding={} -> metal_buffer={}", stage_name, resource.name, glsl_binding, metal_index);
+    }
+    for (const spirv_cross::Resource& resource : resources.push_constant_buffers) {
+        uint32_t metal_index = compiler.get_automatic_msl_resource_binding(resource.id);
+        log_program->info("  {} PushConstant '{}': metal_buffer={}", stage_name, resource.name, metal_index);
+    }
+    for (const spirv_cross::Resource& resource : resources.sampled_images) {
+        uint32_t glsl_binding   = compiler.get_decoration(resource.id, spv::DecorationBinding);
+        uint32_t tex_arg_index  = compiler.get_automatic_msl_resource_binding(resource.id);
+        uint32_t smp_arg_index  = compiler.get_automatic_msl_resource_binding_secondary(resource.id);
+        log_program->info("  {} Texture '{}': glsl_binding={} -> arg_buffer tex_id={} smp_id={}", stage_name, resource.name, glsl_binding, tex_arg_index, smp_arg_index);
+    }
+    for (const spirv_cross::Resource& resource : resources.storage_buffers) {
+        uint32_t glsl_binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+        uint32_t metal_index  = compiler.get_automatic_msl_resource_binding(resource.id);
+        log_program->info("  {} SSBO '{}': glsl_binding={} -> metal_buffer={}", stage_name, resource.name, glsl_binding, metal_index);
+    }
+
+    NS::Error* error = nullptr;
+    NS::String* msl_source = NS::String::alloc()->init(msl.c_str(), NS::UTF8StringEncoding);
+    MTL::CompileOptions* options = MTL::CompileOptions::alloc()->init();
+
+    out_library = mtl_device->newLibrary(msl_source, options, &error);
+
+    options->release();
+    msl_source->release();
+
+    if (out_library == nullptr) {
+        const char* error_str = (error != nullptr) ? error->localizedDescription()->utf8String() : "unknown error";
+        std::string error_msg = fmt::format("MTL {} library compilation failed for '{}': {}", stage_name, shader_name, error_str);
+        log_program->error("{}", error_msg);
+        device.shader_error(error_msg, msl);
+        return nullptr;
+    }
+
+    // SPIRV-Cross generates entry point named "main0"
+    NS::String* entry_name = NS::String::string("main0", NS::UTF8StringEncoding);
+    MTL::Function* function = out_library->newFunction(entry_name);
+
+    if (function == nullptr) {
+        NS::Array* function_names = out_library->functionNames();
+        std::string available;
+        for (NS::UInteger i = 0; i < function_names->count(); ++i) {
+            NS::String* fn_name = static_cast<NS::String*>(function_names->object(i));
+            if (i > 0) available += ", ";
+            available += fn_name->utf8String();
+        }
+        std::string error_msg = fmt::format("{} function 'main0' not found in '{}'. Available: {}", stage_name, shader_name, available);
+        log_program->error("{}", error_msg);
+        device.shader_error(error_msg, "");
+    }
+
+    return function;
+}
+
+} // anonymous namespace
+
+Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, Shader_stages_create_info&& create_info)
+    : m_device               {device}
+    , m_create_info           {std::move(create_info)}
+    , m_glslang_shader_stages{*this, &device.get_spirv_cache()}
+{
+}
+
+Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, const Shader_stages_create_info& create_info)
+    : m_device               {device}
+    , m_create_info           {create_info}
+    , m_glslang_shader_stages{*this, &device.get_spirv_cache()}
+{
+}
+
+Shader_stages_prototype_impl::~Shader_stages_prototype_impl() noexcept
+{
+    if (m_vertex_function != nullptr) {
+        m_vertex_function->release();
+    }
+    if (m_fragment_function != nullptr) {
+        m_fragment_function->release();
+    }
+    if (m_vertex_library != nullptr) {
+        m_vertex_library->release();
+    }
+    if (m_fragment_library != nullptr) {
+        m_fragment_library->release();
+    }
+    if (m_compute_function != nullptr) {
+        m_compute_function->release();
+    }
+    if (m_compute_library != nullptr) {
+        m_compute_library->release();
+    }
+}
+
+auto Shader_stages_prototype_impl::name() const -> const std::string& { return m_create_info.name; }
+auto Shader_stages_prototype_impl::create_info() const -> const Shader_stages_create_info& { return m_create_info; }
+auto Shader_stages_prototype_impl::is_valid() -> bool { return m_linked && !m_failed; }
+
+void Shader_stages_prototype_impl::compile_shaders()
+{
+    if (m_compiled || m_failed) {
+        return;
+    }
+    for (const Shader_stage& shader : m_create_info.shaders) {
+        if (shader.type == Shader_type::geometry_shader) {
+            log_program->warn("Metal does not support geometry shaders, marking invalid: {}", m_create_info.name);
+            m_failed = true;
+            return;
+        }
+        const bool compile_ok = m_glslang_shader_stages.compile_shader(m_device, shader);
+        if (!compile_ok) {
+            const std::string& compile_log = m_glslang_shader_stages.get_last_compile_log();
+            std::string error_msg = fmt::format(
+                "GLSL compilation failed for shader: {}\n{}",
+                m_create_info.name,
+                compile_log
+            );
+            log_program->error("{}", error_msg);
+            std::string source = m_create_info.final_source(m_device, shader, nullptr);
+            m_device.shader_error(error_msg, source);
+            m_failed = true;
+            return;
+        }
+    }
+    m_compiled = true;
+}
+
+auto Shader_stages_prototype_impl::link_program() -> bool
+{
+    if (m_failed) {
+        return false;
+    }
+    if (!m_compiled) {
+        compile_shaders();
+    }
+    if (m_failed) {
+        return false;
+    }
+    if (m_linked) {
+        return true;
+    }
+
+    const bool link_ok = m_glslang_shader_stages.link_program(m_device);
+    if (!link_ok) {
+        log_program->error("GLSL -> SPIR-V link failed for: {}", m_create_info.name);
+        m_failed = true;
+        return false;
+    }
+
+    Device_impl& device_impl = m_device.get_impl();
+    MTL::Device* mtl_device = device_impl.get_mtl_device();
+    if (mtl_device == nullptr) {
+        m_failed = true;
+        return false;
+    }
+
+    // Compile each stage into its own MTL::Library
+    m_vertex_function = compile_spirv_to_mtl_function(
+        m_device,
+        mtl_device,
+        m_glslang_shader_stages.get_spirv_binary(Shader_type::vertex_shader),
+        m_create_info.name,
+        "Vertex",
+        m_create_info.bind_group_layout,
+        m_vertex_library
+    );
+
+    m_fragment_function = compile_spirv_to_mtl_function(
+        m_device,
+        mtl_device,
+        m_glslang_shader_stages.get_spirv_binary(Shader_type::fragment_shader),
+        m_create_info.name,
+        "Fragment",
+        m_create_info.bind_group_layout,
+        m_fragment_library
+    );
+
+    m_compute_function = compile_spirv_to_mtl_function(
+        m_device,
+        mtl_device,
+        m_glslang_shader_stages.get_spirv_binary(Shader_type::compute_shader),
+        m_create_info.name,
+        "Compute",
+        m_create_info.bind_group_layout,
+        m_compute_library,
+        &m_compute_workgroup_size
+    );
+
+    if ((m_vertex_function == nullptr) && (m_compute_function == nullptr)) {
+        log_program->error("No vertex function for: {}", m_create_info.name);
+        m_failed = true;
+        return false;
+    }
+
+    log_program->info(
+        "Metal shader '{}': vertex={}, fragment={}",
+        m_create_info.name,
+        (m_vertex_function   != nullptr) ? "ok" : "missing",
+        (m_fragment_function != nullptr) ? "ok" : "missing"
+    );
+
+    m_linked = true;
+    return true;
+}
+
+void Shader_stages_prototype_impl::dump_reflection() const {}
+
+auto Shader_stages_prototype_impl::get_final_source(
+    const Shader_stage&         shader,
+    std::optional<unsigned int> gl_name
+) -> std::string
+{
+    return m_create_info.final_source(m_device, shader, &m_paths, gl_name);
+}
+
+auto Shader_stages_prototype_impl::get_dependency_paths() -> std::vector<std::filesystem::path>&
+{
+    return m_paths;
+}
+
+auto Shader_stages_prototype_impl::get_vertex_function() const -> MTL::Function*
+{
+    return m_vertex_function;
+}
+
+auto Shader_stages_prototype_impl::get_fragment_function() const -> MTL::Function*
+{
+    return m_fragment_function;
+}
+
+auto Shader_stages_prototype_impl::get_compute_function() const -> MTL::Function*
+{
+    return m_compute_function;
+}
+
+auto Shader_stages_prototype_impl::get_compute_workgroup_size() const -> std::array<uint32_t, 3>
+{
+    return m_compute_workgroup_size;
+}
+
+
+} // namespace erhe::graphics

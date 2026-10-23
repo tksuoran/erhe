@@ -255,6 +255,7 @@ flowchart TD
 - [erhe/meshoptimizer_integration.md](erhe/meshoptimizer_integration.md) (stable): meshoptimizer-based mesh optimization: source / optimized separation, caching, edit bracket
 - [erhe/message_bus.md](erhe/message_bus.md) (stable): Generic typed publish-subscribe message bus
 - [erhe/metal_backend.md](erhe/metal_backend.md) (mostly stable): Metal graphics backend architecture
+- [erhe/metal4_backend.md](erhe/metal4_backend.md) (experimental): Metal 4 graphics backend beside Metal 3, ported subsystem by subsystem
 - [erhe/metal_headless.md](erhe/metal_headless.md) (experimental): Metal backend running headless through an emulated swapchain
 - [erhe/multiview.md](erhe/multiview.md) (stable): Single-pass stereo (Vulkan multiview) for OpenXR on Quest 3
 - [erhe/net.md](erhe/net.md) (experimental): A cross-platform (Windows/Linux/macOS) TCP networking layer built on raw BSD sockets with `select()`

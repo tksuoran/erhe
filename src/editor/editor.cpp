@@ -2361,6 +2361,8 @@ public:
             .size              = glm::ivec2{1920, 1080},
 #if defined(ERHE_GRAPHICS_API_OPENGL)
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - OpenGL"),
+#elif defined(ERHE_GRAPHICS_API_METAL4)
+            .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - Metal 4"),
 #elif defined(ERHE_GRAPHICS_API_METAL)
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - Metal"),
 #elif defined(ERHE_GRAPHICS_API_VULKAN)

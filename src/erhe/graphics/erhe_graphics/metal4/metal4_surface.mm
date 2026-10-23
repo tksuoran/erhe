@@ -1,0 +1,164 @@
+#include "erhe_graphics/metal4/metal4_surface.hpp"
+#include "erhe_graphics/display_refresh_resolver.hpp"
+#include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/metal4/metal4_swapchain.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/swapchain.hpp"
+#include "erhe_window/window.hpp"
+
+#include <Metal/Metal.hpp>
+#include <QuartzCore/QuartzCore.hpp>
+
+#import <QuartzCore/CAMetalLayer.h>
+#import <AppKit/AppKit.h>
+
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+#   include <SDL3/SDL.h>
+#   include <SDL3/SDL_metal.h>
+#endif
+
+namespace erhe::graphics {
+
+Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& create_info)
+    : m_device_impl        {device_impl}
+    , m_surface_create_info{create_info}
+{
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    if (create_info.context_window != nullptr) {
+        SDL_Window* sdl_window = static_cast<SDL_Window*>(create_info.context_window->get_sdl_window());
+        if (sdl_window != nullptr) {
+            m_sdl_metal_view = SDL_Metal_CreateView(sdl_window);
+            if (m_sdl_metal_view != nullptr) {
+                m_metal_layer = static_cast<CA::MetalLayer*>(SDL_Metal_GetLayer(m_sdl_metal_view));
+                if (m_metal_layer != nullptr) {
+                    m_metal_layer->setDevice(device_impl.get_mtl_device());
+                    m_metal_layer->setPixelFormat(MTL::PixelFormatBGRA8Unorm_sRGB);
+                    // Readable drawables, so the swapchain can blit a
+                    // frame into a buffer for Device::capture_last_frame
+                    // (Swapchain_impl::record_capture). Framebuffer-only
+                    // drawables reject every read.
+                    m_metal_layer->setFramebufferOnly(false);
+                    if (device_impl.get_graphics_config().force_disable_vsync) {
+                        ((CAMetalLayer*)m_metal_layer).displaySyncEnabled = NO;
+                        log_startup->info("Disabled vsync (force_disable_vsync)");
+                    }
+                }
+            }
+        }
+    }
+#endif
+
+    if (m_metal_layer == nullptr) {
+        log_startup->info(
+            "Metal surface is headless: rendering into an emulated swapchain of offscreen textures"
+        );
+    }
+
+    m_swapchain = std::make_unique<Swapchain>(
+        std::make_unique<Swapchain_impl>(
+            m_device_impl,
+            *this
+        )
+    );
+}
+
+Surface_impl::~Surface_impl() noexcept
+{
+    m_swapchain.reset();
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    if (m_sdl_metal_view != nullptr) {
+        SDL_Metal_DestroyView(m_sdl_metal_view);
+        m_sdl_metal_view = nullptr;
+    }
+#endif
+}
+
+auto Surface_impl::get_swapchain() -> Swapchain*
+{
+    return m_swapchain.get();
+}
+
+auto Surface_impl::get_metal_layer() const -> CA::MetalLayer*
+{
+    return m_metal_layer;
+}
+
+auto Surface_impl::is_headless() const -> bool
+{
+    return m_metal_layer == nullptr;
+}
+
+void Surface_impl::apply_frame_pacing_tier(const Frame_pacing_tier tier)
+{
+    if ((m_metal_layer == nullptr) || (tier == Frame_pacing_tier::off)) {
+        return;
+    }
+    CAMetalLayer* const layer = (CAMetalLayer*)m_metal_layer;
+    layer.displaySyncEnabled   = YES;
+    layer.maximumDrawableCount = 3;
+    log_startup->info("Metal layer: displaySyncEnabled, maximumDrawableCount 3 (frame pacing tiers S and M)");
+}
+
+void Surface_impl::service_main_run_loop()
+{
+    if (![NSThread isMainThread]) {
+        return;
+    }
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true);
+}
+
+auto Surface_impl::get_backbuffer_width() const -> int
+{
+    return (m_surface_create_info.context_window != nullptr)
+        ? m_surface_create_info.context_window->get_width()
+        : 0;
+}
+
+auto Surface_impl::get_backbuffer_height() const -> int
+{
+    return (m_surface_create_info.context_window != nullptr)
+        ? m_surface_create_info.context_window->get_height()
+        : 0;
+}
+
+auto Surface_impl::query_display_presentation() const -> Display_presentation
+{
+    Display_presentation presentation{};
+    erhe::window::Context_window* const context_window = m_surface_create_info.context_window;
+    if (context_window == nullptr) {
+        return presentation;
+    }
+    presentation.fullscreen = context_window->is_fullscreen();
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    SDL_Window* const sdl_window = static_cast<SDL_Window*>(context_window->get_sdl_window());
+    if (sdl_window == nullptr) {
+        return presentation;
+    }
+    NSWindow* const ns_window = (__bridge NSWindow*)SDL_GetPointerProperty(
+        SDL_GetWindowProperties(sdl_window), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr
+    );
+    NSScreen* const screen = (ns_window != nil) ? [ns_window screen] : nil;
+    if (screen == nil) {
+        return presentation;
+    }
+    if (@available(macOS 12.0, *)) {
+        presentation.minimum_refresh_interval = static_cast<double>([screen minimumRefreshInterval]);
+        presentation.maximum_refresh_interval = static_cast<double>([screen maximumRefreshInterval]);
+        // ProMotion reports half its minimum interval: it refreshes only at
+        // its own ticks of that spacing (claim C32); 0 is continuous.
+        presentation.update_granularity       = static_cast<double>([screen displayUpdateGranularity]);
+    }
+    // A fixed-rate screen reports equal intervals; the margin keeps a
+    // rounding difference between the two from reading as a range.
+    constexpr double variable_range_ratio = 1.01;
+    const bool variable_range =
+        (presentation.minimum_refresh_interval > 0.0) &&
+        (presentation.maximum_refresh_interval > (presentation.minimum_refresh_interval * variable_range_ratio));
+    if (variable_range && presentation.fullscreen) {
+        presentation.kind = erhe::frame_pacing::Present_display_kind::variable_refresh;
+    }
+#endif
+    return presentation;
+}
+
+} // namespace erhe::graphics

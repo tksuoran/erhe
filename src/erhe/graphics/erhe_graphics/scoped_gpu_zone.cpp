@@ -11,8 +11,13 @@
 #endif
 #if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE) && defined(ERHE_GRAPHICS_API_METAL)
 #   include "erhe_graphics/command_buffer.hpp"
-#   include "erhe_graphics/metal/metal_command_buffer.hpp"
-#   include "erhe_graphics/metal/metal_gpu_timer.hpp"
+#   if defined(ERHE_GRAPHICS_API_METAL4)
+#       include "erhe_graphics/metal4/metal4_command_buffer.hpp"
+#       include "erhe_graphics/metal4/metal4_gpu_timer.hpp"
+#   else
+#       include "erhe_graphics/metal/metal_command_buffer.hpp"
+#       include "erhe_graphics/metal/metal_gpu_timer.hpp"
+#   endif
 #endif
 
 namespace erhe::graphics {

@@ -11,6 +11,7 @@ Configure through the `scripts/` wrappers (they enable tests by default):
 
 ```bash
 scripts/configure_xcode_metal.sh           # Metal backend  -> build_xcode_metal/
+scripts/configure_xcode_metal4.sh          # Metal 4 backend -> build_xcode_metal4/
 scripts/configure_xcode_vulkan.sh          # Vulkan backend -> build_xcode_vulkan/
 scripts/configure_xcode_metal_headless.sh  # headless Metal -> build_xcode_metal_headless/
 ```
@@ -19,11 +20,13 @@ Then build with:
 
 ```bash
 cmake --build build_xcode_metal  --target editor --config Debug
+cmake --build build_xcode_metal4 --target editor --config Debug
 cmake --build build_xcode_vulkan --target editor --config Debug
 ```
 
 Executables land in `<build>/bin/<Config>/`. The headless Metal build is
-described in `doc/erhe/metal_headless.md`.
+described in `doc/erhe/metal_headless.md`; the Metal 4 backend (in progress,
+built beside Metal 3) in `doc/erhe/metal4_backend.md`.
 
 ## Vulkan drivers
 

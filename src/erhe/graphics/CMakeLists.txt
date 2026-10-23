@@ -480,7 +480,66 @@ if (ERHE_GRAPHICS_API_VULKAN)
             GPUOpen::VulkanMemoryAllocator
     )
 endif ()
-if (ERHE_GRAPHICS_API_METAL)
+if (ERHE_GRAPHICS_API_METAL4)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/metal4/metal4_acceleration_structure.cpp
+        erhe_graphics/metal4/metal4_acceleration_structure.hpp
+        erhe_graphics/metal4/metal4_bind_group_layout.cpp
+        erhe_graphics/metal4/metal4_bind_group_layout.hpp
+        erhe_graphics/metal4/metal4_render_pipeline.cpp
+        erhe_graphics/metal4/metal4_render_pipeline.hpp
+        erhe_graphics/metal4/metal4_blit_command_encoder.cpp
+        erhe_graphics/metal4/metal4_blit_command_encoder.hpp
+        erhe_graphics/metal4/metal4_buffer.cpp
+        erhe_graphics/metal4/metal4_buffer.hpp
+        erhe_graphics/metal4/metal4_command_buffer.cpp
+        erhe_graphics/metal4/metal4_command_buffer.hpp
+        erhe_graphics/metal4/metal4_command_encoder.cpp
+        erhe_graphics/metal4/metal4_command_encoder.hpp
+        erhe_graphics/metal4/metal4_compute_command_encoder.cpp
+        erhe_graphics/metal4/metal4_compute_command_encoder.hpp
+        erhe_graphics/metal4/metal4_compute_pipeline.cpp
+        erhe_graphics/metal4/metal4_compute_pipeline.hpp
+        erhe_graphics/metal4/metal4_debug.cpp
+        erhe_graphics/metal4/metal4_scoped_debug_group.cpp
+        erhe_graphics/metal4/metal4_scoped_debug_group.hpp
+        erhe_graphics/metal4/metal4_device.cpp
+        erhe_graphics/metal4/metal4_device.hpp
+        erhe_graphics/metal4/metal4_device_present_calibration.cpp
+        erhe_graphics/metal4/metal4_pixel_format_table.cpp
+        erhe_graphics/metal4/metal4_pixel_format_table.hpp
+        erhe_graphics/metal4/metal4_gpu_prewarm.cpp
+        erhe_graphics/metal4/metal4_gpu_prewarm.hpp
+        erhe_graphics/metal4/metal4_gpu_timer.cpp
+        erhe_graphics/metal4/metal4_gpu_timer.hpp
+        erhe_graphics/metal4/metal4_helpers.cpp
+        erhe_graphics/metal4/metal4_helpers.hpp
+        erhe_graphics/metal4/metal4_indirect_count_draws.cpp
+        erhe_graphics/metal4/metal4_indirect_count_draws.hpp
+        erhe_graphics/metal4/metal4_error_handler.mm
+        erhe_graphics/metal4/metal4_implementation.mm
+        erhe_graphics/metal4/metal4_render_command_encoder.cpp
+        erhe_graphics/metal4/metal4_render_command_encoder.hpp
+        erhe_graphics/metal4/metal4_render_pass.cpp
+        erhe_graphics/metal4/metal4_render_pass.hpp
+        erhe_graphics/metal4/metal4_sampler.cpp
+        erhe_graphics/metal4/metal4_sampler.hpp
+        erhe_graphics/metal4/metal4_shader_stages.cpp
+        erhe_graphics/metal4/metal4_shader_stages.hpp
+        erhe_graphics/metal4/metal4_shader_stages_prototype.cpp
+        erhe_graphics/metal4/metal4_surface.mm
+        erhe_graphics/metal4/metal4_surface.hpp
+        erhe_graphics/metal4/metal4_swapchain.cpp
+        erhe_graphics/metal4/metal4_swapchain.hpp
+        erhe_graphics/metal4/metal4_texture.cpp
+        erhe_graphics/metal4/metal4_texture.hpp
+        erhe_graphics/metal4/metal4_texture_heap.cpp
+        erhe_graphics/metal4/metal4_texture_heap.hpp
+        erhe_graphics/metal4/metal4_vertex_input_state.cpp
+        erhe_graphics/metal4/metal4_vertex_input_state.hpp
+    )
+elseif (ERHE_GRAPHICS_API_METAL)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_graphics/metal/metal_acceleration_structure.cpp
@@ -539,7 +598,9 @@ if (ERHE_GRAPHICS_API_METAL)
         erhe_graphics/metal/metal_vertex_input_state.cpp
         erhe_graphics/metal/metal_vertex_input_state.hpp
     )
-
+endif ()
+# Link and include setup shared by the Metal family (metal and metal4).
+if (ERHE_GRAPHICS_API_METAL)
     target_link_libraries(${_target}
         PRIVATE
             spirv-cross-msl

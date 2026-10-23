@@ -1,5 +1,6 @@
 #!/bin/bash
-# Configure + build + run the erhe_graphics tests on the Metal (build_xcode_metal) config.
+# Configure + build + run the erhe_graphics tests on a Metal config:
+# build_xcode_metal (Metal 3, default) or build_xcode_metal4 (METAL_BACKEND=metal4).
 #
 # Tests are always run SERIALLY (never in parallel).
 #
@@ -10,6 +11,8 @@
 #                                                        # process (results survive a hard
 #                                                        # abort / crash in one test)
 #   CONFIG=Debug     scripts/run_graphics_tests_metal.sh # build config (default Debug)
+#   METAL_BACKEND=metal4 scripts/run_graphics_tests_metal.sh # Metal 4 backend
+#                                                        # (build_xcode_metal4)
 #
 # After a run, hand me the printed "run" log path (logs/gtests_run_*.log).
 
@@ -20,7 +23,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-BUILD_DIR="build_xcode_metal"
+METAL_BACKEND="${METAL_BACKEND:-metal}"  # metal | metal4
+case "$METAL_BACKEND" in
+    metal|metal4) ;;
+    *) echo "METAL_BACKEND must be metal or metal4 (got '$METAL_BACKEND')"; exit 1 ;;
+esac
+BUILD_DIR="build_xcode_${METAL_BACKEND}"
 CONFIG="${CONFIG:-Debug}"
 GPU_MODE="${GPU_MODE:-single}"     # single | ctest
 SKIP_CONFIGURE="${SKIP_CONFIGURE:-0}"
@@ -37,9 +45,9 @@ bar() { printf '\n========== %s ==========\n' "$*"; }
 if [ "$SKIP_CONFIGURE" = "1" ]; then
     bar "[1/3] Configure -- SKIPPED (SKIP_CONFIGURE=1)"
 else
-    bar "[1/3] Configure ($BUILD_DIR, Metal)"
+    bar "[1/3] Configure ($BUILD_DIR, $METAL_BACKEND)"
     echo "(full log: $CONFIGURE_LOG)"
-    if bash scripts/configure_xcode_metal.sh > "$CONFIGURE_LOG" 2>&1; then
+    if bash "scripts/configure_xcode_${METAL_BACKEND}.sh" > "$CONFIGURE_LOG" 2>&1; then
         echo "Configure OK"
     else
         echo "Configure FAILED -- tail:"

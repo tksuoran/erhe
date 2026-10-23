@@ -1,0 +1,333 @@
+#include "erhe_graphics/metal4/metal4_compute_command_encoder.hpp"
+#include "erhe_graphics/metal4/metal4_acceleration_structure.hpp"
+#include "erhe_graphics/metal4/metal4_command_buffer.hpp"
+#include "erhe_graphics/metal4/metal4_compute_pipeline.hpp"
+#include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/metal4/metal4_indirect_count_draws.hpp"
+#include "erhe_graphics/metal4/metal4_buffer.hpp"
+#include "erhe_graphics/metal4/metal4_sampler.hpp"
+#include "erhe_graphics/metal4/metal4_shader_stages.hpp"
+#include "erhe_graphics/metal4/metal4_texture.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/metal4/metal4_bind_group_layout.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
+#include "erhe_verify/verify.hpp"
+
+#include <Metal/Metal.hpp>
+
+namespace erhe::graphics {
+
+thread_local Compute_command_encoder_impl* Compute_command_encoder_impl::s_active_encoder{nullptr};
+
+auto Compute_command_encoder_impl::get_active_mtl_encoder() noexcept -> MTL::ComputeCommandEncoder*
+{
+    return (s_active_encoder != nullptr) ? s_active_encoder->m_encoder : nullptr;
+}
+
+Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : Command_encoder_impl{device, command_buffer}
+{
+    // Record into the MTL::CommandBuffer that the caller's
+    // Command_buffer owns. Metal only allows one encoder open on a cb
+    // at a time; the API contract is that the caller does not interleave
+    // encoders on the same cb.
+    Command_buffer_impl& cb_impl = m_command_buffer.get_impl();
+    m_mtl_command_buffer  = cb_impl.get_mtl_command_buffer();
+    m_inter_encoder_fence = cb_impl.get_inter_encoder_fence();
+    ERHE_VERIFY(m_mtl_command_buffer != nullptr);
+
+    // The encoder is autoreleased: take a reference, and drain the
+    // autoreleased one right here, so the encoder's lifetime does not depend
+    // on which autorelease pool the calling thread has open.
+    {
+        Scoped_transient_object_pool object_pool{};
+        // Gpu_timer samples (metal4_gpu_timer.hpp) at the start and end of
+        // the encoder.
+        MTL::CounterSampleBuffer* sample_buffer = nullptr;
+        std::size_t               start_sample  = 0;
+        std::size_t               end_sample    = 0;
+        Gpu_timer_sample_pool* const pool = cb_impl.get_gpu_timer_sample_pool();
+        if ((pool != nullptr) && cb_impl.get_gpu_timer_samples().begin_encoder(*pool, sample_buffer, start_sample, end_sample)) {
+            MTL::ComputePassDescriptor* const descriptor = MTL::ComputePassDescriptor::computePassDescriptor();
+            MTL::ComputePassSampleBufferAttachmentDescriptor* const attachment = descriptor->sampleBufferAttachments()->object(0);
+            attachment->setSampleBuffer            (sample_buffer);
+            attachment->setStartOfEncoderSampleIndex(start_sample);
+            attachment->setEndOfEncoderSampleIndex  (end_sample);
+            m_encoder = m_mtl_command_buffer->computeCommandEncoder(descriptor);
+        } else {
+            m_encoder = m_mtl_command_buffer->computeCommandEncoder();
+        }
+        ERHE_VERIFY(m_encoder != nullptr);
+        m_encoder->retain();
+    }
+    s_active_encoder = this;
+
+    // Serialize against prior encoders on this cb via the cb's
+    // inter-encoder fence. Metal does not track aliased newTextureView
+    // hazards within one cb; the fence catches those.
+    if (m_inter_encoder_fence != nullptr) {
+        m_encoder->waitForFence(m_inter_encoder_fence);
+    }
+}
+
+Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
+{
+    if (s_active_encoder == this) {
+        s_active_encoder = nullptr;
+    }
+    if (m_encoder != nullptr) {
+        if (m_inter_encoder_fence != nullptr) {
+            m_encoder->updateFence(m_inter_encoder_fence);
+        }
+        m_encoder->endEncoding();
+        m_encoder->release();
+        m_encoder = nullptr;
+        m_command_buffer.get_impl().get_gpu_timer_samples().end_encoder();
+    }
+    // The cb is owned by Command_buffer, not by this encoder; nothing
+    // to commit here. submit_command_buffers takes care of commit.
+    m_mtl_command_buffer  = nullptr;
+    m_inter_encoder_fence = nullptr;
+    if (m_pipeline_state != nullptr) {
+        if (m_owns_pipeline_state) {
+            // Only release pipeline states we created via newComputePipelineState
+            // (the dynamic-state path). Borrowed pointers from a long-lived
+            // Compute_pipeline_impl must NOT be released here -- doing so was
+            // a use-after-free that crashed the next dispatch. Even for the
+            // owned case, defer the release via add_completion_handler so the
+            // GPU has a chance to finish using the pipeline.
+            MTL::ComputePipelineState* ps = m_pipeline_state;
+            m_device.get_impl().add_completion_handler(
+                [ps](Device_impl&) {
+                    ps->release();
+                }
+            );
+        }
+        m_pipeline_state = nullptr;
+        m_owns_pipeline_state = false;
+    }
+}
+
+void Compute_command_encoder_impl::set_buffer(
+    const Buffer_target  buffer_target,
+    const Buffer* const  buffer,
+    const std::uintptr_t offset,
+    const std::uintptr_t length,
+    const std::uintptr_t index
+)
+{
+    static_cast<void>(buffer_target);
+    static_cast<void>(length);
+    if (buffer == nullptr) {
+        return;
+    }
+    MTL::Buffer* mtl_buffer = buffer->get_impl().get_mtl_buffer();
+    if (mtl_buffer == nullptr) {
+        return;
+    }
+
+    // Identity mapping: GLSL binding = Metal buffer index
+    m_encoder->setBuffer(mtl_buffer, static_cast<NS::UInteger>(offset), static_cast<NS::UInteger>(index));
+}
+
+void Compute_command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* const buffer)
+{
+    static_cast<void>(buffer_target);
+    if (buffer == nullptr) {
+        return;
+    }
+    MTL::Buffer* mtl_buffer = buffer->get_impl().get_mtl_buffer();
+    if (mtl_buffer == nullptr) {
+        return;
+    }
+
+    m_encoder->setBuffer(mtl_buffer, 0, 0);
+}
+
+void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
+{
+    // Tracked for set_sampled_image's sampler binding offset (mirrors
+    // Render_command_encoder_impl).
+    m_bind_group_layout = bind_group_layout;
+}
+
+void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, const Texture& texture)
+{
+    MTL::Texture* mtl_texture = texture.get_impl().get_mtl_texture();
+    if (mtl_texture == nullptr) {
+        return;
+    }
+    // Storage images bind at their raw binding point (no sampler-binding offset);
+    // this matches the [[texture(N)]] slot pinned in compile_spirv_to_mtl_function.
+    // Directly-bound textures are made resident and hazard-tracked automatically,
+    // so no useResource / explicit barrier is needed here (the cb's inter-encoder
+    // fence orders the transmittance pass before the multi-scatter pass).
+    m_encoder->setTexture(mtl_texture, static_cast<NS::UInteger>(binding_point));
+}
+
+void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
+{
+    // Dedicated named samplers are direct [[texture(N)]]/[[sampler(M)]]
+    // bindings on Metal; the texture slot is the user-facing binding_point plus
+    // the bind group layout's sampler binding offset and the sampler slot is
+    // the layout's compact dedicated-sampler index (Metal caps [[sampler(M)]]
+    // at M <= 15), exactly like Render_command_encoder_impl::set_sampled_image
+    // (the lightmap gather compute pass samples its G-buffer and sky LUTs this
+    // way).
+    ERHE_VERIFY(m_bind_group_layout != nullptr);
+    const uint32_t glsl_binding = binding_point + m_bind_group_layout->get_sampler_binding_offset();
+    const uint32_t sampler_slot = m_bind_group_layout->get_impl().get_metal_sampler_slot(glsl_binding);
+
+    MTL::Texture*      mtl_texture = texture.get_impl().get_mtl_texture();
+    MTL::SamplerState* mtl_sampler = sampler.get_impl().get_mtl_sampler();
+    if ((mtl_texture == nullptr) || (mtl_sampler == nullptr)) {
+        return;
+    }
+    m_encoder->setTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
+    m_encoder->setSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
+}
+
+void Compute_command_encoder_impl::set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure)
+{
+    // The GLSL binding point is not the Metal slot: acceleration structure
+    // resources are remapped to the reserved buffer index by
+    // compile_spirv_to_mtl_function (UBOs/SSBOs own the identity-mapped
+    // index namespace the binding point lives in).
+    static_cast<void>(binding_point);
+    const Acceleration_structure_impl& as_impl = acceleration_structure.get_impl();
+    MTL::AccelerationStructure* tlas = as_impl.get_mtl_acceleration_structure();
+    if (tlas == nullptr) {
+        return;
+    }
+    m_encoder->setAccelerationStructure(tlas, c_metal_acceleration_structure_buffer_index);
+    // Directly-bound structures are made resident automatically, but the
+    // bottom level structures the instance structure references are not.
+    for (MTL::AccelerationStructure* bottom_level : as_impl.get_referenced_bottom_level()) {
+        m_encoder->useResource(bottom_level, MTL::ResourceUsageRead);
+    }
+}
+
+void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
+{
+    const Compute_pipeline_data& data = pipeline.data;
+    if (data.shader_stages == nullptr) {
+        ERHE_FATAL("Metal: compute pipeline has no shader stages");
+    }
+
+    const Shader_stages_impl& stages_impl = data.shader_stages->get_impl();
+    MTL::Function* compute_function = stages_impl.get_compute_function();
+    if (compute_function == nullptr) {
+        log_startup->error("Metal: no compute function for '{}'", data.shader_stages->name());
+        ERHE_FATAL("Metal: no compute function");
+    }
+    m_threadgroup_size = stages_impl.get_compute_workgroup_size();
+
+    Device_impl& device_impl = m_device.get_impl();
+    MTL::Device* mtl_device = device_impl.get_mtl_device();
+    ERHE_VERIFY(mtl_device != nullptr);
+
+    NS::Error* error = nullptr;
+    m_pipeline_state = mtl_device->newComputePipelineState(compute_function, &error);
+    if (m_pipeline_state == nullptr) {
+        const char* error_str = (error != nullptr) ? error->localizedDescription()->utf8String() : "unknown";
+        ERHE_FATAL("Metal compute pipeline state creation failed: %s", error_str);
+    }
+    m_owns_pipeline_state = true;
+
+    m_encoder->setComputePipelineState(m_pipeline_state);
+
+    // Apply debug labels
+    if (data.name != nullptr) {
+        NS::String* label = NS::String::alloc()->init(
+            data.name,
+            NS::UTF8StringEncoding
+        );
+        m_mtl_command_buffer->setLabel(label);
+        m_encoder->setLabel(label);
+        label->release();
+    }
+}
+
+void Compute_command_encoder_impl::set_compute_pipeline(const Compute_pipeline& pipeline)
+{
+    MTL::ComputePipelineState* mtl_pipeline = pipeline.get_impl().get_mtl_pipeline();
+    if (mtl_pipeline == nullptr) {
+        return;
+    }
+    // If a previous set_compute_pipeline_state created a pipeline that this
+    // encoder owns, defer-release it now -- we are about to overwrite
+    // m_pipeline_state with a borrowed pointer.
+    if ((m_pipeline_state != nullptr) && m_owns_pipeline_state) {
+        MTL::ComputePipelineState* ps = m_pipeline_state;
+        m_device.get_impl().add_completion_handler(
+            [ps](Device_impl&) {
+                ps->release();
+            }
+        );
+    }
+    m_pipeline_state      = mtl_pipeline;
+    m_owns_pipeline_state = false;
+    m_encoder->setComputePipelineState(m_pipeline_state);
+
+    // Carry the shader's declared local workgroup size so dispatch_compute can
+    // supply it to dispatchThreadgroups() (the erhe API passes group counts).
+    const Shader_stages* shader_stages = pipeline.get_data().shader_stages;
+    if (shader_stages != nullptr) {
+        m_threadgroup_size = shader_stages->get_impl().get_compute_workgroup_size();
+    }
+}
+
+void Compute_command_encoder_impl::dispatch_compute(
+    const std::uintptr_t x_size,
+    const std::uintptr_t y_size,
+    const std::uintptr_t z_size
+)
+{
+    ERHE_VERIFY(m_encoder != nullptr);
+    ERHE_VERIFY(m_pipeline_state != nullptr);
+
+    // x_size/y_size/z_size are workgroup COUNTS (GL/Vulkan dispatch semantics).
+    // The per-group thread dimensions come from the shader's declared
+    // layout(local_size_*), captured into m_threadgroup_size when the pipeline
+    // was set. Metal's dispatchThreadgroups multiplies the two to get the grid.
+    MTL::Size threads_per_grid = MTL::Size(
+        static_cast<NS::UInteger>(x_size),
+        static_cast<NS::UInteger>(y_size),
+        static_cast<NS::UInteger>(z_size)
+    );
+    MTL::Size threads_per_threadgroup = MTL::Size(
+        static_cast<NS::UInteger>(m_threadgroup_size[0]),
+        static_cast<NS::UInteger>(m_threadgroup_size[1]),
+        static_cast<NS::UInteger>(m_threadgroup_size[2])
+    );
+
+    m_encoder->dispatchThreadgroups(threads_per_grid, threads_per_threadgroup);
+}
+
+void Compute_command_encoder_impl::encode_indirect_count_draws(Indirect_count_draws& draws, const std::size_t slot)
+{
+    ERHE_VERIFY(m_encoder != nullptr);
+    // The kernel binds its own pipeline: drop the erhe one, so a further
+    // dispatch_compute() without a new set_compute_pipeline() fails loudly
+    // instead of running the kernel's pipeline.
+    if ((m_pipeline_state != nullptr) && m_owns_pipeline_state) {
+        MTL::ComputePipelineState* ps = m_pipeline_state;
+        m_device.get_impl().add_completion_handler(
+            [ps](Device_impl&) {
+                ps->release();
+            }
+        );
+    }
+    m_pipeline_state      = nullptr;
+    m_owns_pipeline_state = false;
+    draws.get_impl().encode(m_encoder, draws.get_slot(slot), slot);
+}
+
+} // namespace erhe::graphics

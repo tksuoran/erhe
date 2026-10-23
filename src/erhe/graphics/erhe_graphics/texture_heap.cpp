@@ -1,7 +1,9 @@
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_texture_heap.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_API_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL4)
+# include "erhe_graphics/metal4/metal4_texture_heap.hpp"
+#elif defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_texture_heap.hpp"
 #endif
 #if defined(ERHE_GRAPHICS_API_VULKAN)

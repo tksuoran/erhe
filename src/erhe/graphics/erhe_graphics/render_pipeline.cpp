@@ -11,6 +11,8 @@
 #   include "erhe_graphics/gl/gl_render_pipeline.hpp"
 #elif defined(ERHE_GRAPHICS_API_VULKAN)
 #   include "erhe_graphics/vulkan/vulkan_render_pipeline.hpp"
+#elif defined(ERHE_GRAPHICS_API_METAL4)
+#   include "erhe_graphics/metal4/metal4_render_pipeline.hpp"
 #elif defined(ERHE_GRAPHICS_API_METAL)
 #   include "erhe_graphics/metal/metal_render_pipeline.hpp"
 #elif defined(ERHE_GRAPHICS_API_NONE)
