@@ -123,4 +123,8 @@ cb-error::log_context-"Metal command buffer '<label>' of frame N failed"{permane
 faulting-encoder::temporary-MTL::CommandBufferDescriptor+setErrorOptions(EncoderExecutionStatus)+log-error->description(){per-encoder-Faulted/Affected/Completed}
 repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks-fixtures}
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{6-DONE;7-Metal-4-separate-backend=NOW}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[LANDED_2026-10-23b]
+>5d27306ab::metal4-scaffold{ERHE_GRAPHICS_API=metal4;defines-ERHE_GRAPHICS_API_METAL(family)+_METAL4;src/erhe/graphics/erhe_graphics/metal4/metal4_*(copy;same-pimpl-class-names;one-backend-per-tree);build_xcode_metal4;METAL_BACKEND=metal4-scripts/run_graphics_tests_metal.sh;generate.py-writes-both-format-tables;goldens-shared}
+!MTL4-inseparable-core::CommandQueue::commit(MTL4::CommandBuffer-only)+CommandBuffer-yields-MTL4-encoders-only+encoders-bind-via-ArgumentTable-only(no-setBytes;blits-on-compute-encoder)->port-order=submission-core|counter-heaps|MTL4Compiler|ICB-check
+
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{6-DONE;7-Metal-4:submission-core-IN-PROGRESS}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
