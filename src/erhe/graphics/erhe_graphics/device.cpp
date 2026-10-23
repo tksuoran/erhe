@@ -320,6 +320,10 @@ auto Device::get_memory_budget() const -> Memory_budget
 {
     return m_impl->get_memory_budget();
 }
+auto Device::get_debug_state() const -> Device_debug_state
+{
+    return m_impl->get_debug_state();
+}
 auto Device::get_reverse_depth() const -> bool
 {
     const bool api_supports_reverse_depth =

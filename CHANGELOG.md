@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Device::get_debug_state()` returns a
+  `Device_debug_state` (open and unretired frames, uncompleted command
+  buffers, queued completion handlers, ring buffer count, busy ring buffers
+  and their bytes in use) for test isolation checks;
+  `Ring_buffer_pool::get_usage()` (`Ring_buffer_pool_usage`) and
+  `Ring_buffer::get_bytes_in_use()` feed it.
 - `erhe::graphics`: `ERHE_GRAPHICS_API=metal4` selects the Metal 4 backend
   (`doc/erhe/metal4_backend.md`), which defines `ERHE_GRAPHICS_API_METAL4` in
   addition to the Metal family define `ERHE_GRAPHICS_API_METAL`.

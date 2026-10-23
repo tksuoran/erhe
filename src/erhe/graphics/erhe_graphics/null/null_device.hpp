@@ -135,6 +135,7 @@ public:
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     // No memory introspection on the null backend; zeros = unknown.
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget { return {}; }
+    [[nodiscard]] auto get_debug_state                    () const -> Device_debug_state;
 
     void reset_shader_stages_state_tracker();
     [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;

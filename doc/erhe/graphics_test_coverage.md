@@ -11,7 +11,10 @@ query tests, + 6 comparison-sampler failures from a driver defect, see "Known
 gaps"); the backend-specific requirements are in
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md). Each
 row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
-fixture derived from it.
+fixture derived from it. The cases run in one process against one `Device`
+(one ctest test, unless the tree is configured with
+`-DERHE_GPU_TESTS_PER_PROCESS=ON`); how `Gpu_test` keeps them independent
+of each other is in [`testing.md`](../testing.md) "GPU test isolation".
 `[x]` = covered, `[ ]` = gap, `[-]` = not testable on this device (a device/engine
 limitation, not a coverage gap to fill).
 

@@ -403,6 +403,16 @@ auto Device_impl::is_frame_completed(const uint64_t frame) const -> bool
     return frame < m_render_frame_id;
 }
 
+auto Device_impl::get_debug_state() const -> Device_debug_state
+{
+    // No GPU and no ring buffers: frames retire when they end.
+    Device_debug_state state{};
+    state.oldest_open_frame_id     = m_render_frame_id;
+    state.open_frame_count         = (m_prepare_frame_id >= m_render_frame_id) ? (m_prepare_frame_id - m_render_frame_id + 1) : 0;
+    state.completion_handler_count = m_completion_handlers.size();
+    return state;
+}
+
 auto Device_impl::allocate_ring_buffer_entry(
     const Buffer_target     buffer_target,
     const Ring_buffer_usage  usage,

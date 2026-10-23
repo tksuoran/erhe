@@ -1618,17 +1618,16 @@ void Imgui_renderer::render_draw_data(
                     draw_indirect_count,
                     sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
                 );
-
-                draw_parameter_buffer_range.release();
-                draw_indirect_buffer_range .release();
-                vertex_buffer_range        .release();
-                index_buffer_range         .release();
-            } else {
-                draw_parameter_buffer_range.cancel();
-                draw_indirect_buffer_range .cancel();
-                vertex_buffer_range        .cancel();
-                index_buffer_range         .cancel();
             }
+
+            // Release, also when nothing was drawn: the ranges are closed with
+            // their bytes written, so their space returns to the ring buffers
+            // only through the sync entries release() makes. cancel() would
+            // leave it allocated until a later range retired past it.
+            draw_parameter_buffer_range.release();
+            draw_indirect_buffer_range .release();
+            vertex_buffer_range        .release();
+            index_buffer_range         .release();
 
             if (cmd_batch_end == command_count) {
                 break;

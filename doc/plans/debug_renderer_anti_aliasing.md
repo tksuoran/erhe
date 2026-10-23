@@ -15,14 +15,16 @@ The coverage model, the core and fringe draws, the hidden-pass variant, the
 ## 1. Cost
 
 Measured by `erhe_renderer_gpu_tests --gtest_filter=*aa_cost*`
-(`aa_cost_benchmark`: 2000 random wide lines of 1, 2 and 4 pixels at
-1920 x 1080, visible + hidden pass, render-pass `Gpu_timer`, median of 20
-frames, logged to `logs/log.txt`). Off is the previous binary path bit-exact
-(`aa_off_is_binary`); on costs about 1.7x off on the first machine measured
-(Vulkan and OpenGL, integrated GPU), accepted for the visual result: the
-one-draw variant (1.17x) blended overlapping fringes twice and showed it on
-every polyline joint. Numbers live in `memory-bank/local/` per machine.
-Re-run it after any change to the wide-line shaders.
+(`aa_cost_benchmark`: 2000 random wide lines of 1, 2 and 4 pixels at 1920 x
+1080, visible + hidden pass, render-pass `Gpu_timer`, median of 20 frames,
+logged to `logs/log.txt` and recorded as the test properties `off_ms`, `on_ms`
+and `cost_ratio`). Off is the previous binary path bit-exact
+(`aa_off_is_binary`); the accepted on / off ratio and the test's tripwire
+bound are in `doc/erhe/renderer.md` (the "Cost:" paragraph). The cost was
+accepted for the visual result: the one-draw variant (1.17x) blended
+overlapping fringes twice and showed it on every polyline joint. Numbers live
+in `memory-bank/local/` per machine. Re-run it after any change to the
+wide-line shaders.
 
 ## 2. Possible refinement: joined polylines
 

@@ -74,6 +74,7 @@ set_option(ERHE_WARNINGS_AS_ERRORS         "Compile erhe targets with warnings a
 set_option(ERHE_USE_FPNG                   "Build the fpng image writer (fast PNG save), independent of window lib"     "ON"       "ON;OFF")
 set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
 set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"                                                      "OFF"      "ON;OFF")
+set_option(ERHE_GPU_TESTS_PER_PROCESS       "Register each case of the gpu-labelled test binaries as its own ctest process" "OFF"      "ON;OFF")
 
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")
     enable_testing()

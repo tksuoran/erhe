@@ -450,6 +450,35 @@ public:
     [[nodiscard]] auto get_remaining() const -> uint64_t { return (device_local_budget > device_local_usage) ? (device_local_budget - device_local_usage) : 0; }
 };
 
+// Device bookkeeping counters (Device::get_debug_state()): what a test
+// isolation check compares between the start and the end of a test
+// (doc/testing.md "GPU test isolation"). Read under the backend's own locks
+// on demand; nothing is counted per frame for it. A counter a backend does not
+// keep reads 0.
+class Device_debug_state
+{
+public:
+    // The frame end_frame() ends next; when none is open, the next frame to
+    // be acquired.
+    uint64_t    oldest_open_frame_id            {0};
+    // Frames acquired and not ended.
+    uint64_t    open_frame_count                {0};
+    // Frames ended whose retirement (ring buffer ranges, completion
+    // handlers) has not run.
+    uint64_t    unretired_frame_count           {0};
+    // Committed command buffers whose completion has not been seen (Metal,
+    // Metal 4; the other backends retire by frame).
+    std::size_t uncompleted_command_buffer_count{0};
+    // Completion handlers (deferred releases) queued and not run.
+    std::size_t completion_handler_count        {0};
+    // Ring buffers in the pool; the busy ones hold unretired ranges or
+    // pending readbacks, and bytes_in_use is the span between their read
+    // and write positions.
+    std::size_t ring_buffer_count               {0};
+    std::size_t busy_ring_buffer_count          {0};
+    std::size_t ring_buffer_bytes_in_use        {0};
+};
+
 using Shader_error_callback   = std::function<void(const std::string& error_log, const std::string& shader_source, const std::string& callstack)>;
 using Device_message_callback = std::function<void(Message_severity severity, const std::string& message, const std::string& callstack)>;
 using State_dump_callback     = std::function<void(const std::string& state_dump)>;
@@ -728,6 +757,11 @@ public:
     // Current device-local memory budget/usage (see Memory_budget). Cheap
     // to call every frame; values refresh as allocations come and go.
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
+
+    // Bookkeeping counters (Device_debug_state). For test isolation checks
+    // and diagnostics, not the steady-state loop: takes the backend's frame
+    // and completion locks.
+    [[nodiscard]] auto get_debug_state                    () const -> Device_debug_state;
 
     // The single source of truth for the reverse-Z choice. Returns true when
     // reverse-Z (near=1.0, far=0.0) should be used: the API must natively

@@ -26,12 +26,23 @@ runs under ctest as a short randomized hierarchy stress run.
   `erhe::file::log_file` by hand, then the library's `initialize_logging()`. The
   `log_*` globals are null `shared_ptr`s until then, so the first log call from
   a library under test is an access violation, not a silent no-op.
-- `gtest_discover_tests` makes every case its own ctest process, and `ctest -j`
-  runs them concurrently, so a case that writes files never uses a fixed path
-  shared with other cases: `erhe_usd_tests` writes under
+- The deviceless suites register through `gtest_discover_tests`, which makes
+  every case its own ctest process: such a process is cheap, and CI's JUnit
+  results report case by case because of it. `ctest -j` runs these processes
+  concurrently, so a case that writes files never uses a fixed path shared
+  with other cases: `erhe_usd_tests` writes under
   `erhe_usd_test::process_temporary_directory()`
   (`src/erhe/usd/test/test_temporary_directory.hpp`), a directory each process
   claims for itself and removes at exit.
+- The four `gpu`-labelled binaries register through `erhe_add_gpu_test()`
+  (`cmake/functions.cmake`) as one ctest test each, so all cases of a binary
+  run in one process against one `Device`: every process pays the window and
+  `Device` bring-up (about 1 s on Metal, 2.5 s on MoltenVK), which per case
+  made `erhe_graphics_gpu_tests` take about 200 s under ctest instead of 7 s.
+  `-DERHE_GPU_TESTS_PER_PROCESS=ON` registers every case of them as its own
+  ctest test instead (one process per case), for a run whose results must
+  survive a crash or an abort in one case. The fixture keeps the cases of one
+  process apart ("GPU test isolation").
 - When adding pure-logic code to an `erhe::*` library that already has a
   `test/` directory (geometry operations, math, item/graph logic, dataformat),
   add or extend a test for it. Editor-level behavior is instead verified live
@@ -97,8 +108,10 @@ graphics `Device`: `erhe_graphics_gpu_tests`, `erhe_renderer_gpu_tests`,
 `erhe_rendergraph_gpu_tests`, `erhe_scene_renderer_gpu_tests`)
 and `editor` (they drive a running editor: `mcp_server_tests` and its
 fixtures). A machine without a GPU runs `ctest --label-exclude "gpu|editor"`;
-a new test that needs either must carry the label
-(`gtest_discover_tests(... PROPERTIES LABELS "gpu")`).
+a new test that needs either must carry the label. A new binary that
+brings up a `Device` registers with `erhe_add_gpu_test(<target>)`, which
+applies the `gpu` label in both registration modes; `ctest -L gpu` then runs
+four processes, or one per case in a `-DERHE_GPU_TESTS_PER_PROCESS=ON` tree.
 
 ## Discovery
 
@@ -110,6 +123,54 @@ into a build error even when the run exits 0, so a test binary that prints
 anything at startup breaks the Visual Studio build. Precedent: Tracy's
 `SymInitialize FAILED with code 0xc0000004` warning failed the Windows CI test
 builds while discovery ran post-build.
+
+## GPU test isolation
+
+The GPU tests derive their fixtures from `erhe::graphics::test::Gpu_test`
+(`src/erhe/graphics/test/gpu_test_fixture.hpp`; the renderer, scene renderer
+and rendergraph fixtures derive from it too). A derived fixture calls
+`Gpu_test::SetUp` first; one that holds device objects as members releases
+them in its own `TearDown` and then calls `Gpu_test::TearDown`, so their
+deferred releases are retired and counted inside the case. Since the cases of
+one binary share one `Device`, the fixture makes each case start
+from the same device state, whatever ran before it:
+
+- **Settling.** `SetUp` and `TearDown` wait the device idle and then run
+  empty frames (`wait_frame()` + `end_frame()` + `wait_idle()`, at most four)
+  until no deferred release is left: completion handlers and ring buffer
+  ranges queued while no frame is open are keyed to the next frame, which the
+  Metal backends retire only once that frame has ended (Vulkan's `wait_idle()`
+  drains them itself).
+- **Open frames.** `TearDown` ends every frame a failed case left open
+  between `wait_frame()` and `end_frame()`, oldest first, and fails the case
+  naming the frame ids, so the next case starts with no frame open.
+- **Caches.** `TearDown` drops the render pipeline cache
+  (`Device::clear_render_pipeline_cache()`; the Vulkan pipeline map is keyed
+  on raw handles a driver may recycle) and settles again for the pipelines'
+  deferred destruction. No other device-level cache needs a reset: bind state
+  lives in the command encoders on Vulkan, Metal and Metal 4 (Metal's
+  `reset_shader_stages_state_tracker()` is a no-op), the OpenGL state tracker
+  mirrors the context's own state, and the remaining caches (compatible
+  render passes, the blit-framebuffer pipelines per format, the SPIR-V and
+  shader source caches) are keyed on their full content.
+- **Counter check.** `SetUp` fails the case when a frame is open (no case
+  left it open, so something outside the cases did), then snapshots
+  `Device::get_debug_state()` (open frames, ended frames not yet retired, uncompleted command buffers, queued
+  completion handlers, busy ring buffers and their bytes in use) after
+  settling; `TearDown` fails the case, with both snapshots in the message,
+  when a frame is still open or a counter grew past the snapshot. The ring
+  buffer count itself may grow (the pool keeps one warm buffer per usage
+  class) and is only reported.
+- **Validation.** `SetUp` clears the runtime validation-message list;
+  `TearDown` fails the case for every validation error emitted during it and
+  prints the warnings.
+
+An order dependency between cases shows up when the cases run in a random
+order: `--gtest_shuffle --gtest_random_seed=<N>` on any GPU binary, or
+`SHUFFLE=1 scripts/run_graphics_tests_metal.sh` for `erhe_graphics_gpu_tests`
+(the seed is printed; `SEED=<N>` repeats one). A failure that appears only in
+some order is fixed in the test or in the state it leaves behind, not by
+pinning the order.
 
 ## CI
 
@@ -143,25 +204,29 @@ Running the `gpu` tests in CI under a software Vulkan is described in
 
 Run via `ctest` from the build directory, or invoke the
 `.../bin/<config>/erhe_<name>_tests.exe` binary directly. Run suites serially
-and fix one failure at a time -- an abort hides the rest of the run.
+and fix one failure at a time -- an abort hides the rest of the run. A GPU
+binary is one ctest test by default, so an abort in it also hides its later
+cases; rerun the binary with `--gtest_filter` past the aborting case, or use a
+`-DERHE_GPU_TESTS_PER_PROCESS=ON` tree (`GPU_MODE=ctest` in
+`scripts/run_graphics_tests_metal.sh` configures one) to get every case's
+result.
 
-Pick the set by what the change touches. The full suite (about 15 minutes on
-an M4 Pro Debug tree) is for a change to a shared library that the
-deviceless suites exercise (`erhe::geometry`, `erhe::scene`, `erhe::item`,
-`erhe::math`, ...). A change confined to a graphics backend
-(`erhe_graphics/vulkan/`, `metal/`, `metal4/`, `gl/`) or to
+Pick the set by what the change touches. The full suite is for a change to a
+shared library that the deviceless suites exercise (`erhe::geometry`,
+`erhe::scene`, `erhe::item`, `erhe::math`, ...). A change confined to a
+graphics backend (`erhe_graphics/vulkan/`, `metal/`, `metal4/`, `gl/`) or to
 `erhe::graphics` itself can only break the suites that bring up a `Device`,
-which are exactly the two labels: `ctest -L "gpu|editor" -j1` (about 8.5
-minutes: `erhe_graphics_gpu_tests` 7 minutes, `mcp_server_tests` 1 minute,
-the renderer, scene renderer and rendergraph GPU suites under half a minute
-together). The deviceless suites cannot see a backend change; the build is
-their check. For a change inside one backend subsystem, run that
-subsystem's cases first (`erhe_graphics_gpu_tests --gtest_filter=
-'Draw_indirect_test.*'`, `'Gpu_timer*'`, `'Material_set_gpu_test.*'`, the
-`Gpu_test.*` image cases) and the labelled set before the commit. A backend
-change still needs the image gate of its backend (byte-identical renders
-against the reference backend, `doc/editor/render_thread.md` "Metal") in
-addition to the tests, since the goldens cover the test scenes only.
+which are exactly the two labels: `ctest -L "gpu|editor" -j1` (the `gpu` label
+is four processes, about 30 s on an M4 Pro Debug tree, most of it the scene
+renderer suite's shader builds; `mcp_server_tests` about 1 minute). The
+deviceless suites cannot see a backend change; the build is their check. For a
+change inside one backend subsystem, run that subsystem's cases first
+(`erhe_graphics_gpu_tests --gtest_filter='Draw_indirect_test.*'`,
+`'Gpu_timer*'`, `'Material_set_gpu_test.*'`, the `Gpu_test.*` image cases) and
+the labelled set before the commit. A backend change still needs the image
+gate of its backend (byte-identical renders against the reference backend,
+`doc/editor/render_thread.md` "Metal") in addition to the tests, since the
+goldens cover the test scenes only.
 
 `erhe_graphics_gpu_tests` also asserts golden buffers and images. Each run
 writes `gpu_test_results/results.json` plus per-test artifacts under the

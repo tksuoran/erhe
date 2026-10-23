@@ -317,6 +317,7 @@ public:
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     [[nodiscard]] auto is_validation_layer_enabled        () const -> bool;
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
+    [[nodiscard]] auto get_debug_state                    () const -> Device_debug_state;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
     // Allocator to use for a buffer with the given usage. Buffers that carry
     // Buffer_usage::shader_device_address must come from an allocator created
@@ -702,7 +703,7 @@ private:
     // then the ring buffer pool, then m_completion_handler_mutex /
     // m_frame_id_mutex. Never held across a GPU wait.
     std::mutex                      m_completion_run_mutex;
-    std::mutex                      m_completion_handler_mutex;
+    mutable std::mutex              m_completion_handler_mutex;
     std::vector<Completion_handler> m_completion_handlers;
     std::vector<Completion_handler> m_completion_handler_scratch;
 

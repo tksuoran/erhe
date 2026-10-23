@@ -155,6 +155,7 @@ attempt and the launch must be retried.
 | `ERHE_TERMINAL_LIBRARY` | Terminal integration | `cpp-terminal`, `none` | `none` |
 | `ERHE_SPIRV` | Enable SPIR-V shader compilation | `ON`, `OFF` | `OFF` |
 | `ERHE_BUILD_TESTS` | Build the `erhe_<name>_tests` gtest targets | `ON`, `OFF` | `OFF` |
+| `ERHE_GPU_TESTS_PER_PROCESS` | Register each case of the `gpu`-labelled test binaries as its own ctest test (one process per case) instead of one test per binary | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_UBSAN` | UndefinedBehaviorSanitizer (Clang, GCC, AppleClang; ignored on MSVC) | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_TSAN` | ThreadSanitizer (Clang, GCC, AppleClang; exclusive with `ERHE_USE_ASAN`, ignored on MSVC) | `ON`, `OFF` | `OFF` |
