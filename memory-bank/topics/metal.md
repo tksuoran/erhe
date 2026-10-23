@@ -141,5 +141,6 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 !GPU-tests::pacing-tier-must-be-off(calibration-2s-Metal/6s-MoltenVK-per-process;967d47edf)
 !ring-buffer-range::cancel()-on-a-closed-WRITTEN-range-makes-no-sync-entry->space-stays-allocated;release()-after-close(8e0aaf42b-texture-heap+imgui)
 !GPU-test-isolation::Gpu_test-fixture-snapshots-Device::get_debug_state-and-fails-on-growth(leaks-show-as-bytes_in_use)
+!present-calibration-cache::key-from-OS-APIs-shared-by-metal/metal4/moltenvk(only-present_path-differs);window-mode-in-key;fullscreen-without-entry=pacer-defaults(old-windowed-1.38T-offset-in-fullscreen-was-wrong);ERHE_PRESENT_CALIBRATION_CACHE=0-for-gate-scripts;cache-dir-gitignored(cache/*)
 
 [OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:test-run-restructure->present-calibration-cache->hazard-tracking->MTL4Compiler;pacing-live-gate-pending-user}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
