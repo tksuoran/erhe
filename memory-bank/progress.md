@@ -5,8 +5,9 @@
 [TASK::metal-draw-count]{started-2026-10-23;branch=render-thread;via-harness;doc/plans/metal_backend.md-sec-6+7}
 ✓decisions{©User:count-first-on-Metal-3-then-Metal-4;Metal-4-separate-backend-beside-Metal-3-removal-decided-after-gates;subsystem-by-subsystem-ctest-gated}
 ✓option-A{0c5ff5285;Indirect_count_draws-API+Metal-raw-MSL-ICB-kernel+Vk/GL-forward;consumer-switched(one-call-site);shadow-pipelines-opt-in;opus-review:folded-2-commits-into-1(gap:gpu-setting-reached-fatal-stub)+5-fixes;gates:Metal-default/heavy/Bistro-0-mismatch-cpu==gpu;KK-default/heavy;Metal-gpu-tests-193/193;Draw_indirect_test-8/8}
-⚡per-shadow-pass-ICB{©User-2026-10-23;ICB-sized-to-largest-pass;prepare-per-call-sequence;coder-briefed}
-?then=Metal-4-backend{plan-sec-7-order}
+✓per-shadow-pass-ICB{92033e2c9;Draw_list_scene::prepare_gpu_shadow_pass-before-each-pass-render-encoder;set=slot+sequence(most-recent-prepare-verified);table-ranges-linear-per-frame;Bistro-ICB-66560->5120-commands(46->3.6MB)/slot;test-set_per_pass;gates-identical-Metal-3-scenes+KK-2;opus-review-approve+nits-applied}
+✓SECTION-6-DONE-2026-10-23
+⚡Metal-4-backend{plan-sec-7;separate-backend;first-commit=device+MTL4CommandQueue/cb/allocator+commit-feedback}
 
 [TASK::bistro-gpu]{started-2026-10-21;branch=render-thread;Release-Metal-M4-Pro-Dell-120Hz}
 ✓profile{Bistro-GPU~6.5ms(viewport-4.3+point-faces-2.15+spot-0.3);R-2.15ms;main-0.38ms;no-meaningful-M/R-overlap(GPU-bound)}
