@@ -107,27 +107,20 @@ misses: the compositor deadline) and release-to-display was 41.8 ms median
 against tier S's 28.9 ms. With the estimator: 1 two-refresh frame of 348,
 release-to-display 19.8 ms against tier S's 29.6 ms, learned offset 9.19 ms
 (table in `doc/erhe/metal_backend.md` "Frame pacing") - when the pacer stays
-at N=1. A run that downshifted to N=2 at startup stayed there (below), so
-`auto` stays tier S. An occluded window gets `presentedTime` 0 and no feedback
+at N=1. Runs that downshifted to N=2 at startup stayed there; the work of
+[frame_pacing_metal.md](frame_pacing_metal.md) removed that lock, and
+`auto` is tier M (OFF headless or under `force_disable_vsync`), gated in
+Debug and Release, in every threading mode, fullscreen with Adaptive-Sync
+([frame_pacing_adaptive_sync.md](frame_pacing_adaptive_sync.md)) and on
+the ProMotion panel. An occluded window gets `presentedTime` 0 and no feedback
 (logged "drawables were not displayed"); tier M then runs without feedback
 (N=2 observed), which nobody sees.
 
-Open, in order:
-
-1. The N=2 lock and making tier M the `auto` tier: iterative plan in
-   [frame_pacing_metal.md](frame_pacing_metal.md) (simulator plant, pacer,
-   live gate).
-2. A Release build and the threading modes (`ERHE_RENDER_THREAD=0`,
-   `ERHE_FRAME_PIPELINING=0`), and a heavier scene: the Debug pipelined
-   frame spans 18 ms from release to commit, which the pacer's latency
-   budget prices in.
-3. Fullscreen (question 2): the editor treats unfocused fullscreen as hidden,
-   so a focused, user-run editor.
-4. Question 6 (ProMotion / VRR) on the built-in display.
-5. A presentation-derived refresh source for `Display_refresh_resolver`
-   (`presentedTime` deltas or `CADisplayLink`): the window display mode says
-   8.333 ms, the display runs 8.344 ms; the pacer's grid period tracker
-   absorbs the 0.13 % today.
+Open (the remaining gates are in [frame_pacing_metal.md](frame_pacing_metal.md)):
+a presentation-derived refresh source for `Display_refresh_resolver`
+(`presentedTime` deltas or `CADisplayLink`): the window display mode says
+8.333 ms, the display runs 8.344 ms; the pacer's grid period tracker
+absorbs the 0.13 % today.
 
 ## 6. GPU-read draw count
 

@@ -420,27 +420,27 @@ flowchart TD
 
 - [plans/android.md](plans/android.md) (proposed): Android: full editor on a phone
 - [plans/animation_keyframing.md](plans/animation_keyframing.md) (in progress): Keyframing and timeline for the Animation window: outstanding work
-- [plans/apple_gpu_shader_gap.md](plans/apple_gpu_shader_gap.md) (in progress): Apple GPU: the standard shader's cost through SPIRV-Cross vs KosmicKrisp
+- [plans/apple_gpu_shader_gap.md](plans/apple_gpu_shader_gap.md) (blocked): Apple GPU: the standard shader's cost through SPIRV-Cross vs KosmicKrisp
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
 - [plans/audit_2026_09_30_followups.md](plans/audit_2026_09_30_followups.md) (in progress): 2026-09-30 audit: medium-term set and follow-ups
-- [plans/bistro_load_profiling.md](plans/bistro_load_profiling.md) (proposed): Bistro load time: profile and optimization candidates
-- [plans/bistro_viewport_gpu.md](plans/bistro_viewport_gpu.md) (proposed): Bistro main viewport GPU cost: measurements, light selection by scene order, options (view-relevant selection, clustered culling, geometry)
+- [plans/bistro_load_profiling.md](plans/bistro_load_profiling.md) (in progress): Bistro load time: profile and optimization candidates
+- [plans/bistro_viewport_gpu.md](plans/bistro_viewport_gpu.md) (in progress): Bistro main viewport GPU cost: measurements, light selection by scene order, options; clustered light culling chosen (clustered_lights.md), geometry open
 - [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
 - [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
 - [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
-- [plans/clustered_lights.md](plans/clustered_lights.md) (proposed): Clustered light culling: cluster grid, binning compute pass, light storage block, runtime-bounded forward loops, consumers, verification gates
+- [plans/clustered_lights.md](plans/clustered_lights.md) (in progress): Clustered light culling: cluster grid, binning compute pass, light storage block, runtime-bounded forward loops, consumers, verification gates
 - [plans/command_script.md](plans/command_script.md) (proposed): Editor command scripts: outstanding work
 - [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
 - [plans/crash_signal.md](plans/crash_signal.md) (in progress): Positive crash signal for harness-run apps
-- [plans/culling.md](plans/culling.md) (proposed): Culling: one classification for every pass, then on the GPU
+- [plans/culling.md](plans/culling.md) (in progress): Culling: one classification for every pass, then on the GPU
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
 - [plans/debug_renderer_anti_aliasing.md](plans/debug_renderer_anti_aliasing.md) (in progress): Debug renderer: analytic anti-aliasing for wide lines
 - [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
-- [plans/scene_roundtrip_failures.md](plans/scene_roundtrip_failures.md) (proposed): The three failing checks of `scripts/scene_roundtrip_verify.py` (physics drift, device loss on the draw-list path, two USD diffs): facts established, repro, next steps
+- [plans/scene_roundtrip_failures.md](plans/scene_roundtrip_failures.md) (in progress): The three failing checks of `scripts/scene_roundtrip_verify.py` (physics drift, device loss on the draw-list path, two USD diffs): facts established, repro, next steps
 - [plans/editor.md](plans/editor.md) (proposed): Editor: outstanding feature work
 - [plans/editor_improvements.md](plans/editor_improvements.md) (proposed): Prioritized backlog of editor architecture improvements
 - [plans/frame_pacing.md](plans/frame_pacing.md) (proposed): Frame pacing: outstanding work
-- [plans/frame_pacing_adaptive_sync.md](plans/frame_pacing_adaptive_sync.md) (proposed): Frame pacing on Adaptive-Sync displays (Metal tier M)
+- [plans/frame_pacing_adaptive_sync.md](plans/frame_pacing_adaptive_sync.md) (in progress): Frame pacing on Adaptive-Sync displays (Metal tier M)
 - [plans/frame_pacing_metal.md](plans/frame_pacing_metal.md) (in progress): Frame pacing on Metal: tier M to a reliable default
 - [plans/geometry_graph/attribute_projection.md](plans/geometry_graph/attribute_projection.md) (proposed): project_attribute geometry-graph node: design research
 - [plans/geometry_graph/creation_tools.md](plans/geometry_graph/creation_tools.md) (in progress): AI creation tools and geometry-graph follow-ups
@@ -458,7 +458,7 @@ flowchart TD
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
-- [plans/metal_backend.md](plans/metal_backend.md) (proposed): Metal backend: parity work
+- [plans/metal_backend.md](plans/metal_backend.md) (in progress): Metal backend: parity work
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
 - [plans/mesh_modeling.md](plans/mesh_modeling.md) (in progress): Blender-style mesh modeling operations: remaining work

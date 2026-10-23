@@ -24,10 +24,10 @@ Metal editor, default scene, external 120 Hz display, window visible:
 - Both pacer suites green, including a claim whose plant reproduces each
   live failure found on the way.
 
-When the gate passes: `auto` resolves to tier M in
-`Device_impl::init_frame_pacing` (`metal_device.cpp`, `frame_pacing_tier`
-"w" selects it until then), and `doc/erhe/metal_backend.md` states the
-result.
+The gate passed on the Dell (Log, 2026-10-21): `auto` (and "w") resolves to
+tier M in `Device_impl::init_frame_pacing` (`metal_device.cpp`); without a
+`CAMetalLayer` (headless) or under `force_disable_vsync` the tier is OFF.
+`doc/erhe/metal_backend.md` states the result.
 
 ## Metal presentation, as the pacer sees it
 
@@ -205,7 +205,7 @@ models it phenomenologically: low clock at the longer cadence unless a
 pre-warm of at least the calibrated fill runs, ramping with the measured
 time constant.
 
-Built (2026-10-21, not yet run live): `Gpu_prewarm` (metal_gpu_prewarm.cpp;
+Built: `Gpu_prewarm` (metal_gpu_prewarm.cpp;
 kernel ordered after the presenting command buffer by an MTLEvent, duration
 requested in seconds, iteration count from the measured rate),
 `Device::set_present_prewarm`, the pacer's pre-warm phase
@@ -222,9 +222,12 @@ cadence switch, one that reached the clock but does not fit backs off.
 
 Gated live 2026-10-21 (Log): the Dell gate passes, every upshift
 pre-warmed, and the upshift transition is clean in Debug and Release
-(C28). Next: the gate on fixed 60 Hz and on ProMotion with this build
-(the calibration's majority vote and probe spacing have not run there
-yet).
+(C28). ProMotion is re-gated (Log, 2026-10-22, claim C32). Open: the gate
+on fixed 60 Hz (the calibration's majority vote and probe spacing have not
+run there), Metal and MoltenVK; a pre-warm on the Vulkan path; the
+MoltenVK fullscreen launches that stay at N=2
+([frame_pacing_adaptive_sync.md](frame_pacing_adaptive_sync.md)
+"Verification").
 
 ## Tools
 
@@ -417,7 +420,9 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   16.7-19.7 ms Release; GPU service 6-6.5 ms at 72-80 % clock. Open: the
   Vulkan path has no present calibration (ProMotion needs a request a
   period earlier, see "Compositor properties per display mode") and no
-  pre-warm; re-gate on fixed 60 Hz and ProMotion.
+  pre-warm; re-gate on fixed 60 Hz and ProMotion. (Closed since: the
+  present calibration, 2026-10-23 entry; the ProMotion re-gate, 2026-10-22
+  entry.)
 - 2026-10-21, Bistro held at N=2 (`scripts/bistro_frame_bench.py`, Release,
   Dell at 120 Hz). With the pacer off the same build displays 99 % of the
   frames one refresh apart (GPU span 6.4 ms); tier M stayed at N=2 even with
@@ -458,8 +463,8 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   (`desiredPresentTime` a quarter period early), as on Metal before the
   present calibration. Fullscreen MoltenVK reports a fixed grid and runs at
   N=2 (~38 ms). Open: a present calibration for the Vulkan
-  `VK_GOOGLE_display_timing` path (the request offset at least), and the
-  60 Hz re-gate.
+  `VK_GOOGLE_display_timing` path (the request offset at least; closed by
+  the 2026-10-23 entry), and the 60 Hz re-gate.
 - 2026-10-23, MoltenVK present calibration (ProMotion panel, Release). Live
   check first: every frame displayed exactly one refresh after its target
   with 18-28 ms between the GPU end and the target, requests at T/4 before

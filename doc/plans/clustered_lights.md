@@ -19,7 +19,8 @@ light's visibility is sampled.
   the preset's `Light_count_limits` (six counts: directional / spot / point,
   shadow-mapped / unshadowed). Slot order is type-major, shadow-mapped first
   within a type. `Graphics_settings::apply_limits` clamps the sum to
-  `max_light_count` (`config/editor/renderer.json`, 32).
+  `max_light_count` (`config/editor/renderer.json`, 1024 in the editor;
+  `Program_interface_config::max_light_count` defaults to 32).
 - `light_block` is a std140 uniform block at binding 1, the header (counts,
   ambient, lightmap flags, BRDF slice, shadow debug light, bias scales, DDGI
   volume); `light_array_block` is a readonly std430 storage block at binding
@@ -282,7 +283,9 @@ unshadowed counts stay with it.
 ## Phases
 
 Each phase is one commit (or a short series), reviewed, with its gates.
-Phases 1 (the light array as a storage block, C3), 2 and 3 are built.
+Phases 1 (the light array as a storage block, C3), 2 and 3 are built, and
+of phase 5 the spot cone test and the light record split; phase 4 (XR) is
+not built.
 
 Phase 2 (CPU binning and the clustered shader path) is built; the code is
 described in [../erhe/scene_renderer.md](../erhe/scene_renderer.md)
@@ -511,3 +514,10 @@ measured there.
    not pursued), so on Bistro the far shadow-mapped point lights keep their
    cube faces while near lights shade unshadowed; clustered mode makes the
    near lights lit, not shadowed.
+2. Phase 4 (XR): the headset's cluster grid and its multiview headless
+   gate; the Quest run needs the user with the headset.
+3. Phase 5: skip binning on unchanged inputs (C4), and shared-memory light
+   tiles for scenes with hundreds of lights, each only when V5 shows it
+   pays.
+4. V3's debug setting forcing the single-cluster grid for the viewport.
+5. V1 on OpenGL: the gates ran on Metal and MoltenVK.

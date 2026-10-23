@@ -222,7 +222,11 @@ converts only the Apple presentation clock. Android needs
   `VK_KHR_present_wait`: either a gate built from GOOGLE feedback, or tier A
   resolves OFF on such devices (the state today),
 - a measurement of whether the Android compositor honors the target and of
-  its deadline (the quarter-period early request is the macOS value).
+  its deadline: on macOS the request offset comes from the present
+  calibration (`present_calibration_runner.cpp`, Metal and Vulkan;
+  `doc/erhe/vulkan_backend.md` "Surface and swapchain"), and the
+  quarter-period early request is only the fallback without one, so
+  Android needs its own calibration run.
 
 ## VRR-aware tier
 
