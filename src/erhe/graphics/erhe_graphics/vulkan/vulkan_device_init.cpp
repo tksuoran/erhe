@@ -1248,6 +1248,14 @@ Device_impl::Device_impl(
         const std::string& requested = get_graphics_config().frame_pacing_tier;
         if (requested == "off") {
             m_frame_pacing_tier = Frame_pacing_tier::off;
+        } else if (get_graphics_config().force_disable_vsync) {
+            // choose_present_mode() then prefers IMMEDIATE, which gives
+            // neither tier the presentation backpressure it paces against.
+            // The flag asks for unpaced frames, so the tier is OFF even
+            // when IMMEDIATE is unavailable or a tier was requested (as on
+            // Metal).
+            m_frame_pacing_tier = Frame_pacing_tier::off;
+            log_context->info("frame pacing: force_disable_vsync leaves no presentation backpressure; tier OFF");
         } else if (requested == "s") {
             m_frame_pacing_tier = Frame_pacing_tier::slop_servo;
         } else if (requested == "w") {
