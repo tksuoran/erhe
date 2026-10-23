@@ -44,6 +44,118 @@ its consumers); the render pass end barriers whose unqualified `sampled`
 consumers are known to be in the next encoder only, by a consumer barrier
 there.
 
+### Measurement (2026-10-24, Apple M4 Pro)
+
+Method. Release headless Metal 3 and Metal 4 trees (Tracy on, emulated
+swapchain, so no drawable wait), frame pipelining on,
+`force_disable_vsync` and `frame_pacing_tier=off` (the GPU saturates);
+each run in an isolated working directory as
+`scripts/render_thread_bench.py` makes one. A Metal System Trace
+(`xcrun xctrace record --template 'Metal System Trace' --attach <pid>
+--time-limit 2500ms`) is taken after an 8 s settle. Headless, the
+`metal-gpu-intervals` rows carry no process, label or Instruments frame
+number: they are joined through their `gpu-submission-id` to
+`metal-gpu-submission-to-command-buffer-id` (pid, command buffer id,
+encoder id). Encoders are ordered by encoder id; a frame is a run of
+encoders on one command buffer object (the frame command buffers rotate);
+200 frames from the middle of the trace. GPU idle is the time no channel
+(Vertex, Fragment, Compute) is busy, inside a frame and from the last
+interval of frame N to the first of N+1. The encoder names and the
+emitted stage pairs come from a temporary Metal 4 log of every consumer,
+producer and intra-encoder barrier, every `endEncoding` (with the
+encoder label) and every commit, matched to the trace by ordinal in the
+frame. Scenes: default, `heavy`, Bistro (the bench camera of
+`scripts/bistro_frame_bench.py`) at the headless window size, and `draws`
+at window 960x540, viewport 320x200.
+
+Barriers per frame on Metal 4: 25 consumer + 25 producer (default,
+heavy), 23 + 23 (Bistro), 21 + 21 (draws), 29 + 29 (heavy with GPU culling
+classification and clustered lights), 32 + 33 with DDGI, 39 + 40 with
+radiance cascades. Each post-processing pass has `V|F|D -> F` at begin and
+`F -> V|F|D` at end; the main pass `all -> V|F` (pending
+`memory_barrier`s) at begin.
+
+GPU idle per frame (us; Metal 3 / Metal 4):
+
+| Scene | GPU busy ms | idle inside frame | idle between frames |
+|---|---|---|---|
+| default | 1.436 / 1.436 | 13.2 / 11.8 (0.9 / 0.8 %) | 2.9 / 2.3 |
+| heavy | 3.410 / 3.450 | 13.6 / 11.8 (0.4 / 0.3 %) | 36.9 / 37.8 |
+| Bistro | 4.48 / 4.61 | 12.3 / 11.2 (0.3 / 0.2 %) | 5.7 / 5.1 |
+| draws, small viewport | 0.740 / 0.822 | 10.3 / 9.3 (1.4 / 1.1 %) | 42.9 / 40.3 |
+
+The gaps are the same on both back ends, encoder pair by encoder pair, so
+none is the cost of a Metal 4 barrier: viewport overlay pass -> ImGui host
+pass 3.1-3.8 us (a `F -> F` consumer barrier on Metal 4), each
+post-processing pass -> the next 0.22-0.26 us (20 pairs), the in-scene
+render target pass -> the capture blit 0.4-1.2 us. The gap before the main
+pass (heavy 37 us, draws 40 us, default 2 us, Bistro 5 us) is equal on
+Metal 3. Metal 4's main pass of `draws` is 75-85 us longer than Metal 3's
+(1500 draws; no barrier inside the pass, and narrowing does not change
+it).
+
+What the broad barriers cost is overlap, not idle: on Metal 4 the
+producer barrier `F -> V|F|D` at the end of each post-processing pass
+holds the vertex stage of every later pass until the pass's fragment work
+is done, so the per-pass vertex / tiling phase of the 20 small passes runs
+serially. Experiment (measurement only, not committed): the unqualified
+`sampled` `usage_before` / `usage_after` of the frame's sampled color
+targets narrowed to `sampled | fragment_shader`
+(`post_processing.cpp:268-269` and `:317-318`, `render_target.cpp:178`,
+`:184`, `:186`, `viewport_scene_view.cpp:811`, `:817`, `:819`,
+`rendertarget_mesh.cpp:151`, `:153`), which makes those passes `F -> F` at
+both ends. GPU span after the main pass, Metal 3 / Metal 4, before ->
+after (us; Bistro over three runs each, spread 1 us; its main pass varies
+150 us run to run):
+
+| Scene | Metal 3 | Metal 4 |
+|---|---|---|
+| default | 720 -> 722 | 717 -> 629 |
+| heavy | 764 -> 763 | 757 -> 660 |
+| Bistro | 707 -> 706 | 710 -> 615 |
+| draws, small viewport | 231 -> 230 | 229 -> 158 |
+
+The frame GPU span drops by 72-97 us on Metal 4 (default 6.1 %, heavy
+2.7 %, Bistro 2.1 %, draws 8.7 %); idle inside the frame drops from 11-12
+to 2-3 us; Metal 3 is unchanged (its encoders are fenced regardless). In
+the bench (small viewport, pipelined, unpaced, three runs; GPU-bound in
+Release on this GPU: `slot_acquire` is most of the tick):
+
+| Scene, back end | tick before -> after | R | Tracy `Post_processing` GPU zone |
+|---|---|---|---|
+| draws, Metal 3 | 800 -> 802 | 374 -> 375 | 121 -> 121 |
+| draws, Metal 4 | 876 -> 801 | 397 -> 396 | 120 -> 77 |
+| default, Metal 3 | 286 -> 286 | 188 -> 188 | 119 -> (no capture) |
+| default, Metal 4 | 281 -> 235 | 151 -> 149 | 116 -> 79 |
+
+CPU-bound (Debug headless, `draws`, the same viewport, two runs): tick
+6566 / 6615 us (Metal 3 / Metal 4) before, 6679 / 6783 after, R equal to
+the tick and `slot_acquire` 0.2 us: no effect beyond the session's drift,
+as expected of a GPU-side change.
+
+The intra-encoder barrier (step 4) is encoded 0 times per frame in every
+configuration measured (heavy with GPU culling classification, GPU light
+binning, DDGI or radiance cascades): each dispatch records its own compute
+encoder. The gaps between the consecutive compute encoders of the culling
+chain are 0.3-0.6 us on both back ends; the `memory_barrier`s between them
+(`all -> D`) cost nothing measurable.
+
+What step 2 commits, in order of gain:
+
+1. The sampled color targets of the frame's render passes declare their
+   fragment-only use: `usage_before` / `usage_after` `sampled ->
+   sampled | fragment_shader` at the sites of the experiment, each after
+   checking that no compute or vertex consumer reads the target (the
+   experiment did not check consumers or run the image gates). Expected:
+   70-100 us GPU per frame on Metal 4 at any resolution (the cost is per
+   pass, not per pixel), up to 17 % of the tick in the small-viewport
+   bench. No change on Metal 3; Vulkan not measured.
+2. The `memory_barrier()` sites below, and the main pass begin barrier they
+   feed (`all -> V|F`): no measurable cost (the gap before the main pass is
+   the same on Metal 3); converted as cleanup only.
+3. The compute chain barriers (`draw_list_scene_gpu_cull.cpp`,
+   `light_cluster_gpu_binner.cpp`): no measurable cost.
+
 ## Step 3: Vulkan tracked layouts
 
 The `texture_barrier ... a barrier chain is missing` warning becomes a
