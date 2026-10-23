@@ -146,4 +146,7 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 !GPU-test-isolation::Gpu_test-fixture-snapshots-Device::get_debug_state-and-fails-on-growth(leaks-show-as-bytes_in_use)
 !present-calibration-cache::key-from-OS-APIs-shared-by-metal/metal4/moltenvk(only-present_path-differs);window-mode-in-key;fullscreen-without-entry=pacer-defaults(old-windowed-1.38T-offset-in-fullscreen-was-wrong);ERHE_PRESENT_CALIBRATION_CACHE=0-for-gate-scripts;cache-dir-gitignored(cache/*)
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:test-run-restructure->present-calibration-cache->hazard-tracking->MTL4Compiler;pacing-live-gate-pending-user}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[LANDED_2026-10-23d]
+>92938afb5::texture_barrier/buffer_barrier-API(discard;Barrier_scope;validation);29b2b5c65::Metal-4-orders-from-declarations{consumer+producer-barriers;band-aid+ERHE_METAL4_EXPLICIT_BARRIERS_ONLY-gone};aea3e1871-calibration-cache;8e0aaf42b-test-runs;24faccd5f-drawable-at-first-use
+
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:MTL4Compiler-running;then-user-gates(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)+Metal-3-removal-decision;doc/plans/resource_barriers.md-steps-2-4}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
