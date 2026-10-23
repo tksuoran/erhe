@@ -66,6 +66,7 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/texel_renderer.cpp
     erhe_scene_renderer/texel_renderer.hpp
 
+    erhe_scene_renderer/caster_extents_identity.hpp
     erhe_scene_renderer/cull_classification.hpp
     erhe_scene_renderer/cull_lanes.cpp
     erhe_scene_renderer/cull_lanes.hpp

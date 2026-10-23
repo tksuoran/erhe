@@ -25,6 +25,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include <algorithm>
+#include <cstring>
 #include <cmath>
 #include <limits>
 
@@ -523,12 +524,78 @@ void Light_projections::reset_distance_fallbacks()
     previous_distance_fallback_light_ids.clear();
 }
 
+void Shadow_fit_cache::clear()
+{
+    m_extents = Caster_extents_identity{};
+    m_entries.clear();
+}
+
+void Shadow_fit_cache::begin_apply(const Caster_extents_identity& extents)
+{
+    // Entries were computed from the extents of m_extents; other extents
+    // (or unknown ones) leave none of them valid.
+    if (!extents.is_known() || !(extents == m_extents)) {
+        m_entries.clear();
+    }
+    m_extents = extents;
+    ++m_apply_serial;
+}
+
+void Shadow_fit_cache::end_apply()
+{
+    // Lights this apply() did not fit (removed, no longer shadow-mapped):
+    // dropped, so the entries stay bounded by the shadow-mapped lights.
+    std::erase_if(m_entries, [this](const Entry& entry) { return entry.apply_serial != m_apply_serial; });
+}
+
+auto Shadow_fit_cache::find(const std::size_t light_id, const glm::vec3& view_origin) -> Entry*
+{
+    if (!m_extents.is_known()) {
+        return nullptr;
+    }
+    for (Entry& entry : m_entries) {
+        if (
+            (entry.light_id == light_id) &&
+            (std::memcmp(&entry.view_origin, &view_origin, sizeof(glm::vec3)) == 0)
+        ) {
+            entry.apply_serial = m_apply_serial;
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+auto Shadow_fit_cache::store(const std::size_t light_id, const glm::vec3& view_origin, const float caster_vertex_rounding) -> uint64_t
+{
+    if (!m_extents.is_known()) {
+        return 0;
+    }
+    const Entry stored{
+        .light_id               = light_id,
+        .view_origin            = view_origin,
+        .caster_vertex_rounding = caster_vertex_rounding,
+        .apply_serial           = m_apply_serial,
+        .computed_serial        = ++m_computed_serial
+    };
+    for (Entry& entry : m_entries) {
+        if (entry.light_id == light_id) {
+            entry = stored;
+            return stored.computed_serial;
+        }
+    }
+    m_entries.push_back(stored);
+    return stored.computed_serial;
+}
+
 void Light_projections::clear()
 {
     view_buffers.reset();
     light_projection_transforms.clear();
     light_view_relative_transforms.clear();
     light_shadow_limits.clear();
+    light_fit_reused.clear();
+    light_fit_serials.clear();
+    fit_reused_count = 0;
     light_partition = Light_layer_partition{};
     shadow_map_2d_slots.clear();
     point_shadow_slots.clear();
@@ -551,7 +618,9 @@ void Light_projections::apply(
     const std::span<const erhe::math::Aabb>         in_receiver_world_aabbs,
     const erhe::scene::Shadow_frustum_fit_settings* fit_settings,
     const erhe::scene::Shadow_map_footprint         shadow_map_footprint,
-    const std::span<const Caster_vertex_extent>     in_caster_vertex_extents
+    const std::span<const Caster_vertex_extent>     in_caster_vertex_extents,
+    Shadow_fit_cache* const                         fit_cache,
+    const Caster_extents_identity&                  caster_extents_identity
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -596,6 +665,14 @@ void Light_projections::apply(
     light_view_relative_transforms.reserve(lights.size());
     light_shadow_limits.clear();
     light_shadow_limits.reserve(lights.size());
+    light_fit_reused.clear();
+    light_fit_reused.reserve(lights.size());
+    light_fit_serials.clear();
+    light_fit_serials.reserve(lights.size());
+    fit_reused_count = 0;
+    if (fit_cache != nullptr) {
+        fit_cache->begin_apply(caster_extents_identity);
+    }
     const glm::dmat4 texture_from_clip{erhe::scene::Light::get_texture_from_clip(depth_range, conventions)};
     // Depth clamp applies to the directional passes only (Shadow_renderer);
     // their raster bound then comes from the caster bounds.
@@ -631,6 +708,8 @@ void Light_projections::apply(
 
         Light_view_relative_transforms& view_relative = light_view_relative_transforms.emplace_back();
         Light_shadow_limits&            limits        = light_shadow_limits.emplace_back();
+        uint8_t&                        reused        = light_fit_reused.emplace_back(uint8_t{0});
+        uint64_t&                       fit_serial    = light_fit_serials.emplace_back(uint64_t{0});
         if (!slot_is_shadow_mapped) {
             // Only the shadow records read the view-relative matrices and the
             // bias limits (Light_buffer::write_light_records()).
@@ -642,7 +721,20 @@ void Light_projections::apply(
         // inverted in double.
         const glm::mat4& world_from_light_camera = transforms.world_from_light_camera.get_matrix();
         view_relative.view_origin = get_view_origin(world_from_light_camera);
-        limits.caster_vertex_rounding = get_max_caster_vertex_rounding(view_relative.view_origin, in_caster_vertex_extents);
+        // A function of the view origin and the extents alone: reused while
+        // both are unchanged (Shadow_fit_cache).
+        Shadow_fit_cache::Entry* const cached = (fit_cache != nullptr) ? fit_cache->find(light.get_id(), view_relative.view_origin) : nullptr;
+        if (cached != nullptr) {
+            limits.caster_vertex_rounding = cached->caster_vertex_rounding;
+            fit_serial = cached->computed_serial;
+            reused = uint8_t{1};
+            ++fit_reused_count;
+        } else {
+            limits.caster_vertex_rounding = get_max_caster_vertex_rounding(view_relative.view_origin, in_caster_vertex_extents);
+            if (fit_cache != nullptr) {
+                fit_serial = fit_cache->store(light.get_id(), view_relative.view_origin, limits.caster_vertex_rounding);
+            }
+        }
         const erhe::scene::Light_type light_type = light.get_light_type();
         if (light_type != erhe::scene::Light_type::point) {
             const glm::dmat4 texture_from_view_relative = texture_from_clip * get_clip_from_view_relative(
@@ -657,6 +749,9 @@ void Light_projections::apply(
         if (light_type == erhe::scene::Light_type::spot) {
             limits.distance_rays_valid = (map_resolution >= get_spot_distance_min_resolution(light.get_outer_spot_angle(), shadow_map_footprint));
         }
+    }
+    if (fit_cache != nullptr) {
+        fit_cache->end_apply();
     }
     parameters.fit_debug_out        = nullptr;
     parameters.caster_world_aabbs   = {};

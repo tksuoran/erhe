@@ -10,6 +10,7 @@
 #include "erhe_scene/light_frustum_fit.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
+#include "erhe_scene_renderer/caster_extents_identity.hpp"
 #include "erhe_scene_renderer/light_cluster.hpp"
 #include "erhe_scene_renderer/light_cluster_gpu_binner.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
@@ -271,6 +272,48 @@ public:
     glm::vec3 node_abs_extent       {0.0f}; // largest |coordinate| per axis over the mesh's node-space bounds
 };
 
+// The per-light results of Light_projections::apply() that are a function of
+// the light's view origin and the caster vertex extents alone, kept between
+// applies (doc/erhe/shadows.md "Shadow fit cache"): Light_shadow_limits::
+// caster_vertex_rounding, a pass over every caster per shadow-mapped light.
+// An entry is reused when the light id, the view origin (bitwise) and the
+// extents identity equal the ones it was computed from; a changed extents
+// identity forgets every entry, and an entry no apply() used is dropped at
+// the end of that apply(). Owned by the caller next to its Light_projections
+// producer (one per shadow node), render thread; capacity kept.
+class Shadow_fit_cache
+{
+public:
+    void clear();
+
+private:
+    friend class Light_projections;
+
+    class Entry
+    {
+    public:
+        std::size_t light_id              {0};
+        glm::vec3   view_origin           {0.0f};
+        float       caster_vertex_rounding{0.0f};
+        uint64_t    apply_serial          {0};
+        // Light_projections::light_fit_serials: which computation the
+        // entry holds.
+        uint64_t    computed_serial       {0};
+    };
+
+    void begin_apply(const Caster_extents_identity& extents);
+    void end_apply();
+    [[nodiscard]] auto find(std::size_t light_id, const glm::vec3& view_origin) -> Entry*;
+    // Returns the entry's computed_serial (0 when nothing is kept).
+    [[nodiscard]] auto store(std::size_t light_id, const glm::vec3& view_origin, float caster_vertex_rounding) -> uint64_t;
+
+    Caster_extents_identity m_extents{};
+    uint64_t                m_apply_serial{0};
+    // Monotonic over the cache's lifetime, clear() included.
+    uint64_t                m_computed_serial{0};
+    std::vector<Entry>      m_entries;
+};
+
 // Per-light limits of the shadow map receiver bias, derived once per
 // Light_projections::apply() from the light's projection, the caster bounds
 // and the receiver filter footprint (doc/erhe/shadows.md "Minimum bias" and
@@ -366,7 +409,9 @@ public:
         std::span<const erhe::math::Aabb>               in_receiver_world_aabbs = {},
         const erhe::scene::Shadow_frustum_fit_settings* fit_settings = nullptr,
         erhe::scene::Shadow_map_footprint               shadow_map_footprint = erhe::scene::Shadow_map_footprint{},
-        std::span<const Caster_vertex_extent>           in_caster_vertex_extents = {}
+        std::span<const Caster_vertex_extent>           in_caster_vertex_extents = {},
+        Shadow_fit_cache*                               fit_cache = nullptr,
+        const Caster_extents_identity&                  caster_extents_identity = Caster_extents_identity{}
     );
 
     // Forget the resolution of the previous apply(). The slot entries point
@@ -410,6 +455,14 @@ public:
     // limits (Light_shadow_limits), derived once per apply() for the
     // shadow-mapped slots; the other slots keep the defaults.
     std::vector<Light_shadow_limits>                      light_shadow_limits;
+    // Parallel as well: 1 where apply() took the slot's caster vertex
+    // rounding from the Shadow_fit_cache instead of computing it, and the
+    // count of such slots; and which computation the slot's value is (the
+    // cache's serial: equal for two frames means the second reused the
+    // first's, 0 without a cache or when nothing is kept).
+    std::vector<uint8_t>                                  light_fit_reused;
+    std::vector<uint64_t>                                 light_fit_serials;
+    std::size_t                                           fit_reused_count{0};
     // Ids of the shadow-mapped spot lights whose distance_rays_valid was
     // false at this / the previous report_distance_fallbacks(), for one log
     // line per change. The validity depends jointly on the map resolution,

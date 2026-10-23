@@ -21,7 +21,10 @@ the lights whose reach the caster's old or new bounds are in
 light is kept. Selecting the caster beside A (a flag the caster filter does
 not read) must keep every face of both. A skinned figure imported beside B,
 kept static, keeps every face of both, and a joint rotation and a vertex
-drag on it redraw only B's faces. The captures with the cache on and off must again be
+drag on it redraw only B's faces. Last, the shadow fit cache: a static
+frame reuses every shadow-mapped light's fit results (get_scene_lights
+shadow_fit_reused / shadow_fit_serial), moving one light refits that light
+only, and captures with the fit cache off are identical. The captures with the cache on and off must again be
 identical.
 
 Needs Pillow and numpy. Example:
@@ -242,6 +245,47 @@ def main():
         if (mismatch != 0) or not ok:
             failed.append(tag)
         previous = without_cache
+
+    # Shadow fit cache: in a static frame every shadow-mapped light reuses
+    # its caster-derived limits (shadow_fit_reused, shadow_fit_serial stable);
+    # moving one light refits that light only; captures equal those with
+    # the fit cache off.
+    def fit_state():
+        lights = call("get_scene_lights", scene_name=scene).get("lights", [])
+        return {light["name"]: (light.get("shadow_fit_reused"), light.get("shadow_fit_serial")) for light in lights if light.get("shadow_mapped")}
+
+    def compare_fit(tag):
+        with_cache = os.path.join(out_dir, f"{tag}_fit_cache.png")
+        call("capture_screenshot", path=with_cache)
+        call("set_shadow_fit_cache_enabled", enabled=False)
+        time.sleep(args.settle_s)
+        without_cache = os.path.join(out_dir, f"{tag}_no_fit_cache.png")
+        call("capture_screenshot", path=without_cache)
+        call("set_shadow_fit_cache_enabled", enabled=True)
+        return pixel_diff(with_cache, without_cache)
+
+    call("set_shadow_map_cache_enabled", enabled=True)
+    time.sleep(args.settle_s * 2.0)
+    before = fit_state()
+    time.sleep(args.settle_s)
+    after = fit_state()
+    ok = bool(before) and all(after[name][0] is True for name in after) and (before == after)
+    mismatch = compare_fit("fit_static")
+    print(f"fit_static     fit cache vs no fit cache: {mismatch} differing pixels; lights reused: {sum(1 for v in after.values() if v[0])}/{len(after)}; serials stable: {before == after}")
+    if (mismatch != 0) or not ok:
+        failed.append("fit_static")
+
+    time.sleep(args.settle_s * 2.0)
+    before = fit_state()
+    call("set_node_transform", scene_name=scene, node_name="Point A", space="world", translation=beside(light_a, 0.05, 0.0, 0.0), rotation_xyzw=identity)
+    time.sleep(args.settle_s * 2.0)
+    after = fit_state()
+    refit = sorted(name for name in after if (name in before) and (after[name][1] != before[name][1]))
+    ok = (refit == ["Point A"])
+    mismatch = compare_fit("fit_move_point_a")
+    print(f"fit_move_point_a fit cache vs no fit cache: {mismatch} differing pixels; refitted: {refit}")
+    if (mismatch != 0) or not ok:
+        failed.append("fit_move_point_a")
 
     call("request_exit")
     try:

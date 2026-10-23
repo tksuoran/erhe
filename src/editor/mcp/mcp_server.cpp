@@ -729,6 +729,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_culling_classification",     &Mcp_server::action_set_culling_classification    },
         { "set_shadow_maps_frozen",         &Mcp_server::action_set_shadow_maps_frozen        },
         { "set_shadow_map_cache_enabled",   &Mcp_server::action_set_shadow_map_cache_enabled  },
+        { "set_shadow_fit_cache_enabled",   &Mcp_server::action_set_shadow_fit_cache_enabled  },
         { "get_cull_classification_check",  &Mcp_server::query_cull_classification_check      },
         { "set_light_cluster_binning",      &Mcp_server::action_set_light_cluster_binning     },
         { "get_light_cluster_stats",        &Mcp_server::query_light_cluster_stats            },

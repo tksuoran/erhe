@@ -9,6 +9,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Shadow_fit_cache`, `Caster_extents_identity`
+  (`caster_extents_identity.hpp`), `Shadow_bounds::extents_identity`,
+  `Shadow_renderer::Render_parameters::fit_cache`, the trailing
+  `fit_cache` / `caster_extents_identity` parameters of
+  `Light_projections::apply()` (defaulted) and
+  `Light_projections::light_fit_reused`, `light_fit_serials`,
+  `fit_reused_count`: the per-light caster vertex rounding is reused while
+  the light's view origin and the prepared caster extents are unchanged
+  (doc/erhe/shadows.md "Shadow fit cache").
+
 - `erhe::primitive`: `normalize_joint_weights()`,
   `quantize_joint_weights_unorm8()` and
   `include_vertex_in_joint_bounding_boxes()`: the builder writes `WEIGHTS_0`

@@ -813,6 +813,7 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
             .draw_list_layers         = m_frame_passes.draw_list_layers,
             .draw_statistics          = &result.draw_statistics,
             .map_cache                = render_settings.shadow_map_cache ? &m_map_cache : nullptr,
+            .fit_cache                = render_settings.shadow_fit_cache ? &m_fit_cache : nullptr,
             .exclude_unlit_casters    = exclude_unlit_casters,
             .casters                  = casters,
             .shadow_bounds            = &root_draw_list_scene->get_shadow_bounds(frame_index)
@@ -822,6 +823,9 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     // what it held is not kept across the cache-off period.
     if (!render_settings.shadow_map_cache) {
         m_map_cache.clear();
+    }
+    if (!render_settings.shadow_fit_cache) {
+        m_fit_cache.clear();
     }
     m_context.shadow_renderer->fit(m_frame_passes.parameters.value(), m_cull_views);
     m_distance_fallback_light_ids = result.light_projections.distance_fallback_light_ids;
