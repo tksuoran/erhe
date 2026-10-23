@@ -7,6 +7,7 @@
 #include "erhe_graphics/metal4/metal4_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_sampler.hpp"
 #include "erhe_graphics/metal4/metal4_shader_stages.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/metal4/metal4_texture.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/metal4/metal4_bind_group_layout.hpp"
@@ -26,55 +27,68 @@ namespace erhe::graphics {
 
 thread_local Compute_command_encoder_impl* Compute_command_encoder_impl::s_active_encoder{nullptr};
 
-auto Compute_command_encoder_impl::get_active_mtl_encoder() noexcept -> MTL::ComputeCommandEncoder*
+auto Compute_command_encoder_impl::get_active_mtl_encoder() noexcept -> MTL4::ComputeCommandEncoder*
 {
     return (s_active_encoder != nullptr) ? s_active_encoder->m_encoder : nullptr;
+}
+
+auto Compute_command_encoder_impl::get_active_argument_table() noexcept -> MTL4::ArgumentTable*
+{
+    return (s_active_encoder != nullptr) ? s_active_encoder->m_argument_table : nullptr;
 }
 
 Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Command_buffer& command_buffer)
     : Command_encoder_impl{device, command_buffer}
 {
-    // Record into the MTL::CommandBuffer that the caller's
+    // Record into the MTL4::CommandBuffer that the caller's
     // Command_buffer owns. Metal only allows one encoder open on a cb
     // at a time; the API contract is that the caller does not interleave
     // encoders on the same cb.
     Command_buffer_impl& cb_impl = m_command_buffer.get_impl();
-    m_mtl_command_buffer  = cb_impl.get_mtl_command_buffer();
-    m_inter_encoder_fence = cb_impl.get_inter_encoder_fence();
+    m_mtl_command_buffer = cb_impl.get_mtl4_command_buffer();
     ERHE_VERIFY(m_mtl_command_buffer != nullptr);
 
-    // The encoder is autoreleased: take a reference, and drain the
-    // autoreleased one right here, so the encoder's lifetime does not depend
-    // on which autorelease pool the calling thread has open.
     {
         Scoped_transient_object_pool object_pool{};
-        // Gpu_timer samples (metal4_gpu_timer.hpp) at the start and end of
-        // the encoder.
-        MTL::CounterSampleBuffer* sample_buffer = nullptr;
-        std::size_t               start_sample  = 0;
-        std::size_t               end_sample    = 0;
-        Gpu_timer_sample_pool* const pool = cb_impl.get_gpu_timer_sample_pool();
-        if ((pool != nullptr) && cb_impl.get_gpu_timer_samples().begin_encoder(*pool, sample_buffer, start_sample, end_sample)) {
-            MTL::ComputePassDescriptor* const descriptor = MTL::ComputePassDescriptor::computePassDescriptor();
-            MTL::ComputePassSampleBufferAttachmentDescriptor* const attachment = descriptor->sampleBufferAttachments()->object(0);
-            attachment->setSampleBuffer            (sample_buffer);
-            attachment->setStartOfEncoderSampleIndex(start_sample);
-            attachment->setEndOfEncoderSampleIndex  (end_sample);
-            m_encoder = m_mtl_command_buffer->computeCommandEncoder(descriptor);
-        } else {
-            m_encoder = m_mtl_command_buffer->computeCommandEncoder();
-        }
+        m_encoder = m_mtl_command_buffer->computeCommandEncoder();
         ERHE_VERIFY(m_encoder != nullptr);
         m_encoder->retain();
     }
     s_active_encoder = this;
 
-    // Serialize against prior encoders on this cb via the cb's
-    // inter-encoder fence. Metal does not track aliased newTextureView
-    // hazards within one cb; the fence catches those.
-    if (m_inter_encoder_fence != nullptr) {
-        m_encoder->waitForFence(m_inter_encoder_fence);
+    // Order against all earlier work of the queue (doc/erhe/metal4_backend.md
+    // "Barriers"): replaces the Metal 3 inter-encoder fence and hazard
+    // tracking.
+    encode_queue_barrier(m_encoder);
+
+    // Gpu_timer samples (metal4_gpu_timer.hpp) at the start and end of the
+    // encoder.
+    {
+        MTL4::CounterHeap* counter_heap = nullptr;
+        std::size_t        start_sample = 0;
+        std::size_t        end_sample   = 0;
+        Gpu_timer_sample_pool* const pool = cb_impl.get_gpu_timer_sample_pool();
+        if ((pool != nullptr) && cb_impl.get_gpu_timer_samples().begin_encoder(*pool, counter_heap, start_sample, end_sample)) {
+            m_encoder->writeTimestamp(MTL4::TimestampGranularityRelaxed, counter_heap, start_sample);
+            m_timer_counter_heap = counter_heap;
+            m_timer_end_sample   = end_sample;
+        }
     }
+
+    m_argument_table = cb_impl.acquire_argument_table();
+    m_argument_table->setAddress(
+        m_device.get_impl().get_submission_pools().get_draw_id_zero(),
+        c_metal_push_constant_index
+    );
+    m_encoder->setArgumentTable(m_argument_table);
+}
+
+void Compute_command_encoder_impl::before_dispatch()
+{
+    if (m_dispatch_count > 0) {
+        encode_intra_encoder_barrier(m_encoder);
+    }
+    ++m_dispatch_count;
 }
 
 Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
@@ -83,8 +97,9 @@ Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
         s_active_encoder = nullptr;
     }
     if (m_encoder != nullptr) {
-        if (m_inter_encoder_fence != nullptr) {
-            m_encoder->updateFence(m_inter_encoder_fence);
+        if (m_timer_counter_heap != nullptr) {
+            m_encoder->writeTimestamp(MTL4::TimestampGranularityRelaxed, m_timer_counter_heap, m_timer_end_sample);
+            m_timer_counter_heap = nullptr;
         }
         m_encoder->endEncoding();
         m_encoder->release();
@@ -93,26 +108,23 @@ Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
     }
     // The cb is owned by Command_buffer, not by this encoder; nothing
     // to commit here. submit_command_buffers takes care of commit.
+    release_owned_pipeline_state();
     m_mtl_command_buffer  = nullptr;
-    m_inter_encoder_fence = nullptr;
-    if (m_pipeline_state != nullptr) {
-        if (m_owns_pipeline_state) {
-            // Only release pipeline states we created via newComputePipelineState
-            // (the dynamic-state path). Borrowed pointers from a long-lived
-            // Compute_pipeline_impl must NOT be released here -- doing so was
-            // a use-after-free that crashed the next dispatch. Even for the
-            // owned case, defer the release via add_completion_handler so the
-            // GPU has a chance to finish using the pipeline.
-            MTL::ComputePipelineState* ps = m_pipeline_state;
-            m_device.get_impl().add_completion_handler(
-                [ps](Device_impl&) {
-                    ps->release();
-                }
-            );
-        }
-        m_pipeline_state = nullptr;
-        m_owns_pipeline_state = false;
+    m_argument_table      = nullptr;
+}
+
+void Compute_command_encoder_impl::release_owned_pipeline_state()
+{
+    // Only pipeline states created here (set_compute_pipeline_state, the
+    // dynamic-state path) are owned; borrowed ones from a long-lived
+    // Compute_pipeline_impl must not be released. An owned one is handed to
+    // the command buffer, which releases it once the GPU has completed it
+    // (MTL4 command buffers retain nothing), as the render path does.
+    if ((m_pipeline_state != nullptr) && m_owns_pipeline_state) {
+        m_command_buffer.get_impl().retain_until_completed(m_pipeline_state);
     }
+    m_pipeline_state      = nullptr;
+    m_owns_pipeline_state = false;
 }
 
 void Compute_command_encoder_impl::set_buffer(
@@ -134,7 +146,7 @@ void Compute_command_encoder_impl::set_buffer(
     }
 
     // Identity mapping: GLSL binding = Metal buffer index
-    m_encoder->setBuffer(mtl_buffer, static_cast<NS::UInteger>(offset), static_cast<NS::UInteger>(index));
+    m_argument_table->setAddress(mtl_buffer->gpuAddress() + static_cast<uint64_t>(offset), static_cast<NS::UInteger>(index));
 }
 
 void Compute_command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* const buffer)
@@ -148,7 +160,7 @@ void Compute_command_encoder_impl::set_buffer(const Buffer_target buffer_target,
         return;
     }
 
-    m_encoder->setBuffer(mtl_buffer, 0, 0);
+    m_argument_table->setAddress(mtl_buffer->gpuAddress(), 0);
 }
 
 void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
@@ -166,10 +178,9 @@ void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, con
     }
     // Storage images bind at their raw binding point (no sampler-binding offset);
     // this matches the [[texture(N)]] slot pinned in compile_spirv_to_mtl_function.
-    // Directly-bound textures are made resident and hazard-tracked automatically,
-    // so no useResource / explicit barrier is needed here (the cb's inter-encoder
-    // fence orders the transmittance pass before the multi-scatter pass).
-    m_encoder->setTexture(mtl_texture, static_cast<NS::UInteger>(binding_point));
+    // The texture is resident through the device's residency set; the queue
+    // barrier the next encoder starts with orders its writes.
+    m_argument_table->setTexture(mtl_texture->gpuResourceID(), static_cast<NS::UInteger>(binding_point));
 }
 
 void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
@@ -190,8 +201,8 @@ void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, con
     if ((mtl_texture == nullptr) || (mtl_sampler == nullptr)) {
         return;
     }
-    m_encoder->setTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
-    m_encoder->setSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
+    m_argument_table->setTexture     (mtl_texture->gpuResourceID(), static_cast<NS::UInteger>(glsl_binding));
+    m_argument_table->setSamplerState(mtl_sampler->gpuResourceID(), static_cast<NS::UInteger>(sampler_slot));
 }
 
 void Compute_command_encoder_impl::set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure)
@@ -206,12 +217,9 @@ void Compute_command_encoder_impl::set_acceleration_structure(uint32_t binding_p
     if (tlas == nullptr) {
         return;
     }
-    m_encoder->setAccelerationStructure(tlas, c_metal_acceleration_structure_buffer_index);
-    // Directly-bound structures are made resident automatically, but the
-    // bottom level structures the instance structure references are not.
-    for (MTL::AccelerationStructure* bottom_level : as_impl.get_referenced_bottom_level()) {
-        m_encoder->useResource(bottom_level, MTL::ResourceUsageRead);
-    }
+    // The instance structure and the bottom level structures it references
+    // (by resource id) are resident through the device's residency set.
+    m_argument_table->setResource(tlas->gpuResourceID(), c_metal_acceleration_structure_buffer_index);
 }
 
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
@@ -233,6 +241,7 @@ void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipe
     MTL::Device* mtl_device = device_impl.get_mtl_device();
     ERHE_VERIFY(mtl_device != nullptr);
 
+    release_owned_pipeline_state();
     NS::Error* error = nullptr;
     m_pipeline_state = mtl_device->newComputePipelineState(compute_function, &error);
     if (m_pipeline_state == nullptr) {
@@ -261,17 +270,9 @@ void Compute_command_encoder_impl::set_compute_pipeline(const Compute_pipeline& 
     if (mtl_pipeline == nullptr) {
         return;
     }
-    // If a previous set_compute_pipeline_state created a pipeline that this
-    // encoder owns, defer-release it now -- we are about to overwrite
-    // m_pipeline_state with a borrowed pointer.
-    if ((m_pipeline_state != nullptr) && m_owns_pipeline_state) {
-        MTL::ComputePipelineState* ps = m_pipeline_state;
-        m_device.get_impl().add_completion_handler(
-            [ps](Device_impl&) {
-                ps->release();
-            }
-        );
-    }
+    // A pipeline an earlier set_compute_pipeline_state created goes to the
+    // command buffer before m_pipeline_state is overwritten.
+    release_owned_pipeline_state();
     m_pipeline_state      = mtl_pipeline;
     m_owns_pipeline_state = false;
     m_encoder->setComputePipelineState(m_pipeline_state);
@@ -308,6 +309,7 @@ void Compute_command_encoder_impl::dispatch_compute(
         static_cast<NS::UInteger>(m_threadgroup_size[2])
     );
 
+    before_dispatch();
     m_encoder->dispatchThreadgroups(threads_per_grid, threads_per_threadgroup);
 }
 
@@ -317,17 +319,9 @@ void Compute_command_encoder_impl::encode_indirect_count_draws(Indirect_count_dr
     // The kernel binds its own pipeline: drop the erhe one, so a further
     // dispatch_compute() without a new set_compute_pipeline() fails loudly
     // instead of running the kernel's pipeline.
-    if ((m_pipeline_state != nullptr) && m_owns_pipeline_state) {
-        MTL::ComputePipelineState* ps = m_pipeline_state;
-        m_device.get_impl().add_completion_handler(
-            [ps](Device_impl&) {
-                ps->release();
-            }
-        );
-    }
-    m_pipeline_state      = nullptr;
-    m_owns_pipeline_state = false;
-    draws.get_impl().encode(m_encoder, draws.get_slot(slot), slot);
+    release_owned_pipeline_state();
+    before_dispatch();
+    draws.get_impl().encode(m_encoder, m_argument_table, draws.get_slot(slot), slot);
 }
 
 } // namespace erhe::graphics

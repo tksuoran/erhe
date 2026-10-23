@@ -24,7 +24,7 @@ namespace erhe::graphics {
 
 auto Gpu_timer_command_buffer_samples::begin_encoder(
     Gpu_timer_sample_pool&     pool,
-    MTL::CounterSampleBuffer*& out_buffer,
+    MTL4::CounterHeap*&        out_heap,
     std::size_t&               out_start,
     std::size_t&               out_end
 ) -> bool
@@ -56,7 +56,7 @@ auto Gpu_timer_command_buffer_samples::begin_encoder(
     }
 
     const std::size_t base = pool.get_chunk_base(chunk_index);
-    out_buffer = pool.get_chunk_buffer(chunk_index);
+    out_heap   = pool.get_chunk_buffer(chunk_index);
     out_start  = base + static_cast<std::size_t>(open_encoder_start);
     out_end    = base + static_cast<std::size_t>(open_encoder_end);
     return true;
@@ -164,23 +164,7 @@ Gpu_timer_sample_pool::Gpu_timer_sample_pool(MTL::Device* const mtl_device)
         log_startup->warn("Metal: device does not support counter sampling at stage boundaries - GPU timers read 0");
         return;
     }
-    Scoped_transient_object_pool object_pool{};
-    const NS::Array* const counter_sets = m_mtl_device->counterSets();
-    if (counter_sets == nullptr) {
-        return;
-    }
-    for (NS::UInteger i = 0, end = counter_sets->count(); i < end; ++i) {
-        MTL::CounterSet* const counter_set = counter_sets->object<MTL::CounterSet>(i);
-        if (counter_set->name()->isEqualToString(MTL::CommonCounterSetTimestamp)) {
-            m_timestamp_counter_set = counter_set;
-            m_timestamp_counter_set->retain();
-            break;
-        }
-    }
-    if (m_timestamp_counter_set == nullptr) {
-        log_startup->warn("Metal: device has no timestamp counter set - GPU timers read 0");
-        return;
-    }
+    m_supported = true;
     MTL::Timestamp cpu_timestamp = 0;
     MTL::Timestamp gpu_timestamp = 0;
     m_mtl_device->sampleTimestamps(&cpu_timestamp, &gpu_timestamp);
@@ -410,14 +394,10 @@ Gpu_timer_sample_pool::~Gpu_timer_sample_pool() noexcept
         std::unique_lock<std::mutex> lock{m_mutex};
         m_chunks_returned.wait(lock, [this]() { return m_chunks_out == 0; });
     }
-    for (MTL::CounterSampleBuffer* const sample_buffer : m_sample_buffers) {
-        sample_buffer->release();
+    for (MTL4::CounterHeap* const counter_heap : m_sample_buffers) {
+        counter_heap->release();
     }
     m_sample_buffers.clear();
-    if (m_timestamp_counter_set != nullptr) {
-        m_timestamp_counter_set->release();
-        m_timestamp_counter_set = nullptr;
-    }
     if (m_mtl_device != nullptr) {
         m_mtl_device->release();
         m_mtl_device = nullptr;
@@ -426,13 +406,13 @@ Gpu_timer_sample_pool::~Gpu_timer_sample_pool() noexcept
 
 auto Gpu_timer_sample_pool::is_supported() const -> bool
 {
-    return m_timestamp_counter_set != nullptr;
+    return m_supported;
 }
 
 auto Gpu_timer_sample_pool::has_timers() const -> bool
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
-    if (m_timestamp_counter_set == nullptr) {
+    if (!m_supported) {
         return false;
     }
     if (!m_timers.empty()) {
@@ -466,7 +446,7 @@ void Gpu_timer_sample_pool::unregister_timer(const uint64_t timer_serial)
 auto Gpu_timer_sample_pool::acquire_chunk() -> int
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
-    if (m_timestamp_counter_set == nullptr) {
+    if (!m_supported) {
         return -1;
     }
     if (m_free_chunks.empty()) {
@@ -474,26 +454,24 @@ auto Gpu_timer_sample_pool::acquire_chunk() -> int
             return -1;
         }
         Scoped_transient_object_pool object_pool{};
-        MTL::CounterSampleBufferDescriptor* const descriptor = MTL::CounterSampleBufferDescriptor::alloc()->init();
-        descriptor->setCounterSet(m_timestamp_counter_set);
-        descriptor->setStorageMode(MTL::StorageModeShared);
-        descriptor->setSampleCount(samples_per_buffer);
-        descriptor->setLabel(NS::String::string("erhe Gpu_timer samples", NS::UTF8StringEncoding));
+        MTL4::CounterHeapDescriptor* const descriptor = MTL4::CounterHeapDescriptor::alloc()->init();
+        descriptor->setType (MTL4::CounterHeapTypeTimestamp);
+        descriptor->setCount(samples_per_buffer);
         NS::Error* error = nullptr;
-        MTL::CounterSampleBuffer* const sample_buffer = m_mtl_device->newCounterSampleBuffer(descriptor, &error);
+        MTL4::CounterHeap* const counter_heap = m_mtl_device->newCounterHeap(descriptor, &error);
         descriptor->release();
-        if (sample_buffer == nullptr) {
+        if (counter_heap == nullptr) {
             log_context->error(
-                "Metal: newCounterSampleBuffer failed: {}",
+                "Metal 4: newCounterHeap failed: {}",
                 (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error object)"
             );
             // Stop trying: every later acquire would fail the same way.
-            m_timestamp_counter_set->release();
-            m_timestamp_counter_set = nullptr;
+            m_supported = false;
             return -1;
         }
+        counter_heap->setLabel(NS::String::string("erhe Gpu_timer samples", NS::UTF8StringEncoding));
         const int first_chunk = static_cast<int>(m_sample_buffers.size() * chunks_per_buffer);
-        m_sample_buffers.push_back(sample_buffer);
+        m_sample_buffers.push_back(counter_heap);
         for (int i = static_cast<int>(chunks_per_buffer) - 1; i >= 0; --i) {
             m_free_chunks.push_back(first_chunk + i);
         }
@@ -501,6 +479,11 @@ auto Gpu_timer_sample_pool::acquire_chunk() -> int
     const int chunk_index = m_free_chunks.back();
     m_free_chunks.pop_back();
     ++m_chunks_out;
+    // Entries the GPU does not write this time (an encoder without work)
+    // must not read a previous use's timestamps.
+    m_sample_buffers.at(static_cast<std::size_t>(chunk_index) / chunks_per_buffer)->invalidateCounterRange(
+        NS::Range::Make(get_chunk_base(chunk_index), samples_per_chunk)
+    );
     return chunk_index;
 }
 
@@ -515,7 +498,7 @@ void Gpu_timer_sample_pool::release_chunk(const int chunk_index)
     m_chunks_returned.notify_all();
 }
 
-auto Gpu_timer_sample_pool::get_chunk_buffer(const int chunk_index) const -> MTL::CounterSampleBuffer*
+auto Gpu_timer_sample_pool::get_chunk_buffer(const int chunk_index) const -> MTL4::CounterHeap*
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     return m_sample_buffers.at(static_cast<std::size_t>(chunk_index) / chunks_per_buffer);
@@ -539,7 +522,7 @@ void Gpu_timer_sample_pool::resolve_command_buffer_samples(const Gpu_timer_comma
     Scoped_transient_object_pool object_pool{}; // drains the NS::Data resolveCounterRange returns
     // Without a chunk only Tracy zone records remain, resolved with no samples.
     const bool                      has_chunk     = samples.has_chunk();
-    MTL::CounterSampleBuffer* const sample_buffer = has_chunk ? get_chunk_buffer(samples.chunk_index) : nullptr;
+    MTL4::CounterHeap* const        sample_buffer = has_chunk ? get_chunk_buffer(samples.chunk_index) : nullptr;
     const std::size_t               base          = has_chunk ? get_chunk_base(samples.chunk_index) : 0;
     const NS::Data* const data = (has_chunk && (samples.used_sample_count > 0))
         ? sample_buffer->resolveCounterRange(NS::Range::Make(base, samples.used_sample_count))

@@ -293,8 +293,8 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
         return m_used_slot_count;
     }
 
-    MTL::RenderCommandEncoder* render_encoder = Render_pass_impl::get_active_mtl_encoder();
-    if (render_encoder == nullptr) {
+    MTL4::ArgumentTable* argument_table = Render_pass_impl::get_active_argument_table();
+    if (argument_table == nullptr) {
         return m_used_slot_count;
     }
 
@@ -316,24 +316,10 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
         return m_used_slot_count;
     }
 
-    NS::UInteger offset = static_cast<NS::UInteger>(m_argument_buffer_range.get_byte_start_offset_in_buffer());
-    render_encoder->setFragmentBuffer(mtl_buffer, offset, m_argument_buffer_index);
-
-    for (std::size_t slot = 0; slot < m_used_slot_count; ++slot) {
-        const Texture* texture = m_textures[slot];
-        if (texture == nullptr) {
-            continue;
-        }
-        MTL::Texture* mtl_texture = texture->get_impl().get_mtl_texture();
-        if (mtl_texture != nullptr) {
-            render_encoder->useResource(mtl_texture, MTL::ResourceUsageRead | MTL::ResourceUsageSample, MTL::RenderStageFragment);
-        }
-    }
-    MTL::Texture* fallback_mtl = m_fallback_texture.get_impl().get_mtl_texture();
-    if (fallback_mtl != nullptr) {
-        render_encoder->useResource(fallback_mtl, MTL::ResourceUsageRead | MTL::ResourceUsageSample, MTL::RenderStageFragment);
-    }
-
+    // The textures the argument buffer references are resident through the
+    // device's residency set (no useResource under MTL4).
+    const uint64_t offset = static_cast<uint64_t>(m_argument_buffer_range.get_byte_start_offset_in_buffer());
+    argument_table->setAddress(mtl_buffer->gpuAddress() + offset, m_argument_buffer_index);
     return m_used_slot_count;
 }
 
@@ -348,8 +334,8 @@ auto Texture_heap_impl::bind(Compute_command_encoder& encoder) -> std::size_t
     }
 
     static_cast<void>(encoder);
-    MTL::ComputeCommandEncoder* compute_encoder = Compute_command_encoder_impl::get_active_mtl_encoder();
-    if (compute_encoder == nullptr) {
+    MTL4::ArgumentTable* argument_table = Compute_command_encoder_impl::get_active_argument_table();
+    if (argument_table == nullptr) {
         return m_used_slot_count;
     }
 
@@ -371,24 +357,8 @@ auto Texture_heap_impl::bind(Compute_command_encoder& encoder) -> std::size_t
         return m_used_slot_count;
     }
 
-    NS::UInteger offset = static_cast<NS::UInteger>(m_argument_buffer_range.get_byte_start_offset_in_buffer());
-    compute_encoder->setBuffer(mtl_buffer, offset, m_argument_buffer_index);
-
-    for (std::size_t slot = 0; slot < m_used_slot_count; ++slot) {
-        const Texture* texture = m_textures[slot];
-        if (texture == nullptr) {
-            continue;
-        }
-        MTL::Texture* mtl_texture = texture->get_impl().get_mtl_texture();
-        if (mtl_texture != nullptr) {
-            compute_encoder->useResource(mtl_texture, MTL::ResourceUsageRead | MTL::ResourceUsageSample);
-        }
-    }
-    MTL::Texture* fallback_mtl = m_fallback_texture.get_impl().get_mtl_texture();
-    if (fallback_mtl != nullptr) {
-        compute_encoder->useResource(fallback_mtl, MTL::ResourceUsageRead | MTL::ResourceUsageSample);
-    }
-
+    const uint64_t offset = static_cast<uint64_t>(m_argument_buffer_range.get_byte_start_offset_in_buffer());
+    argument_table->setAddress(mtl_buffer->gpuAddress() + offset, m_argument_buffer_index);
     return m_used_slot_count;
 }
 

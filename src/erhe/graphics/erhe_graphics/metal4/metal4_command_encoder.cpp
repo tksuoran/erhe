@@ -47,17 +47,14 @@ void Command_encoder_impl::set_buffer(
         default: break;
     }
 
-    // With explicit resource bindings, GLSL binding = Metal buffer index (identity mapping).
-    // No binding map lookup needed.
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
-    if (encoder == nullptr) {
+    // With explicit resource bindings, GLSL binding = Metal buffer index
+    // (identity mapping), set in the active pass's argument table, which
+    // the vertex and fragment stages share.
+    MTL4::ArgumentTable* argument_table = Render_pass_impl::get_active_argument_table();
+    if (argument_table == nullptr) {
         return;
     }
-
-    NS::UInteger mtl_index  = static_cast<NS::UInteger>(index);
-    NS::UInteger mtl_offset = static_cast<NS::UInteger>(offset);
-    encoder->setVertexBuffer  (mtl_buffer, mtl_offset, mtl_index);
-    encoder->setFragmentBuffer(mtl_buffer, mtl_offset, mtl_index);
+    argument_table->setAddress(mtl_buffer->gpuAddress() + static_cast<uint64_t>(offset), static_cast<NS::UInteger>(index));
 }
 
 void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* const buffer)
@@ -82,13 +79,11 @@ void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const B
         default: break;
     }
 
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
-    if (encoder == nullptr) {
+    MTL4::ArgumentTable* argument_table = Render_pass_impl::get_active_argument_table();
+    if (argument_table == nullptr) {
         return;
     }
-
-    encoder->setVertexBuffer  (mtl_buffer, 0, 0);
-    encoder->setFragmentBuffer(mtl_buffer, 0, 0);
+    argument_table->setAddress(mtl_buffer->gpuAddress(), 0);
 }
 
 auto Command_encoder_impl::get_draw_indirect_buffer() const -> MTL::Buffer*

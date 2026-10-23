@@ -80,12 +80,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     log_startup->info("Metal 4 backend, device: {}", m_mtl_device->name()->utf8String());
 
-    // Require Metal 3 (GPU family Metal3): the bindless texture heap relies on
-    // SPIRV-Cross MSL 3+ for full mutable aliasing of argument buffer descriptors.
-    if (!m_mtl_device->supportsFamily(MTL::GPUFamilyMetal3)) {
+    // Require Metal 4 (GPU family Metal4): the backend submits through the
+    // MTL4 command queue, argument tables and residency sets.
+    if (!m_mtl_device->supportsFamily(MTL::GPUFamilyMetal4)) {
         log_startup->critical(
-            "Metal device '{}' does not support GPUFamilyMetal3 (Metal 3). "
-            "erhe requires Metal 3.",
+            "Metal device '{}' does not support GPUFamilyMetal4 (Metal 4). "
+            "The Metal 4 backend requires it; use the Metal 3 backend (ERHE_GRAPHICS_API=metal).",
             m_mtl_device->name()->utf8String()
         );
         abort();
@@ -104,7 +104,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     // MoltenVK's modifyMTLFormatCapabilities runtime adjustment.
     m_supports_32bit_float_filtering = m_mtl_device->supports32BitFloatFiltering();
 
-    m_mtl_command_queue = m_mtl_device->newCommandQueue();
+    m_mtl_command_queue = m_mtl_device->newMTL4CommandQueue();
+    if (m_mtl_command_queue == nullptr) {
+        log_startup->critical("Metal 4: newMTL4CommandQueue failed");
+        abort();
+    }
+    m_residency        = std::make_unique<Residency>(m_mtl_device);
+    m_submission_pools = std::make_unique<Submission_pools>(m_mtl_device, *m_residency);
+    m_mtl_command_queue->addResidencySet(m_residency->get_residency_set());
+    m_in_flight_serials.reserve(256);
 
     // Metal LogState with custom log handler is disabled for now because it
     // interferes with Metal GPU capture (Xcode frame debugger).
@@ -356,7 +364,7 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     // Tier S senses its backpressure: nextDrawable blocks once the
     // compositor holds the drawable pool. Tier M is tier W on Metal: the
     // drawable's presented handler gives presentation feedback and present
-    // wait (Present_feedback), presentDrawable:atTime: the target present
+    // wait (Present_feedback), the drawable's presentAtTime: the target present
     // time, which macOS honors (measured, doc/erhe/metal_backend.md "Frame
     // pacing"), so it needs no C15 present-request holdback.
     const bool         has_layer = (m_surface != nullptr) && !m_surface->get_impl().is_headless();
@@ -391,7 +399,7 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
         if (!m_clock_monitor->is_available()) {
             m_clock_monitor.reset();
         }
-        m_gpu_prewarm = std::make_unique<Gpu_prewarm>(m_mtl_device, m_mtl_command_queue);
+        m_gpu_prewarm = std::make_unique<Gpu_prewarm>(*this);
         if (!m_gpu_prewarm->is_available()) {
             m_gpu_prewarm.reset();
         }
@@ -399,7 +407,7 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
     }
     log_context->info(
         "frame pacing tier = {}",
-        (m_frame_pacing_tier == Frame_pacing_tier::full)       ? "M (full pacing: presented handler feedback, presentDrawable:atTime:)" :
+        (m_frame_pacing_tier == Frame_pacing_tier::full)       ? "M (full pacing: presented handler feedback, presentAtTime:)" :
         (m_frame_pacing_tier == Frame_pacing_tier::slop_servo) ? "S (slop-servo fallback)" : "OFF"
     );
 }
@@ -420,6 +428,10 @@ Device_impl::~Device_impl() noexcept
     // ring buffers must be torn down before we drain the queue. Surface
     // destruction in turn enqueues handlers (e.g. for the swapchain texture
     // argument encoder), so we need to drain *after* this point.
+    // MTL4 command buffers retain nothing: wait until the GPU is done with
+    // everything committed before the surface (swapchain textures, capture
+    // buffer) and the pipelines below are released at once.
+    wait_idle();
     m_surface.reset();
     m_ring_buffer_pool.clear();
     for (Blit_framebuffer_pipeline& entry : m_blit_framebuffer_pipelines) {
@@ -451,6 +463,21 @@ Device_impl::~Device_impl() noexcept
         entry.callback(*this);
     }
     m_completion_handler_scratch.clear();
+
+    // The command buffers still held return their recordings to the pools,
+    // which go before the residency set and the queue.
+    {
+        std::lock_guard<std::mutex> lock{m_per_thread_mutex};
+        for (Per_thread_command_buffers& slot : m_per_thread_command_buffers) {
+            slot.allocated.clear();
+        }
+    }
+    m_gpu_prewarm.reset();
+    m_submission_pools.reset();
+    if ((m_mtl_command_queue != nullptr) && (m_residency != nullptr)) {
+        m_mtl_command_queue->removeResidencySet(m_residency->get_residency_set());
+    }
+    m_residency.reset();
 
     if (m_mtl_log_state != nullptr) {
         m_mtl_log_state->release();
@@ -521,10 +548,10 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
     return true;
 }
 
-void Device_impl::drain_completed_frames(const Gpu_queue_state gpu_queue_state, const uint64_t ended_frame_bound)
+void Device_impl::drain_completed_frames(const uint64_t ended_frame_bound)
 {
-    // Drain frames whose cbs have signalled GPU completion via
-    // Command_buffer_impl's addCompletedHandler. Ring buffer ranges
+    // Drain frames whose cbs have signalled GPU completion via their
+    // commit feedback (submit_command_buffers). Ring buffer ranges
     // pinned to those frames become safe to recycle; per-frame
     // completion handlers run now.
     //
@@ -554,9 +581,10 @@ void Device_impl::drain_completed_frames(const Gpu_queue_state gpu_queue_state, 
                 [frame](const Frame_command_buffer_count& entry) { return entry.frame_index == frame; }
             );
             if (i != m_frame_command_buffer_counts.end()) {
-                if ((gpu_queue_state == Gpu_queue_state::running) && (i->completed < i->committed)) {
+                if (i->completed < i->committed) {
                     break;
                 }
+                ERHE_VERIFY(i->completed == i->committed);
                 m_frame_command_buffer_counts.erase(i);
             }
             m_retired_frames_scratch.push_back(frame);
@@ -577,7 +605,7 @@ auto Device_impl::begin_frame() -> bool
     ERHE_VERIFY(slot.state == Device_frame_state::waited);
     ERHE_VERIFY(slot.frame_id == m_render_frame_id);
 
-    drain_completed_frames(Gpu_queue_state::running, m_render_frame_id);
+    drain_completed_frames(m_render_frame_id);
 
     slot.state = Device_frame_state::recording;
     return true;
@@ -630,7 +658,7 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
     // completion-handler queue (and m_pending_completed_frames) grow
     // unbounded and GPU->CPU readbacks (e.g. Id_renderer picking) never
     // complete. The render role reads its own frame id unlocked.
-    drain_completed_frames(Gpu_queue_state::running, frame_id);
+    drain_completed_frames(frame_id);
 
     {
         // The slot is idle before the frame id advances: once it has, the
@@ -770,7 +798,7 @@ void Present_feedback::on_presented(const std::int64_t frame_id, const double pr
                 if ((m_targeted_count == s_early_check_count) && (m_early_count > (s_early_check_count / 10))) {
                     log_context->warn(
                         "frame pacing: {} of {} targeted frames displayed a refresh or more before their target; "
-                        "presentDrawable:atTime: is not honored on this system",
+                        "presentAtTime: is not honored on this system",
                         m_early_count, m_targeted_count
                     );
                 }
@@ -812,7 +840,7 @@ auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
 
 auto Device_impl::is_present_target_time_honored() const -> bool
 {
-    // Tier M requests targets with presentDrawable:atTime:, which macOS
+    // Tier M requests targets with the drawable's presentAtTime:, which macOS
     // honors; the drawable is taken when the command buffer completes.
     return m_frame_pacing_tier == Frame_pacing_tier::full;
 }
@@ -931,153 +959,283 @@ auto Device_impl::get_command_buffer(const unsigned int thread_slot) -> Command_
     return reference;
 }
 
-void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
+auto Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers) -> uint64_t
 {
-    Scoped_transient_object_pool object_pool{}; // drains what commit / presentDrawable autorelease
+    Scoped_transient_object_pool object_pool{}; // drains what commit / present autorelease
     if (command_buffers.empty()) {
-        return;
+        return 0;
     }
 
     // CPU-side wait phase: any wait_for_cpu_completion_of(producer)
-    // registered on the cbs in this batch translates into MTL::SharedEvent::waitUntilSignaledValue
-    // before the cb is committed (Step 7).
+    // registered on the cbs in this batch blocks on the producer's
+    // MTL::SharedEvent before anything is committed (outside the submit
+    // mutex: the producer may be committed by another thread).
     for (Command_buffer* const command_buffer : command_buffers) {
         ERHE_VERIFY(command_buffer != nullptr);
         command_buffer->get_impl().pre_submit_wait();
     }
 
-    // Encode GPU sync events and commit each cb in submit order. Metal
-    // submits FIFO on a single queue, so order across the span is
-    // preserved on the GPU.
+    // Commit each cb in submit order. The MTL4 queue starts work in commit
+    // order; the queue barrier every encoder starts with orders it.
+    uint64_t last_serial = 0;
+    const std::unique_lock<std::mutex> submit_lock = lock_submit();
     for (Command_buffer* const command_buffer : command_buffers) {
         Command_buffer_impl& impl = command_buffer->get_impl();
-        impl.encode_synchronization();
 
-        MTL::CommandBuffer* mtl_cb = impl.get_mtl_command_buffer();
-        if (mtl_cb == nullptr) {
-            // begin() failed (queue allocation refused); nothing to commit.
+        Swapchain_impl* const    swapchain = impl.get_swapchain_used();
+        CA::MetalDrawable* const drawable  = (swapchain != nullptr) ? swapchain->get_current_drawable() : nullptr;
+
+        // Queue waits of wait_for_gpu_completion_signal, before the commit
+        // (the producer must have been committed before: the queue waits in
+        // commit order).
+        impl.encode_queue_waits(m_mtl_command_queue);
+
+        Recording* const recording = impl.end_recording();
+        if (recording == nullptr) {
+            // begin() was not called; nothing to commit.
+            impl.encode_queue_signals(m_mtl_command_queue);
+            if (swapchain != nullptr) {
+                swapchain->clear_current_drawable();
+            }
             impl.clear_swapchain_used();
             continue;
         }
 
-        // When this cb engaged a swapchain via begin_swapchain, encode
-        // presentDrawable on it before commit. Mirrors Vulkan's
-        // swapchains_to_present handling at the end of submit.
-        Swapchain_impl* swapchain = impl.get_swapchain_used();
-        if (swapchain != nullptr) {
-            CA::MetalDrawable* drawable = swapchain->get_current_drawable();
-            if (drawable != nullptr) {
-                const std::int64_t present_frame_id = static_cast<std::int64_t>(impl.get_frame_id());
-                const double       target_time      = (present_frame_id == m_present_target_frame_id) ? m_present_target_time_seconds : 0.0;
-                const double       period           = m_device.get_display_refresh_duration_seconds();
-                if (m_present_feedback != nullptr) {
-                    std::shared_ptr<Present_feedback> present_feedback = m_present_feedback;
-                    drawable->addPresentedHandler(
-                        [present_feedback, present_frame_id, target_time, period](MTL::Drawable* presented) {
-                            present_feedback->on_presented(present_frame_id, presented->presentedTime(), target_time, period);
-                        }
-                    );
-                    present_feedback->note_present(present_frame_id);
-                }
-                if ((target_time > 0.0) && (period > 0.0)) {
-                    // The compositor displays the drawable at the target vsync
-                    // when the request lies inside its request window, which
-                    // depends on the display mode (a ProMotion panel latches a
-                    // period earlier); the present calibration measured it.
-                    // Without one a quarter period early bias keeps a target on
-                    // the pacer's grid from rounding up to the next refresh
-                    // across a small grid phase error on a fixed-rate display
-                    // (doc/frame_pacing/capability_tiers.md section 5).
-                    const double request_offset = m_present_request_offset.value_or(0.25 * period);
-                    mtl_cb->presentDrawableAtTime(drawable, target_time - request_offset);
-                } else {
-                    mtl_cb->presentDrawable(drawable);
-                }
-
-                // Count this cb against the presented-frame budget that
-                // begin_swapchain waits on. Its completion also gives the
-                // frame's GPU bracket for the frame time record: GPUStartTime
-                // and GPUEndTime are host time, the recorder's clock.
-                note_presented_frame_submitted();
-                Device_impl* device_impl_ptr = this;
-                std::shared_ptr<Clock_monitor> clock_monitor = m_clock_monitor;
-                mtl_cb->addCompletedHandler(
-                    [device_impl_ptr, present_frame_id, clock_monitor](MTL::CommandBuffer* completed_cb) {
-                        const double gpu_begin = completed_cb->GPUStartTime();
-                        const double gpu_end   = completed_cb->GPUEndTime();
-                        if ((gpu_begin > 0.0) && (gpu_end > gpu_begin)) {
-                            if (clock_monitor != nullptr) {
-                                // Writes the bracket with the frame's GPU clock.
-                                clock_monitor->on_frame_gpu_done(present_frame_id, gpu_begin, gpu_end);
-                            } else {
-                                device_impl_ptr->m_device.get_frame_time_recorder().set(
-                                    present_frame_id,
-                                    &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_begin,
-                                    &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_end
-                                );
-                            }
-                        }
-                        device_impl_ptr->note_presented_frame_completed();
+        // The drawable: the queue waits until the display no longer uses it
+        // before this cb's work, and (below) signals it after the commit,
+        // then presents it. Mirrors Vulkan's swapchains_to_present handling
+        // at the end of submit.
+        const std::int64_t present_frame_id = static_cast<std::int64_t>(impl.get_frame_id());
+        const double       target_time      = (present_frame_id == m_present_target_frame_id) ? m_present_target_time_seconds : 0.0;
+        const double       period           = m_device.get_display_refresh_duration_seconds();
+        const bool         presents         = (drawable != nullptr);
+        if (presents) {
+            m_mtl_command_queue->wait(drawable);
+            if (m_present_feedback != nullptr) {
+                std::shared_ptr<Present_feedback> present_feedback = m_present_feedback;
+                drawable->addPresentedHandler(
+                    [present_feedback, present_frame_id, target_time, period](MTL::Drawable* presented) {
+                        present_feedback->on_presented(present_frame_id, presented->presentedTime(), target_time, period);
                     }
                 );
+                present_feedback->note_present(present_frame_id);
             }
+            // Count this cb against the presented-frame budget that
+            // begin_swapchain waits on.
+            note_presented_frame_submitted();
+        }
+
+        // The commit feedback (on_commit_feedback) gives the frame's GPU
+        // bracket, resolves the timer samples, returns what the recording
+        // held and counts the completion against the charged frame.
+        recording->counts_frame     = true;
+        recording->frame_index      = note_command_buffer_committed(impl.get_completion_frame_index());
+        recording->presents         = presents;
+        recording->present_frame_id = present_frame_id;
+
+        // The present request of the frame time record: the commit and the
+        // present hand the drawable over. They do not block (the
+        // backpressure is in begin_swapchain), but the record carries the
+        // request time like the Vulkan present does.
+        erhe::frame_pacing::Frame_time_recorder& recorder = m_device.get_frame_time_recorder();
+        if (presents) {
+            recorder.set(present_frame_id, &erhe::frame_pacing::Frame_time_record::present_request_time, erhe::frame_pacing::Frame_time_recorder::now());
+        }
+        last_serial = commit_locked(*recording);
+        impl.encode_queue_signals(m_mtl_command_queue);
+
+        if (presents) {
+            m_mtl_command_queue->signalDrawable(drawable);
+            if ((target_time > 0.0) && (period > 0.0)) {
+                // The compositor displays the drawable at the target vsync
+                // when the request lies inside its request window, which
+                // depends on the display mode (a ProMotion panel latches a
+                // period earlier); the present calibration measured it.
+                // Without one a quarter period early bias keeps a target on
+                // the pacer's grid from rounding up to the next refresh
+                // across a small grid phase error on a fixed-rate display
+                // (doc/frame_pacing/capability_tiers.md section 5).
+                const double request_offset = m_present_request_offset.value_or(0.25 * period);
+                drawable->presentAtTime(target_time - request_offset);
+            } else {
+                drawable->present();
+            }
+            recorder.set(present_frame_id, &erhe::frame_pacing::Frame_time_record::present_return_time, erhe::frame_pacing::Frame_time_recorder::now());
+        }
+        if (swapchain != nullptr) {
             swapchain->clear_current_drawable();
         }
         impl.clear_swapchain_used();
 
-        impl.add_gpu_timer_completion_handler();
-        note_command_buffer_committed(impl.get_completion_frame_index());
         // GPU pre-warm (claim C26): ordered after the presenting command
         // buffer through the pre-warm event, so it runs in the idle gap.
         const double prewarm_seconds = ((swapchain != nullptr) && (m_gpu_prewarm != nullptr))
             ? m_device.get_present_prewarm(static_cast<std::int64_t>(impl.get_frame_id()))
             : 0.0;
         if (prewarm_seconds > 0.0) {
-            m_gpu_prewarm->signal_after(mtl_cb);
+            m_gpu_prewarm->signal_after_last_commit();
+            m_gpu_prewarm->dispatch_locked(prewarm_seconds);
         }
-        // The present request of the frame time record: presentDrawable is
-        // encoded on this cb, so the commit hands the drawable over. It does
-        // not block (the backpressure is in begin_swapchain), but the record
-        // carries the request time like the Vulkan present does.
-        erhe::frame_pacing::Frame_time_recorder& recorder  = m_device.get_frame_time_recorder();
-        const std::int64_t                       record_id = static_cast<std::int64_t>(impl.get_frame_id());
-        if (swapchain != nullptr) {
-            recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_request_time, erhe::frame_pacing::Frame_time_recorder::now());
-        }
-        mtl_cb->commit();
-        if (swapchain != nullptr) {
-            recorder.set(record_id, &erhe::frame_pacing::Frame_time_record::present_return_time, erhe::frame_pacing::Frame_time_recorder::now());
-        }
-        if (prewarm_seconds > 0.0) {
-            m_gpu_prewarm->dispatch(prewarm_seconds);
-        }
-
-        // Drop our reference now that the cb is committed: Metal keeps the
-        // command buffer alive until its completion handlers have run, and
-        // the queue only frees the in-flight slot the cb occupies when the
-        // cb deallocates. Holding the reference until the Command_buffer
-        // wrapper is swept at frame retire exhausted the queue's 64 slots
-        // during a glTF load (which submits many cbs while the frame index
-        // stands still) and deadlocked the next commandBuffer() call.
-        impl.release_mtl_command_buffer();
     }
+    return last_serial;
+}
+
+void Device_impl::on_commit_feedback(Recording& recording, MTL4::CommitFeedback* const feedback)
+{
+    // A command buffer that faulted on the GPU completes with an error and
+    // nothing else reports it. After repeated faults Metal ignores the
+    // process's later submissions and rendering silently stops, so the
+    // first error is the one worth seeing.
+    const NS::Error* const error = (feedback != nullptr) ? feedback->error() : nullptr;
+    if (error != nullptr) {
+        const NS::String* const label = recording.command_buffer->label();
+        log_context->error(
+            "Metal command buffer '{}' of frame {} failed: {}",
+            (label != nullptr) ? label->utf8String() : "",
+            recording.frame_index,
+            (error->localizedDescription() != nullptr) ? error->localizedDescription()->utf8String() : "(no description)"
+        );
+    }
+
+    if (recording.on_feedback != nullptr) {
+        recording.on_feedback(recording, feedback);
+    }
+    if (recording.presents) {
+        // GPUStartTime and GPUEndTime are host time, the recorder's clock.
+        const double gpu_begin = (feedback != nullptr) ? feedback->GPUStartTime() : 0.0;
+        const double gpu_end   = (feedback != nullptr) ? feedback->GPUEndTime()   : 0.0;
+        if ((gpu_begin > 0.0) && (gpu_end > gpu_begin)) {
+            if (m_clock_monitor != nullptr) {
+                // Writes the bracket with the frame's GPU clock.
+                m_clock_monitor->on_frame_gpu_done(recording.present_frame_id, gpu_begin, gpu_end);
+            } else {
+                m_device.get_frame_time_recorder().set(
+                    recording.present_frame_id,
+                    &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_begin,
+                    &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_end
+                );
+            }
+        }
+        note_presented_frame_completed();
+    }
+    if (recording.gpu_timer_samples.needs_resolve()) {
+        m_gpu_timer_sample_pool->resolve_command_buffer_samples(recording.gpu_timer_samples);
+    }
+    release_recording_payload(recording);
+    const bool     counts_frame = recording.counts_frame;
+    const uint64_t frame_index  = recording.frame_index;
+    const uint64_t serial       = recording.serial;
+    m_submission_pools->release_recording(&recording); // may be taken by another thread from here on
+    if (counts_frame) {
+        notify_command_buffer_completed(frame_index);
+    }
+    // Last: once the serial is gone, wait_idle / wait_for_commit may return
+    // and the device may be destroyed.
+    const std::lock_guard<std::mutex> lock{m_in_flight_mutex};
+    std::erase(m_in_flight_serials, serial);
+    m_in_flight_cv.notify_all();
 }
 
 void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
 {
-    // Metal: commit the cb, then block until this cb (only) has completed.
-    // submit_command_buffers drops the Command_buffer's reference at commit,
-    // so take one of our own to wait on.
-    MTL::CommandBuffer* mtl_cb = command_buffer.get_impl().get_mtl_command_buffer();
-    if (mtl_cb != nullptr) {
-        mtl_cb->retain();
-    }
+    // Commit the cb, then block until its feedback handler (and those of
+    // earlier commits) has run - not for commits other threads made after it.
     Command_buffer* command_buffers[] = { &command_buffer };
-    submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
-    if (mtl_cb != nullptr) {
-        mtl_cb->waitUntilCompleted();
-        mtl_cb->release();
+    const uint64_t serial = submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    if (serial != 0) {
+        wait_for_commit(serial);
     }
+}
+
+auto Device_impl::lock_submit() -> std::unique_lock<std::mutex>
+{
+    return std::unique_lock<std::mutex>{m_submit_mutex};
+}
+
+auto Device_impl::commit_locked(Recording& recording) -> uint64_t
+{
+    // Allocations created since the last commit become resident before any
+    // command of this commit runs.
+    m_residency->commit_if_changed();
+    {
+        const std::lock_guard<std::mutex> lock{m_in_flight_mutex};
+        recording.serial = ++m_latest_commit_serial;
+        m_in_flight_serials.push_back(recording.serial);
+    }
+    const uint64_t serial = recording.serial; // the feedback may return the recording before commit returns
+    const MTL4::CommandBuffer* const command_buffers[] = { recording.command_buffer };
+    // One MTL4::CommitOptions per commit: a CommitOptions created ahead of
+    // time and kept with the recording for reuse delivered no feedback at
+    // all (measured: the first commit of such an options object never
+    // called its handler, and wait_idle hung). The handler is a plain block
+    // over two pointers (no std::function).
+    MTL4::CommitOptions* const options     = MTL4::CommitOptions::alloc()->init();
+    Device_impl* const         device_impl = this;
+    Recording* const           raw         = &recording;
+    options->addFeedbackHandler(
+        ^(MTL4::CommitFeedback* feedback) {
+            device_impl->on_commit_feedback(*raw, feedback);
+        }
+    );
+    m_mtl_command_queue->commit(command_buffers, 1, options);
+    options->release();
+    return serial;
+}
+
+void Device_impl::wait_for_commit(const uint64_t serial)
+{
+    std::unique_lock<std::mutex> lock{m_in_flight_mutex};
+    m_in_flight_cv.wait(
+        lock,
+        [this, serial]() {
+            return std::none_of(
+                m_in_flight_serials.begin(),
+                m_in_flight_serials.end(),
+                [serial](const uint64_t in_flight) { return in_flight <= serial; }
+            );
+        }
+    );
+}
+
+auto Device_impl::get_latest_commit_serial() -> uint64_t
+{
+    const std::lock_guard<std::mutex> lock{m_in_flight_mutex};
+    return m_latest_commit_serial;
+}
+
+auto Device_impl::begin_internal_recording() -> Recording*
+{
+    return m_submission_pools->acquire_recording();
+}
+
+void Device_impl::release_recording_payload(Recording& recording)
+{
+    for (std::function<void()>& callback : recording.callbacks) {
+        callback();
+    }
+    recording.callbacks.clear();
+    for (NS::Object* const object : recording.retained_objects) {
+        object->release();
+    }
+    recording.retained_objects.clear();
+    for (MTL4::ArgumentTable* const argument_table : recording.argument_tables) {
+        m_submission_pools->release_argument_table(argument_table);
+    }
+    recording.argument_tables.clear();
+    for (MTL::Buffer* const chunk : recording.inline_bytes_chunks) {
+        m_submission_pools->release_inline_bytes_chunk(chunk);
+    }
+    recording.inline_bytes_chunks.clear();
+}
+
+auto Device_impl::get_residency() -> Residency&
+{
+    return *m_residency;
+}
+
+auto Device_impl::get_submission_pools() -> Submission_pools&
+{
+    return *m_submission_pools;
 }
 
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
@@ -1109,11 +1267,10 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
     }
     m_completion_handler_scratch.clear();
 
-    // Drop Command_buffers whose frame has retired on the GPU. Releasing
-    // our std::unique_ptr only drops our retain on MTL::CommandBuffer;
-    // Metal's queue keeps the cb alive until completion handlers run, so
-    // dropping here is safe even if some cbs from the same frame have
-    // not completed yet (their MTL retain count keeps them in flight).
+    // Drop Command_buffers whose frame has retired on the GPU. A committed
+    // cb has handed its recording to its commit feedback handler, so
+    // dropping the wrapper here is safe even if some cbs from the same frame
+    // committed late have not completed yet.
     {
         std::lock_guard<std::mutex> lock{m_per_thread_mutex};
         for (Per_thread_command_buffers& slot : m_per_thread_command_buffers) {
@@ -1127,14 +1284,15 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
     }
 }
 
-void Device_impl::note_command_buffer_committed(const uint64_t frame_index)
+auto Device_impl::note_command_buffer_committed(const uint64_t begun_frame_index) -> uint64_t
 {
     std::lock_guard<std::mutex> lock{m_completion_mutex};
-    if (frame_index < m_latest_completed_frame) {
-        // Begun in a frame that has retired already (a long-lived recording
-        // committed late): wait_idle and the next retirements cover it.
-        return;
-    }
+    // Begun in a frame that has retired already (a long-lived recording
+    // committed late): charged to the oldest frame not retired yet, so that
+    // frame - and every later one, frames retire in order - waits for this
+    // commit's feedback before its deferred releases free what the commit
+    // may use.
+    const uint64_t frame_index = std::max(begun_frame_index, m_latest_completed_frame);
     const auto i = std::find_if(
         m_frame_command_buffer_counts.begin(),
         m_frame_command_buffer_counts.end(),
@@ -1145,6 +1303,7 @@ void Device_impl::note_command_buffer_committed(const uint64_t frame_index)
     } else {
         m_frame_command_buffer_counts.push_back(Frame_command_buffer_count{.frame_index = frame_index, .committed = 1, .completed = 0});
     }
+    return frame_index;
 }
 
 void Device_impl::notify_command_buffer_completed(const uint64_t frame_index)
@@ -1156,9 +1315,10 @@ void Device_impl::notify_command_buffer_completed(const uint64_t frame_index)
             m_frame_command_buffer_counts.end(),
             [frame_index](const Frame_command_buffer_count& entry) { return entry.frame_index == frame_index; }
         );
-        if (i != m_frame_command_buffer_counts.end()) {
-            ++i->completed;
-        }
+        // Every commit counted by the feedback was charged to a frame that
+        // cannot retire before this completion.
+        ERHE_VERIFY(i != m_frame_command_buffer_counts.end());
+        ++i->completed;
     }
     m_command_buffer_completed.notify_all();
 }
@@ -1236,42 +1396,30 @@ void Device_impl::clear_render_pipeline_cache()
 
 void Device_impl::wait_idle()
 {
-    // Metal has no vkDeviceWaitIdle equivalent. The standard idiom is to
-    // submit an empty command buffer on the queue and wait for it to
-    // complete -- because command buffers from the same queue are
-    // FIFO-ordered, this guarantees all earlier work has finished.
+    // Metal has no vkDeviceWaitIdle equivalent: wait until the feedback
+    // handler of every commit made so far has run.
     if (m_mtl_command_queue == nullptr) {
         return;
     }
     // m_render_frame_id is the oldest open frame (or the next one); frames
     // before it have ended, so every command buffer of theirs is committed.
     // Read before the wait: a frame the render thread ends during the wait
-    // may have committed command buffers after the wait's own one, which
-    // are still running when the wait returns.
+    // may have committed command buffers after the wait's bound, which are
+    // still running when the wait returns.
     uint64_t render_frame_id = 0;
     {
         const std::lock_guard<std::mutex> frame_id_lock{m_frame_id_mutex};
         render_frame_id = m_render_frame_id;
     }
-    {
-        // The cb below is autoreleased and not retained: drain it here.
-        Scoped_transient_object_pool object_pool{};
-        MTL::CommandBuffer* command_buffer = m_mtl_command_queue->commandBuffer();
-        if (command_buffer == nullptr) {
-            return;
-        }
-        command_buffer->commit();
-        command_buffer->waitUntilCompleted();
-    }
+    wait_for_commit(get_latest_commit_serial());
 
-    // Every command buffer submitted before the wait has completed, so every
+    // Every command buffer committed before the wait has completed, so every
     // frame that had ended before it is retired - the same statement the GL
-    // backend makes after glFinish() - even where the completion callbacks
-    // of its command buffers have not run yet. Its ring buffer ranges and
-    // completion handlers are released before wait_idle returns (used by
-    // the editor ctor's init-frame flow). Frames still open stay - see
+    // backend makes after glFinish(). Its ring buffer ranges and completion
+    // handlers are released before wait_idle returns (used by the editor
+    // ctor's init-frame flow). Frames still open stay - see
     // drain_completed_frames.
-    drain_completed_frames(Gpu_queue_state::idle, render_frame_id);
+    drain_completed_frames(render_frame_id);
 }
 
 void Device_impl::on_thread_enter()
@@ -1615,7 +1763,7 @@ auto Device_impl::get_mtl_device() const -> MTL::Device*
     return m_mtl_device;
 }
 
-auto Device_impl::get_mtl_command_queue() const -> MTL::CommandQueue*
+auto Device_impl::get_mtl_command_queue() const -> MTL4::CommandQueue*
 {
     return m_mtl_command_queue;
 }

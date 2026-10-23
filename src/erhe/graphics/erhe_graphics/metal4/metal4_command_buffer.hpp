@@ -1,17 +1,22 @@
 #pragma once
 
 #include "erhe_graphics/metal4/metal4_gpu_timer.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
-namespace MTL { class CommandBuffer; }
-namespace MTL { class Event; }
-namespace MTL { class Fence; }
-namespace MTL { class SharedEvent; }
+namespace MTL  { class Buffer; }
+namespace MTL  { class Event; }
+namespace MTL  { class SharedEvent; }
+namespace MTL4 { class ArgumentTable; }
+namespace MTL4 { class CommandBuffer; }
+namespace MTL4 { class CommandQueue; }
+namespace NS   { class Object; }
 
 namespace erhe::dataformat {
     enum class Format : unsigned int;
@@ -22,6 +27,7 @@ namespace erhe::graphics {
 class Buffer;
 class Command_buffer;
 class Device;
+class Device_impl;
 class Frame_begin_info;
 class Frame_end_info;
 class Frame_state;
@@ -30,22 +36,24 @@ class Texture;
 enum class Image_layout : unsigned int;
 enum class Memory_barrier_mask : unsigned int;
 
-// Metal backend Command_buffer implementation. Owns one
-// MTL::CommandBuffer allocated from the device's MTL::CommandQueue in
-// begin(), plus a per-cb MTL::Fence used to serialize encoders inside
-// the cb and a pair of GPU/CPU sync primitives (MTL::Event /
-// MTL::SharedEvent) used by signal_gpu_completion_to /
-// wait_for_gpu_completion_signal / signal_cpu_completion /
-// wait_for_cpu_completion_of for cross-cb synchronization.
+// Metal 4 backend Command_buffer implementation. begin() takes a Recording
+// (MTL4::CommandBuffer + MTL4::CommandAllocator + commit options) from the
+// device's Submission_pools and records into it; Device_impl::
+// submit_command_buffers ends and commits it, and its commit feedback
+// returns everything the recording took. Cross command buffer sync
+// (signal_gpu_completion_to / wait_for_gpu_completion_signal /
+// signal_cpu_completion / wait_for_cpu_completion_of) uses an MTL::Event /
+// MTL::SharedEvent pair, waited on and signaled on the MTL4 queue around the
+// commit.
 class Command_buffer_impl final
 {
 public:
     Command_buffer_impl        (Device& device, erhe::utility::Debug_label debug_label);
     ~Command_buffer_impl       () noexcept;
-    Command_buffer_impl        (const Command_buffer_impl&)            = delete;
-    Command_buffer_impl& operator=(const Command_buffer_impl&)         = delete;
-    Command_buffer_impl        (Command_buffer_impl&& other) noexcept;
-    Command_buffer_impl& operator=(Command_buffer_impl&& other) noexcept;
+    Command_buffer_impl        (const Command_buffer_impl&)    = delete;
+    Command_buffer_impl& operator=(const Command_buffer_impl&) = delete;
+    Command_buffer_impl        (Command_buffer_impl&&)         = delete;
+    Command_buffer_impl& operator=(Command_buffer_impl&&)      = delete;
 
     [[nodiscard]] auto get_debug_label() const noexcept -> erhe::utility::Debug_label;
     // The device frame this cb was obtained for; stamped by
@@ -74,55 +82,43 @@ public:
     void memory_barrier           (Memory_barrier_mask barriers);
 
     // Backend access: encoders (Render_pass_impl, Compute_command_encoder_impl,
-    // Blit_command_encoder_impl) and Device_impl::submit_command_buffers
-    // record/commit on this MTL::CommandBuffer. Returns nullptr if begin()
-    // has not been called.
-    [[nodiscard]] auto get_mtl_command_buffer  () const noexcept -> MTL::CommandBuffer*;
-    // Drops the reference taken in begin(). Called by
-    // Device_impl::submit_command_buffers right after commit: Metal keeps
-    // the cb alive until its completion handlers have run, and the queue
-    // frees the in-flight slot the cb holds only when it deallocates.
-    void release_mtl_command_buffer() noexcept;
-    // Per-cb MTL::Fence for serializing encoders inside this cb. Replaces
-    // the legacy device-frame-fence path on Device_impl. Each encoder
-    // waitForFence at start and updateFence at end.
-    [[nodiscard]] auto get_inter_encoder_fence() const noexcept -> MTL::Fence*;
+    // Blit_command_encoder_impl) record into this MTL4::CommandBuffer.
+    // nullptr if begin() has not been called (or failed).
+    [[nodiscard]] auto get_mtl4_command_buffer() const noexcept -> MTL4::CommandBuffer*;
 
-    // Implicit per-cb sync primitives. The "GPU event" backs
-    // signal_gpu_completion_to / wait_for_gpu_completion_signal
-    // (MTL::Event encoded on the MTL::CommandBuffer). The "CPU event"
-    // backs signal_cpu_completion / wait_for_cpu_completion_of
-    // (MTL::SharedEvent that the CPU can block on via waitUntilSignaledValue).
-    [[nodiscard]] auto get_implicit_gpu_event              () const noexcept -> MTL::Event*;
-    [[nodiscard]] auto get_implicit_gpu_event_signal_value () const noexcept -> std::uint64_t;
-    [[nodiscard]] auto get_implicit_cpu_event              () const noexcept -> MTL::SharedEvent*;
-    [[nodiscard]] auto get_implicit_cpu_event_signal_value () const noexcept -> std::uint64_t;
+    // An argument table for one encoder, held until the GPU has completed
+    // this command buffer (MTL4 encoders snapshot a table's bindings at each
+    // draw and dispatch; a table is never shared between encoders, so no
+    // in-flight encoder reads one that is being rewritten).
+    [[nodiscard]] auto acquire_argument_table() -> MTL4::ArgumentTable*;
+    // Copies byte_count bytes into this command buffer's inline constant
+    // chunks and returns their GPU address (the MTL4 replacement for
+    // setBytes / setVertexBytes / setFragmentBytes).
+    [[nodiscard]] auto allocate_inline_bytes(const void* data, std::size_t byte_count) -> uint64_t;
+    // Takes over one reference to object, released once the GPU has
+    // completed this command buffer (temporary pipeline states, depth
+    // stencil states and texture views its commands use).
+    void retain_until_completed(NS::Object* object);
+    // Runs once the GPU has completed this command buffer (or at
+    // destruction when it was never committed).
+    void add_completed_callback(std::function<void()> callback);
 
-    // Called by Device_impl::get_command_buffer right after construction
-    // to hand this cb its implicit GPU/CPU sync primitives. The
-    // primitives are owned by this Command_buffer_impl from this point on
-    // and are released in the destructor. Mirrors the Vulkan
-    // set_implicit_sync pattern.
-    void set_implicit_sync(MTL::Event* gpu_event, MTL::SharedEvent* cpu_event) noexcept;
-
-    // CPU-side wait phase of submit. For each wait_for_cpu_completion_of(producer)
-    // registered, blocks on producer's MTL::SharedEvent until the captured
-    // signal value is reached. Called by Device_impl::submit_command_buffers
-    // before the cb is committed.
-    void pre_submit_wait();
-
-    // Encode pending signal events onto m_mtl_command_buffer for each
-    // signal_gpu_completion_to registered and for signal_cpu_completion.
-    // Must be called after every encoder for this cb has called
-    // endEncoding (Metal disallows event encode while an encoder is
-    // open) and before commit. wait_for_gpu_completion_signal is encoded
-    // immediately at call time (Metal positional cb model); see the
-    // method comment.
-    void encode_synchronization();
+    // Submit path (Device_impl::submit_command_buffers), in this order:
+    // CPU waits of wait_for_cpu_completion_of, the queue waits of
+    // wait_for_gpu_completion_signal (before the commit), end of recording
+    // and the hand-over of the Recording, then the queue signals (after the
+    // commit).
+    void pre_submit_wait   ();
+    void encode_queue_waits(MTL4::CommandQueue* queue);
+    // Ends recording and hands the Recording (with this cb's timer samples)
+    // to the caller, who commits it; nullptr when there is nothing to commit
+    // (begin() was not called).
+    [[nodiscard]] auto end_recording() -> Recording*;
+    void encode_queue_signals(MTL4::CommandQueue* queue);
 
     // Swapchain that this cb engaged via begin_swapchain, or nullptr.
-    // Device_impl::submit_command_buffers reads this to drive
-    // presentDrawable() before commit.
+    // Device_impl::submit_command_buffers reads this to present the drawable
+    // around the commit.
     [[nodiscard]] auto get_swapchain_used() const noexcept -> Swapchain_impl*;
     void               clear_swapchain_used() noexcept;
 
@@ -132,31 +128,35 @@ public:
     [[nodiscard]] auto get_gpu_timer_samples() noexcept -> Gpu_timer_command_buffer_samples&;
     [[nodiscard]] auto get_gpu_timer_sample_pool() const noexcept -> Gpu_timer_sample_pool*;
 
-    // Called by Device_impl::submit_command_buffers before commit: hands the
-    // timer samples to a completion handler that resolves them once the GPU
-    // has finished this cb.
-    void add_gpu_timer_completion_handler();
+    // Called by Device_impl::get_command_buffer right after construction
+    // to hand this cb its implicit GPU/CPU sync primitives, owned from then
+    // on and released in the destructor.
+    void set_implicit_sync(MTL::Event* gpu_event, MTL::SharedEvent* cpu_event) noexcept;
 
 private:
     Device*                    m_device{nullptr};
+    // Held directly, like the timer pool: the destructor of a cb never
+    // committed returns its recording to the pools.
+    Device_impl*               m_device_impl{nullptr};
     erhe::utility::Debug_label m_debug_label;
     std::uint64_t              m_frame_id{0};
     // The device frame begin() counted this command buffer against (its
-    // completion handler reports it); submit_command_buffers() counts the
+    // feedback handler reports it); submit_command_buffers() counts the
     // commit against the same frame.
     std::uint64_t              m_completion_frame_index{0};
-    MTL::CommandBuffer*        m_mtl_command_buffer{nullptr};
-    MTL::Fence*                m_inter_encoder_fence{nullptr};
+
+    // The pooled recording this cb records into (nullptr before begin() and
+    // after end_recording()); it holds what the recording needs until GPU
+    // completion.
+    Recording*                 m_recording{nullptr};
+    MTL::Buffer*               m_inline_bytes_chunk {nullptr}; // the chunk being filled (also in m_recording)
+    std::size_t                m_inline_bytes_offset{0};
+
     MTL::Event*                m_implicit_gpu_event{nullptr};
     std::uint64_t              m_implicit_gpu_event_signal_value{0};
     MTL::SharedEvent*          m_implicit_cpu_event{nullptr};
     std::uint64_t              m_implicit_cpu_event_signal_value{0};
 
-    // Sync registrations populated by wait_for_cpu_completion_of /
-    // signal_gpu_completion_to / signal_cpu_completion.
-    // wait_for_gpu_completion_signal is NOT recorded here -- Metal
-    // positional event encoding requires the wait to land before the
-    // user's encoders, so it encodes immediately at call time.
     class Sync_entry
     {
     public:
@@ -165,17 +165,19 @@ private:
     };
     // Producers whose CPU event this cb's submit blocks on.
     std::vector<Sync_entry> m_wait_for_cpu_pending;
-    // Consumers whose GPU event this cb signals at encode_synchronization.
+    // Consumers whose GPU event this cb signals after its commit.
     std::vector<Sync_entry> m_signal_gpu_pending;
-    // This cb signals its own CPU event at encode_synchronization
+    // Values of this cb's own GPU event the queue waits for before its
+    // commit (wait_for_gpu_completion_signal).
+    std::vector<std::uint64_t> m_gpu_waits_pending;
+    // This cb signals its own CPU event after its commit
     // (signal_cpu_completion); the value is captured at registration.
     bool                    m_signal_own_cpu_completion{false};
     std::uint64_t           m_signal_own_cpu_completion_value{0};
 
     // Set by begin_swapchain when the per-frame swapchain lookup
     // succeeds. Cleared by Device_impl::submit_command_buffers after
-    // presentDrawable runs. Mirrors Vulkan_command_buffer's
-    // m_swapchain_used.
+    // the present. Mirrors Vulkan_command_buffer's m_swapchain_used.
     Swapchain_impl* m_swapchain_used{nullptr};
 
     // Held directly: ~Device tears down Device_impl (and its per-thread

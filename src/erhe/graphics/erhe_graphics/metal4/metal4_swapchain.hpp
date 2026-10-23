@@ -5,16 +5,17 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <mutex>
 #include <vector>
 
 namespace CA  { class MetalDrawable; }
 namespace MTL { class Buffer; }
-namespace MTL { class CommandBuffer; }
 namespace MTL { class Texture; }
 
 namespace erhe::graphics {
 
+class Command_buffer_impl;
 class Device_impl;
 class Surface_impl;
 
@@ -56,22 +57,22 @@ public:
     void mark_render_pass_recorded(uint64_t frame_id);
 
     // Releases the reference taken in begin_frame(). Called by
-    // Device_impl::submit_command_buffers once presentDrawable has been
-    // encoded - the drawable must not be held past that point, or the
+    // Device_impl::submit_command_buffers once the drawable has been
+    // presented - the drawable must not be held past that point, or the
     // layer's small drawable pool runs dry. No-op when headless.
     void clear_current_drawable();
 
     // Screenshot capture (Device::capture_last_frame). Windowed: a drawable
-    // is handed to the compositor at presentDrawable and cannot be read
-    // afterwards, so capture is a one-shot arm-then-collect protocol, the
-    // same as the Vulkan swapchain: request_capture() arms it; the
-    // swapchain render pass epilogue (Render_pass_impl::end_render_pass)
-    // calls record_capture(), which blits the freshly composited drawable
-    // texture into a persistent shared MTL::Buffer on the frame's own
-    // command buffer (before presentDrawable) and keeps a reference to
-    // that command buffer; read_back_capture() collects the capture once
-    // that frame has ended, waits for the command buffer to complete, then
-    // returns the pixels as tightly packed opaque RGBA8.
+    // is handed to the compositor at present and cannot be read afterwards,
+    // so capture is a one-shot arm-then-collect protocol, the same as the
+    // Vulkan swapchain: request_capture() arms it; the swapchain render pass
+    // epilogue (Render_pass_impl::end_render_pass) calls record_capture(),
+    // which copies the freshly composited drawable texture into a persistent
+    // shared MTL::Buffer on the frame's own command buffer (before the
+    // present) with a completed callback on that command buffer;
+    // read_back_capture() collects the capture once that frame has ended,
+    // waits for the callback, then returns the pixels as tightly packed
+    // opaque RGBA8.
     // request_capture() and read_back_capture() run on the main thread,
     // record_capture() on the render thread, which with frame pipelining
     // records the next frame meanwhile: the capture state is guarded by
@@ -82,12 +83,12 @@ public:
     //
     // Headless: the emulated ring textures stay owned by this class and
     // stay readable, so there is nothing to arm - request_capture() is a
-    // no-op and read_back_capture() blits the ring texture of the newest
+    // no-op and read_back_capture() copies the ring texture of the newest
     // composited frame that has ended on a fresh command buffer and waits
     // for it, synchronously.
     [[nodiscard]] auto is_capture_supported() const -> bool;
     void               request_capture();
-    void               record_capture(uint64_t frame_id, MTL::CommandBuffer* command_buffer);
+    void               record_capture(uint64_t frame_id, Command_buffer_impl& command_buffer);
     [[nodiscard]] auto read_back_capture(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool;
 
 private:
@@ -137,7 +138,12 @@ private:
     mutable std::mutex  m_capture_mutex;
     bool                m_capture_requested     {false};
     MTL::Buffer*        m_capture_buffer        {nullptr}; // shared storage, width * height * 4 bytes
-    MTL::CommandBuffer* m_capture_command_buffer{nullptr}; // retained until read back
+    bool                m_capture_recorded      {false};   // a copy waits to be read back
+    // Set by the capture command buffer's completed callback (a Metal
+    // feedback thread), waited for by read_back_capture.
+    std::mutex              m_capture_done_mutex;
+    std::condition_variable m_capture_done_cv;
+    bool                    m_capture_done{false};
     uint32_t            m_capture_width         {0};
     uint32_t            m_capture_height        {0};
     unsigned long       m_capture_pixel_format  {0};       // MTL::PixelFormat of the captured texture

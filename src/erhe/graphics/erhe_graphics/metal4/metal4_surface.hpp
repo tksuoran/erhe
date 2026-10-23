@@ -6,6 +6,7 @@
 #include <memory>
 
 namespace CA { class MetalLayer; }
+namespace MTL { class ResidencySet; }
 
 namespace erhe::graphics {
 
@@ -68,6 +69,7 @@ private:
     Surface_create_info        m_surface_create_info;
     std::unique_ptr<Swapchain> m_swapchain;
     CA::MetalLayer*            m_metal_layer{nullptr};
+    MTL::ResidencySet*         m_layer_residency_set{nullptr}; // the layer's, attached to the MTL4 queue
     void*                      m_sdl_metal_view{nullptr};
 };
 

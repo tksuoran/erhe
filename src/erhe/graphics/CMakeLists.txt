@@ -528,6 +528,8 @@ if (ERHE_GRAPHICS_API_METAL4)
         erhe_graphics/metal4/metal4_shader_stages.cpp
         erhe_graphics/metal4/metal4_shader_stages.hpp
         erhe_graphics/metal4/metal4_shader_stages_prototype.cpp
+        erhe_graphics/metal4/metal4_submission.cpp
+        erhe_graphics/metal4/metal4_submission.hpp
         erhe_graphics/metal4/metal4_surface.mm
         erhe_graphics/metal4/metal4_surface.hpp
         erhe_graphics/metal4/metal4_swapchain.cpp

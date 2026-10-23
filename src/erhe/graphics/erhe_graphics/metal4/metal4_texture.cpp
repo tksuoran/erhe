@@ -23,8 +23,10 @@ Texture_impl::Texture_impl(Texture_impl&& other) noexcept
     , m_level_count           {other.m_level_count}
     , m_debug_label           {other.m_debug_label}
     , m_mtl_texture           {other.m_mtl_texture}
+    , m_is_resident           {other.m_is_resident}
 {
     other.m_mtl_texture = nullptr;
+    other.m_is_resident = false;
 }
 
 Texture_impl::~Texture_impl() noexcept
@@ -32,8 +34,14 @@ Texture_impl::~Texture_impl() noexcept
     if (m_mtl_texture != nullptr) {
         MTL::Texture* mtl_texture = m_mtl_texture;
         m_mtl_texture = nullptr;
+        // Views share their parent's allocation and are not in the
+        // residency set.
+        const bool resident = m_is_resident;
         m_device_impl.add_completion_handler(
-            [mtl_texture](Device_impl&) {
+            [mtl_texture, resident](Device_impl& device_impl) {
+                if (resident) {
+                    device_impl.get_residency().remove(mtl_texture);
+                }
                 mtl_texture->release();
             }
         );
@@ -145,6 +153,11 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
 
     m_mtl_texture = mtl_device->newTexture(desc);
     desc->release();
+    if (m_mtl_texture != nullptr) {
+        // Resident for every MTL4 commit until the deferred release.
+        m_device_impl.get_residency().add(m_mtl_texture);
+        m_is_resident = true;
+    }
 
     if ((m_mtl_texture != nullptr) && !m_debug_label.empty()) {
         NS::String* label = NS::String::alloc()->init(m_debug_label.data(), NS::UTF8StringEncoding);

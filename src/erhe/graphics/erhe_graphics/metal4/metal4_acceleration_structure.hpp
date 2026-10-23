@@ -7,6 +7,8 @@
 namespace MTL {
     class AccelerationStructure;
     class Buffer;
+}
+namespace MTL4 {
     class InstanceAccelerationStructureDescriptor;
     class PrimitiveAccelerationStructureDescriptor;
 }
@@ -26,16 +28,19 @@ class Device;
 // constant (15) indices.
 constexpr uint32_t c_metal_acceleration_structure_buffer_index = 13;
 
-// Metal backend: bottom level structures build from
-// MTL::PrimitiveAccelerationStructureDescriptor (one triangle geometry
-// descriptor per Acceleration_structure_triangles), top level structures
-// from MTL::InstanceAccelerationStructureDescriptor with userID instance
-// descriptors so InstanceCustomIndex surfaces as
-// get_committed_user_instance_id() in the SPIRV-Cross generated MSL.
-// build() records into an MTL::AccelerationStructureCommandEncoder on the
-// caller's command buffer, serialized against the cb's other encoders via
-// the inter-encoder fence (this stands in for the Vulkan build barrier the
-// public API promises).
+// Metal 4 backend: bottom level structures build from
+// MTL4::PrimitiveAccelerationStructureDescriptor (one triangle geometry
+// descriptor per Acceleration_structure_triangles, buffers as GPU address
+// ranges), top level structures from
+// MTL4::InstanceAccelerationStructureDescriptor with indirect instance
+// descriptors (the bottom level structure by resource id, and the userID, so
+// InstanceCustomIndex surfaces as get_committed_user_instance_id() in the
+// SPIRV-Cross generated MSL). build() records into its own MTL4 compute
+// encoder on the caller's command buffer, which starts with the queue
+// barrier every encoder starts with (this stands in for the Vulkan build
+// barrier the public API promises). Every structure and buffer is in the
+// device's residency set, so the structures an instance structure
+// references are resident without useResource.
 class Acceleration_structure_impl final
 {
 public:
@@ -53,11 +58,6 @@ public:
     [[nodiscard]] auto get_debug_label() const -> erhe::utility::Debug_label;
 
     [[nodiscard]] auto get_mtl_acceleration_structure() const -> MTL::AccelerationStructure*;
-    // Unique bottom level structures referenced by the last top level
-    // build. Metal makes a directly-bound instance structure resident but
-    // not the primitive structures it references; the compute encoder
-    // useResource()s each of these at set_acceleration_structure time.
-    [[nodiscard]] auto get_referenced_bottom_level() const -> const std::vector<MTL::AccelerationStructure*>&;
 
 private:
     void record_build(Command_buffer& command_buffer);
@@ -75,9 +75,8 @@ private:
     // MTLAccelerationStructureTriangleGeometryDescriptor. The build reads it, so
     // it has to outlive the constructor.
     MTL::Buffer*                                   m_transform_buffer      {nullptr};
-    MTL::PrimitiveAccelerationStructureDescriptor* m_primitive_descriptor  {nullptr}; // bottom level only
-    MTL::InstanceAccelerationStructureDescriptor*  m_instance_descriptor   {nullptr}; // top level only
-    std::vector<MTL::AccelerationStructure*>       m_referenced_bottom_level{};
+    MTL4::PrimitiveAccelerationStructureDescriptor* m_primitive_descriptor {nullptr}; // bottom level only
+    MTL4::InstanceAccelerationStructureDescriptor*  m_instance_descriptor  {nullptr}; // top level only
 };
 
 } // namespace erhe::graphics

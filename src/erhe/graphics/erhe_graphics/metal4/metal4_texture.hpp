@@ -56,6 +56,7 @@ private:
     int                        m_level_count           {0};
     erhe::utility::Debug_label m_debug_label;
     MTL::Texture*              m_mtl_texture{nullptr};
+    bool                       m_is_resident{false}; // in the residency set (not a view)
 };
 
 [[nodiscard]] auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool;

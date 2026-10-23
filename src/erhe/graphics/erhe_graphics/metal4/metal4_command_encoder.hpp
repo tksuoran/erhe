@@ -3,7 +3,6 @@
 #include "erhe_graphics/device.hpp"
 
 namespace MTL { class Buffer; }
-namespace MTL { class RenderCommandEncoder; }
 
 namespace erhe::graphics {
 

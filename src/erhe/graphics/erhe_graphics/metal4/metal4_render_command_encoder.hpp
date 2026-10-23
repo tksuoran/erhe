@@ -4,8 +4,6 @@
 #include "erhe_graphics/metal4/metal4_command_encoder.hpp"
 
 namespace MTL { class Buffer; }
-namespace MTL { class IndirectCommandBuffer; }
-namespace MTL { class RenderCommandEncoder; }
 
 namespace erhe::graphics {
 
@@ -63,16 +61,15 @@ public:
 
 private:
     void apply_viewport();
+    // ERHE_DRAW_ID = 0: the push constant at index 15 points at entry 0 of
+    // the draw id table (Submission_pools::get_draw_id_table).
+    void set_draw_id_zero() const;
 
     const Bind_group_layout* m_bind_group_layout{nullptr};
     MTL::Buffer* m_index_buffer    {nullptr};
     // Prepared count draws: whether the bound pipeline supports indirect
-    // command buffers, and the ICB and index buffer last made resident on
-    // m_resident_encoder (execute_indirect_count_draws()).
+    // command buffers (execute_indirect_count_draws()).
     bool                              m_pipeline_supports_indirect_count_draws{false};
-    const MTL::RenderCommandEncoder*  m_resident_encoder     {nullptr};
-    const MTL::IndirectCommandBuffer* m_resident_icb         {nullptr};
-    const MTL::Buffer*                m_resident_index_buffer{nullptr};
     int          m_viewport_x      {0};
     int          m_viewport_y      {0};
     int          m_viewport_width  {0};

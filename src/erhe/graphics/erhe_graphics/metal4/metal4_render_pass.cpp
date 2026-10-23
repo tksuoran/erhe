@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_render_pass.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/metal4/metal4_command_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
 #include "erhe_graphics/metal4/metal4_surface.hpp"
@@ -63,10 +64,26 @@ auto Render_pass_impl::get_render_target_height() const -> int { return m_render
 auto Render_pass_impl::get_swapchain() const -> Swapchain* { return m_swapchain; }
 auto Render_pass_impl::get_debug_label() const -> erhe::utility::Debug_label { return m_debug_label; }
 
-auto Render_pass_impl::get_active_mtl_encoder() -> MTL::RenderCommandEncoder*
+auto Render_pass_impl::get_active_mtl_encoder() -> MTL4::RenderCommandEncoder*
 {
     if (Device_impl::s_active_render_pass != nullptr) {
         return Device_impl::s_active_render_pass->m_mtl_encoder;
+    }
+    return nullptr;
+}
+
+auto Render_pass_impl::get_active_argument_table() -> MTL4::ArgumentTable*
+{
+    if (Device_impl::s_active_render_pass != nullptr) {
+        return Device_impl::s_active_render_pass->m_argument_table;
+    }
+    return nullptr;
+}
+
+auto Render_pass_impl::get_active_command_buffer_impl() -> Command_buffer_impl*
+{
+    if (Device_impl::s_active_render_pass != nullptr) {
+        return Device_impl::s_active_render_pass->m_command_buffer_impl;
     }
     return nullptr;
 }
@@ -129,7 +146,7 @@ auto to_mtl_store_action(const Store_action action) -> MTL::StoreAction
 }
 
 void configure_color_attachment(
-    MTL::RenderPassDescriptor*                  render_pass_desc,
+    MTL4::RenderPassDescriptor*                 render_pass_desc,
     NS::UInteger                                index,
     MTL::Texture*                               texture,
     const Render_pass_attachment_descriptor&     desc
@@ -165,24 +182,22 @@ void configure_color_attachment(
 void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
     Scoped_transient_object_pool object_pool{}; // the encoder is retained below; the pool drains the autoreleased reference
-    // Metal handles most cross-pass synchronization automatically via
-    // its hazard tracking, so these hints are ignored. The per-cb
-    // inter-encoder fence (set up in begin()) handles the cases hazard
-    // tracking misses (aliased mip-view reads of parent-texture writes).
+    // The queue barrier the encoder starts with orders it after all earlier
+    // work, so these hints are not needed.
     static_cast<void>(render_pass_before);
     static_cast<void>(render_pass_after);
 
     Device_impl::s_active_render_pass = this;
 
-    // Record into the MTL::CommandBuffer that the caller's
+    // Record into the MTL4::CommandBuffer that the caller's
     // Command_buffer owns. The cb must already have begin() called on it
     // by the user.
     Command_buffer_impl& cb_impl = command_buffer.get_impl();
-    m_command_buffer       = cb_impl.get_mtl_command_buffer();
-    m_inter_encoder_fence  = cb_impl.get_inter_encoder_fence();
+    m_command_buffer_impl  = &cb_impl;
+    m_command_buffer       = cb_impl.get_mtl4_command_buffer();
     ERHE_VERIFY(m_command_buffer != nullptr);
 
-    MTL::RenderPassDescriptor* render_pass_desc = MTL::RenderPassDescriptor::alloc()->init();
+    MTL4::RenderPassDescriptor* render_pass_desc = MTL4::RenderPassDescriptor::alloc()->init();
 
     // Reset pixel format and sample count tracking
     m_color_pixel_formats.fill(static_cast<unsigned long>(MTL::PixelFormatInvalid));
@@ -202,7 +217,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
             // will be committed empty by submit_command_buffers.
             render_pass_desc->release();
             m_command_buffer      = nullptr;
-            m_inter_encoder_fence = nullptr;
+            m_command_buffer_impl = nullptr;
             return;
         }
         configure_color_attachment(render_pass_desc, 0, color_texture, m_color_attachments[0]);
@@ -295,41 +310,38 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         }
     }
 
-    // Gpu_timer samples (metal4_gpu_timer.hpp): start of vertex and end of
-    // fragment work bracket the pass.
+    m_mtl_encoder = m_command_buffer->renderCommandEncoder(render_pass_desc);
+    render_pass_desc->release();
+    ERHE_VERIFY(m_mtl_encoder != nullptr);
+    m_mtl_encoder->retain();
+
+    // Order against all earlier work of the queue (doc/erhe/metal4_backend.md
+    // "Barriers"): this replaces the Metal 3 inter-encoder fence and Metal's
+    // hazard tracking.
+    encode_queue_barrier(m_mtl_encoder);
+
+    // Gpu_timer samples (metal4_gpu_timer.hpp): the vertex stage start and
+    // (end_render_pass) the fragment stage end bracket the pass.
     {
-        MTL::CounterSampleBuffer* sample_buffer = nullptr;
-        std::size_t               start_sample  = 0;
-        std::size_t               end_sample    = 0;
+        MTL4::CounterHeap* counter_heap = nullptr;
+        std::size_t        start_sample = 0;
+        std::size_t        end_sample   = 0;
         Gpu_timer_sample_pool* const pool = cb_impl.get_gpu_timer_sample_pool();
-        if ((pool != nullptr) && cb_impl.get_gpu_timer_samples().begin_encoder(*pool, sample_buffer, start_sample, end_sample)) {
-            MTL::RenderPassSampleBufferAttachmentDescriptor* const attachment = render_pass_desc->sampleBufferAttachments()->object(0);
-            attachment->setSampleBuffer               (sample_buffer);
-            attachment->setStartOfVertexSampleIndex   (start_sample);
-            attachment->setEndOfVertexSampleIndex     (MTL::CounterDontSample);
-            attachment->setStartOfFragmentSampleIndex (MTL::CounterDontSample);
-            attachment->setEndOfFragmentSampleIndex   (end_sample);
+        if ((pool != nullptr) && cb_impl.get_gpu_timer_samples().begin_encoder(*pool, counter_heap, start_sample, end_sample)) {
+            m_mtl_encoder->writeTimestamp(MTL4::TimestampGranularityRelaxed, MTL::RenderStageVertex, counter_heap, start_sample);
+            m_timer_counter_heap = counter_heap;
+            m_timer_end_sample   = end_sample;
         }
     }
 
-    m_mtl_encoder = m_command_buffer->renderCommandEncoder(render_pass_desc);
-    render_pass_desc->release();
-    if (m_mtl_encoder != nullptr) {
-        m_mtl_encoder->retain();
-    }
-
-    // Serialize against prior encoders on this cb. Metal's automatic
-    // hazard tracking does not catch aliased-view reads of parent-
-    // texture writes (post-processing's mip-view pattern), so we use
-    // the cb's per-frame inter-encoder fence.
-    if ((m_mtl_encoder != nullptr) && (m_inter_encoder_fence != nullptr)) {
-        m_mtl_encoder->waitForFence(
-            m_inter_encoder_fence,
-            MTL::RenderStageVertex | MTL::RenderStageFragment
-        );
-    }
-
-    ERHE_VERIFY(m_mtl_encoder != nullptr);
+    // The pass's argument table, for both stages; the push constant
+    // (ERHE_DRAW_ID) starts at 0.
+    m_argument_table = cb_impl.acquire_argument_table();
+    m_argument_table->setAddress(
+        m_device.get_impl().get_submission_pools().get_draw_id_zero(),
+        c_metal_push_constant_index
+    );
+    m_mtl_encoder->setArgumentTable(m_argument_table, MTL::RenderStageVertex | MTL::RenderStageFragment);
 
     // Apply debug labels to command buffer and encoder
     if (!m_debug_label.empty()) {
@@ -348,13 +360,9 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
     static_cast<void>(render_pass_after);
 
     if (m_mtl_encoder != nullptr) {
-        // Signal the cb's inter-encoder fence so subsequent encoders on
-        // this cb can wait for our render-pass writes.
-        if (m_inter_encoder_fence != nullptr) {
-            m_mtl_encoder->updateFence(
-                m_inter_encoder_fence,
-                MTL::RenderStageFragment
-            );
+        if (m_timer_counter_heap != nullptr) {
+            m_mtl_encoder->writeTimestamp(MTL4::TimestampGranularityRelaxed, MTL::RenderStageFragment, m_timer_counter_heap, m_timer_end_sample);
+            m_timer_counter_heap = nullptr;
         }
         m_mtl_encoder->endEncoding();
         m_mtl_encoder->release();
@@ -369,17 +377,18 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
         // headless readback path reads exactly this one.
         swapchain_impl.mark_render_pass_recorded(command_buffer.get_frame_id());
 
-        // Armed screenshot capture (Device::request_frame_capture): blit
+        // Armed screenshot capture (Device::request_frame_capture): copy
         // the freshly composited drawable into the capture buffer while
-        // this frame still owns it (before presentDrawable at submit).
+        // this frame still owns it (before the present at submit).
         // No-op when headless (nothing is ever armed there).
-        swapchain_impl.record_capture(command_buffer.get_frame_id(), m_command_buffer);
+        swapchain_impl.record_capture(command_buffer.get_frame_id(), command_buffer.get_impl());
     }
 
-    // The MTL::CommandBuffer is owned by the user's Command_buffer; we
+    // The MTL4::CommandBuffer is owned by the user's Command_buffer; we
     // never commit it here. submit_command_buffers handles commit.
     m_command_buffer      = nullptr;
-    m_inter_encoder_fence = nullptr;
+    m_command_buffer_impl = nullptr;
+    m_argument_table      = nullptr;
 
     Device_impl::s_active_render_pass = nullptr;
 }

@@ -1,13 +1,17 @@
 #include "erhe_graphics/metal4/metal4_swapchain.hpp"
+#include "erhe_graphics/metal4/metal4_command_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/metal4/metal4_surface.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
 
 #include <cstring>
+#include <memory>
 #include <optional>
 
 namespace erhe::graphics {
@@ -51,11 +55,8 @@ Swapchain_impl::Swapchain_impl(
 Swapchain_impl::~Swapchain_impl() noexcept
 {
     clear_current_drawable();
-    if (m_capture_command_buffer != nullptr) {
-        m_capture_command_buffer->release();
-        m_capture_command_buffer = nullptr;
-    }
     if (m_capture_buffer != nullptr) {
+        m_device_impl.get_residency().remove(m_capture_buffer);
         m_capture_buffer->release();
         m_capture_buffer = nullptr;
     }
@@ -106,6 +107,7 @@ void Swapchain_impl::create_emulated_textures()
             break;
         }
         texture->setLabel(NS::String::string("emulated swapchain", NS::UTF8StringEncoding));
+        m_device_impl.get_residency().add(texture);
         m_emulated_textures.push_back(texture);
     }
     descriptor->release();
@@ -120,6 +122,7 @@ void Swapchain_impl::release_emulated_textures()
 {
     for (MTL::Texture* texture : m_emulated_textures) {
         if (texture != nullptr) {
+            m_device_impl.get_residency().remove(texture);
             texture->release();
         }
     }
@@ -156,7 +159,7 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
 
     // nextDrawable() is autoreleased. Take a reference: the drawable is
     // used later in the frame (render pass setup) and at submit time
-    // (presentDrawable), and holding it explicitly keeps it alive
+    // (the present), and holding it explicitly keeps it alive
     // independently of which autorelease pool happens to be open.
     clear_current_drawable();
     Scoped_transient_object_pool object_pool{};
@@ -247,7 +250,7 @@ void Swapchain_impl::request_capture()
     const std::lock_guard<std::mutex> lock{m_capture_mutex};
     // A recorded capture not yet collected keeps its buffer: a new copy into
     // it could land while read_back_capture() reads it.
-    if (m_capture_command_buffer != nullptr) {
+    if (m_capture_recorded) {
         return;
     }
     m_capture_requested = true;
@@ -256,6 +259,9 @@ void Swapchain_impl::request_capture()
 auto Swapchain_impl::ensure_capture_buffer(const std::size_t byte_count) -> bool
 {
     if ((m_capture_buffer != nullptr) && (m_capture_buffer->length() < byte_count)) {
+        // No copy into it is in flight (one is collected before the next is
+        // armed, and the headless readback waits for its own).
+        m_device_impl.get_residency().remove(m_capture_buffer);
         m_capture_buffer->release();
         m_capture_buffer = nullptr;
     }
@@ -268,10 +274,11 @@ auto Swapchain_impl::ensure_capture_buffer(const std::size_t byte_count) -> bool
         return false;
     }
     m_capture_buffer->setLabel(NS::String::string("swapchain capture", NS::UTF8StringEncoding));
+    m_device_impl.get_residency().add(m_capture_buffer);
     return true;
 }
 
-void Swapchain_impl::record_capture(const uint64_t frame_id, MTL::CommandBuffer* command_buffer)
+void Swapchain_impl::record_capture(const uint64_t frame_id, Command_buffer_impl& command_buffer_impl)
 {
     Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     const std::lock_guard<std::mutex> lock{m_capture_mutex};
@@ -279,6 +286,7 @@ void Swapchain_impl::record_capture(const uint64_t frame_id, MTL::CommandBuffer*
         return;
     }
     m_capture_requested = false;
+    MTL4::CommandBuffer* const command_buffer = command_buffer_impl.get_mtl4_command_buffer();
     if ((command_buffer == nullptr) || (m_current_drawable == nullptr) || !is_capture_supported()) {
         return;
     }
@@ -303,10 +311,11 @@ void Swapchain_impl::record_capture(const uint64_t frame_id, MTL::CommandBuffer*
         return;
     }
 
-    MTL::BlitCommandEncoder* blit = command_buffer->blitCommandEncoder();
+    MTL4::ComputeCommandEncoder* blit = command_buffer->computeCommandEncoder();
     if (blit == nullptr) {
         return;
     }
+    encode_queue_barrier(blit);
     blit->copyFromTexture(
         texture,
         0, // slice
@@ -320,8 +329,22 @@ void Swapchain_impl::record_capture(const uint64_t frame_id, MTL::CommandBuffer*
     );
     blit->endEncoding();
 
-    m_capture_command_buffer = command_buffer;
-    m_capture_command_buffer->retain();
+    m_capture_recorded = true;
+    {
+        const std::lock_guard<std::mutex> done_lock{m_capture_done_mutex};
+        m_capture_done = false;
+    }
+    // Set once the GPU has completed the frame's command buffer (the device
+    // waits for all commit feedback before this swapchain is destroyed).
+    command_buffer_impl.add_completed_callback(
+        [this]() {
+            {
+                const std::lock_guard<std::mutex> done_lock{m_capture_done_mutex};
+                m_capture_done = true;
+            }
+            m_capture_done_cv.notify_all();
+        }
+    );
     m_capture_width        = width;
     m_capture_height       = height;
     m_capture_pixel_format = static_cast<unsigned long>(pixel_format);
@@ -384,21 +407,13 @@ auto Swapchain_impl::read_back_emulated(uint32_t& out_width, uint32_t& out_heigh
         return false;
     }
 
-    MTL::CommandQueue* const queue = m_device_impl.get_mtl_command_queue();
-    if (queue == nullptr) {
-        return false;
-    }
-    // A fresh command buffer on the one queue the device submits on: Metal
-    // is FIFO per queue, so this blit is ordered after the render that
-    // composited the frame. Diagnostic path, so waiting for it here is fine.
-    MTL::CommandBuffer* const command_buffer = queue->commandBuffer();
-    if (command_buffer == nullptr) {
-        return false;
-    }
-    MTL::BlitCommandEncoder* blit = command_buffer->blitCommandEncoder();
-    if (blit == nullptr) {
-        return false;
-    }
+    // A fresh command buffer on the one queue the device submits on: its
+    // queue barrier orders this copy after the render that composited the
+    // frame. Diagnostic path, so waiting for it here is fine.
+    Recording* const recording = m_device_impl.begin_internal_recording();
+    MTL4::ComputeCommandEncoder* blit = recording->command_buffer->computeCommandEncoder();
+    ERHE_VERIFY(blit != nullptr);
+    encode_queue_barrier(blit);
     blit->copyFromTexture(
         texture,
         0, // slice
@@ -411,10 +426,21 @@ auto Swapchain_impl::read_back_emulated(uint32_t& out_width, uint32_t& out_heigh
         byte_count                            // bytes per image
     );
     blit->endEncoding();
-    command_buffer->commit();
-    command_buffer->waitUntilCompleted();
-    if (command_buffer->status() != MTL::CommandBufferStatusCompleted) {
-        log_swapchain->warn("Metal frame capture: readback command buffer did not complete");
+    recording->command_buffer->endCommandBuffer();
+    // The feedback writes the error state here; the wait below outlasts it.
+    bool     failed = false;
+    uint64_t serial = 0;
+    recording->user_result = &failed;
+    recording->on_feedback = [](Recording& completed, MTL4::CommitFeedback* feedback) {
+        *static_cast<bool*>(completed.user_result) = (feedback != nullptr) && (feedback->error() != nullptr);
+    };
+    {
+        const std::unique_lock<std::mutex> submit_lock = m_device_impl.lock_submit();
+        serial = m_device_impl.commit_locked(*recording);
+    }
+    m_device_impl.wait_for_commit(serial);
+    if (failed) {
+        log_swapchain->warn("Metal frame capture: readback command buffer failed");
         return false;
     }
 
@@ -434,7 +460,7 @@ auto Swapchain_impl::read_back_capture(uint32_t& out_width, uint32_t& out_height
     }
 
     const std::lock_guard<std::mutex> lock{m_capture_mutex};
-    if ((m_capture_command_buffer == nullptr) || (m_capture_buffer == nullptr)) {
+    if (!m_capture_recorded || (m_capture_buffer == nullptr)) {
         return false;
     }
     // The frame that recorded the copy may still be recording (frame
@@ -451,20 +477,17 @@ auto Swapchain_impl::read_back_capture(uint32_t& out_width, uint32_t& out_height
     // one past the frame that recorded the capture in the normal
     // arm -> render -> collect cycle.
     const uint64_t age = m_device_impl.get_frame_index() - m_capture_frame_index;
-    if (age > 2) {
-        m_capture_command_buffer->release();
-        m_capture_command_buffer = nullptr;
-        return false;
+    // The capture rides on the frame's presenting command buffer, committed
+    // since its frame has ended: wait until the GPU has completed it
+    // (diagnostic path; one frame of latency at most when presentation is
+    // progressing). A stale capture is waited for too, before a later
+    // capture reuses the buffer.
+    {
+        std::unique_lock<std::mutex> done_lock{m_capture_done_mutex};
+        m_capture_done_cv.wait(done_lock, [this]() { return m_capture_done; });
     }
-
-    // The capture rides on a presenting command buffer, which completes
-    // once the compositor has consumed the drawable (diagnostic path; one
-    // frame of latency at most when presentation is progressing).
-    m_capture_command_buffer->waitUntilCompleted();
-    const bool completed = (m_capture_command_buffer->status() == MTL::CommandBufferStatusCompleted);
-    m_capture_command_buffer->release();
-    m_capture_command_buffer = nullptr;
-    if (!completed) {
+    m_capture_recorded = false;
+    if (age > 2) {
         return false;
     }
 
