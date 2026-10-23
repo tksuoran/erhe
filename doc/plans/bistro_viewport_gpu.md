@@ -1,11 +1,11 @@
 # Bistro main viewport GPU cost
 
-Status: proposed
+Status: in progress
 
 Bistro's main viewport pass (`Viewport window`) is the largest GPU item of
 the frame once the shadow map cache keeps the static shadow passes
 (`doc/erhe/shadows.md` "Shadow map cache"). This plan records where its time
-goes and the options, for a user decision.
+goes, the options, and the user's choice among them.
 
 ## Measurements (Release, headless Metal, M4 Pro)
 
@@ -62,25 +62,18 @@ is in range, and the loop runs every shaded light.
    light moves (a few dozen lights).
 2. **Clustered (or tiled) light culling.** A compute pass bins the lights
    into view-space clusters each frame; the fragment shader loops only the
-   lights of its cluster. Lets every light be shaded, not only the preset's
-   16, at a cost proportional to the overlap. The standard path for many
-   lights; touches the light buffer layout and the forward shaders, and
-   shadow-mapped lights stay limited by the shadow slots (option 1 still
-   picks those).
+   lights of its cluster. Every light is shaded, not only the preset's 16,
+   at a cost proportional to the overlap. Shadow-mapped lights stay limited
+   by the shadow slots, which option 1 would pick.
 3. **Geometry.** About 0.9 ms of vertex / tiling work for 1155 entries after
    frustum culling (2569 culled). Occlusion culling (`doc/plans/culling.md`
    phase 7, not started) and LODs are the levers; larger work.
 
-Decision (user, 2026-10-21): option 1 is not pursued; option 2,
-clustered light culling, is next - first as a design plan of its own
-(a new plan document, `clustered_lights.md` beside this one), covering: the cluster
-grid (view-space slices, sizes per viewport), the light binning pass
-(compute, per view, per frame or on change), the per-cluster light index
-lists and their buffers (per frame in flight, the render thread's frame
-slots), the light buffer layout change (all lights shaded, shadow-mapped
-ones still limited by the shadow slots), the forward shader loops
-(`standard.frag` per-type loops, `erhe_light.glsl`), the backends (Vulkan,
-Metal, OpenGL), the editor's other light consumers (DDGI / radiance
-cascades / ray tracing `erhe_ray_hit.glsl`, lightmap baking, XR
-multiview), and the verification gates (image identity against the
-current loops when every light fits, the Bistro per-pass timings above).
+Decision (user, 2026-10-21): option 1 is not pursued; option 2 is built as
+clustered light shading, designed and measured in
+[clustered_lights.md](clustered_lights.md) (phases 1-3, the phase 5 spot
+cone test and light record split): on Bistro all 43 lights shade in
+clustered mode for 0.15-0.2 ms of fullscreen fragment time over the loops
+with 16. Shadow
+slots stay by scene order. Option 3 remains, as `culling.md` phase 7 and
+LODs.

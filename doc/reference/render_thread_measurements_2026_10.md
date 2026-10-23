@@ -157,6 +157,10 @@ phase log's full tick, so the "unpaced" runs reported a 1.2 ms tick for a
 tracy-capture started before the editor dropped the connection in the
 handshake on macOS; it now connects after the readiness marker.
 
+Note (2026-10-23): on Metal, `auto` resolves to tier M since 2026-10-21
+(tier S from 2026-10-20 before that), and to OFF headless or under
+`force_disable_vsync` (`doc/plans/frame_pacing_metal.md`).
+
 Release, headless Metal:
 
 | Scene | inline | dedicated | overlap | pipelined | R | `slot_acquire` inline / pipelined |
@@ -219,7 +223,9 @@ Also found on this machine:
   GPU (counters are sampled at stage boundaries only): Tracy reports the
   main pass of draws as 2.5 us, the Metal System Trace as about 0.6 ms.
   Read GPU cost on Apple GPUs from a Metal System Trace.
-- The Metal backend emits no Tracy GPU zones.
+- The Metal backend emits no Tracy GPU zones. (Note, 2026-10-23: it has
+  `Gpu_timer` results through stage-boundary counter sampling since
+  2026-10-19, read with `get_gpu_timers`; still no Tracy GPU zones.)
 - The windowed Metal build is paced by the display with
   `force_disable_vsync` (`displaySyncEnabled = NO` on the layer):
   `nextDrawable` waits about 8.3 ms per frame on a 120 Hz display.

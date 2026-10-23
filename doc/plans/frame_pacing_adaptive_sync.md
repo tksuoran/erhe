@@ -7,7 +7,8 @@ clustered hold 120 Hz fullscreen on the Adaptive-Sync display and on the
 built-in ProMotion panel in every session, windowed unchanged (see
 "Verification"; claims C30, C31 and C32, deviations 24, 25 and 26). The
 goal is met; open: the 60 Hz re-gate, the Dell's update granularity (not
-yet read) and a continuous VRR cadence for loads beyond one period.
+yet read), a continuous VRR cadence for loads beyond one period, and the
+MoltenVK fullscreen launches that stay at N=2 (2 of 7, "Verification").
 
 Tier M (`doc/erhe/metal_backend.md` "Frame pacing", algorithm in
 `doc/frame_pacing/algorithm.md`, Metal iteration log in
@@ -252,24 +253,6 @@ windowed fixed-grid behaviour and the existing Dell / ProMotion gates of
 [frame_pacing_metal.md](frame_pacing_metal.md) stay as they are. The pacer
 models stay green: `scripts/frame_pacing_sim.py` and `erhe_frame_pacing_tests`.
 
-## Starting points
-
-- Detect a variable-rate presentation: the `NSScreen` refresh-interval range
-  (`doc/plans/metal_backend.md` table row "Refresh period, VRR range") and
-  whether the window is fullscreen / direct to display. On such a display
-  the grid period comes from the display's minimum refresh interval (the
-  target cadence), not from presented-time deltas; presented deltas are
-  feedback on whether the frame met its target, not grid evidence.
-- Decide the pacing target on VRR: present at the target cadence
-  (`presentDrawable:atTime:` / `afterMinimumDuration:`), with the cadence
-  chosen from the GPU frame time as today.
-- Reproduce the drift and the N=2 trap in the plant (`frame_pacing_sim.py`)
-  with a VRR display model first, so a claim / test fails on the current
-  pacer before the fix.
-- Display / mode changes (window to fullscreen, moving between displays)
-  re-run the detection, not a per-frame poll (`doc/plans/frame_pacing.md`
-  "Display and display-mode change handling").
-
 ## Verification recipe
 
 - Release Metal, `build_xcode_metal` (re-run `cmake build_xcode_metal` after
@@ -287,6 +270,5 @@ models stay green: `scripts/frame_pacing_sim.py` and `erhe_frame_pacing_tests`.
   Report the present-interval distribution, the grid estimate, N and the GPU
   clock ratio. The per-machine measurement scripts and earlier numbers are
   indexed in `memory-bank/local/context.md` (`bistro_fullscreen_perf`).
-- Windowed regression: 120 Hz exact as before. The 60 Hz and ProMotion
-  re-gates (built-in display) need the user to move the window or change
-  the display mode.
+- Windowed regression: 120 Hz exact as before. The 60 Hz re-gate needs the
+  user to move the window or change the display mode.

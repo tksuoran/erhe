@@ -43,10 +43,15 @@ The caster vertex rounding term of the minimum bias
 extent from its mesh node transform and rest-pose node extent. Skinned casters
 are posed by their joints (`world_from_bind`) and glTF ignores the mesh node
 transform for them, so a figure whose joints carry it far from its mesh node
-gets a bound computed at the wrong place. Derive skinned casters' extents from
-the posed joint boxes, and let the pose compare in `Draw_list_scene::publish()`
-move `Shadow_bounds::extents_identity` so the shadow fit cache refits on pose
-changes.
+gets a bound computed at the wrong place. The skinned casters' posed bounds
+(the per-joint bind boxes posed by the joints) already exist: they feed the
+caster AABBs, and the pose compare in `Draw_list_scene::publish()` (against
+`Draw_list_object::published_pose`) records changed poses in
+`Draw_list_content_changes::skinned_changed_bounds` for the shadow map cache;
+the caster vertex extents (`Shadow_bounds::caster_vertex_extents`) do not use
+them. Derive skinned casters' extents from the posed joint boxes too, and let a
+pose change move `Shadow_bounds::extents_identity` so the shadow fit cache
+refits on it.
 
 ## QuickHull library work
 
