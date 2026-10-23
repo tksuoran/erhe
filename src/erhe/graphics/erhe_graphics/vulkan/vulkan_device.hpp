@@ -20,6 +20,7 @@ VK_DEFINE_HANDLE(VmaAllocator)
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -401,6 +402,16 @@ public:
     // before the application's swapchain exists; feeds the device's
     // Display_refresh_resolver.
     void               run_display_refresh_calibration(Surface_impl& surface_impl);
+    // Present calibration (vulkan_device_present_calibration.cpp, the
+    // algorithm in present_calibration_runner.cpp): tier W through
+    // VK_GOOGLE_display_timing only (is_present_target_time_honored()), on a
+    // dedicated clear-only swapchain at device init after the display refresh
+    // calibration; stores the result in Device::get_present_calibration()
+    // and the request offset in m_present_request_offset.
+    void               run_present_calibration(Surface_impl& surface_impl);
+    // Seconds before the target present time to request it with
+    // VK_GOOGLE_display_timing: the calibrated request offset, empty without one.
+    [[nodiscard]] auto get_present_request_offset() const -> std::optional<double>;
     void               record_frame_bracket_begin   (VkCommandBuffer cb, uint64_t frame_id);
     [[nodiscard]] auto record_frame_bracket_end     (uint64_t frame_id) -> VkCommandBuffer;
     // The GPU idle gap between a frame's first submit and its presenting
@@ -894,6 +905,9 @@ private:
     // (clock_monitor_apple.hpp, claim C25); the frame bracket results reach
     // the recorder through it so a GPU span never arrives without its clocks.
     std::shared_ptr<Clock_monitor> m_clock_monitor;
+    // Written once by run_present_calibration at device init, before any
+    // frame; read by the presenting thread (Swapchain_impl::present_image).
+    std::optional<double> m_present_request_offset;
     // Per frame-in-flight slot: the frame's bracket begin timestamp was
     // recorded (by the first cb of that frame to begin).
     std::array<bool, s_number_of_frames_in_flight> m_frame_bracket_begun{};

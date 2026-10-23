@@ -674,9 +674,32 @@ properties counter change. Without `VK_EXT_present_timing`, tier W runs on
 `VK_GOOGLE_display_timing` where the platform's presentation clock is
 converted (Apple: MoltenVK reports and takes `mach_absolute_time`
 nanoseconds, the frame time recorder's clock): `present_image` chains
-`VkPresentTimesInfoGOOGLE` (present id = frame id + 1, the target a quarter
-refresh period early) and `poll_display_timing` writes `actualPresentTime`
-into the frame records. On Apple, tier W also runs the `Clock_monitor`
+`VkPresentTimesInfoGOOGLE` (present id = frame id + 1, the target requested
+the calibrated request offset early, a quarter refresh period without a
+calibration) and `poll_display_timing` writes `actualPresentTime` into the
+frame records. This path runs the present calibration of the Metal backend
+(`doc/erhe/metal_backend.md` "Frame pacing"; the algorithm is
+`present_calibration_runner.cpp`, shared by both backends) at device init,
+after the display refresh calibration, in
+`Device_impl::run_present_calibration`
+(`vulkan_device_present_calibration.cpp`): a dedicated clear-only plain-FIFO
+swapchain with the application swapchain's image count presents the probes
+with `desiredPresentTime` = the request time, reads the displayed times back
+through `vkGetPastPresentationTimingGOOGLE` (MoltenVK records every present
+once, `actualPresentTime` 0 when not displayed) and the GPU ends from a
+timestamp after the clear, converted with the calibrated timestamps; the
+main run loop is serviced between the grid presents
+(`vulkan_metal_layer_mac.mm`). It runs where `is_present_target_time_honored`
+holds - tier W without `VK_EXT_present_timing` but with the display timing
+capability, which is Apple-only because the timing clock is converted on
+Apple only - so drivers with `VK_EXT_present_timing` (Windows, Linux) and
+KosmicKrisp (tier S) do not run it. The result is logged
+(`erhe.graphics.display_refresh`), reported by MCP `get_frame_pacing_status`
+`present_calibration`, and seeds the pacer's deadline offset as on Metal
+(`Device::get_present_calibration`). The calibration runs at init only: a
+window moved to another display keeps the request offset measured on the
+first one (as on Metal). Measured results:
+`doc/plans/frame_pacing_adaptive_sync.md` "Verification". On Apple, tier W also runs the `Clock_monitor`
 (`clock_monitor_apple.hpp`), which takes the frame bracket results and
 writes them with the frame's GPU and CPU clock ratios. The display refresh
 init calibration itself runs

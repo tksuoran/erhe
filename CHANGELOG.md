@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `present_calibration_runner.hpp`
+  (`IPresent_calibration_presenter`, `Present_calibration_probe_feedback`,
+  `run_present_calibration`, `present_calibration_wait_until`): the
+  backend-neutral present calibration (grid fit, request window search,
+  deadline split) over clear-only probes a backend presents; Metal tier M
+  and Vulkan tier W through `VK_GOOGLE_display_timing` (MoltenVK) run it at
+  device init (doc/erhe/vulkan_backend.md "Surface and swapchain").
 - `erhe::graphics`: `Display_presentation::update_granularity` (Metal: the
   window screen's NSScreen `displayUpdateGranularity`; 4.167 ms on a
   ProMotion panel, which refreshes only at its own ticks of that spacing) and

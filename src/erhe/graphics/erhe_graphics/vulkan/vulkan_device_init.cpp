@@ -2784,6 +2784,16 @@ Device_impl::Device_impl(
         ERHE_PROFILE_SCOPE("Display refresh calibration");
         run_display_refresh_calibration(m_surface->get_impl());
     }
+    // Present calibration: where targets are honored (tier W through
+    // VK_GOOGLE_display_timing, Apple only), the request offset and the
+    // deadline of the compositor depend on the display mode (a ProMotion
+    // panel latches a period earlier) and are measured before the first
+    // frame, after the display refresh period is known
+    // (vulkan_device_present_calibration.cpp).
+    if (!headless && (m_surface != nullptr) && is_present_target_time_honored()) {
+        ERHE_PROFILE_SCOPE("Present calibration");
+        run_present_calibration(m_surface->get_impl());
+    }
 
     // Shader hot-reload. Started here, before any shader stages exist:
     // Shader_monitor::add() registers nothing while the monitor is not

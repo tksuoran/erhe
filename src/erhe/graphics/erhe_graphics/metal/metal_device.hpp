@@ -341,8 +341,8 @@ private:
     std::int64_t                     m_present_target_frame_id    {-1};
     double                           m_present_target_time_seconds{0.0};
     // Seconds before the target vsync to request a tier M present, from the
-    // present calibration; 0.0 without one (a quarter period is used).
-    double                           m_present_request_offset     {0.0};
+    // present calibration; empty without one (a quarter period is used).
+    std::optional<double>            m_present_request_offset;
 
     class Blit_framebuffer_pipeline
     {

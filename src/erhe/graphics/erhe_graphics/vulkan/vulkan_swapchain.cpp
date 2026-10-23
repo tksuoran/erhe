@@ -1965,9 +1965,13 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
         present_info.pNext = &timings_info;
     }
     // VK_GOOGLE_display_timing: the present id ties the feedback to the
-    // frame; the target is requested a quarter period early so a target on
-    // the pacer's grid does not round up to the next refresh across a small
-    // grid phase error (the Metal tier M default without a calibration,
+    // frame; the target is requested the calibrated request offset early
+    // (Device_impl::run_present_calibration: the compositor displays an
+    // image at its target only when requested inside a window that depends
+    // on the display mode - on a ProMotion panel about 1.4 periods early).
+    // Without a calibration a quarter period early keeps a target on the
+    // pacer's grid from rounding up to the next refresh across a small grid
+    // phase error on a fixed-rate display (the Metal tier M default,
     // doc/erhe/metal_backend.md "Frame pacing").
     VkPresentTimeGOOGLE present_time{
         .presentID          = static_cast<uint32_t>(frame_id + 1),
@@ -1983,7 +1987,8 @@ auto Swapchain_impl::present_image(const uint64_t frame_id, const uint32_t index
         const double target_time = m_device_impl.get_present_target_time(static_cast<std::int64_t>(frame_id));
         const double period      = m_device_impl.get_device().get_display_refresh_duration_seconds();
         if ((target_time > 0.0) && (period > 0.0)) {
-            present_time.desiredPresentTime = seconds_to_display_timing(target_time - (0.25 * period));
+            const double request_offset = m_device_impl.get_present_request_offset().value_or(0.25 * period);
+            present_time.desiredPresentTime = seconds_to_display_timing(target_time - request_offset);
         }
         present_times_info.pNext = present_info.pNext;
         present_info.pNext       = &present_times_info;

@@ -840,7 +840,8 @@ public:
     // The frame pacer's presentation setup for the window display's
     // presentation (claim C30, doc/plans/frame_pacing_adaptive_sync.md).
     // A presentation path that honors target present times shows its
-    // deadline offset in the feedback (Metal tier M), starting from the
+    // deadline offset in the feedback (Metal tier M, Vulkan tier W through
+    // VK_GOOGLE_display_timing), starting from the
     // deadline the device's present calibration measured, with the estimate
     // ceiling half a period above it; elsewhere the pacer keeps its fixed
     // initial value. On a variable refresh rate display driven fullscreen
