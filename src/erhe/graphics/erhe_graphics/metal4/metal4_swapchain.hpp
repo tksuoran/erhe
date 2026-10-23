@@ -43,6 +43,16 @@ public:
 
     [[nodiscard]] auto get_current_drawable() const -> CA::MetalDrawable*;
 
+    // Windowed: begin_frame does not take a drawable. The frame's drawable
+    // is taken (nextDrawable, which blocks until the layer has one) at its
+    // first use, Command_buffer_impl::acquire_drawable_for_use, after the
+    // work recorded before it has been committed (doc/erhe/metal4_backend.md
+    // "Present"). True while a frame has begun and its drawable has not been
+    // taken yet; always false headless.
+    [[nodiscard]] auto is_drawable_pending() const -> bool;
+    // Takes the pending drawable. Returns false when the layer returned none.
+    [[nodiscard]] auto acquire_drawable() -> bool;
+
     // Color attachment 0 of the swapchain render pass: the current
     // drawable's texture in the windowed configuration, the current
     // emulated ring texture in the headless one. nullptr when no frame is
@@ -56,7 +66,7 @@ public:
     // has ended. Mirrors Emulated_swapchain_impl::mark_render_pass_recorded().
     void mark_render_pass_recorded(uint64_t frame_id);
 
-    // Releases the reference taken in begin_frame(). Called by
+    // Releases the reference taken in acquire_drawable(). Called by
     // Device_impl::submit_command_buffers once the drawable has been
     // presented - the drawable must not be held past that point, or the
     // layer's small drawable pool runs dry. No-op when headless.
@@ -115,6 +125,7 @@ private:
     Device_impl&        m_device_impl;
     Surface_impl&       m_surface_impl;
     CA::MetalDrawable*  m_current_drawable{nullptr};
+    bool                m_drawable_pending{false};
 
     std::vector<MTL::Texture*> m_emulated_textures;      // empty unless headless
     std::size_t                m_emulated_index      {0};

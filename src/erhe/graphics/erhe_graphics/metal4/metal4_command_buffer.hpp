@@ -83,8 +83,28 @@ public:
 
     // Backend access: encoders (Render_pass_impl, Compute_command_encoder_impl,
     // Blit_command_encoder_impl) record into this MTL4::CommandBuffer.
-    // nullptr if begin() has not been called (or failed).
-    [[nodiscard]] auto get_mtl4_command_buffer() const noexcept -> MTL4::CommandBuffer*;
+    // nullptr if begin() has not been called (or failed). Marks the current
+    // recording as holding work (acquire_drawable_for_use) - also for
+    // callers that only query it without encoding, which then cost an
+    // extra (empty) commit before the drawable.
+    [[nodiscard]] auto get_mtl4_command_buffer() noexcept -> MTL4::CommandBuffer*;
+
+    // Called before every encoder that uses swapchain's current texture
+    // (the swapchain render pass, a blit_framebuffer from or to it). At the
+    // first such use of a frame whose drawable is still pending (windowed,
+    // Swapchain_impl::is_drawable_pending) this cb, when it engaged that
+    // swapchain and has recorded work, ends the recording so far and
+    // commits it (Device_impl::commit_drawable_prefix), continues in a new
+    // recording, and then takes the drawable (nextDrawable, the acquire of
+    // the frame time record): the work before the drawable runs on the GPU
+    // while the CPU waits for the drawable, and the queue's drawable wait at
+    // submit holds back only what follows (doc/erhe/metal4_backend.md
+    // "Present").
+    void acquire_drawable_for_use(Swapchain_impl& swapchain);
+    // Submit path: whether the work before the drawable was committed
+    // ahead (the frame's GPU bracket then starts at that commit). Cleared
+    // by end_recording.
+    [[nodiscard]] auto has_committed_drawable_prefix() const noexcept -> bool;
 
     // An argument table for one encoder, held until the GPU has completed
     // this command buffer (MTL4 encoders snapshot a table's bindings at each
@@ -109,6 +129,11 @@ public:
     // and the hand-over of the Recording, then the queue signals (after the
     // commit).
     void pre_submit_wait   ();
+    // VERIFYs that every producer this cb waits for (wait_for_cpu_completion_of,
+    // wait_for_gpu_completion_signal) has been committed already, so the
+    // waits cannot hang. Called with the submit mutex held before a commit
+    // that happens ahead of submit (Device_impl::commit_drawable_prefix).
+    void verify_waited_producers_committed() const;
     void encode_queue_waits(MTL4::CommandQueue* queue);
     // Ends recording and hands the Recording (with this cb's timer samples)
     // to the caller, who commits it; nullptr when there is nothing to commit
@@ -149,6 +174,10 @@ private:
     // after end_recording()); it holds what the recording needs until GPU
     // completion.
     Recording*                 m_recording{nullptr};
+    // True once an encoder was asked for m_recording's command buffer.
+    bool                       m_recording_used{false};
+    // acquire_drawable_for_use committed the work before the drawable.
+    bool                       m_drawable_prefix_committed{false};
     MTL::Buffer*               m_inline_bytes_chunk {nullptr}; // the chunk being filled (also in m_recording)
     std::size_t                m_inline_bytes_offset{0};
 
@@ -156,6 +185,10 @@ private:
     std::uint64_t              m_implicit_gpu_event_signal_value{0};
     MTL::SharedEvent*          m_implicit_cpu_event{nullptr};
     std::uint64_t              m_implicit_cpu_event_signal_value{0};
+    // The highest values of the two events a committed producer has queued
+    // a signal for (encode_queue_signals, under the submit mutex).
+    std::uint64_t              m_implicit_gpu_event_queued_value{0};
+    std::uint64_t              m_implicit_cpu_event_queued_value{0};
 
     class Sync_entry
     {

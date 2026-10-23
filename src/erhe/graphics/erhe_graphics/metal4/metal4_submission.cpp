@@ -204,8 +204,10 @@ void Submission_pools::release_recording(Recording* const recording)
     recording->serial           = 0;
     recording->counts_frame     = false;
     recording->frame_index      = 0;
-    recording->presents         = false;
-    recording->present_frame_id = 0;
+    recording->presents           = false;
+    recording->present_prefix     = false;
+    recording->has_present_prefix = false;
+    recording->present_frame_id   = 0;
     recording->on_feedback      = nullptr;
     recording->user             = nullptr;
     recording->user_result      = nullptr;

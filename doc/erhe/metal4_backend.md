@@ -122,6 +122,18 @@ no deferred release frees what an in-flight commit uses (verified: a
 completion always finds its frame's entry, and a retiring frame has
 `completed == committed`).
 
+A presenting command buffer commits as two MTL4 command buffers: the work
+before the drawable's first use when the drawable is taken, the rest at
+submit ("Present"). Both take a recording from the pool and both are charged
+to the command buffer's frame (the late-commit rule above applies to each).
+The first part is committed with the CPU waits and queue waits registered on
+the command buffer up to that point, so a producer the command buffer waits
+for (`wait_for_cpu_completion_of`, `wait_for_gpu_completion_signal`) must be
+submitted before the consumer reaches its swapchain pass - not in the same
+`submit_command_buffers` batch after it. `commit_drawable_prefix` VERIFYs
+that every such producer has queued its signal, instead of waiting forever.
+Waits registered after the first part apply to the rest.
+
 `wait_idle` waits until no commit up to the latest serial is in flight
 (`wait_for_commit`), which also guarantees that their feedback handlers have
 finished; `submit_command_buffer_and_wait` waits for the serial of its own
@@ -250,16 +262,64 @@ stages and resources that conflict is future work.
 
 ## Present
 
-For the command buffer that engaged the swapchain, `submit_command_buffers`
-calls `queue->wait(drawable)` before the commit, adds the drawable's presented
-handler (`Present_feedback`) and counts the presented-frame budget, commits,
-then calls `queue->signalDrawable(drawable)` and presents with the drawable's
-own `presentAtTime(target - request offset)` (tier M with a target) or
-`present()`. `present_request_time` / `present_return_time` bracket the commit
-and the present. The present calibration probes present the same way. Every
-frame pacing input of `doc/erhe/metal_backend.md` "Frame pacing" is kept: the
-achieved present time and present wait from the presented handler, the GPU
-bracket from the commit feedback, the acquire times around `nextDrawable`.
+`Swapchain_impl::begin_frame` does not take a drawable: windowed, it marks
+the frame's drawable pending, and the drawable is taken at its first use.
+Every encoder that uses the swapchain's current texture (the swapchain render
+pass, a `blit_framebuffer` from or to it) first calls
+`Command_buffer_impl::acquire_drawable_for_use`, with no encoder open. At the
+first use of a frame, when the command buffer engaged that swapchain
+(`begin_swapchain`) and has recorded work, the recording so far is ended and
+committed at once as its own MTL4 command buffer, labelled `<label> (before
+drawable)` (`Device_impl::commit_drawable_prefix`), recording continues in a
+second `Recording` from the pool, and then `nextDrawable` takes the drawable.
+The command buffer's GPU timer samples stay with its last recording, which
+resolves them. Headless there is no pending drawable and the frame is one
+commit.
+
+`submit_command_buffers` calls `queue->wait(drawable)` before the commit of
+the rest - the only commit that waits for the drawable - adds the drawable's
+presented handler (`Present_feedback`) and counts the presented-frame budget,
+commits, then calls `queue->signalDrawable(drawable)` and presents with the
+drawable's own `presentAtTime(target - request offset)` (tier M with a
+target) or `present()`. `present_request_time` / `present_return_time`
+bracket the commit and the present. The present calibration probes present
+the same way.
+
+The split exists because MTL4 has no drawable wait inside a command buffer:
+`queue->wait(drawable)` holds back the whole commit after it and every later
+commit of the queue, and a drawable that `nextDrawable` returns is not yet
+free for the GPU. A frame committed whole behind the drawable wait, with the
+drawable taken at frame start, takes 2.9 - 3.2 ms against Metal 3's
+1.7 - 2.0 ms (Release, windowed default scene, unpaced, pipelined,
+`scripts/render_thread_bench.py --scene default --configs pipelined --tracy
+--frames 1200`): the GPU idles 0.7 - 0.8 ms per frame and the compositor
+displays 1143 of 1204 frames (Metal 3: 701 of 1204, Metal System Trace), so
+drawables return only at its swaps. Committed in two parts, the CPU records
+the work before the drawable instead of waiting and the GPU runs it while the
+CPU waits for the drawable: the median frame is 1.46 - 1.54 ms against
+Metal 3's 1.54 - 1.64 ms, and the GPU zones match Metal 3 ("Migration
+status").
+
+Frame pacing inputs (`doc/erhe/metal_backend.md` "Frame pacing"): the
+presented-frame budget wait in `begin_swapchain` is the record's
+`fence_wait_duration` (a wait for earlier frames' GPU completion), the
+`nextDrawable` wait at the drawable's first use is its acquire
+(`acquire_begin` / `acquire_end`), and the achieved present time and present
+wait come from the presented handler. The GPU bracket (`gpu_frame_begin` /
+`gpu_frame_end`) spans both commits, from the GPU start of the commit before
+the drawable to the GPU end of the presenting commit, and the gap between the
+two commits (the CPU recording the rest of the frame, `nextDrawable`, the
+queue's drawable wait) is the record's `gpu_idle_time`, so
+`gpu_service_time()` counts only GPU work and the pacer does not read its own
+presentation wait as GPU load (`doc/frame_pacing/inputs.md`). The two commit
+feedbacks run in either order on Metal's dispatch threads; each stores its
+GPU start and end in a per-frame slot (`Device_impl::merge_present_gpu_bracket`,
+more slots than frames in flight) and the second writes the idle time, then
+the bracket (through the clock monitor in tier M). A frame whose drawable
+never comes leaves a half that the next frame in its slot overwrites. In the
+editor's phase log the drawable wait is in the render phase's swapchain
+render pass (the `execute_rendergraph_node` zone of `window_imgui_host.cpp`
+in Tracy), not in the `swapchain` term (`begin_swapchain`).
 
 Windowed screenshot capture copies the drawable into the capture buffer on the
 frame's command buffer, as Metal 3 does, with a completed callback on that
@@ -298,7 +358,7 @@ of the Metal 3 backend.
 | Argument tables (`MTL4ArgumentTable`), residency sets (`MTLResidencySet`) | MTL4 ("Residency", "Binding") |
 | Render, compute and blit encoders, barriers | MTL4 ("Encoders and barriers"); barriers conservative |
 | Swapchain, drawable, frame pacing | MTL4 ("Present"); tier M runs and calibrates; the frame pacing live gate (`doc/plans/frame_pacing_metal.md`, Dell 120 Hz, with the C26 pre-warm) is pending: it needs the user at the display |
-| Counter heaps (GPU timers, Tracy GPU zones) | MTL4 `MTL4CounterHeap` ("GPU timers"); in a Tracy build the default scene shows the same GPU zones as Metal 3 (`Main`, `Post_processing`, `Overlay`) on the program timeline, with medians 0.87 / 0.37 / 0.16 ms against Metal 3's 0.73 / 0.32 / 0.15 ms (Release, windowed, unpaced) |
+| Counter heaps (GPU timers, Tracy GPU zones) | MTL4 `MTL4CounterHeap` ("GPU timers"); in a Tracy build the default scene shows the same GPU zones as Metal 3 (`Main`, `Post_processing`, `Overlay`) on the program timeline, with medians 0.73 / 0.32 / 0.15 ms, the same as Metal 3's (Release, windowed, unpaced) |
 | `MTL4Compiler` (shaders, pipelines) | Metal 3 code (`newLibrary`, `newRenderPipelineState`) |
 | GPU-read draw count (`executeCommandsInBuffer`) | MTL4 encoders and residency; verified by the `Draw_indirect_test` count tests |
 
@@ -307,6 +367,12 @@ of the Metal 3 backend.
 The ports and checks of `doc/plans/metal_backend.md` section 7: the
 `MTL4Compiler` port, narrowing the barriers and the frame pacing live gate.
 In the unpaced Release bench (`scripts/render_thread_bench.py`, default
-scene, pipelined, windowed) the render phase takes 2.9 ms per frame against
-1.65 ms on Metal 3, most of it in the `swapchain` term (2.2 ms against
-1.2 ms); where that time goes is not measured yet.
+scene, pipelined, windowed, `displaySyncEnabled` off) the median frame is at
+Metal 3's, but the mean is not (2.0 - 2.4 ms against 1.6 - 1.8 ms): about
+one `nextDrawable` wait in twelve takes 6 - 8 ms, about one 120 Hz refresh,
+with no compositor swap during the wait (111 of 1329 waits, 0.82 s of a
+2.4 s run, Metal System Trace; Metal 3: 11 of 1211). The tail disappears
+without `queue->wait(drawable)`, so it belongs to the MTL4 drawable wait;
+how to avoid it is open. In the same captures the Tracy GPU zone counts of
+the Metal 4 build are below the frame count in some runs (Main 566 - 792 of
+980 - 1130 frames) and equal to it in others; Metal 3's always equal it.

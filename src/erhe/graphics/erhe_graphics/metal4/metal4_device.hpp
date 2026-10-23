@@ -41,6 +41,7 @@ namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
 
+class Command_buffer_impl;
 class Frame_state;
 class Frame_end_info;
 class Gpu_timer_sample_pool;
@@ -259,6 +260,24 @@ public:
     // resolve, frame accounting), then the payload and the recording return
     // to the pools and the commit leaves the in-flight list.
     void on_commit_feedback(Recording& recording, MTL4::CommitFeedback* feedback);
+    // Commits the work a presenting cb recorded before its drawable's first
+    // use (Command_buffer_impl::acquire_drawable_for_use), before the
+    // drawable is taken: the CPU waits and queue waits registered on the cb
+    // so far, then the commit, charged to the cb's frame. The prefix opens
+    // the frame's GPU bracket.
+    void commit_drawable_prefix(Command_buffer_impl& command_buffer_impl, Recording& prefix);
+    // The presented frame's GPU bracket (the frame time record, through the
+    // clock monitor in tier M).
+    void write_present_gpu_bracket(int64_t frame_id, double gpu_begin, double gpu_end);
+    // One half of the GPU bracket of a frame whose presenting cb committed
+    // the work before the drawable separately: the GPU start and end of that
+    // commit or of the presenting commit. Their feedback handlers run in
+    // either order; the second one writes the gap between the two commits
+    // as the record's gpu_idle_time (the CPU recording the rest of the
+    // frame, nextDrawable, the queue's drawable wait - not GPU work), then
+    // the bracket from the first commit's start to the second one's end.
+    enum class Present_gpu_bracket_part : unsigned int { prefix, presenting };
+    void merge_present_gpu_bracket(int64_t frame_id, Present_gpu_bracket_part part, double gpu_begin, double gpu_end);
 
     // The submit path. Every MTL4 commit goes through commit_locked with the
     // submit mutex held (lock_submit): the residency set is committed when
@@ -462,6 +481,24 @@ private:
     // Commits whose feedback handler has not run yet (wait_idle,
     // wait_for_commit); serials increase with commit order.
     std::mutex                        m_in_flight_mutex;
+    // merge_present_gpu_bracket: per presented frame, indexed by frame id
+    // modulo the slot count. A frame whose prefix was committed but whose
+    // drawable never came (nextDrawable returned none) leaves a half that
+    // the next frame using that slot overwrites (frame id mismatch).
+    class Present_gpu_bracket
+    {
+    public:
+        int64_t frame_id        {-1};
+        double  prefix_begin    {0.0};
+        double  prefix_end      {0.0};
+        double  presenting_begin{0.0};
+        double  presenting_end  {0.0};
+        int     parts           {0};
+    };
+    static constexpr std::size_t       s_present_gpu_bracket_slots{8};
+    static_assert(s_present_gpu_bracket_slots > static_cast<std::size_t>(s_max_frames_in_flight), "a slot must not be reused while its frame is in flight");
+    std::mutex                                                     m_present_gpu_bracket_mutex;
+    std::array<Present_gpu_bracket, s_present_gpu_bracket_slots>   m_present_gpu_brackets{};
     std::condition_variable           m_in_flight_cv;
     std::vector<uint64_t>             m_in_flight_serials;
     uint64_t                          m_latest_commit_serial{0};
