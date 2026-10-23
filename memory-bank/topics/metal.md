@@ -153,4 +153,4 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 !per-bind-PSO-creation::Metal-3-set_render_pipeline_state/set_compute_pipeline_state-create-a-PSO-per-bind(debug-lines,wide-lines,every-frame)->Metal-4-has-Pipeline_state_cache;Metal-3-still-does-it(input-to-keep/remove-decision)
 !MTL::Device::newArchive-segfaults-on-non-archive-bytes->manifest(size+FNV)-checked-first
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4-code-COMPLETE;user-gates-pending(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)->Metal-3-decision;doc/plans/resource_barriers.md-steps-2-4(narrowing-measurement-next)}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4-code-COMPLETE;user-gates-pending(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)->Metal-3-decision;doc/plans/resource_barriers.md-step-2-narrowing-in-progress(measured-b7cb81339)+steps-3-4;M4-draws-main-pass-+14%-vs-M3-unexplained(per-draw-cost)}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
