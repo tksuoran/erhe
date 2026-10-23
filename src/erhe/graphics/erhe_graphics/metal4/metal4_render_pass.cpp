@@ -187,12 +187,17 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     static_cast<void>(render_pass_before);
     static_cast<void>(render_pass_after);
 
-    Device_impl::s_active_render_pass = this;
-
     // Record into the MTL4::CommandBuffer that the caller's
     // Command_buffer owns. The cb must already have begin() called on it
     // by the user.
     Command_buffer_impl& cb_impl = command_buffer.get_impl();
+    if (m_swapchain != nullptr) {
+        // Commits the work recorded so far, then takes the drawable; no
+        // encoder may be open (this pass is not active yet).
+        cb_impl.acquire_drawable_for_use(m_swapchain->get_impl());
+    }
+
+    Device_impl::s_active_render_pass = this;
     m_command_buffer_impl  = &cb_impl;
     m_command_buffer       = cb_impl.get_mtl4_command_buffer();
     ERHE_VERIFY(m_command_buffer != nullptr);

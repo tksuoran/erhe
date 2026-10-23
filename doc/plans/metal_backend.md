@@ -298,5 +298,11 @@ order of magnitude (counter heap ticks converted with
 `queryTimestampFrequency`, `doc/erhe/metal4_backend.md` "GPU timers"); the
 frame pacing live gate is pending (it needs the user at the display). Next:
 the pacing live gate, then (3) `MTL4Compiler`; the image, race and pacing
-gates as each step lands, narrowing the barriers, and the render phase cost
-(2.9 ms against Metal 3's 1.65 ms per unpaced frame).
+gates as each step lands, and narrowing the barriers (own hazard tracking).
+Render phase cost: the unpaced windowed frame took 2.9 - 3.2 ms against
+Metal 3's 1.7 - 2.0 ms because the queue's drawable wait held back the whole
+frame; since the work before the swapchain pass is committed before the
+drawable is taken (`doc/erhe/metal4_backend.md` "Present") the median frame
+is at Metal 3's (1.46 - 1.54 ms against 1.54 - 1.64 ms), the mean is not
+(2.0 - 2.4 ms against 1.6 - 1.8 ms: a tail of one-refresh drawable waits,
+open in that document's "Future work").

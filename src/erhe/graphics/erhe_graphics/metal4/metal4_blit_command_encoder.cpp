@@ -107,7 +107,14 @@ void Blit_command_encoder_impl::blit_framebuffer(
     Scoped_transient_object_pool object_pool{}; // drains the encoders, descriptor and other autoreleased objects created here
 
     // A swapchain render pass needs its frame's drawable: blit after
-    // begin_swapchain, before the frame is submitted.
+    // begin_swapchain, before the frame is submitted. Its first use commits
+    // the work recorded before it and takes the drawable.
+    for (const Render_pass* const render_pass : { &source_renderpass, &destination_renderpass }) {
+        Swapchain* const swapchain = render_pass->get_swapchain();
+        if (swapchain != nullptr) {
+            m_command_buffer.get_impl().acquire_drawable_for_use(swapchain->get_impl());
+        }
+    }
     const Blit_attachment source      = get_blit_attachment(source_renderpass);
     const Blit_attachment destination = get_blit_attachment(destination_renderpass);
     ERHE_VERIFY((source.texture != nullptr) && (destination.texture != nullptr));

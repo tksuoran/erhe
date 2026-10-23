@@ -79,6 +79,13 @@ public:
     bool                        counts_frame    {false}; // a Command_buffer's commit, charged to frame_index
     uint64_t                    frame_index     {0};
     bool                        presents        {false};
+    // The work of a presenting cb before its drawable's first use
+    // (Command_buffer_impl::acquire_drawable_for_use), committed before the
+    // drawable is taken; its GPU start opens the frame's GPU bracket.
+    bool                        present_prefix  {false};
+    // A presenting recording whose cb committed such a prefix: its GPU end
+    // closes the frame's GPU bracket.
+    bool                        has_present_prefix{false};
     int64_t                     present_frame_id{0};
     // Backend-internal recordings: their feedback and its arguments.
     Recording_feedback_function on_feedback     {nullptr};

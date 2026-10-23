@@ -2,6 +2,7 @@
 #include "erhe_graphics/metal4/metal4_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_compute_command_encoder.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/metal4/metal4_render_pass.hpp"
 #include "erhe_graphics/metal4/metal4_swapchain.hpp"
 #include "erhe_graphics/metal4/metal4_texture.hpp"
 #include "erhe_graphics/buffer.hpp"
@@ -85,8 +86,10 @@ void Command_buffer_impl::begin()
     Scoped_transient_object_pool object_pool{};
     ERHE_VERIFY(m_device_impl != nullptr);
     ERHE_VERIFY(m_recording == nullptr);
+    ERHE_VERIFY(!m_drawable_prefix_committed);
 
-    m_recording = m_device_impl->get_submission_pools().acquire_recording();
+    m_recording      = m_device_impl->get_submission_pools().acquire_recording();
+    m_recording_used = false;
     if (!m_debug_label.empty()) {
         m_recording->command_buffer->setLabel(NS::String::string(m_debug_label.data(), NS::UTF8StringEncoding));
     }
@@ -128,27 +131,26 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
         return false;
     }
 
-    // Bound the number of presented-but-uncompleted frames before acquiring
-    // another drawable. When presentation is stalled this returns false rather
-    // than queueing yet another frame behind the stuck one - see
-    // Device_impl::wait_for_presented_frame_slot.
-    //
-    // Both waits are the acquire of the frame time record: with a
-    // display-synced layer they are where presentation backpressure blocks
-    // (the presented-frame budget, then nextDrawable once the layer's
-    // drawable pool is held by the compositor), the vkAcquireNextImageKHR
-    // analogue the tier S slop servo senses (doc/frame_pacing/inputs.md 3.2).
-    erhe::frame_pacing::Frame_time_recorder& recorder  = m_device->get_frame_time_recorder();
-    const std::int64_t                       record_id = static_cast<std::int64_t>(m_frame_id);
-    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_begin, erhe::frame_pacing::Frame_time_recorder::now());
-    if (!m_device->get_impl().wait_for_presented_frame_slot()) {
-        recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_end, erhe::frame_pacing::Frame_time_recorder::now());
+    // Bound the number of presented-but-uncompleted frames before taking
+    // another drawable. When presentation is stalled this returns false
+    // rather than queueing yet another frame behind the stuck one - see
+    // Device_impl::wait_for_presented_frame_slot. The wait is for earlier
+    // frames' GPU completion, the fence wait of the frame time record; the
+    // drawable itself is taken at its first use (acquire_drawable_for_use),
+    // whose nextDrawable wait is the record's acquire - with a
+    // display-synced layer the presentation backpressure the tier S slop
+    // servo senses (doc/frame_pacing/inputs.md 3.2).
+    erhe::frame_pacing::Frame_time_recorder& recorder   = m_device->get_frame_time_recorder();
+    const std::int64_t                       record_id  = static_cast<std::int64_t>(m_frame_id);
+    const double                             wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
+    const bool                               slot_ok    = m_device->get_impl().wait_for_presented_frame_slot();
+    recorder.add(record_id, &erhe::frame_pacing::Frame_time_record::fence_wait_duration, erhe::frame_pacing::Frame_time_recorder::now() - wait_begin);
+    if (!slot_ok) {
         out_frame_state.should_render = false;
         return false;
     }
 
     const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
-    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_end, erhe::frame_pacing::Frame_time_recorder::now());
     out_frame_state.should_render = ok;
     if (ok) {
         // Latch the engaged swapchain. submit_command_buffers reads this
@@ -487,9 +489,82 @@ void Command_buffer_impl::memory_barrier(Memory_barrier_mask /*barriers*/)
     }
 }
 
-auto Command_buffer_impl::get_mtl4_command_buffer() const noexcept -> MTL4::CommandBuffer*
+auto Command_buffer_impl::get_mtl4_command_buffer() noexcept -> MTL4::CommandBuffer*
 {
-    return (m_recording != nullptr) ? m_recording->command_buffer : nullptr;
+    if (m_recording == nullptr) {
+        return nullptr;
+    }
+    m_recording_used = true;
+    return m_recording->command_buffer;
+}
+
+void Command_buffer_impl::acquire_drawable_for_use(Swapchain_impl& swapchain)
+{
+    if (!swapchain.is_drawable_pending()) {
+        return; // headless, already taken this frame, or no frame begun
+    }
+    // MTL4 has no drawable wait inside a command buffer: the queue's wait
+    // for the drawable (submit_command_buffers) holds back the whole commit
+    // after it and every later commit. The work recorded before the
+    // drawable's first use is committed now, before the CPU blocks in
+    // nextDrawable, so the GPU runs it while the layer has no drawable free
+    // (doc/erhe/metal4_backend.md "Present" has the measurement).
+    if ((m_swapchain_used == &swapchain) && (m_recording != nullptr) && m_recording_used) {
+        // Ending the command buffer with an encoder open would drop it.
+        ERHE_VERIFY(Compute_command_encoder_impl::get_active_mtl_encoder() == nullptr);
+        ERHE_VERIFY(Render_pass_impl::get_active_mtl_encoder() == nullptr);
+        Scoped_transient_object_pool object_pool{};
+        m_recording->command_buffer->endCommandBuffer();
+        Recording* const prefix = m_recording;
+        if (!m_debug_label.empty()) {
+            // The commit error log names the faulting commit by its label.
+            prefix->command_buffer->setLabel(
+                NS::String::string(m_debug_label.data(), NS::UTF8StringEncoding)->stringByAppendingString(
+                    NS::String::string(" (before drawable)", NS::UTF8StringEncoding)
+                )
+            );
+        }
+
+        m_recording           = m_device_impl->get_submission_pools().acquire_recording();
+        m_recording_used      = false;
+        m_inline_bytes_chunk  = nullptr; // the chunk being filled stays with the prefix
+        m_inline_bytes_offset = 0;
+        if (!m_debug_label.empty()) {
+            m_recording->command_buffer->setLabel(NS::String::string(m_debug_label.data(), NS::UTF8StringEncoding));
+        }
+        m_device_impl->commit_drawable_prefix(*this, *prefix);
+        m_drawable_prefix_committed = true;
+    }
+
+    // The acquire of the frame time record: the wait for a layer drawable.
+    erhe::frame_pacing::Frame_time_recorder& recorder  = m_device->get_frame_time_recorder();
+    const std::int64_t                       record_id = static_cast<std::int64_t>(m_frame_id);
+    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_begin, erhe::frame_pacing::Frame_time_recorder::now());
+    const bool acquired = swapchain.acquire_drawable();
+    recorder.set_once(record_id, &erhe::frame_pacing::Frame_time_record::acquire_end, erhe::frame_pacing::Frame_time_recorder::now());
+    if (!acquired) {
+        log_swapchain->warn("Metal 4: the layer returned no drawable; the frame is not presented");
+    }
+}
+
+void Command_buffer_impl::verify_waited_producers_committed() const
+{
+    // A producer committed after this cb's work before the drawable would
+    // never be waited for: the queue (or the CPU) would wait forever. The
+    // producer must be submitted before the consumer's swapchain pass, not
+    // in the same submit_command_buffers batch after it.
+    for (const Sync_entry& entry : m_wait_for_cpu_pending) {
+        ERHE_VERIFY(entry.command_buffer != nullptr);
+        ERHE_VERIFY(entry.value <= entry.command_buffer->get_impl().m_implicit_cpu_event_queued_value);
+    }
+    for (const std::uint64_t value : m_gpu_waits_pending) {
+        ERHE_VERIFY(value <= m_implicit_gpu_event_queued_value);
+    }
+}
+
+auto Command_buffer_impl::has_committed_drawable_prefix() const noexcept -> bool
+{
+    return m_drawable_prefix_committed;
 }
 
 auto Command_buffer_impl::acquire_argument_table() -> MTL4::ArgumentTable*
@@ -569,8 +644,10 @@ auto Command_buffer_impl::end_recording() -> Recording*
     recording->command_buffer->endCommandBuffer();
     recording->gpu_timer_samples = m_gpu_timer_samples;
     m_gpu_timer_samples   = Gpu_timer_command_buffer_samples{};
-    m_recording           = nullptr;
-    m_inline_bytes_chunk  = nullptr;
+    m_recording                 = nullptr;
+    m_recording_used            = false;
+    m_drawable_prefix_committed = false;
+    m_inline_bytes_chunk        = nullptr;
     m_inline_bytes_offset = 0;
     return recording;
 }
@@ -585,12 +662,14 @@ void Command_buffer_impl::encode_queue_signals(MTL4::CommandQueue* const queue)
             continue;
         }
         queue->signalEvent(target_impl.m_implicit_gpu_event, entry.value);
+        target_impl.m_implicit_gpu_event_queued_value = std::max(target_impl.m_implicit_gpu_event_queued_value, entry.value);
     }
     m_signal_gpu_pending.clear();
 
     if (m_signal_own_cpu_completion) {
         if (m_implicit_cpu_event != nullptr) {
             queue->signalEvent(m_implicit_cpu_event, m_signal_own_cpu_completion_value);
+            m_implicit_cpu_event_queued_value = std::max(m_implicit_cpu_event_queued_value, m_signal_own_cpu_completion_value);
         }
         m_signal_own_cpu_completion = false;
     }

@@ -990,6 +990,8 @@ auto Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         // commit order).
         impl.encode_queue_waits(m_mtl_command_queue);
 
+        // Read before end_recording, which clears it.
+        const bool prefix_committed = impl.has_committed_drawable_prefix();
         Recording* const recording = impl.end_recording();
         if (recording == nullptr) {
             // begin() was not called; nothing to commit.
@@ -1002,9 +1004,11 @@ auto Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         }
 
         // The drawable: the queue waits until the display no longer uses it
-        // before this cb's work, and (below) signals it after the commit,
-        // then presents it. Mirrors Vulkan's swapchains_to_present handling
-        // at the end of submit.
+        // before this commit - the cb's work from the drawable's first use
+        // on, the work before it was committed when the drawable was taken
+        // (Command_buffer_impl::acquire_drawable_for_use) - and (below)
+        // signals it after the commit, then presents it. Mirrors Vulkan's
+        // swapchains_to_present handling at the end of submit.
         const std::int64_t present_frame_id = static_cast<std::int64_t>(impl.get_frame_id());
         const double       target_time      = (present_frame_id == m_present_target_frame_id) ? m_present_target_time_seconds : 0.0;
         const double       period           = m_device.get_display_refresh_duration_seconds();
@@ -1030,8 +1034,9 @@ auto Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         // held and counts the completion against the charged frame.
         recording->counts_frame     = true;
         recording->frame_index      = note_command_buffer_committed(impl.get_completion_frame_index());
-        recording->presents         = presents;
-        recording->present_frame_id = present_frame_id;
+        recording->presents           = presents;
+        recording->has_present_prefix = presents && prefix_committed;
+        recording->present_frame_id   = present_frame_id;
 
         // The present request of the frame time record: the commit and the
         // present hand the drawable over. They do not block (the
@@ -1100,22 +1105,21 @@ void Device_impl::on_commit_feedback(Recording& recording, MTL4::CommitFeedback*
     if (recording.on_feedback != nullptr) {
         recording.on_feedback(recording, feedback);
     }
-    if (recording.presents) {
+    if (recording.presents || recording.present_prefix) {
         // GPUStartTime and GPUEndTime are host time, the recorder's clock.
+        // The frame's GPU bracket spans its two commits when the work before
+        // the drawable was committed separately.
         const double gpu_begin = (feedback != nullptr) ? feedback->GPUStartTime() : 0.0;
         const double gpu_end   = (feedback != nullptr) ? feedback->GPUEndTime()   : 0.0;
-        if ((gpu_begin > 0.0) && (gpu_end > gpu_begin)) {
-            if (m_clock_monitor != nullptr) {
-                // Writes the bracket with the frame's GPU clock.
-                m_clock_monitor->on_frame_gpu_done(recording.present_frame_id, gpu_begin, gpu_end);
-            } else {
-                m_device.get_frame_time_recorder().set(
-                    recording.present_frame_id,
-                    &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_begin,
-                    &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_end
-                );
-            }
+        if (recording.present_prefix) {
+            merge_present_gpu_bracket(recording.present_frame_id, Present_gpu_bracket_part::prefix, gpu_begin, gpu_end);
+        } else if (recording.has_present_prefix) {
+            merge_present_gpu_bracket(recording.present_frame_id, Present_gpu_bracket_part::presenting, gpu_begin, gpu_end);
+        } else {
+            write_present_gpu_bracket(recording.present_frame_id, gpu_begin, gpu_end);
         }
+    }
+    if (recording.presents) {
         note_presented_frame_completed();
     }
     if (recording.gpu_timer_samples.needs_resolve()) {
@@ -1134,6 +1138,84 @@ void Device_impl::on_commit_feedback(Recording& recording, MTL4::CommitFeedback*
     const std::lock_guard<std::mutex> lock{m_in_flight_mutex};
     std::erase(m_in_flight_serials, serial);
     m_in_flight_cv.notify_all();
+}
+
+void Device_impl::commit_drawable_prefix(Command_buffer_impl& command_buffer_impl, Recording& prefix)
+{
+    // The same steps submit_command_buffers takes before a commit: the CPU
+    // waits, then under the submit mutex the queue waits registered so far,
+    // then the commit, charged to the cb's frame. Queue waits and CPU waits
+    // registered later apply to the rest of the cb, committed at submit.
+    // Unlike at submit, the producers must have been committed already
+    // (doc/erhe/metal4_backend.md "Submission"): fail loudly rather than
+    // wait forever.
+    Scoped_transient_object_pool object_pool{};
+    {
+        const std::unique_lock<std::mutex> verify_lock = lock_submit();
+        command_buffer_impl.verify_waited_producers_committed();
+    }
+    command_buffer_impl.pre_submit_wait();
+    const std::unique_lock<std::mutex> submit_lock = lock_submit();
+    command_buffer_impl.encode_queue_waits(m_mtl_command_queue);
+    prefix.counts_frame     = true;
+    prefix.frame_index      = note_command_buffer_committed(command_buffer_impl.get_completion_frame_index());
+    prefix.present_prefix   = true;
+    prefix.present_frame_id = static_cast<std::int64_t>(command_buffer_impl.get_frame_id());
+    static_cast<void>(commit_locked(prefix));
+}
+
+void Device_impl::write_present_gpu_bracket(const int64_t frame_id, const double gpu_begin, const double gpu_end)
+{
+    if ((gpu_begin <= 0.0) || (gpu_end <= gpu_begin)) {
+        return;
+    }
+    if (m_clock_monitor != nullptr) {
+        // Writes the bracket with the frame's GPU clock.
+        m_clock_monitor->on_frame_gpu_done(frame_id, gpu_begin, gpu_end);
+    } else {
+        m_device.get_frame_time_recorder().set(
+            frame_id,
+            &erhe::frame_pacing::Frame_time_record::gpu_frame_begin, gpu_begin,
+            &erhe::frame_pacing::Frame_time_record::gpu_frame_end,   gpu_end
+        );
+    }
+}
+
+void Device_impl::merge_present_gpu_bracket(const int64_t frame_id, const Present_gpu_bracket_part part, const double gpu_begin, const double gpu_end)
+{
+    Present_gpu_bracket complete{};
+    {
+        const std::lock_guard<std::mutex> lock{m_present_gpu_bracket_mutex};
+        Present_gpu_bracket& bracket = m_present_gpu_brackets[static_cast<std::size_t>(frame_id) % m_present_gpu_brackets.size()];
+        if (bracket.frame_id != frame_id) {
+            bracket = Present_gpu_bracket{.frame_id = frame_id};
+        }
+        if (part == Present_gpu_bracket_part::prefix) {
+            bracket.prefix_begin = gpu_begin;
+            bracket.prefix_end   = gpu_end;
+        } else {
+            bracket.presenting_begin = gpu_begin;
+            bracket.presenting_end   = gpu_end;
+        }
+        ++bracket.parts;
+        if (bracket.parts < 2) {
+            return;
+        }
+        complete = bracket;
+        bracket  = Present_gpu_bracket{};
+    }
+    if ((complete.prefix_begin <= 0.0) || (complete.presenting_end <= complete.prefix_begin)) {
+        return;
+    }
+    // Before the bracket: the observer takes the record as soon as
+    // gpu_frame_end > gpu_frame_begin, and gpu_service_time() subtracts the
+    // idle time (doc/frame_pacing/inputs.md: the pacer must not see its own
+    // presentation wait as GPU load).
+    const double idle = ((complete.presenting_begin > 0.0) && (complete.prefix_end > 0.0))
+        ? std::max(0.0, complete.presenting_begin - complete.prefix_end)
+        : 0.0;
+    m_device.get_frame_time_recorder().set(frame_id, &erhe::frame_pacing::Frame_time_record::gpu_idle_time, idle);
+    write_present_gpu_bracket(frame_id, complete.prefix_begin, complete.presenting_end);
 }
 
 void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)

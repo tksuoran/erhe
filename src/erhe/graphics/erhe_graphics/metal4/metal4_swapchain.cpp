@@ -157,11 +157,32 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
         return false;
     }
 
+    // The drawable is taken at its first use (acquire_drawable): the
+    // queue's wait for it holds back every later commit, so the frame's
+    // work before the drawable is committed first, and the CPU records that
+    // work instead of blocking in nextDrawable.
+    clear_current_drawable();
+    m_drawable_pending = true;
+    return true;
+}
+
+auto Swapchain_impl::is_drawable_pending() const -> bool
+{
+    return m_drawable_pending;
+}
+
+auto Swapchain_impl::acquire_drawable() -> bool
+{
+    ERHE_VERIFY(m_drawable_pending);
+    m_drawable_pending = false;
+    CA::MetalLayer* const layer = m_surface_impl.get_metal_layer();
+    if (layer == nullptr) {
+        return false;
+    }
     // nextDrawable() is autoreleased. Take a reference: the drawable is
     // used later in the frame (render pass setup) and at submit time
     // (the present), and holding it explicitly keeps it alive
     // independently of which autorelease pool happens to be open.
-    clear_current_drawable();
     Scoped_transient_object_pool object_pool{};
     m_current_drawable = layer->nextDrawable();
     if (m_current_drawable != nullptr) {
@@ -172,6 +193,7 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
 
 void Swapchain_impl::clear_current_drawable()
 {
+    m_drawable_pending = false;
     if (m_current_drawable != nullptr) {
         m_current_drawable->release();
         m_current_drawable = nullptr;
