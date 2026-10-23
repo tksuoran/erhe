@@ -15,6 +15,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/present_calibration.hpp"
+#include "erhe_graphics/present_calibration_cache.hpp"
 #include "erhe_graphics/present_calibration_runner.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_graphics/surface.hpp"
@@ -164,6 +165,10 @@ public:
         m_surface_impl.service_main_run_loop();
     }
 
+    // The probe configuration (drawable count, queue depth, the layer's
+    // pixel format and display sync) is part of what the calibration
+    // measures: a change bumps c_present_calibration_version
+    // (present_calibration_cache.hpp).
     auto get_queue_depth() const -> std::size_t override
     {
         return 3; // Surface_impl::apply_frame_pacing_tier: maximumDrawableCount 3
@@ -196,6 +201,13 @@ void Device_impl::run_present_calibration()
             static_cast<void>(m_gpu_prewarm->run_blocking(s_prewarm_rate_iterations));
         }
         result.prewarm_seconds_per_iteration = m_gpu_prewarm->get_seconds_per_iteration();
+        log_display_refresh->info("present calibration: GPU pre-warm kernel {:.1f} ns per iteration", result.prewarm_seconds_per_iteration * 1.0e9);
+    }
+
+    // A cached calibration for this display, mode, OS build, GPU and path
+    // (doc/erhe/graphics.md "Present calibration cache") replaces the probes.
+    if (m_device.begin_present_calibration(m_frame_pacing_window, m_mtl_device->name()->utf8String(), Present_path::metal4, result)) {
+        return;
     }
 
     CA::MetalLayer* const layer          = (m_surface != nullptr) ? m_surface->get_impl().get_metal_layer() : nullptr;
@@ -213,8 +225,7 @@ void Device_impl::run_present_calibration()
     } else {
         log_display_refresh->info("present calibration: {}", result.status);
     }
-    m_present_request_offset = result.valid ? std::optional<double>{result.request_offset} : std::nullopt;
-    m_device.set_present_calibration(result);
+    m_device.finish_present_calibration(result);
 }
 
 } // namespace erhe::graphics

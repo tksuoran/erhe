@@ -61,6 +61,7 @@ void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now
         tunables.max_refresh_interval    = m_max_refresh_interval;
         tunables.refresh_granularity     = m_refresh_granularity;
         m_pacer          = std::make_unique<Frame_pacer>(tunables);
+        m_deadline_ceiling_reported = false;
         m_refresh_period = refresh_period;
         m_pacer_deadline_offset_setup = m_deadline_offset_setup;
         m_pacer_display               = m_display;
@@ -103,6 +104,23 @@ void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now
     }
 
     deliver_pending(recorder, current_frame_id);
+
+    // Stale-low host deadline measurement (the deadline estimate held at the
+    // calibrated ceiling, updated by the feedback deliver_pending() just
+    // delivered): reported once per pacer.
+    if (!m_deadline_ceiling_reported && m_pacer->is_deadline_offset_ceiling_sustained()) {
+        m_deadline_ceiling_reported = true;
+        m_log_lines.push_back(
+            format_line(
+                "frame pacing (observer): deadline offset held at its calibrated ceiling %.3f ms for %zu samples: the present calibration is stale-low",
+                m_pacer->get_deadline_offset() * 1000.0,
+                m_pacer->get_tunables().deadline_ceiling_sustain_samples
+            )
+        );
+        if (m_deadline_ceiling_callback) {
+            m_deadline_ceiling_callback(m_pacer->get_deadline_offset());
+        }
+    }
 
     // Observer mode: compute the decision, record the prediction, enforce
     // nothing. The release time / target slot / wait id are what the pacer
@@ -261,6 +279,11 @@ void Frame_pacing_observer::request_min_vsyncs(const int min_vsyncs)
 {
     const int clamped = std::max(1, std::min(min_vsyncs, 8)); // Frame_pacer_tunables max_vsyncs default
     m_min_vsyncs_request.store(clamped, std::memory_order_relaxed);
+}
+
+void Frame_pacing_observer::set_deadline_ceiling_callback(std::function<void(double deadline_offset)> callback)
+{
+    m_deadline_ceiling_callback = std::move(callback);
 }
 
 void Frame_pacing_observer::set_deadline_offset(const Deadline_offset_setup& setup)

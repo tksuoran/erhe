@@ -36,6 +36,7 @@
 #include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/present_calibration.hpp"
+#include "erhe_graphics/present_calibration_cache.hpp"
 #include "erhe_graphics/thermal_state.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -2889,7 +2890,11 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
         // The present calibration (erhe::graphics::Present_calibration) with
         // every raw sample: the compositor's request window and deadline
         // for this display mode, the simulator plant's calibration input.
-        const erhe::graphics::Present_calibration& calibration = m_context.graphics_device->get_present_calibration();
+        // source: measured in this process, cached (adopted from the present
+        // calibration cache, doc/erhe/graphics.md "Present calibration
+        // cache") or none (cleared after a display change without an entry).
+        const erhe::graphics::Present_calibration_state calibration_state = m_context.graphics_device->get_present_calibration_state();
+        const erhe::graphics::Present_calibration&      calibration       = calibration_state.calibration;
         if (calibration.done) {
             json samples = json::array();
             for (const erhe::graphics::Present_calibration_sample& sample : calibration.samples) {
@@ -2911,8 +2916,36 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
                 {"request_max_ms",     calibration.request_max * 1000.0},
                 {"deadline_offset_ms", calibration.deadline_offset * 1000.0},
                 {"prewarm_ns_per_iteration", calibration.prewarm_seconds_per_iteration * 1.0e9},
+                {"source",             erhe::graphics::c_str(calibration_state.source)},
+                {"cache_file",         calibration_state.cache_file},
+                {"cache_reads",        calibration_state.cache_reads_enabled},
+                {"measured_utc",       calibration_state.measured_utc},
+                {"display_label",      calibration_state.display_label},
                 {"samples",            std::move(samples)}
             };
+            if (calibration_state.key.has_value()) {
+                const erhe::graphics::Present_calibration_key& key = calibration_state.key.value();
+                result["present_calibration"]["key"] = {
+                    {"display_vendor",            key.display_vendor},
+                    {"display_model",             key.display_model},
+                    {"display_serial",            key.display_serial},
+                    {"mode_pixel_width",          key.mode_pixel_width},
+                    {"mode_pixel_height",         key.mode_pixel_height},
+                    {"mode_refresh_rate",         key.mode_refresh_rate},
+                    {"mode_io_flags",             key.mode_io_flags},
+                    {"backing_scale_factor",      key.backing_scale_factor},
+                    {"minimum_refresh_interval_ms", key.minimum_refresh_interval * 1000.0},
+                    {"maximum_refresh_interval_ms", key.maximum_refresh_interval * 1000.0},
+                    {"update_granularity_ms",     key.update_granularity * 1000.0},
+                    {"maximum_frames_per_second", key.maximum_frames_per_second},
+                    {"window_mode",               erhe::graphics::c_str(key.window_mode)},
+                    {"os_version",                key.os_version},
+                    {"os_build",                  key.os_build},
+                    {"gpu_name",                  key.gpu_name},
+                    {"present_path",              erhe::graphics::c_str(key.present_path)},
+                    {"calibration_version",       key.calibration_version}
+                };
+            }
         }
         const erhe::graphics::Frame_pacing_tier tier = m_context.graphics_device->get_frame_pacing_tier();
         result["tier"] =
@@ -2977,6 +3010,23 @@ auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
         result["workload_ms"] = {{"min", workload.first}, {"max", workload.second}};
     }
     result["now"] = erhe::frame_pacing::Frame_time_recorder::now();
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_recalibrate_present(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.graphics_device == nullptr) {
+        json r = make_text_content("Graphics device not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    // The probes run at device init only: deleting the entry makes the next
+    // start measure (doc/erhe/graphics.md "Present calibration cache").
+    const std::string deleted = m_context.graphics_device->remove_present_calibration_cache_entry("recalibrate_present (MCP)");
+    json result;
+    result["deleted"]   = deleted;
+    result["next_start"] = "measures the present calibration (no runtime re-run)";
     return make_json_content(result).dump();
 }
 

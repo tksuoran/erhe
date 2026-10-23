@@ -27,6 +27,7 @@
 #include <atomic>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -90,6 +91,13 @@ public:
     // Main thread, on a display or mode change (not per frame); a change
     // recreates the pacer at the next tick(), like a refresh period change.
     void set_display(Present_display_kind display, double max_refresh_interval, double refresh_granularity);
+
+    // Called once per pacer (main thread, inside tick()) when the deadline
+    // estimate sat at the host-measured ceiling for the pacer's sustain
+    // window (Frame_pacer::is_deadline_offset_ceiling_sustained): the host's
+    // deadline measurement is stale-low (the presentation path got slower).
+    // The pacer keeps its estimate; the host may drop its stored measurement.
+    void set_deadline_ceiling_callback(std::function<void(double deadline_offset)> callback);
     [[nodiscard]] auto get_min_vsyncs   () const -> int { return m_min_vsyncs_request.load(std::memory_order_relaxed); }
 
 private:
@@ -111,6 +119,8 @@ private:
     static constexpr std::int64_t s_scan_window   = 48; // < ring size
 
     std::unique_ptr<Frame_pacer> m_pacer;
+    std::function<void(double)> m_deadline_ceiling_callback;
+    bool                         m_deadline_ceiling_reported{false}; // for m_pacer
     double                       m_refresh_period{0.0};
     Deadline_offset_setup        m_deadline_offset_setup{};
     Deadline_offset_setup        m_pacer_deadline_offset_setup{};

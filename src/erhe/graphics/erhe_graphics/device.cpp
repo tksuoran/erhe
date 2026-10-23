@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/display_refresh_resolver.hpp"
 #include "erhe_graphics/present_calibration.hpp"
+#include "erhe_graphics/present_calibration_cache.hpp"
 #include "erhe_graphics/thermal_state.hpp"
 
 #include "erhe_graphics/generated/graphics_config.hpp"
@@ -45,7 +46,31 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <cstdlib>
+#include <filesystem>
+#include <string_view>
+
 namespace erhe::graphics {
+
+namespace {
+
+// The present calibration cache (doc/erhe/graphics.md "Present calibration
+// cache"): reads follow the graphics config, and the environment variable
+// ERHE_PRESENT_CALIBRATION_CACHE=0 disables them for scripts.
+auto make_present_calibration_store(const Graphics_config& graphics_config) -> std::unique_ptr<Present_calibration_store>
+{
+    bool reads = graphics_config.present_calibration_cache;
+    const char* const env = std::getenv("ERHE_PRESENT_CALIBRATION_CACHE");
+    if ((env != nullptr) && (std::string_view{env} == "0")) {
+        reads = false;
+    }
+    return std::make_unique<Present_calibration_store>(
+        reads ? Present_calibration_cache_reads::enabled : Present_calibration_cache_reads::disabled,
+        std::filesystem::path{"cache"} / "present_calibration"
+    );
+}
+
+} // anonymous namespace
 
 Device::Device(
     const Surface_create_info&      surface_create_info,
@@ -56,7 +81,7 @@ Device::Device(
     : m_device_message_callback{std::move(device_message_callback)}
     , m_frame_time_recorder{std::make_unique<erhe::frame_pacing::Frame_time_recorder>()}
     , m_display_refresh_resolver{make_display_refresh_resolver(graphics_config)}
-    , m_present_calibration{std::make_unique<Present_calibration>()}
+    , m_present_calibration_store{make_present_calibration_store(graphics_config)}
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config, vulkan_external_creators)}
 #else
@@ -474,14 +499,53 @@ auto Device::get_present_prewarm(const std::int64_t frame_id) const -> double
     return (frame_id == m_present_prewarm_frame_id) ? m_present_prewarm_seconds : 0.0;
 }
 
-auto Device::get_present_calibration() const -> const Present_calibration&
+auto Device::get_present_calibration() const -> Present_calibration
 {
-    return *m_present_calibration;
+    return m_present_calibration_store->get_calibration();
 }
 
-void Device::set_present_calibration(const Present_calibration& calibration)
+auto Device::get_present_calibration_state() const -> Present_calibration_state
 {
-    *m_present_calibration = calibration;
+    return m_present_calibration_store->get_state();
+}
+
+void Device::get_present_calibration_summary(Present_calibration_summary& out) const
+{
+    m_present_calibration_store->get_summary(out);
+}
+
+auto Device::get_present_request_offset() const -> std::optional<double>
+{
+    return m_present_calibration_store->get_request_offset();
+}
+
+auto Device::begin_present_calibration(
+    erhe::window::Context_window* const window,
+    const std::string_view              gpu_name,
+    const Present_path                  present_path,
+    Present_calibration&                in_out
+) -> bool
+{
+    m_present_calibration_store->set_key_source(window, gpu_name, present_path);
+    return m_present_calibration_store->begin(m_present_calibration_store->query_key(), in_out);
+}
+
+void Device::finish_present_calibration(const Present_calibration& result)
+{
+    m_present_calibration_store->finish_measured(result);
+}
+
+auto Device::refresh_present_calibration_for_display() -> bool
+{
+    if (!m_present_calibration_store->is_keyed()) {
+        return false; // no calibration on this path
+    }
+    return m_present_calibration_store->refresh_for_display(m_present_calibration_store->query_key());
+}
+
+auto Device::remove_present_calibration_cache_entry(const std::string_view reason) -> std::string
+{
+    return m_present_calibration_store->remove_entry(reason);
 }
 
 auto c_str(const Present_calibration_phase value) -> const char*

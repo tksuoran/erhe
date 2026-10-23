@@ -28,6 +28,9 @@ namespace erhe::graphics {
 
 namespace {
 
+// A change to any of these constants or to the phases below changes what the
+// calibration measures: bump c_present_calibration_version
+// (present_calibration_cache.hpp) so cached entries are not reused.
 constexpr int    s_request_steps         = 11;    // request offsets 0 ... 2.5 T in steps of T/4
 constexpr int    s_request_passes        = 3;
 constexpr double s_request_lead_periods  = 3.5;   // request-window samples complete at least this early
@@ -364,17 +367,13 @@ auto run_present_calibration(
             ++early_in_deadline;
         }
     }
-    const std::string prewarm = (result.prewarm_seconds_per_iteration > 0.0)
-        ? fmt::format("GPU pre-warm kernel {:.1f} ns per iteration; ", result.prewarm_seconds_per_iteration * 1.0e9)
-        : std::string{};
     result.status = fmt::format(
         "period {:.3f} ms; request window {:.2f} ... {:.2f} T -> request at {:.3f} ms ({:.2f} T) before the target; "
-        "deadline {:.3f} ms ({:.2f} T); {}{} samples, {} early in the deadline phase, {} coarse deadline passes late as a whole; {:.0f} ms",
+        "deadline {:.3f} ms ({:.2f} T); {} samples, {} early in the deadline phase, {} coarse deadline passes late as a whole; {:.0f} ms",
         period * 1000.0,
         result.request_min / period, result.request_max / period,
         result.request_offset * 1000.0, result.request_offset / period,
         result.deadline_offset * 1000.0, result.deadline_offset / period,
-        prewarm,
         result.samples.size(), early_in_deadline, discarded_passes,
         (now() - start_time) * 1000.0
     );

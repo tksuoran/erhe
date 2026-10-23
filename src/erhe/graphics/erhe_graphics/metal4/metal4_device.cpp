@@ -344,10 +344,19 @@ void Device_impl::init_frame_pacing(erhe::window::Context_window* const context_
             // display driven fullscreen has no grid for the pacer to track.
             // Re-read with the period: on a display change, a mode change and
             // entering or leaving fullscreen.
+            // The present calibration's cache key follows the display, its
+            // mode and the fullscreen state (doc/erhe/graphics.md "Present
+            // calibration cache"): a changed key re-seeds the pacer from the
+            // cached entry, or clears the calibration.
+            const bool calibration_changed = owner_device->refresh_present_calibration_for_display();
+            bool presentation_applied = false;
             if ((device_impl->m_surface != nullptr) && !device_impl->m_surface->get_impl().is_headless()) {
-                owner_device->get_display_refresh_resolver().set_window_presentation(
+                presentation_applied = owner_device->get_display_refresh_resolver().set_window_presentation(
                     device_impl->m_surface->get_impl().query_display_presentation()
                 );
+            }
+            if (calibration_changed && !presentation_applied) {
+                owner_device->get_display_refresh_resolver().notify_presentation();
             }
         };
         feed_window_period();
@@ -1060,7 +1069,7 @@ auto Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
                 // the pacer's grid from rounding up to the next refresh
                 // across a small grid phase error on a fixed-rate display
                 // (doc/frame_pacing/capability_tiers.md section 5).
-                const double request_offset = m_present_request_offset.value_or(0.25 * period);
+                const double request_offset = m_device.get_present_request_offset().value_or(0.25 * period);
                 drawable->presentAtTime(target_time - request_offset);
             } else {
                 drawable->present();

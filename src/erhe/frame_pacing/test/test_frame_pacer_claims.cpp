@@ -1231,6 +1231,34 @@ TEST(Frame_pacer_claims, c22b_deadline_estimate_stays_put_on_direct_path)
     EXPECT_DOUBLE_EQ(pacer.get_deadline_offset(), scenario.plant.tunables.deadline_offset_initial);
 }
 
+TEST(Frame_pacer_claims, c22c_calibrated_deadline_ceiling_sustained)
+{
+    // Stale-low host calibration (doc/erhe/graphics.md "Present calibration
+    // cache"): the host seeds the deadline offset and caps the estimate half a
+    // period above it, but the presentation path now needs more. The
+    // estimate sits at the ceiling, and after the sustain window the pacer
+    // reports it. A calibration that still covers the true deadline is not
+    // reported.
+    const double t = 1.0 / 120.0;
+    const auto run = [t](const double true_deadline, const double calibrated) -> bool {
+        Scenario scenario;
+        scenario.frame_count                            = 3000;
+        scenario.plant.tunables.refresh_period          = t;
+        scenario.plant.true_deadline_offset             = true_deadline;
+        scenario.plant.tunables.deadline_offset_source  = erhe::frame_pacing::Deadline_offset_source::estimated;
+        scenario.plant.tunables.deadline_offset_initial = calibrated;
+        scenario.plant.tunables.deadline_offset_max     = calibrated + (0.5 * t);
+        scenario.cpu_duration                           = make_gauss(2221, 2.0, 0.2);
+        scenario.gpu_duration                           = make_gauss(2222, 3.0, 0.2);
+        Frame_pacer pacer{scenario.plant.tunables};
+        const std::vector<Frame_record> records = run_scenario(scenario, pacer);
+        static_cast<void>(records);
+        return pacer.is_deadline_offset_ceiling_sustained();
+    };
+    EXPECT_TRUE (run(t + (1.5 * ms), 0.25 * t)) << "a ceiling below the true deadline must be reported";
+    EXPECT_FALSE(run(t + (1.5 * ms), t + (1.5 * ms))) << "a calibration at the true deadline must not be reported";
+}
+
 TEST(Frame_pacer_claims, c23_upshift_under_gpu_clock_scaling)
 {
     // Measured on the Apple GPU (doc/erhe/metal_backend.md "Frame pacing"):

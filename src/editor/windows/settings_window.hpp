@@ -6,6 +6,7 @@
 #include "windows/property_editor.hpp"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
@@ -48,6 +49,7 @@ private:
     int                      m_graphics_preset_index{0};
     int                      m_shadow_resolution_index{0};
     int                      m_shadow_depth_bits_index{0};
+    std::string              m_present_calibration_feedback; // set by the re-measure button only
 };
 
 }

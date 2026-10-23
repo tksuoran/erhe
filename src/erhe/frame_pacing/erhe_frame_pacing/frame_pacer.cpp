@@ -373,6 +373,7 @@ void Frame_pacer::notify_swapchain_recreated(const double nominal_grid_phase)
     m_deadline_offset       = m_tunables.deadline_offset_initial;
     m_deadline_sample_head  = 0;
     m_deadline_sample_count = 0;
+    m_deadline_ceiling_run  = 0;
     m_consecutive_misses  = 0;
     m_streak_attribution  = std::numeric_limits<double>::infinity();
     m_backlog             = 0.0;
@@ -1037,6 +1038,17 @@ void Frame_pacer::update_deadline_offset(const std::int64_t frame_id, const doub
         m_deadline_offset = evidence;
     } else {
         m_deadline_offset = std::max(evidence, m_deadline_offset - m_tunables.deadline_offset_decay);
+    }
+    // Stale-low host measurement (present calibration cache): the estimate
+    // held at a host-measured ceiling. Saturates once sustained.
+    if (m_tunables.deadline_offset_max > 0.0) {
+        if (m_deadline_offset >= (m_deadline_offset_max - m_tunables.deadline_ceiling_tolerance)) {
+            if (m_deadline_ceiling_run < m_tunables.deadline_ceiling_sustain_samples) {
+                ++m_deadline_ceiling_run;
+            }
+        } else if (m_deadline_ceiling_run < m_tunables.deadline_ceiling_sustain_samples) {
+            m_deadline_ceiling_run = 0;
+        }
     }
 }
 

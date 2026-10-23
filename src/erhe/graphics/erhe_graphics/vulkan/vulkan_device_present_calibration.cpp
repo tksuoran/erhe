@@ -25,6 +25,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/present_calibration.hpp"
+#include "erhe_graphics/present_calibration_cache.hpp"
 #include "erhe_graphics/present_calibration_runner.hpp"
 #include "erhe_frame_pacing/frame_time_recorder.hpp"
 
@@ -312,7 +313,7 @@ private:
 
 auto Device_impl::get_present_request_offset() const -> std::optional<double>
 {
-    return m_present_request_offset;
+    return m_device.get_present_request_offset();
 }
 
 void Device_impl::run_present_calibration(Surface_impl& surface_impl)
@@ -327,9 +328,21 @@ void Device_impl::run_present_calibration(Surface_impl& surface_impl)
         } else {
             log_display_refresh->info("present calibration: {}", result.status);
         }
-        m_present_request_offset = result.valid ? std::optional<double>{result.request_offset} : std::nullopt;
-        m_device.set_present_calibration(result);
+        m_device.finish_present_calibration(result);
     };
+
+    // A cached calibration for this display, mode, OS build, GPU and path
+    // (doc/erhe/graphics.md "Present calibration cache") replaces the probes.
+    {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(m_vulkan_physical_device, &properties);
+        const Present_path present_path = (m_driver_properties.driverID == VK_DRIVER_ID_MOLTENVK)
+            ? Present_path::moltenvk_display_timing
+            : Present_path::vulkan_display_timing;
+        if (m_device.begin_present_calibration(m_context_window, properties.deviceName, present_path, result)) {
+            return;
+        }
+    }
 
     const VkSurfaceKHR surface = surface_impl.get_vulkan_surface();
     if ((surface == VK_NULL_HANDLE) || !m_gpu_timers_supported || (m_vulkan_present_queue == VK_NULL_HANDLE) || (vkGetPastPresentationTimingGOOGLE == nullptr)) {
@@ -363,6 +376,8 @@ void Device_impl::run_present_calibration(Surface_impl& surface_impl)
     }
     // The application swapchain's image count and present mode (tier W on
     // this path: plain FIFO), so the probes see the queue the frames see.
+    // A change to this probe swapchain configuration bumps
+    // c_present_calibration_version (present_calibration_cache.hpp).
     uint32_t image_count = std::max(surface_impl.get_image_count(), std::max(3u, surface_capabilities.minImageCount));
     if (surface_capabilities.maxImageCount != 0) {
         image_count = std::min(image_count, surface_capabilities.maxImageCount);

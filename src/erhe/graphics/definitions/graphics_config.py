@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Graphics_config",
     reflect=True,
-    version=2,
+    version=3,
     short_desc="Graphics Settings",
     long_desc="",
     developer=False,
@@ -134,6 +134,16 @@ struct("Graphics_config",
             default="0.0f",
             short_desc="Display Refresh Override (Hz)",
             long_desc="The display refresh rate the frame pacer runs on when display_refresh_source is 'override', in Hz (e.g. 120.0). Ignored for the other sources; 0 or less with 'override' falls back to 'auto' with a warning.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "present_calibration_cache",
+            Bool,
+            added_in=3,
+            default="true",
+            short_desc="Reuse Cached Present Calibration",
+            long_desc="Reuse the present calibration (the probe run at device init on a presentation path that honors target present times: Metal tier M, Vulkan VK_GOOGLE_display_timing) measured by an earlier run on the same display, display mode, OS build, GPU and present path, instead of running the probes again (doc/erhe/graphics.md 'Present calibration cache'). Entries live in cache/present_calibration/ under the working directory. false always measures and rewrites the entry; the environment variable ERHE_PRESENT_CALIBRATION_CACHE=0 does the same. Change requires restart.",
             visible=True,
             developer=False
         ),

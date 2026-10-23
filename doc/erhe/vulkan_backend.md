@@ -696,9 +696,12 @@ Apple only - so drivers with `VK_EXT_present_timing` (Windows, Linux) and
 KosmicKrisp (tier S) do not run it. The result is logged
 (`erhe.graphics.display_refresh`), reported by MCP `get_frame_pacing_status`
 `present_calibration`, and seeds the pacer's deadline offset as on Metal
-(`Device::get_present_calibration`). The calibration runs at init only: a
-window moved to another display keeps the request offset measured on the
-first one (as on Metal). Measured results:
+(`Device::get_present_calibration`). A valid result is cached under the
+present path `moltenvk_display_timing`, and a later start on the same
+display, mode, OS build and GPU adopts it instead of creating the probe
+swapchain; a display, mode or fullscreen change adopts the calibration of
+the new key (this session's, else the cached entry) or clears it (`doc/erhe/graphics.md` "Present
+calibration cache"). Measured results:
 `doc/plans/frame_pacing_adaptive_sync.md` "Verification". On Apple, tier W also runs the `Clock_monitor`
 (`clock_monitor_apple.hpp`), which takes the frame bracket results and
 writes them with the frame's GPU and CPU clock ratios. The display refresh

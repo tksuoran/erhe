@@ -316,12 +316,20 @@
     "name": "set_window_visibility"
   },
   {
-    "description": "Frame pacing snapshot: display refresh period, pacer state (cadence N, margin, vsync grid phase), upshift state (dwell and the dwell required, the last upshift test's stage time against N-1's period, the GPU / CPU clock ratio N-1 is judged at for the last frame's workload - 0 when N-1 has no samples of that workload - and the pre-warm fill), latest schedule decision, enforcement flag, simulated workload knob, and capture bounds (first/latest frame id). All times are seconds in the frame-record reference clock unless suffixed _ms.",
+    "description": "Frame pacing snapshot: display refresh period, pacer state (cadence N, margin, vsync grid phase), upshift state (dwell and the dwell required, the last upshift test's stage time against N-1's period, the GPU / CPU clock ratio N-1 is judged at for the last frame's workload - 0 when N-1 has no samples of that workload - and the pre-warm fill), latest schedule decision, enforcement flag, simulated workload knob, and capture bounds (first/latest frame id). All times are seconds in the frame-record reference clock unless suffixed _ms. present_calibration (when the backend calibrates: Metal tier M, Vulkan VK_GOOGLE_display_timing) holds the compositor's request window and deadline with every raw sample, its source ('measured' in this process, 'cached' from the present calibration cache, 'none' after a display change without a cached entry), the cache file name, and the cache key fields (CGDisplay vendor / model / serial, display mode, NSScreen refresh range, window mode, OS version and build, GPU name, present path, calibration version).",
     "inputSchema": {
       "properties": {},
       "type": "object"
     },
     "name": "get_frame_pacing_status"
+  },
+  {
+    "description": "Delete the present calibration cache entry of the current display, display mode, OS build, GPU and present path (cache/present_calibration/<hash>.json, doc/erhe/graphics.md 'Present calibration cache'), so the next start measures the present calibration again. The running session keeps its calibration: the probes run only at device init. Returns the deleted file name (empty when there was no entry).",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "recalibrate_present"
   },
   {
     "description": "Every live GPU timer (erhe::graphics::Gpu_timer: render passes, DDGI / radiance cascades passes, the render_scene_image forward pass) with its last completed measurement in milliseconds. A measurement lands one or more frames after the frame that recorded it; 0 = no result yet. 'render_scene_image forward pass' times the forward render pass of the latest render_scene_image capture.",

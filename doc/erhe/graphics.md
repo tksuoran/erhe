@@ -306,6 +306,7 @@ render inline (one thread); the Metal backend's table is in
 | `set_present_target_time` | `m_present_target_*` | render role only (asserted) |
 | `capture_last_frame` (MCP, main) | the emulated swapchain image and its readback submit | `m_queue_mutex` for the submit and the device wait; the image content is ordered only by the caller's handoff |
 | queue debug labels (`Scoped_queue_debug_group`) | the graphics queue | `m_queue_mutex` per call |
+| present calibration (`get_present_request_offset` in the presenting thread; `refresh_present_calibration_for_display` on a display change, main; MCP and Settings readers) | `Present_calibration_store` state | `Present_calibration_store::m_mutex`; getters return copies |
 | shader monitor, shader source cache, SPIR-V cache | watch list; source cache; cache files | `Shader_monitor::m_mutex`; `Shader_source_cache::m_mutex`; the SPIR-V cache keeps no in-memory state |
 | `get_info`, `get_buffer_alignment`, format queries, capabilities | device properties | written during construction only |
 | `get_memory_budget` | VMA heap budgets | VMA is internally synchronized |
@@ -562,11 +563,113 @@ before it (no render encoder open).
   shader with directly bound textures or samplers (texture heap samplers are
   fine). The other backends ignore the field.
 
+## Present calibration cache
+
+The present calibration (`present_calibration.hpp`; the probes are described
+in `doc/erhe/metal_backend.md` "Frame pacing") takes 2 - 3 s of device init
+on a presentation path that honors target present times: Metal and Metal 4
+tier M, and Vulkan tier W through `VK_GOOGLE_display_timing` (MoltenVK). Its
+result depends on the display, its mode, the compositor and the present path,
+so a run reuses the result an earlier run measured on the same combination
+(`present_calibration_cache.hpp`, `Present_calibration_store`, owned by
+`Device`).
+
+**Key** (`Present_calibration_key`), from OS APIs only
+(`query_present_calibration_key`, `present_calibration_key_apple.mm`, shared
+by the three backends; the window system's display name is stored as a
+label and never compared):
+
+- the window's `NSScreen` display (`NSScreenNumber`): `CGDisplayVendorNumber`,
+  `CGDisplayModelNumber`, `CGDisplaySerialNumber`;
+- `CGDisplayCopyDisplayMode`: pixel width and height, refresh rate, IO flags;
+- `NSScreen`: `backingScaleFactor`, `minimumRefreshInterval`,
+  `maximumRefreshInterval`, `displayUpdateGranularity`,
+  `maximumFramesPerSecond`;
+- the window mode (windowed or fullscreen) at the time of the measurement;
+- the OS version (`NSProcessInfo operatingSystemVersion`) and build
+  (`kern.osversion`);
+- the GPU name (`MTLDevice name`; `VkPhysicalDeviceProperties::deviceName`
+  on Vulkan, the same name under MoltenVK);
+- the present path: `metal`, `metal4`, `moltenvk_display_timing` (or
+  `vulkan_display_timing` for another driver);
+- `c_present_calibration_version`, bumped on any change to the runner's
+  constants or phases or to a backend's probe configuration (layer pixel
+  format, drawable / swapchain image count, display sync, queue depth).
+
+Elsewhere (no Apple query) there is no key and the probes run every start.
+
+**File**: `cache/present_calibration/<hash>.json` under the working
+directory, the hash being FNV-1a 64 of the key's canonical JSON text. It
+holds the key fields in clear (compared field by field on read: an entry
+whose fields differ is a miss that names the first differing field), the
+display label, the calibration (validity, status, period, request offset and
+window, deadline offset and every probe sample; floats as hexfloat strings),
+the measurement time (Unix seconds and UTC) and the writing build
+(`erhe::version`). It is written atomically (temporary file, then rename).
+The GPU pre-warm kernel rate is not cached: it is a GPU clock property,
+measured every start before the cache lookup.
+
+**Use**: at device init the backend calls `Device::begin_present_calibration`
+with the window, its GPU name and its present path; a valid entry for the key
+is adopted (`present calibration: cached <file>, measured <UTC>, <N> days
+old`) and the probes are skipped; otherwise the probes run and
+`Device::finish_present_calibration` writes a valid result. Reads are
+disabled (the probes always run, and the entry is rewritten) by the graphics
+config field `present_calibration_cache` = false or the environment variable
+`ERHE_PRESENT_CALIBRATION_CACHE=0`. The GPU tests run with frame pacing tier
+off, so they never calibrate or touch the cache. `Device::get_present_calibration_state`
+reports the calibration with its source (`measured`, `cached` or `none`),
+the key and the file name (MCP `get_frame_pacing_status`
+`present_calibration`).
+
+**Invalidation**:
+
+- A changed key is a miss. At run time the window's display-changed
+  callback (display move, mode change, fullscreen enter and leave) calls
+  `Device::refresh_present_calibration_for_display`: a changed key adopts
+  the cached entry for the new key, or clears the calibration (the pacer
+  then uses its defaults, as it does when the refresh period moves by more
+  than 1 %) and logs that the next start calibrates for that display. The
+  probes do not run at run time. The session's own calibrations are kept
+  in memory per key and looked up first, whatever the read setting, so a
+  window that returns to a display it was calibrated on in this session gets
+  that calibration back. Either way the backend hands the
+  presentation to the editor again (`Display_refresh_resolver::notify_presentation`),
+  which re-seeds the pacer (`apply_display_presentation`).
+- Stale-low (the compositor became slower than the entry): the pacer's
+  deadline estimate held at the calibrated ceiling (the deadline offset
+  plus half a period, within `deadline_ceiling_tolerance`, 0.1 ms, since the
+  estimate decays slowly between raises) for
+  `Frame_pacer_tunables::deadline_ceiling_sustain_samples` (240) consecutive
+  deadline samples
+  (`Frame_pacer::is_deadline_offset_ceiling_sustained`) makes the frame
+  pacing observer call its deadline ceiling callback once per pacer; the
+  editor deletes the entry (`Device::remove_present_calibration_cache_entry`)
+  and the running session keeps the estimate.
+- Stale-high (the compositor became faster) is not observable from the
+  feedback; there is no age limit. The entry's age is logged at every start,
+  and MCP `recalibrate_present` and the Settings window's "Re-measure at
+  Next Start" button delete the entry so the next start measures.
+- The editor uses the calibration only while the resolved refresh period is
+  within 1 % of the calibrated period (`Frame_pacing_observer`).
+- The window mode is part of the key and a fullscreen key never falls back
+  to the windowed entry: the compositor's request window differs between
+  them (MoltenVK fullscreen 0 - 0.75 T against 1.0 - 1.75 T windowed,
+  `doc/plans/frame_pacing_adaptive_sync.md` "Verification"). A run-time
+  fullscreen toggle without a fullscreen entry runs on the pacer defaults
+  (a quarter period request offset, the 2.5 ms deadline start) until a start
+  in fullscreen calibrates it; a launch straight into fullscreen may
+  calibrate while the Space animation runs.
+- No key, so no caching: a window without a screen, a display without
+  identity (vendor and model 0: virtual, Sidecar and AirPlay displays) or
+  without a readable display mode.
+
 ## Dependencies
 - **erhe libraries (interface target, public):** `erhe::circular_ring_buffer`, `erhe::dataformat`, `erhe::frame_pacing`, `erhe::item`, `erhe::math`
 - **erhe libraries (backend target):** `erhe::window` (public; the surface and swapchain backends), `erhe::gl` (private, OpenGL backend only)
 - **erhe libraries (both targets, private):** `erhe::defer`, `erhe::file`, `erhe::hash`, `erhe::log`, `erhe::profile`, `erhe::time`, `erhe::utility`, `erhe::verify`
-- **External:** glm, fmt, mango, concurrentqueue and glslang (with `ERHE_SPIRV`) on the interface target; volk and VMA (Vulkan), metal-cpp and SPIRV-Cross (Metal) on the backend target, selected at CMake time
+- **erhe libraries (interface target, private):** `erhe::version` and `erhe::window` (the present calibration cache)
+- **External:** glm, fmt, mango, concurrentqueue, nlohmann_json (private) and glslang (with `ERHE_SPIRV`) on the interface target; volk and VMA (Vulkan), metal-cpp and SPIRV-Cross (Metal) on the backend target, selected at CMake time
 
 ## Notes
 - All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), `metal4/` (Metal 4, `doc/erhe/metal4_backend.md`), and `null/` (headless).

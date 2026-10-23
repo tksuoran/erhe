@@ -667,6 +667,13 @@ Device_impl::Device_impl(
                 display_name.c_str(),
                 context_window->enumerate_displays().size()
             );
+            // The present calibration's cache key follows the display, its
+            // mode and the fullscreen state (doc/erhe/graphics.md "Present
+            // calibration cache"): a changed key re-seeds the pacer from the
+            // cached entry, or clears the calibration.
+            if (owner_device->refresh_present_calibration_for_display()) {
+                owner_device->get_display_refresh_resolver().notify_presentation();
+            }
         };
         feed_window_period();
         m_context_window->register_display_changed_callback(feed_window_period);

@@ -154,6 +154,14 @@ model suites.
 
 ## Verification
 
+Status 2026-10-23: the fullscreen sessions below (Dell D-I and the
+ProMotion fullscreen runs) ran with the windowed present calibration's
+request offset (1.38 T), which lies outside the fullscreen request window
+measured on MoltenVK (0 - 0.75 T). With the present calibration cache
+(`doc/erhe/graphics.md` "Present calibration cache") fullscreen uses a
+fullscreen entry, or the pacer defaults (T/4) without one; the fullscreen
+gate results are pending a re-gate.
+
 Live, 2026-10-22, Release Metal (`build_xcode_metal`), M4 Pro, external
 48-120 Hz panel at 3840x1440 @ 120 Hz, Bistro at the bench camera; per
 config 10 s settle, then a 5 s pacing capture (about 600 frames at N=1).
