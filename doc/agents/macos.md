@@ -86,16 +86,19 @@ plain CMake); `scripts/render_thread_bench.py` and
 `scripts/tracy_zone_summary.py` find them in `$HOME/git/tracy`.
 
 Unpaced frame times need the headless Metal tree
-(`scripts/configure_xcode_metal_headless.sh`): the windowed Metal build is
-display-paced in `nextDrawable` even with `force_disable_vsync`, and the
-windowed Vulkan drivers are bound by the presenting submit
+(`scripts/configure_xcode_metal_headless.sh`): with `force_disable_vsync`
+the windowed builds are not display-paced, but every frame waits 1.4-1.8 ms
+for a `CAMetalLayer` drawable, in the `swapchain` term on Metal and inside
+the presenting submit's `vkQueueSubmit2` on MoltenVK
 (`doc/reference/render_thread_measurements_2026_10.md` section 4). Pass
 `--config Release` (or `Debug`) to the bench for the Xcode trees' `bin/<config>/`.
 GPU cost on the Apple GPU comes from a Metal System Trace (`xcrun xctrace
 record --template 'Metal System Trace' --launch -- <editor> ...`, then
-`xcrun xctrace export --xpath` of the `metal-gpu-intervals` table): the
-backend emits no Tracy GPU zones, and MoltenVK's timestamp queries do not
-time render passes on this GPU.
+`xcrun xctrace export --xpath` of the `metal-gpu-intervals` table) or, per
+`Scoped_gpu_zone`, from the Metal backend's Tracy GPU zones (encoder
+granularity, `doc/erhe/metal_backend.md` "GPU timers"; `tracy-csvexport -g`
+lists them). MoltenVK's timestamp queries do not time render passes on this
+GPU.
 
 ## Debugging
 

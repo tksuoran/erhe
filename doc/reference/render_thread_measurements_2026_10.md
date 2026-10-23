@@ -159,7 +159,9 @@ handshake on macOS; it now connects after the readiness marker.
 
 Note (2026-10-23): on Metal, `auto` resolves to tier M since 2026-10-21
 (tier S from 2026-10-20 before that), and to OFF headless or under
-`force_disable_vsync` (`doc/plans/frame_pacing_metal.md`).
+`force_disable_vsync` (`doc/plans/frame_pacing_metal.md`). Vulkan resolves
+`force_disable_vsync` to tier OFF too, and the phase log's full tick now
+starts at the frame start, so it includes `frame_start_wait` and the poll.
 
 Release, headless Metal:
 
@@ -225,8 +227,29 @@ Also found on this machine:
   Read GPU cost on Apple GPUs from a Metal System Trace.
 - The Metal backend emits no Tracy GPU zones. (Note, 2026-10-23: it has
   `Gpu_timer` results through stage-boundary counter sampling since
-  2026-10-19, read with `get_gpu_timers`; still no Tracy GPU zones.)
+  2026-10-19, read with `get_gpu_timers`, and Tracy GPU zones at encoder
+  granularity since 2026-10-23, `doc/erhe/metal_backend.md` "GPU
+  timers".)
 - The windowed Metal build is paced by the display with
   `force_disable_vsync` (`displaySyncEnabled = NO` on the layer):
   `nextDrawable` waits about 8.3 ms per frame on a 120 Hz display.
+
+Follow-up measurements (2026-10-23, Release, windowed, draws, window
+960x540, viewport 320x200, pipelined, `force_disable_vsync` with the tier
+resolving to OFF on both back ends):
+
+- Windowed Metal is no longer display-paced: the full tick (now including
+  the frame start and the poll) is 2.06 ms over three runs, against 1.47 ms
+  headless. R is the tick; 1.4 ms of it is the `swapchain` term, the
+  `nextDrawable` wait for a drawable the compositor has not returned. The
+  Tracy GPU zones put the frame's timed GPU work at about 0.87 ms (Main
+  0.70, Post_processing 0.15, Overlay 0.01).
+- Windowed MoltenVK (tick 3.4 ms, R 3.18 ms): a `sample` profile of the
+  render thread puts 74% of it in `submit_command_buffers`, and 56% in
+  `-[CAMetalLayer nextDrawable]` blocked on its semaphore, reached through
+  `vkQueueSubmit2` -> MoltenVK encoding the render pass that targets the
+  swapchain image -> `MVKPresentableSwapchainImage::getCAMetalDrawable()`.
+  MoltenVK takes the drawable lazily at submit, so the drawable wait the
+  Metal backend shows in `swapchain` is the presenting submit's bimodal
+  CPU time on MoltenVK. The suspicion above holds.
 
