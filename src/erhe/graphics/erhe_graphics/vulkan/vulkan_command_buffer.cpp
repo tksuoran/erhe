@@ -719,6 +719,110 @@ void Command_buffer_impl::memory_barrier(Memory_barrier_mask barriers)
     );
 }
 
+void Command_buffer_impl::texture_barrier(
+    const Texture&                   texture,
+    const Texture_subresource_range& range,
+    const std::uint64_t              usage_before,
+    const std::uint64_t              usage_after,
+    const Barrier_scope              scope
+)
+{
+    ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);
+
+    // The first synchronization scope of a pipeline barrier holds every
+    // command submitted to the queue before it (vkspec "Execution and Memory
+    // Dependencies"), so earlier_submissions records the same barrier as
+    // command_buffer: this backend submits on one queue.
+    static_cast<void>(scope);
+
+    const Texture_impl& tex_impl = texture.get_impl();
+    if (tex_impl.get_vk_image() == VK_NULL_HANDLE) {
+        return;
+    }
+    const Image_subresource_range all = tex_impl.get_all_subresources();
+    ERHE_VERIFY(range.base_level < all.level_count);
+    ERHE_VERIFY(range.base_layer < all.layer_count);
+    const uint32_t level_count = (range.level_count == Texture_subresource_range::remaining) ? (all.level_count - range.base_level) : range.level_count;
+    const uint32_t layer_count = (range.layer_count == Texture_subresource_range::remaining) ? (all.layer_count - range.base_layer) : range.layer_count;
+    ERHE_VERIFY((range.base_level + level_count) <= all.level_count);
+    ERHE_VERIFY((range.base_layer + layer_count) <= all.layer_count);
+
+    const erhe::dataformat::Format pixelformat = texture.get_pixelformat();
+    const Image_aspect_kind aspect_kind =
+        ((erhe::dataformat::get_depth_size_bits(pixelformat) > 0) || (erhe::dataformat::get_stencil_size_bits(pixelformat) > 0))
+            ? Image_aspect_kind::depth_stencil
+            : Image_aspect_kind::color;
+    const Vk_stage_access_2 src        = image_usage_to_vk_barrier_scope(usage_before, Barrier_side::source);
+    const Vk_stage_access_2 dst        = image_usage_to_vk_barrier_scope(usage_after,  Barrier_side::destination);
+    const VkImageLayout     old_layout = image_usage_to_vk_barrier_layout(usage_before, aspect_kind);
+    const VkImageLayout     new_layout = image_usage_to_vk_barrier_layout(usage_after,  aspect_kind);
+    tex_impl.record_usage_barrier(
+        m_vk_command_buffer,
+        Image_subresource_range{
+            .base_level  = range.base_level,
+            .level_count = level_count,
+            .base_layer  = range.base_layer,
+            .layer_count = layer_count
+        },
+        src.stage,
+        src.access,
+        dst.stage,
+        dst.access,
+        old_layout,
+        new_layout
+    );
+}
+
+void Command_buffer_impl::buffer_barrier(const Buffer& buffer, const std::uint64_t usage_before, const std::uint64_t usage_after, const Barrier_scope scope)
+{
+    ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);
+    static_cast<void>(scope); // see texture_barrier
+
+    const VkBuffer vk_buffer = buffer.get_impl().get_vk_buffer();
+    if (vk_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+    const Vk_stage_access_2 src = buffer_usage_to_vk_barrier_scope(usage_before, Barrier_side::source);
+    const Vk_stage_access_2 dst = buffer_usage_to_vk_barrier_scope(usage_after,  Barrier_side::destination);
+    if ((src.stage == 0) || (dst.stage == 0)) {
+        return; // usage_before none: nothing earlier to order against
+    }
+    const VkBufferMemoryBarrier2 buffer_barrier_info{
+        .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+        .pNext               = nullptr,
+        .srcStageMask        = src.stage,
+        .srcAccessMask       = src.access,
+        .dstStageMask        = dst.stage,
+        .dstAccessMask       = dst.access,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer              = vk_buffer,
+        .offset              = 0,
+        .size                = VK_WHOLE_SIZE
+    };
+    const VkDependencyInfo dependency_info{
+        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                    = nullptr,
+        .dependencyFlags          = 0,
+        .memoryBarrierCount       = 0,
+        .pMemoryBarriers          = nullptr,
+        .bufferMemoryBarrierCount = 1,
+        .pBufferMemoryBarriers    = &buffer_barrier_info,
+        .imageMemoryBarrierCount  = 0,
+        .pImageMemoryBarriers     = nullptr,
+    };
+    vkCmdPipelineBarrier2(m_vk_command_buffer, &dependency_info);
+
+    ERHE_VULKAN_SYNC_TRACE(
+        "[BUF_BARRIER] buffer=0x{:x} src_stage={} src_access={} dst_stage={} dst_access={}",
+        reinterpret_cast<std::uintptr_t>(vk_buffer),
+        pipeline_stage_flags_str(src.stage),
+        access_flags_str(src.access),
+        pipeline_stage_flags_str(dst.stage),
+        access_flags_str(dst.access)
+    );
+}
+
 void Command_buffer_impl::cmd_texture_barrier(std::uint64_t usage_before, std::uint64_t usage_after)
 {
     ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);

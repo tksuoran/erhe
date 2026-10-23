@@ -513,6 +513,21 @@ public:
     // OpenXR fixed foveated rendering: the runtime-owned FDM image controls
     // per-tile render resolution. Maps to VK_IMAGE_USAGE_FRAGMENT_DENSITY_MAP_BIT_EXT.
     static constexpr uint64_t fragment_density_map     = 13;
+
+    // Modifiers for Command_buffer::texture_barrier (doc/erhe/graphics.md
+    // "Resource barriers"); texture creation and render pass attachment
+    // descriptors ignore them. The stage qualifiers name the shader stages
+    // that perform the sampled / storage / input_attachment accesses of a
+    // barrier side; without one, those accesses cover every shader stage.
+    // discard, on usage_before only, drops the texture's contents (Vulkan
+    // oldLayout UNDEFINED) while the rest of usage_before still orders the
+    // earlier accesses (sampled | fragment_shader | discard: a target the
+    // previous frame sampled, about to be overwritten). The bit positions of
+    // the stage qualifiers equal those of Buffer_usage_flag_bit.
+    static constexpr uint64_t vertex_shader            = 20;
+    static constexpr uint64_t fragment_shader          = 21;
+    static constexpr uint64_t compute_shader           = 22;
+    static constexpr uint64_t discard                  = 23;
 };
 
 class Image_usage_flag_bit_mask
@@ -532,6 +547,94 @@ public:
     static constexpr uint64_t present                  = uint64_t{1} << Image_usage_flag_bit::present                 ;
     static constexpr uint64_t user_synchronized        = uint64_t{1} << Image_usage_flag_bit::user_synchronized       ;
     static constexpr uint64_t fragment_density_map     = uint64_t{1} << Image_usage_flag_bit::fragment_density_map    ;
+    static constexpr uint64_t vertex_shader            = uint64_t{1} << Image_usage_flag_bit::vertex_shader           ;
+    static constexpr uint64_t fragment_shader          = uint64_t{1} << Image_usage_flag_bit::fragment_shader         ;
+    static constexpr uint64_t compute_shader           = uint64_t{1} << Image_usage_flag_bit::compute_shader          ;
+    static constexpr uint64_t discard                  = uint64_t{1} << Image_usage_flag_bit::discard                 ;
+    static constexpr uint64_t shader_stages            = vertex_shader | fragment_shader | compute_shader;
+};
+
+// The accesses of one side of Command_buffer::buffer_barrier
+// (doc/erhe/graphics.md "Resource barriers"). Distinct from Buffer_usage,
+// which declares at creation what a buffer may be used for: these bits name
+// what one recorded access does. Same shape as Image_usage_flag_bit: invalid
+// is the empty mask, none (no earlier access, usage_before only) is bit 1.
+// The stage qualifiers (vertex_shader, fragment_shader, compute_shader) name
+// the shader stages of the uniform, storage_read, storage_write and
+// acceleration_structure_read accesses of the same side; without one those
+// accesses cover every shader stage. indirect takes no qualifier: argument
+// reads cover draws and dispatches.
+class Buffer_usage_flag_bit
+{
+public:
+    static constexpr uint64_t invalid                            = 0;
+    static constexpr uint64_t none                               = 1;
+    static constexpr uint64_t vertex                             = 2;  // vertex attribute fetch
+    static constexpr uint64_t index                              = 3;  // index fetch
+    static constexpr uint64_t indirect                           = 4;  // draw / dispatch arguments, draw counts
+    static constexpr uint64_t uniform                            = 5;
+    static constexpr uint64_t storage_read                       = 6;
+    static constexpr uint64_t storage_write                      = 7;
+    static constexpr uint64_t transfer_src                       = 8;
+    static constexpr uint64_t transfer_dst                       = 9;
+    static constexpr uint64_t host_read                          = 10;
+    static constexpr uint64_t host_write                         = 11;
+    static constexpr uint64_t acceleration_structure_build_input = 12; // vertex / index / instance input of a build
+    static constexpr uint64_t acceleration_structure_read        = 13; // ray queries, top level builds reading bottom levels
+    static constexpr uint64_t acceleration_structure_write       = 14; // the structure a build writes
+    static constexpr uint64_t vertex_shader                      = 20;
+    static constexpr uint64_t fragment_shader                    = 21;
+    static constexpr uint64_t compute_shader                     = 22;
+};
+
+class Buffer_usage_flag_bit_mask
+{
+public:
+    static constexpr uint64_t invalid                            = {0};
+    static constexpr uint64_t none                               = uint64_t{1} << Buffer_usage_flag_bit::none                              ;
+    static constexpr uint64_t vertex                             = uint64_t{1} << Buffer_usage_flag_bit::vertex                            ;
+    static constexpr uint64_t index                              = uint64_t{1} << Buffer_usage_flag_bit::index                             ;
+    static constexpr uint64_t indirect                           = uint64_t{1} << Buffer_usage_flag_bit::indirect                          ;
+    static constexpr uint64_t uniform                            = uint64_t{1} << Buffer_usage_flag_bit::uniform                           ;
+    static constexpr uint64_t storage_read                       = uint64_t{1} << Buffer_usage_flag_bit::storage_read                      ;
+    static constexpr uint64_t storage_write                      = uint64_t{1} << Buffer_usage_flag_bit::storage_write                     ;
+    static constexpr uint64_t transfer_src                       = uint64_t{1} << Buffer_usage_flag_bit::transfer_src                      ;
+    static constexpr uint64_t transfer_dst                       = uint64_t{1} << Buffer_usage_flag_bit::transfer_dst                      ;
+    static constexpr uint64_t host_read                          = uint64_t{1} << Buffer_usage_flag_bit::host_read                         ;
+    static constexpr uint64_t host_write                         = uint64_t{1} << Buffer_usage_flag_bit::host_write                        ;
+    static constexpr uint64_t acceleration_structure_build_input = uint64_t{1} << Buffer_usage_flag_bit::acceleration_structure_build_input;
+    static constexpr uint64_t acceleration_structure_read        = uint64_t{1} << Buffer_usage_flag_bit::acceleration_structure_read       ;
+    static constexpr uint64_t acceleration_structure_write       = uint64_t{1} << Buffer_usage_flag_bit::acceleration_structure_write      ;
+    static constexpr uint64_t vertex_shader                      = uint64_t{1} << Buffer_usage_flag_bit::vertex_shader                     ;
+    static constexpr uint64_t fragment_shader                    = uint64_t{1} << Buffer_usage_flag_bit::fragment_shader                   ;
+    static constexpr uint64_t compute_shader                     = uint64_t{1} << Buffer_usage_flag_bit::compute_shader                    ;
+    static constexpr uint64_t shader_stages                      = vertex_shader | fragment_shader | compute_shader;
+};
+
+// Where the accesses of usage_before of a resource barrier were recorded
+// (doc/erhe/graphics.md "Resource barriers").
+enum class Barrier_scope : unsigned int {
+    // Earlier in the command buffer the barrier is recorded into.
+    command_buffer,
+    // In work submitted to the queue before the command buffer the barrier
+    // is recorded into: another command buffer, possibly recorded by another
+    // thread. Also covers earlier work of the same command buffer.
+    earlier_submissions
+};
+
+// Mip levels and array layers of a texture, relative to the texture (a
+// texture view counts from its own base level and layer). remaining as a
+// count extends the range to the texture's last level / layer; the default
+// range is the whole texture.
+class Texture_subresource_range
+{
+public:
+    static constexpr uint32_t remaining = 0xffffffffu;
+
+    uint32_t base_level {0};
+    uint32_t level_count{remaining};
+    uint32_t base_layer {0};
+    uint32_t layer_count{remaining};
 };
 
 enum class Image_layout : unsigned int {
@@ -555,5 +658,6 @@ enum class Message_severity : unsigned int {
 };
 
 [[nodiscard]] auto c_str(Message_severity message_severity) -> const char*;
+[[nodiscard]] auto c_str(Barrier_scope    barrier_scope   ) -> const char*;
 
 } // namespace erhe::graphics

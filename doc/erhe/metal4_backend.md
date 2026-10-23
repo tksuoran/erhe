@@ -257,8 +257,56 @@ so every dispatch after the first starts with
 encoder is open on the calling thread (between encoders the queue barrier
 already covers it). The pre-warm kernel starts without a barrier (it touches
 nothing else), but later encoders' barriers wait for it ("Submission").
-Conservative: the barriers serialize all encoders; narrowing them to the
-stages and resources that conflict is future work.
+The unconditional encoder-start barrier is temporary: commit B of
+`doc/plans/resource_barriers.md` removes it once the application chains its
+dependencies explicitly.
+
+Explicit barriers (`Command_buffer::texture_barrier` / `buffer_barrier`,
+`doc/erhe/graphics.md` "Resource barriers") are stage barriers here: MTL4 has
+neither per-resource barriers nor layouts, so the resource, the range and
+`discard` are not used. Each call maps its two usages to `MTL::Stages`
+(`transfer_*` -> blit; `sampled` / `storage` / `input_attachment` /
+`uniform` / `storage_*` -> the stages the `vertex_shader` / `fragment_shader`
+/ `compute_shader` qualifiers name, vertex | fragment | dispatch without
+one; `indirect` -> vertex | dispatch; attachments -> fragment, where tile
+loads, depth tests, stores and resolves happen; `vertex` / `index` ->
+vertex; acceleration structure accesses -> acceleration structure; `none`,
+`present`, host accesses -> no stage, so no barrier) and merges them into one
+of two pending barriers on `Command_buffer_impl`, chosen by the encoder kind
+of the consumer stages (render: vertex / fragment / tile / object / mesh;
+compute: dispatch / blit / acceleration structure). The pending barriers are
+two stage-mask pairs (no allocation). Every encoder recorded into the
+command buffer starts with `Command_buffer_impl::encode_start_barriers`,
+which encodes the unconditional barrier and then, when the pending barrier
+of the encoder's kind is set, one `barrierAfterQueueStages(union of after
+stages, union of before stages, VisibilityOptionDevice)` and clears it. A
+transfer recorded as a render encoder (`blit_framebuffer`'s draw, a depth /
+stencil `clear_texture`, `Render_encoder_use::transfer`) also encodes the
+pending compute barrier when it has blit-stage consumers, as a barrier
+before the render stages, and leaves it pending for the compute encoders
+after it. `end_recording` drops a pending barrier no encoder consumed and
+logs the stage pair at debug level (`log_render_pass`).
+`barrierAfterQueueStages` is the one primitive between encoders for both
+scopes: it is a consumer barrier on all work before the current encoder,
+earlier encoders of the same command buffer and earlier commits alike,
+while `barrierAfterEncoderStages` orders only inside one pass (Apple's
+`MTL4CommandEncoder.h`).
+
+A barrier recorded while a compute encoder is open on the calling thread
+(verified to record into the same command buffer) still enters the pending
+union, and a compute consumer is also ordered inside the open encoder at
+once: `barrierAfterEncoderStages(after, before)` against the encoder's
+earlier dispatches, plus, for `Barrier_scope::earlier_submissions`,
+`barrierAfterQueueStages(after, before)` for the earlier commit (Apple
+documents the queue barrier for work before the current encoder only, so
+the encoder barrier is not left to it).
+
+`ERHE_METAL4_EXPLICIT_BARRIERS_ONLY=1` skips the unconditional barrier in
+`encode_start_barriers` and the per-dispatch `encode_intra_encoder_barrier`,
+so the `Resource_barrier_test` cases of `erhe_graphics_gpu_tests` verify the
+explicit path on its own: each case passes with its barriers and fails
+without them under the switch. It is a test switch that lives until the
+unconditional barriers are removed; the editor is not correct with it set.
 
 ## Present
 

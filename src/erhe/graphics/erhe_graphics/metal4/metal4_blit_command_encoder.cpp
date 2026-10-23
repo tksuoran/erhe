@@ -36,7 +36,7 @@ public:
         ERHE_VERIFY(mtl_command_buffer != nullptr);
         m_encoder = mtl_command_buffer->computeCommandEncoder();
         ERHE_VERIFY(m_encoder != nullptr);
-        encode_queue_barrier(m_encoder);
+        command_buffer.get_impl().encode_start_barriers(m_encoder);
     }
     ~Recording_scope() noexcept
     {
@@ -176,7 +176,7 @@ void Blit_command_encoder_impl::blit_framebuffer(
     MTL4::RenderCommandEncoder* const render_encoder = mtl_command_buffer->renderCommandEncoder(pass_descriptor);
     pass_descriptor->release();
     ERHE_VERIFY(render_encoder != nullptr);
-    encode_queue_barrier(render_encoder);
+    cb_impl.encode_start_barriers(render_encoder, Command_buffer_impl::Render_encoder_use::transfer);
     render_encoder->setRenderPipelineState(pipeline);
     render_encoder->setViewport(
         MTL::Viewport{

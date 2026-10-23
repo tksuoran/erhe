@@ -191,6 +191,13 @@ private:
 // doc/erhe/metal4_backend.md "Barriers".
 void encode_queue_barrier(MTL4::RenderCommandEncoder*  encoder);
 void encode_queue_barrier(MTL4::ComputeCommandEncoder* encoder);
+// False when ERHE_METAL4_EXPLICIT_BARRIERS_ONLY=1: Command_buffer_impl::
+// encode_start_barriers then encodes only the explicit barriers and compute
+// encoders skip the per-dispatch intra-encoder barrier, so the
+// texture_barrier / buffer_barrier tests verify the explicit path on its own.
+// A test switch that exists until the unconditional barrier is removed
+// (doc/plans/resource_barriers.md); the editor is not correct with it set.
+[[nodiscard]] auto is_queue_barrier_enabled() -> bool;
 // Dispatches and blits inside one MTL4 compute encoder run concurrently:
 // a barrier between consecutive ones (Metal 3 compute encoders were serial).
 void encode_intra_encoder_barrier(MTL4::ComputeCommandEncoder* encoder);

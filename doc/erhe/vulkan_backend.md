@@ -526,6 +526,25 @@ when it resolves, else the stencil attachment), so a stencil-only resolve
 tracks its target like a depth resolve does. Optional layout-transition
 tracing can be logged to `logs/vulkan.txt`.
 
+`Command_buffer::texture_barrier` (`doc/erhe/graphics.md` "Resource
+barriers") names both layouts itself: `oldLayout` comes from `usage_before`
+and `newLayout` from `usage_after` (`image_usage_to_vk_barrier_layout`), and
+`Texture_impl::record_usage_barrier` sets the tracked layout of the range to
+`newLayout` afterwards. For this path the tracked layout is a consistency
+check, not an input: a subresource tracked in the `usage_before` layout, or
+already in `newLayout` (a backend-internal transition such as a blit
+encoder copy's or a render pass `finalLayout` got there first), is
+expected and gets the barrier as stated (source access included); any other
+tracked layout logs a `log_texture` warning - once per image
+(`Image_layout_state::claim_mismatch_report`) - naming the texture, the
+first such subresource and its layout: a missing chain. The barrier then
+names the tracked layout as `oldLayout` so it stays valid. `none` or the
+`discard` modifier in `usage_before` drops the contents (`oldLayout =
+UNDEFINED`) and checks nothing. The tracked state exists for the
+transitions the backend still derives (`transition_layout`, blits, render
+pass layouts); it goes once every transition is explicit
+(`doc/plans/resource_barriers.md`).
+
 ## Resources
 
 **Buffers** (`vulkan_buffer.cpp`). VMA-backed `VkBuffer`. `Buffer_usage` maps to

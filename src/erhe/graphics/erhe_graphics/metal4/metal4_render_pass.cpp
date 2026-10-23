@@ -323,7 +323,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     // Order against all earlier work of the queue (doc/erhe/metal4_backend.md
     // "Barriers"): this replaces the Metal 3 inter-encoder fence and Metal's
     // hazard tracking.
-    encode_queue_barrier(m_mtl_encoder);
+    cb_impl.encode_start_barriers(m_mtl_encoder, Command_buffer_impl::Render_encoder_use::draw);
 
     // Gpu_timer samples (metal4_gpu_timer.hpp): the vertex stage start and
     // (end_render_pass) the fragment stage end bracket the pass.

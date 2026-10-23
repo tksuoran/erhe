@@ -405,6 +405,15 @@ auto c_str(const Message_severity message_severity) -> const char*
     }
 }
 
+auto c_str(const Barrier_scope barrier_scope) -> const char*
+{
+    switch (barrier_scope) {
+        case Barrier_scope::command_buffer:      return "command_buffer";
+        case Barrier_scope::earlier_submissions: return "earlier_submissions";
+        default:                                 return "?";
+    }
+}
+
 auto to_glsl_attribute_type(const erhe::dataformat::Format format) -> Glsl_type
 {
     using namespace erhe::dataformat;

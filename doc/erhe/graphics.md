@@ -102,6 +102,7 @@ on every push.
 - `Scoped_render_pass(render_pass, command_buffer, render_pass_before, render_pass_after)` -- RAII render pass begin/end recorded into `command_buffer`; the optional neighbouring passes refine the synchronization between passes.
 - `Scoped_debug_group(command_buffer, label)` / `Scoped_queue_debug_group(device, label)` -- RAII debug label region; the label (`std::string_view`, literal or `Debug_label`) is read during construction only and copied onto the stack (`Debug_label_buffer`, truncated at 255 characters), so a caller may format per-draw labels into a reused buffer without heap allocation.
 - `Gpu_timer(render_pass, label)` / `Gpu_timer(device, label)` + `Scoped_gpu_timer(timer, command_buffer)` -- GPU timing of a render pass or of an explicit command buffer range. A render pass's timers write their timestamps just outside the pass (before it begins, after it ends): KosmicKrisp returns the same value for every timestamp written inside one render pass.
+- `Command_buffer::texture_barrier(texture, [range,] usage_before, usage_after[, scope])` / `buffer_barrier(buffer, usage_before, usage_after[, scope])` -- Explicit per-resource barrier between two accesses (see "Resource barriers").
 - `Render_command_encoder::set_render_pipeline()` / `set_bind_group_layout()` / `set_sampled_image(binding_point, texture, sampler)` / `draw_indexed_primitives()` -- Issue draw calls.
 
 ## Frame lifecycle
@@ -316,6 +317,80 @@ mutex, a ring buffer's mutex, then the leaves (`m_completion_handler_mutex`,
 `m_frame_id_mutex`, `Device_sync_pool::m_mutex`, `m_descriptor_pool_mutex`,
 `m_gpu_timer_mutex` before `Gpu_timer_impl::m_result_mutex`). No bookkeeping
 mutex is held across a GPU wait or a queue call.
+
+## Resource barriers
+
+`Command_buffer::texture_barrier(texture, range, usage_before, usage_after,
+scope)` and `Command_buffer::buffer_barrier(buffer, usage_before,
+usage_after, scope)` state one dependency of one resource. The call orders
+the resource's accesses of `usage_before`, recorded earlier in this command
+buffer (or, with `Barrier_scope::earlier_submissions`, in work submitted to
+the queue before this command buffer, possibly recorded by another thread),
+before its accesses of `usage_after` recorded after the call, and makes the
+earlier writes visible to them. For a texture it also performs the layout
+transition the usage pair implies on a backend with image layouts. Nothing
+is inferred: the backends keep no per-resource hazard state to compensate (two
+threads record at once, so no backend can know the submission order), and a
+missing barrier is an application bug. The application chains the barriers;
+`doc/plans/resource_barriers.md` lists the chains the editor and the
+libraries still leave to the backends.
+
+- Usages are `Image_usage_flag_bit_mask` bits for a texture (the vocabulary of
+  `Render_pass_attachment_descriptor::usage_before` / `usage_after`) and
+  `Buffer_usage_flag_bit_mask` bits for a buffer (`vertex`, `index`,
+  `indirect`, `uniform`, `storage_read`, `storage_write`, `transfer_src`,
+  `transfer_dst`, `host_read`, `host_write`,
+  `acceleration_structure_build_input`, `acceleration_structure_read`,
+  `acceleration_structure_write`; distinct from `Buffer_usage`, which declares
+  at creation what a buffer may be used for). Both masks have the same
+  shape: `invalid` is the empty mask, `none` is bit 1, the stage qualifiers
+  share their bit positions.
+- `none` means the resource was never accessed (a fresh texture); it stands
+  alone and only as `usage_before`. A texture whose contents are dropped but
+  that earlier work did access - a target the previous frame sampled, a
+  swapchain image after its acquire - names that access and adds the
+  `discard` modifier (`sampled | fragment_shader | discard`,
+  `present | discard`): the earlier accesses are still ordered, and the
+  layout transition starts from `UNDEFINED`. `discard` is for
+  `usage_before` only. `present` as `usage_before` is the acquire of a
+  swapchain image: Vulkan orders it at the stage the acquire semaphore wait
+  is submitted with (`COLOR_ATTACHMENT_OUTPUT`).
+- Shader accesses name their stages with the qualifier bits
+  `vertex_shader`, `fragment_shader` and `compute_shader` of the same mask:
+  `storage_write | compute_shader` -> `sampled | fragment_shader`. Without a
+  qualifier a side's shader accesses (texture `sampled`, `storage`,
+  `input_attachment`; buffer `uniform`, `storage_*`,
+  `acceleration_structure_read`) cover every shader stage. `indirect` takes
+  no qualifier: argument reads cover draws and dispatches on every
+  backend. The qualifiers
+  ride in the usage mask rather than in a separate stage argument so that
+  each side of a call reads as one value, and a render graph pin can carry
+  one such value per access. Texture creation and render pass descriptors
+  ignore them.
+- `Barrier_scope::command_buffer` (the overloads without a scope) is the
+  common case. `earlier_submissions` is for a producer in another command
+  buffer; it also covers earlier work of the same command buffer.
+- `range` (`Texture_subresource_range`, default: the whole texture) selects
+  mip levels and array layers relative to the texture; `remaining` as a count
+  extends to the last level / layer.
+- Outside of a render pass only. `Command_buffer` verifies each side: at
+  least one access, nothing but access and modifier bits, a stage qualifier
+  only with a shader access of the same side, `none` and `discard` only on
+  `usage_before`; `user_synchronized` (a render pass descriptor modifier) and
+  `transient_attachment` (a creation flag) are no barrier usage.
+
+`memory_barrier(Memory_barrier_mask)` stays the global catch-all for a
+dependency that names no single resource, and `transition_texture_layout` /
+`cmd_texture_barrier` remain until their callers are chained
+(`doc/plans/resource_barriers.md`). Render pass attachment `usage_before` /
+`usage_after` still derive each pass's own attachment barriers and layouts.
+
+| Backend | `texture_barrier` / `buffer_barrier` |
+|---|---|
+| Vulkan | One `vkCmdPipelineBarrier2` with `VkImageMemoryBarrier2`s (per run of levels sharing their old layout, per layer; `oldLayout` / `newLayout` implied by the usages: `none` and `discard` -> `UNDEFINED`, `sampled` -> `SHADER_READ_ONLY` or `DEPTH_STENCIL_READ_ONLY`, `storage` and mixed usages -> `GENERAL`) or one `VkBufferMemoryBarrier2` over the whole buffer. Source scope: the stages of `usage_before` with their write accesses (`present`: `COLOR_ATTACHMENT_OUTPUT`, no access); destination: the stages and accesses of `usage_after`. Both scopes record the same barrier: a pipeline barrier's first scope includes everything submitted earlier to the queue. The tracked layout is a consistency check (`doc/erhe/vulkan_backend.md` "Image layout tracking") |
+| OpenGL | `glMemoryBarrier` with the bits of `usage_after` (`sampled` -> `TEXTURE_FETCH`, `storage` -> `SHADER_IMAGE_ACCESS`, buffer `vertex` -> `VERTEX_ATTRIB_ARRAY`, `indirect` -> `COMMAND`, `storage_*` -> `SHADER_STORAGE` and so on). OpenGL has no layouts and runs one context in issue order, so range and scope do not matter |
+| Metal | Nothing to record: hazard tracking inside a command buffer, the per-command-buffer inter-encoder fence and queue order already serialize every access (`doc/erhe/metal_backend.md`) |
+| Metal 4 | A stage barrier (MTL4 has no per-resource barriers): the stages of the two usages are merged into the command buffer's pending barrier for the encoder kind of the consumer stages and encoded as one `barrierAfterQueueStages` at the start of the next encoder of that kind; with a compute encoder open, a compute consumer is also ordered at once inside it (`doc/erhe/metal4_backend.md` "Encoders and barriers") |
 
 ## Bind group layout
 
