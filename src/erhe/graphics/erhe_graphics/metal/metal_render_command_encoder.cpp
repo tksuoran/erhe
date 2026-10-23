@@ -608,7 +608,9 @@ void Render_command_encoder_impl::execute_indirect_count_draws(
     }
     const Indirect_count_draws::Slot&                         slot_data = draws.get_slot(slot);
     const Indirect_count_draws_impl::Slot_resources&          resources = draws.get_impl().get_slot_resources(slot);
-    ERHE_VERIFY(resources.encoded && (resources.encoded_frame == slot_data.frame_index));
+    // The ICB and range buffer hold the slot's most recent prepare, which the
+    // set is (Render_command_encoder verified the sequence).
+    ERHE_VERIFY(resources.encoded_sequence == slot_data.sequence);
     ERHE_VERIFY((resources.icb != nullptr) && (resources.range_buffer != nullptr));
     const Indirect_count_draw_job&     job          = slot_data.jobs[job_index];
     const Indirect_count_index_buffer& index_buffer = slot_data.index_buffers[job.index_buffer];

@@ -521,18 +521,23 @@ logs the capability at startup (`Draw indirect count: ...`).
 The form every backend with `use_draw_indirect_count` draws (Metal has no
 other): a producer writes, per job, up to `max_draw_count`
 `Draw_indexed_primitives_indirect_command`s at the job's `command_offset` in
-a command buffer and their number into a count buffer, then declares them
-once per frame with `Compute_command_encoder::
+a command buffer and their number into a count buffer, then declares a set of
+them with `Compute_command_encoder::
 prepare_indexed_indirect_count_draws(draws, prepare_info)` and draws job `j`
-with `Render_command_encoder::multi_draw_indexed_primitives_indirect_count(
-set, j)` inside a later render pass, after the pass has set the pipeline,
-vertex buffers and bindings.
+of the set with `Render_command_encoder::
+multi_draw_indexed_primitives_indirect_count(set, j)` inside a later render
+pass, after the pass has set the pipeline, vertex buffers and bindings. A
+frame may prepare any number of sets, typically one per render pass just
+before it (no render encoder open).
 
 - `Indirect_count_draws(device, debug_label)` is persistent (one per
   producer): it keeps one slot per frame in flight, selected by
-  `prepare_info.frame_index % get_number_of_frames_in_flight()`, and one
-  prepare per slot per frame. The returned `Indirect_count_draw_set` names
-  the slot and is valid for that frame.
+  `prepare_info.frame_index % get_number_of_frames_in_flight()` (frame
+  indices do not decrease). Each prepare replaces the slot's state and gets
+  the next sequence number; the returned `Indirect_count_draw_set` names the
+  slot and the sequence number, and the draw verifies the set is the most
+  recent prepare, so a set is drawn before the next prepare on the same
+  `Indirect_count_draws`.
 - `Indirect_count_draws_prepare_info`: the primitive type; the index buffers
   (`Indirect_count_index_buffer`: buffer, 16- or 32-bit index type; a job
   names one by index, so jobs of one prepare may draw from different

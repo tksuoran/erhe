@@ -24,11 +24,15 @@ class Indirect_count_draws_impl;
 // Draw_indexed_primitives_indirect_command records (stride 20 bytes) starting
 // at the job's command_offset in a command buffer, and the number it wrote
 // into a count buffer. Compute_command_encoder::
-// prepare_indexed_indirect_count_draws() declares those buffers and the jobs
-// once per frame, after the producer's dispatches; Render_command_encoder::
+// prepare_indexed_indirect_count_draws() declares those buffers and a set of
+// jobs, after the producer's dispatches, and Render_command_encoder::
 // multi_draw_indexed_primitives_indirect_count(set, job) then draws one job
-// with the GPU-read count. On Vulkan and OpenGL the draw is the native count
-// draw and the prepare step only records the parameters; on Metal the prepare
+// of the set with the GPU-read count. A frame may prepare several sets (one
+// per render pass, say); each prepare replaces the previous set's state, so
+// a set is drawn before the next prepare on the same Indirect_count_draws
+// (the draw verifies it is the most recent one). On Vulkan and OpenGL the
+// draw is the native count draw and the prepare step only records the
+// parameters; on Metal the prepare
 // step dispatches a kernel that encodes each job's surviving commands into an
 // indirect command buffer, and the draw executes the job's range of it.
 // Needs Device_info::use_draw_indirect_count.
@@ -59,8 +63,7 @@ class Indirect_count_draws_prepare_info
 public:
     // The device frame the draws are recorded for (Device::get_frame_index()
     // of the recording role); selects the frame-in-flight slot whose
-    // resources the prepare step writes. One prepare per Indirect_count_draws
-    // per frame.
+    // resources the prepare step writes. Non-decreasing across prepares.
     uint64_t                                     frame_index        {0};
     Primitive_type                               primitive_type     {Primitive_type::triangle};
     std::span<const Indirect_count_index_buffer> index_buffers      {};
@@ -76,13 +79,15 @@ public:
 };
 
 // What prepare_indexed_indirect_count_draws() returns: names the prepared
-// frame-in-flight slot of an Indirect_count_draws. Valid for the frame it was
-// prepared for.
+// frame-in-flight slot of an Indirect_count_draws and the prepare's sequence
+// number. Valid until the next prepare on the same Indirect_count_draws (the
+// draw verifies it is the slot's most recent prepare).
 class Indirect_count_draw_set
 {
 public:
-    const Indirect_count_draws* draws{nullptr};
-    std::size_t                 slot {0};
+    const Indirect_count_draws* draws   {nullptr};
+    std::size_t                 slot    {0};
+    uint64_t                    sequence{0};
 };
 
 // Owns the per-frame-in-flight state of the prepared draws (on Metal the
@@ -92,13 +97,15 @@ public:
 class Indirect_count_draws final
 {
 public:
-    // The parameters of one prepared frame, as the draw needs them on every
-    // backend (copies; capacity kept across frames).
+    // The parameters of the slot's most recent prepare, as the draw needs
+    // them on every backend (copies; capacity kept across prepares).
     class Slot
     {
     public:
         uint64_t                                 frame_index        {0};
-        bool                                     prepared           {false};
+        // The prepare's number among all prepares of this
+        // Indirect_count_draws (1 on); 0: never prepared.
+        uint64_t                                 sequence           {0};
         Primitive_type                           primitive_type     {Primitive_type::triangle};
         std::vector<Indirect_count_index_buffer> index_buffers;
         const Buffer*                            command_buffer     {nullptr};
@@ -117,10 +124,12 @@ public:
     Indirect_count_draws& operator=(Indirect_count_draws&&) = delete;
 
     // Copies the prepare info into the frame's slot and returns the set
-    // naming it (called by Compute_command_encoder::
+    // naming it and the prepare (called by Compute_command_encoder::
     // prepare_indexed_indirect_count_draws()).
     [[nodiscard]] auto store          (const Indirect_count_draws_prepare_info& prepare_info) -> Indirect_count_draw_set;
     [[nodiscard]] auto get_slot       (std::size_t slot) const -> const Slot&;
+    // The number of the most recent prepare (0: none yet).
+    [[nodiscard]] auto get_sequence   () const -> uint64_t;
     [[nodiscard]] auto get_device     () const -> Device&;
     [[nodiscard]] auto get_debug_label() const -> const erhe::utility::Debug_label&;
     [[nodiscard]] auto get_impl       () -> Indirect_count_draws_impl&;
@@ -130,6 +139,8 @@ private:
     Device&                                    m_device;
     erhe::utility::Debug_label                 m_debug_label;
     std::vector<Slot>                          m_slots;
+    uint64_t                                   m_sequence   {0};
+    uint64_t                                   m_frame_index{0};
     std::unique_ptr<Indirect_count_draws_impl> m_impl;
 };
 

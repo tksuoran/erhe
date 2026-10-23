@@ -80,7 +80,9 @@ namespace erhe::graphics::test {
 // elsewhere). Its expected image is computed; it has no golden.
 //
 // Count variants (draw_indexed_indirect_count, draw_indexed_indirect_count_zero,
-// draw_indexed_indirect_count_two_jobs): the compute pass writes every command
+// draw_indexed_indirect_count_two_jobs, draw_indexed_indirect_count_set_per_pass,
+// the last one preparing and drawing each job in its own render pass, see
+// its test): the compute pass writes every command
 // slot, a second compute encoder prepares the jobs
 // (Compute_command_encoder::prepare_indexed_indirect_count_draws) and the
 // render pass draws each job with multi_draw_indexed_primitives_indirect_count
@@ -193,10 +195,21 @@ constexpr uint32_t c_count_job_slots       = 3;
 constexpr uint32_t c_count_words_per_job   = 2; // {count, decoy}
 constexpr uint32_t c_count_decoy           = 0xdeadbeefu;
 
+// How the count variants prepare their jobs: all in one set drawn in one
+// render pass, or one set per job, each prepared just before its own render
+// pass (the second pass loads the first one's image), reusing the
+// Indirect_count_draws' state between passes of one frame.
+enum class Prepare_mode : unsigned int
+{
+    one_set,
+    set_per_pass
+};
+
 // The count variants' command slots and which quad each draws.
 class Count_setup
 {
 public:
+    Prepare_mode           prepare_mode{Prepare_mode::one_set};
     uint32_t               command_slots{c_count_job_slots};
     std::string            quad_of_slot {"s"};
     // Empty: the defaults (base vertex 3 q, first instance q).
@@ -475,6 +488,49 @@ protected:
                     encoder.set_buffer(erhe::graphics::Buffer_target::storage, command_buffer_object.get(), 0, command_bytes, 0);
                     encoder.dispatch_compute(command_write_count, 1, 1);
                 }
+                if ((count_setup != nullptr) && (count_setup->prepare_mode == Prepare_mode::set_per_pass)) {
+                    // The command writes -> the prepare steps' reads.
+                    command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit | erhe::graphics::Memory_barrier_mask::command_barrier_bit);
+                    erhe::graphics::Render_pass_descriptor load_descriptor = descriptor;
+                    load_descriptor.color_attachments[0].load_action = erhe::graphics::Load_action::Load;
+                    for (std::size_t job = 0; job < count_draw_jobs.size(); ++job) {
+                        // Rebased to command 0, so every pass encodes into
+                        // the same indirect command buffer entries.
+                        const erhe::graphics::Indirect_count_draw_job pass_job{
+                            .command_offset = 0,
+                            .max_draw_count = count_draw_jobs[job].max_draw_count,
+                            .index_buffer   = count_draw_jobs[job].index_buffer
+                        };
+                        erhe::graphics::Indirect_count_draw_set pass_set{};
+                        {
+                            erhe::graphics::Compute_command_encoder encoder = graphics_device.make_compute_command_encoder(command_buffer);
+                            pass_set = encoder.prepare_indexed_indirect_count_draws(
+                                count_draws,
+                                erhe::graphics::Indirect_count_draws_prepare_info{
+                                    .frame_index         = graphics_device.get_frame_index(),
+                                    .primitive_type      = erhe::graphics::Primitive_type::triangle,
+                                    .index_buffers       = count_index_buffers,
+                                    .command_buffer      = command_buffer_object.get(),
+                                    .command_byte_offset = static_cast<std::size_t>(count_draw_jobs[job].command_offset) * sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command),
+                                    .count_buffer        = count_buffer_object.get(),
+                                    .count_byte_offset   = job * c_count_words_per_job * sizeof(uint32_t),
+                                    .count_byte_stride   = c_count_words_per_job * sizeof(uint32_t),
+                                    .jobs                = std::span<const erhe::graphics::Indirect_count_draw_job>{&pass_job, 1}
+                                }
+                            );
+                        }
+                        erhe::graphics::Render_pass              render_pass{graphics_device, (job == 0) ? descriptor : load_descriptor};
+                        erhe::graphics::Render_command_encoder   encoder = graphics_device.make_render_command_encoder(command_buffer);
+                        const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+                        encoder.set_viewport_rect(0, 0, c_width, c_height);
+                        encoder.set_scissor_rect (0, 0, c_width, c_height);
+                        encoder.set_bind_group_layout(&draw_layout);
+                        encoder.set_render_pipeline(pipeline);
+                        encoder.set_buffer(erhe::graphics::Buffer_target::storage, vertex_buffer.get(), 0, vertex_bytes, 0);
+                        encoder.multi_draw_indexed_primitives_indirect_count(pass_set, 0);
+                    }
+                    return;
+                }
                 erhe::graphics::Indirect_count_draw_set count_draw_set{};
                 if (count_setup != nullptr) {
                     // The command writes -> the prepare step's reads.
@@ -639,6 +695,29 @@ TEST_F(Draw_indirect_test, draw_indexed_indirect_count)
 TEST_F(Draw_indirect_test, draw_indexed_indirect_count_zero)
 {
     run_count(Count_setup{.jobs = { Count_job{.command_offset = 0, .count = 0, .index_buffer = 0} }}, 0b000u);
+}
+
+// The two jobs above, each prepared just before its own render pass and
+// rebased to command 0: the second prepare rewrites the indirect command
+// buffer entries and range the first pass drew from. Job 1 draws only
+// column 2 here, so a first pass that executed the second prepare's
+// commands would lose column 0.
+TEST_F(Draw_indirect_test, draw_indexed_indirect_count_set_per_pass)
+{
+    run_count(
+        Count_setup{
+            .prepare_mode           = Prepare_mode::set_per_pass,
+            .command_slots          = 7,
+            .quad_of_slot           = "((s < 4u) ? (s % 3u) : (s - 4u))",
+            .base_vertex_of_slot    = "((s < 4u) ? (q * 3u) : 0u)",
+            .first_instance_of_slot = "((s < 4u) ? q : ((q + 2u) % 3u))",
+            .jobs                   = {
+                Count_job{.command_offset = 0, .count = 1, .index_buffer = 0},
+                Count_job{.command_offset = 4, .count = 1, .index_buffer = 1}
+            }
+        },
+        0b101u
+    );
 }
 
 // Two jobs with their own command offset, count and index buffer (16-bit,

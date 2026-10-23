@@ -24,8 +24,14 @@ namespace erhe::graphics {
 // command buffer the kernel encodes the jobs' commands into, the buffer of
 // per-job execution ranges {location, length} the kernel writes, and the
 // table buffer the CPU writes (the ICB's resource id, the index buffer
-// addresses, the jobs). Each grows to its high-water mark and is re-created
-// only on growth.
+// addresses, the jobs). A frame may prepare several sets: the ICB and the
+// range buffer are rewritten by each prepare's kernel (the GPU orders that
+// after the previous set's draws: both are tracked resources, and the
+// command buffer's inter-encoder fence orders the encoders), while each
+// prepare's table takes its own range of the table buffer, since the CPU
+// writes the tables of a frame before the GPU runs any of them. Each grows
+// to its high-water mark (the ICB and range buffer: the largest set; the
+// table buffer: a frame's sets) and is re-created only on growth.
 class Indirect_count_draws_impl final
 {
 public:
@@ -38,8 +44,9 @@ public:
         std::size_t                 range_capacity{0}; // jobs
         MTL::Buffer*                table_buffer  {nullptr};
         std::size_t                 table_capacity{0}; // bytes
-        uint64_t                    encoded_frame {0};
-        bool                        encoded       {false};
+        uint64_t                    table_frame   {0}; // the frame whose tables table_used counts
+        std::size_t                 table_used    {0}; // bytes
+        uint64_t                    encoded_sequence{0}; // the set the ICB and range buffer hold
     };
 
     Indirect_count_draws_impl(Device& device, const erhe::utility::Debug_label& debug_label);
@@ -56,7 +63,10 @@ public:
     [[nodiscard]] auto get_slot_resources(std::size_t slot_index) const -> const Slot_resources&;
 
 private:
-    void reserve(Slot_resources& resources, std::size_t command_count, std::size_t job_count, std::size_t table_bytes);
+    void reserve(Slot_resources& resources, std::size_t command_count, std::size_t job_count);
+    // The byte offset of table_bytes in the slot's table buffer for a
+    // prepare of frame_index.
+    [[nodiscard]] auto allocate_table(Slot_resources& resources, uint64_t frame_index, std::size_t table_bytes) -> std::size_t;
 
     Device&                     m_device;
     erhe::utility::Debug_label  m_debug_label;

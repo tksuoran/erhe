@@ -42,12 +42,14 @@ auto Indirect_count_draws::store(const Indirect_count_draws_prepare_info& prepar
 
     const std::size_t slot_index = static_cast<std::size_t>(prepare_info.frame_index % static_cast<uint64_t>(m_slots.size()));
     Slot& slot = m_slots[slot_index];
-    // One prepare per frame: a second one would overwrite the resources the
-    // frame's earlier draws execute.
-    ERHE_VERIFY(!slot.prepared || (slot.frame_index < prepare_info.frame_index));
+    // Frames are prepared in order; a frame may prepare any number of sets,
+    // each replacing the previous one.
+    ERHE_VERIFY(prepare_info.frame_index >= m_frame_index);
+    m_frame_index = prepare_info.frame_index;
+    ++m_sequence;
 
     slot.frame_index         = prepare_info.frame_index;
-    slot.prepared            = true;
+    slot.sequence            = m_sequence;
     slot.primitive_type      = prepare_info.primitive_type;
     slot.index_buffers.assign(prepare_info.index_buffers.begin(), prepare_info.index_buffers.end());
     slot.command_buffer      = prepare_info.command_buffer;
@@ -62,13 +64,18 @@ auto Indirect_count_draws::store(const Indirect_count_draws_prepare_info& prepar
     for (const Indirect_count_index_buffer& index_buffer : slot.index_buffers) {
         ERHE_VERIFY(index_buffer.buffer != nullptr);
     }
-    return Indirect_count_draw_set{.draws = this, .slot = slot_index};
+    return Indirect_count_draw_set{.draws = this, .slot = slot_index, .sequence = m_sequence};
 }
 
 auto Indirect_count_draws::get_slot(const std::size_t slot) const -> const Slot&
 {
     ERHE_VERIFY(slot < m_slots.size());
     return m_slots[slot];
+}
+
+auto Indirect_count_draws::get_sequence() const -> uint64_t
+{
+    return m_sequence;
 }
 
 auto Indirect_count_draws::get_device() const -> Device&
