@@ -136,4 +136,8 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 !MTL4CounterHeap-timestamps=ticks-of-queryTimestampFrequency(24MHz-mach_absolute_time)¬ns{sampleTimestamps+CommitFeedback-GPU-times-are-ns}->3c2bafd67-converts
 !metal4-vs-metal3-unpaced-pipelined::2.91-vs-1.66ms{swapchain-term-2.2-vs-1.2ms;Tracy-zone-counts-uneven}->investigating-2026-10-23
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:swapchain-regression-investigating;pacing-live-gate-pending-user;then-MTL4Compiler+barrier-narrowing}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+!MTL4-queue->wait(drawable)-holds-the-whole-commit+all-later-commits->take-drawable-at-first-use(prefix-commit-before-swapchain-pass;24faccd5f);gap-between-the-two-commits=gpu_idle_time(else-pacer-reads-presentation-wait-as-GPU-load)
+!MTL4-drawable-wait-tail::1-in-12-nextDrawable-6-8ms-with-displaySync-off(Metal-3:11/1211)->open
+!GPU-tests::pacing-tier-must-be-off(calibration-2s-Metal/6s-MoltenVK-per-process;967d47edf)
+
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:test-run-restructure->present-calibration-cache->hazard-tracking->MTL4Compiler;pacing-live-gate-pending-user}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}

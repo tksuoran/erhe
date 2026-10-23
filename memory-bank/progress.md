@@ -12,7 +12,12 @@
 ✓metal4-submission-core{434d9ecda;pooled-Recording(cb+allocator+lists)+commit-feedback;late-commits->oldest-unretired-frame;residency-set-one-per-device;argument-table-per-encoder+draw-id-table+inline-chunks;MTL4-encoders(blits-on-compute)+queue-barrier-every-encoder;present-via-queue;MTL4CounterHeap-relaxed;GPUFamilyMetal4-required;opus-review:1-blocker(teardown-before-wait_idle)+late-commit-gap+per-commit-allocs+own-serial-wait->fixed;CommitOptions-reuse-gives-no-feedback(per-commit-kept);gates:ctest-1800/1800+render-md5==Metal-3+gpu-cull-0+soak-1035-clean+tier-M-calibrated}
 ✓metal4-gates-partial{3c2bafd67;TSan-race-0-reports(build_xcode_metal4_tsan);Tracy-GPU-zones-present(Main/PP/Overlay-0.87/0.37/0.16ms-vs-Metal-3-0.73/0.32/0.15);FOUND+FIXED:MTL4CounterHeap-ticks=24MHz-mach-ticks-not-ns(queryTimestampFrequency);ctest-1825/0/3-skipped}
 ?metal4-pacing-live-gate{PENDING-user-at-Dell;Metal-3-same-session-comparison}
-⚡metal4-frame-time-regression{unpaced-pipelined-2.91-vs-1.66ms;swapchain-term-2.2-vs-1.2ms;zone-counts-uneven;coder-investigating}
+✓metal4-frame-time-regression{24faccd5f;ROOT=queue->wait(drawable)-before-frame's-first-encoder-stalled-whole-frame(GPU-idle-0.7-0.8ms;compositor-displayed-1143/1204);fix=prefix-commit-before-swapchain-pass+drawable-at-first-use+wait-only-on-presenting-commit;gpu_idle_time=gap-between-commits(opus-review-blocker);VERIFY-waited-producers-committed;median-1.46-1.54ms==Metal-3;GPU-zones-equal;open:6-8ms-drawable-wait-tail-1/12(mean-2.0-2.4ms)+zone-counts<frames-sometimes;barriers/residency/argument-tables-ruled-out-on-default-scene}
+✓gpu-tests-no-calibration{967d47edf;frame_pacing_tier=off-in-Gpu_test_environment;per-process-2.5->0.4s-Metal,7->2.1s-MoltenVK;ctest-L-gpu-435->233s}
+✓doc-test-set-for-backend-changes{ce7431681;ctest-L-gpu|editor}
+⚡gpu-test-run-restructure{©User:fewer-processes-default+per-process-option+in-process-isolation;coder-running}
+?present-calibration-cache{©User-asked-2026-10-23;design-agreed-in-chat:key=present-path+display-identity(vendor/model/serial;SDL-name-insufficient)+mode(size,scale,period,VRR-range,kind)+windowed+OS-build+GPU+algorithm-version;value=Present_calibration-hexfloat+raw-samples;<cwd>/cache/present_calibration/<hash>.json;invalidate=key-mismatch(runtime-display-change-recomputes-key;miss->defaults-until-next-start)+stale-low-via-pacer-deadline-estimator-at-ceiling+explicit-re-measure(MCP+Settings);stale-high-undetectable;next-after-test-restructure}
+?then=hazard-tracking{metal4-barrier-narrowing}
 ?then=MTL4Compiler{last-migration-row}+barrier-narrowing+pre-warm-queue-wait
 
 [TASK::bistro-gpu]{started-2026-10-21;branch=render-thread;Release-Metal-M4-Pro-Dell-120Hz}
