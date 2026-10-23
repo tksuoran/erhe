@@ -10,7 +10,9 @@
 ✓metal4-scaffold{5d27306ab;ERHE_GRAPHICS_API=metal4-defines-METAL(family)+METAL4;metal4/-copy-of-metal/(55-files;normalised-diff=2-strings);bridges-METAL4-first;configure_xcode_metal4.sh+METAL_BACKEND=metal4-test-script;doc/erhe/metal4_backend.md-migration-table;ctest-1800/1800-both-trees;opus-review-approve}
 !FOUND::MTL4CommandQueue-commits-only-MTL4CommandBuffers->only-MTL4-encoders->only-ArgumentTable-binding(no-setBytes)=>first-MTL4-commit-must-be-whole-submission-core{queue+cb+allocator+commit-feedback+residency-set+argument-tables+encoders+barriers+present};then-counter-heaps;then-MTL4Compiler;then-ICB-check
 ✓metal4-submission-core{434d9ecda;pooled-Recording(cb+allocator+lists)+commit-feedback;late-commits->oldest-unretired-frame;residency-set-one-per-device;argument-table-per-encoder+draw-id-table+inline-chunks;MTL4-encoders(blits-on-compute)+queue-barrier-every-encoder;present-via-queue;MTL4CounterHeap-relaxed;GPUFamilyMetal4-required;opus-review:1-blocker(teardown-before-wait_idle)+late-commit-gap+per-commit-allocs+own-serial-wait->fixed;CommitOptions-reuse-gives-no-feedback(per-commit-kept);gates:ctest-1800/1800+render-md5==Metal-3+gpu-cull-0+soak-1035-clean+tier-M-calibrated}
-⚡metal4-gates{race(TSan-tree)+pacing-live-gate+Tracy-GPU-zones;coder-running}
+✓metal4-gates-partial{3c2bafd67;TSan-race-0-reports(build_xcode_metal4_tsan);Tracy-GPU-zones-present(Main/PP/Overlay-0.87/0.37/0.16ms-vs-Metal-3-0.73/0.32/0.15);FOUND+FIXED:MTL4CounterHeap-ticks=24MHz-mach-ticks-not-ns(queryTimestampFrequency);ctest-1825/0/3-skipped}
+?metal4-pacing-live-gate{PENDING-user-at-Dell;Metal-3-same-session-comparison}
+⚡metal4-frame-time-regression{unpaced-pipelined-2.91-vs-1.66ms;swapchain-term-2.2-vs-1.2ms;zone-counts-uneven;coder-investigating}
 ?then=MTL4Compiler{last-migration-row}+barrier-narrowing+pre-warm-queue-wait
 
 [TASK::bistro-gpu]{started-2026-10-21;branch=render-thread;Release-Metal-M4-Pro-Dell-120Hz}
