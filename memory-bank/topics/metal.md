@@ -127,4 +127,10 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 >5d27306ab::metal4-scaffold{ERHE_GRAPHICS_API=metal4;defines-ERHE_GRAPHICS_API_METAL(family)+_METAL4;src/erhe/graphics/erhe_graphics/metal4/metal4_*(copy;same-pimpl-class-names;one-backend-per-tree);build_xcode_metal4;METAL_BACKEND=metal4-scripts/run_graphics_tests_metal.sh;generate.py-writes-both-format-tables;goldens-shared}
 !MTL4-inseparable-core::CommandQueue::commit(MTL4::CommandBuffer-only)+CommandBuffer-yields-MTL4-encoders-only+encoders-bind-via-ArgumentTable-only(no-setBytes;blits-on-compute-encoder)->port-order=submission-core|counter-heaps|MTL4Compiler|ICB-check
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{6-DONE;7-Metal-4:submission-core-IN-PROGRESS}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[LANDED_2026-10-23c]
+>434d9ecda::metal4-MTL4-submission-core{doc/erhe/metal4_backend.md;Recording-pool+CommitFeedback;Residency(one-set;removals-held-until-next-commit);ArgumentTable-per-encoder;draw-id-table-for-push-constant-15;inline-bytes-chunks;barrierAfterQueueStages(all)-every-encoder;present=queue-wait/signalDrawable/presentAtTime;MTL4CounterHeap}
+!MTL4-retains-nothing::teardown-must-wait_idle-before-releasing-surface/pipelines;late-commits-must-be-charged-to-an-unretired-frame(else-deferred-release-frees-in-use-resources)
+!MTL4-CommitOptions-reuse-across-commits->feedback-never-fires(wait_idle-hangs)->one-per-commit
+!MTL4-queue-wait(event)-holds-ALL-later-commits{pre-warm-now-gates-next-frame;XR-producer-must-commit-before-consumer}
+
+[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4:gates(race+pacing+Tracy)-running;then-MTL4Compiler+barrier-narrowing}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
