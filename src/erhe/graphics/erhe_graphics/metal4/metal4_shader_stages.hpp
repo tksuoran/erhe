@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace MTL { class Library; }
-namespace MTL { class Function; }
+namespace MTL4 { class LibraryFunctionDescriptor; }
 
 namespace erhe::graphics {
 
@@ -40,9 +40,9 @@ public:
     [[nodiscard]] auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
     [[nodiscard]] auto get_dependency_paths() -> std::vector<std::filesystem::path>&;
 
-    [[nodiscard]] auto get_vertex_function  () const -> MTL::Function*;
-    [[nodiscard]] auto get_fragment_function() const -> MTL::Function*;
-    [[nodiscard]] auto get_compute_function () const -> MTL::Function*;
+    [[nodiscard]] auto get_vertex_function  () const -> MTL4::LibraryFunctionDescriptor*;
+    [[nodiscard]] auto get_fragment_function() const -> MTL4::LibraryFunctionDescriptor*;
+    [[nodiscard]] auto get_compute_function () const -> MTL4::LibraryFunctionDescriptor*;
     [[nodiscard]] auto get_compute_workgroup_size() const -> std::array<uint32_t, 3>;
 
 private:
@@ -56,13 +56,13 @@ private:
     bool                               m_failed  {false};
     Glslang_shader_stages              m_glslang_shader_stages;
     std::vector<std::filesystem::path> m_paths;
-    MTL::Library*             m_vertex_library      {nullptr};
-    MTL::Library*             m_fragment_library     {nullptr};
-    MTL::Library*             m_compute_library      {nullptr};
-    MTL::Function*            m_vertex_function     {nullptr};
-    MTL::Function*            m_fragment_function   {nullptr};
-    MTL::Function*            m_compute_function    {nullptr};
-    std::array<uint32_t, 3>   m_compute_workgroup_size{1, 1, 1};
+    MTL::Library*                      m_vertex_library   {nullptr};
+    MTL::Library*                      m_fragment_library {nullptr};
+    MTL::Library*                      m_compute_library  {nullptr};
+    MTL4::LibraryFunctionDescriptor*   m_vertex_function  {nullptr};
+    MTL4::LibraryFunctionDescriptor*   m_fragment_function{nullptr};
+    MTL4::LibraryFunctionDescriptor*   m_compute_function {nullptr};
+    std::array<uint32_t, 3>            m_compute_workgroup_size{1, 1, 1};
 };
 
 class Shader_stages_impl
@@ -81,9 +81,9 @@ public:
     [[nodiscard]] auto is_valid            () const -> bool;
     [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
 
-    [[nodiscard]] auto get_vertex_function  () const -> MTL::Function*;
-    [[nodiscard]] auto get_fragment_function() const -> MTL::Function*;
-    [[nodiscard]] auto get_compute_function () const -> MTL::Function*;
+    [[nodiscard]] auto get_vertex_function  () const -> MTL4::LibraryFunctionDescriptor*;
+    [[nodiscard]] auto get_fragment_function() const -> MTL4::LibraryFunctionDescriptor*;
+    [[nodiscard]] auto get_compute_function () const -> MTL4::LibraryFunctionDescriptor*;
     [[nodiscard]] auto get_compute_workgroup_size() const -> std::array<uint32_t, 3>;
 
 private:
@@ -92,9 +92,9 @@ private:
     Device_impl&       m_device_impl;
     std::string        m_name;
     bool               m_is_valid{false};
-    MTL::Function*     m_vertex_function  {nullptr};
-    MTL::Function*     m_fragment_function{nullptr};
-    MTL::Function*     m_compute_function {nullptr};
+    MTL4::LibraryFunctionDescriptor* m_vertex_function  {nullptr};
+    MTL4::LibraryFunctionDescriptor* m_fragment_function{nullptr};
+    MTL4::LibraryFunctionDescriptor* m_compute_function {nullptr};
     std::array<uint32_t, 3> m_compute_workgroup_size{1, 1, 1};
 };
 

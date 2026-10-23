@@ -80,9 +80,12 @@ and "Follow-ups found by review"; the next pick is a new selection from
 
 ## Open parts of worked items
 
-- Item 18, Metal half: a persisted `MTLBinaryArchive` for the Metal backend
-  (the `Device::warmup_render_pipeline` comment in `device.hpp` names the
-  opt-in); needs a macOS session to build and verify.
+- Item 18, Metal half: the Metal 4 backend persists its pipelines in an
+  `MTL4Archive` (`doc/erhe/metal4_backend.md` "Pipeline archive"). The Metal
+  3 backend has no persisted `MTLBinaryArchive` (the
+  `Device::warmup_render_pipeline` comment in `device.hpp` says so); whether
+  it gets one waits for the decision whether Metal 3 stays
+  (`doc/plans/metal_backend.md` section 7).
 - Item 6, Metal half: `blit_framebuffer` (fatal) and swapchain resize on
   Metal; needs a macOS session.
 - Item 17, GPU tests in CI: `erhe_graphics_gpu_tests` on Linux under

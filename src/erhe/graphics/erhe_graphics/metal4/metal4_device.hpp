@@ -36,7 +36,7 @@ namespace erhe::dataformat {
 }
 
 namespace erhe::frame_pacing { class Frame_time_recorder; }
-namespace erhe::graphics { class Clock_monitor; class Gpu_prewarm; }
+namespace erhe::graphics { class Clock_monitor; class Gpu_prewarm; class Pipeline_compiler; class Pipeline_state_cache; }
 namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
@@ -249,6 +249,14 @@ public:
     [[nodiscard]] auto get_mtl_command_queue       () const -> MTL4::CommandQueue*;
     [[nodiscard]] auto get_residency               () -> Residency&;
     [[nodiscard]] auto get_submission_pools        () -> Submission_pools&;
+    // The device's MTL4::Compiler and pipeline archive
+    // (metal4_pipeline_compiler.hpp); every library and pipeline state is
+    // created through it.
+    [[nodiscard]] auto get_pipeline_compiler       () -> Pipeline_compiler&;
+    // The pipeline states the encoders' per-bind paths use
+    // (metal4_pipeline_state_cache.hpp).
+    [[nodiscard]] auto get_pipeline_state_cache    () -> Pipeline_state_cache&;
+    [[nodiscard]] auto get_device                  () -> Device&;
 
     // Returns what a Recording held once the GPU has completed it, or when it
     // was never committed: runs its callbacks, releases its retained objects
@@ -387,6 +395,10 @@ private:
     std::shared_ptr<Clock_monitor> m_clock_monitor;
     // Tier M: the GPU pre-warm kernel (metal4_gpu_prewarm.hpp); null elsewhere.
     std::unique_ptr<Gpu_prewarm>   m_gpu_prewarm;
+    // Created right after the queue, before any library or pipeline; writes
+    // the pipeline archive and goes in ~Device_impl after the GPU is idle.
+    std::unique_ptr<Pipeline_compiler> m_pipeline_compiler;
+    std::unique_ptr<Pipeline_state_cache> m_pipeline_state_cache;
     // The FR3 target present time of one frame (set_present_target_time),
     // applied when that frame's drawable is presented. Render thread only,
     // like the Vulkan backend's.

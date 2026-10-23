@@ -57,9 +57,9 @@ Shader_stages_impl::~Shader_stages_impl()
 
 void Shader_stages_impl::defer_release_functions()
 {
-    MTL::Function* vertex_function   = m_vertex_function;
-    MTL::Function* fragment_function = m_fragment_function;
-    MTL::Function* compute_function  = m_compute_function;
+    MTL4::LibraryFunctionDescriptor* vertex_function   = m_vertex_function;
+    MTL4::LibraryFunctionDescriptor* fragment_function = m_fragment_function;
+    MTL4::LibraryFunctionDescriptor* compute_function  = m_compute_function;
     m_vertex_function   = nullptr;
     m_fragment_function = nullptr;
     m_compute_function  = nullptr;
@@ -81,12 +81,12 @@ void Shader_stages_impl::reload(Shader_stages_prototype&& prototype)
         return;
     }
 
-    // Release old functions
+    // Release old function descriptors
     defer_release_functions();
 
     m_name = prototype.name();
 
-    // Transfer function ownership from prototype
+    // Share the prototype's function descriptors
     Shader_stages_prototype_impl& proto_impl = prototype.get_impl();
     m_vertex_function   = proto_impl.get_vertex_function();
     m_fragment_function = proto_impl.get_fragment_function();
@@ -103,23 +103,8 @@ void Shader_stages_impl::reload(Shader_stages_prototype&& prototype)
         m_compute_function->retain();
     }
 
-    // Apply debug labels to shader functions
-    if (!m_name.empty()) {
-        NS::String* label = NS::String::alloc()->init(
-            m_name.c_str(),
-            NS::UTF8StringEncoding
-        );
-        if (m_vertex_function != nullptr) {
-            m_vertex_function->setLabel(label);
-        }
-        if (m_fragment_function != nullptr) {
-            m_fragment_function->setLabel(label);
-        }
-        if (m_compute_function != nullptr) {
-            m_compute_function->setLabel(label);
-        }
-        label->release();
-    }
+    // MTL4 function descriptors carry no label: the pipelines are labelled
+    // with the shader stages name (Render_pipeline_impl, Compute_pipeline_impl).
 
     m_is_valid = true;
 }
@@ -135,17 +120,17 @@ auto Shader_stages_impl::gl_name() const -> unsigned int { return 0; }
 auto Shader_stages_impl::is_valid() const -> bool { return m_is_valid; }
 auto Shader_stages_impl::get_bind_group_layout() const -> const Bind_group_layout* { return nullptr; }
 
-auto Shader_stages_impl::get_vertex_function() const -> MTL::Function*
+auto Shader_stages_impl::get_vertex_function() const -> MTL4::LibraryFunctionDescriptor*
 {
     return m_vertex_function;
 }
 
-auto Shader_stages_impl::get_fragment_function() const -> MTL::Function*
+auto Shader_stages_impl::get_fragment_function() const -> MTL4::LibraryFunctionDescriptor*
 {
     return m_fragment_function;
 }
 
-auto Shader_stages_impl::get_compute_function() const -> MTL::Function*
+auto Shader_stages_impl::get_compute_function() const -> MTL4::LibraryFunctionDescriptor*
 {
     return m_compute_function;
 }

@@ -177,7 +177,7 @@ Options considered:
   decision (explicit barriers everywhere, `MTL4ArgumentTable`,
   `MTL4CommandAllocator`). `MTLResidencySet` (macOS 15) could replace the
   texture heap's per-encode `useResource` loops without it, and
-  `MTL4Compiler` / `MTL4Archive` relate to the open `MTLBinaryArchive` item.
+  `MTL4Compiler` / `MTL4Archive` relate to the `MTLBinaryArchive` item.
 
 Status (2026-10-23): option A is built. `erhe::graphics` has
 `Indirect_count_draws` (doc/erhe/graphics.md "Indirect count draws"), Metal
@@ -246,8 +246,9 @@ What changes (the MTL4 model; agfx's Metal 4 backend is a reference,
 - Timestamps: `MTL4CounterHeap` replaces the counter sample buffers of the
   GPU timers and the Tracy GPU zones (`doc/erhe/metal_backend.md` "GPU
   timers").
-- Shaders and pipelines: `MTL4Compiler` / `MTL4Archive` (relates to the open
-  `MTLBinaryArchive` item); `MTL4RenderPipelineDescriptor`.
+- Shaders and pipelines: `MTL4Compiler` / `MTL4Archive` (the Metal 4 answer
+  to the `MTLBinaryArchive` item of `doc/plans/audit_2026_09_30_followups.md`);
+  `MTL4RenderPipelineDescriptor`.
 - The GPU-read draw count carries over: `MTL4RenderCommandEncoder` has
   `executeCommandsInBuffer(icb, indirectRangeBuffer)` with the range buffer
   as a GPU address (pinned metal-cpp `metal-cpp_27` has the `MTL4*`
@@ -287,24 +288,31 @@ section 6's verification on MTL4.
 
 State: the backend exists as `ERHE_GRAPHICS_API=metal4` (build tree
 `build_xcode_metal4`, sources `src/erhe/graphics/erhe_graphics/metal4/`).
-Step (1) landed: MTL4 submission, residency, argument tables, encoders,
-drawables through the queue, GPU timers on counter heaps; shaders and pipelines are still the Metal 3 API. Its
-document, with the per-subsystem migration status, is
+Every subsystem is on the MTL4 API: step (1) (submission, residency,
+argument tables, encoders, drawables through the queue, GPU timers on
+counter heaps), step (2) and step (3), libraries and pipelines through one
+`MTL4::Compiler` with a pipeline archive persisted per GPU and OS build
+(`doc/erhe/metal4_backend.md` "Shaders and pipelines", with the measured
+effect of the archive). Its document, with the per-subsystem migration status, is
 `doc/erhe/metal4_backend.md`. Gates of step (1): the Metal ctest suite and
 the image gates pass; the race gate reports nothing; step (2) holds: the
 Tracy GPU zones of the default scene match Metal 3's zones in name and
 order of magnitude (counter heap ticks converted with
 `queryTimestampFrequency`, `doc/erhe/metal4_backend.md` "GPU timers"); the
-frame pacing live gate is pending (it needs the user at the display). Next:
-the pacing live gate, then (3) `MTL4Compiler`; the image, race and pacing
-gates as each step lands. Barriers: the backend orders work from the
+frame pacing live gate is pending (it needs the user at the display).
+Gates of step (3): the Metal ctest suite, the image gates, the Bistro image
+and the GPU culling check match the build before it, and the Bistro
+viewport GPU time is unchanged. What remains: the barrier work of
+`doc/plans/resource_barriers.md` (narrowing where measured, the Vulkan
+backend's tracked layouts, the intra-encoder dispatch barrier for dependent
+dispatches only) and the gates pending the user (the frame pacing live
+gate). Barriers: the backend orders work from the
 application's declarations (render pass attachment usages,
 `memory_barrier`, layout transitions, its own transfers) as consumer and
 producer stage barriers, with no unconditional encoder-start barrier
 (`doc/erhe/metal4_backend.md` "Encoders and barriers"); the image gates,
 the Bistro image, the GPU culling check and the ray trace / radiance
 cascades / DDGI gates match the build with the unconditional barrier.
-Narrowing them further is `doc/plans/resource_barriers.md`.
 Render phase cost: the unpaced windowed frame took 2.9 - 3.2 ms against
 Metal 3's 1.7 - 2.0 ms because the queue's drawable wait held back the whole
 frame; since the work before the swapchain pass is committed before the

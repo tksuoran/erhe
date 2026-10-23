@@ -603,9 +603,10 @@ public:
     // populates (keyed on the active VkRenderPass pointer) is NOT
     // populated by this call -- a runtime bind still calls
     // vkCreateGraphicsPipelines once, but reuses the warmed driver cache.
-    // OpenGL and Null backends are effectively no-ops; Metal participates
-    // only when the backend opts into MTLBinaryArchive, which it does not
-    // today.
+    // OpenGL and Null backends are effectively no-ops, as is Metal 3 (no
+    // persisted binary archive); on Metal 4 the pipeline lands in the
+    // pipeline archive written at device destruction
+    // (metal4_pipeline_compiler.hpp).
     //
     // Caller contract: create_info must be well-formed (non-null
     // shader_stages with valid modules, formats matching a render pass

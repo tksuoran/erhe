@@ -1,4 +1,6 @@
 #include "erhe_graphics/metal4/metal4_render_command_encoder.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_state_cache.hpp"
 #include "erhe_graphics/metal4/metal4_render_pass.hpp"
 #include "erhe_graphics/metal4/metal4_command_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_submission.hpp"
@@ -175,131 +177,21 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         return; // Invalid shader (e.g. uses geometry shaders), skip
     }
 
-    const Shader_stages_impl& stages_impl = shader_stages->get_impl();
-    MTL::Function* vertex_function   = stages_impl.get_vertex_function();
-    MTL::Function* fragment_function = stages_impl.get_fragment_function();
-
-    if (vertex_function == nullptr) {
-        return; // No vertex function, skip
+    // One pipeline state per distinct key for the device's lifetime
+    // (Pipeline_state_cache): a bind every frame creates nothing.
+    std::array<unsigned long, Pipeline_state_cache::max_color_attachments> color_pixel_formats{};
+    for (unsigned int i = 0; i < Pipeline_state_cache::max_color_attachments; ++i) {
+        color_pixel_formats[i] = Render_pass_impl::get_active_color_pixel_format(i);
     }
-
-    Device_impl& device_impl = m_device.get_impl();
-    MTL::Device* mtl_device = device_impl.get_mtl_device();
-    ERHE_VERIFY(mtl_device != nullptr);
-
-    MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
-    desc->setVertexFunction(vertex_function);
-    desc->setFragmentFunction(fragment_function);
-
-    // Color attachment pixel formats - must match the render pass.
-    // Walks all slots so MRT passes bind blend/write-mask on every active
-    // attachment. Slot 0 is always written (may be Invalid for depth-only).
-    unsigned int active_color_attachment_count = 0;
-    {
-        constexpr unsigned int max_color_attachments = 4;
-        const unsigned long invalid_fmt = static_cast<unsigned long>(MTL::PixelFormatInvalid);
-        for (unsigned int i = 0; i < max_color_attachments; ++i) {
-            const unsigned long color_fmt = Render_pass_impl::get_active_color_pixel_format(i);
-            if ((color_fmt != invalid_fmt) || (i == 0)) {
-                desc->colorAttachments()->object(static_cast<NS::UInteger>(i))->setPixelFormat(
-                    static_cast<MTL::PixelFormat>(color_fmt)
-                );
-            }
-            if (color_fmt != invalid_fmt) {
-                active_color_attachment_count = i + 1;
-            }
-        }
-    }
-
-    // Sample count
-    {
-        unsigned long sample_count = Render_pass_impl::get_active_sample_count();
-        if (sample_count > 1) {
-            desc->setSampleCount(static_cast<NS::UInteger>(sample_count));
-        }
-    }
-
-    // Multisample coverage/one state
-    desc->setAlphaToCoverageEnabled(data.multisample.alpha_to_coverage_enable);
-    desc->setAlphaToOneEnabled(data.multisample.alpha_to_one_enable);
-
-    // Depth/stencil pixel formats
-    {
-        unsigned long depth_fmt = Render_pass_impl::get_active_depth_pixel_format();
-        if (depth_fmt != 0) {
-            desc->setDepthAttachmentPixelFormat(static_cast<MTL::PixelFormat>(depth_fmt));
-        }
-        unsigned long stencil_fmt = Render_pass_impl::get_active_stencil_pixel_format();
-        if (stencil_fmt != 0) {
-            desc->setStencilAttachmentPixelFormat(static_cast<MTL::PixelFormat>(stencil_fmt));
-        }
-    }
-
-    // Vertex descriptor from vertex input state
-    if (data.vertex_input != nullptr) {
-        const Vertex_input_state_data& vis_data = data.vertex_input->get_data();
-        MTL::VertexDescriptor* vertex_desc = MTL::VertexDescriptor::alloc()->init();
-
-        for (const Vertex_input_attribute& attr : vis_data.attributes) {
-            MTL::VertexAttributeDescriptor* attr_desc = vertex_desc->attributes()->object(
-                static_cast<NS::UInteger>(attr.layout_location)
-            );
-            attr_desc->setFormat(to_mtl_vertex_format(attr.format));
-            attr_desc->setOffset(static_cast<NS::UInteger>(attr.offset));
-            attr_desc->setBufferIndex(static_cast<NS::UInteger>(attr.binding) + vertex_buffer_index_offset);
-        }
-
-        for (const Vertex_input_binding& binding : vis_data.bindings) {
-            MTL::VertexBufferLayoutDescriptor* layout_desc = vertex_desc->layouts()->object(
-                static_cast<NS::UInteger>(binding.binding) + vertex_buffer_index_offset
-            );
-            layout_desc->setStride(static_cast<NS::UInteger>(binding.stride));
-            if (binding.divisor == 0) {
-                layout_desc->setStepFunction(MTL::VertexStepFunctionPerVertex);
-            } else {
-                layout_desc->setStepFunction(MTL::VertexStepFunctionPerInstance);
-                layout_desc->setStepRate(static_cast<NS::UInteger>(binding.divisor));
-            }
-        }
-
-        desc->setVertexDescriptor(vertex_desc);
-        vertex_desc->release();
-    }
-
-    // Color blend state - applied to all active color attachments
-    {
-        MTL::ColorWriteMask mask = MTL::ColorWriteMaskNone;
-        if (data.color_blend.write_mask.red)   mask |= MTL::ColorWriteMaskRed;
-        if (data.color_blend.write_mask.green) mask |= MTL::ColorWriteMaskGreen;
-        if (data.color_blend.write_mask.blue)  mask |= MTL::ColorWriteMaskBlue;
-        if (data.color_blend.write_mask.alpha) mask |= MTL::ColorWriteMaskAlpha;
-
-        const unsigned int attachment_loop_count = std::max(1u, active_color_attachment_count);
-        for (unsigned int i = 0; i < attachment_loop_count; ++i) {
-            MTL::RenderPipelineColorAttachmentDescriptor* color_att =
-                desc->colorAttachments()->object(static_cast<NS::UInteger>(i));
-            if (data.color_blend.enabled) {
-                color_att->setBlendingEnabled(true);
-                color_att->setSourceRGBBlendFactor(to_mtl_blend_factor(data.color_blend.rgb.source_factor));
-                color_att->setDestinationRGBBlendFactor(to_mtl_blend_factor(data.color_blend.rgb.destination_factor));
-                color_att->setRgbBlendOperation(to_mtl_blend_operation(data.color_blend.rgb.equation_mode));
-                color_att->setSourceAlphaBlendFactor(to_mtl_blend_factor(data.color_blend.alpha.source_factor));
-                color_att->setDestinationAlphaBlendFactor(to_mtl_blend_factor(data.color_blend.alpha.destination_factor));
-                color_att->setAlphaBlendOperation(to_mtl_blend_operation(data.color_blend.alpha.equation_mode));
-            }
-            color_att->setWriteMask(mask);
-        }
-    }
-
-    NS::Error* error = nullptr;
-    MTL::RenderPipelineState* pso = mtl_device->newRenderPipelineState(desc, &error);
-    desc->release();
-
+    Pipeline_state_cache& cache = m_device.get_impl().get_pipeline_state_cache();
+    MTL::RenderPipelineState* const pso = cache.get_render_pipeline(
+        *shader_stages,
+        data,
+        color_pixel_formats,
+        Render_pass_impl::get_active_sample_count()
+    );
     if (pso == nullptr) {
-        const char* error_str = (error != nullptr) ? error->localizedDescription()->utf8String() : "unknown error";
-        std::string error_msg = fmt::format("Pipeline state creation failed for '{}': {}", shader_stages->name(), error_str);
-        m_device.shader_error(error_msg, "");
-        return;
+        return; // No vertex function, or the pipeline failed (reported)
     }
 
     encoder->setRenderPipelineState(pso);
@@ -307,8 +199,6 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     // Render_pipeline created with Indirect_count_draw_support::enabled
     // draws prepared count draws.
     m_pipeline_supports_indirect_count_draws = false;
-    // MTL4 command buffers retain nothing they reference.
-    cb_impl->retain_until_completed(pso);
 
     // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage.
     // Push constant is always at fixed index 15 (c_metal_push_constant_index).
@@ -317,39 +207,12 @@ void Render_command_encoder_impl::set_render_pipeline_state(
 
     // Depth stencil state
     {
-        const bool has_depth   = (Render_pass_impl::get_active_depth_pixel_format()   != 0);
-        const bool has_stencil = (Render_pass_impl::get_active_stencil_pixel_format() != 0);
-        MTL::DepthStencilDescriptor* ds_desc = MTL::DepthStencilDescriptor::alloc()->init();
-
-        // Depth
-        if (has_depth && data.depth_stencil.depth_write_enable) {
-            ds_desc->setDepthWriteEnabled(true);
-        }
-        if (has_depth && data.depth_stencil.depth_test_enable) {
-            ds_desc->setDepthCompareFunction(to_mtl_compare_function(data.depth_stencil.depth_compare_op));
-        } else {
-            ds_desc->setDepthCompareFunction(MTL::CompareFunctionAlways);
-        }
-
-        // Stencil
-        if (has_stencil && data.depth_stencil.stencil_test_enable) {
-            auto configure_stencil = [](MTL::StencilDescriptor* stencil_desc, const Stencil_op_state& state) {
-                stencil_desc->setStencilCompareFunction(to_mtl_compare_function(state.function));
-                stencil_desc->setStencilFailureOperation(to_mtl_stencil_operation(state.stencil_fail_op));
-                stencil_desc->setDepthFailureOperation(to_mtl_stencil_operation(state.z_fail_op));
-                stencil_desc->setDepthStencilPassOperation(to_mtl_stencil_operation(state.z_pass_op));
-                stencil_desc->setReadMask(state.test_mask);
-                stencil_desc->setWriteMask(state.write_mask);
-            };
-            configure_stencil(ds_desc->frontFaceStencil(), data.depth_stencil.stencil_front);
-            configure_stencil(ds_desc->backFaceStencil(),  data.depth_stencil.stencil_back);
-        }
-
-        MTL::DepthStencilState* ds_state = mtl_device->newDepthStencilState(ds_desc);
-        ds_desc->release();
+        const unsigned long depth_format   = Render_pass_impl::get_active_depth_pixel_format();
+        const unsigned long stencil_format = Render_pass_impl::get_active_stencil_pixel_format();
+        const bool          has_stencil    = (stencil_format != 0);
+        MTL::DepthStencilState* const ds_state = cache.get_depth_stencil_state(data.depth_stencil, depth_format, stencil_format);
         if (ds_state != nullptr) {
             encoder->setDepthStencilState(ds_state);
-            cb_impl->retain_until_completed(ds_state);
         }
 
         // Stencil reference value (set on encoder, not descriptor)

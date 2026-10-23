@@ -1,9 +1,11 @@
 #include "erhe_graphics/metal4/metal4_render_pipeline.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
 #include "erhe_graphics/metal4/metal4_helpers.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_compiler.hpp"
 #include "erhe_graphics/metal4/metal4_render_command_encoder.hpp"
 #include "erhe_graphics/metal4/metal4_shader_stages.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_verify/verify.hpp"
@@ -26,8 +28,8 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     }
 
     const Shader_stages_impl& stages_impl = shader_stages->get_impl();
-    MTL::Function* vertex_function   = stages_impl.get_vertex_function();
-    MTL::Function* fragment_function = stages_impl.get_fragment_function();
+    MTL4::LibraryFunctionDescriptor* vertex_function   = stages_impl.get_vertex_function();
+    MTL4::LibraryFunctionDescriptor* fragment_function = stages_impl.get_fragment_function();
     if (vertex_function == nullptr) {
         return;
     }
@@ -37,15 +39,26 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
 
     const Base_render_pipeline_create_info& base = create_info.base;
 
+    Scoped_transient_object_pool object_pool{}; // drains the label string
+
     // --- Render pipeline state ---
-    MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
-    desc->setVertexFunction(vertex_function);
-    desc->setFragmentFunction(fragment_function);
+    // MTL4::RenderPipelineDescriptor has no depth or stencil attachment
+    // pixel formats: an MTL4 render pipeline is compatible with any depth /
+    // stencil attachment (doc/erhe/metal4_backend.md "Shaders and
+    // pipelines"). Sample count -> rasterSampleCount.
+    MTL4::RenderPipelineDescriptor* desc = MTL4::RenderPipelineDescriptor::alloc()->init();
+    desc->setLabel(NS::String::string(shader_stages->name().c_str(), NS::UTF8StringEncoding));
+    desc->setVertexFunctionDescriptor(vertex_function);
+    desc->setFragmentFunctionDescriptor(fragment_function);
     // Prepared count draws (Indirect_count_draws) execute an indirect
     // command buffer that inherits the encoder's pipeline, which needs this
     // on the pipeline. Opt-in: Metal rejects it for a fragment shader with
     // directly bound textures or samplers.
-    desc->setSupportIndirectCommandBuffers(base.indirect_count_draws == Indirect_count_draw_support::enabled);
+    desc->setSupportIndirectCommandBuffers(
+        (base.indirect_count_draws == Indirect_count_draw_support::enabled)
+            ? MTL4::IndirectCommandBufferSupportStateEnabled
+            : MTL4::IndirectCommandBufferSupportStateDisabled
+    );
 
     // Color attachment pixel formats from create info
     for (unsigned int i = 0; i < create_info.color_attachment_count; ++i) {
@@ -59,21 +72,13 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
 
     // Sample count
     if (create_info.sample_count > 1) {
-        desc->setSampleCount(static_cast<NS::UInteger>(create_info.sample_count));
+        desc->setRasterSampleCount(static_cast<NS::UInteger>(create_info.sample_count));
     }
 
     // Multisample coverage/one state (pipeline-descriptor state, applies
     // even when sample_count == 1 - Metal ignores the flags in that case).
-    desc->setAlphaToCoverageEnabled(base.multisample.alpha_to_coverage_enable);
-    desc->setAlphaToOneEnabled(base.multisample.alpha_to_one_enable);
-
-    // Depth/stencil pixel formats
-    if (create_info.depth_attachment_format != erhe::dataformat::Format::format_undefined) {
-        desc->setDepthAttachmentPixelFormat(to_mtl_pixel_format(create_info.depth_attachment_format));
-    }
-    if (create_info.stencil_attachment_format != erhe::dataformat::Format::format_undefined) {
-        desc->setStencilAttachmentPixelFormat(to_mtl_pixel_format(create_info.stencil_attachment_format));
-    }
+    desc->setAlphaToCoverageState(base.multisample.alpha_to_coverage_enable ? MTL4::AlphaToCoverageStateEnabled : MTL4::AlphaToCoverageStateDisabled);
+    desc->setAlphaToOneState     (base.multisample.alpha_to_one_enable      ? MTL4::AlphaToOneStateEnabled      : MTL4::AlphaToOneStateDisabled);
 
     // Vertex descriptor
     if (create_info.vertex_input != nullptr) {
@@ -109,9 +114,9 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     // Color blend state
     const Color_blend_state& color_blend = (base.color_blend != nullptr) ? *base.color_blend : erhe::graphics::Color_blend_state::color_blend_disabled;
     for (unsigned int i = 0; i < std::max(1u, create_info.color_attachment_count); ++i) {
-        MTL::RenderPipelineColorAttachmentDescriptor* color_att = desc->colorAttachments()->object(static_cast<NS::UInteger>(i));
+        MTL4::RenderPipelineColorAttachmentDescriptor* color_att = desc->colorAttachments()->object(static_cast<NS::UInteger>(i));
         if (color_blend.enabled) {
-            color_att->setBlendingEnabled(true);
+            color_att->setBlendingState(MTL4::BlendStateEnabled);
             color_att->setSourceRGBBlendFactor(to_mtl_blend_factor(color_blend.rgb.source_factor));
             color_att->setDestinationRGBBlendFactor(to_mtl_blend_factor(color_blend.rgb.destination_factor));
             color_att->setRgbBlendOperation(to_mtl_blend_operation(color_blend.rgb.equation_mode));
@@ -128,13 +133,12 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         color_att->setWriteMask(mask);
     }
 
-    NS::Error* error = nullptr;
-    m_pso = mtl_device->newRenderPipelineState(desc, &error);
+    std::string error;
+    m_pso = m_device_impl.get_pipeline_compiler().new_render_pipeline(desc, error);
     desc->release();
 
     if (m_pso == nullptr) {
-        const char* error_str = (error != nullptr) ? error->localizedDescription()->utf8String() : "unknown error";
-        std::string error_msg = fmt::format("Pipeline state creation failed for '{}': {}", shader_stages->name(), error_str);
+        std::string error_msg = fmt::format("Pipeline state creation failed for '{}': {}", shader_stages->name(), error);
         device.shader_error(error_msg, "");
         return;
     }

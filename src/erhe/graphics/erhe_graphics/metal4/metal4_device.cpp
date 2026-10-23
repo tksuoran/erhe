@@ -6,6 +6,8 @@
 #include "erhe_graphics/metal4/metal4_gpu_prewarm.hpp"
 #include "erhe_graphics/metal4/metal4_gpu_timer.hpp"
 #include "erhe_graphics/metal4/metal4_indirect_count_draws.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_compiler.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_state_cache.hpp"
 #include "erhe_graphics/metal4/metal4_scoped_debug_group.hpp"
 #include "erhe_graphics/metal4/metal4_helpers.hpp"
 #include "erhe_graphics/metal4/metal4_surface.hpp"
@@ -43,6 +45,17 @@
 #include <objc/runtime.h>
 
 namespace erhe::graphics {
+
+namespace {
+
+// The device frame whose end logs the pipeline startup summary
+// (Pipeline_compiler::log_startup_summary): late enough for the pipelines
+// the editor creates in its first main loop frames (its loading screen
+// renders device frames before them), early enough that the startup window,
+// in which every pipeline creation probes the archive, stays short.
+constexpr uint64_t c_pipeline_startup_summary_frame = 300;
+
+} // anonymous namespace
 
 Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Graphics_config& graphics_config)
     : m_device         {device}
@@ -109,6 +122,10 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         log_startup->critical("Metal 4: newMTL4CommandQueue failed");
         abort();
     }
+    // Every library and pipeline state goes through the compiler, which
+    // loads the pipeline archive of this GPU and OS build.
+    m_pipeline_compiler    = std::make_unique<Pipeline_compiler>(m_mtl_device);
+    m_pipeline_state_cache = std::make_unique<Pipeline_state_cache>(*this);
     m_residency        = std::make_unique<Residency>(m_mtl_device);
     m_submission_pools = std::make_unique<Submission_pools>(m_mtl_device, *m_residency);
     m_mtl_command_queue->addResidencySet(m_residency->get_residency_set());
@@ -241,7 +258,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.use_multi_draw_indirect_core             = false;
     // The GPU-read draw count: prepared count draws (Indirect_count_draws),
     // whose encoding kernel is raw MSL compiled here.
-    m_indirect_count_encode_pipeline = make_indirect_count_encode_pipeline(m_mtl_device);
+    m_indirect_count_encode_pipeline = make_indirect_count_encode_pipeline(*m_pipeline_compiler);
     m_info.use_draw_indirect_count                  = (m_indirect_count_encode_pipeline != nullptr);
     log_startup->info(
         "Draw indirect count: {} (indirect command buffer encoded by a kernel, Indirect_count_draws)",
@@ -441,6 +458,17 @@ Device_impl::~Device_impl() noexcept
     // everything committed before the surface (swapchain textures, capture
     // buffer) and the pipelines below are released at once.
     wait_idle();
+    // Precondition: every thread that creates pipelines (the editor's
+    // worker threads, the render thread) has stopped. The archive then
+    // holds every pipeline this run created. Pipeline states do not depend
+    // on the compiler, so the ones released below and by the drained
+    // completion handlers outlive it safely.
+    m_pipeline_state_cache.reset();
+    if (m_pipeline_compiler != nullptr) {
+        m_pipeline_compiler->log_startup_summary();
+        m_pipeline_compiler->write_archive();
+        m_pipeline_compiler.reset();
+    }
     m_surface.reset();
     m_ring_buffer_pool.clear();
     for (Blit_framebuffer_pipeline& entry : m_blit_framebuffer_pipelines) {
@@ -676,6 +704,9 @@ auto Device_impl::end_frame(const uint64_t frame_id) -> bool
         slot.state = Device_frame_state::idle;
         ++m_render_frame_id;
     }
+    if (frame_id == c_pipeline_startup_summary_frame) {
+        m_pipeline_compiler->log_startup_summary();
+    }
     return true;
 }
 
@@ -899,43 +930,29 @@ auto Device_impl::get_blit_framebuffer_pipeline(const unsigned long destination_
         }
     }
 
-    Scoped_transient_object_pool object_pool{}; // drains the strings and errors created here
-    NS::Error* error = nullptr;
+    Scoped_transient_object_pool object_pool{}; // drains the strings created here
+    std::string error;
     if (m_blit_framebuffer_library == nullptr) {
-        m_blit_framebuffer_library = m_mtl_device->newLibrary(
-            NS::String::string(c_blit_framebuffer_msl, NS::UTF8StringEncoding),
-            nullptr,
-            &error
-        );
+        m_blit_framebuffer_library = m_pipeline_compiler->new_library(c_blit_framebuffer_msl, "blit_framebuffer", error);
         if (m_blit_framebuffer_library == nullptr) {
-            log_context->error(
-                "blit_framebuffer: shader library compile failed: {}",
-                (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)"
-            );
+            log_context->error("blit_framebuffer: shader library compile failed: {}", error);
             return nullptr;
         }
     }
-    MTL::Function* const vertex_function   = m_blit_framebuffer_library->newFunction(NS::String::string("blit_framebuffer_vs", NS::UTF8StringEncoding));
-    MTL::Function* const fragment_function = m_blit_framebuffer_library->newFunction(NS::String::string("blit_framebuffer_fs", NS::UTF8StringEncoding));
-    MTL::RenderPipelineDescriptor* const descriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+    MTL4::LibraryFunctionDescriptor* const vertex_function   = m_pipeline_compiler->new_function_descriptor(m_blit_framebuffer_library, "blit_framebuffer_vs");
+    MTL4::LibraryFunctionDescriptor* const fragment_function = m_pipeline_compiler->new_function_descriptor(m_blit_framebuffer_library, "blit_framebuffer_fs");
+    ERHE_VERIFY((vertex_function != nullptr) && (fragment_function != nullptr));
+    MTL4::RenderPipelineDescriptor* const descriptor = MTL4::RenderPipelineDescriptor::alloc()->init();
     descriptor->setLabel(NS::String::string("blit_framebuffer", NS::UTF8StringEncoding));
-    descriptor->setVertexFunction  (vertex_function);
-    descriptor->setFragmentFunction(fragment_function);
+    descriptor->setVertexFunctionDescriptor  (vertex_function);
+    descriptor->setFragmentFunctionDescriptor(fragment_function);
     descriptor->colorAttachments()->object(0)->setPixelFormat(static_cast<MTL::PixelFormat>(destination_pixel_format));
-    MTL::RenderPipelineState* const pipeline = m_mtl_device->newRenderPipelineState(descriptor, &error);
+    MTL::RenderPipelineState* const pipeline = m_pipeline_compiler->new_render_pipeline(descriptor, error);
     descriptor->release();
-    if (fragment_function != nullptr) {
-        fragment_function->release();
-    }
-    if (vertex_function != nullptr) {
-        vertex_function->release();
-    }
+    fragment_function->release();
+    vertex_function->release();
     if (pipeline == nullptr) {
-        log_context->error(
-            "blit_framebuffer: pipeline for pixel format {} failed: {}",
-            destination_pixel_format,
-            (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)"
-        );
+        log_context->error("blit_framebuffer: pipeline for pixel format {} failed: {}", destination_pixel_format, error);
         return nullptr;
     }
     m_blit_framebuffer_pipelines.push_back(
@@ -1330,6 +1347,23 @@ auto Device_impl::get_submission_pools() -> Submission_pools&
     return *m_submission_pools;
 }
 
+auto Device_impl::get_pipeline_compiler() -> Pipeline_compiler&
+{
+    ERHE_VERIFY(m_pipeline_compiler); // null only once ~Device_impl wrote the archive
+    return *m_pipeline_compiler;
+}
+
+auto Device_impl::get_pipeline_state_cache() -> Pipeline_state_cache&
+{
+    ERHE_VERIFY(m_pipeline_state_cache);
+    return *m_pipeline_state_cache;
+}
+
+auto Device_impl::get_device() -> Device&
+{
+    return m_device;
+}
+
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
     const uint64_t frame_index = get_frame_index();
@@ -1481,9 +1515,10 @@ auto Device_impl::recreate_surface_for_new_window() -> bool
 
 void Device_impl::clear_render_pipeline_cache()
 {
-    // Metal pipelines are owned by Render_pipeline objects directly;
-    // there is no hash-keyed cache analogous to Vulkan's m_pipeline_map
-    // that could return stale entries when shader stages are recompiled.
+    // The cache entries retain their function descriptors, so a recompiled
+    // shader never matches a stale entry; clearing after a reload releases
+    // the pipelines of the replaced shaders (frame-deferred).
+    m_pipeline_state_cache->clear();
 }
 
 void Device_impl::wait_idle()

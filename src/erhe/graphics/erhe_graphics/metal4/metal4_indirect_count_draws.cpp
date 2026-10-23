@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_indirect_count_draws.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_compiler.hpp"
 #include "erhe_graphics/metal4/metal4_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
 #include "erhe_graphics/buffer.hpp"
@@ -199,29 +200,17 @@ void make_resident(Device& device, const MTL::Resource* const resource)
 
 } // anonymous namespace
 
-auto make_indirect_count_encode_pipeline(MTL::Device* const device) -> MTL::ComputePipelineState*
+auto make_indirect_count_encode_pipeline(Pipeline_compiler& pipeline_compiler) -> MTL::ComputePipelineState*
 {
-    Scoped_transient_object_pool object_pool{}; // drains the strings and errors created here
-    NS::Error* error = nullptr;
-    MTL::Library* const library = device->newLibrary(NS::String::string(c_indirect_count_encode_msl, NS::UTF8StringEncoding), nullptr, &error);
-    if (library == nullptr) {
-        log_startup->error(
-            "Indirect count draws: kernel compile failed: {}",
-            (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)"
-        );
-        return nullptr;
-    }
-    MTL::Function* const function = library->newFunction(NS::String::string("erhe_encode_indexed_indirect_count_draws", NS::UTF8StringEncoding));
-    MTL::ComputePipelineState* const pipeline = (function != nullptr) ? device->newComputePipelineState(function, &error) : nullptr;
-    if (function != nullptr) {
-        function->release();
-    }
-    library->release();
+    std::string error;
+    MTL::ComputePipelineState* const pipeline = pipeline_compiler.new_compute_pipeline_from_source(
+        c_indirect_count_encode_msl,
+        "erhe_encode_indexed_indirect_count_draws",
+        "indirect_count_draws_encode",
+        error
+    );
     if (pipeline == nullptr) {
-        log_startup->error(
-            "Indirect count draws: kernel pipeline failed: {}",
-            (error != nullptr) ? error->localizedDescription()->utf8String() : "(no error)"
-        );
+        log_startup->error("Indirect count draws: kernel pipeline failed: {}", error);
     }
     return pipeline;
 }

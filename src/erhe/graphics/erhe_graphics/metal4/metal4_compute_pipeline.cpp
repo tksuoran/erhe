@@ -1,9 +1,11 @@
 #include "erhe_graphics/metal4/metal4_compute_pipeline.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/metal4/metal4_pipeline_compiler.hpp"
 #include "erhe_graphics/metal4/metal4_shader_stages.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
@@ -19,21 +21,21 @@ Compute_pipeline_impl::Compute_pipeline_impl(Device& device, const Compute_pipel
     }
 
     const Shader_stages_impl& stages_impl = shader_stages->get_impl();
-    MTL::Function* compute_function = stages_impl.get_compute_function();
+    MTL4::LibraryFunctionDescriptor* compute_function = stages_impl.get_compute_function();
     if (compute_function == nullptr) {
         log_startup->error("Metal: no compute function for '{}'", shader_stages->name());
         return;
     }
 
-    Device_impl& device_impl = device.get_impl();
-    MTL::Device* mtl_device = device_impl.get_mtl_device();
-    ERHE_VERIFY(mtl_device != nullptr);
-
-    NS::Error* error = nullptr;
-    m_pipeline_state = mtl_device->newComputePipelineState(compute_function, &error);
+    Scoped_transient_object_pool object_pool{}; // drains the label string
+    MTL4::ComputePipelineDescriptor* const descriptor = MTL4::ComputePipelineDescriptor::alloc()->init();
+    descriptor->setLabel(NS::String::string(shader_stages->name().c_str(), NS::UTF8StringEncoding));
+    descriptor->setComputeFunctionDescriptor(compute_function);
+    std::string error;
+    m_pipeline_state = device.get_impl().get_pipeline_compiler().new_compute_pipeline(descriptor, error);
+    descriptor->release();
     if (m_pipeline_state == nullptr) {
-        const char* error_str = (error != nullptr) ? error->localizedDescription()->utf8String() : "unknown";
-        log_startup->error("Metal compute pipeline state creation failed: {}", error_str);
+        log_startup->error("Metal compute pipeline state creation failed for '{}': {}", shader_stages->name(), error);
     }
 }
 
