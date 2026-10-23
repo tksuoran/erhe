@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/metal4/metal4_pixel_format_table.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_pool.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
@@ -20,7 +21,8 @@ typedef int GLint;
 
 namespace MTL { class ArgumentEncoder; }
 namespace MTL { class Device; }
-namespace MTL { class CommandQueue; }
+namespace MTL4 { class CommandQueue; }
+namespace MTL4 { class CommitFeedback; }
 namespace MTL { class ComputePipelineState; }
 namespace MTL { class Event; }
 namespace MTL { class Library; }
@@ -138,13 +140,17 @@ public:
     // Per-frame command buffer accounting (any thread, under
     // m_completion_mutex). submit_command_buffers() counts each command
     // buffer it commits against the frame the command buffer was begun in;
-    // the command buffer's addCompletedHandler (an arbitrary Metal dispatch
-    // thread) counts its completion. A frame retires once it has ended and
+    // the commit's feedback handler (a Metal dispatch thread) counts its
+    // completion. A frame retires once it has ended and
     // every command buffer committed for it has completed - not when the
     // first one does: a frame has several (uploads, render-to-texture
     // passes, the swapchain pass), and the releases its completion runs
     // (texture and buffer releases, ring buffer ranges) must wait for all.
-    void note_command_buffer_committed  (uint64_t frame_index);
+    // Returns the frame the commit is charged to: frame_index, or, when that
+    // frame has retired already (a recording begun in it committed late),
+    // the oldest frame not retired yet, so no frame retires while a commit
+    // charged to it is in flight.
+    [[nodiscard]] auto note_command_buffer_committed(uint64_t frame_index) -> uint64_t;
     void notify_command_buffer_completed(uint64_t frame_index);
     // Blocks until every command buffer committed for frame_index has
     // completed on the GPU. The frame must have ended (all its command
@@ -152,16 +158,12 @@ public:
     void wait_for_frame_gpu_completion  (uint64_t frame_index);
 
     // Presented-frame throttle. A command buffer that presents a drawable
-    // normally completes at its GPU end (measured: 16 ms before the drawable
-    // is displayed), but when presentation stalls these never retire.
-    // Without a bound the main loop keeps submitting frames until the
-    // command queue's in-flight limit (maxCommandBufferCount, 64) is
-    // reached, at which point
-    // MTL::CommandQueue::commandBuffer() blocks inside the driver and the
-    // process is wedged until presentation resumes - observed live: a
-    // presentation stall left the editor hung in Command_buffer::begin() for
-    // two hours, until a display wake released the drawables and all 64
-    // queued command buffers drained at once.
+    // normally completes at its GPU end (measured with the Metal 3 backend:
+    // 16 ms before the drawable is displayed), but when presentation stalls
+    // these never retire. Without a bound the main loop keeps submitting
+    // frames behind the stuck one (with the Metal 3 queue until its
+    // in-flight limit of 64 command buffers wedged the process inside
+    // commandBuffer() for as long as the stall lasted).
     //
     // begin_swapchain waits here instead: normal FIFO backpressure at
     // s_max_frames_in_flight, and if presentation is not progressing the wait
@@ -181,7 +183,8 @@ public:
     // group must reach the encoder of its own thread's pass.
     static thread_local Render_pass_impl* s_active_render_pass;
     [[nodiscard]] auto get_command_buffer(unsigned int thread_slot) -> Command_buffer&;
-    void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
+    // Returns the serial of the last commit it made (0: none).
+    auto submit_command_buffers    (std::span<Command_buffer* const> command_buffers) -> uint64_t;
     void submit_command_buffer_and_wait(Command_buffer& command_buffer);
     void add_completion_handler    (std::function<void(Device_impl&)> callback);
     [[nodiscard]] auto get_indirect_count_encode_pipeline() const -> MTL::ComputePipelineState* { return m_indirect_count_encode_pipeline; }
@@ -241,7 +244,40 @@ public:
     [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
 
     [[nodiscard]] auto get_mtl_device              () const -> MTL::Device*;
-    [[nodiscard]] auto get_mtl_command_queue       () const -> MTL::CommandQueue*;
+    [[nodiscard]] auto get_mtl_command_queue       () const -> MTL4::CommandQueue*;
+    [[nodiscard]] auto get_residency               () -> Residency&;
+    [[nodiscard]] auto get_submission_pools        () -> Submission_pools&;
+
+    // Returns what a Recording held once the GPU has completed it, or when it
+    // was never committed: runs its callbacks, releases its retained objects
+    // and returns its argument tables and inline constant chunks to the pools
+    // (the lists are cleared with their capacity kept).
+    void release_recording_payload(Recording& recording);
+    // The feedback handler of every commit (commit_locked), on a
+    // Metal dispatch thread: the internal recording's on_feedback or the
+    // Command_buffer path (error log, presented frame GPU bracket, timer
+    // resolve, frame accounting), then the payload and the recording return
+    // to the pools and the commit leaves the in-flight list.
+    void on_commit_feedback(Recording& recording, MTL4::CommitFeedback* feedback);
+
+    // The submit path. Every MTL4 commit goes through commit_locked with the
+    // submit mutex held (lock_submit): the residency set is committed when
+    // it changed, the commit is tracked as in flight until its feedback
+    // handler (on_feedback, a Metal dispatch thread) has run, and queue
+    // waits / signals / drawable operations around it keep their order
+    // across threads. Returns the commit serial.
+    [[nodiscard]] auto lock_submit() -> std::unique_lock<std::mutex>;
+    // The recording's command buffer must have ended.
+    [[nodiscard]] auto commit_locked(Recording& recording) -> uint64_t;
+    // Blocks until the feedback handlers of every commit up to serial have
+    // run.
+    void wait_for_commit(uint64_t serial);
+    [[nodiscard]] auto get_latest_commit_serial() -> uint64_t;
+    // A recording begun for backend-internal work (swapchain readback, the
+    // GPU pre-warm, the present calibration): set its on_feedback / user
+    // fields, end it and commit it with commit_locked; it returns to the
+    // pool after its on_feedback ran.
+    [[nodiscard]] auto begin_internal_recording() -> Recording*;
     [[nodiscard]] auto get_default_sampler_state   () const -> MTL::SamplerState*;
     [[nodiscard]] auto get_gpu_timer_sample_pool   () -> Gpu_timer_sample_pool&;
 
@@ -267,16 +303,6 @@ public:
 private:
     void frame_completed(uint64_t completed_frame);
 
-    // running: retire ended frames whose committed command buffers have all
-    // completed. idle: the caller has drained the queue (wait_idle), so every
-    // ended frame is retired, whether or not its completion callbacks have
-    // run yet.
-    enum class Gpu_queue_state : unsigned int
-    {
-        running = 0,
-        idle    = 1
-    };
-
     // Retire the ended frames whose command buffers have completed (see
     // note_command_buffer_committed) and run frame_completed() for each,
     // in frame id order. Called every frame from end_frame() -- mirroring the
@@ -286,9 +312,11 @@ private:
     // begin_frame(), so the end_frame() drain is the one that actually
     // recycles ring buffers and fires completion handlers per frame.
     // Retires, in id order, the frames before ended_frame_bound (frames
-    // that have ended) whose command buffers have all completed - or, with
-    // Gpu_queue_state::idle, every one of them.
-    void drain_completed_frames(Gpu_queue_state gpu_queue_state, uint64_t ended_frame_bound);
+    // that have ended) whose command buffers have all completed (their
+    // commit feedback ran) - also after wait_idle, which waited for that
+    // feedback, so no frame retires while a commit charged to it is in
+    // flight.
+    void drain_completed_frames(uint64_t ended_frame_bound);
 
     class Completion_handler
     {
@@ -300,8 +328,9 @@ private:
     // Per-(thread_slot) bag of cbs allocated this frame. Each entry is
     // tagged with the frame index of allocation so frame_completed() can
     // drop entries whose frame's GPU work has retired. Mirrors Vulkan's
-    // Per_thread_command_pool except there is no MTLCommandPool to reset
-    // -- MTL::CommandBuffer allocation goes straight through the queue.
+    // Per_thread_command_pool; the MTL4 command buffer + allocator pair a
+    // Command_buffer records into comes from Submission_pools and returns
+    // there from its commit feedback.
     class Per_thread_command_buffers
     {
     public:
@@ -423,7 +452,19 @@ private:
     std::condition_variable  m_presented_frames_cv;
     int                      m_presented_frames_in_flight{0};
     MTL::Device*             m_mtl_device          {nullptr};
-    MTL::CommandQueue*       m_mtl_command_queue   {nullptr};
+    MTL4::CommandQueue*      m_mtl_command_queue   {nullptr};
+    // Declared before the command buffers and the pools before the ring
+    // buffers: what they hold is returned to the pools and removed from the
+    // residency set when they are destroyed.
+    std::unique_ptr<Residency>        m_residency;
+    std::unique_ptr<Submission_pools> m_submission_pools;
+    std::mutex                        m_submit_mutex;
+    // Commits whose feedback handler has not run yet (wait_idle,
+    // wait_for_commit); serials increase with commit order.
+    std::mutex                        m_in_flight_mutex;
+    std::condition_variable           m_in_flight_cv;
+    std::vector<uint64_t>             m_in_flight_serials;
+    uint64_t                          m_latest_commit_serial{0};
     MTL::SamplerState*       m_default_sampler_state{nullptr};
     MTL::LogState*           m_mtl_log_state        {nullptr};
     MTL::ArgumentEncoder*    m_texture_argument_encoder{nullptr};

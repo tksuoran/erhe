@@ -30,6 +30,10 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
                 std::memcpy(m_mtl_buffer->contents(), create_info.init_data, m_capacity_byte_count);
             }
         }
+        if (m_mtl_buffer != nullptr) {
+            // Resident for every MTL4 commit until the deferred release.
+            m_device_impl.get_residency().add(m_mtl_buffer);
+        }
         if ((m_mtl_buffer != nullptr) && !m_debug_label.empty()) {
             NS::String* label = NS::String::alloc()->init(
                 m_debug_label.data(),
@@ -47,7 +51,8 @@ Buffer_impl::~Buffer_impl() noexcept
         MTL::Buffer* mtl_buffer = m_mtl_buffer;
         m_mtl_buffer = nullptr;
         m_device_impl.add_completion_handler(
-            [mtl_buffer](Device_impl&) {
+            [mtl_buffer](Device_impl& device_impl) {
+                device_impl.get_residency().remove(mtl_buffer);
                 mtl_buffer->release();
             }
         );
@@ -73,7 +78,8 @@ auto Buffer_impl::operator=(Buffer_impl&& other) noexcept -> Buffer_impl&
         if (m_mtl_buffer != nullptr) {
             MTL::Buffer* mtl_buffer = m_mtl_buffer;
             m_device_impl.add_completion_handler(
-                [mtl_buffer](Device_impl&) {
+                [mtl_buffer](Device_impl& device_impl) {
+                    device_impl.get_residency().remove(mtl_buffer);
                     mtl_buffer->release();
                 }
             );

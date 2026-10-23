@@ -9,12 +9,12 @@ namespace erhe::graphics {
 
 bool Scoped_debug_group_impl::s_enabled{false};
 
-// Metal routes labels to the active MTL::RenderCommandEncoder via
+// Metal routes labels to the active MTL4::RenderCommandEncoder via
 // Render_pass_impl::get_active_mtl_encoder(); the explicit cb argument
 // is not consulted (the encoder owns the cb).
 Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer&, const std::string_view debug_label)
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     if (encoder != nullptr && !debug_label.empty()) {
         const Debug_label_buffer label_buffer{debug_label};
         NS::String* label = NS::String::alloc()->init(

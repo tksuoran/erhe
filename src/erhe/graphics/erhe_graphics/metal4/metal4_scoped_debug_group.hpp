@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace MTL {
+namespace MTL4 {
     class RenderCommandEncoder;
 }
 
@@ -23,7 +23,7 @@ private:
     // exact same encoder, not whichever encoder is active at the time
     // ~Scoped_debug_group_impl runs. Without this caching, switching
     // encoders between push/pop would mismatch debug groups.
-    MTL::RenderCommandEncoder*  m_pushed_encoder{nullptr};
+    MTL4::RenderCommandEncoder* m_pushed_encoder{nullptr};
 };
 
 class Device;

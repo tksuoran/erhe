@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 
-namespace MTL { class Buffer; class CommandBuffer; class CommandQueue; class ComputePipelineState; class Device; class Event; }
+namespace MTL  { class Buffer; class ComputePipelineState; class Event; }
+namespace MTL4 { class CommitFeedback; class ComputeCommandEncoder; }
 
 namespace erhe::graphics {
 
@@ -16,34 +18,40 @@ namespace erhe::graphics {
 // never-taken write, no memory traffic) in its own command buffer, ordered
 // after the frame's presenting command buffer through an MTLEvent so it runs
 // in the idle gap instead of overlapping the frame (unordered it stretched
-// the frame's span). 2.3 ms of it per 16.7 ms frame raised the clock from
-// ~0.5 to ~0.97 of its maximum (probe on an M4 Pro).
+// the frame's span). Under MTL4 the queue signals the event after the
+// presenting commit and waits on it before the pre-warm commit (which holds
+// back every later commit too, doc/erhe/metal4_backend.md "Submission").
+// 2.3 ms of it per 16.7 ms frame raised the clock from ~0.5 to ~0.97 of its
+// maximum (probe on an M4 Pro).
 //
 // The kernel duration is requested in seconds; the iteration count follows
 // the measured duration per iteration of earlier dispatches. Thread-safe:
-// the render thread dispatches, Metal's completion threads update the rate.
+// the render thread dispatches, Metal's feedback threads update the rate.
+class Device_impl;
+class Recording;
 class Gpu_prewarm
 {
 public:
-    Gpu_prewarm(MTL::Device* device, MTL::CommandQueue* queue);
+    explicit Gpu_prewarm(Device_impl& device_impl);
     ~Gpu_prewarm() noexcept;
     Gpu_prewarm(const Gpu_prewarm&) = delete;
     auto operator=(const Gpu_prewarm&) -> Gpu_prewarm& = delete;
 
     [[nodiscard]] auto is_available() const -> bool;
-    // Before committing the presenting command buffer: signal the event the
-    // following dispatch() waits on.
-    void signal_after(MTL::CommandBuffer* presenting_command_buffer);
-    // After that commit: run the kernel for about seconds, ordered after it.
-    void dispatch(double seconds);
+    // Right after committing the presenting command buffer, with the submit
+    // mutex held: the queue signals the event the following dispatch_locked()
+    // waits on.
+    void signal_after_last_commit();
+    // Then: run the kernel for about seconds, ordered after it.
+    void dispatch_locked(double seconds);
     // Init calibration: runs iterations standalone and waits; returns the
     // kernel's GPU time in seconds (0.0 on failure) and updates the rate.
     [[nodiscard]] auto run_blocking(std::uint32_t iterations) -> double;
     [[nodiscard]] auto get_seconds_per_iteration() const -> double;
 
 private:
-    // Duration per iteration of earlier dispatches, shared with their
-    // completion handlers (which may run after the device is gone).
+    // Duration per iteration of earlier dispatches, updated by their commit
+    // feedback (the device waits for all feedback before destroying this).
     class Rate
     {
     public:
@@ -54,14 +62,21 @@ private:
         double             m_seconds_per_iteration{0.0}; // 0 = not measured
     };
 
-    void encode(MTL::CommandBuffer* command_buffer, std::uint32_t iterations);
+    // With the submit mutex held. blocking_seconds (may be null) receives
+    // the kernel's GPU time from the commit feedback.
+    [[nodiscard]] auto commit_locked(std::uint32_t iterations, double* blocking_seconds) -> std::uint64_t;
+    // Recording_feedback_function of the pre-warm commits.
+    static void on_feedback(Recording& recording, MTL4::CommitFeedback* feedback);
 
-    MTL::CommandQueue*          m_queue   {nullptr};
+    static constexpr std::size_t s_iteration_slots = 16;
+
+    Device_impl&                m_device_impl;
     MTL::ComputePipelineState*  m_pipeline{nullptr};
+    std::size_t                 m_iteration_slot{0};
     MTL::Buffer*                m_output  {nullptr};
     MTL::Event*                 m_event   {nullptr};
     std::uint64_t               m_event_value{0}; // render thread only
-    std::shared_ptr<Rate>       m_rate{std::make_shared<Rate>()};
+    Rate                        m_rate;
 };
 
 } // namespace erhe::graphics

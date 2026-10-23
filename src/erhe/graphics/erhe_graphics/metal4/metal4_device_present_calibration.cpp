@@ -1,14 +1,16 @@
 // Present calibration at device init, Metal part (the algorithm and its
 // rationale: present_calibration_runner.cpp): clear-only drawables on the
-// window's CAMetalLayer, requested with presentDrawable:atTime:; the
-// presented handler gives the displayed time, the completed handler the GPU
-// end. The GPU pre-warm kernel rate is measured first.
+// window's CAMetalLayer, requested with the drawable's presentAtTime: after
+// the MTL4 queue signaled it; the presented handler gives the displayed
+// time, the commit feedback the GPU end. The GPU pre-warm kernel rate is
+// measured first.
 //
-// Runs synchronously on the init thread; presented and completed handlers
+// Runs synchronously on the init thread; presented and feedback handlers
 // arrive on Metal's own threads and are collected under a mutex.
 
 #include "erhe_graphics/metal4/metal4_device.hpp"
 #include "erhe_graphics/metal4/metal4_gpu_prewarm.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/metal4/metal4_surface.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -80,12 +82,19 @@ private:
 class Metal_calibration_presenter : public IPresent_calibration_presenter
 {
 public:
-    Metal_calibration_presenter(CA::MetalLayer* layer, MTL::CommandQueue* command_queue, Surface_impl& surface_impl)
+    Metal_calibration_presenter(CA::MetalLayer* layer, Device_impl& device_impl, Surface_impl& surface_impl)
         : m_layer        {layer}
-        , m_command_queue{command_queue}
+        , m_device_impl  {device_impl}
         , m_surface_impl {surface_impl}
         , m_feedback     {std::make_shared<Calibration_feedback>()}
     {
+    }
+
+    ~Metal_calibration_presenter() override
+    {
+        if (m_last_serial != 0) {
+            m_device_impl.wait_for_commit(m_last_serial);
+        }
     }
 
     auto present(const double request_time, const double commit_time) -> std::ptrdiff_t override
@@ -95,19 +104,20 @@ public:
         if (drawable == nullptr) {
             return -1;
         }
-        MTL::CommandBuffer* const command_buffer = m_command_queue->commandBuffer();
-        if (command_buffer == nullptr) {
-            return -1;
-        }
+        Recording* const recording = m_device_impl.begin_internal_recording();
+        MTL4::CommandBuffer* const command_buffer = recording->command_buffer;
         command_buffer->setLabel(NS::String::string("present calibration", NS::UTF8StringEncoding));
-        MTL::RenderPassDescriptor* const render_pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+        MTL4::RenderPassDescriptor* const render_pass = MTL4::RenderPassDescriptor::alloc()->init();
         MTL::RenderPassColorAttachmentDescriptor* const color = render_pass->colorAttachments()->object(0);
         color->setTexture(drawable->texture());
         color->setLoadAction(MTL::LoadActionClear);
         color->setClearColor(MTL::ClearColor{0.0, 0.0, 0.0, 1.0});
         color->setStoreAction(MTL::StoreActionStore);
-        MTL::RenderCommandEncoder* const encoder = command_buffer->renderCommandEncoder(render_pass);
+        MTL4::RenderCommandEncoder* const encoder = command_buffer->renderCommandEncoder(render_pass);
+        render_pass->release();
+        encode_queue_barrier(encoder);
         encoder->endEncoding();
+        command_buffer->endCommandBuffer();
 
         const std::size_t index = m_feedback->add();
         std::shared_ptr<Calibration_feedback> presented_feedback = m_feedback;
@@ -116,21 +126,31 @@ public:
                 presented_feedback->set_presented(index, presented->presentedTime());
             }
         );
-        std::shared_ptr<Calibration_feedback> completed_feedback = m_feedback;
-        command_buffer->addCompletedHandler(
-            [completed_feedback, index](MTL::CommandBuffer* completed) {
-                completed_feedback->set_gpu_end(index, completed->GPUEndTime());
-            }
-        );
-        if (request_time > 0.0) {
-            command_buffer->presentDrawableAtTime(drawable, request_time);
-        } else {
-            command_buffer->presentDrawable(drawable);
-        }
+        // The commit feedback writes the GPU end; the presenter's destructor
+        // waits for the last commit, so the feedback object outlives it.
+        recording->user        = m_feedback.get();
+        recording->user_value  = index;
+        recording->on_feedback = [](Recording& completed, MTL4::CommitFeedback* feedback) {
+            static_cast<Calibration_feedback*>(completed.user)->set_gpu_end(
+                static_cast<std::size_t>(completed.user_value),
+                (feedback != nullptr) ? feedback->GPUEndTime() : 0.0
+            );
+        };
         if (commit_time > 0.0) {
             present_calibration_wait_until(commit_time);
         }
-        command_buffer->commit();
+        {
+            const std::unique_lock<std::mutex> submit_lock = m_device_impl.lock_submit();
+            MTL4::CommandQueue* const queue = m_device_impl.get_mtl_command_queue();
+            queue->wait(drawable);
+            m_last_serial = m_device_impl.commit_locked(*recording);
+            queue->signalDrawable(drawable);
+            if (request_time > 0.0) {
+                drawable->presentAtTime(request_time);
+            } else {
+                drawable->present();
+            }
+        }
         return static_cast<std::ptrdiff_t>(index);
     }
 
@@ -151,9 +171,10 @@ public:
 
 private:
     CA::MetalLayer*                       m_layer;
-    MTL::CommandQueue*                    m_command_queue;
+    Device_impl&                          m_device_impl;
     Surface_impl&                         m_surface_impl;
-    std::shared_ptr<Calibration_feedback> m_feedback; // shared with the handlers, which may outlive the calibration
+    std::shared_ptr<Calibration_feedback> m_feedback; // shared with the presented handlers, which may outlive the calibration
+    uint64_t                              m_last_serial{0};
 };
 
 } // namespace
@@ -184,7 +205,7 @@ void Device_impl::run_present_calibration()
         failure = "no CAMetalLayer";
         result.status = failure;
     } else {
-        Metal_calibration_presenter presenter{layer, m_mtl_command_queue, m_surface->get_impl()};
+        Metal_calibration_presenter presenter{layer, *this, m_surface->get_impl()};
         failure = erhe::graphics::run_present_calibration(presenter, nominal_period, result);
     }
     if (failure != nullptr) {

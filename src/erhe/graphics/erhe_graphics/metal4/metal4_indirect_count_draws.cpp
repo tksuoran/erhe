@@ -178,17 +178,23 @@ constexpr std::size_t c_table_alignment    = 256;
 
 // Replaced (grown) and destroyed resources are released through the
 // device's completion handlers, as the other Metal resource releases are, so
-// no frame still in flight loses one.
+// no frame still in flight loses one; they leave the residency set then.
 void release_later(Device& device, MTL::Resource* const resource)
 {
     if (resource == nullptr) {
         return;
     }
     device.get_impl().add_completion_handler(
-        [resource](Device_impl&) {
+        [resource](Device_impl& device_impl) {
+            device_impl.get_residency().remove(resource);
             resource->release();
         }
     );
+}
+
+void make_resident(Device& device, const MTL::Resource* const resource)
+{
+    device.get_impl().get_residency().add(resource);
 }
 
 } // anonymous namespace
@@ -267,6 +273,7 @@ void Indirect_count_draws_impl::reserve(
             ERHE_FATAL("Indirect_count_draws '%s': newIndirectCommandBuffer(%zu commands) failed", m_debug_label.data(), capacity);
         }
         resources.icb_capacity = capacity;
+        make_resident(m_device, resources.icb);
         log_startup->info(
             "Indirect_count_draws '{}': indirect command buffer grown to {} commands ({} bytes)",
             m_debug_label.string_view(), capacity, resources.icb->allocatedSize()
@@ -281,6 +288,7 @@ void Indirect_count_draws_impl::reserve(
         );
         ERHE_VERIFY(resources.range_buffer != nullptr);
         resources.range_capacity = capacity;
+        make_resident(m_device, resources.range_buffer);
         log_startup->info("Indirect_count_draws '{}': range buffer grown to {} jobs", m_debug_label.string_view(), capacity);
     }
 }
@@ -315,18 +323,21 @@ auto Indirect_count_draws_impl::allocate_table(
     );
     ERHE_VERIFY(resources.table_buffer != nullptr);
     resources.table_capacity = capacity;
+    make_resident(m_device, resources.table_buffer);
     resources.table_used     = table_bytes;
     log_startup->info("Indirect_count_draws '{}': table buffer grown to {} bytes", m_debug_label.string_view(), capacity);
     return 0;
 }
 
 void Indirect_count_draws_impl::encode(
-    MTL::ComputeCommandEncoder* const encoder,
-    const Indirect_count_draws::Slot& slot,
-    const std::size_t                 slot_index
+    MTL4::ComputeCommandEncoder* const encoder,
+    MTL4::ArgumentTable* const         argument_table,
+    const Indirect_count_draws::Slot&  slot,
+    const std::size_t                  slot_index
 )
 {
     ERHE_VERIFY(encoder != nullptr);
+    ERHE_VERIFY(argument_table != nullptr);
     ERHE_VERIFY(slot_index < m_slots.size());
     MTL::ComputePipelineState* const pipeline = m_device.get_impl().get_indirect_count_encode_pipeline();
     ERHE_VERIFY(pipeline != nullptr);
@@ -349,11 +360,14 @@ void Indirect_count_draws_impl::encode(
     }
 
     // The table: written by the CPU into this prepare's range of the slot's
-    // shared table buffer.
-    const std::size_t table_bytes        = c_icb_argument_bytes + index_buffer_bytes + job_bytes;
+    // shared table buffer; the kernel parameters last (they were setBytes
+    // in the Metal 3 backend).
+    const std::size_t params_bytes       = sizeof(Gpu_params);
+    const std::size_t table_bytes        = c_icb_argument_bytes + index_buffer_bytes + job_bytes + params_bytes;
     const std::size_t table_offset       = allocate_table(resources, slot.frame_index, table_bytes);
     const std::size_t index_table_offset = table_offset + c_icb_argument_bytes;
     const std::size_t job_table_offset   = index_table_offset + index_buffer_bytes;
+    const std::size_t params_offset      = job_table_offset + job_bytes;
     std::byte* const table = static_cast<std::byte*>(resources.table_buffer->contents()) + table_offset;
     const MTL::ResourceID icb_id = resources.icb->gpuResourceID();
     static_assert(sizeof(MTL::ResourceID) <= c_icb_argument_bytes);
@@ -385,21 +399,23 @@ void Indirect_count_draws_impl::encode(
         .primitive_type     = to_mtl_primitive_type_value(slot.primitive_type),
         .reserved           = 0
     };
+    std::memcpy(static_cast<std::byte*>(resources.table_buffer->contents()) + params_offset, &params, sizeof(params));
 
     MTL::Buffer* const command_buffer = slot.command_buffer->get_impl().get_mtl_buffer();
     MTL::Buffer* const count_buffer   = slot.count_buffer->get_impl().get_mtl_buffer();
     ERHE_VERIFY((command_buffer != nullptr) && (count_buffer != nullptr));
 
+    const uint64_t table_address = resources.table_buffer->gpuAddress();
     encoder->setComputePipelineState(pipeline);
-    encoder->setBuffer(resources.table_buffer, static_cast<NS::UInteger>(table_offset),             0);
-    encoder->setBuffer(command_buffer,         static_cast<NS::UInteger>(slot.command_byte_offset), 1);
-    encoder->setBuffer(count_buffer,           static_cast<NS::UInteger>(slot.count_byte_offset),   2);
-    encoder->setBuffer(resources.table_buffer, static_cast<NS::UInteger>(job_table_offset),         3);
-    encoder->setBuffer(resources.table_buffer, static_cast<NS::UInteger>(index_table_offset),       4);
-    encoder->setBuffer(resources.range_buffer, 0,                                                   5);
-    encoder->setBytes (&params, sizeof(params), 6);
-    // The ICB is reached through the table (by resource id), not bound.
-    encoder->useResource(resources.icb, MTL::ResourceUsageWrite);
+    argument_table->setAddress(table_address + table_offset,                            0);
+    argument_table->setAddress(command_buffer->gpuAddress() + slot.command_byte_offset, 1);
+    argument_table->setAddress(count_buffer->gpuAddress() + slot.count_byte_offset,     2);
+    argument_table->setAddress(table_address + job_table_offset,                        3);
+    argument_table->setAddress(table_address + index_table_offset,                      4);
+    argument_table->setAddress(resources.range_buffer->gpuAddress(),                    5);
+    argument_table->setAddress(table_address + params_offset,                           6);
+    // The ICB is reached through the table (by resource id), not bound; it
+    // is resident through the device's residency set.
 
     // Slot 0 of every job runs (it writes the range), so the grid is at
     // least one slot wide.

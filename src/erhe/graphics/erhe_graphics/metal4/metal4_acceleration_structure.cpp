@@ -2,16 +2,17 @@
 #include "erhe_graphics/metal4/metal4_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_command_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
+#include <Metal/MTL4AccelerationStructure.hpp> // not in the metal-cpp umbrella header
 
 #include <algorithm>
 #include <cstring>
-#include <unordered_map>
 
 namespace erhe::graphics {
 
@@ -84,6 +85,7 @@ Acceleration_structure_impl::Acceleration_structure_impl(Device& device, const A
                 MTL::ResourceStorageModeShared
             );
             ERHE_VERIFY(m_transform_buffer != nullptr);
+            device_impl.get_residency().add(m_transform_buffer);
         }
         std::size_t geometry_index = 0;
         for (const Acceleration_structure_triangles& triangles : create_info.triangle_geometries) {
@@ -98,14 +100,22 @@ Acceleration_structure_impl::Acceleration_structure_impl(Device& device, const A
             ERHE_VERIFY(vertex_buffer != nullptr);
             ERHE_VERIFY(index_buffer != nullptr);
 
-            MTL::AccelerationStructureTriangleGeometryDescriptor* geometry =
-                MTL::AccelerationStructureTriangleGeometryDescriptor::alloc()->init();
-            geometry->setVertexBuffer      (vertex_buffer);
-            geometry->setVertexBufferOffset(triangles.vertex_byte_offset);
+            MTL4::AccelerationStructureTriangleGeometryDescriptor* geometry =
+                MTL4::AccelerationStructureTriangleGeometryDescriptor::alloc()->init();
+            geometry->setVertexBuffer(
+                MTL4::BufferRange::Make(
+                    vertex_buffer->gpuAddress() + triangles.vertex_byte_offset,
+                    vertex_buffer->length() - triangles.vertex_byte_offset
+                )
+            );
             geometry->setVertexFormat      (to_mtl_acceleration_structure_vertex_format(triangles.vertex_format));
             geometry->setVertexStride      (triangles.vertex_byte_stride);
-            geometry->setIndexBuffer       (index_buffer);
-            geometry->setIndexBufferOffset (triangles.index_byte_offset);
+            geometry->setIndexBuffer(
+                MTL4::BufferRange::Make(
+                    index_buffer->gpuAddress() + triangles.index_byte_offset,
+                    index_buffer->length() - triangles.index_byte_offset
+                )
+            );
             geometry->setIndexType         (MTL::IndexTypeUInt32);
             geometry->setTriangleCount     (triangles.index_count / 3);
             geometry->setOpaque            (triangles.opaque);
@@ -117,8 +127,9 @@ Acceleration_structure_impl::Acceleration_structure_impl(Device& device, const A
                     &mtl_transform,
                     sizeof(MTL::PackedFloat4x3)
                 );
-                geometry->setTransformationMatrixBuffer      (m_transform_buffer);
-                geometry->setTransformationMatrixBufferOffset(transform_byte_offset);
+                geometry->setTransformationMatrixBuffer(
+                    MTL4::BufferRange::Make(m_transform_buffer->gpuAddress() + transform_byte_offset, sizeof(MTL::PackedFloat4x3))
+                );
             }
             ++geometry_index;
             geometry_descriptors.push_back(geometry);
@@ -132,7 +143,7 @@ Acceleration_structure_impl::Acceleration_structure_impl(Device& device, const A
             geometry->release(); // retained by the array
         }
 
-        m_primitive_descriptor = MTL::PrimitiveAccelerationStructureDescriptor::alloc()->init();
+        m_primitive_descriptor = MTL4::PrimitiveAccelerationStructureDescriptor::alloc()->init();
         m_primitive_descriptor->setGeometryDescriptors(geometry_array);
         geometry_array->release(); // retained by the descriptor
 
@@ -142,19 +153,24 @@ Acceleration_structure_impl::Acceleration_structure_impl(Device& device, const A
         ERHE_VERIFY(create_info.triangle_geometries.empty());
 
         m_instance_buffer = mtl_device->newBuffer(
-            m_max_instance_count * sizeof(MTL::AccelerationStructureUserIDInstanceDescriptor),
+            m_max_instance_count * sizeof(MTL::IndirectAccelerationStructureInstanceDescriptor),
             MTL::ResourceStorageModeShared
         );
         ERHE_VERIFY(m_instance_buffer != nullptr);
+        device_impl.get_residency().add(m_instance_buffer);
 
-        m_instance_descriptor = MTL::InstanceAccelerationStructureDescriptor::alloc()->init();
-        m_instance_descriptor->setInstanceDescriptorType  (MTL::AccelerationStructureInstanceDescriptorTypeUserID);
-        m_instance_descriptor->setInstanceDescriptorBuffer(m_instance_buffer);
-        m_instance_descriptor->setInstanceDescriptorStride(sizeof(MTL::AccelerationStructureUserIDInstanceDescriptor));
+        // Indirect instance descriptors name their bottom level structure by
+        // resource id (MTL4 descriptors have no instancedAccelerationStructures
+        // array).
+        m_instance_descriptor = MTL4::InstanceAccelerationStructureDescriptor::alloc()->init();
+        m_instance_descriptor->setInstanceDescriptorType  (MTL::AccelerationStructureInstanceDescriptorTypeIndirect);
+        m_instance_descriptor->setInstanceDescriptorBuffer(
+            MTL4::BufferRange::Make(m_instance_buffer->gpuAddress(), m_instance_buffer->length())
+        );
+        m_instance_descriptor->setInstanceDescriptorStride(sizeof(MTL::IndirectAccelerationStructureInstanceDescriptor));
         // Size at full instance capacity; the instance structure's size
         // depends on the instance count, not on which bottom level
-        // structures the instances end up referencing, so the (per-build)
-        // instancedAccelerationStructures array can stay unset here.
+        // structures the instances end up referencing.
         m_instance_descriptor->setInstanceCount(m_max_instance_count);
 
         sizes = mtl_device->accelerationStructureSizes(m_instance_descriptor);
@@ -162,8 +178,10 @@ Acceleration_structure_impl::Acceleration_structure_impl(Device& device, const A
 
     m_acceleration_structure = mtl_device->newAccelerationStructure(sizes.accelerationStructureSize);
     ERHE_VERIFY(m_acceleration_structure != nullptr);
-    m_scratch_buffer = mtl_device->newBuffer(sizes.buildScratchBufferSize, MTL::ResourceStorageModePrivate);
+    m_scratch_buffer = mtl_device->newBuffer(std::max<NS::UInteger>(sizes.buildScratchBufferSize, 16), MTL::ResourceStorageModePrivate);
     ERHE_VERIFY(m_scratch_buffer != nullptr);
+    device_impl.get_residency().add(m_acceleration_structure);
+    device_impl.get_residency().add(m_scratch_buffer);
 
     if (!create_info.debug_label.empty()) {
         NS::String* label = NS::String::alloc()->init(create_info.debug_label.data(), NS::UTF8StringEncoding);
@@ -181,18 +199,19 @@ Acceleration_structure_impl::~Acceleration_structure_impl() noexcept
     MTL::AccelerationStructure*                    acceleration_structure = m_acceleration_structure;
     MTL::Buffer*                                   scratch_buffer         = m_scratch_buffer;
     MTL::Buffer*                                   instance_buffer        = m_instance_buffer;
-    MTL::Buffer*                                   transform_buffer       = m_transform_buffer;
-    MTL::PrimitiveAccelerationStructureDescriptor* primitive_descriptor   = m_primitive_descriptor;
-    MTL::InstanceAccelerationStructureDescriptor*  instance_descriptor    = m_instance_descriptor;
+    MTL::Buffer*                                    transform_buffer       = m_transform_buffer;
+    MTL4::PrimitiveAccelerationStructureDescriptor* primitive_descriptor   = m_primitive_descriptor;
+    MTL4::InstanceAccelerationStructureDescriptor*  instance_descriptor    = m_instance_descriptor;
     if ((acceleration_structure != nullptr) || (scratch_buffer != nullptr) || (instance_buffer != nullptr) ||
         (transform_buffer != nullptr) ||
         (primitive_descriptor != nullptr) || (instance_descriptor != nullptr)) {
         m_device.get_impl().add_completion_handler(
-            [acceleration_structure, scratch_buffer, instance_buffer, transform_buffer, primitive_descriptor, instance_descriptor](Device_impl&) {
-                if (acceleration_structure != nullptr) { acceleration_structure->release(); }
-                if (scratch_buffer         != nullptr) { scratch_buffer->release(); }
-                if (instance_buffer        != nullptr) { instance_buffer->release(); }
-                if (transform_buffer       != nullptr) { transform_buffer->release(); }
+            [acceleration_structure, scratch_buffer, instance_buffer, transform_buffer, primitive_descriptor, instance_descriptor](Device_impl& device_impl) {
+                Residency& residency = device_impl.get_residency();
+                if (acceleration_structure != nullptr) { residency.remove(acceleration_structure); acceleration_structure->release(); }
+                if (scratch_buffer         != nullptr) { residency.remove(scratch_buffer);         scratch_buffer->release(); }
+                if (instance_buffer        != nullptr) { residency.remove(instance_buffer);        instance_buffer->release(); }
+                if (transform_buffer       != nullptr) { residency.remove(transform_buffer);       transform_buffer->release(); }
                 if (primitive_descriptor   != nullptr) { primitive_descriptor->release(); }
                 if (instance_descriptor    != nullptr) { instance_descriptor->release(); }
             }
@@ -204,36 +223,32 @@ void Acceleration_structure_impl::record_build(Command_buffer& command_buffer)
 {
     Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     Command_buffer_impl& cb_impl = command_buffer.get_impl();
-    MTL::CommandBuffer*  mtl_cb  = cb_impl.get_mtl_command_buffer();
+    MTL4::CommandBuffer* mtl_cb  = cb_impl.get_mtl4_command_buffer();
     ERHE_VERIFY(mtl_cb != nullptr);
 
-    MTL::AccelerationStructureDescriptor* descriptor = (m_type == Acceleration_structure_type::bottom_level)
-        ? static_cast<MTL::AccelerationStructureDescriptor*>(m_primitive_descriptor)
-        : static_cast<MTL::AccelerationStructureDescriptor*>(m_instance_descriptor);
+    MTL4::AccelerationStructureDescriptor* descriptor = (m_type == Acceleration_structure_type::bottom_level)
+        ? static_cast<MTL4::AccelerationStructureDescriptor*>(m_primitive_descriptor)
+        : static_cast<MTL4::AccelerationStructureDescriptor*>(m_instance_descriptor);
 
-    // The inter-encoder fence orders this build after prior encoders on
-    // the cb (vertex/index uploads, earlier bottom level builds feeding a
-    // top level build) and before subsequent ones (the ray query compute
-    // dispatch) - the Metal equivalent of the Vulkan
+    // The queue barrier orders this build after earlier work (vertex/index
+    // uploads, earlier bottom level builds feeding a top level build), and
+    // the next encoder's barrier orders later work (the ray query compute
+    // dispatch) after it - the Metal equivalent of the Vulkan
     // ACCELERATION_STRUCTURE_BUILD -> BUILD | COMPUTE barrier record_build
     // emits there.
     //
-    // Note: under Xcode's GPU frame-capture layer ANY acceleration
-    // structure encoder crashes in endEncoding (GPUToolsCapture encodes a
-    // signal event that throws NSInvalidArgumentException inside the AGX
-    // driver; reproduced with a minimal standalone build, fence or no
-    // fence). Device_impl therefore forces use_ray_query off when the
-    // capture layer is loaded, so this code never runs under it.
-    MTL::Fence* fence = cb_impl.get_inter_encoder_fence();
-    MTL::AccelerationStructureCommandEncoder* encoder = mtl_cb->accelerationStructureCommandEncoder();
+    // Note: under Xcode's GPU frame-capture layer acceleration structure
+    // encoders of the Metal 3 API crash in endEncoding. Device_impl
+    // therefore forces use_ray_query off when the capture layer is loaded,
+    // so this code never runs under it.
+    MTL4::ComputeCommandEncoder* encoder = mtl_cb->computeCommandEncoder();
     ERHE_VERIFY(encoder != nullptr);
-    if (fence != nullptr) {
-        encoder->waitForFence(fence);
-    }
-    encoder->buildAccelerationStructure(m_acceleration_structure, descriptor, m_scratch_buffer, 0);
-    if (fence != nullptr) {
-        encoder->updateFence(fence);
-    }
+    encode_queue_barrier(encoder);
+    encoder->buildAccelerationStructure(
+        m_acceleration_structure,
+        descriptor,
+        MTL4::BufferRange::Make(m_scratch_buffer->gpuAddress(), m_scratch_buffer->length())
+    );
     encoder->endEncoding();
 }
 
@@ -248,15 +263,10 @@ void Acceleration_structure_impl::build(Command_buffer& command_buffer, std::spa
     ERHE_VERIFY(m_type == Acceleration_structure_type::top_level);
     ERHE_VERIFY(instances.size() <= m_max_instance_count);
 
-    // Instance descriptors reference bottom level structures by index into
-    // the descriptor's instancedAccelerationStructures array; deduplicate
-    // (instances routinely share a bottom level) and keep the array
-    // contents for useResource() residency at bind time.
-    m_referenced_bottom_level.clear();
-    std::unordered_map<MTL::AccelerationStructure*, uint32_t> bottom_level_indices;
-
-    MTL::AccelerationStructureUserIDInstanceDescriptor* mtl_instances =
-        static_cast<MTL::AccelerationStructureUserIDInstanceDescriptor*>(m_instance_buffer->contents());
+    // Indirect instance descriptors name their bottom level structure by
+    // resource id; it is resident through the device's residency set.
+    MTL::IndirectAccelerationStructureInstanceDescriptor* mtl_instances =
+        static_cast<MTL::IndirectAccelerationStructureInstanceDescriptor*>(m_instance_buffer->contents());
     ERHE_VERIFY(instances.empty() || (mtl_instances != nullptr));
     for (std::size_t i = 0, end = instances.size(); i < end; ++i) {
         const Acceleration_structure_instance& instance = instances[i];
@@ -264,17 +274,8 @@ void Acceleration_structure_impl::build(Command_buffer& command_buffer, std::spa
         ERHE_VERIFY(instance.bottom_level->get_type() == Acceleration_structure_type::bottom_level);
         MTL::AccelerationStructure* bottom_level = instance.bottom_level->get_impl().get_mtl_acceleration_structure();
         ERHE_VERIFY(bottom_level != nullptr);
-        uint32_t bottom_level_index = 0;
-        const auto existing = bottom_level_indices.find(bottom_level);
-        if (existing != bottom_level_indices.end()) {
-            bottom_level_index = existing->second;
-        } else {
-            bottom_level_index = static_cast<uint32_t>(m_referenced_bottom_level.size());
-            bottom_level_indices.emplace(bottom_level, bottom_level_index);
-            m_referenced_bottom_level.push_back(bottom_level);
-        }
 
-        MTL::AccelerationStructureUserIDInstanceDescriptor& mtl_instance = mtl_instances[i];
+        MTL::IndirectAccelerationStructureInstanceDescriptor& mtl_instance = mtl_instances[i];
         // MTL::PackedFloat4x3 is column major (4 columns of packed float3),
         // the same logical 3x4 object-to-world matrix Vulkan stores row
         // major - copy glm's columns straight in.
@@ -298,16 +299,9 @@ void Acceleration_structure_impl::build(Command_buffer& command_buffer, std::spa
         mtl_instance.options                         = options;
         mtl_instance.mask                            = instance.mask & 0xffu;
         mtl_instance.intersectionFunctionTableOffset = 0;
-        mtl_instance.accelerationStructureIndex      = bottom_level_index;
         mtl_instance.userID                          = instance.instance_custom_index & 0x00ffffffu;
+        mtl_instance.accelerationStructureID         = bottom_level->gpuResourceID();
     }
-
-    NS::Array* bottom_level_array = NS::Array::alloc()->init(
-        reinterpret_cast<NS::Object* const*>(m_referenced_bottom_level.data()),
-        static_cast<NS::UInteger>(m_referenced_bottom_level.size())
-    );
-    m_instance_descriptor->setInstancedAccelerationStructures(bottom_level_array);
-    bottom_level_array->release(); // retained by the descriptor
     m_instance_descriptor->setInstanceCount(instances.size());
 
     record_build(command_buffer);
@@ -326,11 +320,6 @@ auto Acceleration_structure_impl::get_debug_label() const -> erhe::utility::Debu
 auto Acceleration_structure_impl::get_mtl_acceleration_structure() const -> MTL::AccelerationStructure*
 {
     return m_acceleration_structure;
-}
-
-auto Acceleration_structure_impl::get_referenced_bottom_level() const -> const std::vector<MTL::AccelerationStructure*>&
-{
-    return m_referenced_bottom_level;
 }
 
 } // namespace erhe::graphics

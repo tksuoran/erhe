@@ -7,8 +7,7 @@
 #include <mutex>
 #include <vector>
 
-namespace MTL { class CounterSampleBuffer; }
-namespace MTL { class CounterSet; }
+namespace MTL4 { class CounterHeap; }
 namespace MTL { class Device; }
 
 namespace erhe::graphics {
@@ -20,16 +19,17 @@ class Gpu_timer_sample_pool;
 
 // GPU timers on Metal (doc/erhe/metal_backend.md "GPU timers").
 //
-// Apple GPUs sample timestamps only at stage boundaries
-// (MTL::CounterSamplingPointAtStageBoundary): a timestamp is taken at the
-// start or the end of an encoder, through the sampleBufferAttachments of the
-// pass descriptor the encoder is created from. A Gpu_timer's begin / end
+// Apple GPUs sample timestamps only at stage boundaries: a timestamp is
+// taken at the start or the end of an encoder. The Metal 4 backend writes
+// them with the MTL4 encoders' writeTimestamp into an MTL4::CounterHeap
+// (the Metal 3 backend attaches counter sample buffers to the pass
+// descriptors, which MTL4 does not have). A Gpu_timer's begin / end
 // therefore resolve to encoder boundaries:
 //
 // - Every render pass and compute encoder created on a command buffer while
-//   any Gpu_timer exists samples its start (render: start of vertex) and end
-//   (render: end of fragment) into the command buffer's chunk of a
-//   device-owned MTL::CounterSampleBuffer.
+//   any Gpu_timer exists writes a timestamp at its start (render: vertex
+//   stage) and its end (render: fragment stage) into the command buffer's
+//   chunk of a device-owned MTL4::CounterHeap.
 // - begin(): the start of the encoder open on the command buffer, or, with
 //   none open, the start of the next sampled encoder.
 // - end(): the end of the encoder open on the command buffer, or, with none
@@ -41,7 +41,7 @@ class Gpu_timer_sample_pool;
 // work records no timestamps (the samples read 0) and leaves the timer's
 // previous result in place.
 //
-// The samples are resolved in the command buffer's completion handler
+// The samples are resolved in the command buffer's commit feedback handler
 // (resolve_command_buffer_samples), on a Metal dispatch thread.
 //
 // Tracy GPU zones (erhe::graphics::Scoped_gpu_zone) use the same records and
@@ -72,11 +72,11 @@ public:
 
     // Called when an encoder is created on the command buffer. Returns false
     // when the encoder is not sampled (no live timers, or no sample chunk);
-    // otherwise out_buffer / out_start / out_end are the sample buffer and
-    // the absolute sample indices to attach to the pass descriptor.
+    // otherwise out_heap / out_start / out_end are the counter heap and the
+    // absolute entry indices the encoder writes its timestamps to.
     [[nodiscard]] auto begin_encoder(
         Gpu_timer_sample_pool&       pool,
-        MTL::CounterSampleBuffer*&   out_buffer,
+        MTL4::CounterHeap*&          out_heap,
         std::size_t&                 out_start,
         std::size_t&                 out_end
     ) -> bool;
@@ -105,15 +105,13 @@ public:
     std::array<Gpu_timer_record, max_records> records            {};
 };
 
-// Device-owned: the counter sample buffers (split into per-command-buffer
-// chunks), the registry of live timers, and the GPU-tick to nanosecond
-// calibration.
+// Device-owned: the counter heaps (split into per-command-buffer chunks),
+// the registry of live timers, and the GPU-tick to nanosecond calibration.
 class Gpu_timer_sample_pool
 {
 public:
     static constexpr std::size_t samples_per_chunk  = 256;
-    // MTL::CounterSampleBuffer is limited to 32 KiB: 4096 timestamps.
-    static constexpr std::size_t samples_per_buffer = 4096;
+    static constexpr std::size_t samples_per_buffer = 4096; // entries per counter heap
     static constexpr std::size_t chunks_per_buffer  = samples_per_buffer / samples_per_chunk;
     static constexpr std::size_t max_buffers        = 8;
 
@@ -150,10 +148,10 @@ public:
 
     [[nodiscard]] auto acquire_chunk() -> int;
                   void release_chunk(int chunk_index);
-    [[nodiscard]] auto get_chunk_buffer(int chunk_index) const -> MTL::CounterSampleBuffer*;
+    [[nodiscard]] auto get_chunk_buffer(int chunk_index) const -> MTL4::CounterHeap*;
     [[nodiscard]] auto get_chunk_base  (int chunk_index) const -> std::size_t;
 
-    // Completion handler of a command buffer: reads the chunk's samples,
+    // Commit feedback of a command buffer: reads the chunk's samples,
     // stores each complete record's duration into its timer (if the timer
     // still exists) and returns the chunk.
     void resolve_command_buffer_samples(const Gpu_timer_command_buffer_samples& samples);
@@ -182,10 +180,10 @@ private:
     };
 
     MTL::Device*                           m_mtl_device        {nullptr};
-    MTL::CounterSet*                       m_timestamp_counter_set{nullptr};
+    bool                                   m_supported         {false};
     mutable std::mutex                     m_mutex;
     std::condition_variable                m_chunks_returned;
-    std::vector<MTL::CounterSampleBuffer*> m_sample_buffers;
+    std::vector<MTL4::CounterHeap*>        m_sample_buffers;
     std::vector<int>                       m_free_chunks;
     std::size_t                            m_chunks_out        {0};
     std::vector<Registered_timer>          m_timers;

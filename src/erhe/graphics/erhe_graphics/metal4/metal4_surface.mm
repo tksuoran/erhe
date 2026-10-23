@@ -38,6 +38,14 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
                     // (Swapchain_impl::record_capture). Framebuffer-only
                     // drawables reject every read.
                     m_metal_layer->setFramebufferOnly(false);
+                    // The layer's drawables are resident through the
+                    // layer's own residency set, attached to the MTL4 queue.
+                    MTL::ResidencySet* const layer_residency_set = m_metal_layer->residencySet();
+                    if (layer_residency_set != nullptr) {
+                        device_impl.get_mtl_command_queue()->addResidencySet(layer_residency_set);
+                        m_layer_residency_set = layer_residency_set;
+                        m_layer_residency_set->retain();
+                    }
                     if (device_impl.get_graphics_config().force_disable_vsync) {
                         ((CAMetalLayer*)m_metal_layer).displaySyncEnabled = NO;
                         log_startup->info("Disabled vsync (force_disable_vsync)");
@@ -65,6 +73,11 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
 Surface_impl::~Surface_impl() noexcept
 {
     m_swapchain.reset();
+    if (m_layer_residency_set != nullptr) {
+        m_device_impl.get_mtl_command_queue()->removeResidencySet(m_layer_residency_set);
+        m_layer_residency_set->release();
+        m_layer_residency_set = nullptr;
+    }
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
     if (m_sdl_metal_view != nullptr) {
         SDL_Metal_DestroyView(m_sdl_metal_view);

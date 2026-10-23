@@ -264,13 +264,21 @@ Decisions (user, 2026-10-23):
   Metal 3 tree staying green throughout. Whether Metal 3 is then removed is
   decided once Metal 4 passes those gates.
 - Granularity: subsystem by subsystem in the new backend, one ctest-gated
-  commit each, in this order: device + `MTL4CommandQueue` / command buffer /
-  allocator + commit feedback; argument tables + residency sets; render,
-  compute and blit encoders + barriers; swapchain and drawable + frame
-  pacing; counter heaps (GPU timers, Tracy GPU zones); `MTL4Compiler`;
-  then the section 6 port. (`MTL4CommandBuffer` yields only `MTL4*`
-  encoders, so mixing Metal 3 encoders into it is not an option; two queues
-  synchronised by `MTLSharedEvent` would be, and is not taken.)
+  commit each. `MTL4::CommandQueue::commit` takes only `MTL4::CommandBuffer`s,
+  which yield only `MTL4` encoders, which bind only through argument tables
+  (no `setBytes`), so the first commit is the whole submission core at once.
+  The order: (1) submission core - queue, command buffers and allocators,
+  commit feedback, residency set, argument tables, encoders and barriers,
+  drawables and frame pacing (landed, `doc/erhe/metal4_backend.md`); (2)
+  counter heaps for the GPU timers and Tracy GPU zones (the timer pool moved
+  to `MTL4CounterHeap` with (1), because MTL4 pass descriptors have no sample
+  buffer attachments and the renderer tests expect nonzero timer results;
+  what remains is the Tracy GPU zone check in a Tracy build); (3)
+  `MTL4Compiler` / `MTL4Archive` for shaders and pipelines; (4) the
+  carry-over check of the GPU-read draw count (section 6), which (1) already
+  ported to the MTL4 encoders and residency. (Mixing Metal 3 encoders into an
+  `MTL4CommandBuffer` is not possible; two queues synchronised by
+  `MTLSharedEvent` would be, and is not taken.)
 
 Verification: the Metal ctest suite, the Metal image and race gates
 (`doc/editor/render_thread.md` "Metal"), the frame pacing live gates
@@ -278,10 +286,11 @@ Verification: the Metal ctest suite, the Metal image and race gates
 section 6's verification on MTL4.
 
 State: the backend exists as `ERHE_GRAPHICS_API=metal4` (build tree
-`build_xcode_metal4`, sources `src/erhe/graphics/erhe_graphics/metal4/`),
-still the Metal 3 code in every subsystem and passing the same tests; its
-current document, with the define rule and the per-subsystem migration
-status, is `doc/erhe/metal4_backend.md`. Next: the first row of that table
-(device + `MTL4CommandQueue` / command buffer / allocator + commit
-feedback).
-
+`build_xcode_metal4`, sources `src/erhe/graphics/erhe_graphics/metal4/`).
+Step (1) landed: MTL4 submission, residency, argument tables, encoders with
+conservative queue barriers, drawables through the queue, GPU timers on
+counter heaps; shaders and pipelines are still the Metal 3 API. Its
+document, with the per-subsystem migration status, is
+`doc/erhe/metal4_backend.md`. Next: (2) the Tracy GPU zone check, then (3)
+`MTL4Compiler`; the image, race and pacing gates as each step lands, and
+narrowing the barriers.

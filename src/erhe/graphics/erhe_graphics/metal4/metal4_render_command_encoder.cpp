@@ -1,5 +1,7 @@
 #include "erhe_graphics/metal4/metal4_render_command_encoder.hpp"
 #include "erhe_graphics/metal4/metal4_render_pass.hpp"
+#include "erhe_graphics/metal4/metal4_command_buffer.hpp"
+#include "erhe_graphics/metal4/metal4_submission.hpp"
 #include "erhe_graphics/metal4/metal4_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_sampler.hpp"
 #include "erhe_graphics/metal4/metal4_shader_stages.hpp"
@@ -67,8 +69,8 @@ void Render_command_encoder_impl::set_bind_group_layout(const Bind_group_layout*
 
 void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
-    if (encoder == nullptr) {
+    MTL4::ArgumentTable* argument_table = Render_pass_impl::get_active_argument_table();
+    if (argument_table == nullptr) {
         return;
     }
     ERHE_VERIFY(m_bind_group_layout != nullptr);
@@ -93,13 +95,13 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
     if (mtl_texture == nullptr || mtl_sampler == nullptr) {
         return;
     }
-    encoder->setFragmentTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
-    encoder->setFragmentSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
+    argument_table->setTexture     (mtl_texture->gpuResourceID(), static_cast<NS::UInteger>(glsl_binding));
+    argument_table->setSamplerState(mtl_sampler->gpuResourceID(), static_cast<NS::UInteger>(sampler_slot));
 }
 
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     if (encoder == nullptr) {
         return;
     }
@@ -118,11 +120,7 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
     }
 
     // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage
-    {
-        static constexpr NS::UInteger metal_push_constant_index = 15;
-        int32_t draw_id = 0;
-        encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
-    }
+    set_draw_id_zero();
 
     // Rasterization state from create info
     const Render_pipeline_create_info&      create_info = pipeline.get_create_info();
@@ -160,8 +158,9 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     const Shader_stages* const   override_shader_stages
 )
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
-    if (encoder == nullptr) {
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    Command_buffer_impl* const  cb_impl = Render_pass_impl::get_active_command_buffer_impl();
+    if ((encoder == nullptr) || (cb_impl == nullptr)) {
         // No active encoder (e.g. tick called from SDL event before begin_frame)
         return;
     }
@@ -308,16 +307,13 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     // Render_pipeline created with Indirect_count_draw_support::enabled
     // draws prepared count draws.
     m_pipeline_supports_indirect_count_draws = false;
-    pso->release();
+    // MTL4 command buffers retain nothing they reference.
+    cb_impl->retain_until_completed(pso);
 
     // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage.
-    // Push constant is always at fixed index 15 (metal_push_constant_index).
+    // Push constant is always at fixed index 15 (c_metal_push_constant_index).
     // Only vertex/compute shaders declare ERHE_DRAW_ID; fragment shaders do not.
-    {
-        static constexpr NS::UInteger metal_push_constant_index = 15;
-        int32_t draw_id = 0;
-        encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
-    }
+    set_draw_id_zero();
 
     // Depth stencil state
     {
@@ -353,7 +349,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         ds_desc->release();
         if (ds_state != nullptr) {
             encoder->setDepthStencilState(ds_state);
-            ds_state->release();
+            cb_impl->retain_until_completed(ds_state);
         }
 
         // Stencil reference value (set on encoder, not descriptor)
@@ -400,7 +396,7 @@ void Render_command_encoder_impl::set_viewport_depth_range(const float min_depth
 
 void Render_command_encoder_impl::apply_viewport()
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     if (encoder == nullptr) {
         return;
     }
@@ -417,7 +413,7 @@ void Render_command_encoder_impl::apply_viewport()
 
 void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, const int width, const int height)
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     if (encoder == nullptr) {
         return;
     }
@@ -432,7 +428,7 @@ void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, con
 
 void Render_command_encoder_impl::set_depth_bias(const float constant_factor, const float slope_factor, const float clamp)
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     if (encoder == nullptr) {
         return;
     }
@@ -456,13 +452,16 @@ void Render_command_encoder_impl::set_vertex_buffer(
     const std::uintptr_t index
 )
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
-    if ((encoder == nullptr) || (buffer == nullptr)) {
+    MTL4::ArgumentTable* argument_table = Render_pass_impl::get_active_argument_table();
+    if ((argument_table == nullptr) || (buffer == nullptr)) {
         return;
     }
     MTL::Buffer* mtl_buffer = buffer->get_impl().get_mtl_buffer();
     if (mtl_buffer != nullptr) {
-        encoder->setVertexBuffer(mtl_buffer, static_cast<NS::UInteger>(offset), static_cast<NS::UInteger>(index) + vertex_buffer_index_offset);
+        argument_table->setAddress(
+            mtl_buffer->gpuAddress() + static_cast<uint64_t>(offset),
+            static_cast<NS::UInteger>(index) + vertex_buffer_index_offset
+        );
     }
 }
 
@@ -473,7 +472,7 @@ void Render_command_encoder_impl::draw_primitives(
     const std::uintptr_t instance_count
 ) const
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     if (encoder == nullptr) {
         return;
     }
@@ -502,7 +501,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
     const std::uintptr_t           instance_count
 ) const
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     if ((encoder == nullptr) || (m_index_buffer == nullptr)) {
         return;
     }
@@ -510,8 +509,8 @@ void Render_command_encoder_impl::draw_indexed_primitives(
         to_mtl_primitive_type(primitive_type),
         static_cast<NS::UInteger>(index_count),
         to_mtl_index_type(index_type),
-        m_index_buffer,
-        static_cast<NS::UInteger>(index_buffer_offset),
+        m_index_buffer->gpuAddress() + static_cast<uint64_t>(index_buffer_offset),
+        m_index_buffer->length() - static_cast<NS::UInteger>(index_buffer_offset),
         static_cast<NS::UInteger>(instance_count)
     );
 }
@@ -534,7 +533,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     const std::uintptr_t           stride
 ) const
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
     MTL::Buffer* indirect_buffer = get_draw_indirect_buffer();
     if (encoder == nullptr) {
         ERHE_FATAL("multi_draw_indexed_primitives_indirect: no active encoder");
@@ -552,23 +551,28 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         ? static_cast<NS::UInteger>(stride)
         : static_cast<NS::UInteger>(sizeof(Draw_indexed_primitives_indirect_command));
 
-    // Update ERHE_DRAW_ID per draw call at fixed push constant index
-    static constexpr NS::UInteger metal_push_constant_index = 15;
+    // ERHE_DRAW_ID per draw call at the fixed push constant index: entry i
+    // of the draw id table.
+    MTL4::ArgumentTable* const argument_table = Render_pass_impl::get_active_argument_table();
+    ERHE_VERIFY(argument_table != nullptr);
+    const uint64_t draw_id_table = m_device.get_impl().get_submission_pools().get_draw_id_table(static_cast<std::size_t>(drawcount));
+    const uint64_t index_address = m_index_buffer->gpuAddress();
+    const NS::UInteger index_length = m_index_buffer->length();
+    const uint64_t indirect_address = indirect_buffer->gpuAddress();
 
     for (std::uintptr_t i = 0; i < drawcount; ++i) {
-        int32_t draw_id = static_cast<int32_t>(i);
-        encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
+        argument_table->setAddress(draw_id_table + (i * Submission_pools::c_draw_id_stride), c_metal_push_constant_index);
 
-        const NS::UInteger offset = static_cast<NS::UInteger>(indirect_offset) + i * actual_stride;
+        const uint64_t offset = static_cast<uint64_t>(indirect_offset) + (i * actual_stride);
         encoder->drawIndexedPrimitives(
             mtl_primitive_type,
             mtl_index_type,
-            m_index_buffer,
-            0, // index buffer offset is in the indirect command
-            indirect_buffer,
-            offset
+            index_address, // index buffer offset is in the indirect command
+            index_length,
+            indirect_address + offset
         );
     }
+    set_draw_id_zero();
 }
 
 void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect_count(
@@ -602,7 +606,7 @@ void Render_command_encoder_impl::execute_indirect_count_draws(
     const uint32_t              job_index
 )
 {
-    MTL::RenderCommandEncoder* const encoder = Render_pass_impl::get_active_mtl_encoder();
+    MTL4::RenderCommandEncoder* const encoder = Render_pass_impl::get_active_mtl_encoder();
     if (encoder == nullptr) {
         ERHE_FATAL("multi_draw_indexed_primitives_indirect_count: no active encoder");
     }
@@ -620,33 +624,26 @@ void Render_command_encoder_impl::execute_indirect_count_draws(
     // with supportIndirectCommandBuffers (Indirect_count_draw_support).
     ERHE_VERIFY(m_pipeline_supports_indirect_count_draws);
 
-    // The commands reach the index buffer by address only, and the ICB is
-    // not bound: make both resident for this MTL encoder, once each (the
-    // last ones made resident are remembered per MTL encoder).
-    if (m_resident_encoder != encoder) {
-        m_resident_encoder      = encoder;
-        m_resident_icb          = nullptr;
-        m_resident_index_buffer = nullptr;
-    }
-    if (m_resident_index_buffer != mtl_index_buffer) {
-        encoder->useResource(mtl_index_buffer, MTL::ResourceUsageRead, MTL::RenderStageVertex);
-        m_resident_index_buffer = mtl_index_buffer;
-    }
-    if (m_resident_icb != resources.icb) {
-        encoder->useResource(resources.icb, MTL::ResourceUsageRead, MTL::RenderStageVertex | MTL::RenderStageFragment);
-        m_resident_icb = resources.icb;
-    }
-    // The commands inherit the encoder's buffer bindings, the push constant
-    // (ERHE_DRAW_ID) at index 15 among them: one value for all of them,
-    // 0 here (records are named by first_instance).
-    static constexpr NS::UInteger metal_push_constant_index = 15;
-    const int32_t draw_id = 0;
-    encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
+    // The commands reach the index buffer by address only, the ICB is not
+    // bound: both are resident through the device's residency set. The
+    // commands inherit the encoder's argument table bindings, the push
+    // constant (ERHE_DRAW_ID) at index 15 among them: one value for all of
+    // them, 0 here (records are named by first_instance).
+    static_cast<void>(mtl_index_buffer);
+    set_draw_id_zero();
     encoder->executeCommandsInBuffer(
         resources.icb,
-        resources.range_buffer,
-        static_cast<NS::UInteger>(job_index) * sizeof(MTL::IndirectCommandBufferExecutionRange)
+        resources.range_buffer->gpuAddress() + (static_cast<uint64_t>(job_index) * sizeof(MTL::IndirectCommandBufferExecutionRange))
     );
+}
+
+void Render_command_encoder_impl::set_draw_id_zero() const
+{
+    MTL4::ArgumentTable* const argument_table = Render_pass_impl::get_active_argument_table();
+    if (argument_table == nullptr) {
+        return;
+    }
+    argument_table->setAddress(m_device.get_impl().get_submission_pools().get_draw_id_zero(), c_metal_push_constant_index);
 }
 
 void Render_command_encoder_impl::dump_state(const char* label) const

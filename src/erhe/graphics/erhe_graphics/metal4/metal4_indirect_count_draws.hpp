@@ -6,9 +6,10 @@
 #include <cstdint>
 #include <vector>
 
-namespace MTL { class Buffer; }
-namespace MTL { class ComputeCommandEncoder; }
-namespace MTL { class ComputePipelineState; }
+namespace MTL  { class Buffer; }
+namespace MTL4 { class ArgumentTable; }
+namespace MTL4 { class ComputeCommandEncoder; }
+namespace MTL  { class ComputePipelineState; }
 namespace MTL { class Device; }
 namespace MTL { class IndirectCommandBuffer; }
 
@@ -24,10 +25,11 @@ namespace erhe::graphics {
 // command buffer the kernel encodes the jobs' commands into, the buffer of
 // per-job execution ranges {location, length} the kernel writes, and the
 // table buffer the CPU writes (the ICB's resource id, the index buffer
-// addresses, the jobs). A frame may prepare several sets: the ICB and the
+// addresses, the jobs, the kernel parameters). All three are in the
+// device's residency set. A frame may prepare several sets: the ICB and the
 // range buffer are rewritten by each prepare's kernel (the GPU orders that
-// after the previous set's draws: both are tracked resources, and the
-// command buffer's inter-encoder fence orders the encoders), while each
+// after the previous set's draws: every encoder starts with a barrier on
+// all earlier work of the queue), while each
 // prepare's table takes its own range of the table buffer, since the CPU
 // writes the tables of a frame before the GPU runs any of them. Each grows
 // to its high-water mark (the ICB and range buffer: the largest set; the
@@ -56,9 +58,10 @@ public:
     Indirect_count_draws_impl(Indirect_count_draws_impl&&) = delete;
     Indirect_count_draws_impl& operator=(Indirect_count_draws_impl&&) = delete;
 
-    // Records the encoding dispatch of one prepared slot into encoder
+    // Records the encoding dispatch of one prepared slot into encoder, its
+    // buffers bound through the encoder's argument_table
     // (Compute_command_encoder_impl::encode_indirect_count_draws).
-    void encode(MTL::ComputeCommandEncoder* encoder, const Indirect_count_draws::Slot& slot, std::size_t slot_index);
+    void encode(MTL4::ComputeCommandEncoder* encoder, MTL4::ArgumentTable* argument_table, const Indirect_count_draws::Slot& slot, std::size_t slot_index);
 
     [[nodiscard]] auto get_slot_resources(std::size_t slot_index) const -> const Slot_resources&;
 
