@@ -163,9 +163,8 @@ feedback is a plain function pointer with arguments in the recording (no
 commit by `queue->signalEvent(event)` right after that commit and
 `queue->wait(event)` before its own. Unlike Metal 3, where the next frame did
 not depend on the pre-warm, that queue wait holds back every later commit
-until the presenting command buffer completed, and every later encoder's
-queue barrier waits for the pre-warm kernel: with a pre-warm requested, the
-next frame's GPU work starts only after the previous frame and its pre-warm.
+until the presenting command buffer completed: with a pre-warm requested,
+the next frame's GPU work starts only after the previous frame.
 The pacer's C26 tuning (`doc/plans/frame_pacing_metal.md`) was measured on
 Metal 3 and is not live-gated on this backend.
 
@@ -242,71 +241,110 @@ encoders were. Acceleration structures build on a compute encoder from
 ranges); instance structures use indirect instance descriptors, which name
 their bottom level structure by `gpuResourceID`.
 
-MTL4 tracks no hazards. Every encoder starts with
-`barrierAfterQueueStages(all stages, the encoder's stages,
-VisibilityOptionDevice)`, a consumer barrier on all earlier work of the
-queue - earlier encoders of its command buffer and every earlier commit.
-This stands in for the Metal 3 inter-encoder fence and for Metal's hazard
-tracking (compute to render, render to compute, uploads to consumers, the
-GPU-read draw count kernel to `executeCommandsInBuffer`, a draw set's
-commands to the next prepare that rewrites the ICB). Dispatches inside one
-MTL4 compute encoder run concurrently (Metal 3 compute encoders were serial),
-so every dispatch after the first starts with
-`barrierAfterEncoderStages(dispatch | blit | acceleration structure)`, and
-`Command_buffer::memory_barrier` issues the same barrier when a compute
-encoder is open on the calling thread (between encoders the queue barrier
-already covers it). The pre-warm kernel starts without a barrier (it touches
-nothing else), but later encoders' barriers wait for it ("Submission").
-The unconditional encoder-start barrier is temporary: commit B of
-`doc/plans/resource_barriers.md` removes it once the application chains its
-dependencies explicitly.
+MTL4 tracks no hazards. The backend orders work from what the application
+declares, at the level of explicitness the Vulkan backend needs: every
+declaration is a stage barrier (MTL4 has neither per-resource barriers nor
+layouts, so a resource, a range and `discard` are not used). MTL4 has two
+queue barriers (`MTL4CommandEncoder.h`; metal-cpp carries no doc comments):
 
-Explicit barriers (`Command_buffer::texture_barrier` / `buffer_barrier`,
-`doc/erhe/graphics.md` "Resource barriers") are stage barriers here: MTL4 has
-neither per-resource barriers nor layouts, so the resource, the range and
-`discard` are not used. Each call maps its two usages to `MTL::Stages`
-(`transfer_*` -> blit; `sampled` / `storage` / `input_attachment` /
-`uniform` / `storage_*` -> the stages the `vertex_shader` / `fragment_shader`
-/ `compute_shader` qualifiers name, vertex | fragment | dispatch without
-one; `indirect` -> vertex | dispatch; attachments -> fragment, where tile
-loads, depth tests, stores and resolves happen; `vertex` / `index` ->
-vertex; acceleration structure accesses -> acceleration structure; `none`,
-`present`, host accesses -> no stage, so no barrier) and merges them into one
-of two pending barriers on `Command_buffer_impl`, chosen by the encoder kind
-of the consumer stages (render: vertex / fragment / tile / object / mesh;
-compute: dispatch / blit / acceleration structure). The pending barriers are
-two stage-mask pairs (no allocation). Every encoder recorded into the
-command buffer starts with `Command_buffer_impl::encode_start_barriers`,
-which encodes the unconditional barrier and then, when the pending barrier
-of the encoder's kind is set, one `barrierAfterQueueStages(union of after
-stages, union of before stages, VisibilityOptionDevice)` and clears it. A
-transfer recorded as a render encoder (`blit_framebuffer`'s draw, a depth /
-stencil `clear_texture`, `Render_encoder_use::transfer`) also encodes the
-pending compute barrier when it has blit-stage consumers, as a barrier
-before the render stages, and leaves it pending for the compute encoders
-after it. `end_recording` drops a pending barrier no encoder consumed and
-logs the stage pair at debug level (`log_render_pass`).
-`barrierAfterQueueStages` is the one primitive between encoders for both
-scopes: it is a consumer barrier on all work before the current encoder,
-earlier encoders of the same command buffer and earlier commits alike,
-while `barrierAfterEncoderStages` orders only inside one pass (Apple's
-`MTL4CommandEncoder.h`).
+- the consumer barrier, `barrierAfterQueueStages(after, before)`: the work
+  of the CURRENT encoder in the `before` stages waits for the `after` stages
+  of all work before the current encoder (earlier encoders of its command
+  buffer and earlier commits). It does not order later encoders.
+- the producer barrier, `barrierAfterStages(after, before)`: the work of
+  every LATER encoder, of this command buffer and of later commits, in the
+  `before` stages waits for the `after` stages of the work encoded so far
+  in the current encoder and in the prior encoders. Either side may name
+  stages the current encoder does not run.
 
-A barrier recorded while a compute encoder is open on the calling thread
-(verified to record into the same command buffer) still enters the pending
-union, and a compute consumer is also ordered inside the open encoder at
-once: `barrierAfterEncoderStages(after, before)` against the encoder's
-earlier dispatches, plus, for `Barrier_scope::earlier_submissions`,
-`barrierAfterQueueStages(after, before)` for the earlier commit (Apple
-documents the queue barrier for work before the current encoder only, so
-the encoder barrier is not left to it).
+`barrierAfterEncoderStages` orders only inside one encoder.
 
-`ERHE_METAL4_EXPLICIT_BARRIERS_ONLY=1` skips the unconditional barrier in
-`encode_start_barriers` and the per-dispatch `encode_intra_encoder_barrier`,
-so the `Resource_barrier_test` cases of `erhe_graphics_gpu_tests` verify the
-explicit path on its own: each case passes with its barriers and fails
-without them under the switch. It is a test switch that lives until the
-unconditional barriers are removed; the editor is not correct with it set.
+One table maps each declaration to `MTL::Stages` (`metal4_submission.hpp`:
+`get_image_usage_stages`, `get_buffer_usage_stages`,
+`get_image_layout_stages`, `get_memory_barrier_stages`; the stage bits are
+`constexpr` there):
+
+| Declaration | Barrier (producer stages -> consumer stages) |
+|---|---|
+| Render pass begin, each attachment's `usage_before` | consumer barrier of the pass: the stages of the `usage_before`s (fragment when none names a GPU access) -> fragment, the stage of attachment loads, tests, stores and resolves and of the pass's sampling (Vulkan's inter-pass barrier) |
+| Render pass end, each attachment's `usage_after` (not `user_synchronized`) | producer barrier before `endEncoding`: fragment -> the stages of the `usage_after`s (Vulkan's post-pass barrier) |
+| `texture_barrier` / `buffer_barrier` / `cmd_texture_barrier` | the stages of `usage_before` -> the stages of `usage_after` |
+| `memory_barrier(mask)` | every stage -> the consumer stages of the mask bits, as Vulkan's (`texture_fetch`, `shader_image_access`, `shader_storage`, `uniform`, `atomic_counter` -> vertex / fragment / dispatch; `command` -> vertex / dispatch; `vertex_attrib_array`, `element_array` -> vertex; `pixel_buffer`, `texture_update`, `buffer_update` -> blit; `framebuffer` -> fragment; `client_mapped_buffer` -> none: the CPU reads after the commit completed) |
+| `transition_texture_layout(layout)` | every stage -> the stages of the layout's accesses |
+| Backend transfers on a texture (`upload_to_texture`, `clear_texture`, the blit encoder's texture copies, `generate_mipmaps`, `blit_framebuffer`) | consumer barrier of the transfer's encoder: every stage -> the transfer's stage; producer barrier before its `endEncoding`: the transfer's stage -> every stage (Vulkan's transitions to and from the transfer layout); buffer-only blits (`fill_buffer`, buffer copies) none, as on Vulkan |
+
+The usage stages: `transfer_*` -> blit; `sampled` / `storage` /
+`input_attachment` / `uniform` / `storage_*` -> the stages the
+`vertex_shader` / `fragment_shader` / `compute_shader` qualifiers name,
+vertex | fragment | dispatch without one (an unqualified `sampled` thus
+reaches both render and compute consumers); `indirect` -> vertex |
+dispatch; attachments -> fragment; `vertex` / `index` -> vertex;
+acceleration structure accesses -> acceleration structure; `none`,
+`present`, host accesses -> no stage, so no barrier.
+
+The application's declarations go through
+`Command_buffer_impl::add_stage_barrier`. Between encoders a declaration
+is pending (one stage-mask pair on `Command_buffer_impl`, the union of the
+pending ones; no allocation). Every encoder recorded into the command
+buffer starts with `Command_buffer_impl::encode_start_barriers`, which
+encodes, when barriers are pending, the consumer barrier for their
+consumers in this encoder (merged with the encoder's own pair: a render
+pass's begin barrier, a transfer's wait for earlier accesses) and the
+producer barrier for their consumers in every later encoder, and clears
+them; with nothing pending only the encoder's own pair, and a compute
+encoder without one starts with no barrier. A transfer recorded as a
+render encoder (`blit_framebuffer`'s draw, a depth / stencil
+`clear_texture`, `Render_encoder_use::transfer`) treats pending blit-stage
+consumers as its render stages. `end_recording` encodes the barriers still
+pending when the command buffer ends as a producer barrier in one empty
+compute encoder: its consumers are in later commits.
+
+A declaration made while a compute encoder is open on the calling thread
+(verified to record into the same command buffer) is encoded there at once:
+the encoder's later dispatches wait - `barrierAfterEncoderStages(producer
+stages the encoder runs, consumer)` for its earlier dispatches, plus the
+consumer barrier when the producer stages include stages a compute encoder
+does not run (an earlier encoder) or the scope is `earlier_submissions` (an
+earlier commit) - and a producer barrier orders every later encoder.
+
+The backend's own recordings order what they write for the consumers they
+know: the GPU-read draw count kernel
+(`Compute_command_encoder_impl::encode_indirect_count_draws`) encodes a
+consumer barrier from the render stages (the draws of an earlier prepare
+that read the slot's indirect command buffer) before it and a producer
+barrier dispatch -> vertex | fragment after it, assuming
+`executeCommandsInBuffer` reads the indirect command buffer and its range
+at the vertex stage; its inputs, the command and count buffers, are ordered
+by the application's `memory_barrier(command | shader_storage |
+pixel_buffer)` after the compaction kernel (`draw_list_scene_gpu_cull.cpp`),
+which is recorded between encoders and so is encoded at the start of the
+kernel's encoder. An acceleration structure build ends with the producer
+barrier acceleration structure -> acceleration structure | dispatch
+(Vulkan's barrier after `vkCmdBuildAccelerationStructuresKHR`). The
+swapchain capture copy (`Swapchain_impl::record_capture`) starts with the
+consumer barrier fragment -> blit (the swapchain pass's `usage_after`,
+`present`, names no GPU consumer); the headless capture's own recording
+(`Swapchain_impl::read_back_emulated`) encodes it on its encoder directly.
+The present calibration probes and the pre-warm kernel start without a
+barrier: a probe clears only its drawable, which the queue's drawable wait
+orders, and the pre-warm touches nothing else.
+
+Dispatches inside one MTL4 compute encoder run concurrently (Metal 3
+compute encoders were serial), so every dispatch after the first starts with
+`barrierAfterEncoderStages(dispatch | blit | acceleration structure)`
+(`encode_intra_encoder_barrier`). This is more than Vulkan needs - the
+application states no barrier between dispatches that do not depend on each
+other - and stays until the dependent dispatches carry their barriers
+(`doc/plans/resource_barriers.md`).
+
+The `Resource_barrier_test` cases of `erhe_graphics_gpu_tests` check each
+mapping with a slow producer and a fast consumer, including a consumer that
+is the second encoder of its kind after the barrier (compute, and the
+vertex stage of a render pass). On this hardware (M4 Pro) the compute cases
+fail without their barrier; the second-encoder cases also passed with
+consumer barriers alone, and the vertex-stage case passes even without a
+barrier, so neither proves the producer barrier: that rests on the header's
+semantics.
 
 ## Present
 
@@ -382,7 +420,7 @@ except for where timestamps go: MTL4 pass descriptors have no sample buffer
 attachments, so the pool's buffers are `MTL4::CounterHeap`s of type timestamp
 (4096 entries each, chunks invalidated when taken) and the encoders write the
 boundary samples with `writeTimestamp(TimestampGranularityRelaxed, ...)` -
-render passes at the vertex stage after the queue barrier and at the fragment
+render passes at the vertex stage after the start barrier and at the fragment
 stage before `endEncoding`, compute encoders at their start and end. Relaxed:
 Apple documents that precise timestamps may split encoders, which would
 change the cost being measured; relaxed ones may land later or earlier than
@@ -405,7 +443,7 @@ of the Metal 3 backend.
 | :--- | :--- |
 | Device, `MTL4CommandQueue`, `MTL4CommandBuffer`, `MTL4CommandAllocator`, `MTL4CommitFeedback` | MTL4 ("Submission"); the race gate (`ERHE_USE_TSAN` tree `build_xcode_metal4_tsan`, overlap and pipelining, `doc/agents/macos.md` "ThreadSanitizer") reports nothing |
 | Argument tables (`MTL4ArgumentTable`), residency sets (`MTLResidencySet`) | MTL4 ("Residency", "Binding") |
-| Render, compute and blit encoders, barriers | MTL4 ("Encoders and barriers"); barriers conservative |
+| Render, compute and blit encoders, barriers | MTL4 ("Encoders and barriers"); barriers from the application's declarations, the per-dispatch barrier conservative |
 | Swapchain, drawable, frame pacing | MTL4 ("Present"); tier M runs and calibrates; the frame pacing live gate (`doc/plans/frame_pacing_metal.md`, Dell 120 Hz, with the C26 pre-warm) is pending: it needs the user at the display |
 | Counter heaps (GPU timers, Tracy GPU zones) | MTL4 `MTL4CounterHeap` ("GPU timers"); in a Tracy build the default scene shows the same GPU zones as Metal 3 (`Main`, `Post_processing`, `Overlay`) on the program timeline, with medians 0.73 / 0.32 / 0.15 ms, the same as Metal 3's (Release, windowed, unpaced) |
 | `MTL4Compiler` (shaders, pipelines) | Metal 3 code (`newLibrary`, `newRenderPipelineState`) |

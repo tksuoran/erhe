@@ -287,9 +287,8 @@ section 6's verification on MTL4.
 
 State: the backend exists as `ERHE_GRAPHICS_API=metal4` (build tree
 `build_xcode_metal4`, sources `src/erhe/graphics/erhe_graphics/metal4/`).
-Step (1) landed: MTL4 submission, residency, argument tables, encoders with
-conservative queue barriers, drawables through the queue, GPU timers on
-counter heaps; shaders and pipelines are still the Metal 3 API. Its
+Step (1) landed: MTL4 submission, residency, argument tables, encoders,
+drawables through the queue, GPU timers on counter heaps; shaders and pipelines are still the Metal 3 API. Its
 document, with the per-subsystem migration status, is
 `doc/erhe/metal4_backend.md`. Gates of step (1): the Metal ctest suite and
 the image gates pass; the race gate reports nothing; step (2) holds: the
@@ -298,7 +297,14 @@ order of magnitude (counter heap ticks converted with
 `queryTimestampFrequency`, `doc/erhe/metal4_backend.md` "GPU timers"); the
 frame pacing live gate is pending (it needs the user at the display). Next:
 the pacing live gate, then (3) `MTL4Compiler`; the image, race and pacing
-gates as each step lands, and narrowing the barriers (own hazard tracking).
+gates as each step lands. Barriers: the backend orders work from the
+application's declarations (render pass attachment usages,
+`memory_barrier`, layout transitions, its own transfers) as consumer and
+producer stage barriers, with no unconditional encoder-start barrier
+(`doc/erhe/metal4_backend.md` "Encoders and barriers"); the image gates,
+the Bistro image, the GPU culling check and the ray trace / radiance
+cascades / DDGI gates match the build with the unconditional barrier.
+Narrowing them further is `doc/plans/resource_barriers.md`.
 Render phase cost: the unpaced windowed frame took 2.9 - 3.2 ms against
 Metal 3's 1.7 - 2.0 ms because the queue's drawable wait held back the whole
 frame; since the work before the swapchain pass is committed before the

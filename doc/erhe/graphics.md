@@ -331,9 +331,8 @@ earlier writes visible to them. For a texture it also performs the layout
 transition the usage pair implies on a backend with image layouts. Nothing
 is inferred: the backends keep no per-resource hazard state to compensate (two
 threads record at once, so no backend can know the submission order), and a
-missing barrier is an application bug. The application chains the barriers;
-`doc/plans/resource_barriers.md` lists the chains the editor and the
-libraries still leave to the backends.
+missing barrier is an application bug. The application states the
+dependencies, with these calls or with the broad declarations below.
 
 - Usages are `Image_usage_flag_bit_mask` bits for a texture (the vocabulary of
   `Render_pass_attachment_descriptor::usage_before` / `usage_after`) and
@@ -379,18 +378,26 @@ libraries still leave to the backends.
   `usage_before`; `user_synchronized` (a render pass descriptor modifier) and
   `transient_attachment` (a creation flag) are no barrier usage.
 
-`memory_barrier(Memory_barrier_mask)` stays the global catch-all for a
-dependency that names no single resource, and `transition_texture_layout` /
-`cmd_texture_barrier` remain until their callers are chained
-(`doc/plans/resource_barriers.md`). Render pass attachment `usage_before` /
-`usage_after` still derive each pass's own attachment barriers and layouts.
+The baseline every backend honours is what the application already
+declares: each render pass attachment's `usage_before` / `usage_after` (the
+pass's begin and end barriers; `user_synchronized` leaves the end to the
+caller), `memory_barrier(Memory_barrier_mask)` (every earlier write before
+the accesses the mask names), `transition_texture_layout` /
+`cmd_texture_barrier`, and the transfers the backends record themselves
+(uploads, clears, blits, mipmaps), which order their output for its
+consumers. A backend with neither hazard tracking nor layouts (Metal 4)
+maps these to stage barriers at the level of explicitness Vulkan needs
+(`doc/erhe/metal4_backend.md` "Encoders and barriers").
+`texture_barrier` / `buffer_barrier` narrow the baseline: one resource, the
+two accesses of one dependency. `doc/plans/resource_barriers.md` lists where
+they replace the broad forms.
 
 | Backend | `texture_barrier` / `buffer_barrier` |
 |---|---|
 | Vulkan | One `vkCmdPipelineBarrier2` with `VkImageMemoryBarrier2`s (per run of levels sharing their old layout, per layer; `oldLayout` / `newLayout` implied by the usages: `none` and `discard` -> `UNDEFINED`, `sampled` -> `SHADER_READ_ONLY` or `DEPTH_STENCIL_READ_ONLY`, `storage` and mixed usages -> `GENERAL`) or one `VkBufferMemoryBarrier2` over the whole buffer. Source scope: the stages of `usage_before` with their write accesses (`present`: `COLOR_ATTACHMENT_OUTPUT`, no access); destination: the stages and accesses of `usage_after`. Both scopes record the same barrier: a pipeline barrier's first scope includes everything submitted earlier to the queue. The tracked layout is a consistency check (`doc/erhe/vulkan_backend.md` "Image layout tracking") |
 | OpenGL | `glMemoryBarrier` with the bits of `usage_after` (`sampled` -> `TEXTURE_FETCH`, `storage` -> `SHADER_IMAGE_ACCESS`, buffer `vertex` -> `VERTEX_ATTRIB_ARRAY`, `indirect` -> `COMMAND`, `storage_*` -> `SHADER_STORAGE` and so on). OpenGL has no layouts and runs one context in issue order, so range and scope do not matter |
 | Metal | Nothing to record: hazard tracking inside a command buffer, the per-command-buffer inter-encoder fence and queue order already serialize every access (`doc/erhe/metal_backend.md`) |
-| Metal 4 | A stage barrier (MTL4 has no per-resource barriers): the stages of the two usages are merged into the command buffer's pending barrier for the encoder kind of the consumer stages and encoded as one `barrierAfterQueueStages` at the start of the next encoder of that kind; with a compute encoder open, a compute consumer is also ordered at once inside it (`doc/erhe/metal4_backend.md` "Encoders and barriers") |
+| Metal 4 | A stage barrier (MTL4 has no per-resource barriers): the stages of the two usages are merged into the command buffer's pending barrier, which the next encoder encodes as a consumer barrier for itself (`barrierAfterQueueStages`) and a producer barrier for every later encoder and commit (`barrierAfterStages`); with a compute encoder open it is encoded inside it at once; one still pending when the command buffer ends is encoded in an empty encoder (`doc/erhe/metal4_backend.md` "Encoders and barriers") |
 
 ## Bind group layout
 

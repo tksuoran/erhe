@@ -985,7 +985,8 @@ auto Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     }
 
     // Commit each cb in submit order. The MTL4 queue starts work in commit
-    // order; the queue barrier every encoder starts with orders it.
+    // order; the producer and consumer barriers the encoders carry order it
+    // (doc/erhe/metal4_backend.md "Encoders and barriers").
     uint64_t last_serial = 0;
     const std::unique_lock<std::mutex> submit_lock = lock_submit();
     for (Command_buffer* const command_buffer : command_buffers) {

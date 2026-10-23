@@ -16,6 +16,7 @@ namespace MTL  { class ResidencySet; }
 namespace MTL4 { class ArgumentTable; }
 namespace MTL4 { class CommandAllocator; }
 namespace MTL4 { class CommandBuffer; }
+namespace MTL4 { class CommandEncoder; }
 namespace MTL4 { class CommitFeedback; }
 namespace MTL4 { class ComputeCommandEncoder; }
 namespace MTL4 { class RenderCommandEncoder; }
@@ -27,9 +28,13 @@ namespace NS   { class Object; }
 // (command buffer + allocator + commit options + everything the recording
 // holds until the GPU has completed it), the pools of argument tables and
 // inline constant chunks, the immutable draw id table the push constant
-// points into, and the conservative barriers every encoder starts with.
+// points into, and the stage mapping of the barriers (doc/erhe/metal4_backend.md
+// "Encoders and barriers").
 
 namespace erhe::graphics {
+
+enum class Image_layout : unsigned int;
+enum class Memory_barrier_mask : unsigned int;
 
 // Binding indices of the argument tables (the MSL contract of
 // doc/erhe/metal_backend.md "Explicit Metal Buffer Index Layout").
@@ -184,22 +189,51 @@ private:
     uint64_t                            m_draw_id_zero    {0};
 };
 
-// Hazards (MTL4 tracks none): every encoder starts with a consumer barrier
-// on all earlier work of the queue (earlier encoders of its own command
-// buffer and every earlier commit), which replaces the Metal 3 backend's
-// inter-encoder fence and Metal's hazard tracking. Conservative; see
-// doc/erhe/metal4_backend.md "Barriers".
-void encode_queue_barrier(MTL4::RenderCommandEncoder*  encoder);
-void encode_queue_barrier(MTL4::ComputeCommandEncoder* encoder);
-// False when ERHE_METAL4_EXPLICIT_BARRIERS_ONLY=1: Command_buffer_impl::
-// encode_start_barriers then encodes only the explicit barriers and compute
-// encoders skip the per-dispatch intra-encoder barrier, so the
-// texture_barrier / buffer_barrier tests verify the explicit path on its own.
-// A test switch that exists until the unconditional barrier is removed
-// (doc/plans/resource_barriers.md); the editor is not correct with it set.
-[[nodiscard]] auto is_queue_barrier_enabled() -> bool;
+// Barriers (MTL4 tracks no hazards; doc/erhe/metal4_backend.md "Encoders
+// and barriers"). The one table that maps every synchronization declaration
+// of the application to MTL::Stages bits (returned as uint64_t): the usages
+// of texture_barrier, render pass attachments and cmd_texture_barrier
+// (image), of buffer_barrier (buffer), the layouts of
+// transition_texture_layout and the bits of memory_barrier. 0: no GPU stage
+// of this queue (none, present, host accesses).
+[[nodiscard]] auto get_image_usage_stages   (std::uint64_t usage) -> std::uint64_t;
+[[nodiscard]] auto get_buffer_usage_stages  (std::uint64_t usage) -> std::uint64_t;
+[[nodiscard]] auto get_image_layout_stages  (Image_layout layout) -> std::uint64_t;
+[[nodiscard]] auto get_memory_barrier_stages(Memory_barrier_mask mask) -> std::uint64_t;
+// MTL::Stages bits (MTLCommandEncoder.hpp; metal4_submission.cpp verifies
+// them): single stages the backend's own recordings name, the stages a
+// render encoder runs, the stages a compute encoder runs (dispatch, blit,
+// acceleration structure), every stage of the queue (the source of
+// memory_barrier and of a layout transition, as Vulkan's ALL_COMMANDS) and
+// the shader stages (vertex | fragment | dispatch).
+constexpr std::uint64_t c_stage_vertex                 = std::uint64_t{1} << 0;
+constexpr std::uint64_t c_stage_fragment               = std::uint64_t{1} << 1;
+constexpr std::uint64_t c_stage_tile                   = std::uint64_t{1} << 2;
+constexpr std::uint64_t c_stage_object                 = std::uint64_t{1} << 3;
+constexpr std::uint64_t c_stage_mesh                   = std::uint64_t{1} << 4;
+constexpr std::uint64_t c_stage_dispatch               = std::uint64_t{1} << 27;
+constexpr std::uint64_t c_stage_blit                   = std::uint64_t{1} << 28;
+constexpr std::uint64_t c_stage_acceleration_structure = std::uint64_t{1} << 29;
+constexpr std::uint64_t c_render_encoder_stages  = c_stage_vertex | c_stage_fragment | c_stage_tile | c_stage_object | c_stage_mesh;
+constexpr std::uint64_t c_compute_encoder_stages = c_stage_dispatch | c_stage_blit | c_stage_acceleration_structure;
+constexpr std::uint64_t c_all_stages             = c_render_encoder_stages | c_compute_encoder_stages;
+constexpr std::uint64_t c_shader_stages          = c_stage_vertex | c_stage_fragment | c_stage_dispatch;
+// The two MTL4 queue barriers (MTL4CommandEncoder.h), with
+// VisibilityOptionDevice:
+// - consumer barrier, barrierAfterQueueStages(after, before): the work of the
+//   CURRENT encoder in the before stages waits for the after stages of all
+//   work before the current encoder (earlier encoders of its command buffer
+//   and earlier commits). Later encoders are not ordered by it.
+// - producer barrier, barrierAfterStages(after, before): the work of every
+//   LATER encoder (of this command buffer and of later commits) in the before
+//   stages waits for the after stages of the work encoded so far in the
+//   current encoder and in prior encoders.
+void encode_consumer_barrier(MTL4::CommandEncoder* encoder, std::uint64_t after_stages, std::uint64_t before_stages);
+void encode_producer_barrier(MTL4::CommandEncoder* encoder, std::uint64_t after_stages, std::uint64_t before_stages);
 // Dispatches and blits inside one MTL4 compute encoder run concurrently:
 // a barrier between consecutive ones (Metal 3 compute encoders were serial).
+// Kept for every dispatch after the first until the application states the
+// dependencies between dispatches (doc/plans/resource_barriers.md).
 void encode_intra_encoder_barrier(MTL4::ComputeCommandEncoder* encoder);
 
 } // namespace erhe::graphics

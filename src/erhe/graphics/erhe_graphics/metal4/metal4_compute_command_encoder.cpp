@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_compute_command_encoder.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/metal4/metal4_acceleration_structure.hpp"
 #include "erhe_graphics/metal4/metal4_command_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_compute_pipeline.hpp"
@@ -61,9 +62,8 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
     }
     s_active_encoder = this;
 
-    // Order against all earlier work of the queue (doc/erhe/metal4_backend.md
-    // "Barriers"): replaces the Metal 3 inter-encoder fence and hazard
-    // tracking.
+    // The pending barriers of compute consumers (doc/erhe/metal4_backend.md
+    // "Encoders and barriers").
     cb_impl.encode_start_barriers(m_encoder);
 
     // Gpu_timer samples (metal4_gpu_timer.hpp) at the start and end of the
@@ -90,7 +90,7 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
 
 void Compute_command_encoder_impl::before_dispatch()
 {
-    if ((m_dispatch_count > 0) && is_queue_barrier_enabled()) {
+    if (m_dispatch_count > 0) {
         encode_intra_encoder_barrier(m_encoder);
     }
     ++m_dispatch_count;
@@ -183,8 +183,9 @@ void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, con
     }
     // Storage images bind at their raw binding point (no sampler-binding offset);
     // this matches the [[texture(N)]] slot pinned in compile_spirv_to_mtl_function.
-    // The texture is resident through the device's residency set; the queue
-    // barrier the next encoder starts with orders its writes.
+    // The texture is resident through the device's residency set; the
+    // application's barrier after the dispatch orders its writes for their
+    // consumers.
     m_argument_table->setTexture(mtl_texture->gpuResourceID(), static_cast<NS::UInteger>(binding_point));
 }
 
@@ -326,7 +327,19 @@ void Compute_command_encoder_impl::encode_indirect_count_draws(Indirect_count_dr
     // instead of running the kernel's pipeline.
     release_owned_pipeline_state();
     before_dispatch();
+    // The kernel rewrites the slot's indirect command buffer and range
+    // buffer, which the draws of an earlier prepare of the slot read in
+    // earlier render encoders (executeCommandsInBuffer): those reads before
+    // the kernel. Its inputs, the command and count buffers, are ordered by
+    // the application's barrier after the kernels that wrote them.
+    encode_consumer_barrier(m_encoder, c_render_encoder_stages, c_stage_dispatch);
     draws.get_impl().encode(m_encoder, m_argument_table, draws.get_slot(slot), slot);
+    // The kernel's output before the draws that execute it (the render
+    // encoders after this one), a producer barrier; nothing in the
+    // application names this backend-internal resource. The consumer stage
+    // assumes executeCommandsInBuffer reads the indirect command buffer and
+    // range at the vertex stage (fragment for the draws' later reads).
+    encode_producer_barrier(m_encoder, c_stage_dispatch, c_stage_vertex | c_stage_fragment);
 }
 
 } // namespace erhe::graphics

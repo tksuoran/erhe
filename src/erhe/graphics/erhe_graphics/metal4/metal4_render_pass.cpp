@@ -179,11 +179,51 @@ void configure_color_attachment(
 
 } // anonymous namespace
 
+auto Render_pass_impl::get_usage_before_stages() const -> std::uint64_t
+{
+    std::uint64_t stages = 0;
+    const auto add = [&stages](const Render_pass_attachment_descriptor& attachment) {
+        if (attachment.is_defined() && (attachment.texture != nullptr) && (attachment.usage_before != Image_usage_flag_bit_mask::invalid)) {
+            stages |= get_image_usage_stages(attachment.usage_before & ~Image_usage_flag_bit_mask::user_synchronized);
+        }
+    };
+    for (const Render_pass_attachment_descriptor& attachment : m_color_attachments) {
+        add(attachment);
+    }
+    add(m_depth_attachment);
+    add(m_stencil_attachment);
+    // No attachment names a GPU access before the pass (a swapchain pass
+    // after present, none): the attachment writes of earlier passes, as
+    // Vulkan's fallback source scope.
+    return (stages != 0) ? stages : c_stage_fragment;
+}
+
+auto Render_pass_impl::get_usage_after_stages() const -> std::uint64_t
+{
+    std::uint64_t stages = 0;
+    const auto add = [&stages](const Render_pass_attachment_descriptor& attachment) {
+        if (
+            attachment.is_defined() &&
+            (attachment.texture != nullptr) &&
+            (attachment.usage_after != Image_usage_flag_bit_mask::invalid) &&
+            ((attachment.usage_after & Image_usage_flag_bit_mask::user_synchronized) == 0)
+        ) {
+            stages |= get_image_usage_stages(attachment.usage_after);
+        }
+    };
+    for (const Render_pass_attachment_descriptor& attachment : m_color_attachments) {
+        add(attachment);
+    }
+    add(m_depth_attachment);
+    add(m_stencil_attachment);
+    return stages;
+}
+
 void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
     Scoped_transient_object_pool object_pool{}; // the encoder is retained below; the pool drains the autoreleased reference
-    // The queue barrier the encoder starts with orders it after all earlier
-    // work, so these hints are not needed.
+    // The attachments' usage_before orders the pass (below), so these
+    // hints are not needed.
     static_cast<void>(render_pass_before);
     static_cast<void>(render_pass_after);
 
@@ -320,10 +360,12 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     ERHE_VERIFY(m_mtl_encoder != nullptr);
     m_mtl_encoder->retain();
 
-    // Order against all earlier work of the queue (doc/erhe/metal4_backend.md
-    // "Barriers"): this replaces the Metal 3 inter-encoder fence and Metal's
-    // hazard tracking.
-    cb_impl.encode_start_barriers(m_mtl_encoder, Command_buffer_impl::Render_encoder_use::draw);
+    // The pass begin barrier (Vulkan's inter-pass barrier,
+    // vulkan_render_pass.cpp compute_inter_pass_barrier), a consumer barrier
+    // of this pass: the earlier accesses each attachment's usage_before
+    // names before the pass's attachment loads, tests and stores and its
+    // fragment shading (doc/erhe/metal4_backend.md "Encoders and barriers").
+    cb_impl.encode_start_barriers(m_mtl_encoder, Command_buffer_impl::Render_encoder_use::draw, get_usage_before_stages(), c_stage_fragment);
 
     // Gpu_timer samples (metal4_gpu_timer.hpp): the vertex stage start and
     // (end_render_pass) the fragment stage end bracket the pass.
@@ -368,6 +410,16 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
         if (m_timer_counter_heap != nullptr) {
             m_mtl_encoder->writeTimestamp(MTL4::TimestampGranularityRelaxed, MTL::RenderStageFragment, m_timer_counter_heap, m_timer_end_sample);
             m_timer_counter_heap = nullptr;
+        }
+        // The pass end barrier (Vulkan's post-pass barrier,
+        // compute_post_render_pass_barrier), a producer barrier: the pass's
+        // attachment stores and resolves before the accesses each
+        // attachment's usage_after names, in every later encoder. An
+        // attachment whose usage_after carries user_synchronized is left to
+        // the caller's barrier.
+        const std::uint64_t usage_after_stages = get_usage_after_stages();
+        if (usage_after_stages != 0) {
+            encode_producer_barrier(m_mtl_encoder, c_stage_fragment, usage_after_stages);
         }
         m_mtl_encoder->endEncoding();
         m_mtl_encoder->release();

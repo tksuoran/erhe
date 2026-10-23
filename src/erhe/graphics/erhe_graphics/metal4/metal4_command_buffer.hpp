@@ -15,6 +15,7 @@ namespace MTL  { class Event; }
 namespace MTL  { class SharedEvent; }
 namespace MTL4 { class ArgumentTable; }
 namespace MTL4 { class CommandBuffer; }
+namespace MTL4 { class CommandEncoder; }
 namespace MTL4 { class CommandQueue; }
 namespace MTL4 { class ComputeCommandEncoder; }
 namespace MTL4 { class RenderCommandEncoder; }
@@ -88,19 +89,35 @@ public:
     void memory_barrier           (Memory_barrier_mask barriers);
 
     // Every encoder recorded into this cb calls one of these right after
-    // it is created, before encoding work: the encoder's start barriers
-    // (doc/erhe/metal4_backend.md "Barriers"). They encode the unconditional
-    // queue barrier (encode_queue_barrier; removed once every chain is
-    // explicit) and then one barrierAfterQueueStages with the union of the
-    // pending explicit barriers whose consumer stages belong to the
-    // encoder's kind (render: vertex / fragment / tile / object / mesh;
-    // compute: dispatch / blit / acceleration structure), and clear those.
+    // it is created, before encoding work (doc/erhe/metal4_backend.md
+    // "Encoders and barriers"). With barriers pending (add_stage_barrier
+    // between encoders) it encodes the consumer barrier for their consumers
+    // in this encoder, merged with the encoder's own consumer pair
+    // (consumer_after_stages -> consumer_before_stages: a render pass's
+    // begin barrier, a transfer's wait for earlier accesses), and the
+    // producer barrier for their consumers in every later encoder, then
+    // clears them; without, only the encoder's own pair (none: no barrier).
     // use: draw for a render pass, transfer for a transfer recorded as a
-    // render encoder (blit_framebuffer, depth / stencil clears), which also
-    // orders against the pending barriers of blit-stage consumers.
+    // render encoder (blit_framebuffer, depth / stencil clears), whose
+    // render stages also stand for pending blit-stage consumers.
     enum class Render_encoder_use : unsigned int { draw, transfer };
-    void encode_start_barriers(MTL4::RenderCommandEncoder*  encoder, Render_encoder_use use);
-    void encode_start_barriers(MTL4::ComputeCommandEncoder* encoder);
+    void encode_start_barriers(MTL4::RenderCommandEncoder*  encoder, Render_encoder_use use, std::uint64_t consumer_after_stages = 0, std::uint64_t consumer_before_stages = 0);
+    void encode_start_barriers(MTL4::ComputeCommandEncoder* encoder, std::uint64_t consumer_after_stages = 0, std::uint64_t consumer_before_stages = 0);
+
+    // A dependency from the producer stages (after_stages) to the consumer
+    // stages (before_stages), MTL::Stages bits (metal4_submission.hpp).
+    // Between encoders it is pending for the next encoder of this cb
+    // (encode_start_barriers; end_recording encodes what is left). With a
+    // compute encoder of this cb open on the calling thread it is encoded
+    // there at once: the encoder's later dispatches wait (encoder barrier,
+    // and a consumer barrier for producers in earlier encoders or commits)
+    // and a producer barrier orders every later encoder. Every application
+    // declaration lands here: texture_barrier / buffer_barrier,
+    // memory_barrier, transition_texture_layout, cmd_texture_barrier.
+    void add_stage_barrier      (std::uint64_t after_stages, std::uint64_t before_stages, Barrier_scope scope);
+    // add_stage_barrier with the stages of two image usages
+    // (get_image_usage_stages).
+    void add_image_usage_barrier(std::uint64_t usage_before, std::uint64_t usage_after, Barrier_scope scope);
 
     // Backend access: encoders (Render_pass_impl, Compute_command_encoder_impl,
     // Blit_command_encoder_impl) record into this MTL4::CommandBuffer.
@@ -202,20 +219,20 @@ private:
     MTL::Buffer*               m_inline_bytes_chunk {nullptr}; // the chunk being filled (also in m_recording)
     std::size_t                m_inline_bytes_offset{0};
 
-    // Explicit barriers (texture_barrier / buffer_barrier) not yet encoded:
-    // the unions of their producer (after) and consumer (before) stages as
-    // MTL::Stages bits, split by the encoder kind of the consumer stages.
-    // Each is encoded at the start of the next encoder of its kind and
-    // cleared; end_recording drops what no encoder consumed.
+    // Barriers (add_stage_barrier) recorded between encoders and not yet
+    // encoded: the unions of their producer (after) and consumer (before)
+    // stages as MTL::Stages bits. The next encoder encodes and clears them
+    // (encode_start_barriers); end_recording encodes what is left in an
+    // empty compute encoder (end_recording_barriers).
     class Pending_barrier
     {
     public:
         std::uint64_t after_stages {0};
         std::uint64_t before_stages{0};
     };
-    void add_barrier(std::uint64_t after_stages, std::uint64_t before_stages, Barrier_scope scope);
-    Pending_barrier            m_pending_render_barrier;
-    Pending_barrier            m_pending_compute_barrier;
+    void encode_pending_barriers(MTL4::CommandEncoder* encoder, std::uint64_t encoder_stages, std::uint64_t consumer_after_stages, std::uint64_t consumer_before_stages);
+    void end_recording_barriers ();
+    Pending_barrier            m_pending_barrier;
 
     MTL::Event*                m_implicit_gpu_event{nullptr};
     std::uint64_t              m_implicit_gpu_event_signal_value{0};

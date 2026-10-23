@@ -116,7 +116,8 @@ public:
         color->setStoreAction(MTL::StoreActionStore);
         MTL4::RenderCommandEncoder* const encoder = command_buffer->renderCommandEncoder(render_pass);
         render_pass->release();
-        encode_queue_barrier(encoder);
+        // No barrier: the probe clears the drawable only, which the queue's
+        // drawable wait below orders.
         encoder->endEncoding();
         command_buffer->endCommandBuffer();
 

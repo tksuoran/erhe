@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_submission.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
@@ -7,56 +8,200 @@
 
 #include <algorithm>
 #include <bit>
-#include <cstdlib>
 #include <cstring>
 
 namespace erhe::graphics {
 
 namespace {
 
-constexpr MTL::Stages c_all_queue_stages =
-    MTL::StageVertex   | MTL::StageFragment | MTL::StageTile | MTL::StageObject | MTL::StageMesh |
-    MTL::StageDispatch | MTL::StageBlit     | MTL::StageAccelerationStructure;
-
-constexpr MTL::Stages c_render_stages =
-    MTL::StageVertex | MTL::StageFragment | MTL::StageTile | MTL::StageObject | MTL::StageMesh;
-
-constexpr MTL::Stages c_compute_stages =
-    MTL::StageDispatch | MTL::StageBlit | MTL::StageAccelerationStructure;
+static_assert(c_stage_vertex                 == static_cast<std::uint64_t>(MTL::StageVertex));
+static_assert(c_stage_fragment               == static_cast<std::uint64_t>(MTL::StageFragment));
+static_assert(c_stage_tile                   == static_cast<std::uint64_t>(MTL::StageTile));
+static_assert(c_stage_object                 == static_cast<std::uint64_t>(MTL::StageObject));
+static_assert(c_stage_mesh                   == static_cast<std::uint64_t>(MTL::StageMesh));
+static_assert(c_stage_dispatch               == static_cast<std::uint64_t>(MTL::StageDispatch));
+static_assert(c_stage_blit                   == static_cast<std::uint64_t>(MTL::StageBlit));
+static_assert(c_stage_acceleration_structure == static_cast<std::uint64_t>(MTL::StageAccelerationStructure));
 
 constexpr std::size_t c_initial_draw_id_count = 4096;
 
 } // anonymous namespace
 
-void encode_queue_barrier(MTL4::RenderCommandEncoder* const encoder)
+namespace {
+
+// The MTL::Stages of the shader accesses of one barrier side: the stages its
+// vertex_shader / fragment_shader / compute_shader qualifiers name, every
+// shader stage without one. Image and buffer qualifiers share their bits.
+[[nodiscard]] auto get_barrier_shader_stages(const std::uint64_t usage) -> std::uint64_t
 {
-    ERHE_VERIFY(encoder != nullptr);
-    encoder->barrierAfterQueueStages(c_all_queue_stages, c_render_stages, MTL4::VisibilityOptionDevice);
+    static_assert(Image_usage_flag_bit_mask::vertex_shader   == Buffer_usage_flag_bit_mask::vertex_shader);
+    static_assert(Image_usage_flag_bit_mask::fragment_shader == Buffer_usage_flag_bit_mask::fragment_shader);
+    static_assert(Image_usage_flag_bit_mask::compute_shader  == Buffer_usage_flag_bit_mask::compute_shader);
+    if ((usage & Image_usage_flag_bit_mask::shader_stages) == 0) {
+        return MTL::StageVertex | MTL::StageFragment | MTL::StageDispatch;
+    }
+    std::uint64_t stages = 0;
+    if ((usage & Image_usage_flag_bit_mask::vertex_shader) != 0) {
+        stages |= MTL::StageVertex;
+    }
+    if ((usage & Image_usage_flag_bit_mask::fragment_shader) != 0) {
+        stages |= MTL::StageFragment;
+    }
+    if ((usage & Image_usage_flag_bit_mask::compute_shader) != 0) {
+        stages |= MTL::StageDispatch;
+    }
+    return stages;
 }
 
-void encode_queue_barrier(MTL4::ComputeCommandEncoder* const encoder)
+} // anonymous namespace
+
+auto get_image_usage_stages(const std::uint64_t usage) -> std::uint64_t
 {
-    ERHE_VERIFY(encoder != nullptr);
-    encoder->barrierAfterQueueStages(c_all_queue_stages, c_compute_stages, MTL4::VisibilityOptionDevice);
+    std::uint64_t stages = 0;
+    if ((usage & (Image_usage_flag_bit_mask::transfer_src | Image_usage_flag_bit_mask::transfer_dst)) != 0) {
+        stages |= MTL::StageBlit;
+    }
+    if ((usage & (Image_usage_flag_bit_mask::sampled | Image_usage_flag_bit_mask::storage | Image_usage_flag_bit_mask::input_attachment)) != 0) {
+        stages |= get_barrier_shader_stages(usage);
+    }
+    if ((usage & (Image_usage_flag_bit_mask::color_attachment | Image_usage_flag_bit_mask::depth_stencil_attachment)) != 0) {
+        // Attachment loads, depth / stencil tests, stores and resolves all
+        // happen in the fragment stage of the pass (tile memory loads at its
+        // start, stores and resolves at its end), so the fragment stage is the
+        // producer and the consumer stage of an attachment access.
+        stages |= MTL::StageFragment;
+    }
+    // none, present (the drawable is ordered by the queue's drawable wait),
+    // host_transfer and fragment_density_map are no GPU stage of this queue;
+    // discard changes nothing here (no layouts).
+    return stages;
 }
 
-auto is_queue_barrier_enabled() -> bool
+auto get_buffer_usage_stages(const std::uint64_t usage) -> std::uint64_t
 {
-    static const bool enabled = []() -> bool {
-        const char* const value = std::getenv("ERHE_METAL4_EXPLICIT_BARRIERS_ONLY");
-        const bool explicit_only = (value != nullptr) && (value[0] == '1');
-        if (explicit_only) {
-            log_startup->warn("Metal 4: ERHE_METAL4_EXPLICIT_BARRIERS_ONLY=1 - encoders start with the explicit barriers only (test switch)");
-        }
-        return !explicit_only;
-    }();
-    return enabled;
+    std::uint64_t stages = 0;
+    if ((usage & (Buffer_usage_flag_bit_mask::vertex | Buffer_usage_flag_bit_mask::index)) != 0) {
+        stages |= MTL::StageVertex;
+    }
+    if ((usage & Buffer_usage_flag_bit_mask::indirect) != 0) {
+        // Draw arguments (and indirect command buffer ranges) are read at the
+        // vertex stage, dispatch arguments at the dispatch stage; like Vulkan's
+        // DRAW_INDIRECT, the access is not qualified by a shader stage.
+        stages |= MTL::StageVertex | MTL::StageDispatch;
+    }
+    const std::uint64_t shader_accesses =
+        Buffer_usage_flag_bit_mask::uniform       |
+        Buffer_usage_flag_bit_mask::storage_read  |
+        Buffer_usage_flag_bit_mask::storage_write |
+        Buffer_usage_flag_bit_mask::acceleration_structure_read;
+    if ((usage & shader_accesses) != 0) {
+        stages |= get_barrier_shader_stages(usage);
+    }
+    if ((usage & (Buffer_usage_flag_bit_mask::transfer_src | Buffer_usage_flag_bit_mask::transfer_dst)) != 0) {
+        stages |= MTL::StageBlit;
+    }
+    const std::uint64_t build_accesses =
+        Buffer_usage_flag_bit_mask::acceleration_structure_build_input |
+        Buffer_usage_flag_bit_mask::acceleration_structure_read        |
+        Buffer_usage_flag_bit_mask::acceleration_structure_write;
+    if ((usage & build_accesses) != 0) {
+        stages |= MTL::StageAccelerationStructure;
+    }
+    // host_read / host_write: ordered by command buffer completion and commit.
+    return stages;
+}
+
+auto get_image_layout_stages(const Image_layout layout) -> std::uint64_t
+{
+    // The accesses a texture in the layout takes part in, in the image usage
+    // vocabulary (one table: get_image_usage_stages()). general may be any
+    // access; present, undefined and the fragment density map are no GPU
+    // stage of this queue.
+    switch (layout) {
+        case Image_layout::shader_read_only_optimal:         return get_image_usage_stages(Image_usage_flag_bit_mask::sampled);
+        case Image_layout::depth_stencil_read_only_optimal:  return get_image_usage_stages(Image_usage_flag_bit_mask::sampled | Image_usage_flag_bit_mask::depth_stencil_attachment);
+        case Image_layout::transfer_dst_optimal:             return get_image_usage_stages(Image_usage_flag_bit_mask::transfer_dst);
+        case Image_layout::transfer_src_optimal:             return get_image_usage_stages(Image_usage_flag_bit_mask::transfer_src);
+        case Image_layout::color_attachment_optimal:         return get_image_usage_stages(Image_usage_flag_bit_mask::color_attachment);
+        case Image_layout::depth_stencil_attachment_optimal: return get_image_usage_stages(Image_usage_flag_bit_mask::depth_stencil_attachment);
+        case Image_layout::general:                          return c_all_stages;
+        case Image_layout::undefined:
+        case Image_layout::fragment_density_map_optimal:
+        case Image_layout::present_src:
+        default:                                             return 0;
+    }
+}
+
+auto get_memory_barrier_stages(const Memory_barrier_mask mask) -> std::uint64_t
+{
+    // The destination stages of Vulkan's memory_barrier
+    // (vulkan_command_buffer.cpp), in the buffer and image usage vocabulary.
+    const unsigned int bits = static_cast<unsigned int>(mask);
+    const auto has = [bits](const Memory_barrier_mask bit) -> bool {
+        return (bits & static_cast<unsigned int>(bit)) != 0;
+    };
+    std::uint64_t stages = 0;
+    if (has(Memory_barrier_mask::vertex_attrib_array_barrier_bit)) {
+        stages |= get_buffer_usage_stages(Buffer_usage_flag_bit_mask::vertex);
+    }
+    if (has(Memory_barrier_mask::element_array_barrier_bit)) {
+        stages |= get_buffer_usage_stages(Buffer_usage_flag_bit_mask::index);
+    }
+    if (has(Memory_barrier_mask::uniform_barrier_bit)) {
+        stages |= get_buffer_usage_stages(Buffer_usage_flag_bit_mask::uniform);
+    }
+    if (has(Memory_barrier_mask::texture_fetch_barrier_bit)) {
+        stages |= get_image_usage_stages(Image_usage_flag_bit_mask::sampled);
+    }
+    if (has(Memory_barrier_mask::shader_image_access_barrier_bit)) {
+        stages |= get_image_usage_stages(Image_usage_flag_bit_mask::storage);
+    }
+    if (has(Memory_barrier_mask::atomic_counter_barrier_bit) || has(Memory_barrier_mask::shader_storage_barrier_bit)) {
+        stages |= get_buffer_usage_stages(Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::storage_write);
+    }
+    if (has(Memory_barrier_mask::command_barrier_bit)) {
+        stages |= get_buffer_usage_stages(Buffer_usage_flag_bit_mask::indirect);
+    }
+    if (
+        has(Memory_barrier_mask::pixel_buffer_barrier_bit)   ||
+        has(Memory_barrier_mask::texture_update_barrier_bit) ||
+        has(Memory_barrier_mask::buffer_update_barrier_bit)
+    ) {
+        stages |= get_buffer_usage_stages(Buffer_usage_flag_bit_mask::transfer_src | Buffer_usage_flag_bit_mask::transfer_dst);
+    }
+    if (has(Memory_barrier_mask::framebuffer_barrier_bit)) {
+        stages |= get_image_usage_stages(Image_usage_flag_bit_mask::color_attachment | Image_usage_flag_bit_mask::depth_stencil_attachment);
+    }
+    // client_mapped_buffer_barrier_bit: a host read, no GPU stage; shared
+    // memory written by the GPU is visible to the CPU once the commit has
+    // completed, which is what the reader waits for.
+    return stages;
+}
+
+void encode_consumer_barrier(MTL4::CommandEncoder* const encoder, const std::uint64_t after_stages, const std::uint64_t before_stages)
+{
+    ERHE_VERIFY(encoder != nullptr);
+    encoder->barrierAfterQueueStages(
+        static_cast<MTL::Stages>(after_stages),
+        static_cast<MTL::Stages>(before_stages),
+        MTL4::VisibilityOptionDevice
+    );
+}
+
+void encode_producer_barrier(MTL4::CommandEncoder* const encoder, const std::uint64_t after_stages, const std::uint64_t before_stages)
+{
+    ERHE_VERIFY(encoder != nullptr);
+    encoder->barrierAfterStages(
+        static_cast<MTL::Stages>(after_stages),
+        static_cast<MTL::Stages>(before_stages),
+        MTL4::VisibilityOptionDevice
+    );
 }
 
 void encode_intra_encoder_barrier(MTL4::ComputeCommandEncoder* const encoder)
 {
     ERHE_VERIFY(encoder != nullptr);
-    encoder->barrierAfterEncoderStages(c_compute_stages, c_compute_stages, MTL4::VisibilityOptionDevice);
+    encoder->barrierAfterEncoderStages(static_cast<MTL::Stages>(c_compute_encoder_stages), static_cast<MTL::Stages>(c_compute_encoder_stages), MTL4::VisibilityOptionDevice);
 }
 
 Residency::Residency(MTL::Device* const mtl_device)
