@@ -59,6 +59,14 @@ bool set_sdl_window_drawable_size(void* sdl_window_opaque, int width, int height
     return true;
 }
 
+void service_main_run_loop()
+{
+    if (![NSThread isMainThread]) {
+        return;
+    }
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true);
+}
+
 } // namespace erhe::graphics
 
 #endif

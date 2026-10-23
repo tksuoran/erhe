@@ -351,7 +351,9 @@ that carries the drawable:
   (`doc/frame_pacing/algorithm.md` section 3.3).
 
 Tier M runs the present calibration (`Device_impl::run_present_calibration`,
-`metal_device_present_calibration.cpp`) at the end of `init_frame_pacing`,
+`metal_device_present_calibration.cpp`; the backend-neutral algorithm,
+shared with the Vulkan `VK_GOOGLE_display_timing` path, is
+`present_calibration_runner.cpp`) at the end of `init_frame_pacing`,
 before the application's first frame, because the compositor's timing
 depends on the display mode. It first measures the GPU pre-warm kernel's
 rate (below), which does not depend on the compositor, so a calibration
@@ -373,7 +375,12 @@ the window's layer:
 3. Deadline: probes request at that offset and commit 0.5 ... 3 T before
    the target in T/8 steps, then twice more around the split; the deadline
    is the completion margin (target minus `GPUEndTime`) that best separates
-   late from on-target probes, plus 1 ms.
+   late from on-target probes, plus 1 ms. A coarse pass in which every
+   displayed probe is late is most likely a pass the compositor displayed a
+   refresh late as a whole (MoltenVK on the ProMotion panel, 1 launch in
+   10; the request window phase had displayed this offset on target with
+   3.5 T of margin), so it is left out of the fit and measured again, up to
+   three passes.
 
 The probes run as a steady stream, one every second vsync, so a probe a
 refresh off does not take its neighbour's slot; probes presented one at a

@@ -7,6 +7,7 @@ set(_deviceless_target "erhe_graphics_tests")
 add_executable(${_deviceless_target}
     main.cpp
     test_display_refresh_resolver.cpp
+    test_present_calibration_runner.cpp
     test_shader_resource_size.cpp
 )
 
@@ -20,6 +21,7 @@ endif ()
 
 target_link_libraries(${_deviceless_target}
     PRIVATE
+        erhe::frame_pacing
         erhe::graphics
         erhe::log
         erhe::verify

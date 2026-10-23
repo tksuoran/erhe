@@ -975,7 +975,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
                     // the pacer's grid from rounding up to the next refresh
                     // across a small grid phase error on a fixed-rate display
                     // (doc/frame_pacing/capability_tiers.md section 5).
-                    const double request_offset = (m_present_request_offset > 0.0) ? m_present_request_offset : (0.25 * period);
+                    const double request_offset = m_present_request_offset.value_or(0.25 * period);
                     mtl_cb->presentDrawableAtTime(drawable, target_time - request_offset);
                 } else {
                     mtl_cb->presentDrawable(drawable);

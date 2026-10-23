@@ -19,6 +19,12 @@ namespace erhe::graphics {
 // every vkAcquireNextImageKHR closes the race. Returns true on success.
 bool set_sdl_window_drawable_size(void* sdl_window, int width, int height);
 
+// Runs the main run loop once without blocking (no-op off the main thread):
+// a window ordered on screen during device init is composited only once a
+// Core Animation commit runs, which the present calibration's presents need
+// (vulkan_device_present_calibration.cpp).
+void service_main_run_loop();
+
 } // namespace erhe::graphics
 
 #endif

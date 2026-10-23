@@ -232,6 +232,16 @@ granularity 4.167 ms)". Every presented time lies on the panel's tick grid.
   frames, which adds that much release-to-display latency (10-16 ms).
 - Windowed: fixed grid, N=1 in 40 of 40 launches (default, render thread
   inline, pipelining off; after the fix), release to display 25-27 ms.
+- MoltenVK (`build_xcode_vulkan`, tier W through `VK_GOOGLE_display_timing`),
+  2026-10-23, with the Vulkan present calibration: windowed, request offset
+  1.38 T (2.0 T in 2 launches) and deadline 2.12-2.19 T; N=1 in 23 of 24 launches
+  (the other: a coarse deadline pass displayed a refresh late as a whole and
+  the calibration failed, which led to the re-measured pass; 12 of 12
+  since), two-refresh frames 0-2 of ~342, release to display 27.0-27.9 ms
+  (before: N=2-3 in 9 of 9, ~41 ms, every frame one refresh late).
+  Fullscreen (reported `fixed_grid`): request window 0-0.75 T, deadline
+  0.65-0.85 T; N=1 in 5 of 7 launches at 12-17 ms, N=2 in 2 (before: N=2,
+  ~38 ms).
 
 ## Goal and gate
 

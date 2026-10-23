@@ -460,3 +460,20 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   N=2 (~38 ms). Open: a present calibration for the Vulkan
   `VK_GOOGLE_display_timing` path (the request offset at least), and the
   60 Hz re-gate.
+- 2026-10-23, MoltenVK present calibration (ProMotion panel, Release). Live
+  check first: every frame displayed exactly one refresh after its target
+  with 18-28 ms between the GPU end and the target, requests at T/4 before
+  it - outside the 1.0-1.75 T request window the Metal calibration measures
+  there. The calibration algorithm moved to `present_calibration_runner.cpp`
+  (backend-neutral; Metal and Vulkan present the probes); the Vulkan
+  `VK_GOOGLE_display_timing` path runs it at device init
+  (`doc/erhe/vulkan_backend.md` "Surface and swapchain"). Found on the way:
+  a coarse deadline pass the compositor displayed a refresh late as a whole
+  (1 launch in 10) made the calibration fail; such a pass is now measured
+  again (unit test `Present_calibration_runner` models it). Windowed
+  MoltenVK N=1 in 23 of 24 launches (12 of 12 with the re-measure), 27-28 ms
+  release to display; Metal windowed unchanged (4 of 4, same calibration);
+  KosmicKrisp stays tier S without a calibration. Fullscreen MoltenVK N=1
+  in 5 of 7 (results in [frame_pacing_adaptive_sync.md](frame_pacing_adaptive_sync.md)
+  "Verification"). Open: the MoltenVK fullscreen N=2 launches, the 60 Hz
+  re-gate.
