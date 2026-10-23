@@ -325,7 +325,8 @@ private:
     erhe::window::Context_window* m_frame_pacing_window{nullptr};
     // Tier M: measures the compositor's request window and deadline on the
     // window's layer before the first frame (metal_device_present_calibration.cpp)
-    // and stores the result in Device::get_present_calibration().
+    // and stores the result in Device::get_present_calibration(), or adopts
+    // the cached entry (Device::begin_present_calibration).
     void run_present_calibration();
 
     Device&                          m_device;
@@ -343,9 +344,6 @@ private:
     // like the Vulkan backend's.
     std::int64_t                     m_present_target_frame_id    {-1};
     double                           m_present_target_time_seconds{0.0};
-    // Seconds before the target vsync to request a tier M present, from the
-    // present calibration; empty without one (a quarter period is used).
-    std::optional<double>            m_present_request_offset;
 
     class Blit_framebuffer_pipeline
     {

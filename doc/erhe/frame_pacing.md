@@ -52,6 +52,12 @@ suite (`erhe_frame_pacing_tests`) green.
   parts of the exposed `Schedule_decision` its actuators cover. Log lines go
   through a queue the host drains, so the library stays free of logging
   dependencies.
+  `set_deadline_ceiling_callback` reports, once per pacer, a deadline
+  estimate held at the host-measured ceiling for
+  `deadline_ceiling_sustain_samples` consecutive deadline samples
+  (`Frame_pacer::is_deadline_offset_ceiling_sustained`): the host's deadline
+  measurement is stale-low (the editor then deletes its present calibration
+  cache entry, doc/erhe/graphics.md "Present calibration cache").
 - `Frame_time_recorder` - the bounded ring of per-frame event timestamps
   (one monotonic clock domain) that feeds both the pacer's estimators and the
   profiling UI. There is no second instrumentation path. Thread-safe: one

@@ -162,8 +162,14 @@ public:
 
     // The window's display presentation (the backend's window source; on
     // Metal the NSScreen refresh-interval range and the fullscreen state).
-    // Logged and handed to the presentation callback when it changes.
-    void set_window_presentation(const Display_presentation& presentation);
+    // Logged and handed to the presentation callback when it changes;
+    // returns true then.
+    auto set_window_presentation(const Display_presentation& presentation) -> bool;
+    // Hands the current presentation to the presentation callback although
+    // it did not change: something the callback derives from besides the
+    // presentation changed (the device's present calibration after a display
+    // change, Device::refresh_present_calibration_for_display).
+    void notify_presentation();
     [[nodiscard]] auto get_presentation() const -> Display_presentation;
 
     // The graphics config choice: which source decides, and the override

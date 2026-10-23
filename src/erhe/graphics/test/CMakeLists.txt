@@ -1,12 +1,13 @@
 include(GoogleTest)
 
-# Deviceless tests: std140/std430 layout math and the on-disk shader and
-# pipeline caches; no graphics Device.
+# Deviceless tests: std140/std430 layout math and the on-disk shader,
+# pipeline and present calibration caches; no graphics Device.
 # Built in every configuration (CI-friendly, GPU-less).
 set(_deviceless_target "erhe_graphics_tests")
 add_executable(${_deviceless_target}
     main.cpp
     test_display_refresh_resolver.cpp
+    test_present_calibration_cache.cpp
     test_present_calibration_runner.cpp
     test_shader_resource_size.cpp
 )

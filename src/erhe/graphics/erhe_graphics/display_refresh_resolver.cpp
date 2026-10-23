@@ -94,13 +94,13 @@ void Display_refresh_resolver::set_presentation_callback(Presentation_callback c
     m_presentation_callback = std::move(callback);
 }
 
-void Display_refresh_resolver::set_window_presentation(const Display_presentation& presentation)
+auto Display_refresh_resolver::set_window_presentation(const Display_presentation& presentation) -> bool
 {
     Presentation_callback callback;
     {
         const std::lock_guard<std::mutex> lock{m_mutex};
         if (m_presentation_known && (presentation == m_presentation)) {
-            return;
+            return false;
         }
         m_presentation       = presentation;
         m_presentation_known = true;
@@ -118,6 +118,21 @@ void Display_refresh_resolver::set_window_presentation(const Display_presentatio
             presentation.update_granularity * 1000.0
         );
         callback = m_presentation_callback;
+    }
+    if (callback) {
+        callback(presentation);
+    }
+    return true;
+}
+
+void Display_refresh_resolver::notify_presentation()
+{
+    Presentation_callback callback;
+    Display_presentation  presentation{};
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        callback     = m_presentation_callback;
+        presentation = m_presentation;
     }
     if (callback) {
         callback(presentation);

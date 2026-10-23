@@ -69,6 +69,8 @@ erhe_target_sources_grouped(
     erhe_graphics/multi_copy_buffer.hpp
     erhe_graphics/native_format.hpp
     erhe_graphics/present_calibration.hpp
+    erhe_graphics/present_calibration_cache.cpp
+    erhe_graphics/present_calibration_cache.hpp
     erhe_graphics/present_calibration_runner.cpp
     erhe_graphics/present_calibration_runner.hpp
     erhe_graphics/render_command_encoder.hpp
@@ -151,6 +153,7 @@ target_link_libraries(${_interface_target}
         mango
     PRIVATE
         etl::etl
+        nlohmann_json::nlohmann_json
         erhe::defer
         erhe::file
         erhe::hash
@@ -159,6 +162,8 @@ target_link_libraries(${_interface_target}
         erhe::time
         erhe::utility
         erhe::verify
+        erhe::version
+        erhe::window
 )
 
 # KTX2 / Basis Universal transcoder (image_loader_ktx2): compiled straight
@@ -319,9 +324,10 @@ if (APPLE)
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_graphics/clock_monitor_apple.hpp
         erhe_graphics/clock_monitor_apple.mm
+        erhe_graphics/present_calibration_key_apple.mm
         erhe_graphics/thermal_state_apple.mm
     )
-    target_link_libraries(${_target} PRIVATE "-framework Foundation" "-framework IOKit")
+    target_link_libraries(${_target} PRIVATE "-framework Foundation" "-framework IOKit" "-framework AppKit" "-framework CoreGraphics")
 endif ()
 
 if (ERHE_SPIRV)

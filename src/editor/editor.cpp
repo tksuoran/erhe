@@ -860,7 +860,7 @@ public:
         if (m_graphics_device->is_present_target_time_honored()) {
             deadline_offset.source        = erhe::frame_pacing::Deadline_offset_source::estimated;
             deadline_offset.present_queue = erhe::frame_pacing::Present_queue_kind::fifo;
-            const erhe::graphics::Present_calibration& calibration = m_graphics_device->get_present_calibration();
+            const erhe::graphics::Present_calibration calibration = m_graphics_device->get_present_calibration();
             if (calibration.valid && !variable_refresh) {
                 deadline_offset.calibrated_period = calibration.period;
                 deadline_offset.initial           = calibration.deadline_offset;
@@ -3257,6 +3257,20 @@ public:
                             apply_display_presentation(presentation);
                         }
                     );
+                    // A deadline estimate held at the calibrated ceiling means
+                    // the present calibration is stale-low (the compositor got
+                    // slower): its cache entry is deleted so the next start
+                    // measures; this session keeps the estimate
+                    // (doc/erhe/graphics.md "Present calibration cache").
+                    m_frame_pacing_observer.set_deadline_ceiling_callback(
+                        [this](const double deadline_offset) {
+                            const std::string reason = fmt::format(
+                                "deadline estimate held at its calibrated ceiling {:.3f} ms (stale-low)",
+                                deadline_offset * 1000.0
+                            );
+                            static_cast<void>(m_graphics_device->remove_present_calibration_cache_entry(reason));
+                        }
+                    );
                 }
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -4017,6 +4031,7 @@ public:
         if (m_graphics_device) {
             // The presentation callback reaches this editor's pacer.
             m_graphics_device->get_display_refresh_resolver().set_presentation_callback({});
+            m_frame_pacing_observer.set_deadline_ceiling_callback({});
             m_graphics_device->wait_idle();
         }
 

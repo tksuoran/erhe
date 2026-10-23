@@ -1,5 +1,5 @@
 {
-    "_version": 2,
+    "_version": 3,
     "initial_clear": true,
     "renderdoc_capture_support": false,
     "renderdoc_library_path_override_enable": false,
@@ -13,6 +13,7 @@
     "frame_pacing_tier": "auto",
     "display_refresh_source": "auto",
     "display_refresh_override_hz": 0.0,
+    "present_calibration_cache": true,
     "opengl": {
         "_version": 2,
         "force_bindless_textures_off": false,

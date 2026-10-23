@@ -12,6 +12,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct Graphics_config;
@@ -24,6 +25,10 @@ namespace erhe::graphics {
 class Display_refresh_report;
 class Display_refresh_resolver;
 class Present_calibration;
+class Present_calibration_state;
+class Present_calibration_summary;
+class Present_calibration_store;
+enum class Present_path : unsigned int;
 
 class Format_properties
 {
@@ -849,10 +854,40 @@ public:
     [[nodiscard]] auto is_present_target_time_honored       () const -> bool;
     // Present calibration (present_calibration.hpp): measured at device
     // init by a backend whose presentation path honors target present times
-    // (Metal tier M); not done elsewhere. Written once during device init,
-    // read-only afterwards.
-    [[nodiscard]] auto get_present_calibration              () const -> const Present_calibration&;
-    void               set_present_calibration              (const Present_calibration& calibration);
+    // (Metal tier M, Vulkan VK_GOOGLE_display_timing), or adopted from the
+    // present calibration cache (present_calibration_cache.hpp,
+    // doc/erhe/graphics.md "Present calibration cache"); not done elsewhere.
+    // A display change re-reads it from the cache or clears it
+    // (refresh_present_calibration_for_display). Thread-safe; the getters
+    // return copies.
+    [[nodiscard]] auto get_present_calibration              () const -> Present_calibration;
+    [[nodiscard]] auto get_present_calibration_state        () const -> Present_calibration_state;
+    // Allocation-free summary (source, measurement time, cache file) for
+    // per-frame UI.
+    void               get_present_calibration_summary      (Present_calibration_summary& out) const;
+    // The request offset of a valid calibration (seconds before the target
+    // vsync); nullopt: the backend's default. Read by the thread that
+    // presents.
+    [[nodiscard]] auto get_present_request_offset           () const -> std::optional<double>;
+    // Backend, device init: the calibration's cache key for the window's
+    // display and the backend's GPU and present path; on a cache hit the
+    // entry is adopted into in_out (its prewarm rate kept) and true is
+    // returned, so the backend skips the probes.
+    [[nodiscard]] auto begin_present_calibration            (erhe::window::Context_window* window, std::string_view gpu_name, Present_path present_path, Present_calibration& in_out) -> bool;
+    // Backend, device init: the probes' result; written to the cache when
+    // valid.
+    void               finish_present_calibration           (const Present_calibration& result);
+    // Backend, on the window's display-changed callback (main thread): the
+    // key is recomputed; a changed key adopts the cached entry for it or
+    // clears the calibration. True when the calibration changed (the caller
+    // then re-applies the presentation, Display_refresh_resolver).
+    [[nodiscard]] auto refresh_present_calibration_for_display() -> bool;
+    // Deletes the current key's cache entry, so the next start measures:
+    // stale evidence (the deadline estimate stuck at its ceiling) or an
+    // explicit re-measure (MCP recalibrate_present, Settings window). The
+    // running session keeps its calibration. Returns the deleted file name,
+    // empty when there was none.
+    auto               remove_present_calibration_cache_entry(std::string_view reason) -> std::string;
 
     // Returns the underlying GPU and OS-platform handles needed to populate
     // XrGraphicsBinding*KHR structs. Backend-neutral: Vulkan backend fills
@@ -871,7 +906,7 @@ private:
     // window's display mode) and the resolver applies to the recorder.
     std::unique_ptr<erhe::frame_pacing::Frame_time_recorder> m_frame_time_recorder;
     std::unique_ptr<Display_refresh_resolver>                 m_display_refresh_resolver;
-    std::unique_ptr<Present_calibration>                      m_present_calibration;
+    std::unique_ptr<Present_calibration_store>                m_present_calibration_store;
     std::int64_t                 m_present_prewarm_frame_id{-1};
     double                       m_present_prewarm_seconds {0.0};
     std::unique_ptr<Device_impl> m_impl;

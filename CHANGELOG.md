@@ -9,6 +9,31 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: present calibration cache (`present_calibration_cache.hpp`,
+  doc/erhe/graphics.md "Present calibration cache"): `Present_calibration_key`
+  and `query_present_calibration_key()` (Apple: CGDisplay identity and mode,
+  NSScreen refresh range, window mode, OS build, GPU name, `Present_path`,
+  `c_present_calibration_version`), `get_present_calibration_key_hash()`,
+  `make_present_calibration_cache_path()`,
+  `read_present_calibration_cache_file()` /
+  `write_present_calibration_cache_file()` (`Present_calibration_cache_entry`),
+  `Present_calibration_store` (with this session's calibrations per key),
+  `Present_calibration_key_query`, `Present_calibration_state`,
+  `Present_calibration_summary` and `Present_calibration_source`;
+  `Device::get_present_calibration_state()`,
+  `get_present_calibration_summary()`,
+  `get_present_request_offset()`, `begin_present_calibration()`,
+  `finish_present_calibration()`, `refresh_present_calibration_for_display()`
+  and `remove_present_calibration_cache_entry()`; `Graphics_config` version 3
+  field `present_calibration_cache` (environment override
+  `ERHE_PRESENT_CALIBRATION_CACHE=0`);
+  `Display_refresh_resolver::notify_presentation()`.
+- `erhe::frame_pacing`: `Frame_pacer_tunables::deadline_ceiling_sustain_samples`,
+  `Frame_pacer_tunables::deadline_ceiling_tolerance`,
+  `Frame_pacer::is_deadline_offset_ceiling_sustained()`,
+  `Frame_pacer::get_tunables()` and
+  `Frame_pacing_observer::set_deadline_ceiling_callback()`.
+
 - `erhe::graphics`: `Device::get_debug_state()` returns a
   `Device_debug_state` (open and unretired frames, uncompleted command
   buffers, queued completion handlers, ring buffer count, busy ring buffers
@@ -652,6 +677,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `Device::get_present_calibration()` returns a copy (the
+  calibration changes at run time on a display change);
+  `Device::set_present_calibration()` is replaced by
+  `begin_present_calibration()` / `finish_present_calibration()`;
+  `Display_refresh_resolver::set_window_presentation()` returns whether the
+  presentation changed.
 - `erhe::primitive`: the primitive builder normalizes `WEIGHTS_0` (skinned
   meshes whose authored weights did not sum to one, or whose unorm8
   rounding did not, render slightly differently); the joint boxes include a

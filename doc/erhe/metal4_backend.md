@@ -283,7 +283,8 @@ commits, then calls `queue->signalDrawable(drawable)` and presents with the
 drawable's own `presentAtTime(target - request offset)` (tier M with a
 target) or `present()`. `present_request_time` / `present_return_time`
 bracket the commit and the present. The present calibration probes present
-the same way.
+the same way; their result is cached under the present path `metal4`
+(`doc/erhe/graphics.md` "Present calibration cache").
 
 The split exists because MTL4 has no drawable wait inside a command buffer:
 `queue->wait(drawable)` holds back the whole commit after it and every later

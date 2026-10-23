@@ -401,6 +401,13 @@ period matches the calibrated one). It is logged
 occluded window) or without an on-target request offset it logs why and tier M keeps the quarter period and the
 estimator's 2.5 ms start.
 
+A valid result is cached per display, display mode, OS build, GPU and present
+path, and a later start on the same combination adopts it instead of running
+the probes (the pre-warm rate is measured every start, and logged on its own
+line); a display, mode or fullscreen change adopts the calibration of the new
+key (this session's, else the cached entry) or clears it
+(`doc/erhe/graphics.md` "Present calibration cache").
+
 Tier M also starts the clock monitor (`Clock_monitor`,
 `clock_monitor_apple.mm`). macOS has no public API for GPU or CPU clocks;
 the monitor resolves the private IOReport framework with `dlopen` - "GPU

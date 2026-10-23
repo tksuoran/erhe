@@ -131,6 +131,12 @@ public:
     std::size_t deadline_evidence_band{4};      // samples (by margin) in a deadline band
     std::size_t deadline_evidence_min_late{2};  // late frames a deadline band needs
     double      deadline_offset_decay{0.0000001};// decay per feedback toward the evidence (s)
+    // A host-measured ceiling (deadline_offset_max > 0) that the estimate
+    // sits at for this many consecutive deadline samples means the host's
+    // measurement is stale-low: the presentation path is slower than it was
+    // measured (is_deadline_offset_ceiling_sustained).
+    std::size_t deadline_ceiling_sustain_samples{240};
+    double      deadline_ceiling_tolerance{0.0001}; // s: "at the ceiling" within this (the estimate decays between raises)
     double      grid_tracker_gain {0.2};        // vsync grid phase PLL gain
     double      grid_period_gain  {0.01};       // vsync grid period tracker gain (per cycle)
     double      grid_period_max_dev{0.005};     // tracked period clamp, fraction of the reference period
@@ -283,6 +289,11 @@ public:
     [[nodiscard]] auto get_grid_phase      () const -> double { return m_grid_phase; }
     [[nodiscard]] auto get_grid_period     () const -> double { return m_grid_period; }
     [[nodiscard]] auto get_deadline_offset () const -> double { return m_deadline_offset; }
+    [[nodiscard]] auto get_tunables        () const -> const Frame_pacer_tunables& { return m_tunables; }
+    // The estimate sat at a host-measured ceiling for
+    // deadline_ceiling_sustain_samples consecutive deadline samples (never
+    // with the default ceiling). Stays true until a swapchain recreation.
+    [[nodiscard]] auto is_deadline_offset_ceiling_sustained() const -> bool { return m_deadline_ceiling_run >= m_tunables.deadline_ceiling_sustain_samples; }
     [[nodiscard]] auto get_frame_stats     (std::int64_t frame_id) const -> Frame_stats;
     [[nodiscard]] auto get_upshift_state   () const -> Upshift_state;
 
@@ -363,6 +374,7 @@ private:
     std::int64_t m_feedback_slot_previous{0};
     double m_deadline_offset{0.0}; // delta_pe estimate
     double m_deadline_offset_max{0.0};
+    std::size_t m_deadline_ceiling_run{0}; // consecutive deadline samples at a host-measured ceiling
     std::vector<Deadline_sample> m_deadline_samples;        // ring, capacity tunables.history
     std::vector<Deadline_sample> m_deadline_samples_scratch; // sort scratch for deadline_evidence()
     std::size_t                  m_deadline_sample_head {0};

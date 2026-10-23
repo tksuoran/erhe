@@ -13,6 +13,8 @@
 #include "windows/input_bindings_window.hpp"
 #include "windows/inventory_window.hpp"
 
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/present_calibration_cache.hpp"
 #include "config/generated/camera_controls_config_serialization.hpp"
 #include "config/generated/content_edge_lines_config_serialization.hpp"
 #include "config/generated/ddgi_config_serialization.hpp"
@@ -221,6 +223,39 @@ void Settings_window::imgui()
     
     add_entry("Headlight When Unlit", [&graphics]() {
         ImGui::Checkbox("##", &graphics.headlight_when_unlit);
+    });
+
+    // The present calibration (doc/erhe/graphics.md "Present calibration
+    // cache"): where it came from, and an explicit re-measure - deleting the
+    // cache entry makes the next start run the probes (a compositor that got
+    // faster is not detectable live).
+    add_entry("Present Calibration", [this]() {
+        if (m_context.graphics_device == nullptr) {
+            return;
+        }
+        // Fixed-capacity summary: no allocation per ImGui frame.
+        erhe::graphics::Present_calibration_summary summary{};
+        m_context.graphics_device->get_present_calibration_summary(summary);
+        if (!summary.done) {
+            ImGui::TextUnformatted("none on this presentation path");
+            return;
+        }
+        ImGui::Text(
+            "%s%s %s %s",
+            erhe::graphics::c_str(summary.source),
+            summary.valid ? "" : " (not valid)",
+            summary.measured_utc.data(),
+            summary.cache_file.data()
+        );
+        if (ImGui::Button("Re-measure at Next Start")) {
+            const std::string deleted = m_context.graphics_device->remove_present_calibration_cache_entry("re-measure (Settings window)");
+            m_present_calibration_feedback = deleted.empty()
+                ? std::string{"no cache entry to delete"}
+                : ("entry deleted: " + deleted + "; the next start measures");
+        }
+        if (!m_present_calibration_feedback.empty()) {
+            ImGui::TextUnformatted(m_present_calibration_feedback.c_str());
+        }
     });
 
     auto& graphics_presets = graphics.graphics_presets;
