@@ -478,7 +478,8 @@ public:
     // m1_us / m2_us / render_us bracket frame_overlap_phase(),
     // frame_prepare_phase() and frame_render_phase()
     // (doc/editor/render_thread.md section 2.1); run()'s frame start and
-    // poll_events wait are outside frame() entirely.
+    // poll_events wait are outside frame() entirely. full_tick_us runs from
+    // the frame start to the end of frame(), so it is the loop period.
     struct Phase_timing {
         double frame_start_wait_us {0.0}; // Device::wait_for_frame_start + frame pacing waits (start_frame(), before run()'s poll)
         double slot_acquire_us     {0.0}; // Device::acquire_frame_slot alone (part of M2)
@@ -497,7 +498,7 @@ public:
         double render_us           {0.0}; // R render
         double swapchain_us        {0.0}; // wait_for_swapchain + begin_swapchain (both part of R)
         double join_wait_us        {0.0}; // main thread blocked joining the previous frame's R (Render_thread::join() in M1, or in Render_thread::kick() with frame pipelining); R minus join_wait = overlapped R
-        double full_tick_us        {0.0};
+        double full_tick_us        {0.0}; // start_frame() begin to frame() end: frame start wait + poll + frame()
         unsigned int frame_count   {0};
     };
     Phase_timing m_phase_timing{};
@@ -579,7 +580,6 @@ public:
         m_in_tick.store(true);
         std::lock_guard<std::mutex> lock{m_mutex};
         Frame_packet& packet = m_frame_packet;
-        const std::chrono::steady_clock::time_point frame_begin = std::chrono::steady_clock::now();
 
         ERHE_PROFILE_FUNCTION();
 
@@ -635,7 +635,7 @@ public:
             kick_frame(packet);
         }
 
-        log_phase_timing(frame_begin);
+        log_phase_timing(m_frame_start_begin);
         m_in_tick.store(false);
     }
 
@@ -1141,10 +1141,10 @@ public:
         ERHE_PROFILE_SCOPE("frame start");
         Frame_packet& packet = m_frame_packet;
         erhe::log::set_breadcrumb("tick: wait_for_frame_start");
-        const std::chrono::steady_clock::time_point frame_start_begin = std::chrono::steady_clock::now();
+        m_frame_start_begin = std::chrono::steady_clock::now();
         packet.device_frame_id    = m_graphics_device->wait_for_frame_start();
         packet.display_advance_ns = frame_start_pacing(packet);
-        m_phase_timing.frame_start_wait_us += elapsed_us(frame_start_begin, std::chrono::steady_clock::now());
+        m_phase_timing.frame_start_wait_us += elapsed_us(m_frame_start_begin, std::chrono::steady_clock::now());
         m_frame_started = true;
     }
 
@@ -5320,6 +5320,7 @@ public:
     // swapchain timing query.
     erhe::frame_pacing::Slop_servo_pacer                     m_slop_servo{erhe::frame_pacing::Slop_servo_tunables{}, 1.0 / 60.0};
     bool                                                     m_frame_started{false}; // start_frame() ran for the frame the next frame() runs
+    std::chrono::steady_clock::time_point                    m_frame_start_begin{};   // start_frame() of the frame frame() runs; the phase log's full tick starts here
     double                                                   m_slop_servo_last_tick_time{0.0};
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;

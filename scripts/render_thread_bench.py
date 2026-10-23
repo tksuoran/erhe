@@ -231,8 +231,8 @@ def run_once(args: argparse.Namespace, runs_root: Path, config_name: str, index:
     if not args.keep_vsync:
         overrides.append("erhe_graphics.json:force_disable_vsync=true")
         # The frame pacer (tier S slop servo when the device lacks present
-        # timing) sleeps in the frame start even with vsync off; that wait
-        # is outside the phase log's full tick, so an unpaced run turns it off.
+        # timing) would pace the frame start; an unpaced run turns it off
+        # (force_disable_vsync alone also resolves the tier to off).
         overrides.append("erhe_graphics.json:frame_pacing_tier=off")
     run_dir = make_run_dir(args, runs_root, name, overrides)
     editor = find_editor(args)
