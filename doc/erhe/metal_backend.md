@@ -606,6 +606,21 @@ returns the chunk. GPU ticks convert to nanoseconds by the ratio of
 `MTL::Device::sampleTimestamps` CPU and GPU deltas since the pool was created
 (1:1 on Apple silicon).
 
+In a Tracy build (`ERHE_PROFILE_LIBRARY=tracy`) the pool also owns a Tracy
+GPU context ("erhe Metal queue"), and `erhe::graphics::Scoped_gpu_zone` is a
+Tracy GPU zone recorded as one more record on the command buffer: its begin
+and end resolve to encoder boundaries by the rules above, encoders are
+sampled while a Tracy profiler is connected (`TRACY_ON_DEMAND`) even with no
+`Gpu_timer`, and the completion handler sends the two samples as the zone's
+GPU times. A zone whose samples the GPU did not write (no sampled encoder
+inside it, an encoder without work, no free sample chunk or chunk space,
+its command buffer dropped without submit) still gets both times, zero
+length at the command buffer's latest resolved sample or at the resolve
+time, so Tracy closes it; with the command buffer's record array full the
+zone records nothing. A zone ends before its command buffer's submit. The
+context follows `tracy/TracyMetal.hmm`: GPU times are raw ticks with a
+period of 1 ns.
+
 ### Deferred GPU Resource Destruction
 
 Metal resources (buffers, textures, samplers, render pipelines, depth-stencil
