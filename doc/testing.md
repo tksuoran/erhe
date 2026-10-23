@@ -145,6 +145,24 @@ Run via `ctest` from the build directory, or invoke the
 `.../bin/<config>/erhe_<name>_tests.exe` binary directly. Run suites serially
 and fix one failure at a time -- an abort hides the rest of the run.
 
+Pick the set by what the change touches. The full suite (about 15 minutes on
+an M4 Pro Debug tree) is for a change to a shared library that the
+deviceless suites exercise (`erhe::geometry`, `erhe::scene`, `erhe::item`,
+`erhe::math`, ...). A change confined to a graphics backend
+(`erhe_graphics/vulkan/`, `metal/`, `metal4/`, `gl/`) or to
+`erhe::graphics` itself can only break the suites that bring up a `Device`,
+which are exactly the two labels: `ctest -L "gpu|editor" -j1` (about 8.5
+minutes: `erhe_graphics_gpu_tests` 7 minutes, `mcp_server_tests` 1 minute,
+the renderer, scene renderer and rendergraph GPU suites under half a minute
+together). The deviceless suites cannot see a backend change; the build is
+their check. For a change inside one backend subsystem, run that
+subsystem's cases first (`erhe_graphics_gpu_tests --gtest_filter=
+'Draw_indirect_test.*'`, `'Gpu_timer*'`, `'Material_set_gpu_test.*'`, the
+`Gpu_test.*` image cases) and the labelled set before the commit. A backend
+change still needs the image gate of its backend (byte-identical renders
+against the reference backend, `doc/editor/render_thread.md` "Metal") in
+addition to the tests, since the goldens cover the test scenes only.
+
 `erhe_graphics_gpu_tests` also asserts golden buffers and images. Each run
 writes `gpu_test_results/results.json` plus per-test artifacts under the
 working directory (or `ERHE_GPU_TEST_RESULTS_DIR`);
