@@ -8,6 +8,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -22,24 +23,46 @@ namespace erhe::graphics {
 
 namespace {
 
+// What a blit accesses: a texture (the Vulkan blit encoder transitions it
+// from its tracked layout to the transfer layout and back to a shader
+// readable one), or buffers only (Vulkan records no barrier: the
+// application's memory_barrier / buffer_barrier orders them).
+enum class Blit_access : unsigned int {
+    texture,
+    buffers
+};
+
 // RAII helper used by each blit method: one MTL4 compute encoder (blits
 // are compute encoder commands under MTL4) on the cb's MTL4::CommandBuffer,
-// started with the queue barrier every encoder starts with and ended when
-// the scope ends. The cb is owned by the caller's Command_buffer; this
-// scope never commits.
+// ended when the scope ends. A texture blit is ordered as Vulkan's layout
+// transitions order it: every earlier access before the blit (the
+// transition out of the tracked layout covers whatever accessed it) - a
+// consumer barrier at the start of the encoder - and the blit before every
+// later access (the transition back) - a producer barrier before its end.
+// The cb is owned by the
+// caller's Command_buffer; this scope never commits.
 class Recording_scope final
 {
 public:
-    explicit Recording_scope(Command_buffer& command_buffer)
+    Recording_scope(Command_buffer& command_buffer, const Blit_access access)
+        : m_command_buffer_impl{command_buffer.get_impl()}
+        , m_access             {access}
     {
-        MTL4::CommandBuffer* const mtl_command_buffer = command_buffer.get_impl().get_mtl4_command_buffer();
+        MTL4::CommandBuffer* const mtl_command_buffer = m_command_buffer_impl.get_mtl4_command_buffer();
         ERHE_VERIFY(mtl_command_buffer != nullptr);
         m_encoder = mtl_command_buffer->computeCommandEncoder();
         ERHE_VERIFY(m_encoder != nullptr);
-        command_buffer.get_impl().encode_start_barriers(m_encoder);
+        if (m_access == Blit_access::texture) {
+            m_command_buffer_impl.encode_start_barriers(m_encoder, c_all_stages, c_stage_blit);
+        } else {
+            m_command_buffer_impl.encode_start_barriers(m_encoder);
+        }
     }
     ~Recording_scope() noexcept
     {
+        if (m_access == Blit_access::texture) {
+            encode_producer_barrier(m_encoder, c_stage_blit, c_all_stages);
+        }
         m_encoder->endEncoding();
     }
     Recording_scope(const Recording_scope&)            = delete;
@@ -47,6 +70,8 @@ public:
     Recording_scope(Recording_scope&&)                 = delete;
     Recording_scope& operator=(Recording_scope&&)      = delete;
 
+    Command_buffer_impl&         m_command_buffer_impl;
+    Blit_access                  m_access;
     MTL4::ComputeCommandEncoder* m_encoder{nullptr};
 };
 
@@ -137,7 +162,7 @@ void Blit_command_encoder_impl::blit_framebuffer(
 
     // Same format: a texel copy.
     if (source.texture->pixelFormat() == destination.texture->pixelFormat()) {
-        Recording_scope scope{m_command_buffer};
+        Recording_scope scope{m_command_buffer, Blit_access::texture};
         scope.m_encoder->copyFromTexture(
             source.texture, source.slice, source.level,
             MTL::Origin{static_cast<NS::UInteger>(region.source_origin.x), static_cast<NS::UInteger>(region.source_origin.y), 0},
@@ -173,10 +198,12 @@ void Blit_command_encoder_impl::blit_framebuffer(
     color_attachment->setLoadAction (MTL::LoadActionLoad);
     color_attachment->setStoreAction(MTL::StoreActionStore);
 
+    // As a texture blit (Recording_scope), recorded as a render encoder:
+    // every earlier access before the draw, the draw before every later one.
     MTL4::RenderCommandEncoder* const render_encoder = mtl_command_buffer->renderCommandEncoder(pass_descriptor);
     pass_descriptor->release();
     ERHE_VERIFY(render_encoder != nullptr);
-    cb_impl.encode_start_barriers(render_encoder, Command_buffer_impl::Render_encoder_use::transfer);
+    cb_impl.encode_start_barriers(render_encoder, Command_buffer_impl::Render_encoder_use::transfer, c_all_stages, c_render_encoder_stages);
     render_encoder->setRenderPipelineState(pipeline);
     render_encoder->setViewport(
         MTL::Viewport{
@@ -197,6 +224,7 @@ void Blit_command_encoder_impl::blit_framebuffer(
     argument_table->setAddress(cb_impl.allocate_inline_bytes(&offset, sizeof(offset)), 0);
     render_encoder->setArgumentTable(argument_table, MTL::RenderStageVertex | MTL::RenderStageFragment);
     render_encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger{0}, NS::UInteger{3});
+    encode_producer_barrier(render_encoder, c_render_encoder_stages, c_all_stages);
     render_encoder->endEncoding();
 
     // MTL4 command buffers retain nothing: the view lives until the GPU has
@@ -224,7 +252,7 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
         return;
     }
 
-    Recording_scope scope{m_command_buffer};
+    Recording_scope scope{m_command_buffer, Blit_access::texture};
     MTL4::ComputeCommandEncoder* const blit_encoder = scope.m_encoder;
 
     blit_encoder->copyFromTexture(
@@ -273,7 +301,7 @@ void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& so
         return;
     }
 
-    Recording_scope scope{m_command_buffer};
+    Recording_scope scope{m_command_buffer, Blit_access::texture};
     MTL4::ComputeCommandEncoder* const blit_encoder = scope.m_encoder;
 
     blit_encoder->copyFromBuffer(
@@ -318,7 +346,7 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
         return;
     }
 
-    Recording_scope scope{m_command_buffer};
+    Recording_scope scope{m_command_buffer, Blit_access::texture};
     MTL4::ComputeCommandEncoder* const blit_encoder = scope.m_encoder;
 
     blit_encoder->copyFromTexture(
@@ -354,7 +382,7 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
         return;
     }
 
-    Recording_scope scope{m_command_buffer};
+    Recording_scope scope{m_command_buffer, Blit_access::texture};
     MTL4::ComputeCommandEncoder* const blit_encoder = scope.m_encoder;
 
     blit_encoder->generateMipmaps(mtl_texture);
@@ -376,7 +404,7 @@ void Blit_command_encoder_impl::fill_buffer(
         return;
     }
 
-    Recording_scope scope{m_command_buffer};
+    Recording_scope scope{m_command_buffer, Blit_access::buffers};
     MTL4::ComputeCommandEncoder* const blit_encoder = scope.m_encoder;
 
     blit_encoder->fillBuffer(
@@ -459,7 +487,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
         return;
     }
 
-    Recording_scope scope{m_command_buffer};
+    Recording_scope scope{m_command_buffer, Blit_access::buffers};
     MTL4::ComputeCommandEncoder* const blit_encoder = scope.m_encoder;
 
     blit_encoder->copyFromBuffer(

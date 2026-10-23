@@ -283,9 +283,11 @@ void Command_buffer_impl::upload_to_texture(
     Residency& residency = m_device_impl->get_residency();
     residency.add(staging);
 
+    // As Vulkan's transitions around the copy: every earlier access before
+    // the copy, the copy before every shader read.
     MTL4::ComputeCommandEncoder* const blit = command_buffer->computeCommandEncoder();
     ERHE_VERIFY(blit != nullptr);
-    encode_start_barriers(blit);
+    encode_start_barriers(blit, c_all_stages, get_image_layout_stages(Image_layout::transfer_dst_optimal));
     blit->copyFromBuffer(
         staging,
         /*sourceOffset*/        NS::UInteger{0},
@@ -305,6 +307,7 @@ void Command_buffer_impl::upload_to_texture(
             NS::UInteger{0}
         )
     );
+    encode_producer_barrier(blit, c_stage_blit, get_image_layout_stages(Image_layout::shader_read_only_optimal));
     blit->endEncoding();
 
     // The staging buffer lives until the GPU has completed this cb.
@@ -356,9 +359,14 @@ void Command_buffer_impl::clear_texture(const Texture& texture, std::array<doubl
             stencil_att->setClearStencil(static_cast<uint32_t>(clear_value[0]));
             stencil_att->setStoreAction(MTL::StoreActionStore);
         }
+        // The clear is an attachment write of a render encoder: every earlier
+        // access before it, the clear before every later access (Vulkan:
+        // transfer_dst from the tracked layout, then the final layout).
         MTL4::RenderCommandEncoder* encoder = command_buffer->renderCommandEncoder(render_pass_desc);
         if (encoder != nullptr) {
-            encode_start_barriers(encoder, Render_encoder_use::transfer);
+            const std::uint64_t attachment_stages = get_image_usage_stages(Image_usage_flag_bit_mask::depth_stencil_attachment);
+            encode_start_barriers(encoder, Render_encoder_use::transfer, c_all_stages, attachment_stages);
+            encode_producer_barrier(encoder, attachment_stages, c_all_stages);
             encoder->endEncoding();
         }
         render_pass_desc->release();
@@ -445,13 +453,14 @@ void Command_buffer_impl::clear_texture(const Texture& texture, std::array<doubl
         residency.add(staging);
         MTL4::ComputeCommandEncoder* const blit = command_buffer->computeCommandEncoder();
         ERHE_VERIFY(blit != nullptr);
-        encode_start_barriers(blit);
+        encode_start_barriers(blit, c_all_stages, c_stage_blit);
         blit->copyFromBuffer(
             staging, 0, bytes_per_row, 0,
             MTL::Size(width, height, 1),
             mtl_texture, 0, 0,
             MTL::Origin(0, 0, 0)
         );
+        encode_producer_barrier(blit, c_stage_blit, c_all_stages);
         blit->endEncoding();
 
         add_completed_callback(
@@ -466,149 +475,86 @@ void Command_buffer_impl::clear_texture(const Texture& texture, std::array<doubl
     }
 }
 
-void Command_buffer_impl::transition_texture_layout(const Texture& /*texture*/, Image_layout /*new_layout*/)
+void Command_buffer_impl::transition_texture_layout(const Texture& /*texture*/, const Image_layout new_layout)
 {
-    // Metal manages image layouts implicitly. Nothing to record here.
+    // MTL4 has no image layouts; the transition's dependency stays. Only the
+    // destination is named: the source is every stage, as Vulkan's
+    // transition from the tracked layout covers whatever accessed it.
+    add_stage_barrier(c_all_stages, get_image_layout_stages(new_layout), Barrier_scope::command_buffer);
 }
 
-namespace {
-
-constexpr std::uint64_t c_render_encoder_stages =
-    MTL::StageVertex | MTL::StageFragment | MTL::StageTile | MTL::StageObject | MTL::StageMesh;
-constexpr std::uint64_t c_compute_encoder_stages =
-    MTL::StageDispatch | MTL::StageBlit | MTL::StageAccelerationStructure;
-
-// The MTL::Stages of the shader accesses of one barrier side: the stages its
-// vertex_shader / fragment_shader / compute_shader qualifiers name, every
-// shader stage without one. Image and buffer qualifiers share their bits.
-[[nodiscard]] auto get_barrier_shader_stages(const std::uint64_t usage) -> std::uint64_t
-{
-    static_assert(Image_usage_flag_bit_mask::vertex_shader   == Buffer_usage_flag_bit_mask::vertex_shader);
-    static_assert(Image_usage_flag_bit_mask::fragment_shader == Buffer_usage_flag_bit_mask::fragment_shader);
-    static_assert(Image_usage_flag_bit_mask::compute_shader  == Buffer_usage_flag_bit_mask::compute_shader);
-    if ((usage & Image_usage_flag_bit_mask::shader_stages) == 0) {
-        return MTL::StageVertex | MTL::StageFragment | MTL::StageDispatch;
-    }
-    std::uint64_t stages = 0;
-    if ((usage & Image_usage_flag_bit_mask::vertex_shader) != 0) {
-        stages |= MTL::StageVertex;
-    }
-    if ((usage & Image_usage_flag_bit_mask::fragment_shader) != 0) {
-        stages |= MTL::StageFragment;
-    }
-    if ((usage & Image_usage_flag_bit_mask::compute_shader) != 0) {
-        stages |= MTL::StageDispatch;
-    }
-    return stages;
-}
-
-[[nodiscard]] auto get_image_usage_stages(const std::uint64_t usage) -> std::uint64_t
-{
-    std::uint64_t stages = 0;
-    if ((usage & (Image_usage_flag_bit_mask::transfer_src | Image_usage_flag_bit_mask::transfer_dst)) != 0) {
-        stages |= MTL::StageBlit;
-    }
-    if ((usage & (Image_usage_flag_bit_mask::sampled | Image_usage_flag_bit_mask::storage | Image_usage_flag_bit_mask::input_attachment)) != 0) {
-        stages |= get_barrier_shader_stages(usage);
-    }
-    if ((usage & (Image_usage_flag_bit_mask::color_attachment | Image_usage_flag_bit_mask::depth_stencil_attachment)) != 0) {
-        // Attachment loads, depth / stencil tests, stores and resolves all
-        // happen in the fragment stage of the pass (tile memory loads at its
-        // start, stores and resolves at its end), so the fragment stage is the
-        // producer and the consumer stage of an attachment access.
-        stages |= MTL::StageFragment;
-    }
-    // none, present (the drawable is ordered by the queue's drawable wait),
-    // host_transfer and fragment_density_map are no GPU stage of this queue;
-    // discard changes nothing here (no layouts).
-    return stages;
-}
-
-[[nodiscard]] auto get_buffer_usage_stages(const std::uint64_t usage) -> std::uint64_t
-{
-    std::uint64_t stages = 0;
-    if ((usage & (Buffer_usage_flag_bit_mask::vertex | Buffer_usage_flag_bit_mask::index)) != 0) {
-        stages |= MTL::StageVertex;
-    }
-    if ((usage & Buffer_usage_flag_bit_mask::indirect) != 0) {
-        // Draw arguments (and indirect command buffer ranges) are read at the
-        // vertex stage, dispatch arguments at the dispatch stage; like Vulkan's
-        // DRAW_INDIRECT, the access is not qualified by a shader stage.
-        stages |= MTL::StageVertex | MTL::StageDispatch;
-    }
-    const std::uint64_t shader_accesses =
-        Buffer_usage_flag_bit_mask::uniform       |
-        Buffer_usage_flag_bit_mask::storage_read  |
-        Buffer_usage_flag_bit_mask::storage_write |
-        Buffer_usage_flag_bit_mask::acceleration_structure_read;
-    if ((usage & shader_accesses) != 0) {
-        stages |= get_barrier_shader_stages(usage);
-    }
-    if ((usage & (Buffer_usage_flag_bit_mask::transfer_src | Buffer_usage_flag_bit_mask::transfer_dst)) != 0) {
-        stages |= MTL::StageBlit;
-    }
-    const std::uint64_t build_accesses =
-        Buffer_usage_flag_bit_mask::acceleration_structure_build_input |
-        Buffer_usage_flag_bit_mask::acceleration_structure_read        |
-        Buffer_usage_flag_bit_mask::acceleration_structure_write;
-    if ((usage & build_accesses) != 0) {
-        stages |= MTL::StageAccelerationStructure;
-    }
-    // host_read / host_write: ordered by command buffer completion and commit.
-    return stages;
-}
-
-void encode_queue_stage_barrier(MTL4::CommandEncoder* const encoder, const std::uint64_t after_stages, const std::uint64_t before_stages)
-{
-    encoder->barrierAfterQueueStages(
-        static_cast<MTL::Stages>(after_stages),
-        static_cast<MTL::Stages>(before_stages),
-        MTL4::VisibilityOptionDevice
-    );
-}
-
-} // anonymous namespace
-
-void Command_buffer_impl::add_barrier(const std::uint64_t after_stages, const std::uint64_t before_stages, const Barrier_scope scope)
+void Command_buffer_impl::add_stage_barrier(const std::uint64_t after_stages, const std::uint64_t before_stages, const Barrier_scope scope)
 {
     if ((after_stages == 0) || (before_stages == 0)) {
         return; // no GPU producer or no GPU consumer on this queue
     }
-    const std::uint64_t render_before  = before_stages & c_render_encoder_stages;
-    const std::uint64_t compute_before = before_stages & c_compute_encoder_stages;
 
-    // Every barrier waits for the next encoder of its consumer's kind, which
-    // orders the consumers recorded in later encoders.
-    if (render_before != 0) {
-        m_pending_render_barrier.after_stages  |= after_stages;
-        m_pending_render_barrier.before_stages |= render_before;
-    }
-    if (compute_before != 0) {
-        m_pending_compute_barrier.after_stages  |= after_stages;
-        m_pending_compute_barrier.before_stages |= compute_before;
-    }
-
-    // With a compute encoder open (recorded on this thread into this cb) a
-    // compute consumer may also be a later dispatch of the same encoder:
-    // order it there at once. barrierAfterEncoderStages orders against the
-    // encoder's own earlier dispatches; for earlier_submissions the producer
-    // is in an earlier commit, which the consumer barrier on the queue
-    // (barrierAfterQueueStages) orders. Both are encoded for that scope:
-    // Apple documents the queue barrier for work before the current encoder
-    // only.
+    // With a compute encoder open (recorded on this thread into this cb) the
+    // barrier is encoded there at once: the later dispatches of the encoder
+    // wait - barrierAfterEncoderStages for the producer stages the encoder
+    // itself runs (its earlier dispatches), the consumer barrier for the
+    // rest (earlier encoders) and for earlier_submissions (earlier commits)
+    // - and the producer barrier orders every later encoder.
     MTL4::ComputeCommandEncoder* const compute_encoder = Compute_command_encoder_impl::get_active_mtl_encoder();
-    if ((compute_encoder != nullptr) && (compute_before != 0)) {
+    if (compute_encoder != nullptr) {
         const Command_buffer* const encoder_command_buffer = Compute_command_encoder_impl::get_active_command_buffer();
         ERHE_VERIFY((encoder_command_buffer != nullptr) && (&encoder_command_buffer->get_impl() == this));
-        compute_encoder->barrierAfterEncoderStages(
-            static_cast<MTL::Stages>(after_stages),
-            static_cast<MTL::Stages>(compute_before),
-            MTL4::VisibilityOptionDevice
-        );
-        if (scope == Barrier_scope::earlier_submissions) {
-            encode_queue_stage_barrier(compute_encoder, after_stages, compute_before);
+        const std::uint64_t compute_before = before_stages & c_compute_encoder_stages;
+        const std::uint64_t encoder_after  = after_stages  & c_compute_encoder_stages;
+        if (compute_before != 0) {
+            if (encoder_after != 0) {
+                compute_encoder->barrierAfterEncoderStages(
+                    static_cast<MTL::Stages>(encoder_after),
+                    static_cast<MTL::Stages>(compute_before),
+                    MTL4::VisibilityOptionDevice
+                );
+            }
+            if ((scope == Barrier_scope::earlier_submissions) || (encoder_after != after_stages)) {
+                encode_consumer_barrier(compute_encoder, after_stages, compute_before);
+            }
         }
+        encode_producer_barrier(compute_encoder, after_stages, before_stages);
+        return;
     }
+
+    // Between encoders: pending for the next encoder (encode_start_barriers),
+    // whatever its kind.
+    m_pending_barrier.after_stages  |= after_stages;
+    m_pending_barrier.before_stages |= before_stages;
+}
+
+void Command_buffer_impl::encode_pending_barriers(
+    MTL4::CommandEncoder* const encoder,
+    const std::uint64_t         encoder_stages,
+    const std::uint64_t         consumer_after_stages,
+    const std::uint64_t         consumer_before_stages
+)
+{
+    ERHE_VERIFY(encoder != nullptr);
+    std::uint64_t consumer_after  = consumer_after_stages;
+    std::uint64_t consumer_before = consumer_before_stages;
+    const bool    has_pending     = (m_pending_barrier.before_stages != 0);
+    // The pending barriers' consumers in this encoder: a consumer barrier
+    // orders the current encoder only.
+    if (has_pending && ((m_pending_barrier.before_stages & encoder_stages) != 0)) {
+        consumer_after  |= m_pending_barrier.after_stages;
+        consumer_before |= (m_pending_barrier.before_stages & encoder_stages);
+    }
+    if ((consumer_after != 0) && (consumer_before != 0)) {
+        encode_consumer_barrier(encoder, consumer_after, consumer_before);
+    }
+    // Their consumers in every later encoder, of this cb and of later
+    // commits: the producer barrier, which covers the work of the prior
+    // encoders.
+    if (has_pending) {
+        encode_producer_barrier(encoder, m_pending_barrier.after_stages, m_pending_barrier.before_stages);
+        m_pending_barrier = Pending_barrier{};
+    }
+}
+
+void Command_buffer_impl::add_image_usage_barrier(const std::uint64_t usage_before, const std::uint64_t usage_after, const Barrier_scope scope)
+{
+    add_stage_barrier(get_image_usage_stages(usage_before), get_image_usage_stages(usage_after), scope);
 }
 
 void Command_buffer_impl::texture_barrier(
@@ -621,63 +567,77 @@ void Command_buffer_impl::texture_barrier(
 {
     // MTL4 has no per-resource barriers and no image layouts: the barrier is
     // a stage barrier, merged with the other pending ones.
-    add_barrier(get_image_usage_stages(usage_before), get_image_usage_stages(usage_after), scope);
+    add_image_usage_barrier(usage_before, usage_after, scope);
 }
 
 void Command_buffer_impl::buffer_barrier(const Buffer& /*buffer*/, const std::uint64_t usage_before, const std::uint64_t usage_after, const Barrier_scope scope)
 {
-    add_barrier(get_buffer_usage_stages(usage_before), get_buffer_usage_stages(usage_after), scope);
+    add_stage_barrier(get_buffer_usage_stages(usage_before), get_buffer_usage_stages(usage_after), scope);
 }
 
-void Command_buffer_impl::encode_start_barriers(MTL4::RenderCommandEncoder* const encoder, const Render_encoder_use use)
+void Command_buffer_impl::encode_start_barriers(
+    MTL4::RenderCommandEncoder* const encoder,
+    const Render_encoder_use          use,
+    const std::uint64_t               consumer_after_stages,
+    const std::uint64_t               consumer_before_stages
+)
 {
-    ERHE_VERIFY(encoder != nullptr);
-    if (is_queue_barrier_enabled()) {
-        encode_queue_barrier(encoder);
-    }
-    if (m_pending_render_barrier.before_stages != 0) {
-        encode_queue_stage_barrier(encoder, m_pending_render_barrier.after_stages, m_pending_render_barrier.before_stages);
-        m_pending_render_barrier = Pending_barrier{};
-    }
-    if (use == Render_encoder_use::transfer) {
+    std::uint64_t consumer_before = consumer_before_stages;
+    if ((use == Render_encoder_use::transfer) && ((m_pending_barrier.before_stages & c_stage_blit) != 0)) {
         // A transfer recorded as a render pass (blit_framebuffer's draw, a
-        // depth / stencil clear): its transfer accesses are blit-stage
-        // consumers of the pending compute barrier, ordered here as render
-        // stages. The pending barrier stays for the compute encoders after it.
-        if ((m_pending_compute_barrier.before_stages & MTL::StageBlit) != 0) {
-            encode_queue_stage_barrier(encoder, m_pending_compute_barrier.after_stages, c_render_encoder_stages);
-        }
+        // depth / stencil clear) runs its transfer accesses in render
+        // stages: a pending blit-stage consumer is ordered as them.
+        consumer_before |= c_render_encoder_stages;
     }
+    const std::uint64_t consumer_after = (consumer_before != consumer_before_stages)
+        ? (consumer_after_stages | m_pending_barrier.after_stages)
+        : consumer_after_stages;
+    encode_pending_barriers(encoder, c_render_encoder_stages, consumer_after, consumer_before);
 }
 
-void Command_buffer_impl::encode_start_barriers(MTL4::ComputeCommandEncoder* const encoder)
+void Command_buffer_impl::encode_start_barriers(
+    MTL4::ComputeCommandEncoder* const encoder,
+    const std::uint64_t                consumer_after_stages,
+    const std::uint64_t                consumer_before_stages
+)
 {
+    encode_pending_barriers(encoder, c_compute_encoder_stages, consumer_after_stages, consumer_before_stages);
+}
+
+void Command_buffer_impl::end_recording_barriers()
+{
+    // A barrier still pending when the command buffer ends: its consumers
+    // are in later commits. One empty compute encoder carries the producer
+    // barrier (it covers the prior encoders and the later commits).
+    if (m_pending_barrier.before_stages == 0) {
+        return;
+    }
+    Scoped_transient_object_pool object_pool{};
+    MTL4::ComputeCommandEncoder* const encoder = m_recording->command_buffer->computeCommandEncoder();
     ERHE_VERIFY(encoder != nullptr);
-    if (is_queue_barrier_enabled()) {
-        encode_queue_barrier(encoder);
-    }
-    if (m_pending_compute_barrier.before_stages != 0) {
-        encode_queue_stage_barrier(encoder, m_pending_compute_barrier.after_stages, m_pending_compute_barrier.before_stages);
-        m_pending_compute_barrier = Pending_barrier{};
-    }
+    encode_producer_barrier(encoder, m_pending_barrier.after_stages, m_pending_barrier.before_stages);
+    encoder->endEncoding();
+    m_pending_barrier = Pending_barrier{};
 }
 
-void Command_buffer_impl::cmd_texture_barrier(std::uint64_t /*usage_before*/, std::uint64_t /*usage_after*/)
+void Command_buffer_impl::cmd_texture_barrier(const std::uint64_t usage_before, const std::uint64_t usage_after)
 {
-    // Every MTL4 encoder starts with a barrier on all earlier work of the
-    // queue (encode_queue_barrier), which covers texture hazards between
-    // encoders.
+    // user_synchronized only steers the render pass end barrier; the stages
+    // are those of the usages (as Vulkan's cmd_texture_barrier).
+    add_image_usage_barrier(
+        usage_before & ~Image_usage_flag_bit_mask::user_synchronized,
+        usage_after  & ~Image_usage_flag_bit_mask::user_synchronized,
+        Barrier_scope::command_buffer
+    );
 }
 
-void Command_buffer_impl::memory_barrier(Memory_barrier_mask /*barriers*/)
+void Command_buffer_impl::memory_barrier(const Memory_barrier_mask barriers)
 {
-    // Between encoders the queue barrier every encoder starts with already
-    // orders the accesses. Inside an open compute encoder of this thread,
-    // the in-encoder barrier.
-    MTL4::ComputeCommandEncoder* const encoder = Compute_command_encoder_impl::get_active_mtl_encoder();
-    if (encoder != nullptr) {
-        encode_intra_encoder_barrier(encoder);
-    }
+    // Vulkan's memory_barrier: every earlier write of every stage before the
+    // accesses the mask names. Pending for the next encoder or, inside an
+    // open compute encoder of this thread, encoded there at once
+    // (add_stage_barrier).
+    add_stage_barrier(c_all_stages, get_memory_barrier_stages(barriers), Barrier_scope::command_buffer);
 }
 
 auto Command_buffer_impl::get_mtl4_command_buffer() noexcept -> MTL4::CommandBuffer*
@@ -832,6 +792,7 @@ auto Command_buffer_impl::end_recording() -> Recording*
         return nullptr;
     }
     Recording* const recording = m_recording;
+    end_recording_barriers();
     recording->command_buffer->endCommandBuffer();
     recording->gpu_timer_samples = m_gpu_timer_samples;
     m_gpu_timer_samples   = Gpu_timer_command_buffer_samples{};
@@ -840,17 +801,6 @@ auto Command_buffer_impl::end_recording() -> Recording*
     m_drawable_prefix_committed = false;
     m_inline_bytes_chunk        = nullptr;
     m_inline_bytes_offset = 0;
-    // A barrier no encoder of this cb consumed orders nothing.
-    if ((m_pending_render_barrier.before_stages != 0) || (m_pending_compute_barrier.before_stages != 0)) {
-        log_render_pass->debug(
-            "Metal 4 command buffer '{}': dropping unconsumed barriers render 0x{:x} -> 0x{:x}, compute 0x{:x} -> 0x{:x}",
-            m_debug_label.data(),
-            m_pending_render_barrier.after_stages,  m_pending_render_barrier.before_stages,
-            m_pending_compute_barrier.after_stages, m_pending_compute_barrier.before_stages
-        );
-    }
-    m_pending_render_barrier  = Pending_barrier{};
-    m_pending_compute_barrier = Pending_barrier{};
     return recording;
 }
 

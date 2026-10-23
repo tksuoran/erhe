@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_swapchain.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/metal4/metal4_command_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
 #include "erhe_graphics/metal4/metal4_submission.hpp"
@@ -333,11 +334,14 @@ void Swapchain_impl::record_capture(const uint64_t frame_id, Command_buffer_impl
         return;
     }
 
+    // The swapchain pass's attachment writes before the copy (its
+    // usage_after, present, names no GPU consumer). The CPU reads the
+    // capture buffer after the commit completed.
     MTL4::ComputeCommandEncoder* blit = command_buffer->computeCommandEncoder();
     if (blit == nullptr) {
         return;
     }
-    command_buffer_impl.encode_start_barriers(blit);
+    command_buffer_impl.encode_start_barriers(blit, c_stage_fragment, c_stage_blit);
     blit->copyFromTexture(
         texture,
         0, // slice
@@ -429,13 +433,14 @@ auto Swapchain_impl::read_back_emulated(uint32_t& out_width, uint32_t& out_heigh
         return false;
     }
 
-    // A fresh command buffer on the one queue the device submits on: its
-    // queue barrier orders this copy after the render that composited the
-    // frame. Diagnostic path, so waiting for it here is fine.
+    // A fresh command buffer on the one queue the device submits on: a
+    // barrier on the queue's earlier fragment work (the render that
+    // composited the frame, in an earlier commit) orders the copy after it.
+    // Diagnostic path, so waiting for it here is fine.
     Recording* const recording = m_device_impl.begin_internal_recording();
     MTL4::ComputeCommandEncoder* blit = recording->command_buffer->computeCommandEncoder();
     ERHE_VERIFY(blit != nullptr);
-    encode_queue_barrier(blit);
+    encode_consumer_barrier(blit, c_stage_fragment, c_stage_blit);
     blit->copyFromTexture(
         texture,
         0, // slice

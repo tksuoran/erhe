@@ -41,9 +41,9 @@
 // and a fast consumer of one resource with the explicit barrier between them,
 // and asserts the consumer saw the producer's result. Texture consumers are
 // compute probes (texelFetch at a 64 x 64 grid of texels, the last texel of
-// each grid cell) that start at once when nothing orders them. On Metal 4 the
-// cases also run with ERHE_METAL4_EXPLICIT_BARRIERS_ONLY=1, which drops the
-// backend's unconditional barriers so only the explicit ones order the work.
+// each grid cell) that start at once when nothing orders them. On Metal 4,
+// which orders nothing it is not told to, only the explicit barrier orders
+// the work (doc/erhe/metal4_backend.md "Encoders and barriers").
 
 namespace erhe::graphics::test {
 
@@ -215,6 +215,37 @@ void main()
 }
 )glsl";
 
+// One point per probe texel: the vertex stage fetches the texel and the
+// point lands on pixel (gx, gy) of a PROBE_GRID x PROBE_GRID target.
+constexpr const char* c_vertex_fetch_vertex_source = R"glsl(
+out gl_PerVertex {
+    vec4  gl_Position;
+    float gl_PointSize;
+};
+layout(location = 0) flat out vec4 v_color;
+float pixel_center_ndc(float pixel)
+{
+    return ((pixel + 0.5) / float(PROBE_GRID)) * 2.0 - 1.0;
+}
+void main()
+{
+    int   gx = gl_VertexID % PROBE_GRID;
+    int   gy = gl_VertexID / PROBE_GRID;
+    ivec2 p  = (ivec2(gx, gy) * PROBE_STRIDE) + ivec2(PROBE_STRIDE - 1);
+    v_color      = texelFetch(s_source, p, 0);
+    gl_Position  = vec4(pixel_center_ndc(float(gx)), float(Y_SIGN) * pixel_center_ndc(float(gy)), 0.0, 1.0);
+    gl_PointSize = 1.0;
+}
+)glsl";
+
+constexpr const char* c_vertex_fetch_fragment_source = R"glsl(
+layout(location = 0) flat in vec4 v_color;
+void main()
+{
+    out_color = v_color;
+}
+)glsl";
+
 [[nodiscard]] auto with_spin(const char* body) -> std::string
 {
     return std::string{c_spin_glsl} + body;
@@ -269,6 +300,17 @@ protected:
         erhe::graphics::Render_pass_descriptor              descriptor{};
     };
 
+    class Vertex_fetch
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Bind_group_layout> layout;
+        std::unique_ptr<erhe::graphics::Sampler>           sampler;
+        std::unique_ptr<erhe::graphics::Shader_stages>     shader_stages;
+        std::unique_ptr<erhe::graphics::Render_pipeline>   pipeline;
+        std::shared_ptr<erhe::graphics::Texture>           output;
+        erhe::graphics::Render_pass_descriptor             descriptor{};
+    };
+
     class Slow_pass
     {
     public:
@@ -301,6 +343,7 @@ protected:
         m_probe.reset();
         m_draw.reset();
         m_slow_pass.reset();
+        m_vertex_fetch.reset();
         m_compute_layout.reset();
         m_src_block.reset();
         m_dst_float_block.reset();
@@ -642,6 +685,157 @@ protected:
         );
     }
 
+    // --- vertex-stage fetch: a render pass whose vertex shader samples ------
+
+    [[nodiscard]] auto make_vertex_fetch(const int texture_size) -> bool
+    {
+        erhe::graphics::Device& graphics_device = device();
+        m_vertex_fetch = std::make_unique<Vertex_fetch>();
+        Vertex_fetch& fetch = *m_vertex_fetch;
+        fetch.sampler = std::make_unique<erhe::graphics::Sampler>(
+            graphics_device,
+            erhe::graphics::Sampler_create_info{
+                .min_filter   = erhe::graphics::Filter::nearest,
+                .mag_filter   = erhe::graphics::Filter::nearest,
+                .mipmap_mode  = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+                .address_mode = {
+                    erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                    erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                    erhe::graphics::Sampler_address_mode::clamp_to_edge
+                },
+                .debug_label  = erhe::utility::Debug_label{"barrier vertex fetch sampler"}
+            }
+        );
+        fetch.layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+            graphics_device,
+            erhe::graphics::Bind_group_layout_create_info{
+                .bindings = {
+                    erhe::graphics::Bind_group_layout_binding{
+                        .binding_point  = 0,
+                        .type           = erhe::graphics::Binding_type::combined_image_sampler,
+                        .sampler_aspect = erhe::graphics::Sampler_aspect::color,
+                        .name           = "s_source",
+                        .glsl_type      = erhe::graphics::Glsl_type::sampler_2d,
+                        .stage_flags    = erhe::graphics::Shader_stage_flags::vertex
+                    }
+                },
+                .debug_label       = erhe::utility::Debug_label{"barrier vertex fetch layout"},
+                .uses_texture_heap = false
+            }
+        );
+        const erhe::math::Coordinate_conventions& conventions = graphics_device.get_info().coordinate_conventions;
+        const char* const y_sign = (conventions.texture_origin == erhe::math::Texture_origin::top_left) ? "-1.0" : "1.0";
+        erhe::graphics::Shader_stages_create_info create_info{
+            .name             = "barrier_vertex_fetch",
+            .defines          = {
+                { "PROBE_GRID",   std::to_string(c_probe_grid)                },
+                { "PROBE_STRIDE", std::to_string(texture_size / c_probe_grid) },
+                { "Y_SIGN",       y_sign                                      }
+            },
+            .fragment_outputs = &m_fragment_outputs,
+            .no_vertex_input  = true,
+            .shaders = {
+                { erhe::graphics::Shader_type::vertex_shader,   std::string_view{c_vertex_fetch_vertex_source}   },
+                { erhe::graphics::Shader_type::fragment_shader, std::string_view{c_vertex_fetch_fragment_source} }
+            },
+            .bind_group_layout = fetch.layout.get()
+        };
+        erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(graphics_device, create_info);
+        if (!prototype.is_valid()) {
+            ADD_FAILURE() << "barrier_vertex_fetch: shader failed to compile/link";
+            return false;
+        }
+        fetch.shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_device, std::move(prototype));
+        fetch.output        = make_color_target(c_probe_grid, c_probe_grid);
+
+        erhe::graphics::Render_pass_descriptor& descriptor = fetch.descriptor;
+        descriptor.color_attachments[0].texture       = fetch.output.get();
+        descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 0.0, 0.0, 0.0, 0.0 };
+        descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+        descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+        descriptor.color_attachments[0].usage_before  = Image_usage::transfer_src;
+        descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::transfer_src_optimal;
+        descriptor.color_attachments[0].usage_after   = Image_usage::transfer_src;
+        descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
+        descriptor.render_target_width  = c_probe_grid;
+        descriptor.render_target_height = c_probe_grid;
+        descriptor.debug_label = erhe::utility::Debug_label{"barrier vertex fetch pass"};
+
+        erhe::graphics::Render_pipeline_create_info pipeline_info;
+        pipeline_info.base.input_assembly                    = erhe::graphics::Input_assembly_state::point;
+        pipeline_info.base.rasterization                     = erhe::graphics::Rasterization_state::cull_mode_none;
+        pipeline_info.base.depth_stencil.depth_test_enable   = false;
+        pipeline_info.base.depth_stencil.depth_write_enable  = false;
+        pipeline_info.base.depth_stencil.stencil_test_enable = false;
+        pipeline_info.base.bind_group_layout                 = fetch.layout.get();
+        pipeline_info.base.color_blend                       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+        pipeline_info.shader_stages                          = fetch.shader_stages.get();
+        pipeline_info.set_format_from_render_pass(descriptor);
+        fetch.pipeline = std::make_unique<erhe::graphics::Render_pipeline>(graphics_device, pipeline_info);
+        return fetch.pipeline->is_valid();
+    }
+
+    void record_vertex_fetch(erhe::graphics::Command_buffer& command_buffer, const erhe::graphics::Texture& texture)
+    {
+        Vertex_fetch& fetch = *m_vertex_fetch;
+        erhe::graphics::Render_pass              render_pass{device(), fetch.descriptor};
+        erhe::graphics::Render_command_encoder   encoder = device().make_render_command_encoder(command_buffer);
+        const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+        encoder.set_viewport_rect(0, 0, c_probe_grid, c_probe_grid);
+        encoder.set_scissor_rect (0, 0, c_probe_grid, c_probe_grid);
+        encoder.set_bind_group_layout(fetch.layout.get());
+        encoder.set_render_pipeline(*fetch.pipeline);
+        encoder.set_sampled_image(0, texture, *fetch.sampler);
+        encoder.draw_primitives(erhe::graphics::Primitive_type::point, 0, c_probe_count);
+    }
+
+    // The vertex fetch target against the probe values (pixel (gx, gy) holds
+    // grid index gx + gy * PROBE_GRID).
+    void expect_vertex_fetch(const std::vector<uint32_t>& expected, const std::string_view label)
+    {
+        const std::vector<uint8_t> pixels = read_texture_rgba8(*m_vertex_fetch->output);
+        ASSERT_EQ(pixels.size(), c_probe_count * 4u);
+        std::size_t mismatches = 0;
+        std::size_t first      = 0;
+        for (std::size_t i = 0; i < c_probe_count; ++i) {
+            const uint32_t actual = pack_rgba8(pixels[(i * 4) + 0], pixels[(i * 4) + 1], pixels[(i * 4) + 2], pixels[(i * 4) + 3]);
+            if (actual != expected[i]) {
+                if (mismatches == 0) {
+                    first = i;
+                }
+                ++mismatches;
+            }
+        }
+        EXPECT_EQ(mismatches, 0u) << label << ": " << mismatches << " of " << c_probe_count << " vertex-fetched texels differ; first at grid index " << first;
+    }
+
+    // An empty encoder of one kind: the first encoder after a barrier, so the
+    // consumer is the second encoder of its kind.
+    void record_empty_compute_encoder(erhe::graphics::Command_buffer& command_buffer)
+    {
+        erhe::graphics::Compute_command_encoder encoder = device().make_compute_command_encoder(command_buffer);
+        static_cast<void>(encoder);
+    }
+
+    void record_empty_render_pass(erhe::graphics::Command_buffer& command_buffer, const erhe::graphics::Texture& target)
+    {
+        erhe::graphics::Render_pass_descriptor descriptor{};
+        descriptor.color_attachments[0].texture       = &target;
+        descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 0.0, 0.0, 0.0, 0.0 };
+        descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+        descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+        descriptor.color_attachments[0].usage_before  = Image_usage::none;
+        descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::undefined;
+        descriptor.color_attachments[0].usage_after   = Image_usage::color_attachment | Image_usage::user_synchronized;
+        descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
+        descriptor.render_target_width  = target.get_width();
+        descriptor.render_target_height = target.get_height();
+        descriptor.debug_label = erhe::utility::Debug_label{"barrier empty pass"};
+        erhe::graphics::Render_pass              render_pass{device(), descriptor};
+        erhe::graphics::Render_command_encoder   encoder = device().make_render_command_encoder(command_buffer);
+        const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+    }
+
     // --- vertex input draw ----------------------------------------------------
 
     [[nodiscard]] auto make_vertex_draw() -> bool
@@ -892,6 +1086,7 @@ protected:
     std::unique_ptr<Probe>                             m_probe;
     std::unique_ptr<Vertex_draw>                       m_draw;
     std::unique_ptr<Slow_pass>                         m_slow_pass;
+    std::unique_ptr<Vertex_fetch>                      m_vertex_fetch;
 };
 
 // Compute storage write -> buffer_barrier -> vertex attribute fetch, in one
@@ -1169,6 +1364,54 @@ TEST_F(Resource_barrier_test, in_encoder_dispatch_to_dispatch)
 TEST_F(Resource_barrier_test, in_encoder_earlier_submission)
 {
     check_in_encoder(erhe::graphics::Barrier_scope::earlier_submissions);
+}
+
+// The consumer is the second encoder of its kind after the barrier: an empty
+// compute encoder comes first (Metal 4: a consumer barrier orders only its own
+// encoder, so the barrier must also order the later ones).
+TEST_F(Resource_barrier_test, color_attachment_to_sampled_second_compute_encoder)
+{
+    ASSERT_TRUE(make_probe(Probe_kind::color_2d, c_heavy_size));
+    const std::shared_ptr<erhe::graphics::Texture> target = make_texture(
+        Image_usage::color_attachment | Image_usage::sampled, erhe::graphics::Texture_type::texture_2d,
+        erhe::dataformat::Format::format_8_vec4_unorm, c_heavy_size, 0, "barrier color attachment"
+    );
+    ASSERT_TRUE(make_slow_pass(*target, 0, Slow_target::color));
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            record_slow_pass(command_buffer);
+            command_buffer.texture_barrier(*target, Image_usage::color_attachment, Image_usage::sampled | Image_usage::compute_shader);
+            record_empty_compute_encoder(command_buffer);
+            record_probe(command_buffer, *target);
+        }
+    );
+    expect_probe(expected_pattern_probe(c_heavy_size), "color attachment -> second compute encoder");
+}
+
+// Render pass color attachment write -> texture_barrier -> sampled in the
+// VERTEX stage of a later render pass, which is the second render encoder
+// after the barrier (an empty pass comes first).
+TEST_F(Resource_barrier_test, color_attachment_to_vertex_stage_second_render_pass)
+{
+    ASSERT_TRUE(make_vertex_fetch(c_heavy_size));
+    const std::shared_ptr<erhe::graphics::Texture> target = make_texture(
+        Image_usage::color_attachment | Image_usage::sampled, erhe::graphics::Texture_type::texture_2d,
+        erhe::dataformat::Format::format_8_vec4_unorm, c_heavy_size, 0, "barrier color attachment"
+    );
+    const std::shared_ptr<erhe::graphics::Texture> unrelated = make_texture(
+        Image_usage::color_attachment, erhe::graphics::Texture_type::texture_2d,
+        erhe::dataformat::Format::format_8_vec4_unorm, 16, 0, "barrier unrelated attachment"
+    );
+    ASSERT_TRUE(make_slow_pass(*target, 0, Slow_target::color));
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            record_slow_pass(command_buffer);
+            command_buffer.texture_barrier(*target, Image_usage::color_attachment, Image_usage::sampled | Image_usage::vertex_shader);
+            record_empty_render_pass(command_buffer, *unrelated);
+            record_vertex_fetch(command_buffer, *target);
+        }
+    );
+    expect_vertex_fetch(expected_pattern_probe(c_heavy_size), "color attachment -> vertex stage of the second render pass");
 }
 
 } // namespace erhe::graphics::test

@@ -55,6 +55,13 @@ private:
     void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);
     void end_render_pass  (Command_buffer& command_buffer, Render_pass* render_pass_after);
 
+    // The MTL::Stages (metal4_submission.hpp) of the accesses the
+    // attachments' usage_before name (the pass begin barrier's producers)
+    // and of those their usage_after name (the pass end barrier's
+    // consumers; attachments with user_synchronized left out).
+    [[nodiscard]] auto get_usage_before_stages() const -> std::uint64_t;
+    [[nodiscard]] auto get_usage_after_stages () const -> std::uint64_t;
+
 private:
     Device&                                          m_device;
     Swapchain*                                       m_swapchain{nullptr};

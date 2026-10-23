@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal4/metal4_acceleration_structure.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/metal4/metal4_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_command_buffer.hpp"
 #include "erhe_graphics/metal4/metal4_device.hpp"
@@ -230,10 +231,11 @@ void Acceleration_structure_impl::record_build(Command_buffer& command_buffer)
         ? static_cast<MTL4::AccelerationStructureDescriptor*>(m_primitive_descriptor)
         : static_cast<MTL4::AccelerationStructureDescriptor*>(m_instance_descriptor);
 
-    // The queue barrier orders this build after earlier work (vertex/index
-    // uploads, earlier bottom level builds feeding a top level build), and
-    // the next encoder's barrier orders later work (the ray query compute
-    // dispatch) after it - the Metal equivalent of the Vulkan
+    // The build's inputs (vertex / index / instance data written by the CPU
+    // into shared memory, an earlier bottom level build feeding a top level
+    // build) are ordered by the barrier after the earlier build (below) and
+    // by the commit; the barrier after this build orders the later builds
+    // and the ray query dispatches after it - the Vulkan
     // ACCELERATION_STRUCTURE_BUILD -> BUILD | COMPUTE barrier record_build
     // emits there.
     //
@@ -249,6 +251,7 @@ void Acceleration_structure_impl::record_build(Command_buffer& command_buffer)
         descriptor,
         MTL4::BufferRange::Make(m_scratch_buffer->gpuAddress(), m_scratch_buffer->length())
     );
+    encode_producer_barrier(encoder, c_stage_acceleration_structure, c_stage_acceleration_structure | c_stage_dispatch);
     encoder->endEncoding();
 }
 
