@@ -34,10 +34,11 @@ Command_buffer_impl::Command_buffer_impl(Device& device, erhe::utility::Debug_la
 
 Command_buffer_impl::~Command_buffer_impl() noexcept
 {
-    // A cb dropped without submit still holds its timer sample chunk.
-    if ((m_gpu_timer_sample_pool != nullptr) && m_gpu_timer_samples.has_chunk()) {
-        m_gpu_timer_sample_pool->release_chunk(m_gpu_timer_samples.chunk_index);
-        m_gpu_timer_samples.chunk_index = -1;
+    // A cb dropped without submit still holds its timer sample chunk and
+    // records.
+    if (m_gpu_timer_sample_pool != nullptr) {
+        m_gpu_timer_sample_pool->discard_command_buffer_samples(m_gpu_timer_samples);
+        m_gpu_timer_samples = Gpu_timer_command_buffer_samples{};
     }
     if (m_inter_encoder_fence != nullptr) {
         m_inter_encoder_fence->release();
@@ -76,7 +77,7 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     , m_gpu_timer_sample_pool           {other.m_gpu_timer_sample_pool}
     , m_gpu_timer_samples               {other.m_gpu_timer_samples}
 {
-    other.m_gpu_timer_samples.chunk_index = -1;
+    other.m_gpu_timer_samples = Gpu_timer_command_buffer_samples{};
     other.m_device              = nullptr;
     other.m_mtl_command_buffer  = nullptr;
     other.m_inter_encoder_fence = nullptr;
@@ -102,8 +103,8 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     if (m_implicit_cpu_event != nullptr) {
         m_implicit_cpu_event->release();
     }
-    if ((m_gpu_timer_sample_pool != nullptr) && m_gpu_timer_samples.has_chunk()) {
-        m_gpu_timer_sample_pool->release_chunk(m_gpu_timer_samples.chunk_index);
+    if (m_gpu_timer_sample_pool != nullptr) {
+        m_gpu_timer_sample_pool->discard_command_buffer_samples(m_gpu_timer_samples);
     }
 
     m_device                          = other.m_device;
@@ -124,7 +125,7 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_gpu_timer_sample_pool           = other.m_gpu_timer_sample_pool;
     m_gpu_timer_samples               = other.m_gpu_timer_samples;
 
-    other.m_gpu_timer_samples.chunk_index = -1;
+    other.m_gpu_timer_samples = Gpu_timer_command_buffer_samples{};
     other.m_device              = nullptr;
     other.m_mtl_command_buffer  = nullptr;
     other.m_inter_encoder_fence = nullptr;
@@ -744,10 +745,11 @@ auto Command_buffer_impl::get_gpu_timer_sample_pool() const noexcept -> Gpu_time
 
 void Command_buffer_impl::add_gpu_timer_completion_handler()
 {
-    if ((m_gpu_timer_sample_pool == nullptr) || (m_mtl_command_buffer == nullptr) || !m_gpu_timer_samples.has_chunk()) {
+    if ((m_gpu_timer_sample_pool == nullptr) || (m_mtl_command_buffer == nullptr) || !m_gpu_timer_samples.needs_resolve()) {
         return;
     }
-    // The handler owns the chunk from here on; this Command_buffer_impl may
+    // The handler owns the chunk and the records (a Tracy zone record waits
+    // for its GPU times) from here on; this Command_buffer_impl may
     // be destroyed before the GPU completes the cb.
     Gpu_timer_sample_pool* const           pool    = m_gpu_timer_sample_pool;
     const Gpu_timer_command_buffer_samples samples = m_gpu_timer_samples;

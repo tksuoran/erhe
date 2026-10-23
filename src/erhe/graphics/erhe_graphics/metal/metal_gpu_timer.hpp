@@ -43,16 +43,24 @@ class Gpu_timer_sample_pool;
 //
 // The samples are resolved in the command buffer's completion handler
 // (resolve_command_buffer_samples), on a Metal dispatch thread.
+//
+// Tracy GPU zones (erhe::graphics::Scoped_gpu_zone) use the same records and
+// boundaries: in a Tracy build the pool owns a Tracy GPU context, encoders are
+// sampled while Tracy is connected, and a zone record's two samples are sent
+// to Tracy as the GPU times of the zone's query pair.
 
 // One timer measurement on a command buffer: sample indices within the
 // command buffer's chunk; -1 while not (yet) known.
 class Gpu_timer_record
 {
 public:
-    uint64_t timer_serial{0};
+    uint64_t timer_serial{0};          // Gpu_timer serial; 0 for a Tracy zone
     int      begin_sample{-1};
     int      end_sample  {-1};
     bool     begin_pending{false};
+    bool     is_tracy_zone{false};
+    uint16_t tracy_query_id{0};        // Tracy zone: begin query id; the end query id is the next one
+    uint64_t tracy_connection_id{0};   // Tracy zone: the connection the zone begin was sent on
 };
 
 // The timer state of one command buffer. Copied by value into the command
@@ -77,7 +85,16 @@ public:
     void write_begin(uint64_t timer_serial);
     void write_end  (uint64_t timer_serial);
 
+    // Tracy zone records; false when the record array is full.
+    [[nodiscard]] auto write_tracy_zone_begin(uint16_t query_id, uint64_t connection_id) -> bool;
+    // Returns the zone's record (it stays valid until the next write).
+    [[nodiscard]] auto write_tracy_zone_end  (uint16_t query_id) -> const Gpu_timer_record*;
+
     [[nodiscard]] auto has_chunk() const -> bool;
+    // A chunk or a record to resolve: the command buffer needs its
+    // completion handler (a Tracy zone record needs its GPU times even
+    // without samples).
+    [[nodiscard]] auto needs_resolve() const -> bool;
 
     int                                       chunk_index        {-1};
     std::size_t                               used_sample_count  {0};
@@ -109,8 +126,24 @@ public:
     auto operator=       (Gpu_timer_sample_pool&&)      = delete;
 
     [[nodiscard]] auto is_supported() const -> bool;
-    // True while at least one Gpu_timer exists: encoders are sampled only then.
+    // True while at least one Gpu_timer exists or Tracy GPU zones are
+    // recorded (Tracy build, profiler connected): encoders are sampled only
+    // then.
     [[nodiscard]] auto has_timers  () const -> bool;
+
+    // Tracy GPU zones (Scoped_gpu_zone). begin returns false when the zone
+    // records nothing (no Tracy context, not connected, or the command
+    // buffer's record array is full); otherwise out_query_id is the zone's
+    // begin query id, passed back to end.
+    [[nodiscard]] auto begin_tracy_zone(
+        Gpu_timer_command_buffer_samples& samples,
+        uint32_t                          line,
+        const char*                       file,
+        const char*                       function,
+        const char*                       name,
+        uint16_t&                         out_query_id
+    ) -> bool;
+    void end_tracy_zone(Gpu_timer_command_buffer_samples& samples, uint16_t query_id);
 
     [[nodiscard]] auto register_timer  (Gpu_timer_impl* timer) -> uint64_t;
                   void unregister_timer(uint64_t timer_serial);
@@ -124,9 +157,22 @@ public:
     // stores each complete record's duration into its timer (if the timer
     // still exists) and returns the chunk.
     void resolve_command_buffer_samples(const Gpu_timer_command_buffer_samples& samples);
+    // A command buffer dropped without submit: closes its Tracy zones and
+    // returns its chunk.
+    void discard_command_buffer_samples(const Gpu_timer_command_buffer_samples& samples);
 
 private:
     [[nodiscard]] auto ticks_to_nanoseconds(uint64_t ticks) -> uint64_t;
+    void create_tracy_context();
+    // With m_mutex held. last_gpu_time carries the latest zone time across
+    // one command buffer's records.
+    void send_tracy_zone_times(
+        const Gpu_timer_record& record,
+        const uint64_t*         values,
+        std::size_t             sample_count,
+        uint64_t                now_gpu_time,
+        uint64_t&               last_gpu_time
+    );
 
     class Registered_timer
     {
@@ -147,6 +193,8 @@ private:
     uint64_t                               m_calibration_cpu_ns{0};
     uint64_t                               m_calibration_gpu   {0};
     double                                 m_ns_per_tick       {1.0};
+    int                                    m_tracy_context_id  {-1};
+    uint16_t                               m_tracy_next_query_id{0};
 };
 
 class Gpu_timer_impl

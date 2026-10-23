@@ -9,6 +9,11 @@
 #   include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #   include "erhe_graphics/vulkan/vulkan_device.hpp"
 #endif
+#if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE) && defined(ERHE_GRAPHICS_API_METAL)
+#   include "erhe_graphics/command_buffer.hpp"
+#   include "erhe_graphics/metal/metal_command_buffer.hpp"
+#   include "erhe_graphics/metal/metal_gpu_timer.hpp"
+#endif
 
 namespace erhe::graphics {
 
@@ -65,9 +70,46 @@ private:
     tracy::GpuCtxScope m_zone;
 };
 
+#elif defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE) && defined(ERHE_GRAPHICS_API_METAL)
+
+// Metal: the zone is a record on the command buffer's Gpu_timer samples, so
+// its GPU times are the encoder boundaries the Gpu_timer rules give
+// (metal_gpu_timer.hpp): the zone spans the whole encoders it brackets.
+class Scoped_gpu_zone_impl
+{
+public:
+    Scoped_gpu_zone_impl(Command_buffer& command_buffer, const char* name, const std::source_location location)
+        : m_command_buffer{&command_buffer}
+    {
+        Command_buffer_impl&         cb_impl = command_buffer.get_impl();
+        Gpu_timer_sample_pool* const pool    = cb_impl.get_gpu_timer_sample_pool();
+        m_active = (pool != nullptr) && pool->begin_tracy_zone(
+            cb_impl.get_gpu_timer_samples(),
+            static_cast<uint32_t>(location.line()),
+            location.file_name(),
+            location.function_name(),
+            name,
+            m_query_id
+        );
+    }
+    ~Scoped_gpu_zone_impl() noexcept
+    {
+        if (!m_active) {
+            return;
+        }
+        Command_buffer_impl& cb_impl = m_command_buffer->get_impl();
+        cb_impl.get_gpu_timer_sample_pool()->end_tracy_zone(cb_impl.get_gpu_timer_samples(), m_query_id);
+    }
+
+private:
+    Command_buffer* m_command_buffer{nullptr};
+    uint16_t        m_query_id      {0};
+    bool            m_active        {false};
+};
+
 #else
 
-// No Tracy, or a backend without a Tracy GPU integration (Metal, null): no-op.
+// No Tracy, or a backend without a Tracy GPU integration (null): no-op.
 class Scoped_gpu_zone_impl
 {
 public:

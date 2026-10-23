@@ -16,9 +16,14 @@ class Scoped_gpu_zone_impl;
 //    buffer's VkCommandBuffer (TracyVkZone is explicit about both).
 //  - OpenGL: the Tracy GL GPU context is thread-local, so the command buffer
 //    argument is unused (the zone still brackets the same GL command stream).
-//  - Other backends (Metal, null) or Tracy disabled: a no-op.
+//  - Metal: a record on the command buffer's GPU timer samples; the zone's
+//    GPU times are the boundaries of the encoders it brackets (Apple GPUs
+//    sample timestamps only at encoder boundaries, metal_gpu_timer.hpp).
+//  - null backend or Tracy disabled: a no-op.
 // The name is copied by Tracy, so a temporary or string literal is fine; the
 // source location defaults to the construction site.
+// The zone ends before its command buffer is submitted (Metal hands the
+// command buffer's zone records to the completion handler at submit).
 class Scoped_gpu_zone final
 {
 public:
