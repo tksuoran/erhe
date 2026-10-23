@@ -164,12 +164,13 @@ Gpu_timer_sample_pool::Gpu_timer_sample_pool(MTL::Device* const mtl_device)
         log_startup->warn("Metal: device does not support counter sampling at stage boundaries - GPU timers read 0");
         return;
     }
-    m_supported = true;
-    MTL::Timestamp cpu_timestamp = 0;
-    MTL::Timestamp gpu_timestamp = 0;
-    m_mtl_device->sampleTimestamps(&cpu_timestamp, &gpu_timestamp);
-    m_calibration_cpu_ns = cpu_timestamp;
-    m_calibration_gpu    = gpu_timestamp;
+    const uint64_t timestamp_frequency = m_mtl_device->queryTimestampFrequency();
+    if (timestamp_frequency == 0) {
+        log_startup->warn("Metal: device reports no timestamp frequency - GPU timers read 0");
+        return;
+    }
+    m_supported   = true;
+    m_ns_per_tick = 1.0e9 / static_cast<double>(timestamp_frequency);
     m_sample_buffers.reserve(max_buffers);
     m_free_chunks.reserve(max_buffers * chunks_per_buffer);
     m_timers.reserve(256);
@@ -180,9 +181,9 @@ void Gpu_timer_sample_pool::create_tracy_context()
 {
 #if defined(ERHE_METAL_TRACY_GPU_ZONES)
     // As tracy/TracyMetal.hmm does: the context's GPU time base is a
-    // sampleTimestamps pair taken now, and the period is 1 ns per GPU tick
-    // (Apple silicon GPU timestamps are nanoseconds, see
-    // resolve_command_buffer_samples).
+    // sampleTimestamps pair taken now, and the period is 1 ns: the zone
+    // times sent are counter heap ticks converted to nanoseconds
+    // (ticks_to_nanoseconds), the time base sampleTimestamps reports.
     MTL::Timestamp cpu_timestamp = 0;
     MTL::Timestamp gpu_timestamp = 0;
     m_mtl_device->sampleTimestamps(&cpu_timestamp, &gpu_timestamp);
@@ -317,12 +318,12 @@ void Gpu_timer_sample_pool::send_tracy_zone_times(
     // no sample chunk, a command buffer dropped without submit) is replaced
     // so the zone closes, zero length, at the latest sample of the command
     // buffer resolved so far, or at the resolve time when there is none.
-    const auto read_sample = [values, sample_count](const int index) -> uint64_t {
+    const auto read_sample = [this, values, sample_count](const int index) -> uint64_t {
         if ((values == nullptr) || (index < 0) || (static_cast<std::size_t>(index) >= sample_count)) {
             return 0;
         }
         const uint64_t value = values[static_cast<std::size_t>(index)];
-        return (value == MTL::CounterErrorValue) ? 0 : value;
+        return ((value == 0) || (value == MTL::CounterErrorValue)) ? 0 : ticks_to_nanoseconds(value);
     };
     uint64_t begin_time = read_sample(record.begin_sample);
     uint64_t end_time   = read_sample(record.end_sample);
@@ -509,7 +510,7 @@ auto Gpu_timer_sample_pool::get_chunk_base(const int chunk_index) const -> std::
     return (static_cast<std::size_t>(chunk_index) % chunks_per_buffer) * samples_per_chunk;
 }
 
-auto Gpu_timer_sample_pool::ticks_to_nanoseconds(const uint64_t ticks) -> uint64_t
+auto Gpu_timer_sample_pool::ticks_to_nanoseconds(const uint64_t ticks) const -> uint64_t
 {
     return static_cast<uint64_t>(static_cast<double>(ticks) * m_ns_per_tick);
 }
@@ -530,20 +531,14 @@ void Gpu_timer_sample_pool::resolve_command_buffer_samples(const Gpu_timer_comma
     const std::size_t sample_count = (data != nullptr) ? (data->length() / sizeof(uint64_t)) : 0;
     const uint64_t* const values = (data != nullptr) ? static_cast<const uint64_t*>(data->bytes()) : nullptr;
 
-    // GPU timestamps are in GPU ticks; MTL::Device::sampleTimestamps pairs
-    // them with CPU nanoseconds. The ratio over the span since the pool was
-    // created converts ticks to nanoseconds (1:1 on Apple silicon).
+    // The resolve time closes Tracy zones without samples; sampleTimestamps
+    // reports it in nanoseconds, the time base of ticks_to_nanoseconds.
     MTL::Timestamp cpu_timestamp = 0;
     MTL::Timestamp gpu_timestamp = 0;
     m_mtl_device->sampleTimestamps(&cpu_timestamp, &gpu_timestamp);
 
     {
         const std::lock_guard<std::mutex> lock{m_mutex};
-        if ((gpu_timestamp > m_calibration_gpu) && (cpu_timestamp > m_calibration_cpu_ns)) {
-            m_ns_per_tick =
-                static_cast<double>(cpu_timestamp - m_calibration_cpu_ns) /
-                static_cast<double>(gpu_timestamp - m_calibration_gpu);
-        }
         uint64_t last_zone_gpu_time = 0;
         for (std::size_t i = 0; i < samples.record_count; ++i) {
             const Gpu_timer_record& record = samples.records[i];
