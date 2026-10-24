@@ -164,6 +164,9 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             {"last_mesh_count",      stats.mesh_count},
             {"last_draw_list_entry_count", stats.draw_list_entry_count},
             {"last_draw_list_culled_count", stats.draw_list_culled_count},
+            // 0: the counts are the frame's own (CPU-written commands); else
+            // the retired frame whose GPU count readback they come from.
+            {"last_draw_list_counts_frame_index", stats.draw_list_counts_frame_index},
             {"last_cpu_time_us",     stats.cpu_time_us},
             {"total_cpu_time_us",    (frame_stats != nullptr) ? pass->get_total_cpu_time_us(*frame_stats) : 0.0},
             {"render_call_count",    (frame_stats != nullptr) ? pass->get_render_call_count(*frame_stats) : std::size_t{0}}
@@ -562,6 +565,7 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"gpu_bounds_write_count",  draw_list_scene->get_gpu_bounds_write_count()},
         {"lists",                   std::move(lists)},
         {"command_job_count",       check.job_count},
+        {"command_color_job_count", check.color_job_count},
         {"command_count",           check.command_count},
         {"command_mismatch_count",  check.command_mismatch_count},
         {"command_gpu_time_ns",     check.command_gpu_time_ns},

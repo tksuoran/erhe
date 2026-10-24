@@ -50,6 +50,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::xr`: `Pose` moved to its own header `erhe_xr/pose.hpp` (included
   by `xr.hpp` and `frame_timing.hpp`), available in every
   `ERHE_XR_LIBRARY` configuration.
+- `erhe::scene_renderer`: GPU-generated commands for the draw-list color
+  passes (doc/erhe/draw_list_renderer.md Q6 "GPU command generation"):
+  `Color_command_selection`, `Command_selection_id`, `Gpu_command_key`,
+  `Draw_list_scene::add_color_command_selection()` and
+  `get_retired_gpu_color_counts()` (`Retired_gpu_color_counts`),
+  `Draw_color_parameters::command_selection`,
+  `Draw_list_renderer::add_color_command_selection()` and
+  `Draw_list_renderer::Render_parameters::command_selection`,
+  `Draw_statistics::gpu_generated`, `Cull_classification_check::
+  color_job_count`, `Gpu_cull_classifier::max_job_filters` (the job table
+  carries a filter index per job and a filter table instead of one filter).
 - `erhe::graphics`: `Base_render_pipeline::get_pipeline_for()` takes an
   optional `Indirect_count_draw_support` that requests a variant able to
   draw prepared indirect count draws whatever the base pipeline declares;

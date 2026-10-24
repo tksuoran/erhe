@@ -1,4 +1,5 @@
 #include "renderers/composer.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
@@ -123,7 +124,8 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         const Composition_pass&    composition_pass = *composition_passes[i].get();
         Composition_pass_prepared& pass_prepared    = prepared.passes[i];
-        pass_prepared.cull_view = erhe::scene_renderer::Cull_view::none;
+        pass_prepared.cull_view         = erhe::scene_renderer::Cull_view::none;
+        pass_prepared.command_selection = erhe::scene_renderer::Command_selection_id::none;
         // The passes Composition_pass::render() draws through draw lists.
         if ((pass_prepared.result != Composition_pass_result::submitted) || !pass_prepared.use_draw_lists) {
             continue;
@@ -137,6 +139,17 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
         // Add_cull_view() returns the view an earlier pass of this scene
         // added (same purpose, same planes).
         pass_prepared.cull_view = erhe::scene_renderer::Draw_list_renderer::add_color_cull_view(*draw_list_scene, prepared.frame_index, view_parameters);
+        // What the pass draws, for the frame's GPU command generation
+        // (none for an unculled pass).
+        pass_prepared.command_selection = context.app_context.draw_list_renderer->add_color_command_selection(
+            *draw_list_scene,
+            prepared.frame_index,
+            pass_prepared.cull_view,
+            composition_pass.data.filter,
+            composition_pass.data.mesh_layers,
+            get_draw_blending_selection(composition_pass.data),
+            get_gpu_command_key(composition_pass, context.scene_view)
+        );
     }
     prepared.cull_views_added = true;
 }
@@ -153,7 +166,8 @@ void Composer::prepare(const Render_context& context, const int64_t host_system_
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         const Composition_pass& composition_pass = *composition_passes[i].get();
         Composition_pass_prepared& prepared = out.passes[i];
-        prepared.cull_view = erhe::scene_renderer::Cull_view::none;
+        prepared.cull_view         = erhe::scene_renderer::Cull_view::none;
+        prepared.command_selection = erhe::scene_renderer::Command_selection_id::none;
         if (!is_drawn_for_content(composition_pass, context.content)) {
             prepared.result = Composition_pass_result::never_rendered;
             prepared.buckets.clear();

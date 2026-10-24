@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/scene_renderer_log.hpp"
 
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -115,6 +116,7 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
                 .environment          = environment,
                 .color_blend_override = parameters.color_blend_override,
                 .cull_view            = cull_view,
+                .command_selection    = parameters.command_selection,
                 .debug_label          = base.debug_label,
                 .frame_index          = frame_index
             }
@@ -123,10 +125,44 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
         statistics.entry_count     += pass_statistics.entry_count;
         statistics.draw_call_count += pass_statistics.draw_call_count;
         statistics.culled_count    += pass_statistics.culled_count;
+        statistics.gpu_generated    = statistics.gpu_generated || pass_statistics.gpu_generated;
     }
 
     m_pass_resources.end_pass(pass_state, render_encoder);
     return statistics;
+}
+
+auto Draw_list_renderer::add_color_command_selection(
+    Draw_list_scene&                             draw_list_scene,
+    const uint64_t                               frame_index,
+    const Cull_view                              cull_view,
+    const erhe::Item_filter&                     filter,
+    const std::span<const erhe::scene::Layer_id> layers,
+    const Draw_blending_selection                blending,
+    const Gpu_command_key&                       key
+) -> Command_selection_id
+{
+    if (cull_view == Cull_view::none) {
+        return Command_selection_id::none;
+    }
+    if (m_draw_indirect_buffer.is_index_count_clamped()) {
+        if (!m_index_count_clamp_refusal_logged) {
+            log_draw_list->warn("Draw_list_renderer: GPU color commands refused, the Draw_indirect_buffer index count clamp is enabled; the color passes write their commands on the CPU");
+            m_index_count_clamp_refusal_logged = true;
+        }
+        return Command_selection_id::none;
+    }
+    return draw_list_scene.add_color_command_selection(
+        frame_index,
+        Color_command_selection{
+            .cull_view        = cull_view,
+            .filter           = filter,
+            .layers           = layers,
+            .blending         = blending,
+            .primitive_buffer = &m_primitive_buffer,
+            .key              = key
+        }
+    );
 }
 
 auto Draw_list_renderer::add_color_cull_view(

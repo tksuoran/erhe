@@ -129,7 +129,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     // arrays, 16 and 4 byte strides).
     m_compact_templates_block.add_uvec4("templates", Shader_resource::unsized_array);
     m_job_header_offset = m_compact_jobs_block.add_uvec4("header"                                )->get_offset_in_parent();
-    m_job_filter_offset = m_compact_jobs_block.add_uvec4("filter_masks", 2                            )->get_offset_in_parent();
+    m_job_filter_offset = m_compact_jobs_block.add_uvec4("filter_masks", 2 * max_job_filters          )->get_offset_in_parent();
     m_job_data_offset   = m_compact_jobs_block.add_uvec4("jobs",   Shader_resource::unsized_array)->get_offset_in_parent();
     m_compact_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
     m_compact_commands_block.add_uint("commands", Shader_resource::unsized_array);

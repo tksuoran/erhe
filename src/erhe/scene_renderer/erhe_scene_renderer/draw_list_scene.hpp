@@ -108,6 +108,13 @@ public:
     // before the frame's classification (classify_frame_cull_views());
     // draw_color() verifies it is classified.
     Cull_view                               cull_view           {Cull_view::none};
+    // The pass's selection in the frame's GPU command generation
+    // (Draw_list_scene::add_color_command_selection(), which the caller made
+    // with this pass's cull_view, filter, layers, blending and
+    // primitive_buffer; verified). When the frame generated commands for it,
+    // draw_color() draws them with the count draw instead of writing
+    // commands on the CPU. none: CPU-written commands.
+    Command_selection_id                    command_selection   {Command_selection_id::none};
     std::string_view                        debug_label         {};
     // The frame being drawn: the published slot frame_index %
     // frames_in_flight is read (Draw_list_scene::publish).
@@ -162,6 +169,35 @@ public:
     // EMPTY selects every layer (Draw_shadow_parameters::layers).
     std::span<const erhe::scene::Layer_id> layers          {};
     const Primitive_buffer*                primitive_buffer{nullptr};
+};
+
+// What one color pass of a frame draws, for the GPU command generation
+// (doc/plans/culling.md "Open", the color passes item,
+// Draw_list_scene::add_color_command_selection()): the pass's culling view,
+// filter, layer selection, blending selection and Primitive_buffer (its
+// record capacity is the chunk size the job table and the draws cut the
+// lists with), and the caller's identity of the pass for its retired counts.
+class Color_command_selection
+{
+public:
+    Cull_view                              cull_view       {Cull_view::none};
+    erhe::Item_filter                      filter          {};
+    // EMPTY selects every layer (Draw_color_parameters::layers).
+    std::span<const erhe::scene::Layer_id> layers          {};
+    Draw_blending_selection                blending        {Draw_blending_selection::opaque_only};
+    const Primitive_buffer*                primitive_buffer{nullptr};
+    Gpu_command_key                        key             {};
+};
+
+// The GPU command generation's counts of one color selection of a retired
+// frame (Draw_list_scene::get_retired_gpu_color_counts()): entries drawn,
+// and entries passing the filter (culled = filtered - drawn).
+class Retired_gpu_color_counts
+{
+public:
+    uint64_t frame_index{0};
+    uint32_t drawn      {0};
+    uint32_t filtered   {0};
 };
 
 // The GPU command generation's counts of one shadow view over its jobs, read
@@ -315,6 +351,7 @@ public:
     // the jobs whose count or commands differ, the first few of them, the
     // per shadow view drawn counts and the compaction's Gpu_timer last result.
     uint32_t                                    job_count              {0};
+    uint32_t                                    color_job_count        {0}; // of job_count, the color selections' jobs
     uint32_t                                    command_count          {0}; // commands the CPU writer produces over all jobs
     std::size_t                                 command_mismatch_count {0};
     std::vector<Cull_command_job_mismatch>      command_mismatches;
@@ -571,6 +608,24 @@ public:
     // the counts arrive frames-in-flight frames late. Null before the first
     // decoded frame.
     [[nodiscard]] auto get_retired_gpu_shadow_counts() const -> const Retired_gpu_shadow_counts*;
+    // Render thread, render phase, with the frame's views (before its
+    // classification): registers what one color pass draws, so that under
+    // Cull_classification::gpu the frame's classification also generates
+    // the pass's commands (one job per chunk of each published color list
+    // the selection's blending and layers select, filtered by the selection's
+    // filter) and prepares them, with every color selection of the frame, as
+    // one Indirect_count_draw_set; draw_color() with the returned id then
+    // draws them with the count draw. Returns none (the pass writes CPU
+    // commands) for a pass without a culling view, in a frame without the
+    // GPU path (its slot was published for the CPU classification, which a
+    // device without draw indirect count always is) and for a pass
+    // Draw_list_renderer::render() skips (has_drawable_entries() false: no
+    // jobs reserve command space for it).
+    [[nodiscard]] auto add_color_command_selection(uint64_t frame_index, const Color_command_selection& selection) -> Command_selection_id;
+    // The counts of the selection named key in the newest frame whose count
+    // readback this scene decoded (as get_retired_gpu_shadow_counts(), frames
+    // in flight late); empty when that frame had no such selection.
+    [[nodiscard]] auto get_retired_gpu_color_counts(const Gpu_command_key& key) const -> std::optional<Retired_gpu_color_counts>;
     // The chunk size of draws through primitive_buffer (P3a): the job table
     // and draw_list_chunks() both cut the lists with it.
     [[nodiscard]] static auto get_records_per_chunk(const Primitive_buffer& primitive_buffer) -> std::size_t;
@@ -762,6 +817,16 @@ private:
         cpu_written,  // Draw_indirect_buffer::update() per chunk
         gpu_generated // the frame's GPU command generation (chunk_entries only)
     };
+    // The prepared count draws a pass draws its GPU-generated commands
+    // from: the set, and the frame jobs it covers ([first_job, first_job +
+    // job_count); job j of the frame is job j - first_job of the set).
+    class Gpu_pass_draws
+    {
+    public:
+        const erhe::graphics::Indirect_count_draw_set* set      {nullptr};
+        uint32_t                                       first_job{0};
+        uint32_t                                       job_count{0};
+    };
     // draw_list_chunks() of a pass drawing GPU-generated commands: every
     // chunk with the count draw over its job (first_gpu_job + chunk).
     void draw_list_gpu_chunks(
@@ -771,6 +836,7 @@ private:
         Primitive_buffer&                       primitive_buffer,
         std::size_t                             draw_list_index,
         uint32_t                                first_gpu_job,
+        const Gpu_pass_draws&                   pass_draws,
         uint64_t                                frame_index,
         Draw_statistics&                        statistics
     );
@@ -789,6 +855,9 @@ private:
         Cull_view                                cull_view,
         Draw_record_layout                       record_layout,
         Draw_command_source                      command_source,
+        // gpu_generated: the color selection whose jobs the pass draws, or
+        // none for a shadow pass (the jobs of cull_view).
+        Command_selection_id                     command_selection,
         uint64_t                                 frame_index,
         Draw_statistics&                         statistics
     );
@@ -827,12 +896,13 @@ private:
     // region's readback and the check's CPU half (the frame's CPU masks).
     void dispatch_gpu_cull_views(uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer);
     // dispatch_gpu_cull_views(), after the classification dispatch, when the
-    // frame has a shadow command selection and shadow views: builds the
-    // frame's job table, records the compaction (timed by
-    // m_gpu_command_timer) between its barriers and, for a check recording
-    // this frame, the count and command readbacks and the CPU writer's
-    // expected counts and commands.
-    void generate_gpu_shadow_commands(
+    // frame has a shadow command selection or color command selections:
+    // builds the frame's job table (the shadow views' jobs, then the color
+    // selections'), records the compaction (timed by m_gpu_command_timer)
+    // between its barriers, prepares the color jobs as the frame's color
+    // count draw set and, for a check recording this frame, the count and
+    // command readbacks and the CPU writer's expected counts and commands.
+    void generate_gpu_commands(
         uint64_t                        frame_index,
         erhe::graphics::Command_buffer& command_buffer,
         const erhe::graphics::Buffer&   mask_buffer,
@@ -842,9 +912,13 @@ private:
     );
     // classify_frame_cull_views(): decodes the count readback of the frame
     // that last used frame_index's frame slot (retired) into
-    // m_retired_gpu_shadow_counts and releases it.
-    void decode_retired_gpu_shadow_counts(uint64_t frame_index);
-    // generate_gpu_shadow_commands() of a check frame: the count and
+    // m_retired_gpu_shadow_counts and m_retired_gpu_color_counts and
+    // releases it.
+    void decode_retired_gpu_counts(uint64_t frame_index);
+    // Index of filter in the frame's job filter table (m_gpu_job_filters),
+    // added when new.
+    [[nodiscard]] auto get_gpu_job_filter_index(const erhe::Item_filter& filter) -> uint32_t;
+    // generate_gpu_commands() of a check frame: the count and
     // command readbacks and what the CPU writer produces per job.
     void record_gpu_command_check(
         uint64_t                        frame_index,
@@ -1130,19 +1204,33 @@ private:
     // GPU command generation (doc/plans/culling.md phase 6), render phase
     // state of the frame being rendered, started over by the frame's first
     // add_cull_view() (begin_cull_frame()). One job per (shadow view, shadow
-    // list chunk): view, first entry (all published lists back to back),
-    // entry count and the offset of its dense commands, in commands; the
-    // uvec4 of cull_compact.comp's job table.
-    class Gpu_shadow_job
+    // list chunk) and per (color selection, color list chunk): its view and
+    // filter (view in bits 0..15, index into the frame's filter table in
+    // bits 16..31), first entry (all published lists back to back), entry
+    // count and the offset of its dense commands, in commands; the uvec4 of
+    // cull_compact.comp's job table.
+    class Gpu_cull_job
     {
     public:
-        uint32_t view          {0};
-        uint32_t entry_begin   {0};
-        uint32_t entry_count   {0};
-        uint32_t command_offset{0};
+        uint32_t view_and_filter{0};
+        uint32_t entry_begin    {0};
+        uint32_t entry_count    {0};
+        uint32_t command_offset {0};
     };
-    static_assert(sizeof(Gpu_shadow_job) == (4 * sizeof(uint32_t)));
-    static constexpr uint32_t                                        c_no_gpu_shadow_job{UINT32_MAX};
+    static_assert(sizeof(Gpu_cull_job) == (4 * sizeof(uint32_t)));
+    // What the CPU knows of each job beside the GPU table: the culling view,
+    // the filter's index, the published list, the chunk's first entry in it
+    // and the color selection (Command_selection_id::none for a shadow job).
+    class Gpu_job_info
+    {
+    public:
+        uint32_t             view       {0};
+        uint32_t             filter     {0};
+        uint32_t             list_index {0};
+        uint32_t             chunk_begin{0};
+        Command_selection_id selection  {Command_selection_id::none};
+    };
+    static constexpr uint32_t                                        c_no_gpu_job{UINT32_MAX};
     // The frame's selection (set_shadow_command_selection()); the layers
     // are a copy (capacity kept).
     bool                                                             m_shadow_selection_set{false};
@@ -1150,12 +1238,32 @@ private:
     erhe::Item_filter                                                m_shadow_selection_filter{};
     std::vector<erhe::scene::Layer_id>                               m_shadow_selection_layers;
     const Primitive_buffer*                                          m_shadow_selection_primitive_buffer{nullptr};
-    // The frame's jobs and, per (view, published list), the list's first
-    // job (its chunks' jobs are consecutive) or c_no_gpu_shadow_job, at
-    // [view * m_gpu_shadow_job_list_count + list] (capacity kept).
-    std::vector<Gpu_shadow_job>                                      m_gpu_shadow_jobs;
+    // The frame's color selections (add_color_command_selection()), their
+    // layers back to back in m_color_selection_layers, and per selection its
+    // consecutive jobs (filled by generate_gpu_commands()); capacity kept.
+    class Color_selection_record
+    {
+    public:
+        Cull_view               cull_view       {Cull_view::none};
+        erhe::Item_filter       filter          {};
+        uint32_t                layer_begin     {0};
+        uint32_t                layer_count     {0};
+        Draw_blending_selection blending        {Draw_blending_selection::opaque_only};
+        const Primitive_buffer* primitive_buffer{nullptr};
+        Gpu_command_key         key             {};
+    };
+    std::vector<Color_selection_record>                              m_color_selections;
+    std::vector<erhe::scene::Layer_id>                               m_color_selection_layers;
+    // The frame's jobs, their CPU side and filter table, and the lookups of
+    // a list's first job (its chunks' jobs are consecutive) or c_no_gpu_job:
+    // shadow at [view * m_gpu_job_list_count + list], color at
+    // [selection * m_gpu_job_list_count + list] (capacity kept).
+    std::vector<Gpu_cull_job>                                        m_gpu_jobs;
+    std::vector<Gpu_job_info>                                        m_gpu_job_infos;
+    std::vector<erhe::Item_filter>                                   m_gpu_job_filters;
     std::vector<uint32_t>                                            m_gpu_shadow_job_lookup;
-    std::size_t                                                      m_gpu_shadow_job_list_count{0};
+    std::vector<uint32_t>                                            m_gpu_color_job_lookup;
+    std::size_t                                                      m_gpu_job_list_count{0};
     // The frame's generated commands and counts (null: none this frame):
     // device ring buffer regions released at the dispatch, kept by the ring
     // until the frame retired.
@@ -1171,7 +1279,7 @@ private:
     // built with the job table; per view its consecutive jobs; the current
     // pass's view, jobs, rebased prepare jobs and set (job j of the frame is
     // job j - first_job of the set). Persistent scratch, capacity kept.
-    class Gpu_shadow_view_jobs
+    class Gpu_job_range
     {
     public:
         uint32_t first_job{0};
@@ -1180,13 +1288,21 @@ private:
     std::unique_ptr<erhe::graphics::Indirect_count_draws>            m_gpu_indirect_count_draws;
     std::vector<erhe::graphics::Indirect_count_draw_job>             m_gpu_indirect_count_jobs;
     std::vector<erhe::graphics::Indirect_count_index_buffer>         m_gpu_indirect_count_index_buffers;
-    std::vector<Gpu_shadow_view_jobs>                                m_gpu_shadow_view_jobs;
+    std::vector<Gpu_job_range>                                m_gpu_shadow_view_jobs;
     Cull_view                                                        m_gpu_pass_cull_view{Cull_view::none};
-    Gpu_shadow_view_jobs                                             m_gpu_pass_jobs{};
+    Gpu_job_range                                             m_gpu_pass_jobs{};
     std::vector<erhe::graphics::Indirect_count_draw_job>             m_gpu_pass_indirect_count_jobs;
     erhe::graphics::Indirect_count_draw_set                          m_gpu_indirect_count_draw_set{};
+    // The color jobs (one consecutive run after the shadow jobs) prepared
+    // once per frame as one set of their own Indirect_count_draws (created
+    // at the first color prepare), drawn by every color pass of the frame
+    // (several of them inside one render pass, so not one prepare per pass).
+    std::unique_ptr<erhe::graphics::Indirect_count_draws>            m_gpu_color_indirect_count_draws;
+    std::vector<erhe::graphics::Indirect_count_draw_job>             m_gpu_color_indirect_count_jobs;
+    erhe::graphics::Indirect_count_draw_set                          m_gpu_color_indirect_count_draw_set{};
+    Gpu_job_range                                             m_gpu_color_jobs{};
     // Per frame slot: the count readback of the slot's last frame with
-    // GPU-generated shadow commands, until decode_retired_gpu_shadow_counts()
+    // GPU-generated shadow commands, until decode_retired_gpu_counts()
     // of the frame reusing the slot, and the decoded counts. Each slot owns a
     // persistent host-readable buffer outside the ring buffers: a ring range
     // held across frames is reclaimed as soon as its acquire frame completes.
@@ -1200,10 +1316,23 @@ private:
         uint64_t                                frame_index{0};
         std::size_t                             view_count {0};
         std::vector<uint32_t>                   job_views;
+        // Per job its color selection (none: a shadow job), and the frame's
+        // selection keys.
+        std::vector<Command_selection_id>       job_selections;
+        std::vector<Gpu_command_key>            selection_keys;
         bool                                    pending    {false};
     };
     std::vector<Gpu_count_readback>                                  m_gpu_count_readbacks;
     std::vector<Gpu_shadow_view_counts>                              m_retired_gpu_shadow_view_counts;
+    // The decoded frame's counts per color selection (capacity kept).
+    class Retired_color_selection_counts
+    {
+    public:
+        Gpu_command_key key     {};
+        uint32_t        drawn   {0};
+        uint32_t        filtered{0};
+    };
+    std::vector<Retired_color_selection_counts>                      m_retired_gpu_color_counts;
     Retired_gpu_shadow_counts                                        m_retired_gpu_shadow_counts{};
     bool                                                             m_has_retired_gpu_shadow_counts{false};
 };

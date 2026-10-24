@@ -174,7 +174,7 @@ generation ([culling.md](../plans/culling.md) phases 5 and 6,
 classification", "GPU command generation"): the render phase of the next
 frame the scene's draw lists classify on the GPU copies the frame's GPU mask
 region, and the counts and commands its command generation wrote for the
-shadow passes, to host memory and keeps the frame's CPU masks and what the
+shadow and color passes, to host memory and keeps the frame's CPU masks and what the
 CPU command writer produces from them per job; once the frame retired, every
 (entry, view) bit of every published draw list is compared, and per job
 the GPU count and the commands up to it. A new request replaces an earlier
@@ -198,13 +198,15 @@ compute dispatches of the frame (1, or 0 for a scene without entries).
 measurement; a dispatch that overlaps the previous work on the GPU measures
 close to 0 (the timer counts work where it finishes).
 The command generation adds `command_job_count` (one job per shadow view and
-chunk of each drawn shadow list; 0 for a frame without shadow passes),
+chunk of each drawn shadow list, and per color pass selection and chunk of
+each color list the pass draws; 0 for a frame without either),
+`command_color_job_count` (the color selections' jobs among them),
 `command_count` (the commands the CPU writer produces over all jobs, the
-drawn shadow entries), `command_mismatch_count` (jobs whose GPU count or
+drawn entries), `command_mismatch_count` (jobs whose GPU count or
 commands differ; 0 is the gate), `command_gpu_time_ns` (the compaction's
 `Gpu_timer` result), `command_views: [{view, cpu_drawn, gpu_drawn}]` (per
-shadow view the drawn entries: the pass's `Draw_statistics::entry_count` and
-the GPU-written count) and `command_mismatches: [{job, view, list_index,
+view the drawn entries over its jobs: what the CPU writer produces and the
+GPU-written count) and `command_mismatches: [{job, view, list_index,
 chunk_begin, cpu_count, gpu_count, command_mismatch_count}]` (the first few).
 `get_draw_lists` reports `cull_classification` (what the last publish
 recorded) and `gpu_bounds_write_count` (the list bounds ranges written to

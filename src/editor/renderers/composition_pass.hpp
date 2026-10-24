@@ -35,6 +35,7 @@ namespace editor {
 class App_context;
 class Render_context;
 class Scene_root;
+class Scene_view;
 
 // editor_aid passes draw editor guides rather than scene content; a render
 // with Render_content::scene_only skips them (Composer::render). background
@@ -181,7 +182,21 @@ public:
     // render_immediate() draws with Render_context::immediate_cull_view
     // (the headset's) or none (unculled).
     erhe::scene_renderer::Cull_view                    cull_view         {erhe::scene_renderer::Cull_view::none};
+    // The pass's selection in the frame's GPU command generation of its
+    // draw list scene (Draw_list_renderer::add_color_command_selection(),
+    // set with cull_view by the same hook); none: CPU-written commands.
+    erhe::scene_renderer::Command_selection_id         command_selection {erhe::scene_renderer::Command_selection_id::none};
 };
+
+// The draw-list path's blending selection of a pass's
+// Blending_mode_policy (Composition_pass::prepare() routes only the
+// policies it maps to the draw-list path).
+[[nodiscard]] auto get_draw_blending_selection(const Composition_pass_data& data) -> erhe::scene_renderer::Draw_blending_selection;
+
+class Composition_pass;
+// The identity of a pass over one scene view in the GPU command generation
+// (its retired counts are found by it).
+[[nodiscard]] auto get_gpu_command_key(const Composition_pass& composition_pass, const Scene_view& scene_view) -> erhe::scene_renderer::Gpu_command_key;
 
 // The view inputs a draw-list color pass of context culls against
 // (Draw_list_renderer::add_color_cull_view(), Composer::add_cull_views())
@@ -203,9 +218,15 @@ public:
     std::size_t             mesh_count             {0};
     // Entries drawn by the draw-list path (0 when the pass went through
     // Forward_renderer::render()), and the entries that passed the filter
-    // but were outside the view frustum.
+    // but were outside the view frustum. With GPU-generated commands
+    // (Cull_classification::gpu) the counts are those of the newest retired
+    // frame whose count readback named this pass and view
+    // (Draw_list_scene::get_retired_gpu_color_counts(); frames in flight
+    // late, 0 before the first), and draw_list_counts_frame_index names that
+    // frame; 0 for counts of the frame itself (CPU-written commands).
     std::size_t             draw_list_entry_count  {0};
     std::size_t             draw_list_culled_count {0};
+    uint64_t                draw_list_counts_frame_index{0};
     double                  cpu_time_us            {0.0};
     double                  total_cpu_time_us      {0.0};
     std::size_t             render_call_count      {0};
