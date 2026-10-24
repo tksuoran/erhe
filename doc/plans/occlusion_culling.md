@@ -52,19 +52,23 @@ are described there. What the occlusion pass builds on:
 - GPU path (editor setting `culling_classification` = `gpu`):
   `Gpu_cull_classifier` and `res/shaders/cull_classify.comp` write the masks;
   `res/shaders/cull_compact.comp` turns them into indirect commands plus a
-  count for the shadow passes, drawn with
+  count for the shadow passes and the draw-list color passes (one job per
+  view or color pass selection and list chunk, each job with its own
+  filter), drawn with
   `multi_draw_indexed_primitives_indirect_count()` (Vulkan with
   `VK_KHR_draw_indirect_count`, GL 4.6) or, on Metal, prepared per pass by
   `Compute_command_encoder::prepare_indexed_indirect_count_draws()` and
   drawn with `multi_draw_indexed_primitives_indirect_count(set, job)`
   (`doc/erhe/draw_list_renderer.md`); the null device stays on the CPU
   path.
-- The color passes still draw CPU-written commands under `gpu`; their
-  records are shared like the shadow records, so a GPU-written command can
-  name them, and generating their commands is culling.md "Open", the color
-  passes item (commit 2). Step 7
-  of the sketch (draw the visible list through MDI) needs that solved
-  first, or a CPU readback of the visibility bits, which adds frames of lag.
+- The color passes draw GPU-written commands under `gpu` (culling.md phase
+  6c): the prerequisite of step 7 of the sketch (draw the visible list
+  through MDI) is met, without a CPU readback of the visibility bits.
+- Devices without a GPU-read draw count (`Device_info::
+  use_draw_indirect_count` false: MoltenVK, the emulated multi-draw path,
+  the null device) have no GPU command generation, so occlusion culling is
+  disabled there: the rule is the device capability, never the backend
+  (`doc/erhe/draw_list_renderer.md` Q6).
 - Gates and tools: MCP `get_cull_classification_check` (GPU vs CPU masks
   and commands), `render_scene_image` byte comparisons between settings,
   per-pass drawn/culled counts in `Shadow_draw_statistics` and
@@ -82,9 +86,9 @@ Decisions (user, 2026-10-24):
   per-eye passes get occlusion; previews and thumbnails stay frustum-only.
 - Lag: the one-frame lag is accepted; the "just became visible" second draw
   (step 5) is built later only if the pop-in is visible in use.
-- Order: the color passes' GPU-written commands (culling.md "Open", the
-  color passes item: the color passes share the frame's records like the
-  shadow passes - no per-pass constant block, since no draw-list shader
-  variant reads a record's color or size - then the color commands come
-  from the shadow passes' jobs) land first, as their own gated step, before
-  any occlusion pass.
+- Order: the color passes' GPU-written commands land first, as their own
+  gated step, before any occlusion pass (done: culling.md phase 6c; the
+  color passes share the frame's records like the shadow passes - no
+  per-pass constant block, since no draw-list shader variant reads a
+  record's color or size - and their commands come from the frame's job
+  table, one more filter per job).

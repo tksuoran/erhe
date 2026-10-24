@@ -83,9 +83,31 @@ public:
         // (add_color_cull_view() before the frame's classification);
         // Cull_view::none draws unculled (multiview passes).
         Cull_view                                              cull_view{Cull_view::none};
+        // The pass's selection in the frame's GPU command generation
+        // (add_color_command_selection()); none: CPU-written commands.
+        Command_selection_id                                   command_selection{Command_selection_id::none};
     };
 
     auto render(const Render_parameters& parameters) -> Draw_statistics;
+
+    // Render phase, with the pass's culling view (add_color_cull_view())
+    // and before the frame's classification: registers what the color pass
+    // draws with this renderer's Primitive_buffer
+    // (Draw_list_scene::add_color_command_selection()), for
+    // Render_parameters::command_selection. Returns none where
+    // Draw_list_scene::add_color_command_selection() does, and while the
+    // Draw_indirect_buffer's debug
+    // index count clamp is on (the GPU commands carry the raw counts;
+    // refused and logged once).
+    [[nodiscard]] auto add_color_command_selection(
+        Draw_list_scene&                       draw_list_scene,
+        uint64_t                               frame_index,
+        Cull_view                              cull_view,
+        const erhe::Item_filter&               filter,
+        std::span<const erhe::scene::Layer_id> layers,
+        Draw_blending_selection                blending,
+        const Gpu_command_key&                 key
+    ) -> Command_selection_id;
 
     // The inputs of a color pass's culling view: the pass's views and the
     // depth conventions its camera block is written with
@@ -116,6 +138,7 @@ private:
     Scene_pass_resources&   m_pass_resources;
     Draw_indirect_buffer    m_draw_indirect_buffer;
     Primitive_buffer        m_primitive_buffer;
+    bool                    m_index_count_clamp_refusal_logged{false};
 };
 
 } // namespace erhe::scene_renderer

@@ -306,6 +306,21 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     s_mesh_spans.clear();
 }
 
+auto get_draw_blending_selection(const Composition_pass_data& data) -> erhe::scene_renderer::Draw_blending_selection
+{
+    switch (data.blending_mode_policy) {
+        case erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only:       return erhe::scene_renderer::Draw_blending_selection::opaque_only;
+        case erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only: return erhe::scene_renderer::Draw_blending_selection::alpha_tested_only;
+        case erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only:  return erhe::scene_renderer::Draw_blending_selection::translucent_only;
+        default:                                                                        return erhe::scene_renderer::Draw_blending_selection::all;
+    }
+}
+
+auto get_gpu_command_key(const Composition_pass& composition_pass, const Scene_view& scene_view) -> erhe::scene_renderer::Gpu_command_key
+{
+    return erhe::scene_renderer::Gpu_command_key{.pass = &composition_pass, .view = &scene_view};
+}
+
 auto get_color_view_parameters(const Render_context& context) -> erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters
 {
     return erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters{
@@ -336,6 +351,7 @@ void Composition_pass::render_immediate(const Render_context& context)
             m_immediate_prepared.cull_view = context.immediate_cull_view;
         }
     }
+    m_immediate_prepared.command_selection = erhe::scene_renderer::Command_selection_id::none;
     render(context, m_immediate_prepared);
 }
 
@@ -393,6 +409,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         stats->mesh_count             = prepared.mesh_count;
         stats->draw_list_entry_count  = 0;
         stats->draw_list_culled_count = 0;
+        stats->draw_list_counts_frame_index = 0;
     }
 
     // The gating ran in the prepare phase (prepare()); a pass that did not
@@ -497,11 +514,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
     if (prepared.use_draw_lists) {
         erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
         ERHE_VERIFY(draw_list_scene != nullptr);
-        const erhe::scene_renderer::Draw_blending_selection blending =
-            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only      ) ? erhe::scene_renderer::Draw_blending_selection::opaque_only :
-            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only) ? erhe::scene_renderer::Draw_blending_selection::alpha_tested_only :
-            (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only ) ? erhe::scene_renderer::Draw_blending_selection::translucent_only :
-                                                                                                                      erhe::scene_renderer::Draw_blending_selection::all;
+        const erhe::scene_renderer::Draw_blending_selection blending = get_draw_blending_selection(data);
         // The views and depth conventions the pass's culling view was built
         // from (Composer::add_cull_views()).
         const erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);
@@ -540,12 +553,25 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .debug_joint_colors    = debug_joint_colors,
                 .debug_target_joint    = debug_target_joint.get(),
                 .color_blend_override  = nullptr,
-                .cull_view             = prepared.cull_view
+                .cull_view             = prepared.cull_view,
+                .command_selection     = prepared.command_selection
             }
         );
         if (stats != nullptr) {
-            stats->draw_list_entry_count  = statistics.entry_count;
-            stats->draw_list_culled_count = statistics.culled_count;
+            if (statistics.gpu_generated) {
+                // The GPU-written counts arrive with a retired frame's
+                // count readback.
+                const std::optional<erhe::scene_renderer::Retired_gpu_color_counts> counts =
+                    draw_list_scene->get_retired_gpu_color_counts(get_gpu_command_key(*this, context.scene_view));
+                if (counts.has_value()) {
+                    stats->draw_list_entry_count        = counts->drawn;
+                    stats->draw_list_culled_count       = counts->filtered - counts->drawn;
+                    stats->draw_list_counts_frame_index = counts->frame_index;
+                }
+            } else {
+                stats->draw_list_entry_count  = statistics.entry_count;
+                stats->draw_list_culled_count = statistics.culled_count;
+            }
         }
         record_result(Composition_pass_result::submitted_draw_lists);
         return;

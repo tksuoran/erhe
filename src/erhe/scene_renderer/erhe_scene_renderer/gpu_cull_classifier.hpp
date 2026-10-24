@@ -73,9 +73,14 @@ public:
     // Command templates: two uvec4 per entry (index_count, first_index,
     // base_vertex, 0 and the entry's flag bits), laid out like the bounds.
     static constexpr std::size_t  template_bytes_per_entry{2 * 4 * sizeof(uint32_t)};
-    // Job table: one uvec4 per job (view, first entry, entry count, command
-    // offset) after the header uvec4 and the two filter uvec4.
+    // Job table: one uvec4 per job (view in bits 0..15 and filter index in
+    // bits 16..31, first entry, entry count, command offset) after the
+    // header uvec4 and the filter table (two uvec4 per filter, up to
+    // max_job_filters).
     static constexpr std::size_t  job_bytes               {4 * sizeof(uint32_t)};
+    // The frame's distinct Item_filters of the job table: the shadow
+    // selection's and the color selections' (a few per view; verified).
+    static constexpr std::size_t  max_job_filters         {32};
     // A job's command offset is a multiple of this: its pass bit words start
     // at command offset / 32.
     static constexpr uint32_t     job_command_alignment   {32};

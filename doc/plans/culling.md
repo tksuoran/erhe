@@ -370,8 +370,9 @@ Each phase lands on its own, verified, before the next starts.
    frame's passes (`Shadow_draw_statistics::gpu_counts_frame_index`, frames
    in flight late). Refused, logged once, while the `Draw_indirect_buffer`
    debug index count clamp is on. Still on the CPU under `gpu`: the CPU
-   lanes (for `has_cull_view_survivors()`, the empty cube face skip, the
-   color passes), the job table, and the color passes' commands. Gate: MCP `get_cull_classification_check` compares per job the
+   lanes (for `has_cull_view_survivors()`, the empty cube face skip, and
+   then the color passes, which phase 6c moved to the GPU), the job table,
+   and the color passes' commands (phase 6c). Gate: MCP `get_cull_classification_check` compares per job the
    GPU count and commands with what the CPU writer produces from the same
    frame's CPU masks: 0 mismatches on default (4 jobs, 24 commands), heavy
    (18 jobs, 6619), draws (1 job, 1044), heavy in four view (30 jobs, 6707),
@@ -401,6 +402,49 @@ Each phase lands on its own, verified, before the next starts.
    674 to 86 us Release and from 9.7 ms to 0.21 ms Debug, and the Debug
    heavy frame rate from 24 to 32 fps; the Release scenes are GPU-bound on
    that machine, so their frame rate does not move.
+   6c, the color passes on the GPU. Done: the draw-list color passes draw
+   GPU-generated commands under `gpu`, on devices with
+   `Device_info::use_draw_indirect_count` (Metal 3, Metal 4, KosmicKrisp;
+   MoltenVK keeps CPU-written commands, unchanged). Commit 1: every
+   draw-list pass of a frame, shadow and color, binds the frame's one
+   shared record range per list chunk, uploaded by the first pass that
+   draws the chunk with the default color / size patch and released by
+   `Cull_frame_registry::release_frame_records()` at the end of the frame's
+   render phase (`doc/erhe/draw_list_renderer.md` "Record upload"). No
+   per-pass constant block was needed: no draw-list shader variant reads a
+   record's color or size (polygon fill without shader debug only;
+   verified per resolved variant). Commit 2a: the Metal backends read a
+   fragment function's dedicated samplers from an argument buffer, so the
+   color pipelines can execute indirect command buffers
+   (`doc/erhe/metal_backend.md` "Two Sampler Binding Paths"). Commit 2:
+   each draw-list color pass registers a `Color_command_selection` with its
+   culling view (`Composer::add_cull_views()`), the job table gets one job
+   per (selection, color list chunk) after the shadow jobs, each job with
+   its own filter (a 16-bit index into the frame's filter table packed
+   beside the view), the color jobs are prepared once per frame as one
+   set of their own `Indirect_count_draws` right after the compaction, and
+   `draw_color()` draws them with the count draw
+   (`doc/erhe/draw_list_renderer.md` Q6 "GPU command generation"); the
+   passes' counts arrive with the retired frame's readback per selection
+   (`Composition_pass_stats::draw_list_counts_frame_index`). Gate: MCP
+   `get_cull_classification_check` 0 mismatches and 0 command mismatches
+   with the color jobs included (`command_color_job_count`) on default,
+   draws, heavy, heavy with selection and heavy in four view (Metal 3,
+   Metal 4, KosmicKrisp) and Bistro (Metal 4, 759 jobs, 59 color);
+   `render_scene_image` and screenshots byte-identical to the CPU-written
+   color commands on Metal 3 and Metal 4 (default, draws, heavy, heavy with
+   selection, heavy in four view; Bistro cpu vs gpu); KosmicKrisp
+   identical except 3 to 8 pixels off by 1 LSB in the cases with the
+   selected-entry passes. Color indirect command buffer per frame in flight
+   on Metal: Bistro 10240 commands (7.1 MB, one viewport and one scene
+   image view), heavy in four view 11264 (7.8 MB). Measured, Metal 4,
+   Release headless, pipelined, `gpu` (Tracy): `draw_color` CPU 106 -> 20
+   us per frame on draws and 130 -> 25 us on heavy, render phase about 40
+   us lower; the GPU `Main` zone 987 -> 1097 us on draws and 2658 -> 2763
+   us on heavy, so the GPU-bound tick grows about 85 us (draws 1709 -> 1795
+   us, heavy 3399 -> 3482 us); where the GPU time goes (the color set's
+   encode kernel or the indirect command buffer execution of the main
+   pass) is not measured yet.
 7. **Occlusion.** [occlusion_culling.md](occlusion_culling.md), fed into the
    mask of the camera views as one more test; depends on phase 6 to be worth
    it (its step 7).
@@ -489,23 +533,13 @@ measured on the GPU timers.
   ("Headset passes"); per-eye views would cull tighter but need the eye
   poses of R's locate before the classification (`erhe::xr` locating once
   in the hook and `render_frame()` reusing it).
-- The color passes stay on CPU-written commands under `gpu` (phase 6b).
-  Their records are shared (commit 1, done): every draw-list pass of a
-  frame, shadow and color, binds the frame's one record range per list
-  chunk, uploaded by the first pass that draws the chunk with the default
-  color / size patch and released by `Cull_frame_registry::
-  release_frame_records()` at the end of the frame's render phase
-  (`doc/erhe/draw_list_renderer.md` "Record upload"); the color commands
-  carry `first_instance = entry - chunk begin` like the shadow commands. No
-  per-pass constant block was needed: no draw-list shader variant reads a
-  record's color or size (the draw-list path takes polygon fill without
-  shader debug only; verified per resolved variant), so the per-pass patch
-  was dead on that path. Open (commit 2): generate the color passes'
-  commands with the shadow passes' jobs (one more filter per job).
-- Under `gpu` the CPU lanes still run for `has_cull_view_survivors()` and
-  the color passes; dropping them for the shadow passes needs the empty
-  face skip from a GPU-written survivor count (an indirect clear-only
-  path).
+- Under `gpu` on Metal the GPU-generated color commands cost about 100 us
+  more GPU time per frame than the CPU-written ones (phase 6c): find where
+  (the color set's encode kernel or executing the main pass through the
+  indirect command buffer) before relying on the color path for speed.
+- Under `gpu` the CPU lanes still run for `has_cull_view_survivors()`;
+  dropping them needs the empty face skip from a GPU-written survivor count
+  (an indirect clear-only path).
 - The compaction pass runs one workgroup per job, so a single large job
   (the draws scene: one shadow pass over one list) is latency-bound (about
   44 us GPU at the low iGPU clock); splitting jobs into several workgroups

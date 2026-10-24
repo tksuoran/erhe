@@ -1,10 +1,12 @@
-// GPU command generation for the shadow passes (doc/plans/culling.md phase
-// 6, doc/erhe/draw_list_renderer.md Q6 "GPU command generation").
+// GPU command generation for the shadow and color passes (doc/plans/
+// culling.md phase 6, doc/erhe/draw_list_renderer.md Q6 "GPU command
+// generation").
 //
 // Runs after cull_classify.comp in the same frame, over the job table the
 // CPU writes per frame: one job per (shadow view, shadow list chunk) the
-// shadow passes draw. A job compacts the chunk's entries that pass the job's
-// view bit and the passes' Item_filter into a dense run of indexed indirect
+// shadow passes draw and per (color selection, color list chunk) the color
+// passes draw. A job compacts the chunk's entries that pass the job's view
+// bit and the job's Item_filter into a dense run of indexed indirect
 // commands at the job's command offset and writes the run's length to the
 // job's count slot, the draw count vkCmdDrawIndexedIndirectCount /
 // glMultiDrawElementsIndirectCount read, followed by the number of the
@@ -27,7 +29,7 @@
 //   (Draw_indirect_buffer::update(..., Draw_record_layout::chunk_entries))
 //   writes, in the same order: index_count, instance_count 1, first_index,
 //   base_vertex, first_instance = entry - chunk begin (the entry's record in
-//   the chunk's shared shadow records). Deterministic: no atomics on the
+//   the chunk's shared records). Deterministic: no atomics on the
 //   output (the filter total is an order-independent shared sum).
 //
 // cull_templates.templates[2 * entry + 0] = index_count, first_index,
@@ -37,12 +39,12 @@
 //   layout)
 // cull_jobs.header = job_count, mask entry count (all published lists),
 //   pass word count (the filter words follow), pass 0 workgroups per job
-// cull_jobs.filter_masks[0] = require_all_bits_set (lo, hi),
-//                             require_at_least_one_bit_set (lo, hi)
-// cull_jobs.filter_masks[1] = require_all_bits_clear (lo, hi),
-//                             require_at_least_one_bit_clear (lo, hi)
-// cull_jobs.jobs[job] = view, first entry, entry count, command offset
-//   (in commands, a multiple of 32)
+// cull_jobs.filter_masks[2 * f + 0] = filter f's require_all_bits_set
+//                             (lo, hi), require_at_least_one_bit_set (lo, hi)
+// cull_jobs.filter_masks[2 * f + 1] = filter f's require_all_bits_clear
+//                             (lo, hi), require_at_least_one_bit_clear (lo, hi)
+// cull_jobs.jobs[job] = view (bits 0..15) and filter index (bits 16..31),
+//   first entry, entry count, command offset (in commands, a multiple of 32)
 // cull_masks.masks[group * mask entry count + entry]: cull_classify.comp's
 //   output (uvec2: x = view bits 0..31, y = bits 32..63)
 // cull_bits.words[command offset / 32 + i]: the job's pass bits, entry
@@ -81,11 +83,12 @@ bool is_zero(uvec2 mask)
     return (mask.x == 0u) && (mask.y == 0u);
 }
 
-// erhe::Item_filter::operator() on the 64-bit flag bits.
-bool filter_passes(uvec2 flag_bits)
+// erhe::Item_filter::operator() of filter filter_index on the 64-bit flag
+// bits.
+bool filter_passes(uint filter_index, uvec2 flag_bits)
 {
-    uvec4 set_masks   = cull_jobs.filter_masks[0];
-    uvec4 clear_masks = cull_jobs.filter_masks[1];
+    uvec4 set_masks   = cull_jobs.filter_masks[(2u * filter_index) + 0u];
+    uvec4 clear_masks = cull_jobs.filter_masks[(2u * filter_index) + 1u];
     if (!all_set(flag_bits, set_masks.xy)) {
         return false;
     }
@@ -121,7 +124,8 @@ void main()
     uint lane             = gl_LocalInvocationID.x;
     uint local_index      = workgroup_begin + lane;
     uint mask_entry_count = cull_jobs.header.y;
-    uint view             = job.x;
+    uint view             = job.x & 0xffffu;
+    uint filter_index     = job.x >> 16u;
     uint chunk_begin      = job.y;
     uint word_base        = job.w / 32u;
     uint group            = view / 64u;
@@ -138,7 +142,7 @@ void main()
         uvec2 mask      = cull_masks.masks[(group * mask_entry_count) + entry];
         uint  mask_word = (bit < 32u) ? mask.x : mask.y;
         uint  mask_bit  = (bit < 32u) ? bit : (bit - 32u);
-        bool  filtered  = filter_passes(cull_templates.templates[(2u * entry) + 1u].xy);
+        bool  filtered  = filter_passes(filter_index, cull_templates.templates[(2u * entry) + 1u].xy);
         bool  passes    = filtered && (((mask_word >> mask_bit) & 1u) != 0u);
         uint  lane_bit  = 1u << (lane % 32u);
         if (filtered) {

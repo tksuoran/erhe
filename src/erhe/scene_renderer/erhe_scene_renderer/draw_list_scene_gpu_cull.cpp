@@ -81,6 +81,7 @@ public:
         uint32_t entry_count   {0};
         uint32_t command_offset{0};
         uint32_t cpu_count     {0};
+        bool     color         {false}; // a color selection's job
     };
     std::vector<Command_job>                                              command_jobs;
     std::vector<erhe::graphics::Draw_indexed_primitives_indirect_command> cpu_commands; // at the jobs' command offsets
@@ -318,10 +319,10 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             const std::size_t group_size = Gpu_cull_classifier::workgroup_size;
             encoder.dispatch_compute(static_cast<std::uintptr_t>((entry_count + group_size - 1) / group_size), 1, 1);
         }
-        // The shadow passes' commands from the masks (phase 6), when the
-        // frame's shadow renderer gave its selection.
-        if (m_shadow_selection_set && (m_shadow_selection_frame_index == frame_index)) {
-            generate_gpu_shadow_commands(frame_index, command_buffer, *mask_buffer, mask_byte_offset, mask_bytes, check_generation);
+        // The passes' commands from the masks (phase 6), when the frame's
+        // shadow renderer gave its selection or color passes gave theirs.
+        if ((m_shadow_selection_set && (m_shadow_selection_frame_index == frame_index)) || !m_color_selections.empty()) {
+            generate_gpu_commands(frame_index, command_buffer, *mask_buffer, mask_byte_offset, mask_bytes, check_generation);
         }
 
         if (check_generation.has_value()) {
@@ -484,6 +485,7 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
     // up to it against what the CPU writer produces.
     constexpr std::size_t command_stride = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
     out.job_count           = static_cast<uint32_t>(check.command_jobs.size());
+    out.color_job_count     = 0;
     out.command_count       = 0;
     out.command_gpu_time_ns = m_gpu_command_timer ? m_gpu_command_timer->last_result() : 0;
     for (std::size_t job_index = 0, job_end = check.command_jobs.size(); job_index < job_end; ++job_index) {
@@ -492,6 +494,9 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
         uint32_t gpu_count = 0;
         std::memcpy(&gpu_count, check.gpu_counts.data() + (job_index * Gpu_cull_classifier::count_bytes_per_job), sizeof(gpu_count));
         out.command_count += job.cpu_count;
+        if (job.color) {
+            ++out.color_job_count;
+        }
         uint32_t       command_mismatches = 0;
         const uint32_t compared           = std::min(std::min(gpu_count, job.cpu_count), job.entry_count);
         for (uint32_t command = 0; command < compared; ++command) {
@@ -536,7 +541,7 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
     return Cull_classification_check_state::complete;
 }
 
-void Draw_list_scene::generate_gpu_shadow_commands(
+void Draw_list_scene::generate_gpu_commands(
     const uint64_t                  frame_index,
     erhe::graphics::Command_buffer& command_buffer,
     const erhe::graphics::Buffer&   mask_buffer,
@@ -550,86 +555,146 @@ void Draw_list_scene::generate_gpu_shadow_commands(
     ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(m_gpu_cull_classifier != nullptr);
     ERHE_VERIFY(m_cull_frame_classified && (m_cull_frame_index == frame_index));
-    ERHE_VERIFY(m_shadow_selection_set && (m_shadow_selection_frame_index == frame_index));
+    const bool shadow_selection = m_shadow_selection_set && (m_shadow_selection_frame_index == frame_index);
+    ERHE_VERIFY(shadow_selection || !m_color_selections.empty());
 
-    const Draw_list_slot& slot          = get_published_slot(frame_index);
-    const std::size_t     list_count    = slot.lists.size();
-    const std::size_t     view_count    = m_cull_views.size();
-    ERHE_VERIFY(m_shadow_selection_primitive_buffer != nullptr);
-    const std::size_t     max_per_chunk = get_records_per_chunk(*m_shadow_selection_primitive_buffer);
+    const Draw_list_slot& slot       = get_published_slot(frame_index);
+    const std::size_t     list_count = slot.lists.size();
+    const std::size_t     view_count = m_cull_views.size();
 
-    // The job table: per shadow view of the frame, per published shadow
-    // list the selection's layers select, one job per chunk (the chunks
+    // The job table: per shadow view of the frame, per published shadow list
+    // the shadow selection's layers select, then per color selection, per
+    // published color list its blending classes (in the order draw_color()
+    // draws them) and layers select, one job per chunk (the chunks
     // draw_list_chunks() cuts with the same chunk size), each with its own
     // dense command range, starting at a multiple of 32 (its pass bit words
     // start at command offset / 32). Persistent scratch, capacity kept.
-    m_gpu_shadow_jobs.clear();
+    m_gpu_jobs.clear();
+    m_gpu_job_infos.clear();
+    m_gpu_job_filters.clear();
     m_gpu_indirect_count_jobs.clear();
     m_gpu_indirect_count_index_buffers.clear();
-    m_gpu_shadow_view_jobs.assign(view_count, Gpu_shadow_view_jobs{});
-    m_gpu_shadow_job_list_count = list_count;
-    m_gpu_shadow_job_lookup.assign(view_count * list_count, c_no_gpu_shadow_job);
+    m_gpu_shadow_view_jobs.assign(view_count, Gpu_job_range{});
+    m_gpu_job_list_count = list_count;
+    m_gpu_shadow_job_lookup.assign(view_count * list_count, c_no_gpu_job);
+    m_gpu_color_job_lookup.assign(m_color_selections.size() * list_count, c_no_gpu_job);
     constexpr uint32_t command_alignment = Gpu_cull_classifier::job_command_alignment;
-    uint32_t command_count     = 0;
-    uint32_t max_job_entries   = 0;
-    for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
-        if (m_cull_views[view_index].purpose != Draw_purpose::shadow) {
-            continue;
+    uint32_t command_count   = 0;
+    uint32_t max_job_entries = 0;
+    // The jobs of one list for one view, filter and chunk size.
+    const auto add_list_jobs = [&](
+        const std::size_t          list_index,
+        const std::size_t          view_index,
+        const uint32_t             filter_index,
+        const std::size_t          max_per_chunk,
+        const Command_selection_id selection
+    ) {
+        const Draw_list&  draw_list        = slot.lists[list_index];
+        const std::size_t list_entry_count = draw_list.entries.size();
+        // The list's index buffer in the prepare's table (Mesh_memory pools
+        // hold several buffers; a frame uses few, so a linear search).
+        const erhe::graphics::Buffer* const index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
+        ERHE_VERIFY(index_buffer != nullptr);
+        uint32_t index_buffer_index = 0;
+        while (
+            (index_buffer_index < m_gpu_indirect_count_index_buffers.size()) &&
+            (m_gpu_indirect_count_index_buffers[index_buffer_index].buffer != index_buffer)
+        ) {
+            ++index_buffer_index;
         }
-        // The view's jobs are consecutive (one shadow pass draws them).
-        m_gpu_shadow_view_jobs[view_index].first_job = static_cast<uint32_t>(m_gpu_shadow_jobs.size());
-        for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
-            const Draw_list&  draw_list        = slot.lists[list_index];
-            const std::size_t list_entry_count = draw_list.entries.size();
-            if (
-                (draw_list.key.purpose != Draw_purpose::shadow) ||
-                (list_entry_count == 0) ||
-                !is_layer_selected(m_shadow_selection_layers, draw_list.key.layer_id)
-            ) {
+        if (index_buffer_index == m_gpu_indirect_count_index_buffers.size()) {
+            m_gpu_indirect_count_index_buffers.push_back(
+                Indirect_count_index_buffer{
+                    .buffer     = index_buffer,
+                    .index_type = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer)
+                }
+            );
+        }
+        // The packed view (Cull_view is 16 bits wide) and filter index.
+        ERHE_VERIFY(view_index < 0x10000u);
+        const uint32_t view_and_filter = static_cast<uint32_t>(view_index) | (filter_index << 16u);
+        for (std::size_t begin = 0; begin < list_entry_count; begin += max_per_chunk) {
+            const std::size_t end             = std::min(list_entry_count, begin + max_per_chunk);
+            const uint32_t    job_entry_count = static_cast<uint32_t>(end - begin);
+            m_gpu_jobs.push_back(Gpu_cull_job{
+                .view_and_filter = view_and_filter,
+                .entry_begin     = slot.entry_offsets[list_index] + static_cast<uint32_t>(begin),
+                .entry_count     = job_entry_count,
+                .command_offset  = command_count
+            });
+            m_gpu_job_infos.push_back(Gpu_job_info{
+                .view        = static_cast<uint32_t>(view_index),
+                .filter      = filter_index,
+                .list_index  = static_cast<uint32_t>(list_index),
+                .chunk_begin = static_cast<uint32_t>(begin),
+                .selection   = selection
+            });
+            m_gpu_indirect_count_jobs.push_back(Indirect_count_draw_job{
+                .command_offset = command_count,
+                .max_draw_count = job_entry_count,
+                .index_buffer   = index_buffer_index
+            });
+            command_count  += ((job_entry_count + command_alignment - 1) / command_alignment) * command_alignment;
+            max_job_entries = std::max(max_job_entries, job_entry_count);
+        }
+    };
+
+    if (shadow_selection) {
+        ERHE_VERIFY(m_shadow_selection_primitive_buffer != nullptr);
+        const std::size_t max_per_chunk = get_records_per_chunk(*m_shadow_selection_primitive_buffer);
+        const uint32_t    filter_index  = get_gpu_job_filter_index(m_shadow_selection_filter);
+        for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
+            if (m_cull_views[view_index].purpose != Draw_purpose::shadow) {
                 continue;
             }
-            m_gpu_shadow_job_lookup[(view_index * list_count) + list_index] = static_cast<uint32_t>(m_gpu_shadow_jobs.size());
-            // The list's index buffer in the prepare's table (Mesh_memory
-            // pools hold several buffers; a frame uses few, so a linear
-            // search).
-            const erhe::graphics::Buffer* const index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
-            ERHE_VERIFY(index_buffer != nullptr);
-            uint32_t index_buffer_index = 0;
-            while (
-                (index_buffer_index < m_gpu_indirect_count_index_buffers.size()) &&
-                (m_gpu_indirect_count_index_buffers[index_buffer_index].buffer != index_buffer)
-            ) {
-                ++index_buffer_index;
+            // The view's jobs are consecutive (one shadow pass draws them).
+            m_gpu_shadow_view_jobs[view_index].first_job = static_cast<uint32_t>(m_gpu_jobs.size());
+            for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
+                const Draw_list& draw_list = slot.lists[list_index];
+                if (
+                    (draw_list.key.purpose != Draw_purpose::shadow) ||
+                    draw_list.entries.empty() ||
+                    !is_layer_selected(m_shadow_selection_layers, draw_list.key.layer_id)
+                ) {
+                    continue;
+                }
+                m_gpu_shadow_job_lookup[(view_index * list_count) + list_index] = static_cast<uint32_t>(m_gpu_jobs.size());
+                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, Command_selection_id::none);
             }
-            if (index_buffer_index == m_gpu_indirect_count_index_buffers.size()) {
-                m_gpu_indirect_count_index_buffers.push_back(
-                    Indirect_count_index_buffer{
-                        .buffer     = index_buffer,
-                        .index_type = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer)
-                    }
-                );
+            m_gpu_shadow_view_jobs[view_index].job_count = static_cast<uint32_t>(m_gpu_jobs.size()) - m_gpu_shadow_view_jobs[view_index].first_job;
+        }
+    }
+
+    // The color selections' jobs: one consecutive run, the frame's color set.
+    m_gpu_color_jobs = Gpu_job_range{.first_job = static_cast<uint32_t>(m_gpu_jobs.size()), .job_count = 0};
+    for (std::size_t selection_index = 0, selection_end = m_color_selections.size(); selection_index < selection_end; ++selection_index) {
+        const Color_selection_record& selection = m_color_selections[selection_index];
+        const std::span<const erhe::scene::Layer_id> layers{m_color_selection_layers.data() + selection.layer_begin, selection.layer_count};
+        const std::size_t max_per_chunk = get_records_per_chunk(*selection.primitive_buffer);
+        const uint32_t    filter_index  = get_gpu_job_filter_index(selection.filter);
+        const std::size_t view_index    = static_cast<std::size_t>(selection.cull_view);
+        ERHE_VERIFY(view_index < view_count);
+        for (const erhe::primitive::Blending_class blending : erhe::primitive::blending_class_draw_order) {
+            if (!is_blending_class_selected(selection.blending, blending)) {
+                continue;
             }
-            for (std::size_t begin = 0; begin < list_entry_count; begin += max_per_chunk) {
-                const std::size_t end = std::min(list_entry_count, begin + max_per_chunk);
-                const uint32_t job_entry_count = static_cast<uint32_t>(end - begin);
-                m_gpu_shadow_jobs.push_back(Gpu_shadow_job{
-                    .view           = static_cast<uint32_t>(view_index),
-                    .entry_begin    = slot.entry_offsets[list_index] + static_cast<uint32_t>(begin),
-                    .entry_count    = job_entry_count,
-                    .command_offset = command_count
-                });
-                m_gpu_indirect_count_jobs.push_back(Indirect_count_draw_job{
-                    .command_offset = command_count,
-                    .max_draw_count = job_entry_count,
-                    .index_buffer   = index_buffer_index
-                });
-                command_count  += ((job_entry_count + command_alignment - 1) / command_alignment) * command_alignment;
-                max_job_entries = std::max(max_job_entries, job_entry_count);
+            for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
+                const Draw_list& draw_list = slot.lists[list_index];
+                if (
+                    (draw_list.key.purpose != Draw_purpose::color) ||
+                    (draw_list.key.blending != blending) ||
+                    draw_list.entries.empty() ||
+                    !is_layer_selected(layers, draw_list.key.layer_id)
+                ) {
+                    continue;
+                }
+                m_gpu_color_job_lookup[(selection_index * list_count) + list_index] = static_cast<uint32_t>(m_gpu_jobs.size());
+                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, static_cast<Command_selection_id>(selection_index));
             }
         }
-        m_gpu_shadow_view_jobs[view_index].job_count = static_cast<uint32_t>(m_gpu_shadow_jobs.size()) - m_gpu_shadow_view_jobs[view_index].first_job;
     }
-    if (m_gpu_shadow_jobs.empty()) {
+    m_gpu_color_jobs.job_count = static_cast<uint32_t>(m_gpu_jobs.size()) - m_gpu_color_jobs.first_job;
+    if (m_gpu_jobs.empty()) {
         return;
     }
 
@@ -640,7 +705,7 @@ void Draw_list_scene::generate_gpu_shadow_commands(
     }
 
     constexpr std::size_t command_stride = sizeof(Draw_indexed_primitives_indirect_command);
-    const std::size_t     job_count      = m_gpu_shadow_jobs.size();
+    const std::size_t     job_count      = m_gpu_jobs.size();
     const std::size_t     job_bytes      = classifier.get_job_data_offset() + (job_count * Gpu_cull_classifier::job_bytes);
     const std::size_t     command_bytes  = static_cast<std::size_t>(command_count) * command_stride;
     const std::size_t     count_bytes    = job_count * Gpu_cull_classifier::count_bytes_per_job;
@@ -664,8 +729,8 @@ void Draw_list_scene::generate_gpu_shadow_commands(
     const std::size_t     template_bytes = static_cast<std::size_t>(slot.entry_count) * Gpu_cull_classifier::template_bytes_per_entry;
     ERHE_VERIFY(slot.gpu_templates && (slot.gpu_bounds_capacity >= template_bytes));
 
-    // The job table, the header and the filter (cull_compact.comp layout;
-    // the filter is the selection's erhe::Item_filter as 32-bit halves).
+    // The job table, the header and the filter table (cull_compact.comp
+    // layout; each filter an erhe::Item_filter as 32-bit halves).
     Ring_buffer_range job_range = classifier.get_job_buffer().acquire(Ring_buffer_usage::CPU_write, job_bytes);
     {
         const std::span<std::byte> gpu_data = job_range.get_span();
@@ -675,18 +740,20 @@ void Draw_list_scene::generate_gpu_shadow_commands(
             pass_word_count,
             bits_workgroups_per_job
         };
-        const erhe::Item_filter&      filter          = m_shadow_selection_filter;
-        const std::array<uint32_t, 2> all_set         = Gpu_cull_classifier::split_uint64(filter.require_all_bits_set);
-        const std::array<uint32_t, 2> one_set         = Gpu_cull_classifier::split_uint64(filter.require_at_least_one_bit_set);
-        const std::array<uint32_t, 2> all_clear       = Gpu_cull_classifier::split_uint64(filter.require_all_bits_clear);
-        const std::array<uint32_t, 2> one_clear       = Gpu_cull_classifier::split_uint64(filter.require_at_least_one_bit_clear);
-        const std::array<glm::uvec4, 2> filter_words{
-            glm::uvec4{all_set  [0], all_set  [1], one_set  [0], one_set  [1]},
-            glm::uvec4{all_clear[0], all_clear[1], one_clear[0], one_clear[1]}
-        };
         std::memcpy(gpu_data.data() + classifier.get_job_header_offset(), &header, sizeof(header));
-        std::memcpy(gpu_data.data() + classifier.get_job_filter_offset(), filter_words.data(), sizeof(filter_words));
-        std::memcpy(gpu_data.data() + classifier.get_job_data_offset(), m_gpu_shadow_jobs.data(), job_count * Gpu_cull_classifier::job_bytes);
+        for (std::size_t filter_index = 0, filter_end = m_gpu_job_filters.size(); filter_index < filter_end; ++filter_index) {
+            const erhe::Item_filter&        filter    = m_gpu_job_filters[filter_index];
+            const std::array<uint32_t, 2>   all_set   = Gpu_cull_classifier::split_uint64(filter.require_all_bits_set);
+            const std::array<uint32_t, 2>   one_set   = Gpu_cull_classifier::split_uint64(filter.require_at_least_one_bit_set);
+            const std::array<uint32_t, 2>   all_clear = Gpu_cull_classifier::split_uint64(filter.require_all_bits_clear);
+            const std::array<uint32_t, 2>   one_clear = Gpu_cull_classifier::split_uint64(filter.require_at_least_one_bit_clear);
+            const std::array<glm::uvec4, 2> filter_words{
+                glm::uvec4{all_set  [0], all_set  [1], one_set  [0], one_set  [1]},
+                glm::uvec4{all_clear[0], all_clear[1], one_clear[0], one_clear[1]}
+            };
+            std::memcpy(gpu_data.data() + classifier.get_job_filter_offset() + (filter_index * sizeof(filter_words)), filter_words.data(), sizeof(filter_words));
+        }
+        std::memcpy(gpu_data.data() + classifier.get_job_data_offset(), m_gpu_jobs.data(), job_count * Gpu_cull_classifier::job_bytes);
         job_range.bytes_written(job_bytes);
         job_range.close();
     }
@@ -742,19 +809,58 @@ void Draw_list_scene::generate_gpu_shadow_commands(
             encoder.dispatch_compute(groups[0], groups[1], 1);
         }
     }
-    // Compaction writes -> the shadow passes' indirect command and count
-    // reads, the prepare steps' reads (Metal's encoding kernel; each shadow
-    // pass prepares its jobs, prepare_gpu_shadow_pass()) and the count (and
-    // the check's) copies below.
+    // Compaction writes -> the passes' indirect command and count reads, the
+    // prepare steps' reads (Metal's encoding kernel; each shadow pass
+    // prepares its jobs, prepare_gpu_shadow_pass(), the color jobs are
+    // prepared below) and the count (and the check's) copies below.
     command_buffer.memory_barrier(
         Memory_barrier_mask::command_barrier_bit |
         Memory_barrier_mask::shader_storage_barrier_bit |
         Memory_barrier_mask::pixel_buffer_barrier_bit
     );
 
+    // The color jobs: one set for every color pass of the frame, prepared
+    // here, outside any render pass (a view's color passes draw inside one
+    // render pass, which no prepare may interrupt), rebased to the first
+    // color job's command and count.
+    m_gpu_color_indirect_count_draw_set = Indirect_count_draw_set{};
+    if (m_gpu_color_jobs.job_count > 0) {
+        const uint32_t first_command = m_gpu_indirect_count_jobs[m_gpu_color_jobs.first_job].command_offset;
+        m_gpu_color_indirect_count_jobs.clear();
+        for (uint32_t job = m_gpu_color_jobs.first_job, end = m_gpu_color_jobs.first_job + m_gpu_color_jobs.job_count; job < end; ++job) {
+            const Indirect_count_draw_job& frame_job = m_gpu_indirect_count_jobs[job];
+            ERHE_VERIFY(frame_job.command_offset >= first_command);
+            m_gpu_color_indirect_count_jobs.push_back(
+                Indirect_count_draw_job{
+                    .command_offset = frame_job.command_offset - first_command,
+                    .max_draw_count = frame_job.max_draw_count,
+                    .index_buffer   = frame_job.index_buffer
+                }
+            );
+        }
+        if (!m_gpu_color_indirect_count_draws) {
+            m_gpu_color_indirect_count_draws = std::make_unique<Indirect_count_draws>(device, erhe::utility::Debug_label{"Color GPU commands"});
+        }
+        Compute_command_encoder encoder = device.make_compute_command_encoder(command_buffer);
+        m_gpu_color_indirect_count_draw_set = encoder.prepare_indexed_indirect_count_draws(
+            *m_gpu_color_indirect_count_draws,
+            Indirect_count_draws_prepare_info{
+                .frame_index         = frame_index,
+                .primitive_type      = Primitive_type::triangle,
+                .index_buffers       = m_gpu_indirect_count_index_buffers,
+                .command_buffer      = m_gpu_command_buffer,
+                .command_byte_offset = m_gpu_command_byte_offset + (static_cast<std::size_t>(first_command) * command_stride),
+                .count_buffer        = m_gpu_count_buffer,
+                .count_byte_offset   = m_gpu_count_byte_offset + (static_cast<std::size_t>(m_gpu_color_jobs.first_job) * Gpu_cull_classifier::count_bytes_per_job),
+                .count_byte_stride   = Gpu_cull_classifier::count_bytes_per_job,
+                .jobs                = m_gpu_color_indirect_count_jobs
+            }
+        );
+    }
+
     // The frame's counts, for the pass statistics: copied to host memory,
     // decoded by the classification of the frame that reuses this frame
-    // slot (decode_retired_gpu_shadow_counts(); the frame has retired then).
+    // slot (decode_retired_gpu_counts(); the frame has retired then).
     {
         const std::size_t slot_count = m_draw_list_slots.size();
         if (m_gpu_count_readbacks.size() != slot_count) {
@@ -779,7 +885,7 @@ void Draw_list_scene::generate_gpu_shadow_commands(
                     .usage                                  = Buffer_usage::transfer_dst,
                     .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
                     .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
-                    .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene shadow count readback"}
+                    .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene GPU command count readback"}
                 }
             );
         }
@@ -791,8 +897,14 @@ void Draw_list_scene::generate_gpu_shadow_commands(
         readback.frame_index = frame_index;
         readback.view_count  = view_count;
         readback.job_views.clear();
-        for (const Gpu_shadow_job& job : m_gpu_shadow_jobs) {
-            readback.job_views.push_back(job.view);
+        readback.job_selections.clear();
+        for (const Gpu_job_info& info : m_gpu_job_infos) {
+            readback.job_views.push_back(info.view);
+            readback.job_selections.push_back(info.selection);
+        }
+        readback.selection_keys.clear();
+        for (const Color_selection_record& selection : m_color_selections) {
+            readback.selection_keys.push_back(selection.key);
         }
         readback.pending = true;
     }
@@ -807,7 +919,7 @@ void Draw_list_scene::generate_gpu_shadow_commands(
     bits_range.release();
 }
 
-void Draw_list_scene::decode_retired_gpu_shadow_counts(const uint64_t frame_index)
+void Draw_list_scene::decode_retired_gpu_counts(const uint64_t frame_index)
 {
     if (m_gpu_count_readbacks.empty()) {
         return;
@@ -826,6 +938,10 @@ void Draw_list_scene::decode_retired_gpu_shadow_counts(const uint64_t frame_inde
     ERHE_VERIFY(readback.byte_count == (readback.job_views.size() * Gpu_cull_classifier::count_bytes_per_job));
     ERHE_VERIFY(data.size_bytes() >= readback.byte_count);
     m_retired_gpu_shadow_view_counts.assign(readback.view_count, Gpu_shadow_view_counts{});
+    m_retired_gpu_color_counts.clear();
+    for (const Gpu_command_key& key : readback.selection_keys) {
+        m_retired_gpu_color_counts.push_back(Retired_color_selection_counts{.key = key});
+    }
     for (std::size_t job_index = 0, job_end = readback.job_views.size(); job_index < job_end; ++job_index) {
         std::array<uint32_t, 2> counts{0u, 0u};
         std::memcpy(counts.data(), data.data() + (job_index * Gpu_cull_classifier::count_bytes_per_job), sizeof(counts));
@@ -833,6 +949,13 @@ void Draw_list_scene::decode_retired_gpu_shadow_counts(const uint64_t frame_inde
         ERHE_VERIFY(view < m_retired_gpu_shadow_view_counts.size());
         m_retired_gpu_shadow_view_counts[view].drawn    += counts[0];
         m_retired_gpu_shadow_view_counts[view].filtered += counts[1];
+        const Command_selection_id selection = readback.job_selections[job_index];
+        if (selection != Command_selection_id::none) {
+            const std::size_t selection_index = static_cast<std::size_t>(selection);
+            ERHE_VERIFY(selection_index < m_retired_gpu_color_counts.size());
+            m_retired_gpu_color_counts[selection_index].drawn    += counts[0];
+            m_retired_gpu_color_counts[selection_index].filtered += counts[1];
+        }
     }
     m_retired_gpu_shadow_counts = Retired_gpu_shadow_counts{
         .frame_index = readback.frame_index,
@@ -905,53 +1028,48 @@ void Draw_list_scene::record_gpu_command_check(
     }
     check.command_jobs.clear();
     check.cpu_commands.assign(command_count, Draw_indexed_primitives_indirect_command{});
-    for (std::size_t view_index = 0, job_index = 0, view_count = m_cull_views.size(); view_index < view_count; ++view_index) {
-        for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
-            const uint32_t first_job = m_gpu_shadow_job_lookup[(view_index * list_count) + list_index];
-            if (first_job == c_no_gpu_shadow_job) {
+    for (std::size_t job_index = 0, job_end = m_gpu_jobs.size(); job_index < job_end; ++job_index) {
+        const Gpu_cull_job&          job              = m_gpu_jobs[job_index];
+        const Gpu_job_info&          info             = m_gpu_job_infos[job_index];
+        ERHE_VERIFY(info.list_index < list_count);
+        const Draw_list&             draw_list        = slot.lists[info.list_index];
+        const std::size_t            list_entry_count = draw_list.entries.size();
+        ERHE_VERIFY(info.list_index < m_cull_masks.size());
+        const std::vector<uint64_t>& masks            = m_cull_masks[info.list_index];
+        const std::size_t            group            = info.view / 64;
+        const uint64_t               view_bit         = uint64_t{1} << (info.view % 64);
+        ERHE_VERIFY(masks.size() >= ((group + 1) * list_entry_count));
+        ERHE_VERIFY(job.entry_begin == (slot.entry_offsets[info.list_index] + info.chunk_begin));
+        ERHE_VERIFY(info.filter < m_gpu_job_filters.size());
+        const erhe::Item_filter& filter = m_gpu_job_filters[info.filter];
+        Gpu_cull_check::Command_job record{
+            .view           = info.view,
+            .list_index     = info.list_index,
+            .chunk_begin    = info.chunk_begin,
+            .entry_count    = job.entry_count,
+            .command_offset = job.command_offset,
+            .cpu_count      = 0,
+            .color          = (info.selection != Command_selection_id::none)
+        };
+        for (uint32_t local = 0; local < job.entry_count; ++local) {
+            const std::size_t      entry_index = static_cast<std::size_t>(info.chunk_begin) + local;
+            const Draw_list_entry& entry       = draw_list.entries[entry_index];
+            const bool             in_view     = ((masks[(group * list_entry_count) + entry_index] & view_bit) != 0);
+            if (!in_view || !filter(entry.flag_bits)) {
                 continue;
             }
-            const Draw_list&             draw_list        = slot.lists[list_index];
-            const std::size_t            list_entry_count = draw_list.entries.size();
-            ERHE_VERIFY(list_index < m_cull_masks.size());
-            const std::vector<uint64_t>& masks            = m_cull_masks[list_index];
-            const std::size_t            group            = view_index / 64;
-            const uint64_t               view_bit         = uint64_t{1} << (view_index % 64);
-            ERHE_VERIFY(masks.size() >= ((group + 1) * list_entry_count));
-            for (std::size_t begin = 0, chunk_size = get_records_per_chunk(*m_shadow_selection_primitive_buffer); begin < list_entry_count; begin += chunk_size, ++job_index) {
-                // The jobs are in the order generate_gpu_shadow_commands() built them.
-                ERHE_VERIFY(job_index < m_gpu_shadow_jobs.size());
-                const Gpu_shadow_job& job = m_gpu_shadow_jobs[job_index];
-                ERHE_VERIFY((job.view == view_index) && (job.entry_begin == (slot.entry_offsets[list_index] + begin)));
-                Gpu_cull_check::Command_job record{
-                    .view           = job.view,
-                    .list_index     = static_cast<uint32_t>(list_index),
-                    .chunk_begin    = static_cast<uint32_t>(begin),
-                    .entry_count    = job.entry_count,
-                    .command_offset = job.command_offset,
-                    .cpu_count      = 0
-                };
-                for (uint32_t local = 0; local < job.entry_count; ++local) {
-                    const std::size_t      entry_index = begin + local;
-                    const Draw_list_entry& entry       = draw_list.entries[entry_index];
-                    const bool             in_view     = ((masks[(group * list_entry_count) + entry_index] & view_bit) != 0);
-                    if (!in_view || !m_shadow_selection_filter(entry.flag_bits)) {
-                        continue;
-                    }
-                    check.cpu_commands[job.command_offset + record.cpu_count] = Draw_indexed_primitives_indirect_command{
-                        entry.index_count,
-                        1u,
-                        entry.first_index,
-                        entry.base_vertex,
-                        local
-                    };
-                    ++record.cpu_count;
-                }
-                check.command_jobs.push_back(record);
-            }
+            check.cpu_commands[job.command_offset + record.cpu_count] = Draw_indexed_primitives_indirect_command{
+                entry.index_count,
+                1u,
+                entry.first_index,
+                entry.base_vertex,
+                local
+            };
+            ++record.cpu_count;
         }
+        check.command_jobs.push_back(record);
     }
-    ERHE_VERIFY(check.command_jobs.size() == m_gpu_shadow_jobs.size());
+    ERHE_VERIFY(check.command_jobs.size() == m_gpu_jobs.size());
 }
 
 void Draw_list_scene::prepare_gpu_shadow_pass(
@@ -968,7 +1086,7 @@ void Draw_list_scene::prepare_gpu_shadow_pass(
     }
     const std::size_t view_index = static_cast<std::size_t>(cull_view);
     ERHE_VERIFY(view_index < m_gpu_shadow_view_jobs.size());
-    const Gpu_shadow_view_jobs& view_jobs = m_gpu_shadow_view_jobs[view_index];
+    const Gpu_job_range& view_jobs = m_gpu_shadow_view_jobs[view_index];
     m_gpu_pass_cull_view = cull_view;
     m_gpu_pass_jobs      = view_jobs;
     m_gpu_indirect_count_draw_set = Indirect_count_draw_set{};
@@ -1018,6 +1136,19 @@ void Draw_list_scene::prepare_gpu_shadow_pass(
             .jobs                = m_gpu_pass_indirect_count_jobs
         }
     );
+}
+
+auto Draw_list_scene::get_gpu_job_filter_index(const erhe::Item_filter& filter) -> uint32_t
+{
+    for (std::size_t i = 0, end = m_gpu_job_filters.size(); i < end; ++i) {
+        if (m_gpu_job_filters[i] == filter) {
+            return static_cast<uint32_t>(i);
+        }
+    }
+    // The job table holds a fixed number of filters (cull_compact.comp).
+    ERHE_VERIFY(m_gpu_job_filters.size() < Gpu_cull_classifier::max_job_filters);
+    m_gpu_job_filters.push_back(filter);
+    return static_cast<uint32_t>(m_gpu_job_filters.size() - 1);
 }
 
 } // namespace erhe::scene_renderer

@@ -140,15 +140,15 @@ struct("Editor_settings_config",
         # Where the draw lists' culling classification runs
         # (doc/plans/culling.md phases 5 and 6). gpu also runs it as a compute
         # pass whose masks a diagnostic compares with the CPU masks and from
-        # which a second pass generates the shadow passes' draw commands; the
-        # CPU masks still drive the color passes.
+        # which a second pass generates the shadow and draw-list color passes'
+        # draw commands.
         field(
             "culling_classification",
             EnumRef("Culling_classification"),
             added_in=6,
             default="Culling_classification::cpu",
             short_desc="Culling Classification",
-            long_desc="Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU that generates the shadow passes' draw commands too (devices with native multi-draw indirect with a GPU-read draw count and first-instance record indexing; others use the CPU). The color passes are drawn from the CPU result in both modes.",
+            long_desc="Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU that generates the shadow and draw-list color passes' draw commands too (devices with native multi-draw indirect with a GPU-read draw count and first-instance record indexing; others use the CPU).",
             visible=True,
             developer=True
         ),

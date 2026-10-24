@@ -51,6 +51,29 @@ enum class Cull_view : uint16_t
     none = 0xffffu
 };
 
+// One color pass's selection in a frame's GPU command generation
+// (Draw_list_scene::add_color_command_selection(), doc/plans/culling.md
+// "Open", the color passes item): an index into the frame's selections, or
+// none (the pass writes its commands on the CPU).
+enum class Command_selection_id : uint32_t
+{
+    none = 0xffffffffu
+};
+
+// The caller's identity of a color pass over one view, stable across
+// frames (the editor: the composition pass and the scene view). The GPU
+// counts of a selection arrive frames in flight late
+// (Draw_list_scene::get_retired_gpu_color_counts()); this names the
+// selection those counts belong to.
+class Gpu_command_key
+{
+public:
+    const void* pass{nullptr};
+    const void* view{nullptr};
+
+    [[nodiscard]] auto operator==(const Gpu_command_key& other) const -> bool = default;
+};
+
 // The range sphere of a point light (Draw_list_scene::add_point_light_cull_views()):
 // the light's position and range, the first test of its six cube face views,
 // so an entry whose box lies wholly outside the sphere is outside every face.
@@ -93,6 +116,10 @@ public:
     std::size_t entry_count    {0}; // entries drawn (after flag filtering and culling)
     std::size_t draw_call_count{0}; // multi-draw submissions (chunks)
     std::size_t culled_count   {0}; // entries passing the filter but outside the view frustum
+    // The draws used GPU-generated commands: entry_count and culled_count
+    // are not counted on the CPU (they arrive with the retired frame's count
+    // readback).
+    bool        gpu_generated  {false};
 };
 
 // Resolved shader stages for one color view configuration (R19).
