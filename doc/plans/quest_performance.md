@@ -68,20 +68,31 @@ taken on the device; the desktop culling numbers were taken that way
 (`memory-bank/local/culling_perf_2026_10_17.md`) and Quest numbers follow
 the same rule.
 
-## Baseline 2026-10-24 (default OpenXR scene, release APK, 42c05810b)
+## Baseline 2026-10-24 (benchmark_orbit, 120 Hz, release APK f0e9d344c)
 
-Phase timing at 72 Hz, averaged per 60 frames (us): M1 12000 (the
-`xrWaitFrame` wait; `frame_start_wait` 12), M2 780, M3 1000, R 5760
-(`draw_data_wait` 450), `join_wait` 0.1, full tick 13880. The main thread
-never blocks on R, so `xrWaitFrame(N+1)` runs inside R(N) as designed
-(`doc/editor/render_thread.md` section 2.2). `ovrgpuprofiler` over 30 s:
-GPU utilization 47 % at 456 MHz, 97 % of GPU time shading fragments,
-texture fetch stall 26 %, nearest filtered 85 %, non-base-level textures
-0 % (no mips sampled; unchanged since 2026-05-01), LRZ busy 84 %. Raw
-samples and the full logcat capture are in
-`memory-bank/local/quest_2026_10_24/`. The run was taken with the user
-wearing the headset, so the view and the controller rays were not
-reproducible; every later number comes from the benchmark mode below.
+Three repetitions per scene, medians, headset on the desk
+(`scripts/quest_bench.py run --bench config/editor/benchmark_orbit.json --repeat 3 --gpu-metrics`);
+the result files are in `memory-bank/local/quest_runs/`, the numbers in
+`memory-bank/local/quest.md`.
+
+| Scene | Wall time, 600 frames | Frame | M2 | R | App GPU | Compositor GPU | GPU util |
+|---|---|---|---|---|---|---|---|
+| default (openxr_commands.json) | 7.55 s, 79.5 fps, spread 0.7 % | 12.3 ms | 0.55 ms | 3.34 ms | 7.44 ms | 2.23 ms | 97 % |
+| heavy (commands_bench_heavy.json) | 65.4 s, 9.17 fps, spread 0.05 % | 100.3 ms | 60.1 ms | 35.0 ms | 87.3 ms | 0.61 ms | 99 % |
+
+Both scenes are GPU-bound: on the default scene app plus compositor GPU
+time exceeds the 8.33 ms period, so the frame alternates between one and
+two vsyncs (M1 is the `xrWaitFrame` wait); on the heavy scene M2 is the
+frame-slot wait behind the GPU. `ovrgpuprofiler` still shows no mip
+sampling (non-base-level 0 %), nearest filtering on 75-79 % of fetches
+and a 22 % texture fetch stall; the heavy scene adds a 21 % vertex fetch
+stall and 9.6 % of GPU time shading vertices. Ranking: the heavy scene's
+geometry cost (culling the headset passes, item 2 of the queue) and the
+texture sampling items (item 3) first; the render-thread CPU (R 35 ms on
+the heavy scene) after them. A worn-headset run taken earlier the same
+day at 72 Hz (full tick 13.9 ms, R 5.8 ms, GPU 47 %) confirmed the
+render-thread overlap: `xrWaitFrame(N+1)` runs inside R(N), the main
+thread never blocks on R.
 
 ## Benchmark mode
 

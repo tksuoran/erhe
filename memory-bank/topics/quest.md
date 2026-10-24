@@ -5,7 +5,7 @@
 @local::memory-bank/local/quest.md{device-numbers;gitignored}
 
 [OPEN_2026-10-24]{priority-order;mirrored-in-prompt_queue.txt}
-1!baseline+render-thread-headset-verification{phase-timing-log-M1/M2/R+ovrgpuprofiler;default-scene+heavier-scene;commit-id-in-log-first-line;expect:xrWaitFrame(N+1)-inside-R(N)+fps+XR_FB_performance_metrics+passthrough+quad-layers+controller-rays+ID-pick-intact;numbers->local/quest.md;method->doc/plans/quest_performance.md}
+1✓baseline-DONE-2026-10-24{benchmark_orbit@120Hz-repeat-3;both-scenes-GPU-bound;numbers->local/quest.md+plan-Baseline;render-thread-overlap-VERIFIED;was:phase-timing-log-M1/M2/R+ovrgpuprofiler;default-scene+heavier-scene;commit-id-in-log-first-line;expect:xrWaitFrame(N+1)-inside-R(N)+fps+XR_FB_performance_metrics+passthrough+quad-layers+controller-rays+ID-pick-intact;numbers->local/quest.md;method->doc/plans/quest_performance.md}
 2!headset-passes-unculled{multiview-never-culled;per-eye-stopped-at-phase-6a;fix=erhe::xr-locate-eye-views-once-in-pre_execute_rendergraph_node+Xr_session::render_frame-reuses+union-frustum-view-for-multiview-color-pass;doc/plans/culling.md-Open}
 3!GPU-items-from-2026-05-01-profile{re-measure-first;mips-not-sampled(mip_level_count=1+min_lod=max_lod=0)=highest;nearest-vs-linear-audit;FFR-level;texture-compression;fp16-revisit-deferred}
 4?headset-prepare-phase{headset-records-tools+renders-in-R-from-live-state->frame_pipelining-forced-off-under-OpenXR;move-to-M2-prepare+R-patch-views;hover-entries-read-in-R;xrEndFrame-submits-outside-device-queue-mutex}
@@ -13,6 +13,7 @@
 ?long-term{doc/plans/xr.md:XR_EXT_render_model-pair-when-runtime-ships+battery-quad-recheck-after-OS-update+ASTC/BC7-controller-textures+OpenXR_mirror-GL/Metal;doc/plans/android.md:phone-editor-phase-3}
 
 [BENCHMARK_MODE]{©User-2026-10-24}
+@status::LANDED-2026-10-24{2792e1422+139dbdc17+f0e9d344c;quest_bench.py-run/compare;120Hz-needs-setprop-debug.oculus.refreshRate(script-does-it);input_hash-identical-across-runs;spread-0.05-0.7%}
 @requirement::Quake-timedemo{fake-clock-frame_dt/frame->same-frames-regardless-of-speed;result=wall_time_s+fps-first,breakdown-second;xrWaitFrame-pins-wall-time-at-refresh->record-frames_at_refresh_ceiling+optional-display_refresh_rate_hz(120)}+fully-deterministic+repeatable{frame-indexed-camera-path;fixed-frame_dt-simulation-time;measure-only-after-scene-settled;no-randomness;input_hash-in-result;--repeat-N-spread-visible}->then-record-NEW-baseline(default+heavy;replaces-2026-10-24-worn-headset-numbers-as-reference)
 @spec::doc/plans/quest_performance.md-"Benchmark mode"
 
