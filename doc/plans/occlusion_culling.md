@@ -28,7 +28,13 @@ Sketch:
 Decision (user, 2026-10-23): this plan starts only after the Metal backend
 has the GPU-read draw count (`doc/plans/metal_backend.md` section 6,
 option A) and Metal 4 (section 7 there), so the occlusion pass is built
-once for Vulkan, OpenGL 4.6 and Metal.
+once for Vulkan, OpenGL 4.6 and Metal. Both are in place (2026-10-24):
+`Indirect_count_draws` (`doc/erhe/graphics.md` "Indirect count draws")
+gives Metal 3 and Metal 4 the GPU-read count through an indirect command
+buffer, and the Metal 4 backend (`doc/erhe/metal4_backend.md`) orders its
+work from the application's barrier declarations, so a new pass declares
+its resources' usage_before / usage_after and memory barriers exactly as on
+Vulkan (`doc/erhe/graphics.md` "Resource barriers").
 
 ## Starting point
 
@@ -47,10 +53,12 @@ are described there. What the occlusion pass builds on:
   `Gpu_cull_classifier` and `res/shaders/cull_classify.comp` write the masks;
   `res/shaders/cull_compact.comp` turns them into indirect commands plus a
   count for the shadow passes, drawn with
-  `multi_draw_indexed_primitives_indirect_count()`. It needs
-  `Device_info::use_draw_indirect_count` (Vulkan with
-  `VK_KHR_draw_indirect_count`, GL 4.6); Metal and the null device stay on
-  the CPU path until `doc/plans/metal_backend.md` section 6 lands.
+  `multi_draw_indexed_primitives_indirect_count()` (Vulkan with
+  `VK_KHR_draw_indirect_count`, GL 4.6) or, on Metal, prepared per pass by
+  `Compute_command_encoder::prepare_indexed_indirect_count_draws()` and
+  drawn with `multi_draw_indexed_primitives_indirect_count(set, job)`
+  (`doc/erhe/draw_list_renderer.md`); the null device stays on the CPU
+  path.
 - The color passes still draw CPU-written commands under `gpu`: their
   primitive records are patched per pass, so a GPU-written command cannot
   name a shared record (culling.md "Open", the color passes item). Step 7
