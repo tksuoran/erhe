@@ -583,10 +583,12 @@ TEST_F(Gpu_test, msaa_stencil_only_resolve_tracks_target_layout)
 
     erhe::graphics::Device& graphics_device = device();
 
-    // A depth-stencil format that is stencil-renderable at 4 samples.
+    // A combined depth-stencil format that is stencil-renderable at 4 samples:
+    // the pass attaches it as both the depth and the stencil attachment, so a
+    // stencil-only format (format_s8_uint) does not qualify.
     erhe::dataformat::Format format = erhe::dataformat::Format::format_undefined;
     for (const erhe::dataformat::Format candidate : graphics_device.get_supported_depth_stencil_formats()) {
-        if (erhe::dataformat::get_stencil_size_bits(candidate) == 0) {
+        if ((erhe::dataformat::get_depth_size_bits(candidate) == 0) || (erhe::dataformat::get_stencil_size_bits(candidate) == 0)) {
             continue;
         }
         const erhe::graphics::Format_properties props = graphics_device.get_format_properties(candidate);
