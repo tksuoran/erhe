@@ -187,11 +187,10 @@ public:
     // rendergraph node's pre-execute hook (Composer::add_cull_views(),
     // doc/plans/culling.md phase 6a) before the frame's classification;
     // render_immediate() draws with Render_context::immediate_cull_view
-    // (the headset's) or none (unculled).
-    // An occlusion test
-    // pass: its view's culling view when the frame made it an occlusion
-    // view (Draw_list_renderer::add_color_occlusion_view(), the same hook),
-    // else none (the pass draws nothing).
+    // (the headset's) or none (unculled). An occlusion test pass: its view's
+    // culling view when the frame made it an occlusion view
+    // (Draw_list_renderer::add_color_occlusion_view(), the same hook), else
+    // none (the pass draws nothing).
     erhe::scene_renderer::Cull_view                    cull_view         {erhe::scene_renderer::Cull_view::none};
     // The pass's selection in the frame's GPU command generation of its
     // draw list scene (Draw_list_renderer::add_color_command_selection(),
