@@ -238,7 +238,8 @@ public:
     std::size_t             draw_list_culled_count {0};
     uint64_t                draw_list_counts_frame_index{0};
     // An occlusion test pass: the counts of its view in the newest retired
-    // frame whose occlusion words were decoded
+    // frame whose occlusion words were decoded - only frames an occlusion
+    // check (MCP get_occlusion_check) recorded are
     // (Draw_list_scene::get_retired_occlusion_counts(); frames in flight
     // late, 0 frame index before the first): entries the test rasterized,
     // those no fragment marked, and the color entries marked visible

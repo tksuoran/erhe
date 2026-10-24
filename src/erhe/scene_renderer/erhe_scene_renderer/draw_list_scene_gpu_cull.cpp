@@ -1709,6 +1709,20 @@ void Draw_list_scene::decode_retired_occlusion(const uint64_t frame_index)
     // This frame reuses the slot of the frame that wrote the words: that
     // frame retired (Device::acquire_frame_slot() waited for it).
     ERHE_VERIFY((slot.frame_index + m_occlusion_slots.size()) <= frame_index);
+    // The words are read on the CPU only for a frame an occlusion check
+    // recorded: the GPU classification consumes them directly, and reading
+    // every entry's words back each frame costs milliseconds on large
+    // scenes (the buffer is host-visible, not necessarily host-cached).
+    bool checked_frame = false;
+    {
+        const std::lock_guard<std::mutex> lock{m_occlusion_check->mutex};
+        const Gpu_occlusion_check& check = *m_occlusion_check;
+        checked_frame = (check.stage == Gpu_occlusion_check::Stage::recording) && (check.frame_index == slot.frame_index);
+    }
+    if (!checked_frame) {
+        slot.pending = false;
+        return;
+    }
     ERHE_PROFILE_FUNCTION();
     const std::size_t          capacity = slot.buffer->get_capacity_byte_count();
     const std::span<std::byte> data     = slot.buffer->map_bytes(0, capacity);
