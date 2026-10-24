@@ -6,9 +6,9 @@
 ✓Metal-GPU-read-draw-count(ICB)+Metal-4-separate-backend-all-rows-MTL4+barrier-API+declared-barriers+narrowing(5cf6e13d2)+ImGui-first_instance(07330bebc)+Metal-draw-id-removed(2ae347dfe;M4==M3-per-draw)+vertex-stage-sampler-remap(c9e5f8faf)+Vk-render-pass-qualifiers(1fd30277d)+shadow-qualifiers(f52f201e0)
 ?pending-user-at-Dell{pacing-live-gate-cached-vs-fresh;M4-vs-M3;fullscreen-re-gate-Dell+ProMotion}->Metal-3-keep/remove-decision(Metal-3-still-per-bind-PSO)=prompt_queue-item-2
 ✓texel-viz-own-barriers{7b2fc0917;plan-step-2-item-4-DONE;shadow-span-2014->1644us}
-?open{Vk-tracked-layout-VERIFY(step-3);intra-dispatch-barrier-cleanup(step-4;fires-0/frame);M4-drawable-wait-tail;MoltenVK-sync-validation-WAW-vkCmdCopyBuffer-vertex-pool-at-skinned_vertex_drag(shadow_map_cache_check;pre-existing;unrelated-to-shadows)}
+?open{Vk-tracked-layout-VERIFY(step-3);intra-dispatch-barrier-cleanup(step-4;fires-0/frame);M4-drawable-wait-tail;MoltenVK-WAW-vertex-pool-FIXED-17bf1d81d}
 
-[TASK::occlusion-culling]{after-queue-item-1(MoltenVK-vertex-pool-WAW);©User-2026-10-24;prompt_queue-item-2;doc/plans/occlusion_culling.md;via-harness;ask-user-"Decisions for the user"-first}
+[TASK::occlusion-culling]{NEXT;©User-2026-10-24;prompt_queue-item-1;doc/plans/occlusion_culling.md;via-harness;ask-user-"Decisions for the user"-first}
 
 [TASK::bistro-gpu]{started-2026-10-21;branch=render-thread;Release-Metal-M4-Pro-Dell-120Hz}
 ✓profile{Bistro-GPU~6.5ms(viewport-4.3+point-faces-2.15+spot-0.3);R-2.15ms;main-0.38ms;no-meaningful-M/R-overlap(GPU-bound)}
