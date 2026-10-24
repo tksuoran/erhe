@@ -176,23 +176,38 @@ What step 2 commits, in order of gain:
    `light_cluster_gpu_binner.cpp`): no measurable cost.
 4. Done: the shadow map passes declare the stages that sample each map
    (`doc/erhe/shadows.md` "Shadow pass mechanics"): no compute shader
-   samples one, the distance map and the point cube array are
-   `sampled | fragment_shader`, and the depth map keeps `vertex_shader`
-   for the texel visualization (`shadow_debug.vert`). Metal 4 encodes
-   `F -> F` at both ends of the point cube and distance passes and
-   `V|F -> F` / `F -> V|F` around the depth passes. Heavy scene, shadow
-   map cache off, Release headless Metal 4, two runs each: the 12 point
-   cube face passes now overlap, the shadow passes' GPU span (first start
-   to last end) drops 2130 -> 2018 us and the tick 5554 -> 5447 us. The
-   depth passes' vertex stage still waits for the previous pass's depth
-   writes (Vulkan destination `VERTEX_SHADER`, Metal 4 `V`): 51-53 us
-   between consecutive directional passes. Without `vertex_shader` on the
-   depth map (measured with the visualization off) the span is 1644 us and
-   the tick 5070 us. Dropping it needs the visualization to declare its own
-   read, a `texture_barrier` of the depth map to `sampled | vertex_shader`
-   after the last shadow pass while the view's `shadow_debug` is on, and
-   the matching earlier-submission barrier before the next frame's passes;
-   not done.
+   samples one, and every map (the depth map, the distance map and the
+   point cube array) is `sampled | fragment_shader`. The texel
+   visualization (`shadow_debug.vert`), the only vertex shader reader of
+   the depth map, declares its own read ("Texel visualization barriers"
+   there): `Shadow_render_node` records `texture_barrier(depth map,
+   depth_stencil_attachment, sampled | vertex_shader, earlier_submissions)`
+   after the frame's shadow passes in the frames the view's toggle is on,
+   and `sampled | vertex_shader -> sampled | fragment_shader`
+   (`earlier_submissions`) before the next frame's passes that write the
+   map; the broad `memory_barrier(texture_fetch_barrier_bit)` the viewport
+   recorded for it is gone. Metal 4 encodes `F -> F` at both ends of every
+   shadow pass. Heavy scene, shadow map cache off, visualization off,
+   Release headless Metal 4 with Tracy, pipelined, two runs each: the
+   `Shadow_renderer::render()` GPU zone (the shadow passes' span) 2014 /
+   2012 -> 1644 / 1641 us, the tick 5424 / 5420 -> 5051 / 5050 us (with
+   `vertex_shader` on the depth map each depth pass's vertex stage waited
+   for the previous pass's depth writes, 51-53 us between consecutive
+   directional passes; before that, with an unqualified `sampled`, the
+   span was 2130 us and the tick 5554 us). `Resource_barrier_test`
+   `earlier_submission_depth_attachment_to_vertex_stage` covers the
+   visualization's shape (a depth attachment written in one command
+   buffer, read in the vertex stage of the next); on Metal 4 it fails
+   with every probe texel wrong when the barrier names `fragment_shader`
+   instead. Verification: the editor image gates on Metal 3, Metal 4 and
+   MoltenVK (four threading configurations, synchronization validation on
+   MoltenVK) byte-identical to the Metal 4 build before (the same two
+   hashes on all three back ends); the visualization toggled
+   on, off and on again renders the same image twice, on Metal 4 (Metal
+   API validation) and MoltenVK (synchronization validation: 0 hazards;
+   the layer reports no hazard either with either barrier removed, so it
+   does not observe these reads); `ctest -L "gpu|editor"` on Metal 4 and
+   MoltenVK.
 
 ## Step 3: Vulkan render pass qualifiers, then tracked layouts
 
@@ -229,8 +244,8 @@ carry their barriers (`texture_barrier` / `buffer_barrier` or
 
 ## Narrowing candidates: `memory_barrier()` call sites
 
-The 39 sites outside `erhe_graphics` and the tests
-(`grep -rn "memory_barrier(" src --include=*.cpp`): 37 calls and two
+The 38 sites outside `erhe_graphics` and the tests
+(`grep -rn "memory_barrier(" src --include=*.cpp`): 36 calls and two
 comments that name the caller's barrier. Each call can become the named
 per-resource barrier; none needs the global form. They are candidates for
 step 2, converted where a measurement shows the broad form costs something.
@@ -270,9 +285,8 @@ step 2, converted where a measurement shows the broad form costs something.
 | `editor/renderers/radiance_cascades_renderer.cpp:2735` | client mapped | `buffer_barrier(each readback, transfer_dst, host_read)` |
 | `editor/xr/headset_view.cpp:1239` | vertex attrib + storage | `buffer_barrier(debug line triangles, storage_write \| compute_shader, storage_read \| vertex_shader)` (plus `vertex` for a vertex-input consumer) |
 | `editor/xr/headset_view.cpp:1480` | vertex attrib + storage | as `headset_view.cpp:1239` |
-| `editor/scene/viewport_scene_view.cpp:572` | vertex attrib + storage | as `headset_view.cpp:1239` (debug renderer triangles) |
-| `editor/scene/viewport_scene_view.cpp:638` | vertex attrib + storage | as `headset_view.cpp:1239` (content wide line triangles) |
-| `editor/scene/viewport_scene_view.cpp:658` | texture fetch | `texture_barrier(shadow map, depth_stencil_attachment, sampled \| vertex_shader \| fragment_shader)` (a graph edge once pins carry access kinds) |
+| `editor/scene/viewport_scene_view.cpp:571` | vertex attrib + storage | as `headset_view.cpp:1239` (debug renderer triangles) |
+| `editor/scene/viewport_scene_view.cpp:637` | vertex attrib + storage | as `headset_view.cpp:1239` (content wide line triangles) |
 | `editor/scene/scene_image_capture.cpp:476` | client mapped | `buffer_barrier(capture buffer, transfer_dst, host_read)` |
-| `renderer/debug_renderer.cpp:628` | comment: the caller's compute -> vertex barrier (`viewport_scene_view.cpp:572`, `headset_view.cpp:1239`) | rewrite the comment to name the caller's `buffer_barrier` |
-| `scene_renderer/content_wide_line_compute_renderer.cpp:368` | comment: the caller's compute -> vertex barrier (`viewport_scene_view.cpp:638`, `headset_view.cpp:1480`) | rewrite the comment to name the caller's `buffer_barrier` |
+| `renderer/debug_renderer.cpp:628` | comment: the caller's compute -> vertex barrier (`viewport_scene_view.cpp:571`, `headset_view.cpp:1239`) | rewrite the comment to name the caller's `buffer_barrier` |
+| `scene_renderer/content_wide_line_compute_renderer.cpp:368` | comment: the caller's compute -> vertex barrier (`viewport_scene_view.cpp:637`, `headset_view.cpp:1480`) | rewrite the comment to name the caller's `buffer_barrier` |

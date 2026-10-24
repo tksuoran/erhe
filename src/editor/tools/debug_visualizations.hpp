@@ -81,11 +81,6 @@ public:
     void read_config (const Debug_visualizations_settings& settings);
     void write_config(Debug_visualizations_settings& settings) const;
 
-    // True when the shadow-texel visualization is enabled. The viewport uses
-    // this to insert a vertex-stage shadow-map sync barrier before its render
-    // pass, since Texel_renderer samples the shadow map in the vertex stage.
-    [[nodiscard]] auto is_shadow_debug_enabled() const -> bool { return m_settings.shadow_debug; }
-
     // The per-view toggles; the solid-bone composition pass reads the Skins
     // visualization mode of the view being rendered through this (via
     // Scene_view::get_debug_visualizations_settings).

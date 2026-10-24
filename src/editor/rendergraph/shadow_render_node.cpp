@@ -120,6 +120,20 @@ Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 
+namespace {
+
+// The shadow maps' fragment shader readers: the usage_before / usage_after of
+// every shadow pass attachment (reconfigure()).
+constexpr uint64_t c_shadow_map_fragment_sampled =
+    erhe::graphics::Image_usage_flag_bit_mask::sampled |
+    erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
+// The shadow texel visualization's read of the depth map (shadow_debug.vert).
+constexpr uint64_t c_depth_map_vertex_sampled =
+    erhe::graphics::Image_usage_flag_bit_mask::sampled |
+    erhe::graphics::Image_usage_flag_bit_mask::vertex_shader;
+
+} // anonymous namespace
+
 void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const Shadow_node_configuration& configuration)
 {
     const int  resolution           = configuration.resolution;
@@ -144,6 +158,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
             resolution, light_count
         );
         m_texture.reset();
+        m_depth_map_vertex_reads_pending = false;
         return;
     }
 
@@ -176,6 +191,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         ERHE_PROFILE_SCOPE("allocating shadow map array texture");
 
         m_texture.reset();
+        m_depth_map_vertex_reads_pending = false;
         m_texture = std::make_shared<Texture>(
             graphics_device,
             erhe::graphics::Texture_create_info {
@@ -232,20 +248,16 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
 
     // The shader stages that sample the shadow maps, as the usage_before /
     // usage_after of every shadow pass attachment (doc/erhe/shadows.md
-    // "Shadow pass mechanics"). The receivers (erhe_light.glsl in
+    // "Shadow pass mechanics"): the receivers (erhe_light.glsl in
     // standard.frag) and the depth visualization (depth_to_color.frag) are
-    // fragment shaders; the shadow texel visualization (shadow_debug.vert)
-    // reads the depth map in its vertex shader. No compute shader samples a
-    // shadow map (the ray traced paths trace their own shadow rays).
-    constexpr uint64_t depth_map_sampled =
-        erhe::graphics::Image_usage_flag_bit_mask::sampled |
-        erhe::graphics::Image_usage_flag_bit_mask::vertex_shader |
-        erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
-    // The R32F distance maps (the 2D distance array and the point cube array)
-    // have fragment readers only.
-    constexpr uint64_t distance_map_sampled =
-        erhe::graphics::Image_usage_flag_bit_mask::sampled |
-        erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
+    // fragment shaders. The shadow texel visualization (shadow_debug.vert)
+    // reads the depth map in its vertex shader; it declares that read with
+    // barriers of its own (execute_rendergraph_node()), so the passes'
+    // vertex stage does not wait for the previous pass. No compute shader
+    // samples a shadow map (the ray traced paths trace their own shadow
+    // rays).
+    constexpr uint64_t depth_map_sampled    = c_shadow_map_fragment_sampled;
+    constexpr uint64_t distance_map_sampled = c_shadow_map_fragment_sampled;
 
     log_render->debug("updating render passes, light_count = {}", light_count);
     // Order matters: each Gpu_timer is registered with its Render_pass and
@@ -457,6 +469,11 @@ void Shadow_render_node::prepare()
     Configuration_slot& slot        = m_configuration_slots[frame_index % m_configuration_slots.size()];
     slot.frame_index   = frame_index;
     slot.configuration = m_requested_configuration;
+    // The view's shadow texel visualization toggle as this frame's input:
+    // the render phase declares the visualization's depth map read from it
+    // and the visualization draws from the frame result
+    // (execute_rendergraph_node()).
+    slot.texel_visualization = m_scene_view.get_debug_visualizations_settings().shadow_debug;
 }
 
 void Shadow_render_node::apply_requested_configuration(erhe::graphics::Command_buffer& command_buffer)
@@ -563,6 +580,7 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     result.draw_statistics.clear();
     result.light_cluster_stats       = erhe::scene_renderer::Light_cluster_stats{};
     result.light_cluster_gpu_time_ns = 0;
+    result.texel_visualization       = false;
     // Execute draws only what this hook fitted for this frame.
     m_frame_passes.frame_index = frame_index;
     m_frame_passes.parameters.reset();
@@ -926,7 +944,42 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             const erhe::scene_renderer::Shadow_renderer::Render_parameters& parameters = m_frame_passes.parameters.value();
             // The frame command buffer the hook fitted with.
             ERHE_VERIFY(&parameters.command_buffer == &command_buffer);
+            // An earlier frame's texel visualization read the depth map in
+            // its vertex shader (submitted before this command buffer): that
+            // read precedes this frame's depth writes. The passes' begin
+            // barrier orders fragment shader reads before them
+            // (c_shadow_map_fragment_sampled), so this barrier chains the
+            // vertex read into that stage; the layout stays depth stencil
+            // read only, the passes' layout_before.
+            if (m_depth_map_vertex_reads_pending) {
+                ERHE_VERIFY(m_texture && (parameters.texture == m_texture));
+                command_buffer.texture_barrier(
+                    *m_texture,
+                    c_depth_map_vertex_sampled,
+                    c_shadow_map_fragment_sampled,
+                    erhe::graphics::Barrier_scope::earlier_submissions
+                );
+                m_depth_map_vertex_reads_pending = false;
+            }
             m_context.shadow_renderer->draw(parameters, m_cull_views);
+        }
+
+        // The view's shadow texel visualization of this frame (prepare())
+        // samples the depth map in its vertex shader, after the last shadow
+        // pass: the depth writes are ordered before that read here. The
+        // writes may be this frame's or, when the passes did not draw (no
+        // passes, frozen maps, cached maps), an earlier frame's, hence
+        // earlier_submissions.
+        const Configuration_slot& slot = m_configuration_slots[frame_index % m_configuration_slots.size()];
+        if ((slot.frame_index == frame_index) && slot.texel_visualization && m_texture) {
+            command_buffer.texture_barrier(
+                *m_texture,
+                erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment,
+                c_depth_map_vertex_sampled,
+                erhe::graphics::Barrier_scope::earlier_submissions
+            );
+            m_depth_map_vertex_reads_pending = true;
+            result.texel_visualization       = true;
         }
     }
     // The frame's parameters and scene root go with the frame.

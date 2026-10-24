@@ -206,7 +206,6 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     state.tools_frame_slot.reset();
     // No grid unless the grid tool records one (record_grid()).
     state.grid         = Grid_pass_state{};
-    state.shadow_debug = m_debug_visualizations.is_shadow_debug_enabled();
     // Weight_display's joint weight ramp inputs; the colors are assigned
     // into the slot's vector, which keeps its capacity.
     const App_rendering& app_rendering = *m_context.app_rendering;
@@ -643,19 +642,6 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             }
         }
 
-    }
-
-    // Shadow-texel debug visualization sync. Texel_renderer samples the shadow
-    // map in the VERTEX stage (textureSize/textureLod in shadow_debug.vert). The
-    // shadow render pass's producer->consumer barrier only makes the shadow map
-    // available to fragment-stage reads (the forward renderer samples it there),
-    // so the vertex-stage read is a read-after-write hazard. Insert an extra
-    // barrier (outside the render pass) making prior writes visible to
-    // vertex-stage texture fetches -- only when the visualization is active, so
-    // the common path pays no extra synchronization. Mirrors the content-wide-
-    // line compute->vertex barrier above.
-    if (state.shadow_debug) {
-        command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::texture_fetch_barrier_bit);
     }
 
     // Generate the atmosphere LUTs once (must be outside the render pass: it
