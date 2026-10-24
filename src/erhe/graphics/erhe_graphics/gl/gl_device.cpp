@@ -822,6 +822,44 @@ auto Device_impl::get_surface() -> Surface*
     return m_surface.get();
 }
 
+auto Device_impl::capture_last_frame(
+    int&                      out_width,
+    int&                      out_height,
+    erhe::dataformat::Format& out_format,
+    std::vector<std::byte>&   out_pixels
+) -> bool
+{
+    if (m_surface == nullptr) {
+        return false;
+    }
+    Swapchain* const swapchain = m_surface->get_impl().get_swapchain();
+    if (swapchain == nullptr) {
+        return false;
+    }
+    uint32_t width  = 0;
+    uint32_t height = 0;
+    if (!swapchain->get_impl().read_back_capture(width, height, out_pixels)) {
+        return false;
+    }
+    out_width  = static_cast<int>(width);
+    out_height = static_cast<int>(height);
+    out_format = erhe::dataformat::Format::format_8_vec4_srgb;
+    return true;
+}
+
+auto Device_impl::request_frame_capture() -> bool
+{
+    if (m_surface == nullptr) {
+        return false;
+    }
+    Swapchain* const swapchain = m_surface->get_impl().get_swapchain();
+    if (swapchain == nullptr) {
+        return false;
+    }
+    swapchain->get_impl().request_capture();
+    return true;
+}
+
 auto Device_impl::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
 {
     static_cast<void>(frame_id);

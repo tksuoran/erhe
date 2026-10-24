@@ -720,6 +720,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Xr_session::begin_frame` / `wait_frame` assert the main role;
   `Device::get_command_buffer` refuses the main thread during `m1_overlap`.
   `erhe_utility` now links `erhe::verify`.
+- `erhe::graphics`: `Device::capture_last_frame()` / `request_frame_capture()`
+  on the OpenGL backend: an armed capture reads the default framebuffer's back
+  buffer just before the buffer swap.
 - `erhe::graphics`: `Graphics_config::vulkan.vulkan_gpu_assisted_validation`
   (config version 2), GPU-assisted validation in place of synchronization
   validation; debug-level resource and address traces (`erhe.graphics.texture`,

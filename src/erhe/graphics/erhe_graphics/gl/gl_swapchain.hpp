@@ -2,6 +2,10 @@
 
 #include "erhe_graphics/swapchain.hpp"
 
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
 namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
@@ -31,10 +35,27 @@ public:
     [[nodiscard]] auto get_color_format() const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_depth_format() const -> erhe::dataformat::Format;
 
+    // Screenshot capture (Device::capture_last_frame), the same one-shot
+    // arm-then-collect protocol as the Vulkan and Metal swapchains:
+    // request_capture() arms it, present() reads the composited back buffer
+    // just before swapping, and read_back_capture() hands out those pixels
+    // as tightly packed, top-down, opaque RGBA8 rows.
+    void               request_capture  ();
+    [[nodiscard]] auto read_back_capture(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool;
+
 private:
+    void record_capture();
+
     Device_impl&                  m_device_impl;
     Surface_impl&                 m_surface_impl;
     erhe::window::Context_window* m_context_window{nullptr};
+
+    bool                          m_capture_requested  {false};
+    bool                          m_capture_ready      {false};
+    uint64_t                      m_capture_frame_index{0};
+    uint32_t                      m_capture_width      {0};
+    uint32_t                      m_capture_height     {0};
+    std::vector<std::byte>        m_capture_pixels;
 };
 
 } // namespace erhe::graphics
