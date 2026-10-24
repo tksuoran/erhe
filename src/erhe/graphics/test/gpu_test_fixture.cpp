@@ -436,6 +436,31 @@ void Gpu_test::seed_subresource_rgba8(
     );
 }
 
+void Gpu_test::leave_narrow_scissor()
+{
+    const std::shared_ptr<erhe::graphics::Texture> target = make_color_target(4, 4);
+    erhe::graphics::Render_pass_descriptor descriptor{};
+    descriptor.color_attachments[0].texture       = target.get();
+    descriptor.color_attachments[0].clear_value   = std::array<double, 4>{0.0, 0.0, 0.0, 1.0};
+    descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+    descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+    descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.render_target_width  = target->get_width();
+    descriptor.render_target_height = target->get_height();
+    descriptor.debug_label = erhe::utility::Debug_label{"leave_narrow_scissor"};
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Render_pass              render_pass{device(), descriptor};
+            erhe::graphics::Render_command_encoder   encoder = device().make_render_command_encoder(command_buffer);
+            const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+            encoder.set_scissor_rect(0, 0, 1, 1);
+        }
+    );
+}
+
 auto Gpu_test::read_texture_rgba32f(const erhe::graphics::Texture& texture)
     -> std::vector<float>
 {

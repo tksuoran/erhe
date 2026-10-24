@@ -76,6 +76,16 @@ void Blit_command_encoder_impl::blit_framebuffer(
 
     gl::named_framebuffer_read_buffer (src_name, src_buffer);
     gl::named_framebuffer_draw_buffers(dst_name, 1, &dst_buffer);
+    // A blit is clipped by the scissor test, which this backend keeps
+    // enabled: open the scissor to the destination rectangle.
+    m_device.get_impl().get_state_tracker().scissor.execute(
+        Scissor_state{
+            .x      = region.destination_origin.x,
+            .y      = region.destination_origin.y,
+            .width  = region.size.x,
+            .height = region.size.y
+        }
+    );
     gl::blit_named_framebuffer(
         src_name,                                                 // read framebuffer
         dst_name,                                                 // draw framebuffer
