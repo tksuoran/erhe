@@ -50,7 +50,8 @@ auto component_count(const gl::Pixel_format pixel_format) -> size_t
         }
 
         case gl::Pixel_format::rgba:
-        case gl::Pixel_format::rgba_integer: {
+        case gl::Pixel_format::rgba_integer:
+        case gl::Pixel_format::bgra: {
             return 4;
         }
 
@@ -179,6 +180,17 @@ auto get_gl_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_
 
 auto get_format_and_type(erhe::dataformat::Format pixelformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool
 {
+    // BGRA8 is stored as RGBA8 / SRGB8_ALPHA8 (convert_to_gl()); the GL_BGRA
+    // client format keeps the BGRA byte order in uploads and readbacks.
+    if (
+        (pixelformat == erhe::dataformat::Format::format_8_vec4_bgra_unorm) ||
+        (pixelformat == erhe::dataformat::Format::format_8_vec4_bgra_srgb)
+    ) {
+        format = gl::Pixel_format::bgra;
+        type   = gl::Pixel_type::unsigned_byte;
+        return true;
+    }
+
     const std::optional<gl::Internal_format> gl_internal_format_opt = gl_helpers::convert_to_gl(pixelformat);
     ERHE_VERIFY(gl_internal_format_opt.has_value());
     const gl::Internal_format internal_format = gl_internal_format_opt.value();

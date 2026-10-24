@@ -986,6 +986,11 @@ auto has_stencil(const gl::Internal_format format) -> bool
         case erhe::dataformat::Format::format_8_vec4_snorm:             return gl::Internal_format::rgba8_snorm;
         case erhe::dataformat::Format::format_8_vec4_uint:              return gl::Internal_format::rgba8ui;
         case erhe::dataformat::Format::format_8_vec4_sint:              return gl::Internal_format::rgba8i;
+        // OpenGL has no BGRA internal format: BGRA8 is stored as RGBA8 and
+        // transferred with the GL_BGRA client format (erhe_graphics
+        // get_format_and_type()), which gives the BGRA byte order in memory.
+        case erhe::dataformat::Format::format_8_vec4_bgra_srgb:         return gl::Internal_format::srgb8_alpha8;
+        case erhe::dataformat::Format::format_8_vec4_bgra_unorm:        return gl::Internal_format::rgba8;
         case erhe::dataformat::Format::format_16_scalar_unorm:          return gl::Internal_format::r16;
         case erhe::dataformat::Format::format_16_scalar_snorm:          return gl::Internal_format::r16_snorm;
         case erhe::dataformat::Format::format_16_scalar_uint:           return gl::Internal_format::r16ui;
