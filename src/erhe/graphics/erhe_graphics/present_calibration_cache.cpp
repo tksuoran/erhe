@@ -11,7 +11,6 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -97,13 +96,17 @@ auto parse_hexfloat(const json& value, double& out) -> bool
     if (((last - first) < 2) || (first[0] != '0') || ((first[1] != 'x') && (first[1] != 'X'))) {
         return false;
     }
-    first += 2;
-    double magnitude = 0.0;
-    const std::from_chars_result result = std::from_chars(first, last, magnitude, std::chars_format::hex);
-    if ((result.ec != std::errc{}) || (result.ptr != last)) {
+    // std::strtod parses hexadecimal floating point literals on every
+    // platform; floating point std::from_chars is missing from the Android
+    // NDK libc++. text is null-terminated, so the whole string is parsed
+    // (sign and 0x prefix included) and the end pointer must land on the
+    // terminator.
+    char* end = nullptr;
+    const double parsed = std::strtod(text.c_str(), &end);
+    if (end != last) {
         return false;
     }
-    out = negative ? -magnitude : magnitude;
+    out = parsed;
     return true;
 }
 
