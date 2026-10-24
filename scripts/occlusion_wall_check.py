@@ -2,7 +2,8 @@
 """Gate of the raster occlusion test (doc/plans/occlusion_culling.md).
 
 Drives a running editor (ERHE_AI_DRIVER=1, the default startup scene) over
-MCP: places a wall in front of the viewport camera, N boxes behind it, M
+MCP: makes the scene's viewport the only shown viewport window
+(mcp_viewport_isolation.py), places a wall in front of the viewport camera, N boxes behind it, M
 boxes in front of it and one small box that crosses the camera's near plane,
 turns on the gpu culling classification and occlusion culling, and reads
 get_occlusion_check. Passes when every box behind the wall is reported
@@ -21,6 +22,8 @@ import os
 import subprocess
 import sys
 import time
+
+from mcp_viewport_isolation import isolate_viewport
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -49,6 +52,14 @@ def box(port, scene, name, position, size):
     mcp(port, "create_shape", {"scene_name": scene, "shape": "box", "name": name, "size": size, "position": position, "motion_mode": "none"})
 
 
+def only_view(check):
+    # The isolated viewport is the frame's only occlusion view.
+    views = check.get("views", [])
+    if len(views) != 1:
+        raise RuntimeError(f"expected one occlusion view (the isolated viewport), got {len(views)}: {[v.get('scene_view') for v in views]}")
+    return views[0]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=3743)
@@ -56,7 +67,10 @@ def main():
     args = parser.parse_args()
     port, scene = args.port, args.scene
 
-    viewport = mcp(port, "get_viewports", {})["viewports"][0]
+    # The scene's viewport is the only one rendering, whatever window state
+    # the working copy's config restores (a hidden dock tab renders nothing,
+    # and the check then waits for a frame that never comes).
+    viewport = isolate_viewport(lambda tool, arguments: mcp(port, tool, arguments), scene_name=scene)
     camera = viewport["camera"]
     # The camera looks down -Z with the identity rotation.
     mcp(port, "set_node_transform", {"scene_name": scene, "node_name": camera, "translation": EYE, "rotation_xyzw": [0, 0, 0, 1], "space": "world"})
@@ -73,7 +87,7 @@ def main():
 
     check = mcp(port, "get_occlusion_check", {"scene_name": scene})
     print(json.dumps(check, indent=2))
-    view = next(v for v in check["views"] if v["scene_view"] == viewport.get("scene_view", v["scene_view"]))
+    view = only_view(check)
     occluded = {e["name"] for e in view["first_occluded"]}
     behind   = {f"occlusion_behind_{i}" for i in range(len(BEHIND))}
     visible  = {f"occlusion_front_{i}" for i in range(len(FRONT))} | {"occlusion_near", "occlusion_wall"}
@@ -104,7 +118,7 @@ def main():
     mcp(port, "set_node_transform", {"scene_name": scene, "node_name": camera, "translation": ROOM, "rotation_xyzw": [0, 0, 0, 1], "space": "world"})
     time.sleep(2.0)
     check = mcp(port, "get_occlusion_check", {"scene_name": scene})
-    view = next(v for v in check["views"] if v["scene_view"] == viewport.get("scene_view", v["scene_view"]))
+    view = only_view(check)
     occluded = {e["name"] for e in view["first_occluded"]}
     for name in ("occlusion_room", "occlusion_beyond"):
         if name in occluded:

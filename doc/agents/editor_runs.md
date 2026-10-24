@@ -69,6 +69,14 @@ into an AI chat):
   `config/editor/desktop_window_imgui_host_imgui.ini` is read (so a seeded
   layout, such as the creations' large headless viewports, applies) but never
   written.
+- Window visibility (`config/editor/desktop_windows.json`) and the dock
+  layout come from the working copy, so an extra viewport window may be
+  open and the scene's viewport may be a hidden dock tab that renders
+  nothing. A script that measures or gates one viewport calls
+  `isolate_viewport()` of `scripts/mcp_viewport_isolation.py` first: it
+  hides the other viewport windows, focuses the target and returns once
+  ImGui reports the target shown (`get_viewports` keeps reporting the
+  rectangle of a hidden tab, so its size proves nothing).
 - Fatal behavior is unchanged (errors still abort); the log line names the
   file to read.
 
