@@ -442,9 +442,9 @@ Each phase lands on its own, verified, before the next starts.
    us per frame on draws and 130 -> 25 us on heavy, render phase about 40
    us lower; the GPU `Main` zone 987 -> 1097 us on draws and 2658 -> 2763
    us on heavy, so the GPU-bound tick grows about 85 us (draws 1709 -> 1795
-   us, heavy 3399 -> 3482 us); where the GPU time goes (the color set's
-   encode kernel or the indirect command buffer execution of the main
-   pass) is not measured yet.
+   us, heavy 3399 -> 3482 us): the main pass executing its draws from the
+   indirect command buffer, not the encode kernel (about 6 us; split in
+   "Open").
 7. **Occlusion.** [occlusion_culling.md](occlusion_culling.md), fed into the
    mask of the camera views as one more test; depends on phase 6 to be worth
    it (its step 7).
@@ -533,10 +533,28 @@ measured on the GPU timers.
   ("Headset passes"); per-eye views would cull tighter but need the eye
   poses of R's locate before the classification (`erhe::xr` locating once
   in the hook and `render_frame()` reusing it).
-- Under `gpu` on Metal the GPU-generated color commands cost about 100 us
-  more GPU time per frame than the CPU-written ones (phase 6c): find where
-  (the color set's encode kernel or executing the main pass through the
-  indirect command buffer) before relying on the color path for speed.
+- Under `gpu` on Metal the GPU-generated color commands cost about 110 us
+  more GPU time per frame than the CPU-written ones (phase 6c; accepted for
+  now). Metal System Trace split (Apple M4 Pro, Release headless,
+  pipelined, `force_disable_vsync`, 200 mid-trace frames, median per
+  frame, us):
+
+  | Scene, backend | main pass cpu | main pass gpu | vertex cpu -> gpu | fragment cpu -> gpu | color encode kernel |
+  |---|---|---|---|---|---|
+  | draws, Metal 4 | 988 | 1100 | 403 -> 471 | 584 -> 628 | 5.9 |
+  | draws, Metal 3 | 990 | 1100 | 402 -> 471 | 586 -> 629 | 6.2 |
+  | heavy, Metal 4 | 2661 | 2766 | 406 -> 473 | 2255 -> 2293 | 6.1 |
+  | heavy, Metal 3 | 2660 | 2767 | 403 -> 471 | 2257 -> 2296 | 6.2 |
+
+  The encode kernel is about 6 us, and no empty tail slot executes: the
+  kernel writes each job's execution range as {first command, the dense
+  GPU count}, so `executeCommandsInBuffer` runs exactly the drawn
+  commands. The cost is the main pass executing its draws from the
+  indirect command buffer instead of CPU-encoded indirect draws: about
+  +68 us vertex and +40 us fragment work for the same draws, the same on
+  both Metal backends (so it is the hardware / driver ICB path, not the
+  Metal 4 encoder). The fragment part is not explained yet (same pipeline
+  state, same draws in the same order). Not pursued further for now.
 - Under `gpu` the CPU lanes still run for `has_cull_view_survivors()`;
   dropping them needs the empty face skip from a GPU-written survivor count
   (an indirect clear-only path).
