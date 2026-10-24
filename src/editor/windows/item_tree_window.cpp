@@ -1849,6 +1849,9 @@ void Item_tree::imgui_row(const Flat_row& row)
         // was handed an empty label; name the item for the item recorder so
         // the get_imgui_* MCP queries can address the row by what it shows.
         erhe::imgui::set_item_debug_label(row.label_text);
+        if (row.item.get() == m_scroll_target) {
+            ImGui::ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
+        }
     }
 
     bool consumed = false;
@@ -2201,6 +2204,12 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     if (!is_leaf) {
         const ImGuiID id = ImGui::GetID(debug_label.data());
         is_open = ImGui::GetStateStorage()->GetInt(id, expand ? 1 : 0) != 0;
+        // A reveal request (request_reveal) opens the row on the path to a
+        // revealed item, writing the state TreeNodeEx reads for this row.
+        if (!is_open && m_reveal_ancestors.contains(item.get())) {
+            ImGui::GetStateStorage()->SetInt(id, 1);
+            is_open = true;
+        }
     }
     if (!is_open) {
         return;
@@ -2212,6 +2221,18 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
             flatten_visible_rows(child_node, indent + indent_spacing);
         }
     }
+}
+
+void Item_tree::request_reveal(
+    const std::span<const std::shared_ptr<erhe::Item_base>> items,
+    const std::shared_ptr<erhe::Item_base>&                 scroll_to
+)
+{
+    m_reveal_items.clear();
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        m_reveal_items.push_back(item);
+    }
+    m_scroll_to_item = scroll_to;
 }
 
 void Item_tree::imgui_tree(float ui_scale)
@@ -2275,6 +2296,32 @@ void Item_tree::imgui_tree(float ui_scale)
     }
 
     ImGui::TableSetupColumn("entry", ImGuiTableColumnFlags_WidthStretch);
+
+    // A pending reveal request is consumed by the first drawn frame: the
+    // ancestors of the revealed items are collected here and opened by the
+    // forced flatten below, so each item gets a row.
+    const std::shared_ptr<erhe::Item_base> scroll_to_item = m_scroll_to_item.lock();
+    m_scroll_to_item.reset();
+    m_reveal_ancestors.clear();
+    for (const std::weak_ptr<erhe::Item_base>& weak_item : m_reveal_items) {
+        const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(weak_item.lock());
+        if (!hierarchy) {
+            continue;
+        }
+        for (
+            std::shared_ptr<erhe::Hierarchy> parent = hierarchy->get_parent().lock();
+            parent;
+            parent = parent->get_parent().lock()
+        ) {
+            if (!m_reveal_ancestors.insert(parent.get()).second) {
+                break; // the rest of this path was collected for an earlier item
+            }
+        }
+    }
+    if (!m_reveal_items.empty() || scroll_to_item) {
+        m_flat_rows_dirty = true;
+    }
+    m_reveal_items.clear();
 
 #if 0 //// TODO
     ImGui::Checkbox("Show All", &m_context.app_settings->node_tree_show_all);
@@ -2375,6 +2422,7 @@ void Item_tree::imgui_tree(float ui_scale)
         }
         flatten_visible_rows(m_root, 0.0f);
     }
+    m_reveal_ancestors.clear();
 
     {
         ERHE_PROFILE_SCOPE("rows");
@@ -2389,6 +2437,15 @@ void Item_tree::imgui_tree(float ui_scale)
                 clipper.IncludeItemByIndex(static_cast<int>(rename_row.value()));
             } else {
                 end_rename();
+            }
+        }
+        // The scroll target row is submitted too, so ScrollToItem() in
+        // imgui_row() sees its tree node even while it is off screen.
+        if (scroll_to_item) {
+            const std::optional<std::size_t> scroll_row = find_row_index(scroll_to_item.get());
+            if (scroll_row.has_value()) {
+                clipper.IncludeItemByIndex(static_cast<int>(scroll_row.value()));
+                m_scroll_target = scroll_to_item.get();
             }
         }
         while (clipper.Step()) {
@@ -2406,6 +2463,7 @@ void Item_tree::imgui_tree(float ui_scale)
             }
         }
         clipper.End();
+        m_scroll_target = nullptr;
     }
 
     // The context menu's deferred operations (child prim creation,

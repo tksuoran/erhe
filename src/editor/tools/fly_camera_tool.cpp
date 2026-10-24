@@ -11,6 +11,7 @@
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/tools.hpp"
+#include "windows/item_tree_window.hpp"
 
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
@@ -412,6 +413,7 @@ auto Fly_camera_frame_command::try_call() -> bool
     }
     const std::vector<std::shared_ptr<erhe::Item_base>>& selection =
         m_context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(view_scene_root.get()));
+    std::shared_ptr<erhe::scene::Node> last_framed_node;
     for (const std::shared_ptr<erhe::Item_base>& item : selection) {
         const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (!node) {
@@ -421,6 +423,7 @@ auto Fly_camera_frame_command::try_call() -> bool
         if (!mesh) {
             continue;
         }
+        last_framed_node = node;
         const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
             const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
@@ -435,6 +438,14 @@ auto Fly_camera_frame_command::try_call() -> bool
     m_context.fly_camera_tool->set_framed_aabb(bbox);
     if (!bbox.is_valid_3d()) {
         return false;
+    }
+
+    // Bring the selection into view in the scene's hierarchy window too: open
+    // the paths to every selected item, then scroll to the framed node
+    // selected last (the selection keeps items in the order they were added).
+    Item_tree_window* browser_window = view_scene_root->get_browser_window();
+    if (browser_window != nullptr) {
+        browser_window->request_reveal(selection, last_framed_node);
     }
 
     glm::vec3 camera_position = glm::vec3{camera_node->position_in_world()};

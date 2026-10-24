@@ -19,7 +19,10 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string_view>
+#include <unordered_set>
+#include <vector>
 
 namespace erhe {
     class Hierarchy;
@@ -103,6 +106,15 @@ public:
     void add_item_context_menu_callback (Context_menu_callback fun);
 
     auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
+
+    // The next time the tree is drawn, opens every collapsed ancestor of the
+    // items, then scrolls scroll_to's row into view (Fly_camera.frame, F key).
+    // An item this tree does not show (filtered out) gets no row and leaves
+    // the scroll as is.
+    void request_reveal(
+        std::span<const std::shared_ptr<erhe::Item_base>> items,
+        const std::shared_ptr<erhe::Item_base>&           scroll_to
+    );
 
     void imgui_tree(float ui_scale);
 
@@ -277,6 +289,17 @@ private:
     std::string                        m_rename_error;
     int                                m_rename_focus_frames {0};     // frames left to request keyboard focus for the field
     bool                               m_rename_was_active   {false}; // field has held keyboard focus at least once
+
+    // Reveal request (request_reveal). Weak: a pending request never keeps an
+    // item alive. m_reveal_ancestors holds the ancestors of the items while
+    // one flatten runs; flatten_visible_rows() opens them with the same ID
+    // and storage it reads the open state from. m_scroll_target is the row
+    // imgui_row() scrolls to while the rows of one imgui_tree() call are
+    // submitted, null otherwise. Filled on user action only.
+    std::vector<std::weak_ptr<erhe::Item_base>> m_reveal_items;
+    std::weak_ptr<erhe::Item_base>              m_scroll_to_item;
+    std::unordered_set<const erhe::Item_base*>  m_reveal_ancestors;
+    const erhe::Item_base*                      m_scroll_target{nullptr};
 
     // Row layout constants derived from font and style at rebuild time
     float                              m_icon_x_offset {0.0f}; // primary icon, from row content start

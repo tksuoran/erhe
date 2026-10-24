@@ -1418,6 +1418,11 @@ void Scene_root::remove_browser_window()
     m_node_tree_window.reset();
 }
 
+auto Scene_root::get_browser_window() const -> Item_tree_window*
+{
+    return m_node_tree_window.get();
+}
+
 void Scene_root::register_to_editor_scenes(App_scenes& app_scenes)
 {
     ERHE_VERIFY(m_is_registered == false);
