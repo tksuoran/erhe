@@ -709,7 +709,7 @@ public:
     // Arms a one-shot capture of the next composited frame on the real WSI
     // swapchain; the copy is recorded by that frame's swapchain render pass
     // and collected with capture_last_frame() afterwards. Returns false when
-    // no capture path exists (GL / null backend, no surface, or the surface
+    // no capture path exists (null backend, no surface, or the surface
     // does not support reading its images back); returns true and is a no-op
     // when headless (capture_last_frame is already synchronous there).
     [[nodiscard]] auto request_frame_capture() -> bool;

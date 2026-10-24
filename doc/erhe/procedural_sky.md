@@ -146,8 +146,8 @@ This part is foundational and reusable:
    In `logs/log.txt`, `Sky_renderer::ensure_luts: generating atmosphere LUTs`
    appears once and `render_atmosphere first call: supported=true ...` confirms
    the atmosphere path; `supported=false` means the gradient fallback.
-7. On OpenGL, `capture_screenshot` serves the headless Vulkan build only, so
-   confirm GL in the window or with a RenderDoc capture (two compute dispatches
+7. On OpenGL, run the windowed GL editor and check the sky with
+   `capture_screenshot`, or with a RenderDoc capture (two compute dispatches
    binding the LUTs as images, then the fullscreen atmosphere draw).
 
 ## Reference

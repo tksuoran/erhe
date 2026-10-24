@@ -164,8 +164,10 @@ while the swapchain render pass records a copy of the composited image, and
 the retry returns the pixels. The windowed path needs the surface to grant
 `TRANSFER_SRC` image usage (all desktop drivers do) and a supported 4x8-bit
 swapchain format; otherwise the tool errors. The macOS Metal build has the
-same windowed path. It captures the editor's own frame, so occlusion by other
-windows does not matter.
+same windowed path, and the OpenGL build arms the same one-shot capture, read
+from the default framebuffer's back buffer just before the buffer swap. It
+captures the editor's own frame, so occlusion by other windows does not
+matter.
 
 For scene content alone, `render_scene_image` renders the scene offscreen
 through an explicit camera at an explicit size, independent of the ImGui

@@ -126,6 +126,11 @@ public:
     void install_gl_debug_callback ();
 
     [[nodiscard]] auto get_surface                        () -> Surface*;
+    // Screenshot capture: see Device::capture_last_frame() and
+    // Device::request_frame_capture(); the swapchain reads the back buffer
+    // just before presenting an armed frame.
+    [[nodiscard]] auto capture_last_frame                 (int& out_width, int& out_height, erhe::dataformat::Format& out_format, std::vector<std::byte>& out_pixels) -> bool;
+    [[nodiscard]] auto request_frame_capture              () -> bool;
     // Present-wait clamp (frame pacing FR5): no present-wait path on GL.
     [[nodiscard]] auto wait_for_displayed_frame           (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
     [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
