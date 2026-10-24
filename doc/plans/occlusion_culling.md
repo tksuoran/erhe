@@ -1,6 +1,6 @@
 # Raster occlusion culling
 
-Status: proposed
+Status: in progress
 
 This plan extends `doc/editor/rendering.md` (the composer passes and the
 forward renderer) with depth-buffer-based occlusion culling.
@@ -75,8 +75,14 @@ are described there. What the occlusion pass builds on:
   in R before the first pass; visibility bits produced in frame N and read
   in N+1 are per frame slot state, written in R and read in R.
 
-Decisions for the user before building: which views get occlusion (main
-viewport color views only, or also previews and four-view), whether the
-one-frame lag is accepted or the "just became visible" second draw (step
-5) is built, and whether the color passes' GPU commands (the culling.md
-open item) are done first as their own step.
+Decisions (user, 2026-10-24):
+
+- Views: the viewport scene views (including four view) and the headset's
+  per-eye passes get occlusion; previews and thumbnails stay frustum-only.
+- Lag: the one-frame lag is accepted; the "just became visible" second draw
+  (step 5) is built later only if the pop-in is visible in use.
+- Order: the color passes' GPU-written commands (culling.md "Open", the
+  color passes item: per-pass color and size move into a per-pass constant
+  block so the color records can be shared like the shadow records, then
+  the color commands come from the shadow passes' jobs) land first, as
+  their own gated step, before any occlusion pass.
