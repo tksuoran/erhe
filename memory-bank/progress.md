@@ -6,7 +6,12 @@
 ✓quest-topic+queue{42c05810b;Quest-items-1-5-at-queue-front}
 ✓build-fix{5460e0c3b;NDK-libc++-lacks-float-from_chars->strtod-hexfloat;graphics-tests-15/15}
 ✓baseline-default-scene{72Hz;M1-12.0ms(xrWaitFrame)+M2-0.78+M3-1.0;R-5.76(draw_data_wait-0.45);join_wait-0.1=>xrWaitFrame(N+1)-inside-R(N)-CONFIRMED;GPU-util-47%@456MHz;nearest-85%;non-base-level-0%(no-mips);tex-fetch-stall-26%;LRZ-busy-84%;raw->memory-bank/local/quest_2026_10_24/}
-⚡benchmark-mode{©User-2026-10-24:profiling-independent-of-pose+actions;spec=plan-"Benchmark mode";coder-running;3-commits:argv-passthrough|driver+pose-override|quest_bench.py+docs}
+✓benchmark-mode{345b88342-near/far-rename+2792e1422-driver+pose-override+--benchmark+argv-passthrough+139dbdc17-quest_bench.py+docs;fable-review-approve-with-fixes->9-fixes-applied;©User:timedemo+fully-deterministic;launch-protocol-revised(automated=no-prompt+prox-bypass+restore;d0e9533b8-skill)}
+✓off-head-verified{prox_close+guardian_pause->FOCUSED-72Hz-same-as-worn}
+✓first-device-runs-2026-10-24{orbit-default-scene@120Hz(via-setprop-debug.oculus.refreshRate-120;xrRequestDisplayRefreshRateFB-accepted-but-no-switch):2-runs-input_hash-61b0195b87c7808d-identical;wall-7.55s/600f=79.5fps-spread-0.12%;median-frame-12.3ms;M1-10.9(xrWaitFrame)+M2-0.53+M3-0.80;R-3.4ms(spread-11%);GPU-util-64%@456MHz;nearest-79%;non-base-level-0%;results->memory-bank/local/quest_runs/}
+✓device-fixes{f0e9d344c;external-files-result;refresh-offer-check;refreshRate-prop-in-script;XR-counters-fixed(create_hand_tracking-early-return-skipped-enable_performance_metrics=pre-existing-bug);commands-hash-in-input_hash}
+✓BASELINE-2026-10-24{default:79.5fps@120Hz-app_gpu-7.44ms-R-3.34ms;heavy:9.17fps-app_gpu-87.3ms-R-35ms-M2-60ms(slot-wait);both-GPU-bound;->plan-Baseline+local/quest.md}
+⚡item-2-cull-headset-passes{coder-launched-2026-10-24}
 ?then=heavy-scene-run(commands_bench_heavy-via-args-extra)->rank-CPU(R-5.8ms-default)-vs-GPU(mips)->items-2-5
 
 [TASK::metal-draw-count]{2026-10-23..24;branch=render-thread;CODE-DONE;detail->memory-bank/topics/metal.md[PROGRESS_2026-10-24]}
