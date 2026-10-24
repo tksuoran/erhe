@@ -167,6 +167,10 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
         }
 
         {
+            // The color texture's readers are fragment shaders (post
+            // processing, ImGui) and blits; the usages below declare that, and
+            // a compute reader of get_color_texture() would need
+            // compute_shader added here.
             erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
             if (m_sample_count > 1) {
                 render_pass_descriptor.color_attachments[0].texture         = m_multisampled_color_texture.get();
@@ -175,15 +179,15 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
                 render_pass_descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Multisample_resolve;
                 render_pass_descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
                 render_pass_descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::color_attachment_optimal;
-                render_pass_descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+                render_pass_descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
                 render_pass_descriptor.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
             } else {
                 render_pass_descriptor.color_attachments[0].texture         = m_color_texture.get();
                 render_pass_descriptor.color_attachments[0].load_action     = erhe::graphics::Load_action::Clear;
                 render_pass_descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Store;
-                render_pass_descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+                render_pass_descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
                 render_pass_descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::shader_read_only_optimal;
-                render_pass_descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+                render_pass_descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
                 render_pass_descriptor.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
             }
             // When store_depth_stencil is requested, keep the depth/stencil

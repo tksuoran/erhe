@@ -140,6 +140,11 @@ void Rendertarget_mesh::resize_rendertarget(
     command_buffer.transition_texture_layout(*m_texture.get(), erhe::graphics::Image_layout::shader_read_only_optimal);
 
     // TODO Use multisample resolve
+    // The texture is the base color texture of a ray traced material
+    // (make_raytrace() below): besides the fragment shaders of the scene and
+    // ImGui passes, the ray tracing compute shaders (every .comp that
+    // includes erhe_ray_hit.glsl) sample it through the texture heap, so
+    // both usages name the compute stage too.
     erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
     render_pass_descriptor.color_attachments[0].texture        = m_texture.get();
     render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
@@ -148,9 +153,9 @@ void Rendertarget_mesh::resize_rendertarget(
     render_pass_descriptor.color_attachments[0].clear_value[2] = 0.0f;
     render_pass_descriptor.color_attachments[0].clear_value[3] = 0.66f;
     render_pass_descriptor.color_attachments[0].store_action   = erhe::graphics::Store_action::Store;
-    render_pass_descriptor.color_attachments[0].usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    render_pass_descriptor.color_attachments[0].usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader | erhe::graphics::Image_usage_flag_bit_mask::compute_shader;
     render_pass_descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::shader_read_only_optimal;
-    render_pass_descriptor.color_attachments[0].usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    render_pass_descriptor.color_attachments[0].usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader | erhe::graphics::Image_usage_flag_bit_mask::compute_shader;
     render_pass_descriptor.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
     render_pass_descriptor.render_target_width                 = width;
     render_pass_descriptor.render_target_height                = height;
