@@ -463,15 +463,20 @@ void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)
         }
     );
 
+    // The fixture's shadow map readers (shadow_tie.frag, standard.frag) are
+    // fragment shaders.
+    constexpr uint64_t shadow_map_sampled =
+        erhe::graphics::Image_usage_flag_bit_mask::sampled |
+        erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
     erhe::graphics::Render_pass_descriptor descriptor{};
     descriptor.depth_attachment.texture        = m_shadow_map.get();
     descriptor.depth_attachment.texture_level  = 0;
     descriptor.depth_attachment.texture_layer  = 0;
     descriptor.depth_attachment.load_action    = erhe::graphics::Load_action::Clear;
     descriptor.depth_attachment.store_action   = erhe::graphics::Store_action::Store;
-    descriptor.depth_attachment.usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    descriptor.depth_attachment.usage_before   = shadow_map_sampled;
     descriptor.depth_attachment.layout_before  = erhe::graphics::Image_layout::depth_stencil_read_only_optimal;
-    descriptor.depth_attachment.usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    descriptor.depth_attachment.usage_after    = shadow_map_sampled;
     descriptor.depth_attachment.layout_after   = erhe::graphics::Image_layout::depth_stencil_read_only_optimal;
     descriptor.depth_attachment.clear_value[0] = reverse_depth ? 0.0 : 1.0;
     if (m_distance_map) {
@@ -481,9 +486,9 @@ void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)
         descriptor.color_attachments[0].texture_layer  = 0;
         descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
         descriptor.color_attachments[0].store_action   = erhe::graphics::Store_action::Store;
-        descriptor.color_attachments[0].usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        descriptor.color_attachments[0].usage_before   = shadow_map_sampled;
         descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::shader_read_only_optimal;
-        descriptor.color_attachments[0].usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        descriptor.color_attachments[0].usage_after    = shadow_map_sampled;
         descriptor.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
         descriptor.color_attachments[0].clear_value[0] = 1.0e30;
     }

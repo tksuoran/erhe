@@ -230,6 +230,23 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         command_buffer.transition_texture_layout(*m_distance_texture.get(), erhe::graphics::Image_layout::shader_read_only_optimal);
     }
 
+    // The shader stages that sample the shadow maps, as the usage_before /
+    // usage_after of every shadow pass attachment (doc/erhe/shadows.md
+    // "Shadow pass mechanics"). The receivers (erhe_light.glsl in
+    // standard.frag) and the depth visualization (depth_to_color.frag) are
+    // fragment shaders; the shadow texel visualization (shadow_debug.vert)
+    // reads the depth map in its vertex shader. No compute shader samples a
+    // shadow map (the ray traced paths trace their own shadow rays).
+    constexpr uint64_t depth_map_sampled =
+        erhe::graphics::Image_usage_flag_bit_mask::sampled |
+        erhe::graphics::Image_usage_flag_bit_mask::vertex_shader |
+        erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
+    // The R32F distance maps (the 2D distance array and the point cube array)
+    // have fragment readers only.
+    constexpr uint64_t distance_map_sampled =
+        erhe::graphics::Image_usage_flag_bit_mask::sampled |
+        erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
+
     log_render->debug("updating render passes, light_count = {}", light_count);
     // Order matters: each Gpu_timer is registered with its Render_pass and
     // must be destroyed before that Render_pass.
@@ -245,9 +262,9 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         render_pass_descriptor.depth_attachment.texture_layer  = static_cast<unsigned int>(i);
         render_pass_descriptor.depth_attachment.load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.depth_attachment.store_action   = erhe::graphics::Store_action::Store;
-        render_pass_descriptor.depth_attachment.usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        render_pass_descriptor.depth_attachment.usage_before   = depth_map_sampled;
         render_pass_descriptor.depth_attachment.layout_before  = erhe::graphics::Image_layout::depth_stencil_read_only_optimal;
-        render_pass_descriptor.depth_attachment.usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        render_pass_descriptor.depth_attachment.usage_after    = depth_map_sampled;
         render_pass_descriptor.depth_attachment.layout_after   = erhe::graphics::Image_layout::depth_stencil_read_only_optimal;
         render_pass_descriptor.depth_attachment.clear_value[0] = reverse_depth ? 0.0 : 1.0;
         if (distance_technique && m_distance_texture) {
@@ -261,9 +278,9 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
             render_pass_descriptor.color_attachments[0].texture_layer = static_cast<unsigned int>(i);
             render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
             render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
-            render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+            render_pass_descriptor.color_attachments[0].usage_before  = distance_map_sampled;
             render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::shader_read_only_optimal;
-            render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+            render_pass_descriptor.color_attachments[0].usage_after   = distance_map_sampled;
             render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
             render_pass_descriptor.color_attachments[0].clear_value[0] = 1.0e30;
         }
@@ -349,9 +366,9 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
                 rp.color_attachments[0].texture_layer  = static_cast<unsigned int>((6 * cube) + face);
                 rp.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
                 rp.color_attachments[0].store_action   = erhe::graphics::Store_action::Store;
-                rp.color_attachments[0].usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+                rp.color_attachments[0].usage_before   = distance_map_sampled;
                 rp.color_attachments[0].layout_before  = erhe::graphics::Image_layout::shader_read_only_optimal;
-                rp.color_attachments[0].usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+                rp.color_attachments[0].usage_after    = distance_map_sampled;
                 rp.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
                 rp.color_attachments[0].clear_value[0] = 1.0e30;
                 // Depth: shared scratch, cleared each face, never sampled.

@@ -174,13 +174,25 @@ What step 2 commits, in order of gain:
    the same on Metal 3); converted as cleanup only.
 3. The compute chain barriers (`draw_list_scene_gpu_cull.cpp`,
    `light_cluster_gpu_binner.cpp`): no measurable cost.
-4. Cleanup candidate: the shadow map passes' unqualified `sampled`
-   `usage_before` / `usage_after` (`shadow_render_node.cpp`, depth and color
-   attachments) order `PRE_RASTERIZATION` too on Vulkan since step 3, which
-   holds each shadow pass's vertex work behind the previous pass on desktop
-   drivers; they become `sampled | fragment_shader | compute_shader` once it
-   is confirmed which compute shaders sample shadow maps (`erhe_ray_hit.glsl`
-   includes `erhe_light.glsl`).
+4. Done: the shadow map passes declare the stages that sample each map
+   (`doc/erhe/shadows.md` "Shadow pass mechanics"): no compute shader
+   samples one, the distance map and the point cube array are
+   `sampled | fragment_shader`, and the depth map keeps `vertex_shader`
+   for the texel visualization (`shadow_debug.vert`). Metal 4 encodes
+   `F -> F` at both ends of the point cube and distance passes and
+   `V|F -> F` / `F -> V|F` around the depth passes. Heavy scene, shadow
+   map cache off, Release headless Metal 4, two runs each: the 12 point
+   cube face passes now overlap, the shadow passes' GPU span (first start
+   to last end) drops 2130 -> 2018 us and the tick 5554 -> 5447 us. The
+   depth passes' vertex stage still waits for the previous pass's depth
+   writes (Vulkan destination `VERTEX_SHADER`, Metal 4 `V`): 51-53 us
+   between consecutive directional passes. Without `vertex_shader` on the
+   depth map (measured with the visualization off) the span is 1644 us and
+   the tick 5070 us. Dropping it needs the visualization to declare its own
+   read, a `texture_barrier` of the depth map to `sampled | vertex_shader`
+   after the last shadow pass while the view's `shadow_debug` is on, and
+   the matching earlier-submission barrier before the next frame's passes;
+   not done.
 
 ## Step 3: Vulkan render pass qualifiers, then tracked layouts
 
