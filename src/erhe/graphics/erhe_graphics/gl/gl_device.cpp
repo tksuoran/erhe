@@ -629,6 +629,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
                 gl::get_internalformat_iv(target, format, p_name, 1, &value);
                 return (value == GL_TRUE);
             };
+            // FILTER and FRAMEBUFFER_BLEND report a support level, not a
+            // boolean: GL_FULL_SUPPORT, GL_CAVEAT_SUPPORT or GL_NONE.
+            auto get_supported = [format](gl::Internal_format_p_name p_name, gl::Texture_target target = gl::Texture_target::texture_2d) -> bool
+            {
+                GLint value{0};
+                gl::get_internalformat_iv(target, format, p_name, 1, &value);
+                return (value == GL_FULL_SUPPORT) || (value == GL_CAVEAT_SUPPORT);
+            };
 
             properties.red_size           = get_int(gl::Internal_format_p_name::internalformat_red_size);
             properties.green_size         = get_int(gl::Internal_format_p_name::internalformat_green_size);
@@ -640,8 +648,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             properties.color_renderable   = get_bool(gl::Internal_format_p_name::color_renderable);
             properties.depth_renderable   = get_bool(gl::Internal_format_p_name::depth_renderable);
             properties.stencil_renderable = get_bool(gl::Internal_format_p_name::stencil_renderable);
-            properties.filter             = get_bool(gl::Internal_format_p_name::filter);
-            properties.framebuffer_blend  = get_bool(gl::Internal_format_p_name::framebuffer_blend);
+            properties.filter             = get_supported(gl::Internal_format_p_name::filter);
+            properties.framebuffer_blend  = get_supported(gl::Internal_format_p_name::framebuffer_blend);
 
             int num_virtual_page_sizes = 0;
             if (m_info.gl_version >= 460) {
