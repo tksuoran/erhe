@@ -18,6 +18,8 @@
 #include "rendertarget_imgui_host.hpp"
 #include "renderers/id_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
+#include "erhe_scene_renderer/draw_list_key.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -174,6 +176,14 @@ Headset_view_node::~Headset_view_node()
 {
 }
 
+void Headset_view_node::pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    static_cast<void>(command_buffer);
+    m_headset_view.add_render_cull_view();
+}
+
 void Headset_view_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -217,6 +227,8 @@ Headset_view::Headset_view(
     , m_headset                {headset}
 {
     ERHE_PROFILE_FUNCTION();
+    // One culling plane slot per frame in flight (prepare_cull_planes()).
+    m_cull_planes_slots.resize(graphics_device.get_number_of_frames_in_flight());
     if (headset == nullptr) {
         return;
     }
@@ -994,6 +1006,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     if (!m_frame_timing.begin_ok) {
         return false;
     }
+    // The node's pre-execute hook ran for this frame
+    // (add_render_cull_view()); the headset's color passes draw with its view.
+    ERHE_VERIFY(m_render_cull_frame_index == m_app_context.graphics_device->get_frame_index());
     // The frame began, so it must end in this frame too: an unpaired
     // xrBeginFrame makes the next one return XR_FRAME_DISCARDED. A frame
     // that cannot be used (events or actions failed this frame) is ended
@@ -1377,7 +1392,10 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .scene_root          = get_scene_root(),
                     .viewport            = viewport_xy,
                     .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
-                    .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
+                    .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
+                    // The union eye frustum's culling view (add_render_cull_view()).
+                    .immediate_cull_draw_list_scene = m_render_cull_draw_list_scene,
+                    .immediate_cull_view            = m_render_cull_view
                 };
                 // No post-processing in VR: render content + overlay (tool /
                 // rendertarget) in one pass. Tool / rendertarget passes still
@@ -1500,7 +1518,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .scene_root          = get_scene_root(),
                 .viewport            = viewport,
                 .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
-                .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
+                .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
+                // Both eyes draw with the union eye frustum's culling view
+                // (add_render_cull_view()).
+                .immediate_cull_draw_list_scene = m_render_cull_draw_list_scene,
+                .immediate_cull_view            = m_render_cull_view
             };
             // A headset eye has no display scale: one logical pixel is one
             // framebuffer pixel.
@@ -1722,26 +1744,39 @@ void Headset_view::update_camera_node()
     // are located here (before the rendergraph) via Headset::locate_views; on
     // failure the previous frustum is kept.
     if ((m_headset != nullptr) && m_headset->locate_views(m_located_eye_views)) {
-        cache_combined_eye_frustum(m_located_eye_views);
+        cache_combined_eye_frustum(m_located_eye_views, orientation);
     }
     update_root_camera_projection();
+
+    // The eye cameras are children of the scene root node, posed at the
+    // located eye poses with the same camera offset
+    // (Headset_view_resources::update()), so the head frame their union is
+    // taken about is this one.
+    const glm::mat4 world_from_root = m_root_node ? m_root_node->world_from_node() : glm::mat4{1.0f};
+    prepare_cull_planes(world_from_root * world_from_view);
 
     // The root camera as the copy the shadow render node fits to
     // (Scene_view::get_render_camera()).
     snapshot_render_view(m_root_camera.get());
 }
 
-void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views)
+void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views, const glm::quat& head_orientation)
 {
     if (views.empty()) {
         return; // nothing located this frame; keep the previous frustum
     }
 
-    // Union of the per-eye angular extents. fov_left / fov_down are negative
-    // angles, fov_right / fov_up positive, so the widest extent on each side
-    // (min left/down, max right/up) bounds both eye frusta. Taken about the
-    // head node origin; the small IPD positional offset is ignored, which only
-    // makes the culling frustum slightly conservative (over-covers - safe).
+    // Union of the eye frusta's angular extents in head space (-Z forward,
+    // +X right, +Y up). Each eye frustum is the cone spanned by its four
+    // corner rays (tan of the fov sides at z = -1 in eye space); rotated into
+    // head space by inverse(head_orientation) * eye_orientation, the cone lies
+    // inside a head-space side plane exactly when its four corner rays do, so
+    // the min / max horizontal (atan2(x, -z)) and vertical (atan2(y, -z))
+    // angles over all corners bound every eye, canted or not. fov_left /
+    // fov_down are negative angles, fov_right / fov_up positive. Taken about
+    // the head origin; the IPD positional offset is covered by the culling
+    // view's positional margin (prepare_cull_planes()).
+    const glm::quat head_from_world = glm::inverse(head_orientation);
     float fov_left  =  std::numeric_limits<float>::max();
     float fov_right = -std::numeric_limits<float>::max();
     float fov_up    = -std::numeric_limits<float>::max();
@@ -1749,12 +1784,28 @@ void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_v
     float z_near    =  std::numeric_limits<float>::max();
     float z_far     = -std::numeric_limits<float>::max();
     for (const erhe::xr::Render_view& view : views) {
-        fov_left  = std::min(fov_left,  view.fov_left  );
-        fov_right = std::max(fov_right, view.fov_right );
-        fov_up    = std::max(fov_up,    view.fov_up    );
-        fov_down  = std::min(fov_down,  view.fov_down  );
-        z_near    = std::min(z_near,    view.near_depth);
-        z_far     = std::max(z_far,     view.far_depth );
+        const glm::quat head_from_eye = head_from_world * view.view_pose.orientation;
+        const float     tan_left      = std::tan(view.fov_left );
+        const float     tan_right     = std::tan(view.fov_right);
+        const float     tan_up        = std::tan(view.fov_up   );
+        const float     tan_down      = std::tan(view.fov_down );
+        const std::array<glm::vec3, 4> eye_corners{
+            glm::vec3{tan_left,  tan_up,   -1.0f},
+            glm::vec3{tan_right, tan_up,   -1.0f},
+            glm::vec3{tan_left,  tan_down, -1.0f},
+            glm::vec3{tan_right, tan_down, -1.0f}
+        };
+        for (const glm::vec3& eye_corner : eye_corners) {
+            const glm::vec3 d          = head_from_eye * eye_corner;
+            const float     horizontal = std::atan2(d.x, -d.z);
+            const float     vertical   = std::atan2(d.y, -d.z);
+            fov_left  = std::min(fov_left,  horizontal);
+            fov_right = std::max(fov_right, horizontal);
+            fov_up    = std::max(fov_up,    vertical);
+            fov_down  = std::min(fov_down,  vertical);
+        }
+        z_near = std::min(z_near, view.near_depth);
+        z_far  = std::max(z_far,  view.far_depth );
     }
 
     // locate_views leaves near/far at 0 (only the fovs are meaningful there);
@@ -1768,6 +1819,118 @@ void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_v
     m_combined_eye_z_near    = z_near;
     m_combined_eye_z_far     = z_far;
     m_combined_eye_fov_valid = true;
+}
+
+namespace {
+
+// Margins of the headset color passes' culling view (prepare_cull_planes();
+// doc/plans/culling.md "Headset passes"). The view is built in M2 from the
+// eye views located there; R re-locates the views at the same predicted
+// display time and renders from those, so the view must keep every entry
+// the R-side eyes can see.
+//
+// Angular: each side of the union eye frustum opens by 2 degrees. The union
+// is computed from the located eye orientations and fovs
+// (cache_combined_eye_frustum(), no parallel-eye assumption), so the margin
+// covers only the drift of the R-side re-locate: a prediction that moved
+// between the two locates (head rotation of up to 2 degrees at the same
+// display time).
+constexpr float c_cull_angle_margin    = 0.034906585f; // 2 degrees in radians
+// Positional: every side plane moves outward by 0.1 m. The union is taken
+// about the head origin while each eye frustum's apex is the eye, half the
+// IPD from it (about 0.032 m; at most 0.036 m at the Quest 3's widest IPD
+// setting). A plane moved outward by d keeps every frustum whose apex lies
+// within d of the head origin and whose directions lie inside the union;
+// the remaining 0.06 m covers a re-located head position.
+constexpr float c_cull_position_margin = 0.1f;
+// A padded side this far or farther from the view axis bounds nothing
+// useful; it gets no plane (keeps more, never less).
+constexpr float c_cull_max_side_angle  = 1.5533430f; // 89 degrees in radians
+
+}
+
+void Headset_view::prepare_cull_planes(const glm::mat4& world_from_head)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_combined_eye_fov_valid) {
+        return; // before the first located eye views: no planes, unculled
+    }
+    ERHE_VERIFY(!m_cull_planes_slots.empty()); // sized at construction
+    const uint64_t frame_index = m_app_context.graphics_device->get_frame_index();
+    Cull_planes&   slot        = m_cull_planes_slots[frame_index % m_cull_planes_slots.size()];
+    slot.frame_index = frame_index;
+    slot.plane_count = 0;
+
+    // Head space: -Z forward, +X right, +Y up. fov_left / fov_down are
+    // negative angles, fov_right / fov_up positive. Each side plane passes
+    // through the head origin with the inward unit normal written below; w
+    // is the positional margin.
+    const float left  = m_combined_eye_fov_sides.left  - c_cull_angle_margin;
+    const float right = m_combined_eye_fov_sides.right + c_cull_angle_margin;
+    const float up    = m_combined_eye_fov_sides.up    + c_cull_angle_margin;
+    const float down  = m_combined_eye_fov_sides.down  - c_cull_angle_margin;
+    // Planes transform from head to world space by the inverse transpose of
+    // world_from_head: p_world . x_world = p_head . x_head.
+    const glm::mat4 plane_world_from_head = glm::transpose(glm::inverse(world_from_head));
+    const auto add_plane = [&slot, &plane_world_from_head](const float angle, const glm::vec4& head_plane) {
+        if (std::abs(angle) >= c_cull_max_side_angle) {
+            return;
+        }
+        slot.planes[slot.plane_count] = plane_world_from_head * head_plane;
+        ++slot.plane_count;
+    };
+    // x >= -z tan(left)
+    add_plane(left,  glm::vec4{ std::cos(left),  0.0f,            std::sin(left),  c_cull_position_margin});
+    // x <= -z tan(right)
+    add_plane(right, glm::vec4{-std::cos(right), 0.0f,           -std::sin(right), c_cull_position_margin});
+    // y <= -z tan(up)
+    add_plane(up,    glm::vec4{ 0.0f,           -std::cos(up),   -std::sin(up),    c_cull_position_margin});
+    // y >= -z tan(down)
+    add_plane(down,  glm::vec4{ 0.0f,            std::cos(down),  std::sin(down),  c_cull_position_margin});
+}
+
+void Headset_view::add_render_cull_view()
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    const uint64_t frame_index = m_app_context.graphics_device->get_frame_index();
+    m_render_cull_frame_index     = frame_index;
+    m_render_cull_draw_list_scene = nullptr;
+    m_render_cull_view            = erhe::scene_renderer::Cull_view::none;
+
+    // The gates render_headset() renders the scene under. m_frame_timing and
+    // get_scene_root() are R-side state here: begin_frame() stores the
+    // timing at the start of this render phase and render_headset() renders
+    // the same get_scene_root() later in it; nothing here reads M2 state
+    // except the planes slot M2 wrote for this frame.
+    if (!m_context.OpenXR || (m_headset == nullptr) || !m_frame_timing.begin_ok || !m_frame_timing.should_render) {
+        return;
+    }
+    if (!m_app_context.render_settings->headset_culling || !m_app_context.render_settings->use_draw_lists) {
+        return;
+    }
+    const Cull_planes& slot = m_cull_planes_slots[frame_index % m_cull_planes_slots.size()];
+    // M2 of this frame located no head pose (or no eye views yet): unculled.
+    if ((slot.frame_index != frame_index) || (slot.plane_count == 0)) {
+        return;
+    }
+    // The scene root render_headset() renders.
+    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        return;
+    }
+    m_render_cull_view = draw_list_scene->add_cull_view(
+        frame_index,
+        erhe::scene_renderer::Draw_purpose::color,
+        std::span<const glm::vec4>{slot.planes.data(), slot.plane_count}
+    );
+    m_render_cull_draw_list_scene = draw_list_scene;
 }
 
 void Headset_view::update_root_camera_projection()

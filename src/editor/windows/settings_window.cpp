@@ -696,6 +696,11 @@ void Settings_window::imgui()
             // lists' publish (doc/plans/culling.md phase 5).
             static_cast<void>(imgui_enum_combo("##", settings.culling_classification));
         }, "Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU (devices with native multi-draw indirect and first-instance record indexing; others use the CPU). The CPU result drives the draws in both modes.");
+        add_entry("Headset Culling", [this](){
+            // Session only; the render settings snapshot carries it to the
+            // headset's pre-execute hook (doc/plans/culling.md "Headset passes").
+            static_cast<void>(ImGui::Checkbox("##", &m_context.app_settings->headset_culling_session));
+        }, "Frustum-cull the headset's color passes against the union of the eye frusta (padded). Off draws every entry, for comparison. Session only, not saved.");
         add_entry("Light Cluster Binning", [&settings](){
             // The render settings snapshot carries the value to the shadow
             // render nodes' light binning (doc/plans/clustered_lights.md C4).

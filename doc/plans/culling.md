@@ -317,8 +317,8 @@ Each phase lands on its own, verified, before the next starts.
    `add_pending_scene()`, `record_cull_classification()` and the
    end-of-frame dispatch are gone; a view added after the classification, a
    draw naming an unclassified view and a frame whose views were never
-   classified are verified defects. The headset's passes draw unculled
-   (Open below; multiview drew unculled already). Scenes built without a
+   classified are verified defects. The headset's color passes cull
+   through one view of their own ("Headset passes" below). Scenes built without a
    `Gpu_cull_classifier` classify on the CPU (heavy, also in four view,
    byte-identical). `erhe_rendergraph_gpu_tests` checks the hook order. Images and
    per-pass / per-light counts byte- and count-identical to phase 5 at `cpu`
@@ -408,6 +408,56 @@ one pass per light instead of six, Esoterica's `Point Light Shadows.md`),
 which changes the shadow sampling and the caster shader, and screen-size
 culling for shadow views, which Esoterica tried and disabled.
 
+## Headset passes
+
+The headset's color passes (the multiview pass, or both eyes of the per-eye
+path) cull through one view: the union of the eye frusta, padded, added by
+`Headset_view_node::pre_execute_rendergraph_node()` before the frame's
+classification like the viewports' color views.
+
+- **Planes, M2.** `Headset_view::update_camera_node()` locates the eye
+  views at the frame's predicted display time (`Headset::locate_views()`),
+  reduces them to the union of the fov sides about the head origin
+  (`cache_combined_eye_frustum()`, the frustum the shadow fit already
+  uses: each eye's four corner rays rotated into head space by the inverse
+  head orientation times the eye orientation, then the min / max
+  horizontal and vertical angles over all corners, so canted eye views are
+  covered exactly), and `prepare_cull_planes()` writes the four side planes of that
+  union in world space into the frame's slot (one per frame in flight),
+  from the head pose the eye cameras are posed relative to (scene root
+  node, head pose, camera offset). There is no near or far plane.
+- **Margins.** Each side opens by 2 degrees and every plane moves outward
+  by 0.1 m. R re-locates the eye views at the same predicted display time
+  and renders from those (`Xr_session::render_frame()` /
+  `render_frame_multiview()`); the union is computed from the located eye
+  orientations (no parallel-eye assumption), so the angular margin covers
+  only the drift of that re-locate (a prediction that moved between the two
+  locates), and the positional margin covers the eye frusta's apexes half
+  the IPD (about 0.032 m) from the head origin and a re-located head
+  position. In benchmark mode both sides pose the head
+  from the same path pose.
+- **View, R.** `Headset_view::add_render_cull_view()` adds the slot's
+  planes to the headset scene's `Draw_list_scene` (`Draw_purpose::color`)
+  when the frame renders, the draw lists are on and M2 wrote planes for
+  the frame; otherwise the passes draw unculled. `render_headset()` hands
+  the view to its render contexts (`Render_context::immediate_cull_view`
+  with the draw list scene it belongs to), and
+  `Composition_pass::render_immediate()` gives it to every draw-list pass
+  that draws that scene. The per-pass drawn and culled counts are the
+  composition pass statistics (MCP `get_composition_passes`, scene view
+  `Headset`).
+- **Switch.** `App_settings::headset_culling_session` (default on, never
+  persisted; Settings window "Headset Culling"; the editor's
+  `--no-headset-culling` turns it off for the session) reaches the hook
+  as `Render_settings::headset_culling`, for an A/B without a rebuild.
+
+The headset's color passes go through the draw lists only when the
+`use_draw_lists` setting is on; `config/editor/openxr_editor_settings.json`
+turns it on (before 2026-10-24 it was off, so the headset drew through the
+bucket path, which no culling view reaches). Results on the Quest 3:
+[quest_performance.md](quest_performance.md) "Results: culling the headset
+passes".
+
 ## Measurement
 
 `scripts/render_thread_bench.py --scene heavy --tracy` and
@@ -433,17 +483,10 @@ measured on the GPU timers.
   face with any skinned shadow list, or with an entry in range that the
   shadow filter rejects (not a caster), is never skipped. A per-pass caster
   mask applied to the count is the fix if it matters.
-- The headset's per-eye passes draw unculled (the per-eye path culled at
-  draw time before phase 6a; multiview never culled). Their eye views are
-  located by `Xr_session::render_frame()` (`xrLocateViews` at the frame's
-  display time), whose located views are also the ones submitted in
-  `xrEndFrame`'s projection layers, and the eye cameras are posed from them
-  inside the per-view callback (`Headset_view_resources::update()`, then the
-  scene's node transform update). Classifying them in the hook needs
-  `erhe::xr` to locate once in the hook and have `render_frame()` reuse that
-  locate, and the eye camera poses computed there too (the resources are
-  keyed by the acquired swapchain images); not done without a headset to
-  verify it.
+- The headset's culling view is one conservative view for both eyes
+  ("Headset passes"); per-eye views would cull tighter but need the eye
+  poses of R's locate before the classification (`erhe::xr` locating once
+  in the hook and `render_frame()` reusing it).
 - The color passes stay on CPU-written commands under `gpu` (phase 6b):
   their records are patched per pass (color and size from the pass's
   `Primitive_interface_settings`), so they are not shared and a command's

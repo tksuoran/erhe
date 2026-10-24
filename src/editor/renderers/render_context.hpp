@@ -4,6 +4,7 @@
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <memory>
@@ -19,6 +20,9 @@ namespace erhe::scene {
     class Camera;
     class Xformable; using Node = Xformable;
     class Scene;
+}
+namespace erhe::scene_renderer {
+    class Draw_list_scene;
 }
 
 struct Viewport_config;
@@ -85,6 +89,15 @@ public:
     // (Composer_frame_slots); null makes Composer::render() prepare each
     // pass where it renders (previews, headset).
     const Composer_prepared*                composer_prepared  {nullptr};
+    // The culling view Composition_pass::render_immediate() draws a
+    // draw-list pass with when the pass draws immediate_cull_draw_list_scene:
+    // the headset's color passes (Headset_view::add_render_cull_view(), from
+    // its rendergraph node's pre-execute hook, before the frame's
+    // classification). Cull_view::none, or a pass that draws another draw
+    // list scene: unculled. Composer::render() with composer_prepared uses
+    // the prepared passes' own views instead.
+    const erhe::scene_renderer::Draw_list_scene* immediate_cull_draw_list_scene{nullptr};
+    erhe::scene_renderer::Cull_view         immediate_cull_view{erhe::scene_renderer::Cull_view::none};
 
 };
 

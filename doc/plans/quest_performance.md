@@ -30,12 +30,12 @@ the task's state; `prompt_queue.txt` only points here.
 
 ## What the culling work means on Quest
 
-- The headset renders multiview on Vulkan, and multiview passes draw
-  unculled ([culling.md](culling.md) "Open"); per-eye passes are also
-  unculled until the eye views are located in the pre-draw hook. Culling the
-  multiview color pass needs one view whose planes are the union of the two
-  eye frusta (a conservative keep), added in `Headset_view`'s
-  `pre_execute_rendergraph_node`; that is the first culling item for Quest.
+- The headset's color passes (multiview on Vulkan, or per eye) cull
+  through one view, the padded union of the eye frusta, added in
+  `Headset_view_node`'s pre-execute hook ([culling.md](culling.md)
+  "Headset passes"). The draw lists, which that view and the shadow pass
+  culling act on, are on under OpenXR since the same change; before it the
+  headset drew through the bucket path, unculled. Results below.
 - Shadow passes are culled and, on the GPU path, their commands are
   generated on the GPU. The GPU path needs native multi-draw indirect,
   `drawIndirectFirstInstance` and `VK_KHR_draw_indirect_count`
@@ -46,6 +46,36 @@ the task's state; `prompt_queue.txt` only points here.
 - `Shadow_renderer::fit` is the largest render-phase CPU item on the desktop
   after culling (Release heavy about 1 ms; Debug 27 ms); on the Quest CPU it
   will weigh more. The phase-timing log shows it inside R.
+
+### Results: culling the headset passes
+
+benchmark_orbit at 120 Hz, release APKs, headset on the desk, medians of
+the runs not hit by the system shell passthrough stall (a run in which the
+compositor's GPU time rose from 2.3 to 7 ms and the frame rate collapsed
+to 2 to 20 fps; seen on about one run in three after 11:00 on 2026-10-24,
+also with the draw lists off, so not caused by the change; the run count
+is the clean runs). `--no-headset-culling` is the culling-off column.
+
+| Scene, build | Runs | Wall time | fps | R | App GPU | Vertex fetch stall |
+|---|---|---|---|---|---|---|
+| default, HEAD f0e9d344c (bucket path) | 3 | 7.553 s | 79.4 | 3.30 ms | 8.17 ms | 1.5 % |
+| default, draw lists on, culled | 3 | 7.428 s | 80.8 | 3.19 ms | 8.05 ms | 1.4 % |
+| default, draw lists on, culling off | 1 | 7.485 s | 80.2 | 3.17 ms | 8.02 ms | 1.3 % |
+| heavy, HEAD f0e9d344c (bucket path) | 3 | 65.38 s | 9.18 | 35.2 ms | 86.8 ms | 21.2 % |
+| heavy, draw lists on, culled | 2 | 43.91 s | 13.67 | 29.1 ms | 55.4 ms | 15.3 % |
+| heavy, draw lists on, culling off | 2 | 46.10 s | 13.01 | 28.7 ms | 59.9 ms | 15.4 % |
+
+Per-pass counts (MCP `get_composition_passes` during the benchmark run,
+"Content fill opaque not selected", scene view Headset): heavy 502 to 512
+drawn and 745 to 755 culled of 1257 entries along the orbit, culling off
+1257 drawn and 0 culled; default 7 drawn, 0 culled (the orbit keeps the
+whole room in view). The default scene stays pinned at one to two vsyncs
+per frame either way. On the heavy scene the draw lists take the app GPU
+time from 86.8 to 59.9 ms and the culling from 59.9 to 55.4 ms: the color
+pass's vertex work is a small part of the frame, the rest being the
+shadow passes and fragment shading (vertex fetch stall 15 % in both
+culling columns). The heavy runs also log the ring buffer pool growth
+warning (about 1700 lines per run, at HEAD as well).
 
 ## Plan
 

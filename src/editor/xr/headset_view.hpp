@@ -16,9 +16,12 @@
 #include "erhe_renderer/view.hpp"
 #include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_xr/headset.hpp"
 
+#include <array>
+#include <limits>
 #include <optional>
 #include <span>
 #include <vector>
@@ -40,6 +43,7 @@ namespace erhe::scene {
     class Xformable; using Node = Xformable;
 }
 namespace erhe::scene_renderer {
+    class Draw_list_scene;
     class Forward_renderer;
     class Mesh_memory;
     class Shadow_renderer;
@@ -80,6 +84,10 @@ public:
     ~Headset_view_node() override;
 
     // Implements Rendergraph_node
+    // Adds the headset color passes' culling view of the frame
+    // (Headset_view::add_render_cull_view()) before the frame's culling
+    // classification.
+    void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // The XR fan-out ends + submits the frame cb mid-execution and
@@ -179,6 +187,16 @@ public:
     // xrSyncActions and the view pose use the wait's predicted display time.
     auto update_actions(const erhe::xr::Frame_timing& frame_timing) -> bool;
     auto render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool;
+    // Render phase, the rendergraph node's pre-execute hook (before the
+    // frame's culling classification): adds the culling view of the
+    // headset's color passes - the planes M2 built for this frame
+    // (prepare_cull_planes()) - to the view set of the headset scene's draw
+    // list scene, for render_headset()'s contexts
+    // (Render_context::immediate_cull_view; doc/plans/culling.md "Headset
+    // passes"). Adds nothing (the passes draw unculled) when the frame does
+    // not render, the Render_settings::headset_culling session switch is
+    // off, the draw lists are off, or M2 built no planes for the frame.
+    void add_render_cull_view();
 
     void end_frame                ();
     void request_renderdoc_capture();
@@ -291,8 +309,10 @@ private:
     // headset builds one from the per-eye views: update_camera_node() locates
     // the current frame's views early (Headset::locate_views, valid after
     // begin_frame() and before the rendergraph runs),
-    // cache_combined_eye_frustum() reduces them to the union of the eye fov
-    // sides, and update_root_camera_projection() applies that to
+    // cache_combined_eye_frustum() reduces them to the union of the eye
+    // frusta's angular extents in head space (each eye's corner rays rotated
+    // by inverse(head_orientation) * eye orientation, so canted eye views are
+    // covered), and update_root_camera_projection() applies that to
     // m_root_camera as a perspective_xr projection. This is the same frame
     // the shadow node fits, with no latency. If a locate fails, the last
     // good frustum is kept (m_combined_eye_fov_valid stays set).
@@ -301,8 +321,17 @@ private:
     // (m_root_camera): the shadow fit, the hotbar placement and the transform
     // tool's off-screen indicator all consume it there. Do not add another
     // per-eye reduction; extend this one if a client needs more.
-    void cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views);
+    void cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views, const glm::quat& head_orientation);
     void update_root_camera_projection();
+    // M2, after update_root_camera_projection(): the world-space planes of
+    // the headset color passes' culling view of the prepared frame, from the
+    // combined eye frustum about the head pose world_from_head, padded by
+    // the angular and positional margins in headset_view.cpp (the R-side
+    // re-locate of the eye views must never see an entry this view
+    // rejects), into the frame's slot of m_cull_planes_slots. Writes nothing
+    // before the first combined frustum; add_render_cull_view() then adds
+    // no view for the frame.
+    void prepare_cull_planes(const glm::mat4& world_from_head);
 
     // VR skinned-mesh picking. The raytrace BVH used by
     // update_hover_with_raytrace() is rest-pose only, so it cannot pick the
@@ -366,6 +395,27 @@ private:
     // Reused scratch for the early per-frame view locate (cleared + refilled by
     // Headset::locate_views; persists only to keep its capacity across frames).
     std::vector<erhe::xr::Render_view>                   m_located_eye_views;
+    // The headset color passes' culling planes of one frame
+    // (prepare_cull_planes()): the four padded side planes of the union eye
+    // frustum, inward facing, world space (n . x + w >= 0 inside). No near
+    // or far plane: the side planes are the ones that cull.
+    class Cull_planes
+    {
+    public:
+        uint64_t                 frame_index{std::numeric_limits<uint64_t>::max()};
+        uint32_t                 plane_count{0};
+        std::array<glm::vec4, 4> planes     {};
+    };
+    // One per frame in flight, indexed by frame index modulo their count:
+    // M2 of frame N fills slot N, R of frame N reads it
+    // (add_render_cull_view()); sized at construction.
+    std::vector<Cull_planes>                             m_cull_planes_slots;
+    // Render-phase state: the culling view add_render_cull_view() added for
+    // m_render_cull_frame_index, in m_render_cull_draw_list_scene's view set
+    // (none: unculled), read by render_headset() in the same frame.
+    uint64_t                                             m_render_cull_frame_index{std::numeric_limits<uint64_t>::max()};
+    const erhe::scene_renderer::Draw_list_scene*         m_render_cull_draw_list_scene{nullptr};
+    erhe::scene_renderer::Cull_view                      m_render_cull_view{erhe::scene_renderer::Cull_view::none};
     // Single-view camera positioned at the controller aim pose each frame,
     // used solely to drive the Id_renderer for skinned-mesh picking (see
     // update_id_render). Not flagged visible / show_in_ui -- it is never
