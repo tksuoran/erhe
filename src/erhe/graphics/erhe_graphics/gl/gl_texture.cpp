@@ -883,9 +883,15 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     if (create_info.view_source) {
         ERHE_VERIFY(m_device.get_info().use_texture_view);
         m_is_view = true;
+        // Array and cube targets see every layer the create info asks for
+        // (make_view: all layers past the base; 6 faces per cube); the
+        // non-layered targets see one.
+        const bool layered_target = is_array_target(gl_texture_target) || (gl_texture_target == gl::Texture_target::texture_cube_map);
+        const int  view_layer_count = layered_target ? create_info.array_layer_count : 1;
+        ERHE_VERIFY(view_layer_count >= 1);
         gl::texture_view(
             gl_name(), gl_texture_target, create_info.view_source->get_impl().gl_name(), internal_format,
-            create_info.view_base_level, create_info.level_count, create_info.view_base_array_layer, 1 // TODO layer count
+            create_info.view_base_level, create_info.level_count, create_info.view_base_array_layer, view_layer_count
         );
         if (m_device.get_info().use_debug_output) {
             erhe::utility::Debug_label debug_label{ fmt::format("(T:{}) {} (texture view)", gl_name(), m_debug_label.string_view()) };
