@@ -389,14 +389,16 @@ void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, const std::size
 
     // Chain the transfer write to the precise consumer stages this buffer
     // was created for, so downstream readers don't need their own
-    // pre-barrier.
+    // pre-barrier. The next copy into the buffer is a consumer too: every
+    // VkBuffer is created with TRANSFER_DST (Buffer_impl), whatever its
+    // Buffer_usage says, and a later upload_to_buffer into the same range -
+    // in this command buffer or in one submitted after it - must not race
+    // this write (write-after-write).
     const Vk_stage_access_2     dst_scope = buffer_usage_to_vk_stage_access(impl.get_usage());
     const VkPipelineStageFlags2 dst_stage_mask =
-        (dst_scope.stage != 0) ? dst_scope.stage : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        ((dst_scope.stage != 0) ? dst_scope.stage : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) | VK_PIPELINE_STAGE_2_COPY_BIT;
     const VkAccessFlags2 dst_access_mask =
-        (dst_scope.access != 0)
-            ? dst_scope.access
-            : (VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        ((dst_scope.access != 0) ? dst_scope.access : VK_ACCESS_2_MEMORY_READ_BIT) | VK_ACCESS_2_TRANSFER_WRITE_BIT;
     const VkBufferMemoryBarrier2 buffer_barrier{
         .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .pNext               = nullptr,
