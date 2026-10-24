@@ -7,7 +7,7 @@
             "bindless_textures": false,
             "shadow_enable": true,
             "shadow_resolution": 1024,
-            "directional_shadow_light_count": 2,
+            "directional_shadow_light_count": 1,
             "directional_unshadowed_light_count": 4,
             "spot_shadow_light_count": 2,
             "spot_unshadowed_light_count": 4,
