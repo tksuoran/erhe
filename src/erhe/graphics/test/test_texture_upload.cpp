@@ -1,6 +1,8 @@
 #include "gpu_test_fixture.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
@@ -12,7 +14,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace erhe::graphics::test {
@@ -189,6 +193,65 @@ TEST_F(Gpu_test, texture_clear_layer_view_spares_other_layers)
     }
     EXPECT_EQ(layer0_changed, 0) << layer0_changed << " layer-0 texels were touched by clearing the layer-1 view";
     EXPECT_EQ(layer1_bad,     0) << layer1_bad     << " layer-1 texels did not take the clear color";
+}
+
+// A view of an array texture starting at layer 1 keeps the array type and
+// sees every layer past its base (Texture_create_info::make_view). Each of
+// the view's layers must read the source layer it maps to: view layer 0 is
+// source layer 1, view layer 1 is source layer 2. (The OpenGL backend used to
+// create every view with one layer, so view layer 1 did not exist.)
+TEST_F(Gpu_test, texture_array_view_exposes_every_layer_past_its_base)
+{
+    constexpr int width       = 4;
+    constexpr int height      = 4;
+    constexpr int layer_count = 3;
+
+    erhe::graphics::Device& graphics_device = device();
+    constexpr uint64_t usage_mask =
+        erhe::graphics::Image_usage_flag_bit_mask::sampled      |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst;
+    const std::shared_ptr<erhe::graphics::Texture> texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device            = graphics_device,
+            .usage_mask        = usage_mask,
+            .type              = erhe::graphics::Texture_type::texture_2d_array,
+            .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm,
+            .width             = width,
+            .height            = height,
+            .array_layer_count = layer_count,
+            .level_count       = 1,
+            .debug_label       = erhe::utility::Debug_label{"array view source"}
+        }
+    );
+
+    const std::size_t texel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    std::array<std::vector<uint8_t>, layer_count> seeds;
+    for (int layer = 0; layer < layer_count; ++layer) {
+        std::vector<uint8_t>& seed = seeds[static_cast<std::size_t>(layer)];
+        seed.resize(texel_count * 4u);
+        for (std::size_t i = 0; i < texel_count; ++i) {
+            seed[i * 4u + 0] = static_cast<uint8_t>(40 * (layer + 1));
+            seed[i * 4u + 1] = static_cast<uint8_t>(i);
+            seed[i * 4u + 2] = static_cast<uint8_t>(200 - (40 * layer));
+            seed[i * 4u + 3] = 255u;
+        }
+        seed_subresource_rgba8(*texture, static_cast<unsigned int>(layer), 0, seed);
+    }
+
+    erhe::graphics::Texture_create_info view_create_info = erhe::graphics::Texture_create_info::make_view(graphics_device, texture, 0, 1);
+    view_create_info.usage_mask  = usage_mask;
+    view_create_info.debug_label = erhe::utility::Debug_label{"view of layers 1..2"};
+    const std::shared_ptr<erhe::graphics::Texture> view = std::make_shared<erhe::graphics::Texture>(graphics_device, view_create_info);
+    ASSERT_EQ(view->get_texture_type(),      erhe::graphics::Texture_type::texture_2d_array);
+    ASSERT_EQ(view->get_array_layer_count(), layer_count - 1);
+
+    for (int view_layer = 0; view_layer < (layer_count - 1); ++view_layer) {
+        const std::vector<uint8_t> texels = read_subresource_rgba8(*view, static_cast<unsigned int>(view_layer), 0);
+        EXPECT_EQ(texels, seeds[static_cast<std::size_t>(view_layer + 1)])
+            << "view layer " << view_layer << " does not read source layer " << (view_layer + 1);
+    }
 }
 
 } // namespace erhe::graphics::test
