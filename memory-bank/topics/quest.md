@@ -24,6 +24,10 @@
 >2026-08-13::XR_FB_render_model-controllers+control-bones+HUD/Hotbar-quad-layers(#209)+FFR(#208;Vulkan-only)+passthrough-init(#214)+context-menu-thumbrest-fix
 >2026-05-02::multiview=Vulkan-only(©User)
 
+[OFF_HEAD_RUNS]{VERIFIED-2026-10-24}
+✓recipe::force-stop+KEYCODE_WAKEUP+am-broadcast-com.oculus.vrpowermanager.prox_close+setprop-debug.oculus.guardian_pause-1->normal-VR-launch->FOCUSED-in-4s;72Hz-full-tick-13.88ms==worn;GPU-43%;compositor-shows-layer;no-Controllers-Required-dialog;restore=force-stop+automation_disable+guardian_pause-0
+@implication::benchmarks+soaks-need-no-wearer{headset-prompt-protocol-exception-proposed-to-user}
+
 [TRAPS]
 !headset-prompt-protocol::install-FIRST->ask-user-headset-on->launch-only-on-acknowledged-readiness;one-confirmation-per-launch(batch/soak=one-up-front)
 !start-scripts/quest_logcat.sh-BEFORE-every-launch;never-blind-sleep->poll-readiness
