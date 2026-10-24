@@ -11,7 +11,8 @@
 ✓first-device-runs-2026-10-24{orbit-default-scene@120Hz(via-setprop-debug.oculus.refreshRate-120;xrRequestDisplayRefreshRateFB-accepted-but-no-switch):2-runs-input_hash-61b0195b87c7808d-identical;wall-7.55s/600f=79.5fps-spread-0.12%;median-frame-12.3ms;M1-10.9(xrWaitFrame)+M2-0.53+M3-0.80;R-3.4ms(spread-11%);GPU-util-64%@456MHz;nearest-79%;non-base-level-0%;results->memory-bank/local/quest_runs/}
 ✓device-fixes{f0e9d344c;external-files-result;refresh-offer-check;refreshRate-prop-in-script;XR-counters-fixed(create_hand_tracking-early-return-skipped-enable_performance_metrics=pre-existing-bug);commands-hash-in-input_hash}
 ✓BASELINE-2026-10-24{default:79.5fps@120Hz-app_gpu-7.44ms-R-3.34ms;heavy:9.17fps-app_gpu-87.3ms-R-35ms-M2-60ms(slot-wait);both-GPU-bound;->plan-Baseline+local/quest.md}
-⚡item-2-cull-headset-passes{coder-launched-2026-10-24}
+✓item-2-cull-headset-passes{0db809889;union-eye-frustum-4-side-planes(2deg+0.1m;eye-orientations-folded);pre_execute-hook->add_cull_view;render_immediate-uses-Render_context::immediate_cull_view;headset_culling_session+--no-headset-culling;FOUND:openxr_editor_settings-use_draw_lists-was-false=bucket-path-no-cull->flipped-on;heavy:9.18->13.6fps,app_gpu-86.8->55.4(draw-lists-59.9,cull-55.4),drawn-505/1257;default-unchanged(vsync-quantized);desktop-images-identical;fable-review:eye-orientation-union-fixed;open:worn-visual-check-of-draw-list-path;~1/3-runs-collapse-to-2-20fps-with-compositor-GPU-7ms+passthrough-flicker(at-HEAD-too;excluded);~1700-ring-buffer-pool-outpacing-warnings/heavy-run}
+⚡NEXT=queue-item-1-Quest-GPU-items(mips)
 ?then=heavy-scene-run(commands_bench_heavy-via-args-extra)->rank-CPU(R-5.8ms-default)-vs-GPU(mips)->items-2-5
 
 [TASK::metal-draw-count]{2026-10-23..24;branch=render-thread;CODE-DONE;detail->memory-bank/topics/metal.md[PROGRESS_2026-10-24]}
