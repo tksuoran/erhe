@@ -13,7 +13,7 @@
 ?long-term{doc/plans/xr.md:XR_EXT_render_model-pair-when-runtime-ships+battery-quad-recheck-after-OS-update+ASTC/BC7-controller-textures+OpenXR_mirror-GL/Metal;doc/plans/android.md:phone-editor-phase-3}
 
 [BENCHMARK_MODE]{©User-2026-10-24}
-@requirement::fully-deterministic+repeatable{frame-indexed-camera-path;fixed-frame_dt-simulation-time;measure-only-after-scene-settled;no-randomness;input_hash-in-result;--repeat-N-spread-visible}->then-record-NEW-baseline(default+heavy;replaces-2026-10-24-worn-headset-numbers-as-reference)
+@requirement::Quake-timedemo{fake-clock-frame_dt/frame->same-frames-regardless-of-speed;result=wall_time_s+fps-first,breakdown-second;xrWaitFrame-pins-wall-time-at-refresh->record-frames_at_refresh_ceiling+optional-display_refresh_rate_hz(120)}+fully-deterministic+repeatable{frame-indexed-camera-path;fixed-frame_dt-simulation-time;measure-only-after-scene-settled;no-randomness;input_hash-in-result;--repeat-N-spread-visible}->then-record-NEW-baseline(default+heavy;replaces-2026-10-24-worn-headset-numbers-as-reference)
 @spec::doc/plans/quest_performance.md-"Benchmark mode"
 
 [LANDED]{all-Quest-verified;unpushed-since-2026-10-11-on-branch-render-thread}
