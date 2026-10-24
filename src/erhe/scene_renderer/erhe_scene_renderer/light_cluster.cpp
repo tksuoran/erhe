@@ -332,8 +332,8 @@ void Light_cluster_binner::build_grid(
     // The light spheres in the cluster camera's node space (composed in
     // double, rounded once), and the slices: from the near plane to the
     // farthest view depth a binned light reaches.
-    const double near = std::max(static_cast<double>(camera.projection().get_z_near()), 1.0e-3);
-    double far = near;
+    const double z_near = std::max(static_cast<double>(camera.projection().get_z_near()), 1.0e-3);
+    double z_far = z_near;
     m_lights.clear();
     m_cones.clear();
     const glm::dmat3 node_from_world_linear{node_from_world};
@@ -350,7 +350,7 @@ void Light_cluster_binner::build_grid(
         }
         const double radius = range * (1.0 + c_bound_widening);
         m_lights.push_back(glm::vec4{glm::vec3{centre}, static_cast<float>(radius)});
-        far = std::max(far, -centre.z + radius);
+        z_far = std::max(z_far, -centre.z + radius);
 
         // The spot cone (cone_reaches_bounds()): get_spot_attenuation() is
         // nonzero only where the fp32 cosine of the angle between the
@@ -371,24 +371,24 @@ void Light_cluster_binner::build_grid(
         }
         m_cones.push_back(cone);
     }
-    const uint32_t slice_count = (far > (near * (1.0 + c_bound_widening)))
+    const uint32_t slice_count = (z_far > (z_near * (1.0 + c_bound_widening)))
         ? static_cast<uint32_t>(config.slice_count)
         : 1u;
-    const double log_ratio = std::log2(far / near);
+    const double log_ratio = std::log2(z_far / z_near);
     const double scale     = (slice_count > 1) ? (static_cast<double>(slice_count) / log_ratio) : 0.0;
-    const double bias      = -std::log2(near) * scale;
-    m_grid.slices = glm::vec4{static_cast<float>(scale), static_cast<float>(bias), static_cast<float>(near), 0.0f};
+    const double bias      = -std::log2(z_near) * scale;
+    m_grid.slices = glm::vec4{static_cast<float>(scale), static_cast<float>(bias), static_cast<float>(z_near), 0.0f};
     m_grid.counts = glm::uvec4{tiles_x, tiles_y, slice_count, 0u};
 
     // Slice k spans view depths [d_k, d_k+1]; slice 0 starts at the camera
-    // (it takes the fragments nearer than the near plane), the last one ends
-    // at far. The bounds widening scales with the slice's far depth.
+    // (it takes the fragments nearer than the z_near plane), the last one ends
+    // at z_far. The bounds widening scales with the slice's z_far depth.
     m_slices.resize(slice_count);
     double d0 = 0.0;
     for (uint32_t k = 0; k < slice_count; ++k) {
         const double d1 = ((k + 1) < slice_count)
-            ? near * std::exp2((static_cast<double>(k + 1) / static_cast<double>(slice_count)) * log_ratio)
-            : std::max(far, near);
+            ? z_near * std::exp2((static_cast<double>(k + 1) / static_cast<double>(slice_count)) * log_ratio)
+            : std::max(z_far, z_near);
         const double widening = c_bound_widening * std::max(d1, 1.0e-3);
         m_slices[k] = glm::vec4{static_cast<float>(d0), static_cast<float>(d1), static_cast<float>(widening), 0.0f};
         d0 = d1;
