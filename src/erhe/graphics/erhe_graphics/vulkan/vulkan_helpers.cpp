@@ -1232,9 +1232,9 @@ auto buffer_usage_to_vk_stage_access(const Buffer_usage usage) -> Vk_stage_acces
         access |= VK_ACCESS_2_TRANSFER_READ_BIT;
     }
     if (test_bit_set(usage, Buffer_usage::transfer_dst)) {
-        // transfer_dst in the dst scope covers cross-frame WAW against the
-        // next vkCmdCopyBuffer on this buffer. Any buffer reaching
-        // upload_to_buffer has this bit set.
+        // A transfer destination's later copies. upload_to_buffer adds this
+        // scope itself for every buffer (each VkBuffer is created with
+        // TRANSFER_DST whatever its Buffer_usage names).
         stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
         access |= VK_ACCESS_2_TRANSFER_WRITE_BIT;
     }

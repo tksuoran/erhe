@@ -468,7 +468,11 @@ combined with explicit barriers provides correctness:
   destination stage/access is derived from the destination buffer's own
   `Buffer_usage` (`buffer_usage_to_vk_stage_access`), so an upload chains exactly
   to the stages the buffer is used by (vertex input, storage, indirect, uniform)
-  rather than a conservative `ALL_COMMANDS`.
+  rather than a conservative `ALL_COMMANDS`. The destination scope always adds
+  `COPY` / `TRANSFER_WRITE`: every `VkBuffer` is created with
+  `TRANSFER_DST`, whatever its `Buffer_usage` names, so the next copy into the
+  buffer (a second edit of one vertex before a `Mesh_memory` flush, or the
+  next frame's upload) is ordered after this one.
 
 Ring-buffer host-coherent writes are made visible to the device by
 `vkQueueSubmit`. Compute dispatches and immediate-command uploads use separate

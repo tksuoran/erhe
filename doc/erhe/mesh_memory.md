@@ -162,7 +162,10 @@ Geometry build code calls into the sinks via `Buffer_info`:
   flow that drains a `Vertex_buffer_writer` / `Index_buffer_writer`.
 
 `flush(command_buffer)` drains the INTERACTIVE transfer queue in full, and
-also applies pending pool frees (below). Callers schedule this once per frame
+also applies pending pool frees (below). Entries are recorded in enqueue
+order and each upload is ordered after the earlier writes to its buffer
+(`doc/erhe/graphics.md` "Resource barriers"), so overlapping writes - a live
+vertex edit writing one vertex twice before a flush - land last-enqueued-wins. Callers schedule this once per frame
 around mesh uploads. `flush_budgeted(command_buffer, max_bytes)` drains only
 the loader queue and is called only from `Asset_manager::tick`.
 

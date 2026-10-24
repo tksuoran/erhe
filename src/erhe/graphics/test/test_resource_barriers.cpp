@@ -1492,4 +1492,64 @@ TEST_F(Resource_barrier_test, color_attachment_to_vertex_stage_second_render_pas
     expect_vertex_fetch(expected_pattern_probe(c_heavy_size), "color attachment -> vertex stage of the second render pass");
 }
 
+// Command_buffer::upload_to_buffer into a range an earlier upload of the same
+// command buffer wrote (a live vertex edit writing one vertex twice before a
+// flush): the backend's own transfers order their output for the next copy
+// into the buffer as well as for its readers, and the last write lands. The
+// buffer is a device-local vertex | storage buffer (the mesh vertex pools),
+// whose usage names no transfer access; on Vulkan an unordered pair is a
+// SYNC-HAZARD-WRITE-AFTER-WRITE the fixture fails the test for.
+TEST_F(Resource_barrier_test, upload_after_upload_same_range)
+{
+    erhe::graphics::Device& graphics_device = device();
+    constexpr std::size_t c_word_count  = 16384u;
+    constexpr std::size_t c_byte_count  = c_word_count * sizeof(uint32_t);
+    constexpr std::size_t c_edit_first  = 4096u;
+    constexpr std::size_t c_edit_count  = 3u;     // one float3 position
+    const erhe::graphics::Buffer_create_info create_info{
+        .capacity_byte_count                = c_byte_count,
+        .usage                              = erhe::graphics::Buffer_usage::vertex | erhe::graphics::Buffer_usage::storage,
+        .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local,
+        .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none,
+        .debug_label                        = erhe::utility::Debug_label{"barrier upload destination"}
+    };
+    const std::shared_ptr<erhe::graphics::Buffer> destination = std::make_shared<erhe::graphics::Buffer>(graphics_device, create_info);
+    const std::shared_ptr<erhe::graphics::Buffer> readback    = make_readback_buffer(c_byte_count, "barrier upload readback");
+
+    std::vector<uint32_t> base(c_word_count);
+    for (std::size_t i = 0; i < c_word_count; ++i) {
+        base[i] = static_cast<uint32_t>(i);
+    }
+    const std::array<uint32_t, c_edit_count> first_edit {0xa0000001u, 0xa0000002u, 0xa0000003u};
+    const std::array<uint32_t, c_edit_count> second_edit{0xb0000001u, 0xb0000002u, 0xb0000003u};
+    const std::size_t edit_offset = c_edit_first * sizeof(uint32_t);
+    const std::size_t edit_bytes  = c_edit_count * sizeof(uint32_t);
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            command_buffer.upload_to_buffer(*destination, 0, base.data(), c_byte_count);
+            command_buffer.upload_to_buffer(*destination, edit_offset, first_edit.data(), edit_bytes);
+            command_buffer.upload_to_buffer(*destination, edit_offset, second_edit.data(), edit_bytes);
+            command_buffer.buffer_barrier(*destination, Buffer_usage::transfer_dst, Buffer_usage::transfer_src);
+            erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
+            blit.copy_from_buffer(destination.get(), 0, readback.get(), 0, c_byte_count);
+        }
+    );
+
+    const std::vector<std::byte> bytes = read_buffer(*readback, c_byte_count);
+    std::vector<uint32_t> words(c_word_count);
+    std::memcpy(words.data(), bytes.data(), c_byte_count);
+    std::vector<uint32_t> expected = base;
+    for (std::size_t i = 0; i < c_edit_count; ++i) {
+        expected[c_edit_first + i] = second_edit[i];
+    }
+    std::size_t mismatch_count = 0;
+    for (std::size_t i = 0; i < c_word_count; ++i) {
+        if (words[i] != expected[i]) {
+            ++mismatch_count;
+        }
+    }
+    EXPECT_EQ(mismatch_count, 0u) << "upload -> upload of the same range";
+}
+
 } // namespace erhe::graphics::test

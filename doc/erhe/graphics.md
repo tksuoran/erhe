@@ -389,8 +389,9 @@ caller), `memory_barrier(Memory_barrier_mask)` (every earlier write before
 the accesses the mask names), `transition_texture_layout` /
 `cmd_texture_barrier`, and the transfers the backends record themselves
 (uploads, clears, blits, mipmaps), which order their output for its
-consumers. A backend with neither hazard tracking nor layouts (Metal 4)
-maps these to stage barriers at the level of explicitness Vulkan needs
+consumers, a later transfer into the same resource among them. A backend
+with neither hazard tracking nor layouts (Metal 4) maps these to stage
+barriers at the level of explicitness Vulkan needs
 (`doc/erhe/metal4_backend.md` "Encoders and barriers").
 `texture_barrier` / `buffer_barrier` narrow the baseline: one resource, the
 two accesses of one dependency. `doc/plans/resource_barriers.md` lists where
