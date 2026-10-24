@@ -254,4 +254,125 @@ TEST_F(Gpu_test, texture_array_view_exposes_every_layer_past_its_base)
     }
 }
 
+namespace {
+
+// format_packed111110_vec3_unorm stores R11G11B10 unsigned floats in one
+// 32-bit value, R in the low bits: an 11-bit float is a 5-bit exponent (bias
+// 15) over a 6-bit mantissa, the 10-bit one a 5-bit exponent over 5 bits.
+constexpr uint32_t c_packed_r_1_0  = 15u << 6u; // 1.0
+constexpr uint32_t c_packed_g_0_5  = 14u << 6u; // 0.5
+constexpr uint32_t c_packed_b_0_25 = 13u << 5u; // 0.25
+constexpr uint32_t c_packed_texel  = c_packed_r_1_0 | (c_packed_g_0_5 << 11u) | (c_packed_b_0_25 << 22u);
+
+constexpr uint64_t c_packed_usage_mask =
+    erhe::graphics::Image_usage_flag_bit_mask::sampled      |
+    erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+    erhe::graphics::Image_usage_flag_bit_mask::transfer_dst;
+
+} // anonymous namespace
+
+// Clearing an R11G11B10 float texture and copying it to a buffer yields 4
+// bytes per texel holding the packed value. (The OpenGL backend used to
+// transfer this format as three 32-bit floats, 12 bytes per texel, and
+// aborted on the buffer size.)
+TEST_F(Gpu_test, packed_r11g11b10_float_clear_reads_back_packed_texels)
+{
+    constexpr int                      width  = 4;
+    constexpr int                      height = 4;
+    constexpr erhe::dataformat::Format format = erhe::dataformat::Format::format_packed111110_vec3_unorm;
+    erhe::graphics::Device& graphics_device = device();
+    if (!graphics_device.probe_image_format_support(format, c_packed_usage_mask)) {
+        GTEST_SKIP() << "format_packed111110_vec3_unorm is not supported for sampled + transfer images on this device";
+    }
+    ASSERT_EQ(erhe::dataformat::get_format_size_bytes(format), 4u);
+
+    const std::shared_ptr<erhe::graphics::Texture> texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = graphics_device,
+            .usage_mask  = c_packed_usage_mask,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = format,
+            .width       = width,
+            .height      = height,
+            .debug_label = erhe::utility::Debug_label{"R11G11B10 clear target"}
+        }
+    );
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            command_buffer.clear_texture(*texture, std::array<double, 4>{1.0, 0.5, 0.25, 1.0});
+        }
+    );
+
+    const std::vector<std::byte> raw = read_texture_level_bytes(*texture, 0, 4u);
+    ASSERT_EQ(raw.size(), static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+    int bad = 0;
+    for (std::size_t i = 0; i < raw.size(); i += 4u) {
+        uint32_t texel = 0;
+        std::memcpy(&texel, raw.data() + i, sizeof(texel));
+        if (texel != c_packed_texel) {
+            ++bad;
+        }
+    }
+    EXPECT_EQ(bad, 0) << bad << " texels differ from the packed (1.0, 0.5, 0.25) value";
+}
+
+// Packed R11G11B10 texels uploaded from a buffer read back unchanged: the
+// upload and the readback both move 4 bytes per texel.
+TEST_F(Gpu_test, packed_r11g11b10_float_upload_round_trips)
+{
+    constexpr int                      width  = 4;
+    constexpr int                      height = 4;
+    constexpr erhe::dataformat::Format format = erhe::dataformat::Format::format_packed111110_vec3_unorm;
+    erhe::graphics::Device& graphics_device = device();
+    if (!graphics_device.probe_image_format_support(format, c_packed_usage_mask)) {
+        GTEST_SKIP() << "format_packed111110_vec3_unorm is not supported for sampled + transfer images on this device";
+    }
+
+    const std::shared_ptr<erhe::graphics::Texture> texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = graphics_device,
+            .usage_mask  = c_packed_usage_mask,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = format,
+            .width       = width,
+            .height      = height,
+            .debug_label = erhe::utility::Debug_label{"R11G11B10 upload target"}
+        }
+    );
+
+    // Distinct texels: the R and B mantissas count the texel index.
+    constexpr std::size_t texel_count   = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    constexpr std::size_t bytes_per_row = static_cast<std::size_t>(width) * 4u;
+    constexpr std::size_t byte_count    = texel_count * 4u;
+    std::vector<uint32_t> texels(texel_count);
+    for (std::size_t i = 0; i < texel_count; ++i) {
+        const uint32_t index = static_cast<uint32_t>(i);
+        texels[i] = (c_packed_r_1_0 | index) | (c_packed_g_0_5 << 11u) | ((c_packed_b_0_25 | (index & 31u)) << 22u);
+    }
+    const std::shared_ptr<erhe::graphics::Buffer> source = make_host_buffer(byte_count, erhe::graphics::Buffer_usage::transfer_src, "R11G11B10 upload");
+    {
+        const std::span<std::byte> mapped = source->map_bytes(0, byte_count);
+        std::memcpy(mapped.data(), texels.data(), byte_count);
+        source->unmap();
+    }
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
+            blit.copy_from_buffer(
+                erhe::graphics::Buffer_texel_location{.buffer = source.get(), .offset = 0, .bytes_per_row = bytes_per_row, .bytes_per_image = byte_count},
+                glm::ivec3{width, height, 1},
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
+            );
+        }
+    );
+
+    const std::vector<std::byte> raw = read_texture_level_bytes(*texture, 0, 4u);
+    ASSERT_EQ(raw.size(), byte_count);
+    std::vector<uint32_t> read_back(texel_count);
+    std::memcpy(read_back.data(), raw.data(), byte_count);
+    EXPECT_EQ(read_back, texels);
+}
+
 } // namespace erhe::graphics::test

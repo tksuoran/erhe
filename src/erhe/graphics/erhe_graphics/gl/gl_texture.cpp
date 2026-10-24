@@ -82,7 +82,8 @@ auto byte_count(const gl::Pixel_type pixel_type) -> size_t
 
         case gl::Pixel_type::unsigned_int:
         case gl::Pixel_type::int_:
-        case gl::Pixel_type::float_: {
+        case gl::Pixel_type::float_:
+        case gl::Pixel_type::unsigned_int_10f_11f_11f_rev: {
             return 4;
         }
 
@@ -91,6 +92,11 @@ auto byte_count(const gl::Pixel_type pixel_type) -> size_t
         }
     }
 };
+
+auto is_packed_pixel_type(const gl::Pixel_type pixel_type) -> bool
+{
+    return pixel_type == gl::Pixel_type::unsigned_int_10f_11f_11f_rev;
+}
 
 constexpr std::array INTERNAL_FORMAT_INFO =
 {
@@ -106,7 +112,7 @@ constexpr std::array INTERNAL_FORMAT_INFO =
     InternalFormatFormatType{ gl::Internal_format::rgb8_snorm       ,  gl::Pixel_format::rgb            , gl::Pixel_type::byte           },
     InternalFormatFormatType{ gl::Internal_format::srgb8            ,  gl::Pixel_format::rgb            , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::rgb16f           ,  gl::Pixel_format::rgb            , gl::Pixel_type::half_float     },
-    InternalFormatFormatType{ gl::Internal_format::r11f_g11f_b10f   ,  gl::Pixel_format::rgb            , gl::Pixel_type::float_         },
+    InternalFormatFormatType{ gl::Internal_format::r11f_g11f_b10f   ,  gl::Pixel_format::rgb            , gl::Pixel_type::unsigned_int_10f_11f_11f_rev },
     InternalFormatFormatType{ gl::Internal_format::rgba8            ,  gl::Pixel_format::rgba           , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::srgb8_alpha8     ,  gl::Pixel_format::rgba           , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::rgba8_snorm      ,  gl::Pixel_format::rgba           , gl::Pixel_type::byte           },
@@ -150,7 +156,10 @@ auto get_gl_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_
 
     for (const auto& entry : INTERNAL_FORMAT_INFO) {
         if (entry.internal_format == internal_format) {
-            // For now, there are no packed entries
+            // A packed type holds every component of the pixel in one value.
+            if (is_packed_pixel_type(entry.type)) {
+                return byte_count(entry.type);
+            }
             return component_count(entry.format) * byte_count(entry.type);
         }
     }
