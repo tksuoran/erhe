@@ -92,6 +92,11 @@ public:
     // of the latest completed measurement (0 with cpu binning).
     erhe::scene_renderer::Light_cluster_stats    light_cluster_stats{};
     uint64_t                                     light_cluster_gpu_time_ns{0};
+    // The view's shadow texel visualization (shadow_debug.vert) may sample
+    // the depth map in its vertex shader this frame: execute recorded the
+    // depth map's barrier to sampled | vertex_shader. The visualization
+    // draws only in a frame whose result says so.
+    bool                                         texel_visualization{false};
 };
 
 // Helper rendergraph node calling Shadow_renderer
@@ -242,14 +247,21 @@ private:
     // The configuration the main thread requests (main thread owned).
     Shadow_node_configuration                                 m_requested_configuration;
     // The requested configuration as the prepare phase of a frame copied it,
+    // and whether the view's shadow texel visualization is on in that frame,
     // one slot per frame in flight (prepare()).
     class Configuration_slot
     {
     public:
-        uint64_t                  frame_index  {std::numeric_limits<uint64_t>::max()};
-        Shadow_node_configuration configuration{};
+        uint64_t                  frame_index        {std::numeric_limits<uint64_t>::max()};
+        Shadow_node_configuration configuration      {};
+        bool                      texel_visualization{false};
     };
     std::vector<Configuration_slot>                           m_configuration_slots;
+    // Render phase owned (after construction): a texel visualization of an
+    // earlier frame read m_texture in a vertex shader, and no barrier has
+    // ordered that read before a later frame's depth writes yet. A fresh
+    // texture (reconfigure()) starts without such reads.
+    bool                                                      m_depth_map_vertex_reads_pending{false};
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
 
     // Omnidirectional point-light shadows: an R32F texture_cube_map_array (one

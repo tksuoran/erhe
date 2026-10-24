@@ -232,7 +232,12 @@ void main()
     int   gx = gl_VertexID % PROBE_GRID;
     int   gy = gl_VertexID / PROBE_GRID;
     ivec2 p  = (ivec2(gx, gy) * PROBE_STRIDE) + ivec2(PROBE_STRIDE - 1);
+#if FETCH_DEPTH
+    // The depth value's bits, exact through the RGBA8 target.
+    v_color      = unpackUnorm4x8(floatBitsToUint(texelFetch(s_source, p, 0).r));
+#else
     v_color      = texelFetch(s_source, p, 0);
+#endif
     gl_Position  = vec4(pixel_center_ndc(float(gx)), float(Y_SIGN) * pixel_center_ndc(float(gy)), 0.0, 1.0);
     gl_PointSize = 1.0;
 }
@@ -262,6 +267,9 @@ enum class Probe_kind : unsigned int { color_2d, color_2d_array_layer_1, depth_2
 enum class Dst_data : unsigned int { float_data, uint_data };
 
 enum class Slow_target : unsigned int { color, depth };
+// What the vertex-stage fetch samples: a color texture (the texel) or a
+// depth texture (the depth value's bits).
+enum class Fetch_source : unsigned int { color, depth };
 
 // The first dispatch of the in-encoder cases' consumer encoder.
 enum class Barrier_scope_case : unsigned int { writer, unrelated };
@@ -687,8 +695,9 @@ protected:
 
     // --- vertex-stage fetch: a render pass whose vertex shader samples ------
 
-    [[nodiscard]] auto make_vertex_fetch(const int texture_size) -> bool
+    [[nodiscard]] auto make_vertex_fetch(const int texture_size, const Fetch_source source = Fetch_source::color) -> bool
     {
+        const bool fetch_depth = (source == Fetch_source::depth);
         erhe::graphics::Device& graphics_device = device();
         m_vertex_fetch = std::make_unique<Vertex_fetch>();
         Vertex_fetch& fetch = *m_vertex_fetch;
@@ -713,7 +722,7 @@ protected:
                     erhe::graphics::Bind_group_layout_binding{
                         .binding_point  = 0,
                         .type           = erhe::graphics::Binding_type::combined_image_sampler,
-                        .sampler_aspect = erhe::graphics::Sampler_aspect::color,
+                        .sampler_aspect = fetch_depth ? erhe::graphics::Sampler_aspect::depth : erhe::graphics::Sampler_aspect::color,
                         .name           = "s_source",
                         .glsl_type      = erhe::graphics::Glsl_type::sampler_2d,
                         .stage_flags    = erhe::graphics::Shader_stage_flags::vertex
@@ -730,7 +739,8 @@ protected:
             .defines          = {
                 { "PROBE_GRID",   std::to_string(c_probe_grid)                },
                 { "PROBE_STRIDE", std::to_string(texture_size / c_probe_grid) },
-                { "Y_SIGN",       y_sign                                      }
+                { "Y_SIGN",       y_sign                                      },
+                { "FETCH_DEPTH",  fetch_depth ? "1" : "0"                     }
             },
             .fragment_outputs = &m_fragment_outputs,
             .no_vertex_input  = true,
@@ -1313,6 +1323,51 @@ TEST_F(Resource_barrier_test, depth_attachment_to_sampled)
         }
     }
     expect_probe(expected, "depth attachment -> sampled");
+}
+
+// Depth attachment write (gl_FragDepth) in one command buffer ->
+// texture_barrier(depth_stencil_attachment, sampled | vertex_shader,
+// earlier_submissions) -> sampled depth read in the VERTEX stage in the next
+// command buffer (the shape of the editor's shadow texel visualization,
+// doc/erhe/shadows.md "Texel visualization barriers").
+TEST_F(Resource_barrier_test, earlier_submission_depth_attachment_to_vertex_stage)
+{
+    const erhe::dataformat::Format depth_format = find_depth32f_format();
+    if (depth_format == erhe::dataformat::Format::format_undefined) {
+        GTEST_SKIP() << "no 32-bit float depth format";
+    }
+    ASSERT_TRUE(make_vertex_fetch(c_heavy_size, Fetch_source::depth));
+    const std::shared_ptr<erhe::graphics::Texture> depth = make_texture(
+        Image_usage::depth_stencil_attachment | Image_usage::sampled, erhe::graphics::Texture_type::texture_2d,
+        depth_format, c_heavy_size, 0, "barrier depth attachment"
+    );
+    ASSERT_TRUE(make_slow_pass(*depth, 0, Slow_target::depth));
+    submit_two(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            record_slow_pass(command_buffer);
+        },
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            command_buffer.texture_barrier(
+                *depth,
+                Image_usage::depth_stencil_attachment,
+                Image_usage::sampled | Image_usage::vertex_shader,
+                erhe::graphics::Barrier_scope::earlier_submissions
+            );
+            record_vertex_fetch(command_buffer, *depth);
+        }
+    );
+    const int stride = c_heavy_size / c_probe_grid;
+    std::vector<uint32_t> expected(c_probe_count);
+    for (int gy = 0; gy < c_probe_grid; ++gy) {
+        for (int gx = 0; gx < c_probe_grid; ++gx) {
+            const uint32_t x     = static_cast<uint32_t>((gx * stride) + stride - 1);
+            const uint32_t y     = static_cast<uint32_t>((gy * stride) + stride - 1);
+            const uint32_t seed  = x + (y * static_cast<uint32_t>(c_heavy_size));
+            const float    value = (cpu_spin(seed, c_fragment_spin) == c_sentinel) ? 1.0f : (static_cast<float>(seed) / 1048576.0f);
+            expected[(static_cast<std::size_t>(gy) * c_probe_grid) + static_cast<std::size_t>(gx)] = std::bit_cast<uint32_t>(value);
+        }
+    }
+    expect_vertex_fetch(expected, "earlier submission depth attachment -> vertex stage");
 }
 
 // Transfer (copy_from_buffer) -> texture_barrier -> sampled read in compute.

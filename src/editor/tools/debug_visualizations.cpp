@@ -2120,7 +2120,16 @@ void Debug_visualizations::render(const Render_context& context)
     // phase) for renderables that issue draw calls. Everything below
     // generates lines / labels and must run only in the CPU phase.
     if (context.encoder != nullptr) {
-        if (m_settings.shadow_debug) {
+        // The shadow texel visualization draws in the frames whose shadow
+        // node declared its vertex shader read of the depth map (the node
+        // took this view's toggle as the frame's input in M2,
+        // Shadow_render_node::prepare()); the live toggle may already have
+        // changed since.
+        const Shadow_render_node* const shadow_render_node = context.scene_view.get_shadow_render_node();
+        const Shadow_frame_result* const shadow_result = (shadow_render_node != nullptr)
+            ? shadow_render_node->get_frame_result(context.app_context.graphics_device->get_frame_index())
+            : nullptr;
+        if ((shadow_result != nullptr) && shadow_result->texel_visualization) {
             shadow_debug(context);
         }
         return;

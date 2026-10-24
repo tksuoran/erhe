@@ -65,8 +65,6 @@ public:
     std::optional<std::size_t>           tools_frame_slot     {};
     // The view's grid, recorded by the grid tool.
     Grid_pass_state                      grid                 {};
-    // The view's Debug Visualizations shadow texel toggle.
-    bool                                 shadow_debug         {false};
     // Weight_display's joint weight ramp inputs (App_rendering).
     glm::uvec4                           debug_joint_indices  {0xffffffffu, 0, 0, 0};
     std::shared_ptr<erhe::scene::Node>   debug_target_joint   {};

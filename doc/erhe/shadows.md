@@ -308,12 +308,26 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
 - **Attachment usages** - the editor's shadow passes
   (`shadow_render_node.cpp`) declare as `usage_before` / `usage_after` of
   each attachment the shader stages that sample it (`doc/erhe/graphics.md`
-  "Resource barriers"): the depth map `sampled | vertex_shader |
-  fragment_shader` (the receivers in `standard.frag` and the depth
-  visualization `depth_to_color.frag` are fragment shaders; the texel visualization
-  `shadow_debug.vert` reads it in its vertex shader), the distance map and
-  the point cube array `sampled | fragment_shader`. No compute shader samples
-  a shadow map: the ray traced paths (`erhe_ray_hit.glsl`) trace shadow rays.
+  "Resource barriers"): `sampled | fragment_shader` for the depth map, the
+  distance map and the point cube array (the receivers in `standard.frag`
+  and the depth visualization `depth_to_color.frag` are fragment shaders).
+  No compute shader samples a shadow map: the ray traced paths
+  (`erhe_ray_hit.glsl`) trace shadow rays.
+- **Texel visualization barriers** - the shadow texel visualization
+  (`shadow_debug.vert`, Debug Visualizations "Shadow Debug") reads the depth
+  map in its vertex shader and declares that read itself, so the depth
+  passes' vertex stage never waits for it. `Shadow_render_node::prepare()`
+  (M2) copies the view's toggle into the frame's slot. In the render phase,
+  after the frame's shadow passes, a frame with the toggle on records
+  `texture_barrier(depth map, depth_stencil_attachment, sampled |
+  vertex_shader, earlier_submissions)` (the writes may be an earlier
+  frame's: cached or frozen maps) and marks the frame result
+  (`Shadow_frame_result::texel_visualization`); the visualization draws only
+  in a frame whose result is marked. The next frame that draws shadow passes
+  first records `texture_barrier(depth map, sampled | vertex_shader,
+  sampled | fragment_shader, earlier_submissions)`, which chains the earlier
+  vertex read into the passes' begin barrier and keeps the layout depth
+  stencil read only. A reallocated depth map starts without pending reads.
 - **Prewarm** - `prewarm_pipelines()` warms the active cull mode's two base
   pipelines (regular and depth clamp) times both winding variants, so neither
   toggling `depth_clamp` nor mirroring a mesh hitches at first draw. Changing
