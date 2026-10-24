@@ -28,6 +28,7 @@ void Render_settings::snapshot(const Editor_settings_config& editor_settings, co
     exclude_unlit_primitives         = editor_settings.exclude_unlit_primitives;
     indirect_diffuse_source          = editor_settings.indirect_diffuse_source;
     culling_classification           = editor_settings.culling_classification;
+    occlusion_culling                = editor_settings.occlusion_culling;
     light_cluster_binning            = editor_settings.light_cluster_binning;
     lightmap_bicubic_sampling        = editor_settings.lightmap.bicubic_sampling;
 

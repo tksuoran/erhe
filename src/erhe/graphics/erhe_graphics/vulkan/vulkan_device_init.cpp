@@ -1473,7 +1473,10 @@ Device_impl::Device_impl(
             .occlusionQueryPrecise                   = VK_FALSE,
             .pipelineStatisticsQuery                 = VK_FALSE,
             .vertexPipelineStoresAndAtomics          = qf.vertexPipelineStoresAndAtomics,
-            .fragmentStoresAndAtomics                = VK_FALSE,
+            // Storage writes and atomics from fragment shaders: the raster
+            // occlusion test's visibility bits (Device_info::
+            // fragment_stores_and_atomics).
+            .fragmentStoresAndAtomics                = qf.fragmentStoresAndAtomics,
             .shaderTessellationAndGeometryPointSize  = VK_FALSE,
             .shaderImageGatherExtended               = VK_FALSE,
             .shaderStorageImageExtendedFormats       = VK_FALSE,
@@ -2154,6 +2157,8 @@ Device_impl::Device_impl(
     m_info.texture_heap_path       = Texture_heap_path::vulkan_descriptor_indexing;
     m_info.use_sparse_texture      = false;
     m_info.use_base_instance = (query_device_features.features.drawIndirectFirstInstance == VK_TRUE);
+    m_info.fragment_stores_and_atomics = (query_device_features.features.fragmentStoresAndAtomics == VK_TRUE);
+    log_startup->info("Fragment stores and atomics: {}", m_info.fragment_stores_and_atomics);
     // gl_InstanceIndex includes the command's firstInstance on the native
     // and the emulated (per-draw vkCmdDrawIndexedIndirect) multi-draw paths
     // alike; MoltenVK lowers it to the Metal instance_id, which includes the

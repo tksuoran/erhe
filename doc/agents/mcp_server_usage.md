@@ -605,6 +605,43 @@ GPU path's capability keeps the CPU path (`get_draw_lists`
 
 Returns: `{mode, gpu_supported}`.
 
+### set_occlusion_culling
+
+Set `Editor_settings_config::occlusion_culling` (the live setting, as the
+Settings window's Occlusion Culling checkbox edits it; saved only by a
+Settings window save): `enabled` true or false
+([occlusion_culling.md](../plans/occlusion_culling.md)). With the `gpu`
+culling classification on a device whose classifier supports the test
+(fragment shader storage atomics), every viewport's "Occlusion test"
+composition pass rasterizes the draw lists' entry boxes against the view's
+opaque depth and marks the visible entries; nothing skips draws by the marks
+yet, so images do not change. Omit `enabled` to query.
+
+Returns: `{enabled, classification, gpu_supported}`.
+
+### get_occlusion_check
+
+The gate of the raster occlusion test: the next frame with occlusion views
+keeps its CPU masks and entry identities; once the frame retired and the
+frame reusing its slot decoded its occlusion words, the call returns per
+occlusion view `bounded_in_frustum` (CPU masks), `tested`, `visible`,
+`occluded`, `untested` (marked visible without a test), `near_plane` (boxes
+reaching the near plane) and `near_plane_occluded` (0 is the gate), and
+`first_occluded` `[{list_index, entry_index, name}]` (up to 16). Errors
+unless `culling_classification` is `gpu` and `occlusion_culling` is on, on
+a device with the test. `scripts/occlusion_wall_check.py` builds a wall with
+boxes behind and in front of it in a running editor and checks the result.
+
+```bash
+python3 scripts/mcp_call.py get_occlusion_check '{"scene_name":"Default Scene"}'
+```
+
+Returns: `{scene, frame_index, entry_count, view_count, views: [{view,
+scene_view, bounded_in_frustum, tested, visible, occluded, untested,
+near_plane, near_plane_occluded, first_occluded}]}`. The per frame counts of
+the same test are in `get_composition_passes` (`last_occlusion_*` of the
+"Occlusion test" pass).
+
 ### set_light_cluster_binning
 
 Set `Editor_settings_config::light_cluster_binning` (the live setting, as the

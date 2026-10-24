@@ -125,24 +125,26 @@ conditional no-ops per frame, noted below):
 | 13 | Ghost edge lines | edge_lines | geometry graph ghost meshes (`render_wireframe` flag), always on |
 | 14 | Content fill alpha tested not selected | polygon_fill | `Blending_class::alpha_tested` primitives (alpha_test, screen_door) of pass 1; blending off, depth write on |
 | 15 | Content fill alpha tested selected | polygon_fill | as above, of pass 2; writes selection stencil bit 7 |
-| 16 | Content outline opaque selected | edge_lines | selection/hover outline (outline pipeline, constant colors; draws where stencil bit 7 is clear) |
-| 17 | Sky | polygon_fill | fullscreen (3 vertices), depth==far, stencil==0; `Sky_composition_pass` subclass switches between the gradient/checker shader and the physically-based atmosphere (`doc/erhe/procedural_sky.md`) |
-| 18 | Grid | polygon_fill | fullscreen infinite plane (12 vertices), depth clamp, blended overlay that leaves the depth buffer to the content |
-| 19 | Content fill translucent not selected | polygon_fill | `Blending_class::translucent` primitives of pass 1, premultiplied blending |
-| 20 | Content fill translucent selected | polygon_fill | as above, of pass 2 |
-| 21 | Brush | polygon_fill | brush layer, `VARIANT_BRUSH_PREVIEW` variant, two pipelines in sequence (cull back then cull front), premultiplied alpha |
-| 22 | Bone solid (N.V) | polygon_fill | bone proxies, six stencil-assisted pipelines; after every content pass because passes 1-2 of it leave stencil tags the edge-line pipelines test |
-| 23 | Rendertarget | polygon_fill | rendertarget-mesh UI (hotbar quad); overlay pass that ignores camera exposure and runs after post-processing (issue #230) |
-| 24 | Rendertarget view anchored | polygon_fill | as above, for the view-anchored hotbar of the hovered view only |
+| 16 | Occlusion test | - | `Composition_pass_kind::occlusion_test`: the raster occlusion test of the view (`Draw_list_scene::draw_occlusion()`, doc/plans/occlusion_culling.md); viewports only (`Render_context::render_state`), with `occlusion_culling` on, the draw lists and the `gpu` culling classification; draws every tested entry's box, depth test without depth or color writes |
+| 17 | Content outline opaque selected | edge_lines | selection/hover outline (outline pipeline, constant colors; draws where stencil bit 7 is clear) |
+| 18 | Sky | polygon_fill | fullscreen (3 vertices), depth==far, stencil==0; `Sky_composition_pass` subclass switches between the gradient/checker shader and the physically-based atmosphere (`doc/erhe/procedural_sky.md`) |
+| 19 | Grid | polygon_fill | fullscreen infinite plane (12 vertices), depth clamp, blended overlay that leaves the depth buffer to the content |
+| 20 | Content fill translucent not selected | polygon_fill | `Blending_class::translucent` primitives of pass 1, premultiplied blending |
+| 21 | Content fill translucent selected | polygon_fill | as above, of pass 2 |
+| 22 | Brush | polygon_fill | brush layer, `VARIANT_BRUSH_PREVIEW` variant, two pipelines in sequence (cull back then cull front), premultiplied alpha |
+| 23 | Bone solid (N.V) | polygon_fill | bone proxies, six stencil-assisted pipelines; after every content pass because passes 1-2 of it leave stencil tags the edge-line pipelines test |
+| 24 | Rendertarget | polygon_fill | rendertarget-mesh UI (hotbar quad); overlay pass that ignores camera exposure and runs after post-processing (issue #230) |
+| 25 | Rendertarget view anchored | polygon_fill | as above, for the view-anchored hotbar of the hovered view only |
 
 The order serves the GPU's early depth test (on Apple GPUs, hidden surface
 removal; doc/erhe/primitive.md "Blending classes"): a draw that writes depth
 and may discard turns it off for the draws that follow it. Every pass that
 writes depth without discarding - the opaque fills, the selection stencil
 masks, the corner points and centroids - comes before the alpha-tested
-fills (14-15), and the sky follows them, so it skips the pixels the
-alpha-tested content covers. The editor overlays keep their places
-relative to the content they had before the alpha-tested passes existed,
+fills (14-15), then the occlusion test (16), which writes nothing and so
+tests against the view's final opaque depth, and the sky follows them, so it
+skips the pixels the alpha-tested content covers. The editor overlays keep
+their places relative to the content they had before the alpha-tested passes existed,
 where moving them would change what they show:
 
 - The corner points and centroids (7-10) write depth without discarding,
@@ -158,12 +160,12 @@ where moving them would change what they show:
 - The edge lines (11-12, 13) stay ahead of the alpha-tested fills: content
   drawn after an edge line covers its pixels, as the translucent fills do;
   the wide-line shader discards, so these are discarding draws themselves.
-- The outline (16) follows the alpha-tested fills: it draws regardless of
+- The outline (17) follows the alpha-tested fills: it draws regardless of
   depth where stencil bit 7 is clear, so the alpha-tested selected pass has
   to write its bit 7 first, and an alpha-tested surface in front of the
   outline's pixels gets the outline over it like an opaque one does.
-- The grid (18) depth-tests against the alpha-tested content like against
-  the opaque content; the translucent fills (19-20) depth-test against both
+- The grid (19) depth-tests against the alpha-tested content like against
+  the opaque content; the translucent fills (20-21) depth-test against both
   and blend over them, whatever their registration order.
 
 Open: "Selection stencil mask (fill disabled)" (5) overrides the blending
@@ -273,8 +275,8 @@ content's -- the infinite plane is rendered through `clip_from_world_for_grid`
 and passes the depth test over opaque content at every pixel below the horizon,
 which is why grid lines cross objects that stand in front of the plane. Writing
 depth therefore stamped a depth the content disagrees with across the whole
-plane, and every pass ordered after the grid -- passes 17-20, the translucent
-content fill first of all -- was rejected by it, so no alpha-blended or
+plane, and every pass ordered after the grid -- the translucent content
+fill first of all -- was rejected by it, so no alpha-blended or
 alpha-tested primitive reached the frame while the grid was visible. The
 disagreement itself is still open: the grid should not draw over content that
 stands in front of the plane.

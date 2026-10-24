@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <span>
 
 namespace erhe {
@@ -131,6 +132,27 @@ public:
         Draw_list_scene&                  draw_list_scene,
         uint64_t                          frame_index,
         const Color_cull_view_parameters& parameters
+    ) -> Cull_view;
+
+    // The clip_from_world of a single-view color pass, built the way
+    // Camera_buffer builds it (add_color_cull_view()'s frustum and the
+    // occlusion test rasterize with it); empty for multiview passes and a
+    // view without a camera.
+    [[nodiscard]] static auto get_color_clip_from_world(const Color_cull_view_parameters& parameters) -> std::optional<glm::mat4>;
+
+    // Render phase, with the pass's culling view and before the frame's
+    // classification (doc/plans/occlusion_culling.md): registers the color
+    // view as an occlusion view of draw_list_scene
+    // (Draw_list_scene::add_occlusion_view()) with the inward near plane of
+    // the view's clip_from_world. Returns the view, or none (no occlusion
+    // pass this frame: multiview, no camera, no GPU classification with
+    // occlusion on).
+    [[nodiscard]] static auto add_color_occlusion_view(
+        Draw_list_scene&                  draw_list_scene,
+        uint64_t                          frame_index,
+        Cull_view                         cull_view,
+        const Color_cull_view_parameters& parameters,
+        const Gpu_command_key&            key
     ) -> Cull_view;
 
 private:

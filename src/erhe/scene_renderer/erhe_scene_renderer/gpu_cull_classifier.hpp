@@ -13,11 +13,13 @@
 #include <vector>
 
 namespace erhe::graphics {
+    class Base_render_pipeline;
     class Bind_group_layout;
     class Command_buffer;
     class Compute_pipeline;
     class Device;
     class Reloadable_shader_stages;
+    class Shader_stages;
 }
 
 namespace erhe::scene_renderer {
@@ -38,6 +40,14 @@ class Draw_list_scene;
 // the ring buffer clients of its per-frame job table, pass bit, command and
 // count regions.
 //
+// The raster occlusion test (doc/plans/occlusion_culling.md, Q6 "Occlusion
+// test") is its render pipeline: res/shaders/occlusion_test.vert/.frag, a
+// depth-tested, color-write-free draw of every entry's box inside a view's
+// render pass, whose fragments set the entry's visibility bit; with the
+// uniform ring buffer client of its per-draw view block. Supported where the
+// classifier is and fragment shaders take storage writes and atomics
+// (Device_info::fragment_stores_and_atomics).
+//
 // Device capability: native multi-draw indirect with a GPU-read draw count
 // (Device_info::use_draw_indirect_count; the shadow passes draw the commands
 // as erhe::graphics prepared count draws, an indirect command buffer on
@@ -53,11 +63,16 @@ public:
     static constexpr unsigned int bounds_binding_point{0};
     static constexpr unsigned int views_binding_point {1};
     static constexpr unsigned int masks_binding_point {2};
+    // The occlusion test's start words, written by the classification of a
+    // frame with occlusion views (cull_classify.comp documents them).
+    static constexpr unsigned int occlusion_test_binding_point  {3};
+    static constexpr unsigned int occlusion_result_binding_point{4};
     static constexpr uint32_t     workgroup_size      {64};
     // GPU bounds: two vec4 per entry (center + 0, extent + purpose).
     static constexpr std::size_t  bounds_bytes_per_entry{2 * 4 * sizeof(float)};
-    // View set: eight vec4 per view (six planes, range sphere, info).
-    static constexpr std::size_t  vec4s_per_view      {8};
+    // View set: ten vec4 per view (six planes, range sphere, info, the
+    // near plane of an occlusion view, occlusion info).
+    static constexpr std::size_t  vec4s_per_view      {10};
     // Mask: one uvec2 (64 view bits) per entry per group of 64 views.
     static constexpr std::size_t  mask_bytes_per_entry_group{2 * sizeof(uint32_t)};
 
@@ -88,6 +103,14 @@ public:
     // job's first word) and the chunk's entries passing the filter.
     static constexpr std::size_t  count_bytes_per_job     {2 * sizeof(uint32_t)};
 
+    // The occlusion test's render pipeline (occlusion_test.vert / .frag).
+    static constexpr unsigned int occlusion_view_binding_point       {0}; // uniform, vertex
+    static constexpr unsigned int occlusion_bounds_binding_point     {1}; // storage, vertex
+    static constexpr unsigned int occlusion_draw_test_binding_point  {2}; // storage, vertex
+    static constexpr unsigned int occlusion_draw_result_binding_point{3}; // storage, fragment
+    // Vertices per entry: the twelve triangles of its box, non-indexed.
+    static constexpr uint32_t     occlusion_vertices_per_entry       {36};
+
     // The 32-bit halves (low, high) of a 64-bit value as the shaders read
     // them (flag bits, Item_filter masks).
     [[nodiscard]] static constexpr auto split_uint64(const uint64_t value) -> std::array<uint32_t, 2>
@@ -106,6 +129,9 @@ public:
     [[nodiscard]] static auto is_device_capable(const erhe::graphics::Device& graphics_device) -> bool;
     // The device is capable and the pipeline built.
     [[nodiscard]] auto is_supported() const -> bool;
+    // is_supported(), the device takes fragment storage writes and atomics
+    // and the occlusion test's pipeline built.
+    [[nodiscard]] auto is_occlusion_supported() const -> bool;
 
     // For Draw_list_scene's dispatch recording.
     [[nodiscard]] auto get_device           () -> erhe::graphics::Device&;
@@ -127,6 +153,14 @@ public:
     [[nodiscard]] auto get_job_header_offset() const -> std::size_t { return m_job_header_offset; }
     [[nodiscard]] auto get_job_filter_offset() const -> std::size_t { return m_job_filter_offset; }
     [[nodiscard]] auto get_job_data_offset  () const -> std::size_t { return m_job_data_offset; }
+    // For Draw_list_scene's occlusion test.
+    [[nodiscard]] auto get_occlusion_bind_group_layout  () const -> const erhe::graphics::Bind_group_layout*;
+    [[nodiscard]] auto get_occlusion_pipeline           () -> erhe::graphics::Base_render_pipeline&;
+    [[nodiscard]] auto get_occlusion_shader_stages      () const -> const erhe::graphics::Shader_stages&;
+    [[nodiscard]] auto get_occlusion_view_buffer        () -> erhe::graphics::Ring_buffer_client&;
+    [[nodiscard]] auto get_occlusion_view_block_bytes   () const -> std::size_t { return m_occlusion_view_block_bytes; }
+    [[nodiscard]] auto get_occlusion_clip_from_world_offset() const -> std::size_t { return m_occlusion_clip_from_world_offset; }
+    [[nodiscard]] auto get_occlusion_info_offset        () const -> std::size_t { return m_occlusion_info_offset; }
 
 private:
     erhe::graphics::Device&                                   m_graphics_device;
@@ -134,6 +168,8 @@ private:
     erhe::graphics::Shader_resource                           m_bounds_block;
     erhe::graphics::Shader_resource                           m_views_block;
     erhe::graphics::Shader_resource                           m_masks_block;
+    erhe::graphics::Shader_resource                           m_occlusion_tests_block;
+    erhe::graphics::Shader_resource                           m_occlusion_results_block;
     std::size_t                                               m_view_header_offset{0};
     std::size_t                                               m_view_data_offset  {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_bind_group_layout;
@@ -161,6 +197,18 @@ private:
     erhe::graphics::Ring_buffer_client                        m_bits_buffer;
     erhe::graphics::Ring_buffer_client                        m_command_buffer;
     erhe::graphics::Ring_buffer_client                        m_count_buffer;
+
+    erhe::graphics::Shader_resource                           m_occlusion_view_block;
+    erhe::graphics::Shader_resource                           m_occlusion_bounds_block;
+    erhe::graphics::Shader_resource                           m_occlusion_draw_test_block;
+    erhe::graphics::Shader_resource                           m_occlusion_draw_result_block;
+    std::size_t                                               m_occlusion_view_block_bytes{0};
+    std::size_t                                               m_occlusion_clip_from_world_offset{0};
+    std::size_t                                               m_occlusion_info_offset{0};
+    std::unique_ptr<erhe::graphics::Bind_group_layout>        m_occlusion_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_occlusion_shader_stages;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>     m_occlusion_pipeline;
+    erhe::graphics::Ring_buffer_client                        m_occlusion_view_buffer;
 };
 
 } // namespace erhe::scene_renderer

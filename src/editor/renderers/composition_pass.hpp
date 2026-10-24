@@ -40,11 +40,16 @@ class Scene_view;
 // editor_aid passes draw editor guides rather than scene content; a render
 // with Render_content::scene_only skips them (Composer::render). background
 // passes (the sky) fill the pixels no scene surface covers; a render with
-// Render_content::scene_surfaces skips them as well.
+// Render_content::scene_surfaces skips them as well. occlusion_test is the
+// raster occlusion test of a viewport's color view
+// (doc/plans/occlusion_culling.md, Draw_list_scene::draw_occlusion()): it
+// draws no color and no depth, only in viewports (Render_context::
+// render_state set) with Render_content::scene_and_editor_aids.
 enum class Composition_pass_kind : unsigned int {
     scene_content = 0,
     editor_aid,
-    background
+    background,
+    occlusion_test
 };
 
 class Composition_pass_data
@@ -134,7 +139,9 @@ enum class Composition_pass_result : unsigned int {
     primitive_mode_disabled, // the render style has this primitive_mode off
     no_mesh_layers,          // none of data.mesh_layers resolved in the scene
     submitted,               // reached the draw submission (Forward_renderer::render)
-    submitted_draw_lists     // reached the draw submission through the scene's Draw_list_scene
+    submitted_draw_lists,    // reached the draw submission through the scene's Draw_list_scene
+    no_occlusion_view,       // an occlusion test pass whose view is no occlusion view this frame
+    submitted_occlusion_test // an occlusion test pass drew its view's test (Draw_list_scene::draw_occlusion)
 };
 
 [[nodiscard]] auto c_str(Composition_pass_result result) -> const char*;
@@ -181,6 +188,10 @@ public:
     // doc/plans/culling.md phase 6a) before the frame's classification;
     // render_immediate() draws with Render_context::immediate_cull_view
     // (the headset's) or none (unculled).
+    // An occlusion test
+    // pass: its view's culling view when the frame made it an occlusion
+    // view (Draw_list_renderer::add_color_occlusion_view(), the same hook),
+    // else none (the pass draws nothing).
     erhe::scene_renderer::Cull_view                    cull_view         {erhe::scene_renderer::Cull_view::none};
     // The pass's selection in the frame's GPU command generation of its
     // draw list scene (Draw_list_renderer::add_color_command_selection(),
@@ -227,6 +238,16 @@ public:
     std::size_t             draw_list_entry_count  {0};
     std::size_t             draw_list_culled_count {0};
     uint64_t                draw_list_counts_frame_index{0};
+    // An occlusion test pass: the counts of its view in the newest retired
+    // frame whose occlusion words were decoded
+    // (Draw_list_scene::get_retired_occlusion_counts(); frames in flight
+    // late, 0 frame index before the first): entries the test rasterized,
+    // those no fragment marked, and the color entries marked visible
+    // without a test.
+    std::size_t             occlusion_tested_count  {0};
+    std::size_t             occlusion_occluded_count{0};
+    std::size_t             occlusion_untested_count{0};
+    uint64_t                occlusion_counts_frame_index{0};
     double                  cpu_time_us            {0.0};
     double                  total_cpu_time_us      {0.0};
     std::size_t             render_call_count      {0};

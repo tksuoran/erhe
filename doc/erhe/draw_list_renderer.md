@@ -857,6 +857,51 @@ Drawing:
   replaces an earlier one (its pending readbacks belong to an older
   generation and are dropped); one `Gpu_timer` times the classification
   dispatch, another the compaction.
+  **Occlusion test** (doc/plans/occlusion_culling.md): with
+  `publish(..., Occlusion_culling::on, ...)` on a frame whose effective
+  classification is `gpu` and whose `Gpu_cull_classifier` supports it
+  (`is_occlusion_supported()`: `Device_info::fragment_stores_and_atomics`
+  and the pipeline of `res/shaders/occlusion_test.vert/.frag` built; refused,
+  logged once: the slot records off), a color view made an occlusion view
+  with `add_occlusion_view(frame_index, cull_view, near_plane, key)` (the
+  render phase, before the classification; the editor:
+  `Draw_list_renderer::add_color_occlusion_view()` from
+  `Composer::add_cull_views()`, near plane from the view's clip_from_world,
+  `Draw_list_renderer::get_color_clip_from_world()`) gets one visibility bit
+  per entry, in the mask layout (`uvec2` per (group, entry), bit = the
+  view's index). The classification dispatch writes, for the frame's
+  occlusion views (view record words 8 and 9: the near plane and the flag;
+  header `z` set), two regions of the frame slot's occlusion buffer: the
+  test words (a bounded color entry inside the view's frustum whose box,
+  grown by 2^-10 of its coordinate magnitude, `erhe_occlusion_bounds.glsl`,
+  lies wholly beyond the near plane) and the result words, preset to 1 for
+  the color entries the pass does not test (no bounds or skinned, a box
+  reaching the near plane, outside the frustum: unknown, kept visible), 0
+  elsewhere. A storage barrier (compute write -> vertex read and fragment
+  read / write) follows. `draw_occlusion(Draw_occlusion_parameters)`, inside
+  the view's render pass after its depth-writing color passes, draws 36
+  vertices per entry of the frame's lists (no vertex or index buffer: the
+  box corner from `gl_VertexID`), the vertex shader pushing an entry whose
+  test bit is clear outside the clip volume and transforming the grown
+  box's corners by the view's clip_from_world; the pipeline tests depth in
+  the device's direction (`greater_or_equal` with reverse depth), writes no
+  depth and no color and culls no face, and the fragment shader
+  (`early_fragment_tests`) atomically ORs the view's bit into the entry's
+  result word. The buffer is one persistent host-visible buffer per frame
+  slot (two regions at 256-byte alignment, grown to the slot's high-water
+  size, logged), bound by every `gpu` dispatch (a frame without occlusion
+  views binds it and writes nothing); `record_frame_end()`
+  (`Cull_frame_registry::record_frame_end()`, the editor: before
+  `release_frame_records()`) declares the frame's writes -> host read, and
+  the classification of the frame that reuses the slot (retired) decodes
+  the words into per view tested / occluded / untested counts
+  (`get_retired_occlusion_counts(key)`, frames in flight late).
+  `request_occlusion_check()` / `poll_occlusion_check()` (MCP
+  `get_occlusion_check`) add the frame's CPU side: per view the bounded
+  entries in the frustum, the entries whose (not grown) box reaches the near
+  plane, which must all be marked, and the first occluded entries with
+  their mesh names. Nothing consumes the bits yet (the classification's
+  masks and the generated commands are unchanged).
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.

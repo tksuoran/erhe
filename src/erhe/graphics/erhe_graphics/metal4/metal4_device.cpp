@@ -290,6 +290,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.max_vertex_uniform_blocks                = 31;
     m_info.max_vertex_uniform_vectors               = 4096;
     m_info.max_fragment_shader_storage_blocks       = 31;
+    // Fragment functions write and atomically modify device buffers.
+    m_info.fragment_stores_and_atomics              = true;
     m_info.max_fragment_uniform_blocks              = 31;
     m_info.max_fragment_uniform_vectors              = 4096;
     m_info.max_geometry_shader_storage_blocks       = 0;

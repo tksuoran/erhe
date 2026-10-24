@@ -2,6 +2,7 @@
 // phase 5, doc/erhe/draw_list_renderer.md Q6 "GPU classification").
 
 #include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_scene_renderer/cull_frame_registry.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -16,7 +17,12 @@
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/indirect_count_draws.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
@@ -101,10 +107,62 @@ auto Draw_list_scene::make_gpu_cull_check() -> std::shared_ptr<Gpu_cull_check>
     return std::make_shared<Gpu_cull_check>();
 }
 
+// The occlusion check of one frame (Draw_list_scene::request_occlusion_check()):
+// requested and polled on the main thread, captured at the recorded frame's
+// classification and decoded at the classification of the frame that reuses
+// its occlusion slot, both on the render thread. Every field is guarded by
+// mutex. A diagnostic: it may allocate.
+class Gpu_occlusion_check
+{
+public:
+    enum class Stage : uint8_t
+    {
+        idle,
+        requested, // main thread asked; the next frame with occlusion views records it
+        recording, // that frame was captured; its words are decoded when it retired
+        complete   // decoded: result is ready
+    };
+
+    class View
+    {
+    public:
+        Cull_view             cull_view         {Cull_view::none};
+        Gpu_command_key       key               {};
+        uint32_t              bounded_in_frustum{0};
+        std::vector<uint32_t> near_plane_entries; // all lists back to back
+    };
+
+    std::mutex            mutex;
+    Stage                 stage      {Stage::idle};
+    uint64_t              frame_index{0};
+    // The CPU half, captured at the recorded frame's classification.
+    uint32_t              entry_count{0};
+    uint32_t              view_count {0};
+    std::vector<uint32_t> list_entry_offsets;
+    std::vector<uint32_t> entry_objects; // per entry (all lists): Draw_list_entry::object_index
+    std::vector<View>     views;
+    // The decoded result; the first occluded entries' object indices per
+    // view, named at the poll (main thread).
+    Occlusion_check                    result;
+    std::vector<std::vector<uint32_t>> first_occluded_objects;
+};
+
+auto Draw_list_scene::make_gpu_occlusion_check() -> std::shared_ptr<Gpu_occlusion_check>
+{
+    return std::make_shared<Gpu_occlusion_check>();
+}
+
 namespace {
 
 // Host flush granularity: a multiple of every nonCoherentAtomSize.
 constexpr std::size_t c_gpu_bounds_flush_alignment = 256;
+
+// The occlusion buffer's smallest region (a dispatch without occlusion
+// views binds the two regions of an otherwise unused buffer) and the
+// alignment of the result region (a storage binding offset; a multiple of
+// every device's minStorageBufferOffsetAlignment and nonCoherentAtomSize).
+constexpr std::size_t c_occlusion_min_region_bytes = 256;
+constexpr std::size_t c_occlusion_region_alignment = 256;
 
 [[nodiscard]] auto align_down(const std::size_t value, const std::size_t alignment) -> std::size_t
 {
@@ -274,10 +332,18 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
 
         // The frame's views, transcribed from the CPU's Cull_view_tests (the
         // single source) in the cull_classify.comp layout.
+        // The raster occlusion test's start words (doc/plans/
+        // occlusion_culling.md): written by this dispatch when the frame has
+        // occlusion views, into the frame slot's occlusion buffer (bound
+        // every dispatch; the shader writes it only when the header asks).
+        const bool occlusion = !m_occlusion_views.empty();
+        prepare_occlusion_slot(frame_index, entry_count, (view_count + 63) / 64, occlusion);
+        Occlusion_slot& occlusion_slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
+
         Ring_buffer_range view_range = classifier.get_view_buffer().acquire(Ring_buffer_usage::CPU_write, view_bytes);
         {
             const std::span<std::byte> gpu_data = view_range.get_span();
-            const glm::uvec4 header{static_cast<uint32_t>(view_count), static_cast<uint32_t>(entry_count), 0u, 0u};
+            const glm::uvec4 header{static_cast<uint32_t>(view_count), static_cast<uint32_t>(entry_count), occlusion ? 1u : 0u, 0u};
             std::memcpy(gpu_data.data() + classifier.get_view_header_offset(), &header, sizeof(header));
             std::size_t write_offset = classifier.get_view_data_offset();
             for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
@@ -293,6 +359,15 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                     static_cast<float>(view.plane_count),
                     static_cast<float>(view.cube_face)
                 };
+                // The occlusion test of an occlusion view: its near plane
+                // and the flag (cull_classify.comp).
+                for (const Occlusion_view_record& occlusion_view : m_occlusion_views) {
+                    if (static_cast<std::size_t>(occlusion_view.cull_view) == view_index) {
+                        record[8] = occlusion_view.near_plane;
+                        record[9] = glm::vec4{1.0f, 0.0f, 0.0f, 0.0f};
+                        break;
+                    }
+                }
                 std::memcpy(gpu_data.data() + write_offset, record.data(), sizeof(record));
                 write_offset += sizeof(record);
             }
@@ -316,8 +391,32 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             encoder.set_buffer(Buffer_target::storage, slot.gpu_bounds.get(), 0, bounds_bytes, Gpu_cull_classifier::bounds_binding_point);
             classifier.get_view_buffer().bind(encoder, view_range);
             encoder.set_buffer(Buffer_target::storage, mask_buffer, mask_byte_offset, mask_bytes, Gpu_cull_classifier::masks_binding_point);
+            const std::size_t occlusion_bind_bytes = std::max(occlusion_slot.region_bytes, std::size_t{c_occlusion_min_region_bytes});
+            encoder.set_buffer(Buffer_target::storage, occlusion_slot.buffer.get(), 0,                            occlusion_bind_bytes, Gpu_cull_classifier::occlusion_test_binding_point);
+            encoder.set_buffer(Buffer_target::storage, occlusion_slot.buffer.get(), occlusion_slot.result_offset, occlusion_bind_bytes, Gpu_cull_classifier::occlusion_result_binding_point);
             const std::size_t group_size = Gpu_cull_classifier::workgroup_size;
             encoder.dispatch_compute(static_cast<std::uintptr_t>((entry_count + group_size - 1) / group_size), 1, 1);
+        }
+        if (occlusion) {
+            // The start words -> the occlusion passes' vertex reads (test
+            // region) and fragment atomics (result region), in this frame's
+            // view render passes.
+            command_buffer.buffer_barrier(
+                *occlusion_slot.buffer,
+                Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader,
+                Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::vertex_shader | Buffer_usage_flag_bit_mask::fragment_shader
+            );
+            occlusion_slot.frame_index = frame_index;
+            occlusion_slot.entry_count = static_cast<uint32_t>(entry_count);
+            occlusion_slot.group_count = static_cast<uint32_t>((view_count + 63) / 64);
+            occlusion_slot.views.assign(m_occlusion_views.begin(), m_occlusion_views.end());
+            occlusion_slot.pending     = true;
+            m_occlusion_frame_index    = frame_index;
+            m_occlusion_frame_active   = true;
+            // The host reads the words once the frame retired: the frame's
+            // end orders its writes for it.
+            m_cull_frame_registry.add_frame_end_scene(*this, frame_index);
+            capture_occlusion_check(frame_index);
         }
         // The passes' commands from the masks (phase 6), when the frame's
         // shadow renderer gave its selection or color passes gave theirs.
@@ -1149,6 +1248,411 @@ auto Draw_list_scene::get_gpu_job_filter_index(const erhe::Item_filter& filter) 
     ERHE_VERIFY(m_gpu_job_filters.size() < Gpu_cull_classifier::max_job_filters);
     m_gpu_job_filters.push_back(filter);
     return static_cast<uint32_t>(m_gpu_job_filters.size() - 1);
+}
+
+// --- Raster occlusion test (doc/plans/occlusion_culling.md) ---------------
+
+auto Draw_list_scene::add_occlusion_view(
+    const uint64_t         frame_index,
+    const Cull_view        cull_view,
+    const glm::vec4&       near_plane,
+    const Gpu_command_key& key
+) -> Cull_view
+{
+    assert_render_phase();
+    if (cull_view == Cull_view::none) {
+        return Cull_view::none;
+    }
+    // Given with the frame's views, before their classification.
+    ERHE_VERIFY(m_cull_frame_started && (m_cull_frame_index == frame_index) && !m_cull_frame_classified);
+    ERHE_VERIFY(static_cast<std::size_t>(cull_view) < m_cull_views.size());
+    ERHE_VERIFY(m_cull_views[static_cast<std::size_t>(cull_view)].purpose == Draw_purpose::color);
+    const Draw_list_slot& slot = get_published_slot(frame_index);
+    if ((slot.classification != Cull_classification::gpu) || (slot.occlusion != Occlusion_culling::on)) {
+        return Cull_view::none;
+    }
+    for (const Occlusion_view_record& record : m_occlusion_views) {
+        if ((record.cull_view == cull_view) && (record.key == key)) {
+            return cull_view;
+        }
+    }
+    m_occlusion_views.push_back(Occlusion_view_record{.cull_view = cull_view, .near_plane = near_plane, .key = key});
+    return cull_view;
+}
+
+void Draw_list_scene::prepare_occlusion_slot(
+    const uint64_t    frame_index,
+    const std::size_t entry_count,
+    const std::size_t group_count,
+    const bool        occlusion
+)
+{
+    using namespace erhe::graphics;
+
+    if (m_occlusion_slots.size() != m_draw_list_slots.size()) {
+        // Sized once: the device's frames in flight (publish()).
+        ERHE_VERIFY(m_occlusion_slots.empty());
+        m_occlusion_slots.resize(m_draw_list_slots.size());
+    }
+    Occlusion_slot& slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
+    // The slot's previous frame was decoded at this frame's classification
+    // (decode_retired_occlusion() ran first), so the buffer is free.
+    ERHE_VERIFY(!slot.pending);
+    Device&           device       = m_gpu_cull_classifier->get_device();
+    const std::size_t alignment    = std::max(c_occlusion_region_alignment, static_cast<std::size_t>(device.get_info().shader_storage_buffer_offset_alignment));
+    const std::size_t region_bytes = occlusion ? (group_count * entry_count * Gpu_cull_classifier::mask_bytes_per_entry_group) : 0;
+    const std::size_t bind_bytes   = std::max(region_bytes, c_occlusion_min_region_bytes);
+    const std::size_t result_offset = align_up(bind_bytes, alignment);
+    const std::size_t needed       = result_offset + bind_bytes;
+    if (!slot.buffer || (slot.buffer->get_capacity_byte_count() < needed)) {
+        // Rare: the slot's high-water size (lists, views) grew.
+        const std::size_t capacity = std::bit_ceil(needed);
+        slot.buffer = std::make_unique<Buffer>(
+            device,
+            Buffer_create_info{
+                .capacity_byte_count                    = capacity,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::storage,
+                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene occlusion words"}
+            }
+        );
+        log_draw_list->info("Occlusion words: frame slot {} buffer {} bytes ({} entries, {} view groups)", frame_index % m_occlusion_slots.size(), capacity, entry_count, group_count);
+    }
+    slot.region_bytes  = region_bytes;
+    slot.result_offset = result_offset;
+}
+
+void Draw_list_scene::draw_occlusion(const Draw_occlusion_parameters& parameters)
+{
+    using namespace erhe::graphics;
+
+    ERHE_PROFILE_FUNCTION();
+    assert_render_phase();
+    verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
+    // The frame's classification wrote the start words for the view.
+    ERHE_VERIFY(m_occlusion_frame_active && (m_occlusion_frame_index == parameters.frame_index));
+    ERHE_VERIFY(std::ranges::any_of(m_occlusion_views, [&parameters](const Occlusion_view_record& record) -> bool { return record.cull_view == parameters.cull_view; }));
+    ERHE_VERIFY(parameters.render_pass != nullptr);
+    const Draw_list_slot& slot           = get_published_slot(parameters.frame_index);
+    const Occlusion_slot& occlusion_slot = m_occlusion_slots[parameters.frame_index % m_occlusion_slots.size()];
+    ERHE_VERIFY(occlusion_slot.pending && (occlusion_slot.frame_index == parameters.frame_index));
+    ERHE_VERIFY(occlusion_slot.entry_count == slot.entry_count);
+    if (slot.entry_count == 0) {
+        return;
+    }
+
+    Gpu_cull_classifier&    classifier = *m_gpu_cull_classifier;
+    Render_command_encoder& encoder    = parameters.render_encoder;
+    const Vertex_input_entry& empty_vertex_input = m_mesh_memory.get_empty_vertex_input();
+    Render_pipeline* const pipeline = classifier.get_occlusion_pipeline().get_pipeline_for(
+        parameters.render_pass->get_descriptor(),
+        &Color_blend_state::color_writes_disabled,
+        &classifier.get_occlusion_shader_stages(),
+        empty_vertex_input.vertex_input.get(),
+        &empty_vertex_input.vertex_format
+    );
+    if (pipeline == nullptr) {
+        return;
+    }
+
+    const std::size_t view_index  = static_cast<std::size_t>(parameters.cull_view);
+    const glm::uvec4  info{
+        slot.entry_count,
+        static_cast<uint32_t>(view_index / 64),
+        static_cast<uint32_t>(view_index % 64),
+        0u
+    };
+    Ring_buffer_range view_range = classifier.get_occlusion_view_buffer().acquire(Ring_buffer_usage::CPU_write, classifier.get_occlusion_view_block_bytes());
+    {
+        const std::span<std::byte> gpu_data = view_range.get_span();
+        std::memcpy(gpu_data.data() + classifier.get_occlusion_clip_from_world_offset(), &parameters.clip_from_world, sizeof(glm::mat4));
+        std::memcpy(gpu_data.data() + classifier.get_occlusion_info_offset(),            &info,                       sizeof(glm::uvec4));
+        view_range.bytes_written(classifier.get_occlusion_view_block_bytes());
+        view_range.close();
+    }
+
+    const std::size_t bounds_bytes = static_cast<std::size_t>(slot.entry_count) * Gpu_cull_classifier::bounds_bytes_per_entry;
+    ERHE_VERIFY(slot.gpu_bounds && (slot.gpu_bounds_capacity >= bounds_bytes));
+    encoder.set_bind_group_layout(classifier.get_occlusion_bind_group_layout());
+    encoder.set_render_pipeline(*pipeline);
+    encoder.set_viewport_rect(parameters.viewport.x, parameters.viewport.y, parameters.viewport.width, parameters.viewport.height);
+    classifier.get_occlusion_view_buffer().bind(encoder, view_range);
+    encoder.set_buffer(Buffer_target::storage, slot.gpu_bounds.get(),        0,                            bounds_bytes,                Gpu_cull_classifier::occlusion_bounds_binding_point);
+    encoder.set_buffer(Buffer_target::storage, occlusion_slot.buffer.get(), 0,                            occlusion_slot.region_bytes, Gpu_cull_classifier::occlusion_draw_test_binding_point);
+    encoder.set_buffer(Buffer_target::storage, occlusion_slot.buffer.get(), occlusion_slot.result_offset, occlusion_slot.region_bytes, Gpu_cull_classifier::occlusion_draw_result_binding_point);
+    encoder.draw_primitives(
+        Primitive_type::triangle,
+        0,
+        static_cast<std::uintptr_t>(slot.entry_count) * Gpu_cull_classifier::occlusion_vertices_per_entry
+    );
+    view_range.release();
+}
+
+void Draw_list_scene::record_frame_end(const uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    assert_render_phase();
+    if (!m_occlusion_frame_active || (m_occlusion_frame_index != frame_index)) {
+        return;
+    }
+    const Occlusion_slot& slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
+    ERHE_VERIFY(slot.pending && (slot.frame_index == frame_index));
+    // The classification's start words and the occlusion passes' fragment
+    // atomics -> the CPU decode once the frame retired.
+    command_buffer.buffer_barrier(
+        *slot.buffer,
+        Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader | Buffer_usage_flag_bit_mask::fragment_shader,
+        Buffer_usage_flag_bit_mask::host_read
+    );
+}
+
+auto Draw_list_scene::get_retired_occlusion_counts(const Gpu_command_key& key) const -> std::optional<Retired_occlusion_counts>
+{
+    assert_render_phase();
+    if (!m_has_retired_occlusion_counts) {
+        return {};
+    }
+    for (const Retired_occlusion_view_counts& counts : m_retired_occlusion_counts) {
+        if (counts.key == key) {
+            return Retired_occlusion_counts{
+                .frame_index = m_retired_occlusion_frame_index,
+                .tested      = counts.tested,
+                .occluded    = counts.occluded,
+                .untested    = counts.untested
+            };
+        }
+    }
+    return {};
+}
+
+void Draw_list_scene::capture_occlusion_check(const uint64_t frame_index)
+{
+    // A diagnostic path: it may allocate.
+    const std::lock_guard<std::mutex> lock{m_occlusion_check->mutex};
+    Gpu_occlusion_check& check = *m_occlusion_check;
+    if (check.stage != Gpu_occlusion_check::Stage::requested) {
+        return;
+    }
+    ERHE_PROFILE_FUNCTION();
+    const Draw_list_slot& slot        = get_published_slot(frame_index);
+    const std::size_t     list_count  = slot.lists.size();
+    check.stage       = Gpu_occlusion_check::Stage::recording;
+    check.frame_index = frame_index;
+    check.entry_count = slot.entry_count;
+    check.view_count  = static_cast<uint32_t>(m_cull_views.size());
+    check.list_entry_offsets.assign(slot.entry_offsets.begin(), slot.entry_offsets.end());
+    check.entry_objects.assign(slot.entry_count, uint32_t{0});
+    for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
+        const Draw_list& draw_list = slot.lists[list_index];
+        for (std::size_t entry = 0, end = draw_list.entries.size(); entry < end; ++entry) {
+            check.entry_objects[slot.entry_offsets[list_index] + entry] = draw_list.entries[entry].object_index;
+        }
+    }
+    // Per view, from the frame's CPU masks: the bounded color entries in
+    // the frustum, and those of them whose box (not grown) intersects or
+    // crosses the near plane - the classification marks them visible
+    // without a test (it tests the grown box, which reaches the plane
+    // whenever the box does).
+    check.views.clear();
+    for (const Occlusion_view_record& record : m_occlusion_views) {
+        Gpu_occlusion_check::View& view = check.views.emplace_back();
+        view.cull_view = record.cull_view;
+        view.key       = record.key;
+        const std::size_t view_index = static_cast<std::size_t>(record.cull_view);
+        const std::size_t group      = view_index / 64;
+        const uint64_t    view_bit   = uint64_t{1} << (view_index % 64);
+        const glm::vec3   normal{record.near_plane};
+        for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
+            const Draw_list& draw_list = slot.lists[list_index];
+            if ((draw_list.key.purpose != Draw_purpose::color) || (draw_list.key.mobility == Draw_mobility::skinned)) {
+                continue;
+            }
+            const std::size_t list_entry_count = draw_list.entries.size();
+            if ((list_entry_count == 0) || (list_index >= m_cull_masks.size())) {
+                continue;
+            }
+            const std::vector<uint64_t>& masks  = m_cull_masks[list_index];
+            const Draw_list_bounds&      bounds = draw_list.bounds;
+            ERHE_VERIFY(masks.size() >= ((group + 1) * list_entry_count));
+            for (std::size_t entry = 0; entry < list_entry_count; ++entry) {
+                const glm::vec3 extent{bounds.extent_x[entry], bounds.extent_y[entry], bounds.extent_z[entry]};
+                if (!(extent.x >= 0.0f) || ((masks[(group * list_entry_count) + entry] & view_bit) == 0)) {
+                    continue;
+                }
+                ++view.bounded_in_frustum;
+                const glm::vec3 center{bounds.center_x[entry], bounds.center_y[entry], bounds.center_z[entry]};
+                const float     near_distance = glm::dot(normal, center) + record.near_plane.w - glm::dot(glm::abs(normal), extent);
+                if (near_distance < 0.0f) {
+                    view.near_plane_entries.push_back(slot.entry_offsets[list_index] + static_cast<uint32_t>(entry));
+                }
+            }
+        }
+    }
+}
+
+void Draw_list_scene::decode_retired_occlusion(const uint64_t frame_index)
+{
+    if (m_occlusion_slots.empty()) {
+        return;
+    }
+    Occlusion_slot& slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
+    if (!slot.pending) {
+        return;
+    }
+    // This frame reuses the slot of the frame that wrote the words: that
+    // frame retired (Device::acquire_frame_slot() waited for it).
+    ERHE_VERIFY((slot.frame_index + m_occlusion_slots.size()) <= frame_index);
+    ERHE_PROFILE_FUNCTION();
+    const std::size_t          capacity = slot.buffer->get_capacity_byte_count();
+    const std::span<std::byte> data     = slot.buffer->map_bytes(0, capacity);
+    slot.buffer->invalidate(0, capacity);
+    ERHE_VERIFY(data.size_bytes() >= (slot.result_offset + slot.region_bytes));
+    const std::size_t entry_count = slot.entry_count;
+    // The words of (group, entry), bit = view % 64 (cull_classify.comp).
+    const auto read_bit = [&data, entry_count](const std::size_t region_offset, const std::size_t view, const std::size_t entry) -> bool {
+        const std::size_t group = view / 64;
+        const std::size_t bit   = view % 64;
+        uint32_t word = 0;
+        const std::size_t byte_offset = region_offset + ((((group * entry_count) + entry) * 2) + (bit / 32)) * sizeof(uint32_t);
+        std::memcpy(&word, data.data() + byte_offset, sizeof(word));
+        return ((word >> (bit % 32)) & 1u) != 0;
+    };
+
+    m_retired_occlusion_counts.clear();
+    for (const Occlusion_view_record& record : slot.views) {
+        const std::size_t view = static_cast<std::size_t>(record.cull_view);
+        Retired_occlusion_view_counts counts{.key = record.key};
+        for (std::size_t entry = 0; entry < entry_count; ++entry) {
+            const bool tested  = read_bit(0, view, entry);
+            const bool visible = read_bit(slot.result_offset, view, entry);
+            if (tested) {
+                ++counts.tested;
+                if (!visible) {
+                    ++counts.occluded;
+                }
+            } else if (visible) {
+                ++counts.untested;
+            }
+        }
+        m_retired_occlusion_counts.push_back(counts);
+    }
+    m_retired_occlusion_frame_index = slot.frame_index;
+    m_has_retired_occlusion_counts  = true;
+
+    {
+        // The check of this frame: per view its counts, the near plane
+        // entries' bits and the first occluded entries.
+        const std::lock_guard<std::mutex> lock{m_occlusion_check->mutex};
+        Gpu_occlusion_check& check = *m_occlusion_check;
+        if ((check.stage == Gpu_occlusion_check::Stage::recording) && (check.frame_index == slot.frame_index)) {
+            constexpr std::size_t max_reported_entries = 16;
+            ERHE_VERIFY(check.entry_count == entry_count);
+            check.result = Occlusion_check{
+                .frame_index = check.frame_index,
+                .entry_count = check.entry_count,
+                .view_count  = check.view_count
+            };
+            check.first_occluded_objects.clear();
+            for (const Gpu_occlusion_check::View& check_view : check.views) {
+                const std::size_t view = static_cast<std::size_t>(check_view.cull_view);
+                Occlusion_view_check view_check{
+                    .view               = static_cast<uint32_t>(view),
+                    .key                = check_view.key,
+                    .bounded_in_frustum = check_view.bounded_in_frustum,
+                    .near_plane         = static_cast<uint32_t>(check_view.near_plane_entries.size())
+                };
+                std::vector<uint32_t>& occluded_objects = check.first_occluded_objects.emplace_back();
+                for (std::size_t entry = 0; entry < entry_count; ++entry) {
+                    const bool tested  = read_bit(0, view, entry);
+                    const bool visible = read_bit(slot.result_offset, view, entry);
+                    if (!tested) {
+                        if (visible) {
+                            ++view_check.untested;
+                        }
+                        continue;
+                    }
+                    ++view_check.tested;
+                    if (visible) {
+                        ++view_check.visible;
+                        continue;
+                    }
+                    ++view_check.occluded;
+                    if (view_check.first_occluded.size() < max_reported_entries) {
+                        // The entry's list: the last list starting at or before it.
+                        const std::vector<uint32_t>::const_iterator begin = check.list_entry_offsets.cbegin();
+                        const std::vector<uint32_t>::const_iterator it    = std::upper_bound(begin, check.list_entry_offsets.cend(), static_cast<uint32_t>(entry));
+                        ERHE_VERIFY(it != begin);
+                        const std::size_t list_index = static_cast<std::size_t>(std::distance(begin, it)) - 1;
+                        view_check.first_occluded.push_back(Occlusion_check_entry{
+                            .list_index  = static_cast<uint32_t>(list_index),
+                            .entry_index = static_cast<uint32_t>(entry) - check.list_entry_offsets[list_index]
+                        });
+                        occluded_objects.push_back(check.entry_objects[entry]);
+                    }
+                }
+                for (const uint32_t entry : check_view.near_plane_entries) {
+                    if (!read_bit(slot.result_offset, view, entry)) {
+                        ++view_check.near_plane_occluded;
+                    }
+                }
+                check.result.views.push_back(std::move(view_check));
+            }
+            check.stage = Gpu_occlusion_check::Stage::complete;
+        }
+    }
+    slot.buffer->unmap();
+    slot.pending = false;
+}
+
+void Draw_list_scene::request_occlusion_check()
+{
+    assert_main_thread();
+    // A new request replaces any earlier one, whatever its stage.
+    const std::lock_guard<std::mutex> lock{m_occlusion_check->mutex};
+    Gpu_occlusion_check& check = *m_occlusion_check;
+    check.stage = Gpu_occlusion_check::Stage::requested;
+    check.views.clear();
+    check.entry_objects.clear();
+    check.result = Occlusion_check{};
+    check.first_occluded_objects.clear();
+}
+
+auto Draw_list_scene::poll_occlusion_check(Occlusion_check& out) -> Cull_classification_check_state
+{
+    assert_main_thread();
+    const std::lock_guard<std::mutex> lock{m_occlusion_check->mutex};
+    Gpu_occlusion_check& check = *m_occlusion_check;
+    switch (check.stage) {
+        case Gpu_occlusion_check::Stage::idle:      return Cull_classification_check_state::idle;
+        case Gpu_occlusion_check::Stage::requested: return Cull_classification_check_state::pending;
+        case Gpu_occlusion_check::Stage::recording: return Cull_classification_check_state::pending;
+        case Gpu_occlusion_check::Stage::complete:  break;
+        default:                                    return Cull_classification_check_state::idle;
+    }
+    out = std::move(check.result);
+    // The occluded entries' names, from the objects as they are now (main
+    // thread state; an object unregistered since keeps no name).
+    ERHE_VERIFY(check.first_occluded_objects.size() == out.views.size());
+    for (std::size_t view = 0, end = out.views.size(); view < end; ++view) {
+        Occlusion_view_check&        view_check = out.views[view];
+        const std::vector<uint32_t>& objects    = check.first_occluded_objects[view];
+        ERHE_VERIFY(objects.size() == view_check.first_occluded.size());
+        for (std::size_t i = 0, i_end = objects.size(); i < i_end; ++i) {
+            const uint32_t object_index = objects[i];
+            if ((object_index < m_objects.size()) && m_objects[object_index].alive && m_objects[object_index].info.mesh) {
+                view_check.first_occluded[i].name = m_objects[object_index].info.mesh->get_name();
+            }
+        }
+    }
+    check.stage = Gpu_occlusion_check::Stage::idle;
+    check.views.clear();
+    check.entry_objects.clear();
+    check.result = Occlusion_check{};
+    check.first_occluded_objects.clear();
+    return Cull_classification_check_state::complete;
 }
 
 } // namespace erhe::scene_renderer

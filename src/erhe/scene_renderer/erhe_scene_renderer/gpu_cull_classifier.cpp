@@ -5,6 +5,7 @@
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_profile/profile.hpp"
@@ -21,6 +22,15 @@ auto c_str(const Cull_classification classification) -> const char*
         case Cull_classification::cpu: return "cpu";
         case Cull_classification::gpu: return "gpu";
         default:                       return "?";
+    }
+}
+
+auto c_str(const Occlusion_culling occlusion_culling) -> const char*
+{
+    switch (occlusion_culling) {
+        case Occlusion_culling::off: return "off";
+        case Occlusion_culling::on:  return "on";
+        default:                     return "?";
     }
 }
 
@@ -50,6 +60,24 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
         erhe::graphics::Shader_resource::Block_create_info{
             .name          = "cull_masks",
             .binding_point = static_cast<int>(masks_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
+    }
+    , m_occlusion_tests_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_occlusion_test",
+            .binding_point = static_cast<int>(occlusion_test_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
+    }
+    , m_occlusion_results_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_occlusion_result",
+            .binding_point = static_cast<int>(occlusion_result_binding_point),
             .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
             .writeonly     = true
         }
@@ -114,6 +142,41 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     , m_bits_buffer    {graphics_device, erhe::graphics::Buffer_target::storage, "Gpu_cull_classifier pass bits"}
     , m_command_buffer {graphics_device, erhe::graphics::Buffer_target::storage, "Gpu_cull_classifier commands"}
     , m_count_buffer   {graphics_device, erhe::graphics::Buffer_target::storage, "Gpu_cull_classifier counts"}
+    , m_occlusion_view_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "occlusion_view",
+            .binding_point = static_cast<int>(occlusion_view_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::uniform_block
+        }
+    }
+    , m_occlusion_bounds_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_bounds",
+            .binding_point = static_cast<int>(occlusion_bounds_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_occlusion_draw_test_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "occlusion_test",
+            .binding_point = static_cast<int>(occlusion_draw_test_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_occlusion_draw_result_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "occlusion_result",
+            .binding_point = static_cast<int>(occlusion_draw_result_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block
+        }
+    }
+    , m_occlusion_view_buffer{graphics_device, erhe::graphics::Buffer_target::uniform, "Gpu_cull_classifier occlusion view", occlusion_view_binding_point}
 {
     using namespace erhe::graphics;
 
@@ -125,6 +188,17 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_view_header_offset = m_views_block.add_uvec4("header"                             )->get_offset_in_parent();
     m_view_data_offset   = m_views_block.add_vec4 ("views", Shader_resource::unsized_array)->get_offset_in_parent();
     m_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
+    m_occlusion_tests_block  .add_uvec2("tests",   Shader_resource::unsized_array);
+    m_occlusion_results_block.add_uvec2("results", Shader_resource::unsized_array);
+    // The occlusion test (occlusion_test.vert / .frag): the view block
+    // (std140: a mat4 and a uvec4), the bounds as the classifier reads them,
+    // and the two occlusion regions as uint words (the uvec2 layout's bytes).
+    m_occlusion_clip_from_world_offset = m_occlusion_view_block.add_mat4 ("clip_from_world")->get_offset_in_parent();
+    m_occlusion_info_offset            = m_occlusion_view_block.add_uvec4("info"           )->get_offset_in_parent();
+    m_occlusion_view_block_bytes       = m_occlusion_view_block.get_size_bytes();
+    m_occlusion_bounds_block     .add_vec4("bounds", Shader_resource::unsized_array);
+    m_occlusion_draw_test_block  .add_uint("words",  Shader_resource::unsized_array);
+    m_occlusion_draw_result_block.add_uint("words",  Shader_resource::unsized_array);
     // cull_compact.comp documents these; std430 again (uvec4 and uint
     // arrays, 16 and 4 byte strides).
     m_compact_templates_block.add_uvec4("templates", Shader_resource::unsized_array);
@@ -147,7 +221,9 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .bindings = {
                 { .binding_point = bounds_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
                 { .binding_point = views_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = masks_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
+                { .binding_point = masks_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
+                { .binding_point = occlusion_test_binding_point,   .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
+                { .binding_point = occlusion_result_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
             },
             .debug_label       = "Gpu_cull_classifier",
             .uses_texture_heap = false
@@ -159,7 +235,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
         Shader_stages_create_info{
             .name              = "cull_classify",
             .defines           = { { "ERHE_CULL_CLASSIFY_GROUP_SIZE", fmt::format("{}", workgroup_size) } },
-            .interface_blocks  = { &m_bounds_block, &m_views_block, &m_masks_block },
+            .interface_blocks  = { &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_tests_block, &m_occlusion_results_block },
             .shaders           = { { Shader_type::compute_shader, shader_path / std::filesystem::path{"cull_classify.comp"} } },
             .bind_group_layout = m_bind_group_layout.get()
         }
@@ -246,7 +322,71 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
         m_compact_bits_pipeline.reset();
         m_compact_pipeline.reset();
         m_pipeline.reset();
+        return;
     }
+
+    // The raster occlusion test: storage reads in the vertex stage, storage
+    // writes and atomics in the fragment stage.
+    const Device_info& info = graphics_device.get_info();
+    if (
+        !info.fragment_stores_and_atomics ||
+        (info.max_vertex_shader_storage_blocks < 2) ||
+        (info.max_fragment_shader_storage_blocks < 1)
+    ) {
+        log_startup->info("GPU occlusion culling: not supported on this device (needs fragment shader storage writes and atomics)");
+        return;
+    }
+    m_occlusion_bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                { .binding_point = occlusion_view_binding_point,        .type = Binding_type::uniform_buffer, .stage_flags = Shader_stage_flags::vertex   },
+                { .binding_point = occlusion_bounds_binding_point,      .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::vertex   },
+                { .binding_point = occlusion_draw_test_binding_point,   .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::vertex   },
+                { .binding_point = occlusion_draw_result_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::fragment }
+            },
+            .debug_label       = "Gpu_cull_classifier occlusion test",
+            .uses_texture_heap = false
+        }
+    );
+    m_occlusion_shader_stages = std::make_unique<Reloadable_shader_stages>(
+        graphics_device,
+        Shader_stages_create_info{
+            .name              = "occlusion_test",
+            .interface_blocks  = { &m_occlusion_view_block, &m_occlusion_bounds_block, &m_occlusion_draw_test_block, &m_occlusion_draw_result_block },
+            .no_vertex_input   = true,
+            .shaders           = {
+                { Shader_type::vertex_shader,   shader_path / std::filesystem::path{"occlusion_test.vert"} },
+                { Shader_type::fragment_shader, shader_path / std::filesystem::path{"occlusion_test.frag"} }
+            },
+            .bind_group_layout = m_occlusion_bind_group_layout.get()
+        }
+    );
+    graphics_device.get_shader_monitor().add(*m_occlusion_shader_stages);
+    if (!m_occlusion_shader_stages->shader_stages.is_valid()) {
+        log_startup->error("GPU occlusion culling: occlusion_test.vert / .frag failed to build; no occlusion test");
+        m_occlusion_shader_stages.reset();
+        return;
+    }
+    // Depth test against the view's depth (the device's depth direction:
+    // a box face at or in front of the stored depth passes), no depth
+    // write, no color writes, both faces: the box only probes visibility.
+    m_occlusion_pipeline = std::make_unique<Base_render_pipeline>(
+        graphics_device,
+        Base_render_pipeline_create_info{
+            .debug_label       = erhe::utility::Debug_label{"Occlusion test"},
+            .input_assembly    = Input_assembly_state::triangle,
+            .rasterization     = Rasterization_state::cull_mode_none,
+            .depth_stencil     = Depth_stencil_state{
+                .depth_test_enable   = true,
+                .depth_write_enable  = false,
+                .depth_compare_op    = graphics_device.get_reverse_depth() ? Compare_operation::greater_or_equal : Compare_operation::less_or_equal,
+                .stencil_test_enable = false
+            },
+            .bind_group_layout = m_occlusion_bind_group_layout.get(),
+            .color_blend       = &Color_blend_state::color_writes_disabled
+        }
+    );
 }
 
 Gpu_cull_classifier::~Gpu_cull_classifier() noexcept = default;
@@ -264,6 +404,33 @@ auto Gpu_cull_classifier::is_device_capable(const erhe::graphics::Device& graphi
 auto Gpu_cull_classifier::is_supported() const -> bool
 {
     return m_device_capable && (m_pipeline != nullptr) && (m_compact_bits_pipeline != nullptr) && (m_compact_pipeline != nullptr);
+}
+
+auto Gpu_cull_classifier::is_occlusion_supported() const -> bool
+{
+    return is_supported() && (m_occlusion_pipeline != nullptr) && (m_occlusion_shader_stages != nullptr);
+}
+
+auto Gpu_cull_classifier::get_occlusion_bind_group_layout() const -> const erhe::graphics::Bind_group_layout*
+{
+    return m_occlusion_bind_group_layout.get();
+}
+
+auto Gpu_cull_classifier::get_occlusion_pipeline() -> erhe::graphics::Base_render_pipeline&
+{
+    ERHE_VERIFY(m_occlusion_pipeline);
+    return *m_occlusion_pipeline;
+}
+
+auto Gpu_cull_classifier::get_occlusion_shader_stages() const -> const erhe::graphics::Shader_stages&
+{
+    ERHE_VERIFY(m_occlusion_shader_stages);
+    return m_occlusion_shader_stages->shader_stages;
+}
+
+auto Gpu_cull_classifier::get_occlusion_view_buffer() -> erhe::graphics::Ring_buffer_client&
+{
+    return m_occlusion_view_buffer;
 }
 
 auto Gpu_cull_classifier::get_device() -> erhe::graphics::Device&
