@@ -102,7 +102,8 @@ Index 0-12:  UBOs/SSBOs (= GLSL binding number, identity mapping; 9 is the
              shadow transforms)
 Index 13:    Acceleration structure (ray queries)
 Index 14:    Texture argument buffer
-Index 15:    Unused (a UBO/SSBO at GLSL binding 15 would land here)
+Index 15:    Fragment argument buffer (fragment functions' dedicated
+             samplers; a layout with one verifies no UBO/SSBO binding is 15)
 Index 16+:   Vertex attributes (vertex_buffer_index_offset)
 ```
 
@@ -151,26 +152,61 @@ arrays of size 1.
 **Path B -- Dedicated samplers** (`is_texture_heap = false`).
 
 These are named samplers like `s_shadow_compare`, `s_input`, `s_depth`, or
-`s_tex0/1/2`. They stay in discrete set 0 with explicit
-`[[texture(N)]]/[[sampler(N)]]` indices. The host side binds them via:
+`s_tex0/1/2`. In vertex and compute functions they stay in discrete set 0
+with explicit `[[texture(N)]]/[[sampler(N)]]` indices; fragment functions
+read them from the layout's fragment argument buffer (below). The host side
+binds them via:
 
 ```cpp
 encoder.set_sampled_image(/*binding_point=*/0, *texture, *sampler);
 ```
 
-The shader-stages prototype pins every dedicated sampler of the vertex,
-fragment and compute functions alike to `[[texture(N)]]` with N = its GLSL
-binding (`binding_point + bind_group_layout->get_sampler_binding_offset()`,
-which mirrors how SPIRV-Cross numbers them after the buffer bindings) and
-`[[sampler(M)]]` with M = the layout's compact dedicated-sampler slot. A
-texture-heap sampler used in a vertex function fails compilation (the heap
-is bound for the fragment and compute stages only). `set_sampled_image`
-computes the same N and M and binds the texture and sampler to the render
+The shader-stages prototype pins every dedicated sampler of the vertex and
+compute functions to `[[texture(N)]]` with N = its GLSL binding
+(`binding_point + bind_group_layout->get_sampler_binding_offset()`, which
+mirrors how SPIRV-Cross numbers them after the buffer bindings) and
+`[[sampler(M)]]` with M = the layout's compact dedicated-sampler slot, and
+every dedicated sampler of a fragment function to its fragment argument
+buffer entry (below). A texture-heap sampler used in a vertex function
+fails compilation (the heap is bound for the fragment and compute stages
+only). `set_sampled_image` binds the texture and sampler to the render
 stages the binding's `stage_flags` declare: `setVertexTexture` /
-`setVertexSamplerState` for `Shader_stage_flags::vertex` (e.g.
-`s_shadow_no_compare`, which `shadow_debug.vert` samples),
-`setFragmentTexture` / `setFragmentSamplerState` for `fragment`, both for
-both. A binding with neither stage is a configuration error (VERIFY).
+`setVertexSamplerState` at the same N and M for `Shader_stage_flags::vertex`
+(e.g. `s_shadow_no_compare`, which `shadow_debug.vert` samples), the
+fragment argument buffer table for `fragment`, both for both. A binding
+with neither stage is a configuration error (VERIFY).
+
+**Fragment argument buffer.** A render pipeline that executes indirect
+command buffers (`Indirect_count_draw_support::enabled`, "Multi-Draw
+Indirect") must not have a fragment function with directly bound textures
+or samplers, so no fragment function has any: `Bind_group_layout_impl`
+collects the dedicated samplers whose `stage_flags` include the fragment
+stage, in ascending GLSL binding, as the entries of one Tier 2 argument
+buffer (descriptor set 6, `[[buffer(15)]]`; entry k has its texture at
+`[[id(2k)]]` and its sampler at `[[id(2k + 1)]]`) with an
+`MTL::ArgumentEncoder` built from the same ids and texture types. The
+shader-stages prototype pins every such sampler of a fragment function to
+its entry and fails the compile unless the function declares every entry
+(the layout's samplers are all declared in every shader and
+`force_active_argument_buffer_resources` keeps the unused ones, so the
+buffer layout is the same in every fragment function of the layout). On the
+host, `set_sampled_image` stores the fragment half of a binding in the
+active render pass's table (`Render_pass_impl::set_fragment_argument()`;
+another layout starts the table over), and every draw first calls
+`Render_pass_impl::flush_fragment_arguments()`, which, when the table
+changed, encodes it into a fresh ring buffer range, binds the range at
+`[[buffer(15)]]` of the fragment stage, makes its textures resident
+(`useResource(Read | Sample, Fragment)`) and releases the range (the ring
+keeps it until the frame retired). A binding read by both stages (for
+example `s_shadow_no_compare`, which `shadow_debug.vert` samples) is bound
+both ways by the same `set_sampled_image` call, so the two paths always see
+the same texture and sampler. The answer to "do comparison samplers work
+from an argument buffer on Apple GPUs" is yes (M4 Pro): every
+`Sampler_comparison_test` case samples its depth texture through the
+fragment argument buffer, and `Sampler_comparison_test.
+less_or_equal_indirect_count_draw_pipeline` creates its pipeline with
+`Indirect_count_draw_support::enabled`, which the direct bindings made
+Metal refuse.
 
 `set_sampled_image` reads the `Sampler_aspect` (`color` / `depth` /
 `stencil`) from the matching `combined_image_sampler` entry in the active
@@ -634,10 +670,12 @@ count draw:
   are named by `first_instance`, which reaches `[[instance_id]]`.
 - A pipeline an ICB executes needs `supportIndirectCommandBuffers`, which
   Metal refuses for a fragment shader with directly bound textures or samplers
-  ("Fragment shader cannot be used with indirect command buffers"), so it is
-  opt-in per pipeline (`Base_render_pipeline_create_info::
-  indirect_count_draws`); without it Metal validation aborts at
-  `executeCommandsInBuffer`. Only a `Render_pipeline` (`set_render_pipeline`)
+  ("Fragment shader cannot be used with indirect command buffers"); the
+  fragment argument buffer ("Two Sampler Binding Paths") leaves no fragment
+  function with any. It is opt-in per pipeline
+  (`Base_render_pipeline_create_info::indirect_count_draws`, or per variant
+  through `Base_render_pipeline::get_pipeline_for()`); without it Metal
+  validation aborts at `executeCommandsInBuffer`. Only a `Render_pipeline` (`set_render_pipeline`)
   can carry it: the `Render_pipeline_state` path
   (`set_render_pipeline_state`) builds its pipeline state objects without
   it.

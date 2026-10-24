@@ -12,9 +12,12 @@ namespace MTL4 { class ArgumentTable; }
 namespace MTL4 { class CommandBuffer; }
 namespace MTL4 { class CounterHeap; }
 namespace MTL4 { class RenderCommandEncoder; }
+namespace MTL { class SamplerState; }
+namespace MTL { class Texture; }
 
 namespace erhe::graphics {
 
+class Bind_group_layout_impl;
 class Command_buffer_impl;
 class Render_pipeline_state;
 
@@ -49,6 +52,19 @@ public:
     [[nodiscard]] static auto get_active_depth_pixel_format  () -> unsigned long;
     [[nodiscard]] static auto get_active_stencil_pixel_format() -> unsigned long;
     [[nodiscard]] static auto get_active_sample_count        () -> unsigned long;
+
+    // The active pass's fragment argument buffer table
+    // (Bind_group_layout_impl::Fragment_argument): set_sampled_image() of a
+    // fragment-stage dedicated sampler stores its texture and sampler in
+    // entry index of layout's table (a different layout starts the table
+    // over), and every draw first calls flush_fragment_arguments(), which
+    // encodes the table into a fresh ring buffer range when it changed and
+    // sets that range's address at index 15 of the pass's argument table
+    // (the textures are resident through the device's residency set). The
+    // range is released at once: the ring keeps it until the frame retired.
+    // No-ops without an active pass.
+    static void set_fragment_argument   (const Bind_group_layout_impl& layout, std::size_t index, MTL::Texture* texture, MTL::SamplerState* sampler);
+    static void flush_fragment_arguments();
 
 private:
     friend class Render_pass;
@@ -85,6 +101,12 @@ private:
     unsigned long                                    m_depth_pixel_format{0};
     unsigned long                                    m_stencil_pixel_format{0};
     unsigned long                                    m_sample_count{1};
+    // The fragment argument buffer table (set_fragment_argument()); reset at
+    // start_render_pass(), capacity kept.
+    const Bind_group_layout_impl*                    m_fragment_argument_layout{nullptr};
+    std::vector<MTL::Texture*>                       m_fragment_argument_textures;
+    std::vector<MTL::SamplerState*>                  m_fragment_argument_samplers;
+    bool                                             m_fragment_arguments_dirty{false};
 
     friend class Device_impl;
 };

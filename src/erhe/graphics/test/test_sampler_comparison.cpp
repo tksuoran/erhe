@@ -85,7 +85,12 @@ void main()
 class Sampler_comparison_test : public Gpu_test
 {
 protected:
-    void check_compare(const erhe::graphics::Compare_operation operation, const std::array<bool, c_band_count>& expected_bands, const char* golden_name)
+    void check_compare(
+        const erhe::graphics::Compare_operation           operation,
+        const std::array<bool, c_band_count>&             expected_bands,
+        const char*                                       golden_name,
+        const erhe::graphics::Indirect_count_draw_support indirect_count_draws = erhe::graphics::Indirect_count_draw_support::disabled
+    )
     {
         // The analytic model and the stated band table agree.
         for (std::size_t band = 0; band < c_band_count; ++band) {
@@ -175,7 +180,9 @@ protected:
             { { "BAND_WIDTH", std::to_string(c_band_width) } },
             images,
             c_output_width,
-            c_output_height
+            c_output_height,
+            erhe::dataformat::Format::format_8_vec4_unorm,
+            indirect_count_draws
         );
 
         const std::vector<uint8_t> pixels = read_texture_rgba8(*output);
@@ -246,6 +253,24 @@ TEST_F(Sampler_comparison_test, greater_or_equal)
 TEST_F(Sampler_comparison_test, always)
 {
     check_compare(erhe::graphics::Compare_operation::always, { true, true, true }, "sampler_comparison_always");
+}
+
+// The comparison sampler of a pipeline that can draw prepared indirect count
+// draws (Indirect_count_draw_support::enabled). Metal accepts such a pipeline
+// only when its fragment function binds no texture or sampler directly: the
+// Metal backends read a fragment function's dedicated samplers from the
+// layout's fragment argument buffer (doc/erhe/metal_backend.md "Two Sampler
+// Binding Paths"), so this checks that a comparison sampler and a depth
+// texture work from an argument buffer on the device, and that the pipeline
+// is created. Same bands and golden as less_or_equal.
+TEST_F(Sampler_comparison_test, less_or_equal_indirect_count_draw_pipeline)
+{
+    check_compare(
+        erhe::graphics::Compare_operation::less_or_equal,
+        { true, true, false },
+        "sampler_comparison_less_or_equal",
+        erhe::graphics::Indirect_count_draw_support::enabled
+    );
 }
 
 } // namespace erhe::graphics::test

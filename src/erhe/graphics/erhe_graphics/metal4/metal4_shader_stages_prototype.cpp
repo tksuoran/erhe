@@ -8,6 +8,7 @@
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
 
@@ -16,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <unordered_set>
 
 namespace erhe::graphics {
@@ -139,6 +141,17 @@ auto compile_spirv_to_mtl_function(
             }
             std::sort(sorted_images.begin(), sorted_images.end());
 
+            // The fragment argument buffer entry of a dedicated sampler a
+            // fragment function reads (empty for other stages and samplers).
+            const bool is_fragment = (exec_model == spv::ExecutionModelFragment);
+            const auto fragment_argument_index = [bind_group_layout, is_fragment](const uint32_t binding) -> std::optional<std::size_t> {
+                if (!is_fragment || (bind_group_layout == nullptr)) {
+                    return {};
+                }
+                return bind_group_layout->get_impl().get_fragment_argument_index(binding);
+            };
+            std::size_t fragment_argument_count = 0;
+
             // Classify and place each sampled image either into the texture
             // descriptor set (argument buffer) or into discrete set 0
             // (direct [[texture(N)]]/[[sampler(N)]] bindings).
@@ -171,6 +184,26 @@ auto compile_spirv_to_mtl_function(
                     rb.msl_sampler = arg_offset + array_size;
                     compiler.add_msl_resource_binding(rb);
                     arg_offset += 2 * array_size;
+                } else if (fragment_argument_index(binding).has_value()) {
+                    // Dedicated sampler of a fragment function: an entry of
+                    // the layout's fragment argument buffer (descriptor set
+                    // 6 at [[buffer(15)]], Bind_group_layout_impl::
+                    // Fragment_argument), so the function binds no texture
+                    // or sampler directly and may run from indirect command
+                    // buffers.
+                    const Bind_group_layout_impl::Fragment_argument& argument =
+                        bind_group_layout->get_impl().get_fragment_arguments()[fragment_argument_index(binding).value()];
+                    ERHE_VERIFY(array_size == 1);
+                    compiler.set_decoration(resource_ptr->id, spv::DecorationDescriptorSet, Bind_group_layout_impl::fragment_argument_buffer_descriptor_set);
+                    spirv_cross::MSLResourceBinding rb{};
+                    rb.stage       = exec_model;
+                    rb.desc_set    = Bind_group_layout_impl::fragment_argument_buffer_descriptor_set;
+                    rb.binding     = binding;
+                    rb.count       = 1;
+                    rb.msl_texture = argument.texture_id;
+                    rb.msl_sampler = argument.sampler_id;
+                    compiler.add_msl_resource_binding(rb);
+                    ++fragment_argument_count;
                 } else {
                     // Dedicated sampler: keep in discrete set 0 with a direct
                     // [[texture(N)]]/[[sampler(M)]] binding.
@@ -195,6 +228,22 @@ auto compile_spirv_to_mtl_function(
                     rb.msl_texture = binding;
                     rb.msl_sampler = msl_sampler;
                     compiler.add_msl_resource_binding(rb);
+                }
+            }
+            // The argument buffer's layout is the same in every fragment
+            // function of the layout only while each declares every entry
+            // (the emitter declares every sampler of the layout, and
+            // force_active_argument_buffer_resources keeps the unused ones).
+            if (is_fragment && (bind_group_layout != nullptr)) {
+                const std::size_t expected = bind_group_layout->get_impl().get_fragment_arguments().size();
+                if (fragment_argument_count != expected) {
+                    const std::string error_msg = fmt::format(
+                        "SPIR-V -> MSL {} compilation failed for '{}': the fragment function declares {} of the layout's {} fragment argument buffer samplers",
+                        stage_name, shader_name, fragment_argument_count, expected
+                    );
+                    log_program->error("{}", error_msg);
+                    device.shader_error(error_msg, "");
+                    return nullptr;
                 }
             }
         }
@@ -258,6 +307,16 @@ auto compile_spirv_to_mtl_function(
             log_program->error("{}", error_msg);
             device.shader_error(error_msg, "");
             return nullptr;
+        }
+
+        // The fragment argument buffer -> fixed index 15
+        if ((exec_model == spv::ExecutionModelFragment) && (bind_group_layout != nullptr)) {
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage      = exec_model;
+            rb.desc_set   = Bind_group_layout_impl::fragment_argument_buffer_descriptor_set;
+            rb.binding    = spirv_cross::kArgumentBufferBinding;
+            rb.msl_buffer = Bind_group_layout_impl::fragment_argument_buffer_index;
+            compiler.add_msl_resource_binding(rb);
         }
 
         // Argument buffer for texture descriptor set -> fixed index 14

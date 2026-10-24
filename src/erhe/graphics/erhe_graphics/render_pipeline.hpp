@@ -135,7 +135,11 @@ public:
         // glTF material.doubleSided: render both faces of the surface. Drops
         // face culling from this variant only, leaving the base pipeline's
         // cull face mode and winding untouched.
-        bool                                   disable_face_culling = false
+        bool                                   disable_face_culling = false,
+        // enabled: this variant can draw prepared indirect count draws
+        // (Base_render_pipeline_create_info::indirect_count_draws), whatever
+        // the base pipeline declares; disabled keeps the base's choice.
+        Indirect_count_draw_support            indirect_count_draws = Indirect_count_draw_support::disabled
     ) -> Render_pipeline*;
 
     [[nodiscard]] auto get_create_info() const -> const Base_render_pipeline_create_info&;

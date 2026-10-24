@@ -775,8 +775,11 @@ Drawing:
   count draw (a zero count draws nothing), the list's pipeline and vertex
   buffers bound once. The shadow pipelines are created with
   `Indirect_count_draw_support::enabled` (Metal's
-  `supportIndirectCommandBuffers`; their shaders bind no textures
-  directly). A job reserves its chunk's whole entry count in the indirect
+  `supportIndirectCommandBuffers`), and so are the color pipelines
+  `draw_color()` resolves (`get_pipeline_for(..., indirect_count_draws)`),
+  ready for GPU-generated color commands: the Metal backends bind no
+  texture or sampler directly to a fragment function
+  (`doc/erhe/metal_backend.md` "Two Sampler Binding Paths"). A job reserves its chunk's whole entry count in the indirect
   command buffer, so preparing per pass sizes the Metal buffer to the
   largest single pass: 5120 commands (3.6 MB) per frame in flight on
   Bistro. The compaction also writes, per job, the chunk's entries passing

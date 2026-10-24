@@ -202,12 +202,19 @@ shared between encoders.
   `doc/erhe/metal_backend.md` "Explicit Metal Buffer Index Layout"
   (SPIRV-Cross output unchanged); vertex buffers at index 16 and up;
   acceleration structures with `setResource(gpuResourceID, 13)`.
-- Textures and samplers: `setTexture(gpuResourceID, index)` and
-  `setSamplerState(gpuResourceID, index)` (samplers are created with
-  `supportArgumentBuffers`), at the dedicated-sampler indices the
-  shader-stages prototype pins in the vertex, fragment and compute functions
-  alike (`doc/erhe/metal_backend.md` "Two Sampler Binding Paths"); the
-  argument table reaches the vertex and fragment stages.
+- Textures and samplers of vertex and compute functions:
+  `setTexture(gpuResourceID, index)` and `setSamplerState(gpuResourceID,
+  index)` (samplers are created with `supportArgumentBuffers`), at the
+  dedicated-sampler indices the shader-stages prototype pins
+  (`doc/erhe/metal_backend.md` "Two Sampler Binding Paths"); a render pass's
+  table reaches the vertex and fragment stages, and `set_sampled_image()`
+  writes it for the bindings whose `stage_flags` name the vertex stage.
+- Dedicated samplers of fragment functions: the layout's fragment argument
+  buffer (`doc/erhe/metal_backend.md` "Two Sampler Binding Paths"), written
+  with `MTL::ArgumentEncoder` into a ring buffer range by
+  `Render_pass_impl::flush_fragment_arguments()` before a draw after
+  `set_sampled_image()` changed it; its address goes into the table at
+  index 15. The textures are resident through the residency set.
 - Index buffers are draw arguments (`drawIndexedPrimitives` takes the index
   buffer's GPU address and remaining length; indirect draws take the indirect
   buffer's address).

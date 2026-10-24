@@ -229,7 +229,8 @@ auto Base_render_pipeline::get_pipeline_for(
     const Vertex_input_state*              vertex_input,
     const erhe::dataformat::Vertex_format* vertex_format,
     const bool                             front_face_flip,
-    const bool                             disable_face_culling
+    const bool                             disable_face_culling,
+    const Indirect_count_draw_support      indirect_count_draws
 ) -> Render_pipeline*
 {
     if (m_device == nullptr) {
@@ -254,6 +255,10 @@ auto Base_render_pipeline::get_pipeline_for(
 
     if (disable_face_culling) {
         ci.base.rasterization = ci.base.rasterization.with_face_culling_disabled();
+    }
+
+    if (indirect_count_draws == Indirect_count_draw_support::enabled) {
+        ci.base.indirect_count_draws = Indirect_count_draw_support::enabled;
     }
 
     ci.set_format_from_render_pass(render_pass_desc);

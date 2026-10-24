@@ -50,6 +50,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::xr`: `Pose` moved to its own header `erhe_xr/pose.hpp` (included
   by `xr.hpp` and `frame_timing.hpp`), available in every
   `ERHE_XR_LIBRARY` configuration.
+- `erhe::graphics`: `Base_render_pipeline::get_pipeline_for()` takes an
+  optional `Indirect_count_draw_support` that requests a variant able to
+  draw prepared indirect count draws whatever the base pipeline declares;
+  `erhe::scene_renderer::Draw_list_scene::draw_color()` requests it for the
+  draw-list color pipelines.
 - `erhe::scene_renderer`: `Cull_frame_registry::add_record_scene()` and
   `Cull_frame_registry::release_frame_records()` (render phase, once per
   frame after the frame's last draw-list pass; an application drawing
@@ -738,6 +743,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics` (Metal and Metal 4): fragment functions read every
+  dedicated (non-heap) sampler of their bind group layout from one argument
+  buffer at `[[buffer(15)]]` (descriptor set 6) instead of
+  `[[texture(N)]]` / `[[sampler(M)]]`; vertex and compute functions keep the
+  direct bindings. `Render_command_encoder::set_sampled_image()` is
+  unchanged for callers. A layout with fragment-stage dedicated samplers may
+  not declare a buffer at binding 15 (verified). Every render pipeline can
+  therefore be created with `Indirect_count_draw_support::enabled` on Metal
+  (doc/erhe/metal_backend.md "Two Sampler Binding Paths").
 - `erhe::graphics`: on Vulkan the render pass begin and end barriers honour
   the stage qualifiers of an attachment's `usage_before` / `usage_after` as
   `Command_buffer::texture_barrier` does (`sampled | compute_shader` orders

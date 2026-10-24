@@ -525,7 +525,9 @@ made per `combined_image_sampler` binding:
 - **Dedicated sampler** (`is_texture_heap = false`). The caller binds the
   texture per draw via `encoder.set_sampled_image(binding_point, texture, sampler)`.
   On Vulkan it becomes `vkCmdPushDescriptorSetKHR`; on Metal it becomes
-  `setFragmentTexture`/`setFragmentSamplerState`; on GL it becomes
+  `setVertexTexture`/`setVertexSamplerState` for the vertex stage and an
+  entry of the layout's fragment argument buffer for the fragment stage
+  (`doc/erhe/metal_backend.md` "Two Sampler Binding Paths"); on GL it becomes
   `glBindTextureUnit`/`glBindSampler`. Used for resources that change per-draw
   and are not in a heap: shadow maps (`s_shadow_compare`, `s_shadow_no_compare`),
   post-processing chains (`s_input`, `s_downsample`, `s_upsample`),
@@ -656,9 +658,13 @@ before it (no render encoder open).
   (`Record_indexing::first_instance`, "Draw records" above).
   The pipeline must be created with
   `Base_render_pipeline_create_info::indirect_count_draws =
-  Indirect_count_draw_support::enabled`; Metal rejects that for a fragment
-  shader with directly bound textures or samplers (texture heap samplers are
-  fine). The other backends ignore the field.
+  Indirect_count_draw_support::enabled` (or its variant requested through
+  `Base_render_pipeline::get_pipeline_for(..., indirect_count_draws)`).
+  Metal rejects that for a fragment shader with directly bound textures or
+  samplers; the Metal backends bind none to fragment functions (dedicated
+  samplers go through the fragment argument buffer, texture heap samplers
+  through the heap's), so every render pipeline qualifies. The other
+  backends ignore the field.
 
 ## Present calibration cache
 
