@@ -12,6 +12,10 @@
 5?small-warts{request_renderdoc_capture-MCP-tool-built-never-exercised;"ID Render color"->TRANSFER_SRC_OPTIMAL-with-WRITE-access-mask(should-be-READ);right-trigger-right-click-threshold>0-no-hysteresis;Hover_entry.mask=Raytrace_node_mask-bits-vs-Hover_entry::*_bit-consumers;is_head_attached_ray_mode()-0-callers;laser_begin-joint-could-replace-hand-authored-ray-origin}
 ?long-term{doc/plans/xr.md:XR_EXT_render_model-pair-when-runtime-ships+battery-quad-recheck-after-OS-update+ASTC/BC7-controller-textures+OpenXR_mirror-GL/Metal;doc/plans/android.md:phone-editor-phase-3}
 
+[BENCHMARK_MODE]{©User-2026-10-24}
+@requirement::fully-deterministic+repeatable{frame-indexed-camera-path;fixed-frame_dt-simulation-time;measure-only-after-scene-settled;no-randomness;input_hash-in-result;--repeat-N-spread-visible}->then-record-NEW-baseline(default+heavy;replaces-2026-10-24-worn-headset-numbers-as-reference)
+@spec::doc/plans/quest_performance.md-"Benchmark mode"
+
 [LANDED]{all-Quest-verified;unpushed-since-2026-10-11-on-branch-render-thread}
 >a186e22c2-2026-10-11::Adreno-740-refuses-variable-descriptor-count<half-layout-width->Device_impl-probes-at-init+get_texture_heap_variable_count_minimum();max_texture_heap_size-1024-Android
 >375eba772::XR-single-thread-latch-removed{"XR GL thread error"-spam-from-render-thread}
