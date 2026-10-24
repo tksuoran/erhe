@@ -378,13 +378,24 @@ void Multisample_state_tracker::execute(const Multisample_state& state)
 #endif
 }
 
+auto Rasterization_state_tracker::initial_gl_state() -> Rasterization_state
+{
+    return Rasterization_state{
+        .depth_clamp_enable   = false,
+        .face_cull_enable     = false,
+        .cull_face_mode       = Cull_face_mode::back,
+        .front_face_direction = Front_face_direction::ccw,
+        .polygon_mode         = Polygon_mode::fill
+    };
+}
+
 void Rasterization_state_tracker::reset()
 {
     gl::disable     (gl::Enable_cap::cull_face);
     gl::cull_face   (gl::Cull_face_mode::back);
     gl::front_face  (gl::Front_face_direction::ccw);
     gl::polygon_mode(gl::Material_face::front_and_back, gl::Polygon_mode::fill);
-    m_cache = Rasterization_state{};
+    m_cache = initial_gl_state();
 }
 
 void Rasterization_state_tracker::execute(const Rasterization_state& state)
