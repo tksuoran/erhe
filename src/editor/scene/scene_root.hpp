@@ -240,6 +240,7 @@ public:
         App_settings&                app_settings
     ) -> std::shared_ptr<Item_tree_window>;
     void remove_browser_window();
+    [[nodiscard]] auto get_browser_window() const -> Item_tree_window*;
 
     void register_to_editor_scenes    (App_scenes& app_scenes);
     void unregister_from_editor_scenes(App_scenes& app_scenes);

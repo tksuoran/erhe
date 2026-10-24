@@ -69,6 +69,8 @@ The row context menu follows the same model. "Create" is offered on every prim r
 
 Every row's context menu, the Scene header row included, offers Rename, and F2 in a focused tree does the same. The row's label becomes an edit field: Enter or clicking elsewhere commits, Escape cancels. On a selected row, and for F2, the item renamed is the one added to the selection last among the rows this tree shows. The commit is one undoable `Property_set_operation` of `erhe::Item_base::name_property`, so the property's validator applies: a name a sibling already holds is refused, and Enter then keeps the field open with the reason as a tooltip, while clicking away drops the refused name. An empty name is refused the same way.
 
+Framing the selection in a viewport (`Fly_camera.frame`, F) also reveals it in that scene's hierarchy window (`Item_tree::request_reveal`): on the next drawn frame every collapsed row on the path to a selected item is opened, and the framed node selected last is scrolled into view. An item the tree does not show (text filter, inside a sealed instance root) gets no row and is not revealed.
+
 Reference instance structure protection applies to every drop (`prefabs/instance_structure.hpp`, `doc/erhe/usd_compatibility_design.md` X2): a move of a protected prim or under a refusing parent is refused and logged at drop, and the brush, glTF, texture and material-copy drops are not offered where the parent refuses children.
 
 ## Geometry Spreadsheet
