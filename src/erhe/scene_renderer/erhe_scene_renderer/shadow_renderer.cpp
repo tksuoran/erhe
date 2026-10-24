@@ -1000,12 +1000,6 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         ERHE_VERIFY(cull_views.views_cube.size() == (cube_count * 6));
     }
 
-    // The shadow lists' shared records stay acquired across the passes
-    // below and are released when this scope ends (doc/erhe/
-    // draw_list_renderer.md "Record upload").
-    const Draw_list_scene::Shadow_record_scope shadow_record_scope = (parameters.draw_list_scene != nullptr)
-        ? parameters.draw_list_scene->begin_shadow_record_scope()
-        : Draw_list_scene::Shadow_record_scope{};
     // GPU-generated commands: the passes count nothing on the CPU.
     const bool gpu_counted =
         (parameters.draw_list_scene != nullptr) &&

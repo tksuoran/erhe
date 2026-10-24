@@ -2244,6 +2244,13 @@ public:
         if (m_text_renderer) {
             m_text_renderer->release_frames();
         }
+        // Every draw-list pass of this frame (the rendergraph's shadow and
+        // composition passes, the headset's) has drawn: release the shared
+        // records they bound (doc/erhe/draw_list_renderer.md "Record
+        // upload").
+        if (m_cull_frame_registry) {
+            m_cull_frame_registry->release_frame_records();
+        }
 
         if (should_render) {
             m_imgui_renderer->next_frame();

@@ -263,9 +263,9 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     ERHE_VERIFY(m_primitive_record_stride > 0);
     // Shared shadow records need commands that name their record
     // (Record_indexing::first_instance); the device logs its indexing.
-    m_shadow_record_upload = (m_primitive_interface.record_indexing == erhe::graphics::Record_indexing::first_instance)
-        ? Shadow_record_upload::shared
-        : Shadow_record_upload::per_pass;
+    m_record_upload = (m_primitive_interface.record_indexing == erhe::graphics::Record_indexing::first_instance)
+        ? Record_upload::shared
+        : Record_upload::per_pass;
     m_gpu_cull_check = make_gpu_cull_check();
     // Draw_list_content_changes::scene_instance: unique for the process, so a cache
     // keyed on content serials never mistakes another scene's serial for
@@ -1798,6 +1798,26 @@ void Draw_list_scene::set_color_environment(const Color_environment& environment
     }
 }
 
+namespace {
+
+// Whether the shader variant of key reads the pass-dependent fields of its
+// primitive record (color and size, Primitive_buffer's per-pass patch):
+// standard.vert under ERHE_VARIANT_POINTS, under ERHE_SOLID_WIREFRAME and
+// under ERHE_SHADER_DEBUG != 0, standard.frag under ERHE_VARIANT_ID_RENDER.
+// No draw-list pass may (doc/erhe/draw_list_renderer.md "Record upload"):
+// the draw-list path takes polygon fill passes without shader debug only,
+// and every pass of a frame over a list shares one record patch.
+[[nodiscard]] auto reads_record_pass_fields(const Shader_key& key) -> bool
+{
+    return
+        key.get(Shader_bool::VARIANT_POINTS)   ||
+        key.get(Shader_bool::SOLID_WIREFRAME)  ||
+        key.get(Shader_bool::VARIANT_ID_RENDER) ||
+        (key.get(Shader_int::SHADER_DEBUG) != 0u);
+}
+
+} // anonymous namespace
+
 auto Draw_list_scene::resolve_color_stages(
     Draw_list_resolutions& resolutions,
     const Draw_list&       draw_list,
@@ -1829,6 +1849,9 @@ auto Draw_list_scene::resolve_color_stages(
     // calls anisotropic_brdf().
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(env));
     key.set(Shader_int::SHADER_MULTIVIEW_COUNT, static_cast<uint32_t>(multiview_count));
+    // The color passes share the frame's records of the list (Record
+    // upload): exact only while the variant reads no pass-dependent field.
+    ERHE_VERIFY(!reads_record_pass_fields(key));
 
     const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
     const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
@@ -1881,6 +1904,9 @@ auto Draw_list_scene::resolve_shadow_stages(
             ERHE_FATAL("bad Shadow_sub_variant");
         }
     }
+    // The shadow passes share the frame's records of the list (Record
+    // upload): exact only while the variant reads no pass-dependent field.
+    ERHE_VERIFY(!reads_record_pass_fields(key));
     const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
     const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
     if (stages == nullptr) {
@@ -1915,7 +1941,6 @@ void Draw_list_scene::draw_list_gpu_chunks(
     erhe::graphics::Render_command_encoder& render_encoder,
     erhe::graphics::Render_pipeline&        render_pipeline,
     Primitive_buffer&                       primitive_buffer,
-    const Primitive_interface_settings&     primitive_settings,
     const std::size_t                       draw_list_index,
     const uint32_t                          first_gpu_job,
     const uint64_t                          frame_index,
@@ -1949,7 +1974,7 @@ void Draw_list_scene::draw_list_gpu_chunks(
         ERHE_VERIFY(job_index < m_gpu_shadow_jobs.size());
         const Gpu_shadow_job& job = m_gpu_shadow_jobs[job_index];
         ERHE_VERIFY(job.entry_count == (end - begin));
-        const erhe::graphics::Ring_buffer_range& shared_range = shared_shadow_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, primitive_settings, frame_index);
+        const erhe::graphics::Ring_buffer_range& shared_range = shared_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, frame_index);
         primitive_buffer.bind(render_encoder, shared_range);
         ERHE_VERIFY((job_index >= m_gpu_pass_jobs.first_job) && (job_index < (m_gpu_pass_jobs.first_job + m_gpu_pass_jobs.job_count)));
         render_encoder.multi_draw_indexed_primitives_indirect_count(m_gpu_indirect_count_draw_set, static_cast<uint32_t>(job_index - m_gpu_pass_jobs.first_job));
@@ -2001,7 +2026,7 @@ void Draw_list_scene::draw_list_chunks(
         // Every shadow list the selection's layers select has jobs for
         // every shadow view of the frame.
         ERHE_VERIFY(first_gpu_job != c_no_gpu_shadow_job);
-        draw_list_gpu_chunks(draw_list, render_encoder, render_pipeline, primitive_buffer, primitive_settings, draw_list_index, first_gpu_job, frame_index, statistics);
+        draw_list_gpu_chunks(draw_list, render_encoder, render_pipeline, primitive_buffer, draw_list_index, first_gpu_job, frame_index, statistics);
         return;
     }
 
@@ -2069,7 +2094,7 @@ void Draw_list_scene::draw_list_chunks(
 
         // Packed: this pass's own records, one per passing entry, released
         // after the draw. Chunk entries: the chunk's shared records, which
-        // stay acquired until the Shadow_record_scope ends.
+        // stay acquired until the frame's release_frame_records().
         erhe::graphics::Ring_buffer_range        pass_primitive_range{};
         const erhe::graphics::Ring_buffer_range* primitive_range = &pass_primitive_range;
         std::size_t                              primitive_count = 0;
@@ -2080,7 +2105,7 @@ void Draw_list_scene::draw_list_chunks(
                 continue;
             }
         } else {
-            primitive_range = &shared_shadow_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, primitive_settings, frame_index);
+            primitive_range = &shared_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, frame_index);
         }
         Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, entry_passes, record_layout);
         if (record_layout == Draw_record_layout::packed) {
@@ -2117,129 +2142,77 @@ void Draw_list_scene::draw_list_chunks(
     }
 }
 
-namespace {
-
-// The record fields Primitive_buffer::update_records() patches from the
-// settings agree (the shared records serve every pass of a scope).
-[[nodiscard]] auto same_record_settings(const Primitive_interface_settings& lhs, const Primitive_interface_settings& rhs) -> bool
-{
-    return
-        (lhs.color_source          == rhs.color_source         ) &&
-        (lhs.constant_color0       == rhs.constant_color0      ) &&
-        (lhs.constant_color1       == rhs.constant_color1      ) &&
-        (lhs.constant_color_active == rhs.constant_color_active) &&
-        (lhs.size_source           == rhs.size_source          ) &&
-        (lhs.constant_size         == rhs.constant_size        ) &&
-        (lhs.hovered_flag_bits     == rhs.hovered_flag_bits    ) &&
-        (lhs.active_item_flag_bits == rhs.active_item_flag_bits);
-}
-
-} // anonymous namespace
-
-Draw_list_scene::Shadow_record_scope::Shadow_record_scope(Draw_list_scene& draw_list_scene)
-    : m_draw_list_scene{&draw_list_scene}
-{
-}
-
-Draw_list_scene::Shadow_record_scope::~Shadow_record_scope() noexcept
-{
-    end();
-}
-
-Draw_list_scene::Shadow_record_scope::Shadow_record_scope(Shadow_record_scope&& other) noexcept
-    : m_draw_list_scene{std::exchange(other.m_draw_list_scene, nullptr)}
-{
-}
-
-auto Draw_list_scene::Shadow_record_scope::operator=(Shadow_record_scope&& other) noexcept -> Shadow_record_scope&
-{
-    if (this != &other) {
-        end();
-        m_draw_list_scene = std::exchange(other.m_draw_list_scene, nullptr);
-    }
-    return *this;
-}
-
-void Draw_list_scene::Shadow_record_scope::end()
-{
-    if (m_draw_list_scene != nullptr) {
-        m_draw_list_scene->release_shadow_records();
-        m_draw_list_scene = nullptr;
-    }
-}
-
-auto Draw_list_scene::begin_shadow_record_scope() -> Shadow_record_scope
-{
-    assert_render_phase();
-    ERHE_VERIFY(!m_shadow_record_scope_open);
-    ERHE_VERIFY(m_shadow_record_lists.empty());
-    m_shadow_record_scope_open = true;
-    return Shadow_record_scope{*this};
-}
-
-auto Draw_list_scene::shared_shadow_records(
-    const Draw_list&                    draw_list,
-    const std::size_t                   draw_list_index,
-    const std::size_t                   begin,
-    const std::size_t                   end,
-    const std::size_t                   max_per_chunk,
-    Primitive_buffer&                   primitive_buffer,
-    const Primitive_interface_settings& primitive_settings,
-    const uint64_t                      frame_index
+auto Draw_list_scene::shared_records(
+    const Draw_list&  draw_list,
+    const std::size_t draw_list_index,
+    const std::size_t begin,
+    const std::size_t end,
+    const std::size_t max_per_chunk,
+    Primitive_buffer& primitive_buffer,
+    const uint64_t    frame_index
 ) -> const erhe::graphics::Ring_buffer_range&
 {
-    ERHE_VERIFY(m_shadow_record_upload == Shadow_record_upload::shared);
-    ERHE_VERIFY(m_shadow_record_scope_open);
-    ERHE_VERIFY(draw_list.key.purpose == Draw_purpose::shadow);
-    // The ranges are released in the frame that acquired them.
-    ERHE_VERIFY(m_cull_frame_started && (m_cull_frame_index == frame_index));
-    if (m_shadow_record_buffer == nullptr) {
-        m_shadow_record_buffer   = &primitive_buffer;
-        m_shadow_record_settings = primitive_settings;
+    ERHE_VERIFY(m_record_upload == Record_upload::shared);
+    // The ranges are released in the frame that acquired them
+    // (release_frame_records()).
+    if (!m_shared_records_open) {
+        ERHE_VERIFY(m_shared_record_lists.empty());
+        m_shared_records_open       = true;
+        m_shared_record_frame_index = frame_index;
+        m_cull_frame_registry.add_record_scene(*this, frame_index);
     } else {
-        // One scope binds the ranges of one Primitive_buffer, written with
-        // one set of settings.
-        ERHE_VERIFY(m_shadow_record_buffer == &primitive_buffer);
-        ERHE_VERIFY(same_record_settings(m_shadow_record_settings, primitive_settings));
+        ERHE_VERIFY(m_shared_record_frame_index == frame_index);
     }
-    if (m_shadow_records.size() <= draw_list_index) {
-        m_shadow_records.resize(draw_list_index + 1);
+    if (m_shared_records.size() <= draw_list_index) {
+        m_shared_records.resize(draw_list_index + 1);
     }
-    Shared_shadow_records& shared      = m_shadow_records[draw_list_index];
-    const std::size_t      chunk_count = (draw_list.entries.size() + max_per_chunk - 1) / max_per_chunk;
-    const std::size_t      chunk_index = begin / max_per_chunk;
+    Shared_list_records& shared      = m_shared_records[draw_list_index];
+    const std::size_t    chunk_count = (draw_list.entries.size() + max_per_chunk - 1) / max_per_chunk;
+    const std::size_t    chunk_index = begin / max_per_chunk;
     ERHE_VERIFY((begin % max_per_chunk) == 0);
+    // Every pass of the frame over one list binds the ranges of one
+    // Primitive_buffer (one chunk size).
+    if (shared.primitive_buffer == nullptr) {
+        shared.primitive_buffer = &primitive_buffer;
+    } else {
+        ERHE_VERIFY(shared.primitive_buffer == &primitive_buffer);
+    }
     if (shared.chunks.size() < chunk_count) {
         shared.chunks.resize(chunk_count);
     }
     erhe::graphics::Ring_buffer_range& range = shared.chunks[chunk_index];
     if (range.get_buffer() == nullptr) {
-        range = primitive_buffer.update_records(draw_list, begin, end, primitive_settings);
+        // The one record patch every pass of the frame shares: the default
+        // settings' color and size. Exact for every draw-list pass, since no
+        // draw-list shader variant reads a record's color or size
+        // (reads_record_pass_fields(), verified where the variants resolve).
+        range = primitive_buffer.update_records(draw_list, begin, end, Primitive_interface_settings{});
         if (!shared.in_release_list) {
-            m_shadow_record_lists.push_back(draw_list_index);
+            m_shared_record_lists.push_back(draw_list_index);
             shared.in_release_list = true;
         }
     }
     return range;
 }
 
-void Draw_list_scene::release_shadow_records()
+void Draw_list_scene::release_frame_records(const uint64_t frame_index)
 {
     assert_render_phase();
-    ERHE_VERIFY(m_shadow_record_scope_open);
-    for (const std::size_t list_index : m_shadow_record_lists) {
-        Shared_shadow_records& shared = m_shadow_records[list_index];
+    ERHE_VERIFY(m_shared_records_open);
+    ERHE_VERIFY(m_shared_record_frame_index == frame_index);
+    for (const std::size_t list_index : m_shared_record_lists) {
+        Shared_list_records& shared = m_shared_records[list_index];
         for (erhe::graphics::Ring_buffer_range& range : shared.chunks) {
             if (range.get_buffer() != nullptr) {
                 range.release();
                 range = erhe::graphics::Ring_buffer_range{};
             }
         }
-        shared.in_release_list = false;
+        shared.primitive_buffer = nullptr;
+        shared.in_release_list  = false;
     }
-    m_shadow_record_lists.clear();
-    m_shadow_record_buffer     = nullptr;
-    m_shadow_record_scope_open = false;
+    m_shared_record_lists.clear();
+    m_shared_records_open = false;
 }
 
 namespace {
@@ -2266,10 +2239,10 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     if (m_cull_frame_started && (m_cull_frame_index == frame_index)) {
         return;
     }
-    // The previous frame's shared shadow records were released in their
-    // frame (Shadow_record_scope).
-    ERHE_VERIFY(!m_shadow_record_scope_open);
-    ERHE_VERIFY(m_shadow_record_lists.empty());
+    // The previous frame's shared records were released in their frame
+    // (release_frame_records()).
+    ERHE_VERIFY(!m_shared_records_open);
+    ERHE_VERIFY(m_shared_record_lists.empty());
     // The previous frame's views were classified in their frame
     // (classify_frame_cull_views()).
     ERHE_VERIFY(!m_cull_frame_started || m_cull_frame_classified);
@@ -2630,6 +2603,14 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
     Draw_statistics statistics{};
     ERHE_VERIFY(parameters.render_pass != nullptr);
 
+    // Shared records (doc/erhe/draw_list_renderer.md "Record upload"): the
+    // color passes bind the frame's shared records of each chunk like the
+    // shadow passes; the pass's color and size settings reach no draw-list
+    // shader variant (reads_record_pass_fields(), verified at resolution).
+    const Draw_record_layout color_record_layout = (m_record_upload == Record_upload::shared)
+        ? Draw_record_layout::chunk_entries
+        : Draw_record_layout::packed;
+
     set_color_environment(parameters.environment);
     const std::vector<Draw_list>& draw_lists = get_published_draw_lists(parameters.frame_index);
     verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
@@ -2699,7 +2680,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 parameters.filter,
                 list_index,
                 parameters.cull_view,
-                Draw_record_layout::packed,
+                color_record_layout,
                 Draw_command_source::cpu_written,
                 parameters.frame_index,
                 statistics
@@ -2775,7 +2756,7 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             parameters.filter,
             list_index,
             parameters.cull_view,
-            (m_shadow_record_upload == Shadow_record_upload::shared) ? Draw_record_layout::chunk_entries : Draw_record_layout::packed,
+            (m_record_upload == Record_upload::shared) ? Draw_record_layout::chunk_entries : Draw_record_layout::packed,
             command_source,
             parameters.frame_index,
             statistics

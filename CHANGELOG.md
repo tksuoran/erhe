@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::scene_renderer`: `Draw_list_scene::Shadow_record_scope` and
+  `Draw_list_scene::begin_shadow_record_scope()`. The shared draw records
+  are frame-wide: the first shared record a `Draw_list_scene` acquires in a
+  frame registers it with its `Cull_frame_registry`, and
+  `Cull_frame_registry::release_frame_records()` releases them.
 - `erhe::graphics`: `Render_pipeline_create_info::color_usage_before`,
   `color_usage_after`, `depth_usage_before` and `depth_usage_after` (no
   backend read them; render pass barriers come from the
@@ -45,6 +50,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::xr`: `Pose` moved to its own header `erhe_xr/pose.hpp` (included
   by `xr.hpp` and `frame_timing.hpp`), available in every
   `ERHE_XR_LIBRARY` configuration.
+- `erhe::scene_renderer`: `Cull_frame_registry::add_record_scene()` and
+  `Cull_frame_registry::release_frame_records()` (render phase, once per
+  frame after the frame's last draw-list pass; an application drawing
+  draw lists calls it), and `Draw_list_scene::release_frame_records()`.
+  The color passes of the draw lists (`Draw_list_scene::draw_color()`) bind
+  the frame's shared records like the shadow passes under
+  `Record_indexing::first_instance` (doc/erhe/draw_list_renderer.md "Record
+  upload").
 - `erhe::graphics`: explicit per-resource barriers (doc/erhe/graphics.md
   "Resource barriers"): `Command_buffer::texture_barrier(texture, [range,]
   usage_before, usage_after[, scope])` and

@@ -22,7 +22,12 @@ class Draw_list_scene;
 // scene: the CPU lanes always, and the scene's GPU dispatch when its
 // published slot asks for the GPU path (which needs the scene's
 // Gpu_cull_classifier). The editor drives it from the rendergraph's
-// pre-execute callback. Render thread only.
+// pre-execute callback. The registry also ends the frame's shared draw
+// records (doc/erhe/draw_list_renderer.md "Record upload"): a scene whose
+// draw_shadow() / draw_color() acquired shared records in a frame registers
+// itself (add_record_scene()), and release_frame_records(), once per frame
+// after the frame's last draw-list pass, releases them in that frame.
+// Render thread only.
 class Cull_frame_registry
 {
 public:
@@ -37,11 +42,22 @@ public:
     // registered since the previous call, recording the GPU dispatches into
     // command_buffer.
     void classify_frame(erhe::graphics::Command_buffer& command_buffer);
+    // Draw_list_scene, when its first shared record range of frame_index is
+    // acquired.
+    void add_record_scene(Draw_list_scene& draw_list_scene, uint64_t frame_index);
+    // Render phase, after the frame's last draw-list pass (the editor: after
+    // the rendergraph and the headset rendered, before the frame's submit):
+    // releases the shared records of every scene registered since the
+    // previous call (Draw_list_scene::release_frame_records()).
+    void release_frame_records();
 
 private:
     // Cleared (capacity kept) by classify_frame().
     std::vector<Draw_list_scene*> m_frame_scenes;
     uint64_t                      m_frame_index{std::numeric_limits<uint64_t>::max()};
+    // Cleared (capacity kept) by release_frame_records().
+    std::vector<Draw_list_scene*> m_record_scenes;
+    uint64_t                      m_record_frame_index{std::numeric_limits<uint64_t>::max()};
 };
 
 } // namespace erhe::scene_renderer
