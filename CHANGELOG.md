@@ -1177,6 +1177,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `signal_cpu_completion()`, `wait_for_cpu(p)` is
   `wait_for_cpu_completion_of(p)`. The implicit primitives and the
   consumer-owned semaphore model are unchanged.
+- `erhe::graphics`: `Gpu_timer` ranges may nest on every backend: explicit
+  ranges may enclose each other and timed render passes. The OpenGL backend
+  records a `GL_TIMESTAMP` query pair per range instead of one
+  `GL_TIME_ELAPSED` query, which allowed one active timer at a time.
 - `erhe::item`: the editor-only `Item_flags` bits (`tool`, `brush`,
   `controller`, `rendertarget`, `expand`, the hover bits,
   `show_in_developer_ui`, `show_debug_visualizations`, `affects_shadow`,

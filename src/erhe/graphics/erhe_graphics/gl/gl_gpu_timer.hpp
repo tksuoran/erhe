@@ -16,15 +16,16 @@ class Command_buffer;
 class Device;
 
 // OpenGL GPU timer backend. Each timer owns a small ring buffer of
-// GL_TIME_ELAPSED queries. write_begin_timestamp issues glBeginQuery into the
-// current ring slot; write_end_timestamp issues glEndQuery. After the GPU
-// completes the work the result is polled in Gpu_timer_impl::end_frame()
-// (driven from Gl_device::end_frame) and stored as m_last_result.
+// GL_TIMESTAMP query pairs. write_begin_timestamp and write_end_timestamp
+// each record a timestamp (glQueryCounter) into the current ring slot. After
+// the GPU completes the work the result is polled in
+// Gpu_timer_impl::end_frame() (driven from Gl_device::end_frame) and the
+// difference is stored as m_last_result.
 //
-// Constraint: GL allows only one GL_TIME_ELAPSED query active at a time, so
-// only one Gpu_timer per Render_pass scope is supported, and explicit-range
-// timers (Gpu_timer::begin / end) must not nest with each other or with a
-// timed render pass.
+// Timestamps, unlike GL_TIME_ELAPSED queries (of which only one may be active
+// at a time), nest freely: several timers may be bound to one Render_pass,
+// and explicit-range timers (Gpu_timer::begin / end) may enclose timed
+// render passes or each other, as on the Vulkan and Metal backends.
 //
 // Main-thread-only by design: query objects are per-context (unshared), the
 // per-timer state is a ring of queries no per-context slot can represent,
@@ -58,9 +59,10 @@ private:
     class Query
     {
     public:
-        std::optional<Gl_query> query_object{};
-        bool                    pending     {false};
-        uint64_t                frame_id    {0};  // Command_buffer frame id of the measured work
+        std::optional<Gl_query> begin_query{};
+        std::optional<Gl_query> end_query  {};
+        bool                    pending    {false};
+        uint64_t                frame_id   {0};  // Command_buffer frame id of the measured work
     };
 
     static constexpr std::size_t                      s_count = 4;
