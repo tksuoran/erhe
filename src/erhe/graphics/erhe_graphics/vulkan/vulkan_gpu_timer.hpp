@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_graphics/gpu_timer.hpp"
+
 #include "volk.h"
 
 #include <cstddef>
@@ -34,22 +36,23 @@ public:
     Gpu_timer_impl(Gpu_timer_impl&&)      = delete;
     auto operator=(Gpu_timer_impl&&)      = delete;
 
-    [[nodiscard]] auto last_result() -> uint64_t;
+    [[nodiscard]] auto last_result() -> Gpu_timer_result;
     [[nodiscard]] auto label      () const -> const char*;
 
     void write_begin_timestamp(Command_buffer& command_buffer);
     void write_end_timestamp  (Command_buffer& command_buffer);
 
     // Called from Device_impl::acquire_frame_slot after results are read
-    // from the VkQueryPool slice for this timer's slot.
-    void store_last_result_ns(uint64_t nanoseconds);
+    // from the VkQueryPool slice for this timer's slot; frame_id is the
+    // frame that recorded the slice's queries.
+    void store_last_result_ns(uint64_t nanoseconds, uint64_t frame_id);
 
 private:
     Device_impl* m_device_impl{nullptr};
     const char*  m_label      {nullptr};
     int          m_slot       {-1};
     std::mutex   m_result_mutex;
-    uint64_t     m_last_result{0};
+    Gpu_timer_result m_last_result{};
 };
 
 } // namespace erhe::graphics

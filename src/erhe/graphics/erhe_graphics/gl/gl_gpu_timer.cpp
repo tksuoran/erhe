@@ -5,6 +5,7 @@
 #include "erhe_graphics/gl/gl_gpu_timer.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_context_index.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -67,7 +68,6 @@ void Gpu_timer_impl::create()
 
 void Gpu_timer_impl::write_begin_timestamp(Command_buffer& command_buffer)
 {
-    static_cast<void>(command_buffer);
 #if defined(ERHE_USE_TIME_QUERY)
     ERHE_VERIFY_GL_THREAD_MAIN_CONTEXT();
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
@@ -83,6 +83,9 @@ void Gpu_timer_impl::write_begin_timestamp(Command_buffer& command_buffer)
         return;
     }
     gl::begin_query(gl::Query_target::time_elapsed, query.query_object.value().gl_name());
+    query.frame_id = command_buffer.get_frame_id();
+#else
+    static_cast<void>(command_buffer);
 #endif
 }
 
@@ -119,14 +122,14 @@ void Gpu_timer_impl::poll()
         if (result_available != 0) {
             GLuint64 time_value{};
             gl::get_query_object_ui_64v(name, gl::Query_object_parameter_name::query_result, &time_value);
-            m_last_result = time_value;
+            m_last_result = Gpu_timer_result{.nanoseconds = static_cast<uint64_t>(time_value), .frame_id = query.frame_id};
             query.pending = false;
         }
     }
 #endif
 }
 
-auto Gpu_timer_impl::last_result() -> uint64_t
+auto Gpu_timer_impl::last_result() -> Gpu_timer_result
 {
     return m_last_result;
 }

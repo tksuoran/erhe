@@ -97,6 +97,11 @@ void Gpu_timer::on_render_pass_destroyed()
 
 auto Gpu_timer::last_result() -> uint64_t
 {
+    return m_impl->last_result().nanoseconds;
+}
+
+auto Gpu_timer::last_result_with_frame_id() -> Gpu_timer_result
+{
     return m_impl->last_result();
 }
 
@@ -109,6 +114,14 @@ auto Gpu_timer::all_gpu_timers() -> std::vector<Gpu_timer*>
 {
     const std::lock_guard<std::mutex> lock{s_facade_mutex};
     return s_facade_timers;
+}
+
+void Gpu_timer::for_each_gpu_timer(const std::function<void(Gpu_timer&)>& callback)
+{
+    const std::lock_guard<std::mutex> lock{s_facade_mutex};
+    for (Gpu_timer* timer : s_facade_timers) {
+        callback(*timer);
+    }
 }
 
 Scoped_gpu_timer::Scoped_gpu_timer(Gpu_timer& timer, Command_buffer& command_buffer)

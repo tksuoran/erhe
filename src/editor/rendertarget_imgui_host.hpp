@@ -4,9 +4,11 @@
 #include "renderers/prepared_frame_values.hpp"
 
 #include <memory>
+#include <string>
 
 namespace erhe::graphics {
     class Command_buffer;
+    class Gpu_timer;
 }
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -90,6 +92,10 @@ private:
     bool               m_is_visible{false};
     float              m_this_frame_dt_s{0.0};
     int64_t            m_time_ns{};
+    // GPU time of execute_rendergraph_node(): texture updates, the ImGui
+    // pass and the rendertarget mesh mipmaps / quad layer release.
+    std::string                                m_gpu_timer_label;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_gpu_timer;
 };
 
 }

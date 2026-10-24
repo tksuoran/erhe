@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/gl/gl_objects.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <array>
@@ -40,7 +41,7 @@ public:
     Gpu_timer_impl(Gpu_timer_impl&&)      = delete;
     auto operator=(Gpu_timer_impl&&)      = delete;
 
-    [[nodiscard]] auto last_result() -> uint64_t;
+    [[nodiscard]] auto last_result() -> Gpu_timer_result;
     [[nodiscard]] auto label      () const -> const char*;
 
     void write_begin_timestamp(Command_buffer& command_buffer);
@@ -59,6 +60,7 @@ private:
     public:
         std::optional<Gl_query> query_object{};
         bool                    pending     {false};
+        uint64_t                frame_id    {0};  // Command_buffer frame id of the measured work
     };
 
     static constexpr std::size_t                      s_count = 4;
@@ -68,7 +70,7 @@ private:
 
     Device*                    m_device     {nullptr};
     std::array<Query, s_count> m_queries;
-    uint64_t                   m_last_result{0};
+    Gpu_timer_result           m_last_result{};
     const char*                m_label      {nullptr};
 };
 

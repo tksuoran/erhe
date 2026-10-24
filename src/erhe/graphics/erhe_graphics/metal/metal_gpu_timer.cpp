@@ -594,7 +594,7 @@ void Gpu_timer_sample_pool::resolve_command_buffer_samples(const Gpu_timer_comma
             if (entry == m_timers.end()) {
                 continue; // timer destroyed while its command buffer was in flight
             }
-            entry->timer->store_last_result_ns(ticks_to_nanoseconds(end_ticks - begin_ticks));
+            entry->timer->store_last_result_ns(ticks_to_nanoseconds(end_ticks - begin_ticks), samples.frame_id);
         }
     }
     if (has_chunk) {
@@ -616,7 +616,9 @@ Gpu_timer_impl::~Gpu_timer_impl() noexcept
 
 void Gpu_timer_impl::write_begin_timestamp(Command_buffer& command_buffer)
 {
-    command_buffer.get_impl().get_gpu_timer_samples().write_begin(m_serial);
+    Gpu_timer_command_buffer_samples& samples = command_buffer.get_impl().get_gpu_timer_samples();
+    samples.frame_id = command_buffer.get_frame_id();
+    samples.write_begin(m_serial);
 }
 
 void Gpu_timer_impl::write_end_timestamp(Command_buffer& command_buffer)
@@ -624,13 +626,13 @@ void Gpu_timer_impl::write_end_timestamp(Command_buffer& command_buffer)
     command_buffer.get_impl().get_gpu_timer_samples().write_end(m_serial);
 }
 
-void Gpu_timer_impl::store_last_result_ns(const uint64_t nanoseconds)
+void Gpu_timer_impl::store_last_result_ns(const uint64_t nanoseconds, const uint64_t frame_id)
 {
     const std::lock_guard<std::mutex> lock{m_result_mutex};
-    m_last_result = nanoseconds;
+    m_last_result = Gpu_timer_result{.nanoseconds = nanoseconds, .frame_id = frame_id};
 }
 
-auto Gpu_timer_impl::last_result() -> uint64_t
+auto Gpu_timer_impl::last_result() -> Gpu_timer_result
 {
     const std::lock_guard<std::mutex> lock{m_result_mutex};
     return m_last_result;

@@ -2,6 +2,7 @@
 #include "editor_log.hpp"
 
 #include "erhe_file/file.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_version/version.hpp"
 
 #include <fmt/format.h>
@@ -258,6 +259,14 @@ auto Benchmark_driver::load(const std::string& path) -> std::unique_ptr<Benchmar
         driver->m_display_refresh_rate_hz = root["display_refresh_rate_hz"].get<float>();
     }
 
+    if (root.contains("passthrough")) {
+        if (!root["passthrough"].is_boolean()) {
+            log_startup->error("Benchmark failed {}: 'passthrough' must be a boolean", path);
+            return {};
+        }
+        driver->m_passthrough = root["passthrough"].get<bool>() ? Benchmark_passthrough::on : Benchmark_passthrough::off;
+    }
+
     if (!root.contains("camera_path") || !root["camera_path"].is_object()) {
         log_startup->error("Benchmark failed {}: missing object 'camera_path'", path);
         return {};
@@ -314,9 +323,9 @@ auto Benchmark_driver::load(const std::string& path) -> std::unique_ptr<Benchmar
     }
 
     log_startup->info(
-        "Benchmark '{}' from {}: warmup {} frames, measure {} frames, frame_dt {} ns, settle timeout {} frames, {} camera path",
+        "Benchmark '{}' from {}: warmup {} frames, measure {} frames, frame_dt {} ns, settle timeout {} frames, {} camera path, passthrough {}",
         driver->m_name, path, driver->m_warmup_frames, driver->m_measure_frames, driver->m_frame_dt_ns,
-        driver->m_settle_timeout_frames, path_type
+        driver->m_settle_timeout_frames, path_type, (driver->m_passthrough == Benchmark_passthrough::on) ? "on" : "off"
     );
     return driver;
 }
@@ -329,6 +338,11 @@ auto Benchmark_driver::get_name() const -> const std::string&
 auto Benchmark_driver::get_display_refresh_rate_hz() const -> std::optional<float>
 {
     return m_display_refresh_rate_hz;
+}
+
+auto Benchmark_driver::get_passthrough() const -> Benchmark_passthrough
+{
+    return m_passthrough;
 }
 
 auto Benchmark_driver::get_frame_advance_ns() const -> int64_t
@@ -400,6 +414,77 @@ void Benchmark_driver::set_counter(const std::size_t index, const std::string_vi
     m_counters[index].pending = value;
 }
 
+void Benchmark_driver::begin_gpu_passes()
+{
+    // Cold (measured window start): one series per distinct timer label.
+    m_gpu_passes.clear();
+    erhe::graphics::Gpu_timer::for_each_gpu_timer(
+        [this](erhe::graphics::Gpu_timer& timer) {
+            const std::string_view label{timer.label()};
+            for (const Counter_series& series : m_gpu_passes) {
+                if (series.name == label) {
+                    return;
+                }
+            }
+            m_gpu_passes.push_back(Counter_series{.name = std::string{label}, .values = {}, .pending = 0.0});
+        }
+    );
+    std::sort(
+        m_gpu_passes.begin(), m_gpu_passes.end(),
+        [](const Counter_series& lhs, const Counter_series& rhs) { return lhs.name < rhs.name; }
+    );
+    m_gpu_passes.push_back(Counter_series{.name = "(unlisted)", .values = {}, .pending = 0.0});
+    const std::size_t measure_frames = static_cast<std::size_t>(m_measure_frames);
+    for (Counter_series& series : m_gpu_passes) {
+        series.values.reserve(measure_frames);
+    }
+    m_gpu_total_us.reserve(measure_frames);
+    m_gpu_result_frame_id.reserve(measure_frames);
+    m_gpu_sample_frame_id  = 0;
+    m_gpu_pending_total_us = 0.0;
+}
+
+void Benchmark_driver::sample_gpu_timers()
+{
+    if (m_state != State::measure) {
+        return;
+    }
+    // The newest frame any timer has a result from: the frame whose slot
+    // acquire_frame_slot() just retired.
+    m_gpu_sample_frame_id = 0;
+    erhe::graphics::Gpu_timer::for_each_gpu_timer(
+        [this](erhe::graphics::Gpu_timer& timer) {
+            m_gpu_sample_frame_id = std::max(m_gpu_sample_frame_id, timer.last_result_with_frame_id().frame_id);
+        }
+    );
+    for (Counter_series& series : m_gpu_passes) {
+        series.pending = 0.0;
+    }
+    m_gpu_pending_total_us = 0.0;
+    if (m_gpu_sample_frame_id == 0) {
+        return;
+    }
+    erhe::graphics::Gpu_timer::for_each_gpu_timer(
+        [this](erhe::graphics::Gpu_timer& timer) {
+            const erhe::graphics::Gpu_timer_result result = timer.last_result_with_frame_id();
+            if (result.frame_id != m_gpu_sample_frame_id) {
+                return; // not recorded in that frame
+            }
+            const double         us    = static_cast<double>(result.nanoseconds) / 1000.0;
+            const std::string_view label{timer.label()};
+            Counter_series* target = &m_gpu_passes.back(); // "(unlisted)"
+            for (std::size_t i = 0, end = m_gpu_passes.size() - 1; i < end; ++i) {
+                if (m_gpu_passes[i].name == label) {
+                    target = &m_gpu_passes[i];
+                    break;
+                }
+            }
+            target->pending        += us;
+            m_gpu_pending_total_us += us;
+        }
+    );
+}
+
 void Benchmark_driver::hash_bytes(const void* data, const std::size_t size)
 {
     m_input_hash = fnv1a(m_input_hash, data, size);
@@ -412,6 +497,7 @@ void Benchmark_driver::begin_measure(const Benchmark_frame_inputs& inputs)
     for (Counter_series& series : m_counters) {
         series.values.reserve(static_cast<std::size_t>(m_measure_frames));
     }
+    begin_gpu_passes();
     m_display_refresh_hz         = inputs.display_refresh_hz;
     m_thermal_status_begin       = query_thermal_status();
     m_applied_cpu_level_begin    = inputs.applied_cpu_performance_level;
@@ -497,6 +583,11 @@ void Benchmark_driver::on_frame_end(const Benchmark_frame_inputs& inputs)
             for (Counter_series& series : m_counters) {
                 series.values.push_back(series.pending);
             }
+            for (Counter_series& series : m_gpu_passes) {
+                series.values.push_back(series.pending);
+            }
+            m_gpu_total_us       .push_back(m_gpu_pending_total_us);
+            m_gpu_result_frame_id.push_back(static_cast<int64_t>(m_gpu_sample_frame_id));
             ++m_path_frame;
             ++m_state_frame;
             if (m_state_frame >= m_measure_frames) {
@@ -544,13 +635,26 @@ void Benchmark_driver::finish(const Benchmark_frame_inputs& inputs)
         const Term_stats stats = compute_stats(series.values);
         counters_text += fmt::format(" {} {:.3f}/{:.3f}/{:.3f}", series.name, stats.mean, stats.median, stats.p99);
     }
+    // GPU passes: labels contain spaces, so each is quoted.
+    const Term_stats gpu_total = compute_stats(m_gpu_total_us);
+    std::string gpu_passes_text;
+    for (const Counter_series& series : m_gpu_passes) {
+        const Term_stats stats = compute_stats(series.values);
+        if (stats.max <= 0.0) {
+            continue; // never ran in the measured window
+        }
+        gpu_passes_text += fmt::format(" '{}' {:.1f}/{:.1f}/{:.1f}", series.name, stats.mean, stats.median, stats.p99);
+    }
     log_frame->info(
         "Benchmark result {}: wall_time_s {:.4f} frames_per_second {:.2f} frames {} refresh_hz {:.2f} frames_at_refresh_ceiling {} "
-        "(us mean/median/p99/max) {} {} {} {} {} {}; xr counters (mean/median/p99){}; input_hash {:016x}",
+        "(us mean/median/p99/max) {} {} {} {} {} {}; xr counters (mean/median/p99){}; "
+        "gpu passes (us mean/median/p99){} total {:.1f}/{:.1f}/{:.1f}; input_hash {:016x}",
         m_name, wall_time_s, frames_per_second, m_measure_frames, m_display_refresh_hz, frames_at_refresh_ceiling,
         format_term("wall", wall), format_term("full_tick", full_tick), format_term("M1", m1),
         format_term("M2", m2), format_term("M3", m3), format_term("R", r),
         counters_text.empty() ? std::string{" none"} : counters_text,
+        gpu_passes_text.empty() ? std::string{" none"} : gpu_passes_text,
+        gpu_total.mean, gpu_total.median, gpu_total.p99,
         m_input_hash
     );
 
@@ -559,6 +663,12 @@ void Benchmark_driver::finish(const Benchmark_frame_inputs& inputs)
     for (const Counter_series& series : m_counters) {
         counters_summary[series.name] = stats_to_json(compute_stats(series.values));
         counters_frames [series.name] = series.values;
+    }
+    nlohmann::ordered_json gpu_passes_summary = nlohmann::ordered_json::object();
+    nlohmann::ordered_json gpu_passes_frames  = nlohmann::ordered_json::object();
+    for (const Counter_series& series : m_gpu_passes) {
+        gpu_passes_summary[series.name] = stats_to_json(compute_stats(series.values));
+        gpu_passes_frames [series.name] = series.values;
     }
     const nlohmann::ordered_json result = {
         {"wall_time_s",       wall_time_s},
@@ -583,6 +693,7 @@ void Benchmark_driver::finish(const Benchmark_frame_inputs& inputs)
             {"benchmark_file_hash",   fmt::format("{:016x}", m_file_hash)},
             {"commands_path",         m_identity.commands_path},
             {"commands_file_hash",    fmt::format("{:016x}", m_commands_file_hash)},
+            {"passthrough",           m_passthrough == Benchmark_passthrough::on},
             {"device_model",          query_system_property("ro.product.model")},
             {"os_build",              query_system_property("ro.build.display.id")},
             {"cpu_performance_level", m_identity.cpu_performance_level},
@@ -603,7 +714,9 @@ void Benchmark_driver::finish(const Benchmark_frame_inputs& inputs)
             {"m2_us",        stats_to_json(m2)},
             {"m3_us",        stats_to_json(m3)},
             {"r_us",         stats_to_json(r)},
-            {"xr_counters",  counters_summary}
+            {"xr_counters",  counters_summary},
+            {"gpu_passes",   gpu_passes_summary},
+            {"gpu_total_us", stats_to_json(gpu_total)}
         }},
         {"frames", {
             {"wall_us",      m_wall_us},
@@ -612,7 +725,10 @@ void Benchmark_driver::finish(const Benchmark_frame_inputs& inputs)
             {"m2_us",        m_m2_us},
             {"m3_us",        m_m3_us},
             {"r_us",         m_r_us},
-            {"xr_counters",  counters_frames}
+            {"xr_counters",  counters_frames},
+            {"gpu_passes",   gpu_passes_frames},
+            {"gpu_total_us", m_gpu_total_us},
+            {"gpu_result_frame_id", m_gpu_result_frame_id}
         }}
     };
 

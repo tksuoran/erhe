@@ -36,6 +36,15 @@ enum class Benchmark_camera_path_type : int
     keyframes = 1
 };
 
+// The benchmark file's "passthrough" field: in benchmark mode the headset
+// view runs the XR passthrough layer as this says for the whole run,
+// whatever the scene's sky setting or passthrough_fb ask for.
+enum class Benchmark_passthrough : int
+{
+    off = 0,
+    on  = 1
+};
+
 // The camera path of a benchmark file, evaluated by frame number (never by
 // wall time), so two runs render the same poses.
 class Benchmark_camera_path
@@ -116,6 +125,7 @@ public:
 
     [[nodiscard]] auto get_name                () const -> const std::string&;
     [[nodiscard]] auto get_display_refresh_rate_hz() const -> std::optional<float>;
+    [[nodiscard]] auto get_passthrough         () const -> Benchmark_passthrough;
     // The simulation advance of the frame being started: 0 before the
     // measured window, frame_dt during it.
     [[nodiscard]] auto get_frame_advance_ns    () const -> int64_t;
@@ -135,6 +145,15 @@ public:
     // counter list is fixed when the measured window starts; later indices
     // are ignored.
     void set_counter          (std::size_t index, std::string_view name, double value);
+    // M2, after Device::acquire_frame_slot() (where the device stores the
+    // GPU timer results of the frame that slot last held), measured frames
+    // only: the GPU time of every erhe::graphics::Gpu_timer of the newest
+    // frame with results, keyed by the results' frame id (a timer whose
+    // last result is from an older frame, e.g. a skipped pass, adds 0).
+    // The pass list (one series per timer label, same-label timers summed)
+    // is fixed when the measured window starts; timers created later go to
+    // the "(unlisted)" series. Allocation-free.
+    void sample_gpu_timers    ();
     // End of frame(): advances the state and records the measured frame.
     void on_frame_end         (const Benchmark_frame_inputs& inputs);
 
@@ -148,6 +167,8 @@ private:
         std::vector<double> values;
         double              pending{0.0};
     };
+
+    void begin_gpu_passes();
 
     void begin_measure(const Benchmark_frame_inputs& inputs);
     void fail         (const std::string& reason);
@@ -163,6 +184,7 @@ private:
     int64_t                 m_settle_timeout_frames{1800};
     int64_t                 m_frame_dt_ns          {13'888'889};
     std::optional<float>    m_display_refresh_rate_hz;
+    Benchmark_passthrough   m_passthrough{Benchmark_passthrough::off};
     Benchmark_camera_path   m_camera_path;
     Benchmark_run_identity  m_identity;
 
@@ -189,6 +211,13 @@ private:
     std::vector<double>         m_m3_us;
     std::vector<double>         m_r_us;
     std::vector<Counter_series> m_counters;
+    // GPU timer series (microseconds), sample_gpu_timers(). The last entry
+    // of m_gpu_passes is "(unlisted)".
+    std::vector<Counter_series> m_gpu_passes;
+    std::vector<double>         m_gpu_total_us;
+    std::vector<int64_t>        m_gpu_result_frame_id;     // the frame id the measured frame's GPU times are from (0: none)
+    uint64_t                    m_gpu_sample_frame_id{0};  // sample_gpu_timers(): the newest result frame id of this sample
+    double                      m_gpu_pending_total_us{0.0};
 };
 
 } // namespace editor

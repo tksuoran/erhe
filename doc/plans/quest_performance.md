@@ -160,6 +160,42 @@ heavy scene the second of its four directional lights is.
 | heavy, HEAD | 4 | 44.1 s | 13.6 | 56.1 ms | 4.02 | 75.9 % | 20.7 % | 15.0 % |
 | heavy, 1 directional shadow light | 4 | 41.2 s | 14.6 | 51.3 ms | 3.52 | 72.7 % | 20.7 % | 12.8 % |
 
+### Results: per-pass GPU time and passthrough off
+
+benchmark_orbit at 120 Hz, release APKs, headset on the desk, 2026-10-24.
+Default scene, four runs per row, medians (the per-run range in
+brackets); no run collapsed in either series (0 of 4 before, 0 of 12
+after over three series).
+
+| Build | Wall time | fps | App GPU | Compositor GPU |
+|---|---|---|---|---|
+| HEAD 25f779bf5 (passthrough on: sky off) | 5.82 s (5.33-6.88) | 103.2 | 5.67 ms | 2.42 ms (2.18-2.88) |
+| `passthrough` false | 5.18 s (5.00-5.71) | 116.0 | 5.57 ms | 1.75 ms (1.36-2.15) |
+
+With passthrough off the compositor time is bimodal, about 1.35 ms or
+about 2.1 ms per run (seen in all three after series, not explained);
+the 1.35 ms runs hold 120 fps.
+
+Per-pass GPU time (median of the per-frame series, `passthrough` false):
+
+| Pass | Default scene | Heavy scene (1 run) |
+|---|---|---|
+| XR multiview (the whole color pass: content, grid, shadow lookups, lines) | 7.09 ms | 21.30 ms |
+| XR multiview line compute (content wide lines + debug lines) | 0.05 ms | 39.33 ms |
+| Shadow 0 (the one shadow-mapped directional light) | 0 (cached) | 1.41 ms |
+| ImGui Hotbar imgui host | 0.04 ms | 0.04 ms |
+| Pass total | 7.19 ms | 61.69 ms |
+| XR app GPU + compositor GPU | 5.57 + 1.75 ms | 52.65 + 0.67 ms |
+
+On the default scene the color pass is the frame: the shadow maps are
+cached (no shadow pass drawn) and everything else is under 0.1 ms, so
+splitting grid, shadow lookups and content inside it needs the
+switch-off variants of "Results: texture sampling". On the heavy
+scene the line compute pass dominates; the pass total exceeds app plus
+compositor GPU time by 8 ms there (the spans are GPU wall time
+including overlap with neighbouring work), so the share is
+approximate.
+
 ## Plan
 
 1. Baseline on the device: the phase-timing log terms and `ovrgpuprofiler`
@@ -229,7 +265,13 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
   `frame_dt` (seconds of simulation per measured frame, default 1/72, at
   most 0.025: `Time::prepare_update()` caps a frame's advance at 25 ms),
   `settle_timeout_frames` (default 1800), optional
-  `display_refresh_rate_hz`, and `camera_path`: either
+  `display_refresh_rate_hz`, `passthrough` (default false: under OpenXR
+  the headset view keeps the XR passthrough layer paused for the whole
+  run, true keeps it running; in benchmark mode this value replaces the
+  per-frame reconcile in `Headset_view::render_headset()` that otherwise
+  follows `sky.enabled` and `passthrough_fb`; the init status screen
+  before the first scene frame runs with passthrough as always), and
+  `camera_path`: either
   `{"type":"orbit","center":[x,y,z],"radius":r,"height":h,"period_frames":n,"look_at":[x,y,z]}`
   (position center + (r sin t, h, r cos t), t = 2 pi frame / n, looking at
   `look_at` with +Y up) or
@@ -241,7 +283,8 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
   looking down -Z; a single keyframe is a fixed pose).
   `benchmark_orbit.json` orbits the default OpenXR room at 1.6 m height,
   radius 2 m, looking at (0, 1, 0), period 720 frames, at 120 Hz;
-  `benchmark_static.json` holds one pose at the display's own rate.
+  `benchmark_static.json` holds one pose at the display's own rate; both
+  set `passthrough` false.
 - **Phases.** Warmup: `warmup_frames` frames with the simulation clock
   frozen and the camera path running from frame 0. Settle: the driver
   waits until `App_context::is_scene_load_in_flight()` is false (async
@@ -282,7 +325,7 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
     and synthesized input, both off by default).
   - Run identity in the result: the erhe version string, the benchmark
     file path and its FNV-1a hash, the startup commands file the editor
-    ran, the achieved display refresh rate and the XR predicted display
+    ran, the applied `passthrough` value, the achieved display refresh rate and the XR predicted display
     period, device model and OS build (Android system properties; the
     host script fills them from `adb getprop` when empty), the XR CPU /
     GPU performance levels from the settings and the levels actually
@@ -347,25 +390,44 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
   and R (deltas of `Phase_timing` per frame; R is the frame joined during
   that tick), plus the `XR_META_performance_metrics` counters, read in M2
   after the XR actions (they are queried in R by `Headset::begin_frame()`;
-  OpenXR runs the serial schedule, so R is idle in M2). After
+  OpenXR runs the serial schedule, so R is idle in M2), and the GPU time
+  of every `erhe::graphics::Gpu_timer` (render-pass timers and explicit
+  ranges: the shadow passes, post processing, the ImGui hosts, the
+  headset's multiview color pass "XR multiview" and its line compute
+  dispatches "XR multiview line compute", ...), read in M2 right after
+  `Device::acquire_frame_slot()` stored the results of the frame that
+  slot last held: the driver takes the newest result frame id over all
+  timers and records each timer's result only when it is from that
+  frame (a pass that did not run there, such as a cached shadow map,
+  adds 0), one series per timer label (same-label timers summed) fixed
+  when the measured window starts, later timers in "(unlisted)", plus
+  their per-frame total. A timer's span is GPU wall time: on the Quest
+  it includes the compositor's preemption of the app inside the span,
+  so the pass total reads close to app plus compositor GPU time. After
   `measure_frames` it logs one `Benchmark result <name>: wall_time_s ...
   frames_per_second ...` line (`editor.frame`, info): the headline wall
   time from the end of the last unmeasured frame to the end of the last
   measured one and the derived frame rate first, then the frame count,
   refresh rate, `frames_at_refresh_ceiling`, mean / median / p99 / max of
   the per-frame wall time and the phase terms, mean / median / p99 of each
-  XR counter, and `input_hash`. `logs/benchmark_<name>.json` (relative to
+  XR counter and of each GPU pass that ran in the window plus the pass
+  total, and `input_hash`. `logs/benchmark_<name>.json` (relative to
   the working directory; on Android under the app's external files
   directory, `SDL_GetAndroidExternalStoragePath()`, so `adb` reads it
   without `run-as` on a release APK; the log names the path) holds
   `wall_time_s` and `frames_per_second` first, then the refresh block, the
   identity, the summary (mean, median, p99, min, max per term and
-  counter) and the per-frame arrays. The editor then exits (the
+  counter; `summary.gpu_passes` per pass label and
+  `summary.gpu_total_us`, in microseconds) and the per-frame arrays
+  (`frames.gpu_passes`, `frames.gpu_total_us`, and
+  `frames.gpu_result_frame_id`, the device frame id each measured frame's
+  GPU times are from). The editor then exits (the
   `quit_after_frames` path). Every per-frame container is reserved before
   the measured window, so the measured frames allocate nothing.
 - **Host script.** `scripts/quest_bench.py run --bench <benchmark.json> [--scene <commands.json>] [--worn] [--gpu-metrics] [--repeat N] [--push]`
   and `compare a.json b.json`; usage in [../agents/quest.md](../agents/quest.md)
-  "Benchmark runs". `--repeat N` launches N runs and reports each term's
+  "Benchmark runs". Its headline values include `gpu_pass:<label>` (the
+  median of each pass that ran) and `gpu_pass:(total)`. `--repeat N` launches N runs and reports each term's
   median across runs with the min / max spread, so thermal and DVFS noise
   shows apart from code changes; with `--gpu-metrics` the GPU frequency
   metrics are always captured, so clock changes between runs are
