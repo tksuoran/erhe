@@ -47,6 +47,8 @@ import urllib.request
 import zipfile
 from collections import defaultdict
 
+from mcp_viewport_isolation import isolate_viewport
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_PATH = os.path.join(REPO_ROOT, "logs", "log.txt")
 READY_LINE = "Main loop: completed frame 12"
@@ -661,6 +663,16 @@ def run_and_analyze(args, capture_exe, csvexport_exe, editor):
         })
         if not (isinstance(reply, dict) and not reply.get("isError")):
             print(f"set_node_transform {node_name}: {str(reply)[:300]}")
+    # The scene's viewport is the only one rendering, whatever window state
+    # the working copy's config restores: a second viewport window adds its
+    # own frame of GPU work, and a scene viewport behind another dock tab
+    # renders nothing.
+    try:
+        isolated = isolate_viewport(lambda tool, arguments: mcp(port, tool, arguments), scene_name=scene_name)
+    except RuntimeError as error:
+        mcp(port, "request_exit")
+        sys.exit(f"viewport isolation failed: {error}")
+    print(f"isolated viewport '{isolated.get('title')}'")
     viewports = mcp(port, "get_viewports")
     if isinstance(viewports, dict):
         for viewport in viewports.get("viewports", []):

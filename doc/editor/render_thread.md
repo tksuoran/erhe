@@ -453,7 +453,8 @@ for frames 1 to 12; run scripts wait for frame 12.
   (and of that, in M2) versus blocked, and how much of the tick R was idle.
   `scripts/bistro_frame_bench.py` reproduces a windowed user session on
   the Bistro scene (open over MCP, the session's camera and import root
-  transforms, deferred loads settled, a quiet window with no MCP traffic)
+  transforms, the scene's viewport the only shown viewport window,
+  deferred loads settled, a quiet window with no MCP traffic)
   under a Tracy capture and prints the per-frame picture of consecutive
   quiet frames: tick, M1/M2/M3/kick/join, the R each tick kicked, the
   zones above a threshold on both threads and the GPU zones, plus the
