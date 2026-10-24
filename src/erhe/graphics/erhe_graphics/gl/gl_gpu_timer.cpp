@@ -57,10 +57,11 @@ void Gpu_timer_impl::create()
 #if defined(ERHE_USE_TIME_QUERY)
     ERHE_VERIFY_GL_THREAD_MAIN_CONTEXT();
     for (Query& query : m_queries) {
-        if (!query.query_object.has_value()) {
-            query.query_object.emplace(
-                m_device->get_impl().create_query(gl::Query_target::time_elapsed)
-            );
+        if (!query.begin_query.has_value()) {
+            query.begin_query.emplace(m_device->get_impl().create_query(gl::Query_target::timestamp));
+        }
+        if (!query.end_query.has_value()) {
+            query.end_query.emplace(m_device->get_impl().create_query(gl::Query_target::timestamp));
         }
     }
 #endif
@@ -73,16 +74,16 @@ void Gpu_timer_impl::write_begin_timestamp(Command_buffer& command_buffer)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     Query& query = m_queries[s_index % s_count];
-    if (!query.query_object.has_value()) {
+    if (!query.begin_query.has_value()) {
         return;
     }
     if (query.pending) {
         // Previous use of this slot has not been polled yet (frame index
         // wrapped before end_frame caught up). Skip this round to avoid
-        // overlapping queries on the same query object.
+        // overwriting a result that has not been read.
         return;
     }
-    gl::begin_query(gl::Query_target::time_elapsed, query.query_object.value().gl_name());
+    gl::query_counter(query.begin_query.value().gl_name(), gl::Query_counter_target::timestamp);
     query.frame_id = command_buffer.get_frame_id();
 #else
     static_cast<void>(command_buffer);
@@ -97,13 +98,13 @@ void Gpu_timer_impl::write_end_timestamp(Command_buffer& command_buffer)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     Query& query = m_queries[s_index % s_count];
-    if (!query.query_object.has_value()) {
+    if (!query.end_query.has_value()) {
         return;
     }
     if (query.pending) {
         return;
     }
-    gl::end_query(gl::Query_target::time_elapsed);
+    gl::query_counter(query.end_query.value().gl_name(), gl::Query_counter_target::timestamp);
     query.pending = true;
 #endif
 }
@@ -113,16 +114,22 @@ void Gpu_timer_impl::poll()
 #if defined(ERHE_USE_TIME_QUERY)
     for (std::size_t i = 0; i < s_count; ++i) {
         Query& query = m_queries[i];
-        if (!query.pending || !query.query_object.has_value()) {
+        if (!query.pending || !query.begin_query.has_value() || !query.end_query.has_value()) {
             continue;
         }
-        const GLuint name = query.query_object.value().gl_name();
-        GLint result_available{};
-        gl::get_query_object_iv(name, gl::Query_object_parameter_name::query_result_available, &result_available);
-        if (result_available != 0) {
-            GLuint64 time_value{};
-            gl::get_query_object_ui_64v(name, gl::Query_object_parameter_name::query_result, &time_value);
-            m_last_result = Gpu_timer_result{.nanoseconds = static_cast<uint64_t>(time_value), .frame_id = query.frame_id};
+        const GLuint begin_name = query.begin_query.value().gl_name();
+        const GLuint end_name   = query.end_query.value().gl_name();
+        GLint begin_available{};
+        GLint end_available{};
+        gl::get_query_object_iv(begin_name, gl::Query_object_parameter_name::query_result_available, &begin_available);
+        gl::get_query_object_iv(end_name,   gl::Query_object_parameter_name::query_result_available, &end_available);
+        if ((begin_available != 0) && (end_available != 0)) {
+            GLuint64 begin_time{};
+            GLuint64 end_time{};
+            gl::get_query_object_ui_64v(begin_name, gl::Query_object_parameter_name::query_result, &begin_time);
+            gl::get_query_object_ui_64v(end_name,   gl::Query_object_parameter_name::query_result, &end_time);
+            const uint64_t nanoseconds = (end_time >= begin_time) ? static_cast<uint64_t>(end_time - begin_time) : 0;
+            m_last_result = Gpu_timer_result{.nanoseconds = nanoseconds, .frame_id = query.frame_id};
             query.pending = false;
         }
     }

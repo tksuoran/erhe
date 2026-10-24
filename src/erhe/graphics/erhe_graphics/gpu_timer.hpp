@@ -40,9 +40,9 @@ public:
 //   work recorded into one Command_buffer with begin() / end() (or the RAII
 //   Scoped_gpu_timer). Used for work outside render passes, such as a range of
 //   compute dispatches. begin() and end() must be called on the same
-//   Command_buffer, at most once each per frame, and must not nest with
-//   another explicit-range timer (OpenGL allows one GL_TIME_ELAPSED query at a
-//   time). The timestamps are taken after all previously recorded work has
+//   Command_buffer, at most once each per frame. Ranges may nest with each
+//   other and enclose timed render passes. The timestamps are taken after all
+//   previously recorded work has
 //   completed, so work that overlaps the range boundaries is counted where it
 //   finishes.
 //
