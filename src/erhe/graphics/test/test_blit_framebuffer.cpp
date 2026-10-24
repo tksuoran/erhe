@@ -61,6 +61,12 @@ auto make_pass(erhe::graphics::Device& graphics_device, erhe::graphics::Texture&
 
 } // namespace
 
+enum class Scissor_before_blit : unsigned int
+{
+    untouched,
+    narrow // leave_narrow_scissor() before the blit
+};
+
 class Blit_framebuffer_test : public Gpu_test
 {
 protected:
@@ -90,6 +96,53 @@ protected:
                 command_buffer.transition_texture_layout(destination_texture, erhe::graphics::Image_layout::transfer_src_optimal);
             }
         );
+    }
+
+    // Blits the 12x9 rectangle at (3, 2) of a 16x12 source to (2, 4) of a
+    // 10x14 destination and checks every destination texel.
+    void run_offset_clipped(const Scissor_before_blit scissor)
+    {
+        constexpr int source_width       = 16;
+        constexpr int source_height      = 12;
+        constexpr int destination_width  = 10;
+        constexpr int destination_height = 14;
+        const glm::ivec2 source_origin     {3, 2};
+        const glm::ivec2 source_size       {12, 9};
+        const glm::ivec2 destination_origin{2, 4};
+        // Clipped by the destination width: 10 - 2 = 8 columns; all 9 rows fit.
+        const glm::ivec2 copied            {8, 9};
+
+        const std::shared_ptr<erhe::graphics::Texture> source_texture      = make_color_target(source_width,      source_height,      erhe::dataformat::Format::format_8_vec4_unorm, true);
+        const std::shared_ptr<erhe::graphics::Texture> destination_texture = make_color_target(destination_width, destination_height, erhe::dataformat::Format::format_8_vec4_unorm, true);
+        const std::vector<uint8_t> source_texels      = make_pattern(source_width,      source_height,      7);
+        const std::vector<uint8_t> destination_texels = make_pattern(destination_width, destination_height, 200);
+
+        if (scissor == Scissor_before_blit::narrow) {
+            leave_narrow_scissor();
+        }
+        run_blit(*source_texture, source_texels, *destination_texture, destination_texels, source_origin, source_size, destination_origin);
+
+        const std::vector<uint8_t> actual = read_texture_rgba8(*destination_texture);
+        ASSERT_EQ(actual.size(), destination_texels.size());
+        int mismatches = 0;
+        for (int y = 0; y < destination_height; ++y) {
+            for (int x = 0; x < destination_width; ++x) {
+                const glm::ivec2 d{x - destination_origin.x, y - destination_origin.y};
+                const bool inside = (d.x >= 0) && (d.y >= 0) && (d.x < copied.x) && (d.y < copied.y);
+                const std::size_t actual_index = ((static_cast<std::size_t>(y) * destination_width) + static_cast<std::size_t>(x)) * 4u;
+                const std::size_t expect_index = inside
+                    ? ((static_cast<std::size_t>(source_origin.y + d.y) * source_width) + static_cast<std::size_t>(source_origin.x + d.x)) * 4u
+                    : actual_index;
+                const std::vector<uint8_t>& expected = inside ? source_texels : destination_texels;
+                if (std::memcmp(&actual[actual_index], &expected[expect_index], 4) != 0) {
+                    if (mismatches < 8) {
+                        ADD_FAILURE() << "texel (" << x << ", " << y << ") " << (inside ? "inside" : "outside") << " the copied rectangle differs";
+                    }
+                    ++mismatches;
+                }
+            }
+        }
+        EXPECT_EQ(mismatches, 0);
     }
 };
 
@@ -126,44 +179,15 @@ TEST(Blit_framebuffer_region, clips_against_both_attachments)
 // seed.
 TEST_F(Blit_framebuffer_test, offset_clipped)
 {
-    constexpr int source_width       = 16;
-    constexpr int source_height      = 12;
-    constexpr int destination_width  = 10;
-    constexpr int destination_height = 14;
-    const glm::ivec2 source_origin     {3, 2};
-    const glm::ivec2 source_size       {12, 9};
-    const glm::ivec2 destination_origin{2, 4};
-    // Clipped by the destination width: 10 - 2 = 8 columns; all 9 rows fit.
-    const glm::ivec2 copied            {8, 9};
+    run_offset_clipped(Scissor_before_blit::untouched);
+}
 
-    const std::shared_ptr<erhe::graphics::Texture> source_texture      = make_color_target(source_width,      source_height,      erhe::dataformat::Format::format_8_vec4_unorm, true);
-    const std::shared_ptr<erhe::graphics::Texture> destination_texture = make_color_target(destination_width, destination_height, erhe::dataformat::Format::format_8_vec4_unorm, true);
-    const std::vector<uint8_t> source_texels      = make_pattern(source_width,      source_height,      7);
-    const std::vector<uint8_t> destination_texels = make_pattern(destination_width, destination_height, 200);
-
-    run_blit(*source_texture, source_texels, *destination_texture, destination_texels, source_origin, source_size, destination_origin);
-
-    const std::vector<uint8_t> actual = read_texture_rgba8(*destination_texture);
-    ASSERT_EQ(actual.size(), destination_texels.size());
-    int mismatches = 0;
-    for (int y = 0; y < destination_height; ++y) {
-        for (int x = 0; x < destination_width; ++x) {
-            const glm::ivec2 d{x - destination_origin.x, y - destination_origin.y};
-            const bool inside = (d.x >= 0) && (d.y >= 0) && (d.x < copied.x) && (d.y < copied.y);
-            const std::size_t actual_index = ((static_cast<std::size_t>(y) * destination_width) + static_cast<std::size_t>(x)) * 4u;
-            const std::size_t expect_index = inside
-                ? ((static_cast<std::size_t>(source_origin.y + d.y) * source_width) + static_cast<std::size_t>(source_origin.x + d.x)) * 4u
-                : actual_index;
-            const std::vector<uint8_t>& expected = inside ? source_texels : destination_texels;
-            if (std::memcmp(&actual[actual_index], &expected[expect_index], 4) != 0) {
-                if (mismatches < 8) {
-                    ADD_FAILURE() << "texel (" << x << ", " << y << ") " << (inside ? "inside" : "outside") << " the copied rectangle differs";
-                }
-                ++mismatches;
-            }
-        }
-    }
-    EXPECT_EQ(mismatches, 0);
+// As offset_clipped, after a render pass left a 1x1 scissor rectangle: the
+// OpenGL backend keeps the scissor test enabled and a framebuffer blit is
+// clipped by it, so the blit sets its own scissor.
+TEST_F(Blit_framebuffer_test, offset_clipped_under_stale_scissor)
+{
+    run_offset_clipped(Scissor_before_blit::narrow);
 }
 
 // RGBA8 to BGRA8: the blit converts the format (a texel copy would land the

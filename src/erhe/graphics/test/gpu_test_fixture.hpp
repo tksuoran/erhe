@@ -160,6 +160,12 @@ protected:
     // transfer_dst.
     void seed_subresource_rgba8(const erhe::graphics::Texture& texture, unsigned int layer, unsigned int level, std::span<const uint8_t> texels);
 
+    // Records an empty render pass whose encoder sets a 1x1 scissor
+    // rectangle at the origin, and leaves it at that. The OpenGL backend keeps
+    // GL_SCISSOR_TEST enabled outside render passes, so work recorded next
+    // that a scissor clips (framebuffer blits) must set its own rectangle.
+    void leave_narrow_scissor();
+
     // Copy a format_32_vec4_float color texture's level 0 to a mappable buffer
     // and return the texels as floats (4 floats per texel, tightly packed).
     // Same framing contract as read_texture_rgba8.
