@@ -11,8 +11,9 @@ Subcommands:
         extra, ErheActivity.getArguments()), N times, one launch each. Each run:
         force-stops the app, starts scripts/quest_logcat.sh, launches, waits
         (bounded) for the `Benchmark result <name>:` or `Benchmark failed
-        <name>:` line in the capture, pulls files/logs/benchmark_<name>.json
-        through `run-as`, fills the device identity from adb getprop when the
+        <name>:` line in the capture, pulls the result JSON from the app's
+        external files directory (RESULT_DIR; plain adb, no run-as, so a
+        release APK works), fills the device identity from adb getprop when the
         editor left it empty, and stores the JSON under
         memory-bank/local/quest_runs/. With --repeat N > 1 a repeat summary
         (per-term median across runs, min / max spread) is stored and printed
@@ -27,6 +28,12 @@ Subcommands:
 
         --worn       skips the proximity bypass and its restore: an interactive
                      run with the headset worn, whose launch the user confirmed.
+
+        A benchmark file with display_refresh_rate_hz also sets the developer
+        property debug.oculus.refreshRate to that rate before the launch and
+        clears it in the same restore (doc/agents/quest.md "Off-head runs":
+        the runtime accepts xrRequestDisplayRefreshRateFB but does not switch
+        the display on its own).
         --gpu-metrics runs ovrgpuprofiler for the measured window (started at
                      the driver's "measuring" line, measure_frames at the
                      benchmark's refresh rate long). Metric ids: --gpu-metric-ids,
@@ -35,10 +42,11 @@ Subcommands:
                      DEFAULT_GPU_METRIC_NAMES in `ovrgpuprofiler -m`. The GPU
                      frequency metrics are always included.
         --push       copies the local benchmark (and --scene) file over the
-                     device's writable copy first. The APK's config/ files are
-                     migrated to the writable directory only when missing, so
-                     without --push an edited benchmark file reaches the
-                     device only through a clean reinstall.
+                     device's writable copy first. Needs a debuggable APK
+                     (run-as); on a release APK it fails: there a changed
+                     benchmark or commands file needs a rebuild and a clean
+                     reinstall (the APK's config/ files are migrated to the
+                     writable directory only when missing there).
 
     py -3 scripts/quest_bench.py compare a.json b.json
         Prints two results (or repeat summaries) side by side with deltas, and
@@ -65,6 +73,10 @@ RUNS_DIR  = REPO_ROOT / "memory-bank" / "local" / "quest_runs"
 LOCAL_QUEST_MD = REPO_ROOT / "memory-bank" / "local" / "quest.md"
 PKG = "org.libsdl.app.quest"
 ACT = PKG + "/org.libsdl.app.ErheActivity"
+# Where the editor writes benchmark results on Android: the app's external
+# files directory (SDL_GetAndroidExternalStoragePath()) + /logs.
+RESULT_DIR = f"/sdcard/Android/data/{PKG}/files/logs"
+CAPTURE_APPEAR_TIMEOUT_S = 10.0
 
 # Terms of the result JSON "summary", in print order.
 TERMS = ["wall_us", "full_tick_us", "m1_us", "m2_us", "m3_us", "r_us"]
@@ -146,14 +158,20 @@ def start_logcat() -> Path:
     lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     if (result.returncode != 0) or not lines:
         raise RuntimeError(f"quest_logcat.sh failed: {result.stderr.strip()}")
-    path = Path(lines[-1])
+    # Git Bash prints /d/... paths: convert that form first, then resolve a
+    # relative path against the repository root.
+    text = lines[-1].replace("\\", "/")
+    match = re.match(r"^/([a-zA-Z])/(.*)$", text)
+    path = Path(f"{match.group(1)}:/{match.group(2)}") if match else Path(text)
     if not path.is_absolute():
         path = REPO_ROOT / path
-    # Git Bash prints /d/... paths.
-    text = str(path).replace("\\", "/")
-    match = re.match(r"^/([a-zA-Z])/(.*)$", text)
-    if match:
-        path = Path(f"{match.group(1)}:/{match.group(2)}")
+    # Fail loudly when the capture does not appear (a wrong path would make
+    # the run wait for lines that land elsewhere).
+    deadline = time.monotonic() + CAPTURE_APPEAR_TIMEOUT_S
+    while not path.exists():
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"logcat capture {path} did not appear within {CAPTURE_APPEAR_TIMEOUT_S:.0f} s (quest_logcat.sh printed '{lines[-1]}')")
+        time.sleep(0.2)
     return path
 
 
@@ -258,6 +276,12 @@ def push_config(local_path: str) -> None:
     source = REPO_ROOT / local_path
     if not source.exists():
         raise RuntimeError(f"--push: {source} not found")
+    probe = adb_shell(f"run-as {PKG} true")
+    if (probe.returncode != 0) or ("not debuggable" in (probe.stdout + probe.stderr)):
+        raise RuntimeError(
+            f"--push needs a debuggable APK (run-as {PKG} failed: {(probe.stdout + probe.stderr).strip()}); "
+            "on a release APK a changed benchmark or commands file needs a rebuild and a clean reinstall"
+        )
     staging = "/data/local/tmp/erhe_bench_push.json"
     adb("push", str(source), staging, check=True)
     device_dir = os.path.dirname(local_path).replace("\\", "/")
@@ -290,6 +314,19 @@ def off_head_end() -> None:
         raise RuntimeError("; ".join(errors))
 
 
+def refresh_rate_property_value(bench: dict) -> str:
+    rate = float(bench["display_refresh_rate_hz"])
+    return str(int(rate)) if rate.is_integer() else f"{rate:g}"
+
+
+def refresh_rate_begin(bench: dict) -> None:
+    adb_shell(f"setprop debug.oculus.refreshRate {refresh_rate_property_value(bench)}")
+
+
+def refresh_rate_end() -> None:
+    adb_shell("setprop debug.oculus.refreshRate '\"\"'", timeout=60)
+
+
 def launch(editor_args: str) -> None:
     command = (
         "am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "
@@ -320,11 +357,13 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
     profiler = None
     try:
         adb_shell(f"am force-stop {PKG}")
-        adb_shell(f"run-as {PKG} rm -f files/logs/benchmark_{name}.json")
+        adb_shell(f"rm -f {RESULT_DIR}/benchmark_{name}.json")
         capture_path = start_logcat()
         tail = Capture_tail(capture_path)
         if not args.worn:
             off_head_begin()
+        if "display_refresh_rate_hz" in bench:
+            refresh_rate_begin(bench)
         print(f"[{run_index}] launch: {editor_args} (capture {capture_path})")
         launch(editor_args)
         deadline = time.monotonic() + args.timeout
@@ -353,13 +392,13 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
         # The JSON is written right after the result line.
         pulled = None
         for _ in range(20):
-            out = adb("exec-out", "run-as", PKG, "cat", f"files/logs/benchmark_{name}.json", timeout=60)
+            out = adb("exec-out", "cat", f"{RESULT_DIR}/benchmark_{name}.json", timeout=60)
             if (out.returncode == 0) and out.stdout.strip().startswith("{"):
                 pulled = out.stdout
                 break
             time.sleep(0.5)
         if pulled is None:
-            raise RuntimeError(f"files/logs/benchmark_{name}.json not readable on the device")
+            raise RuntimeError(f"{RESULT_DIR}/benchmark_{name}.json not readable on the device")
         result = json.loads(pulled)
         fill_identity(result)
         result["host"] = {
@@ -377,7 +416,11 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
     finally:
         # Restore even when a step above raised (each step on its own, so one
         # failing adb call does not skip the rest).
-        for step in ([off_head_end] if not args.worn else [lambda: adb_shell(f"am force-stop {PKG}")]) + [stop_logcat]:
+        restore_steps = [off_head_end] if not args.worn else [lambda: adb_shell(f"am force-stop {PKG}")]
+        if "display_refresh_rate_hz" in bench:
+            restore_steps.append(refresh_rate_end)
+        restore_steps.append(stop_logcat)
+        for step in restore_steps:
             try:
                 step()
             except Exception as error:  # report and keep restoring

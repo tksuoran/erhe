@@ -343,9 +343,9 @@ auto Headset_view::is_update_actions_ok() const -> bool
     return m_update_actions_ok;
 }
 
-auto Headset_view::is_benchmark_display_refresh_rate_refused() const -> bool
+auto Headset_view::get_benchmark_display_refresh_rate_failure() const -> const std::string&
 {
-    return m_benchmark_display_refresh_rate_refused;
+    return m_benchmark_display_refresh_rate_failure;
 }
 
 auto Headset_view::get_applied_cpu_performance_level() const -> int
@@ -2131,7 +2131,24 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
     if (m_benchmark_mode && m_benchmark_display_refresh_rate_hz.has_value() &&
         !m_benchmark_display_refresh_rate_requested && session->is_session_running()) {
         m_benchmark_display_refresh_rate_requested = true;
-        m_benchmark_display_refresh_rate_refused = !session->request_display_refresh_rate(m_benchmark_display_refresh_rate_hz.value());
+        const float                requested_hz = m_benchmark_display_refresh_rate_hz.value();
+        const std::vector<float>&  offered      = session->get_display_refresh_rates();
+        const bool is_offered = std::any_of(
+            offered.begin(), offered.end(),
+            [requested_hz](const float rate) { return std::abs(rate - requested_hz) <= 0.5f; }
+        );
+        if (!is_offered) {
+            std::string offered_text;
+            for (const float rate : offered) {
+                offered_text += fmt::format("{}{:.2f}", offered_text.empty() ? "" : ", ", rate);
+            }
+            m_benchmark_display_refresh_rate_failure = fmt::format(
+                "display refresh rate {:.2f} not offered by the runtime (offered: {})",
+                requested_hz, offered_text.empty() ? std::string{"none"} : offered_text
+            );
+        } else if (!session->request_display_refresh_rate(requested_hz)) {
+            m_benchmark_display_refresh_rate_failure = "display refresh rate request refused";
+        }
     }
 
     // Benchmark mode: the controllers do not affect the frame. xrSyncActions

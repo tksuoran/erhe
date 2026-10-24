@@ -166,10 +166,13 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
     step-down count (`boost_on_thermal_warning` keeps stepping down in
     benchmark mode), the Android thermal status at the start and end of
     the measured window (`AThermal`; -1 when unavailable), and
-    `input_hash`: FNV-1a over, per measured frame, the benchmark file
-    hash, `frame_dt` and the measured frame index (the sources of the
-    pose rather than the float pose, so builds with a different libm or
-    code generation still match).
+    `input_hash`: FNV-1a seeded with the content hash of the startup
+    commands file the editor ran (the `--scene` file when that path is
+    used; also recorded as `commands_file_hash`), then over, per measured
+    frame, the benchmark file hash, `frame_dt` and the measured frame
+    index (the sources of the pose rather than the float pose, so builds
+    with a different libm or code generation still match, and two results
+    of different scenes cannot claim identical inputs).
   - `input_hash` proves identical inputs, not identical history. The
     editor's frame number (`Time`, the camera block, the render thread's
     draw data handoff) keeps counting through the run-dependent settle,
@@ -210,7 +213,10 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
   vsync-bound; the rate is read again on the last measured frame and
   stored as `display_refresh_hz_end`, so a mid-run switch is visible. `display_refresh_rate_hz` in the benchmark file requests
   that rate through `xrRequestDisplayRefreshRateFB` once the session
-  runs (nothing restores it; the run exits) to raise the ceiling.
+  runs (nothing restores it; the run exits) to raise the ceiling; on the
+  Quest the request is accepted but the display switches only with the
+  developer property the host script sets around the run
+  ([../agents/quest.md](../agents/quest.md) "Off-head runs").
 - **Measurement and report.** Per measured frame, at the end of `frame()`
   (the same point of every frame): the steady-clock wall time since the
   previous frame's end, and the phase timing terms full tick, M1, M2, M3
@@ -224,7 +230,10 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
   measured one and the derived frame rate first, then the frame count,
   refresh rate, `frames_at_refresh_ceiling`, mean / median / p99 / max of
   the per-frame wall time and the phase terms, mean / median / p99 of each
-  XR counter, and `input_hash`. `logs/benchmark_<name>.json` holds
+  XR counter, and `input_hash`. `logs/benchmark_<name>.json` (relative to
+  the working directory; on Android under the app's external files
+  directory, `SDL_GetAndroidExternalStoragePath()`, so `adb` reads it
+  without `run-as` on a release APK; the log names the path) holds
   `wall_time_s` and `frames_per_second` first, then the refresh block, the
   identity, the summary (mean, median, p99, min, max per term and
   counter) and the per-frame arrays. The editor then exits (the

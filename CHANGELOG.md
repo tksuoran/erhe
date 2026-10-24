@@ -32,9 +32,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `locate_views()`, `render()` / `render_multiview()` and the submitted
   projection layer; `Frame_timing::head_pose_override` carries the value
   of each waited frame to its render side.
-- `erhe::xr`: `Xr_session::request_display_refresh_rate(float)` and
-  `get_display_refresh_rate()` (XR_FB_display_refresh_rate);
-  `Xr_instance::xrGetDisplayRefreshRateFB` / `xrRequestDisplayRefreshRateFB`.
+- `erhe::xr`: `Xr_session::request_display_refresh_rate(float)`,
+  `get_display_refresh_rate()` and `get_display_refresh_rates()` (the
+  offered rates, enumerated and logged with the current rate when the
+  session begins) (XR_FB_display_refresh_rate);
+  `Xr_instance::xrEnumerateDisplayRefreshRatesFB`,
+  `xrGetDisplayRefreshRateFB` and `xrRequestDisplayRefreshRateFB`.
 - `erhe::xr`: `Pose` moved to its own header `erhe_xr/pose.hpp` (included
   by `xr.hpp` and `frame_timing.hpp`), available in every
   `ERHE_XR_LIBRARY` configuration.

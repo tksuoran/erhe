@@ -70,7 +70,9 @@ public:
     // the actions updated; always true without OpenXR), and the requested
     // display refresh rate was refused by the runtime.
     bool   frame_rendered                {true};
-    bool   refresh_rate_request_refused  {false};
+    // Non-null and non-empty: the display refresh rate request failed (the
+    // reason is logged and the run fails at once).
+    const std::string* refresh_rate_failure{nullptr};
     // Only read while needs_settle_inputs(): the caller computes them then.
     bool   scene_settled       {false};
     bool   refresh_rate_settled{false}; // the achieved rate is within 0.5 Hz of the requested one (true when none is requested)
@@ -79,6 +81,11 @@ public:
     int    applied_gpu_performance_level{-2};
     int    thermal_step_down_count      {0};
 };
+
+// The directory the result file is written to: logs/ relative to the
+// working directory, or on Android <external files dir>/logs (readable with
+// adb without run-as on a release APK).
+[[nodiscard]] auto get_benchmark_output_directory() -> std::string;
 
 // Run identity fields the editor fills before the measured window
 // (results JSON "identity").
@@ -150,6 +157,7 @@ private:
     std::string             m_path;
     std::string             m_name;
     uint64_t                m_file_hash            {0};
+    uint64_t                m_commands_file_hash   {0};  // FNV-1a of the startup commands (or --scene) file, 0 when unreadable
     int64_t                 m_warmup_frames        {120};
     int64_t                 m_measure_frames       {600};
     int64_t                 m_settle_timeout_frames{1800};

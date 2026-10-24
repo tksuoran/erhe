@@ -1205,6 +1205,24 @@ auto Xr_session::begin_session() -> bool
 
     log_render_models();
 
+    // XR_FB_display_refresh_rate: the offered rates and the current one.
+    if (m_instance.xrEnumerateDisplayRefreshRatesFB != nullptr) {
+        uint32_t rate_count = 0;
+        if (m_instance.xrEnumerateDisplayRefreshRatesFB(m_xr_session, 0, &rate_count, nullptr) == XR_SUCCESS) {
+            m_display_refresh_rates.resize(rate_count);
+            if (m_instance.xrEnumerateDisplayRefreshRatesFB(m_xr_session, rate_count, &rate_count, m_display_refresh_rates.data()) == XR_SUCCESS) {
+                m_display_refresh_rates.resize(rate_count);
+            } else {
+                m_display_refresh_rates.clear();
+            }
+        }
+        std::string rates_text;
+        for (const float rate : m_display_refresh_rates) {
+            rates_text += fmt::format("{}{:.2f}", rates_text.empty() ? "" : ", ", rate);
+        }
+        log_xr->info("Display refresh rates offered: [{}]; current {:.2f} Hz", rates_text, get_display_refresh_rate());
+    }
+
     return true;
 }
 
@@ -1243,8 +1261,12 @@ auto Xr_session::create_hand_tracking() -> bool
         return false;
     }
 
+    // XR_EXT_hand_tracking not enabled: there are no hand trackers to
+    // create, which is not a session setup failure (the steps after this one
+    // in the constructor, the performance metrics, must still run).
     if (m_instance.xrCreateHandTrackerEXT == nullptr) {
-        return false;
+        log_xr->info("Hand tracking not enabled: no hand trackers created");
+        return true;
     }
 
     const XrHandTrackerCreateInfoEXT left_hand{
@@ -1426,6 +1448,11 @@ auto Xr_session::request_display_refresh_rate(const float refresh_rate_hz) -> bo
     }
     log_xr->info("xrRequestDisplayRefreshRateFB({}) ok", refresh_rate_hz);
     return true;
+}
+
+auto Xr_session::get_display_refresh_rates() const -> const std::vector<float>&
+{
+    return m_display_refresh_rates;
 }
 
 auto Xr_session::get_display_refresh_rate() const -> float

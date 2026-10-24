@@ -59,8 +59,10 @@ clash). Confirm the grant with
 
 The editor's benchmark mode (`--benchmark <file>`, a timedemo run: fixed
 simulation step per frame, camera on a scripted path, controllers
-ignored, result logged and written to `files/logs/benchmark_<name>.json`,
-then exit) is specified in `doc/plans/quest_performance.md` "Benchmark
+ignored, result logged and written to
+`/sdcard/Android/data/org.libsdl.app.quest/files/logs/benchmark_<name>.json`,
+the app's external files directory, readable with plain `adb` on a release
+APK; then exit) is specified in `doc/plans/quest_performance.md` "Benchmark
 mode". `scripts/quest_bench.py` drives it on the device:
 
 ```
@@ -73,7 +75,7 @@ quest release`). Each run force-stops the app, starts
 `scripts/quest_logcat.sh`, launches with the `args` intent extra, waits
 (bounded by `--timeout`, default 600 s) for the `Benchmark result <name>:`
 or `Benchmark failed <name>:` line in the capture, pulls the result JSON
-through `run-as`, and stores it under `memory-bank/local/quest_runs/`
+with `adb exec-out cat` (no `run-as`), and stores it under `memory-bank/local/quest_runs/`
 (gitignored). `--repeat N` launches N runs and stores a repeat summary
 (per-term median across runs, min / max spread). `--gpu-metrics` runs
 `ovrgpuprofiler` for the measured window; its metric ids come from
@@ -82,8 +84,9 @@ through `run-as`, and stores it under `memory-bank/local/quest_runs/`
 `DEFAULT_GPU_METRIC_NAMES` looked up in `ovrgpuprofiler -m`, always with the
 GPU frequency metrics. The APK's `config/` files are copied to the
 writable directory only when missing there, so an edited benchmark or
-commands file reaches the device through `--push` (copies the local file
-over the device's copy) or a clean reinstall. `compare` prints two results
+commands file reaches the device through a rebuild and a clean reinstall,
+or through `--push` (copies the local file over the device's copy), which
+needs a debuggable APK (`run-as`) and fails on a release APK. `compare` prints two results
 or repeat summaries side by side with the deltas and whether their
 `input_hash` values match (same camera poses and `frame_dt`). Measure one
 editor at a time with nothing building on the host
@@ -105,7 +108,14 @@ adb shell am force-stop org.libsdl.app.quest
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell am broadcast -a com.oculus.vrpowermanager.prox_close    # the runtime treats the headset as worn
 adb shell setprop debug.oculus.guardian_pause 1                     # no boundary interruptions
+adb shell setprop debug.oculus.refreshRate 120                      # only when the benchmark file sets display_refresh_rate_hz (its value)
 ```
+
+The refresh rate property is what switches the display: on the current OS
+build the runtime offers 72, 80, 90 and 120 Hz and accepts
+`xrRequestDisplayRefreshRateFB(120)`, but the display stays at 72 Hz until
+the property is set (verified 2026-10-24). The editor still requests the
+rate and its settle gate waits for the achieved rate.
 
 then the normal launch
 (`am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -c com.oculus.intent.category.VR -n org.libsdl.app.quest/org.libsdl.app.ErheActivity ...`).
@@ -116,6 +126,7 @@ a `finally`):
 adb shell am force-stop org.libsdl.app.quest
 adb shell am broadcast -a com.oculus.vrpowermanager.automation_disable
 adb shell setprop debug.oculus.guardian_pause 0
+adb shell setprop debug.oculus.refreshRate '""'                    # when it was set
 ```
 
 Readiness comes from the logcat capture (the session FOCUSED line, frame

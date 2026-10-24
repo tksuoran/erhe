@@ -202,6 +202,7 @@ public:
     PFN_xrPerfSettingsSetPerformanceLevelEXT xrPerfSettingsSetPerformanceLevelEXT{nullptr};
 
     // XR_FB_display_refresh_rate
+    PFN_xrEnumerateDisplayRefreshRatesFB   xrEnumerateDisplayRefreshRatesFB  {nullptr};
     PFN_xrGetDisplayRefreshRateFB          xrGetDisplayRefreshRateFB         {nullptr};
     PFN_xrRequestDisplayRefreshRateFB      xrRequestDisplayRefreshRateFB     {nullptr};
 
