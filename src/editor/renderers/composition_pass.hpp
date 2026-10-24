@@ -178,7 +178,8 @@ public:
     // the pass's draw list scene: none from prepare(), set by the view's
     // rendergraph node's pre-execute hook (Composer::add_cull_views(),
     // doc/plans/culling.md phase 6a) before the frame's classification;
-    // render_immediate() draws with none (unculled).
+    // render_immediate() draws with Render_context::immediate_cull_view
+    // (the headset's) or none (unculled).
     erhe::scene_renderer::Cull_view                    cull_view         {erhe::scene_renderer::Cull_view::none};
 };
 

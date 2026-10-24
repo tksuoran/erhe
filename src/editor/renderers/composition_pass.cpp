@@ -319,9 +319,23 @@ auto get_color_view_parameters(const Render_context& context) -> erhe::scene_ren
 void Composition_pass::render_immediate(const Render_context& context)
 {
     prepare(context, context.app_context.render_phase_host_system_time_ns, m_immediate_prepared);
-    // No pre-execute hook added a culling view for a pass prepared where it
-    // renders: the draw-list path draws unculled.
+    // A pass prepared where it renders has no prepared culling view: it
+    // takes the context's (the headset's, added in its pre-execute hook)
+    // when it draws the draw list scene that view belongs to, and draws
+    // unculled otherwise (the previews).
     m_immediate_prepared.cull_view = erhe::scene_renderer::Cull_view::none;
+    if (
+        m_immediate_prepared.use_draw_lists &&
+        (context.immediate_cull_view != erhe::scene_renderer::Cull_view::none)
+    ) {
+        const std::shared_ptr<Scene_root>& scene_root = data.override_scene_root
+            ? data.override_scene_root
+            : context.scene_root;
+        ERHE_VERIFY(scene_root);
+        if (scene_root->get_draw_list_scene() == context.immediate_cull_draw_list_scene) {
+            m_immediate_prepared.cull_view = context.immediate_cull_view;
+        }
+    }
     render(context, m_immediate_prepared);
 }
 

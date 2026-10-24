@@ -2558,7 +2558,7 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights, const std::string& benchmark_path)
+    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling)
         : m_startup_commands_path{std::move(startup_commands_path)}
         , m_startup_scene_path   {std::move(startup_scene_path)}
         , m_no_startup_scene     {no_startup_scene}
@@ -2680,6 +2680,11 @@ public:
             m_input_bindings_store = std::make_unique<Input_bindings_store       >(*m_commands.get());
             m_app_message_bus   = std::make_unique<App_message_bus               >();
             m_app_settings.read(m_editor_settings.headset.openxr);
+            // --no-headset-culling: session-only, never persisted.
+            m_app_settings.headset_culling_session = (headset_culling == Headset_culling::enabled);
+            if (headset_culling == Headset_culling::disabled_for_session) {
+                log_startup->info("Headset culling forced OFF for this session (--no-headset-culling)");
+            }
             m_input_state       = std::make_unique<Input_state                   >();
             m_time              = std::make_unique<Time                          >();
             auto& commands        = *m_commands       .get();
@@ -5661,7 +5666,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights, const std::string& benchmark_path)
+void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -5810,7 +5815,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         //    editor.tick();
         //}
 
-        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights, benchmark_path};
+        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights, benchmark_path, headset_culling};
         editor.run();
     }
 

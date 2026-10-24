@@ -627,7 +627,10 @@ Drawing:
   (`get_color_view_parameters()`, the views and depth conventions both the
   cull view and the draw's `Base_render_parameters` take), one view per
   draw list scene, kept in `Composition_pass_prepared::cull_view`; the
-  headset, which locates its eyes inside its execute, draws unculled).
+  headset's node hook adds one view for its multiview or per-eye color
+  passes, the padded union of the eye frusta, and its passes take it
+  through `Render_context::immediate_cull_view`, doc/plans/culling.md
+  "Headset passes").
   `Shadow_renderer::fit()` fits the light projections and adds every pass
   `Shadow_renderer::draw()` draws later (the editor: `Shadow_render_node`'s
   hook fits, its execute draws): each 2D pass's light frustum (the pass's own
@@ -817,9 +820,9 @@ Drawing:
   then the view's mask bit - and the primitive record and draw command
   writers both consume that decision, so every command names its entry's
   record (`ERHE_PRIMITIVE_INDEX`, section 9.2 "Record upload").
-  Skinned entries (bounds follow the joints, not the transform hook),
-  entries with an invalid AABB and
-  multiview passes are never culled. Culled entries are counted in
+  Skinned entries (bounds follow the joints, not the transform hook) and
+  entries with an invalid AABB are never culled; a multiview pass culls
+  only through a view its caller adds itself (the headset's union view). Culled entries are counted in
   `Draw_statistics::culled_count`: per composition pass in MCP
   `get_composition_passes` (`last_draw_list_culled_count`), per shadow pass
   in `Shadow_draw_statistics` (`Shadow_frame_result::draw_statistics` of the last rendered frame,

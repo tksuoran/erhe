@@ -170,6 +170,13 @@ public:
     // to compare against every light fitted from scratch. Never persisted.
     bool shadow_fit_cache_session{true};
 
+    // Session-only switch of the headset color passes' culling view
+    // (doc/plans/culling.md "Headset passes"): false draws the headset's
+    // passes unculled, for an A/B against the culled draws. Set off for the
+    // session by --no-headset-culling; the Settings window toggles it.
+    // Never persisted.
+    bool headset_culling_session{true};
+
     // Node tree (ephemeral UI state, not persisted)
     bool node_tree_show_all          {false};
 

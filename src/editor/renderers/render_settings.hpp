@@ -72,6 +72,7 @@ public:
     bool                       shadow_maps_frozen             {false}; // App_settings::shadow_maps_frozen_session
     bool                       shadow_map_cache               {true};  // App_settings::shadow_map_cache_session
     bool                       shadow_fit_cache               {true};  // App_settings::shadow_fit_cache_session
+    bool                       headset_culling                {true};  // App_settings::headset_culling_session
 };
 
 // One Render_settings copy per frame in flight, owned by Editor. M2's
