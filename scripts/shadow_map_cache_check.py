@@ -7,10 +7,12 @@ of edits: a static frame, a caster move, a spot move, a point light move, a
 spot cone change, a move of the viewport camera (the directional fits
 follow it) and a second caster move. After each edit, with the cache on, the
 viewport is captured; the cache is then switched off (every pass drawn) and
-captured again. The two captures must be identical (the bottom status bar
-rows, which show frame times, are excluded). Each step also reports how many
-pixels changed against the previous step, so a step that changes nothing is
-visible as such, and which passes the cache kept.
+captured again. The two captures must be identical (the status bar, which
+shows frame times, is excluded: the rows from the top of the editor's status
+bar window, as get_imgui_windows reports it, scaled to the capture's height).
+Each step also reports how many pixels changed against the previous step, so
+a step that changes nothing is visible as such, and which passes the cache
+kept.
 
 A second sequence checks the per-light caster test: two shadowed point
 lights A and B whose ranges do not overlap, each with a caster beside it.
@@ -32,6 +34,7 @@ Needs Pillow and numpy. Example:
 """
 
 import argparse
+import math
 import os
 import subprocess
 import sys
@@ -44,17 +47,33 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bistro_frame_bench as bench  # noqa: E402  (mcp(), wait_for_ready(), scene_names())
 
-STATUS_BAR_ROWS = 24
 # A skinned (and animated, not playing) glTF: the skinned caster steps.
 SKINNED_GLB = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 
 
-def pixel_diff(path_a, path_b, ignore_bottom=STATUS_BAR_ROWS):
+# Top of the status bar as a fraction of the window's height (set in main()
+# from get_imgui_windows): compared rows are those above it, so the crop
+# follows the display's scale and the window's size.
+status_bar_top_fraction = 1.0
+
+
+def status_bar_top(port):
+    """The status bar window's top edge as a fraction of the default ImGui host's height."""
+    hosts = bench.mcp(port, "get_imgui_hosts", {}).get("hosts", [])
+    host = next((entry for entry in hosts if entry.get("default")), None)
+    windows = bench.mcp(port, "get_imgui_windows", {}).get("windows", [])
+    bar = next((entry for entry in windows if "StatusBar" in str(entry.get("name", ""))), None)
+    if (host is None) or (bar is None) or (float(host.get("height", 0.0)) <= 0.0):
+        sys.exit("cannot locate the status bar window (get_imgui_hosts / get_imgui_windows)")
+    return float(bar["y"]) / float(host["height"])
+
+
+def pixel_diff(path_a, path_b):
     a = np.asarray(Image.open(path_a).convert("RGB"))
     b = np.asarray(Image.open(path_b).convert("RGB"))
     if a.shape != b.shape:
         return -1
-    rows = a.shape[0] - ignore_bottom
+    rows = int(math.floor(a.shape[0] * status_bar_top_fraction))
     return int(np.any(a[:rows] != b[:rows], axis=2).sum())
 
 
@@ -77,6 +96,8 @@ def main():
     if port is None:
         sys.exit("editor did not become ready; see logs/log.txt")
     time.sleep(2.0)
+    global status_bar_top_fraction
+    status_bar_top_fraction = status_bar_top(port)
 
     def call(tool, **arguments):
         reply = bench.mcp(port, tool, arguments)
