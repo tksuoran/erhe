@@ -50,7 +50,10 @@ namespace erhe::graphics::test {
 // column d and colors it with color d (red, green, blue), both from
 // ERHE_DRAW_ID: the erhe GLSL preamble defines it as gl_DrawID where multi-draw
 // indirect is native and as a per-draw push constant (Vulkan) or uniform (GL)
-// where it is emulated, so one shader and one golden serve every backend. The
+// where it is emulated, so one shader and one golden serve every backend. On
+// Metal these variants write first_instance q into command q and place and
+// color by ERHE_PRIMITIVE_INDEX instead (Color_source::first_instance), the
+// way Metal's draws name their records; the image and golden are the same. The
 // vertex shader forwards it to the fragment shader as a flat varying (the
 // Vulkan emulation declares it in the vertex stage only). Quad q of the vertex
 // data spans the column's full width and the image rows [16 q, 48), so each
@@ -613,9 +616,19 @@ protected:
         }
     }
 
+    // The draw-position variants: on Metal, whose draws name their records
+    // by first_instance only, command q names record q (Color_source::
+    // first_instance), which renders the same image and checks the same
+    // golden.
     void run(const uint32_t draw_count, const Indexing indexing, std::string_view golden_name)
     {
-        run(draw_count, indexing, Color_source::draw_id, golden_name);
+#if defined(ERHE_GRAPHICS_API_METAL)
+        ASSERT_EQ(device().get_info().record_indexing, erhe::graphics::Record_indexing::first_instance);
+        const Color_source color_source = Color_source::first_instance;
+#else
+        const Color_source color_source = Color_source::draw_id;
+#endif
+        run(draw_count, indexing, color_source, golden_name);
     }
 
     void run(const uint32_t draw_count, const Indexing indexing, const Color_source color_source, std::string_view golden_name)

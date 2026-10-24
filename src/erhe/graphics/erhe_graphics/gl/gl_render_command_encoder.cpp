@@ -242,47 +242,50 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     }
 
     if (info.emulate_multi_draw_indirect) {
-        const GLint draw_id_location = m_device.get_impl().get_draw_id_uniform_location();
-        if (draw_id_location >= 0) {
-            const size_t   type_byte_count = erhe::dataformat::get_format_size_bytes(index_type);
-            const uint64_t offset          = static_cast<uint64_t>(indirect_offset);
-            GLintptr       gl_offset       = (GLintptr)offset;
+        // A program that does not read ERHE_DRAW_ID (it names its records by
+        // ERHE_PRIMITIVE_INDEX with Record_indexing::first_instance) has no
+        // uniform location; its commands are still drawn.
+        const GLint    draw_id_location = m_device.get_impl().get_draw_id_uniform_location();
+        const size_t   type_byte_count  = erhe::dataformat::get_format_size_bytes(index_type);
+        const uint64_t offset           = static_cast<uint64_t>(indirect_offset);
+        GLintptr       gl_offset        = (GLintptr)offset;
 
-            for (GLsizei draw_id = 0; draw_id < drawcount; draw_id++) {
-                Draw_indexed_primitives_indirect_command draw_indirect_record = {};
-                gl::get_buffer_sub_data(
-                    gl::Buffer_target::draw_indirect_buffer,
-                    gl_offset,
-                    sizeof(Draw_indexed_primitives_indirect_command),
-                    &draw_indirect_record
-                );
-                const void* gl_indices = reinterpret_cast<const void *>(
-                    static_cast<uintptr_t>(draw_indirect_record.first_index) * type_byte_count
-                );
+        for (GLsizei draw_id = 0; draw_id < drawcount; draw_id++) {
+            Draw_indexed_primitives_indirect_command draw_indirect_record = {};
+            gl::get_buffer_sub_data(
+                gl::Buffer_target::draw_indirect_buffer,
+                gl_offset,
+                sizeof(Draw_indexed_primitives_indirect_command),
+                &draw_indirect_record
+            );
+            const void* gl_indices = reinterpret_cast<const void *>(
+                static_cast<uintptr_t>(draw_indirect_record.first_index) * type_byte_count
+            );
 
+            if (draw_id_location >= 0) {
                 gl::uniform_1i(draw_id_location, static_cast<GLint>(draw_id));
-                if (info.use_base_instance) {
-                    gl::draw_elements_instanced_base_vertex_base_instance(
-                        gl_primitive_type,
-                        draw_indirect_record.index_count,
-                        gl_index_type,
-                        gl_indices,
-                        draw_indirect_record.instance_count,
-                        draw_indirect_record.base_vertex,
-                        draw_indirect_record.base_instance
-                    );
-                } else {
-                    gl::draw_elements_instanced_base_vertex(
-                        gl_primitive_type,
-                        draw_indirect_record.index_count,
-                        gl_index_type,
-                        gl_indices,
-                        draw_indirect_record.instance_count,
-                        draw_indirect_record.base_vertex
-                    );
-                }
-                gl_offset += stride ? stride : sizeof(Draw_indexed_primitives_indirect_command);
             }
+            if (info.use_base_instance) {
+                gl::draw_elements_instanced_base_vertex_base_instance(
+                    gl_primitive_type,
+                    draw_indirect_record.index_count,
+                    gl_index_type,
+                    gl_indices,
+                    draw_indirect_record.instance_count,
+                    draw_indirect_record.base_vertex,
+                    draw_indirect_record.base_instance
+                );
+            } else {
+                gl::draw_elements_instanced_base_vertex(
+                    gl_primitive_type,
+                    draw_indirect_record.index_count,
+                    gl_index_type,
+                    gl_indices,
+                    draw_indirect_record.instance_count,
+                    draw_indirect_record.base_vertex
+                );
+            }
+            gl_offset += stride ? stride : sizeof(Draw_indexed_primitives_indirect_command);
         }
     }
 }
