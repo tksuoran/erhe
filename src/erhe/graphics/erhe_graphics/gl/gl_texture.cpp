@@ -75,7 +75,8 @@ auto byte_count(const gl::Pixel_type pixel_type) -> size_t
         }
 
         case gl::Pixel_type::unsigned_short:
-        case gl::Pixel_type::short_: {
+        case gl::Pixel_type::short_:
+        case gl::Pixel_type::half_float: {
             return 2;
         }
 
@@ -95,22 +96,22 @@ constexpr std::array INTERNAL_FORMAT_INFO =
 {
     InternalFormatFormatType{ gl::Internal_format::r8               ,  gl::Pixel_format::red            , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::r8_snorm         ,  gl::Pixel_format::red            , gl::Pixel_type::byte           },
-    InternalFormatFormatType{ gl::Internal_format::r16f             ,  gl::Pixel_format::red            , gl::Pixel_type::float_         },
+    InternalFormatFormatType{ gl::Internal_format::r16f             ,  gl::Pixel_format::red            , gl::Pixel_type::half_float     },
     InternalFormatFormatType{ gl::Internal_format::r32f             ,  gl::Pixel_format::red            , gl::Pixel_type::float_         },
     InternalFormatFormatType{ gl::Internal_format::rg8              ,  gl::Pixel_format::rg             , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::rg8_snorm        ,  gl::Pixel_format::rg             , gl::Pixel_type::byte           },
-    InternalFormatFormatType{ gl::Internal_format::rg16f            ,  gl::Pixel_format::rg             , gl::Pixel_type::float_         },
+    InternalFormatFormatType{ gl::Internal_format::rg16f            ,  gl::Pixel_format::rg             , gl::Pixel_type::half_float     },
     InternalFormatFormatType{ gl::Internal_format::rg32f            ,  gl::Pixel_format::rg             , gl::Pixel_type::float_         },
     InternalFormatFormatType{ gl::Internal_format::rgb8             ,  gl::Pixel_format::rgb            , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::rgb8_snorm       ,  gl::Pixel_format::rgb            , gl::Pixel_type::byte           },
     InternalFormatFormatType{ gl::Internal_format::srgb8            ,  gl::Pixel_format::rgb            , gl::Pixel_type::unsigned_byte  },
-    InternalFormatFormatType{ gl::Internal_format::rgb16f           ,  gl::Pixel_format::rgb            , gl::Pixel_type::float_         },
+    InternalFormatFormatType{ gl::Internal_format::rgb16f           ,  gl::Pixel_format::rgb            , gl::Pixel_type::half_float     },
     InternalFormatFormatType{ gl::Internal_format::r11f_g11f_b10f   ,  gl::Pixel_format::rgb            , gl::Pixel_type::float_         },
     InternalFormatFormatType{ gl::Internal_format::rgba8            ,  gl::Pixel_format::rgba           , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::srgb8_alpha8     ,  gl::Pixel_format::rgba           , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::rgba8_snorm      ,  gl::Pixel_format::rgba           , gl::Pixel_type::byte           },
     InternalFormatFormatType{ gl::Internal_format::rgba32f          ,  gl::Pixel_format::rgba           , gl::Pixel_type::float_         },
-    InternalFormatFormatType{ gl::Internal_format::rgba16f          ,  gl::Pixel_format::rgba           , gl::Pixel_type::float_         },
+    InternalFormatFormatType{ gl::Internal_format::rgba16f          ,  gl::Pixel_format::rgba           , gl::Pixel_type::half_float     },
     InternalFormatFormatType{ gl::Internal_format::r8ui             ,  gl::Pixel_format::red_integer    , gl::Pixel_type::unsigned_byte  },
     InternalFormatFormatType{ gl::Internal_format::r16ui            ,  gl::Pixel_format::red_integer    , gl::Pixel_type::unsigned_short },
     InternalFormatFormatType{ gl::Internal_format::r32ui            ,  gl::Pixel_format::red_integer    , gl::Pixel_type::unsigned_int   },
