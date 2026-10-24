@@ -160,6 +160,10 @@ public:
     // The view's clip_from_world, as its color passes rasterize with it
     // (Draw_list_renderer::get_color_clip_from_world()).
     glm::mat4                               clip_from_world{1.0f};
+    // The camera, homogeneous (Draw_list_renderer::get_color_view_eye()):
+    // (position, 1) for a perspective view, (the camera's +Z axis, 0) for an
+    // orthographic one; the faces of each box toward it are drawn.
+    glm::vec4                               eye            {0.0f, 0.0f, 0.0f, 1.0f};
     // The view's culling view, registered for the frame with
     // add_occlusion_view() (verified).
     Cull_view                               cull_view      {Cull_view::none};
@@ -178,6 +182,9 @@ public:
     uint32_t tested     {0};
     uint32_t occluded   {0};
     uint32_t untested   {0};
+    // Entries the classification of that frame removed from the view
+    // because the frame before it found them occluded (one frame of lag).
+    uint32_t culled     {0};
 };
 
 // One occluded entry of an occlusion check view.
@@ -203,6 +210,9 @@ public:
     uint32_t                           visible             {0}; // tested and marked
     uint32_t                           occluded            {0};
     uint32_t                           untested            {0};
+    // Entries the frame's classification removed from the view because the
+    // previous frame found them occluded (Retired_occlusion_counts::culled).
+    uint32_t                           culled              {0};
     // Bounded entries inside the frustum whose box (not grown) intersects
     // or crosses the near plane, and those of them not marked visible: a
     // defect when nonzero (they are marked without a test).
@@ -417,6 +427,11 @@ public:
     uint32_t                                    view_count             {0}; // views the CPU classified
     uint32_t                                    dispatch_count         {0}; // 1, or 0 for a frame without entries
     std::size_t                                 mismatch_count         {0};
+    // The (entry, view) bits the frame's occlusion consumption removed
+    // (doc/plans/occlusion_culling.md): the comparison adds them back to the
+    // GPU masks (the CPU lanes have no occlusion term); a removed bit the CPU
+    // did not set is a mismatch.
+    std::size_t                                 occlusion_culled_count {0};
     // Gpu_timer last result of the frame's dispatch, nanoseconds: the
     // latest completed measurement, not necessarily that of the checked
     // frame.
@@ -721,11 +736,14 @@ public:
     // one bit; each key gets the view's counts.
     [[nodiscard]] auto add_occlusion_view(uint64_t frame_index, Cull_view cull_view, const glm::vec4& near_plane, const Gpu_command_key& key) -> Cull_view;
     // Inside the view's render pass, after its last depth-writing color
-    // pass: one draw of every entry's box (Gpu_cull_classifier's occlusion
-    // pipeline), depth tested against the pass's depth, writing no depth and
+    // pass: one indexed draw of the camera-facing faces of every entry's
+    // box (Gpu_cull_classifier's occlusion pipeline, the slot's index
+    // buffer), depth tested against the pass's depth, writing no depth and
     // no color; a fragment that passes sets the entry's bit of the view in
     // the slot's occlusion result words (atomic OR). The frame's
-    // classification wrote the words the draw starts from.
+    // classification wrote the words the draw starts from; the next
+    // frame's classification consumes them (doc/erhe/draw_list_renderer.md
+    // Q6 "Occlusion culling").
     void draw_occlusion(const Draw_occlusion_parameters& parameters);
     // The occlusion counts of the view named key in the newest frame whose
     // occlusion words this scene decoded (the classification of the frame
@@ -1039,7 +1057,7 @@ private:
     // dispatch_gpu_cull_views(): the slot's occlusion buffer, grown to
     // hold the frame's two occlusion regions (created at the first dispatch,
     // bound by every dispatch).
-    void prepare_occlusion_slot(uint64_t frame_index, std::size_t entry_count, std::size_t group_count, bool occlusion);
+    void prepare_occlusion_slot(uint64_t frame_index, std::size_t entry_count, std::size_t group_count, Occlusion_culling occlusion);
     // dispatch_gpu_cull_views() of a frame with occlusion views, a check
     // pending: the frame's CPU side of the check.
     void capture_occlusion_check(uint64_t frame_index);
@@ -1137,6 +1155,10 @@ private:
         Cull_classification    classification{Cull_classification::cpu};
         // The occlusion culling publish() recorded (on only with gpu).
         Occlusion_culling      occlusion     {Occlusion_culling::off};
+        // m_entry_layout_serial at the publish: equal for two frames whose
+        // lists hold the same entries at the same positions (the occlusion
+        // bits of one describe the entries of the other).
+        uint64_t               entry_layout_serial{0};
         // The changes since the previous publish (Draw_list_content_changes):
         // m_draw_list_serial at that publish, and the accumulated
         // m_changed_bounds / m_changes_unbounded.
@@ -1326,6 +1348,9 @@ private:
     Cull_frame_registry&                                             m_cull_frame_registry;
     Cull_classification                                              m_published_cull_classification{Cull_classification::cpu};
     Occlusion_culling                                                m_published_occlusion_culling{Occlusion_culling::off};
+    // Bumped whenever an entry is added to, removed from or moved within a
+    // list (registration, unregistration, swap-remove, rebuild_all()).
+    uint64_t                                                         m_entry_layout_serial{1};
     bool                                                             m_gpu_cull_refusal_logged{false};
     bool                                                             m_occlusion_refusal_logged{false};
     std::size_t                                                      m_gpu_bounds_write_count{0};
@@ -1492,7 +1517,18 @@ private:
     public:
         std::unique_ptr<erhe::graphics::Buffer> buffer;
         std::size_t                             region_bytes {0};
+        std::size_t                             bind_bytes   {0}; // region_bytes, at least the smallest binding
         std::size_t                             result_offset{0};
+        std::size_t                             culled_offset{0};
+        // The occlusion pass's index buffer (occlusion_test.vert): the
+        // 18-index pattern of entry e at 7 e, uint32, for index_capacity
+        // entries; grown with the slot (the slot's previous frame retired).
+        std::unique_ptr<erhe::graphics::Buffer> index_buffer;
+        std::size_t                             index_capacity{0};
+        uint64_t                                entry_layout_serial{0};
+        // The frame consumed the previous frame's words (its culled region
+        // is meaningful).
+        bool                                    consumed_previous{false};
         uint64_t                                frame_index  {0};
         uint32_t                                entry_count  {0};
         uint32_t                                group_count  {0};
@@ -1505,6 +1541,11 @@ private:
     // may draw, record_frame_end() orders them for the host).
     uint64_t                                                         m_occlusion_frame_index{0};
     bool                                                             m_occlusion_frame_active{false};
+    // Some frame dispatched occlusion words (m_occlusion_frame_index names
+    // the newest), and the buffer bound for the previous words when none
+    // are consumed.
+    bool                                                             m_has_occlusion_frame{false};
+    std::unique_ptr<erhe::graphics::Buffer>                          m_occlusion_no_previous_buffer;
     // The decoded frame's counts per occlusion view key (capacity kept).
     class Retired_occlusion_view_counts
     {
@@ -1513,6 +1554,7 @@ private:
         uint32_t        tested  {0};
         uint32_t        occluded{0};
         uint32_t        untested{0};
+        uint32_t        culled  {0};
     };
     std::vector<Retired_occlusion_view_counts>                       m_retired_occlusion_counts;
     uint64_t                                                         m_retired_occlusion_frame_index{0};

@@ -156,15 +156,15 @@ struct("Editor_settings_config",
         # (doc/plans/occlusion_culling.md): with the gpu culling
         # classification, each viewport's color render pass rasterizes the
         # draw lists' entry boxes against its opaque depth and marks the
-        # visible entries. The bits are produced and checked; no pass reads
-        # them yet.
+        # visible entries; the next frame's classification culls the entries
+        # found hidden (one frame of lag).
         field(
             "occlusion_culling",
             Bool,
             added_in=8,
             default="false",
             short_desc="Occlusion Culling",
-            long_desc="Run the raster occlusion test in the viewports (needs the gpu culling classification, a GPU-read draw count and fragment shader storage atomics): the draw lists' entry boxes are drawn against each view's opaque depth and the visible entries are marked. The marks are not used to skip draws yet.",
+            long_desc="Run the raster occlusion test in the viewports (needs the gpu culling classification, a GPU-read draw count and fragment shader storage atomics): the draw lists' entry boxes are drawn against each view's opaque depth and the visible entries are marked. The next frame skips the entries found hidden (one frame of lag).",
             visible=True,
             developer=True
         ),

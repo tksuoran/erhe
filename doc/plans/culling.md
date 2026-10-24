@@ -445,9 +445,12 @@ Each phase lands on its own, verified, before the next starts.
    us, heavy 3399 -> 3482 us): the main pass executing its draws from the
    indirect command buffer, not the encode kernel (about 6 us; split in
    "Open").
-7. **Occlusion.** [occlusion_culling.md](occlusion_culling.md), fed into the
-   mask of the camera views as one more test; depends on phase 6 to be worth
-   it (its step 7).
+7. **Occlusion.** [occlusion_culling.md](occlusion_culling.md): the
+   viewports' color views get one more test in their masks under `gpu`,
+   the previous frame's raster occlusion result (one frame of lag), so the
+   GPU-generated color commands skip the entries hidden behind the frame's
+   opaque depth; the CPU masks stay frustum-only. Setting
+   `occlusion_culling`, default off.
 
 Later, outside this plan: an octahedral single-pass point shadow (one view and
 one pass per light instead of six, Esoterica's `Point Light Shadows.md`),

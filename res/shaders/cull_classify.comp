@@ -18,30 +18,65 @@
 //   extent.x < 0: no bounds (or a skinned list): inside every view of the
 //   entry's purpose.
 // cull_views.header = view_count, entry_count, occlusion (1: the frame has
-//   occlusion views, the occlusion words below are written), 0
+//   occlusion views, the occlusion words below are written), previous (1:
+//   the previous occlusion frame's words are consumed)
+// cull_views.occlusion_header = the word offsets of the result and culled
+//   regions in cull_occlusion.words (the test region at 0), the word offset
+//   of the result region in cull_occlusion_previous.words, 0
 // cull_views.views[10 * view + k]:
 //   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
 //   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
 //   face (0..5 = +X -X +Y -Y +Z -Z), as exact small floats, 8 the near
 //   plane of an occlusion view (inward), 9 = occlusion view (1.0) or not
-//   (0.0), 0, 0, 0.
+//   (0.0), previous result (1.0: the same view, matched by key, has words in
+//   the previous occlusion frame; 0.0: none, the view is not culled by
+//   occlusion), the previous frame's view group and view bit.
 //
 // The raster occlusion test (doc/plans/occlusion_culling.md, occlusion_test
 // .vert/.frag) of the frame's occlusion views (the viewports' color views)
-// starts from two words per (group, entry), in the mask layout, when the
-// header asks for them: cull_occlusion_test.tests, the views whose entry the
+// starts from two regions of uvec2 per (group, entry) in the mask layout
+// (as uint words, 2 * (group * entry_count + entry) + bit / 32), when the
+// header asks for them: the test region, the views whose entry the
 // occlusion pass rasterizes (a bounded entry inside the view's frustum whose
 // grown box, erhe_occlusion_bounds.glsl, lies wholly beyond the near plane:
-// its front faces are not clipped), and cull_occlusion_result.results, the
-// visibility bits the pass ORs into, preset for the entries of an occlusion
-// view that the pass does not test (no bounds, or a box reaching the near
-// plane: visible; outside the frustum: unknown, kept visible so an entry
-// entering the view is drawn). Entries of another purpose, and views that
-// are no occlusion views, hold 0 in both.
+// its front faces are not clipped), and the result region, the visibility
+// bits the pass ORs into, preset for the entries of an occlusion view that
+// the pass does not test (no bounds, or a box reaching the near plane:
+// visible; outside the frustum: unknown, kept visible so an entry entering
+// the view is drawn). Entries of another purpose, and views that are no
+// occlusion views, hold 0 in both.
+//
+// Consumption (one frame of lag, doc/plans/occlusion_culling.md): an entry
+// inside an occlusion view's frustum loses the view's mask bit when the
+// same view's words of the previous occlusion frame (same entry layout,
+// Draw_list_scene checks) have its test bit set and its result bit clear:
+// tested there and no fragment visible. The entry is still tested this
+// frame (its test bit follows the frustum), so it returns one frame after
+// it becomes visible. The third region, culled, records the bits removed
+// this way (statistics and the classification check).
 
 layout(local_size_x = ERHE_CULL_CLASSIFY_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 // d = n . c + w + |n| . e, inside unless d < 0 (cull_lanes::plane_lanes).
+// The view's bit of one entry in a region of occlusion words.
+uint occlusion_word_index(uint group, uint entry_count, uint entry, uint bit)
+{
+    return (2u * ((group * entry_count) + entry)) + (bit / 32u);
+}
+
+void write_occlusion_words(uint group, uint entry_count, uint entry, uvec2 tests, uvec2 results, uvec2 culled)
+{
+    uint base           = 2u * ((group * entry_count) + entry);
+    uint result_offset  = cull_views.occlusion_header.x;
+    uint culled_offset  = cull_views.occlusion_header.y;
+    cull_occlusion.words[base + 0u]                 = tests.x;
+    cull_occlusion.words[base + 1u]                 = tests.y;
+    cull_occlusion.words[result_offset + base + 0u] = results.x;
+    cull_occlusion.words[result_offset + base + 1u] = results.y;
+    cull_occlusion.words[culled_offset + base + 0u] = culled.x;
+    cull_occlusion.words[culled_offset + base + 1u] = culled.y;
+}
+
 bool plane_keeps(vec4 plane, vec3 c, vec3 e)
 {
     precise float nx = plane.x;
@@ -86,24 +121,26 @@ void main()
     uint purpose   = uint(extent_w.w);
     bool unbounded = !(e.x >= 0.0);
 
-    bool  occlusion       = (cull_views.header.z != 0u);
-    vec3  occlusion_e     = unbounded ? vec3(0.0) : occlusion_grown_extent(c, e);
-    uint  group           = 0u;
-    uvec2 bits            = uvec2(0u, 0u);
-    uvec2 occlusion_tests = uvec2(0u, 0u);
-    uvec2 occlusion_bits  = uvec2(0u, 0u);
+    bool  occlusion        = (cull_views.header.z != 0u);
+    bool  previous         = (cull_views.header.w != 0u);
+    vec3  occlusion_e      = unbounded ? vec3(0.0) : occlusion_grown_extent(c, e);
+    uint  group            = 0u;
+    uvec2 bits             = uvec2(0u, 0u);
+    uvec2 occlusion_tests  = uvec2(0u, 0u);
+    uvec2 occlusion_bits   = uvec2(0u, 0u);
+    uvec2 occlusion_culled = uvec2(0u, 0u);
     for (uint view = 0u; view < view_count; ++view) {
         uint view_group = view / 64u;
         if (view_group != group) {
             cull_masks.masks[(group * entry_count) + entry] = bits;
             if (occlusion) {
-                cull_occlusion_test.tests    [(group * entry_count) + entry] = occlusion_tests;
-                cull_occlusion_result.results[(group * entry_count) + entry] = occlusion_bits;
+                write_occlusion_words(group, entry_count, entry, occlusion_tests, occlusion_bits, occlusion_culled);
             }
-            bits            = uvec2(0u, 0u);
-            occlusion_tests = uvec2(0u, 0u);
-            occlusion_bits  = uvec2(0u, 0u);
-            group           = view_group;
+            bits             = uvec2(0u, 0u);
+            occlusion_tests  = uvec2(0u, 0u);
+            occlusion_bits   = uvec2(0u, 0u);
+            occlusion_culled = uvec2(0u, 0u);
+            group            = view_group;
         }
         uint base = 10u * view;
         vec4 info = cull_views.views[base + 7u];
@@ -142,10 +179,26 @@ void main()
         }
         uint  bit      = view % 64u;
         uvec2 view_bit = (bit < 32u) ? uvec2(1u << bit, 0u) : uvec2(0u, 1u << (bit - 32u));
-        if (inside) {
+        vec4  occlusion_info = cull_views.views[base + 9u];
+        bool  occlusion_view = occlusion && (occlusion_info.x > 0.5);
+        // The previous occlusion frame's verdict on this entry in this view:
+        // occluded only when it was tested there and no fragment marked it.
+        bool  occluded = false;
+        if (inside && occlusion_view && previous && (occlusion_info.y > 0.5)) {
+            uint previous_bit  = uint(occlusion_info.w);
+            uint previous_word = occlusion_word_index(uint(occlusion_info.z), entry_count, entry, previous_bit);
+            uint previous_mask = 1u << (previous_bit % 32u);
+            bool was_tested    = (cull_occlusion_previous.words[previous_word] & previous_mask) != 0u;
+            bool was_visible   = (cull_occlusion_previous.words[cull_views.occlusion_header.z + previous_word] & previous_mask) != 0u;
+            occluded = was_tested && !was_visible;
+        }
+        if (inside && !occluded) {
             bits |= view_bit;
         }
-        if (occlusion && (cull_views.views[base + 9u].x > 0.5)) {
+        if (occluded) {
+            occlusion_culled |= view_bit;
+        }
+        if (occlusion_view) {
             // The grown box wholly beyond the near plane (inside unless
             // n . c + w - |n| . e < 0): its front faces rasterize unclipped.
             vec4  near_plane    = cull_views.views[base + 8u];
@@ -160,7 +213,6 @@ void main()
     }
     cull_masks.masks[(group * entry_count) + entry] = bits;
     if (occlusion) {
-        cull_occlusion_test.tests    [(group * entry_count) + entry] = occlusion_tests;
-        cull_occlusion_result.results[(group * entry_count) + entry] = occlusion_bits;
+        write_occlusion_words(group, entry_count, entry, occlusion_tests, occlusion_bits, occlusion_culled);
     }
 }

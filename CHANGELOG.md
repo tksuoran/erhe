@@ -50,6 +50,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::xr`: `Pose` moved to its own header `erhe_xr/pose.hpp` (included
   by `xr.hpp` and `frame_timing.hpp`), available in every
   `ERHE_XR_LIBRARY` configuration.
+- `erhe::scene_renderer`: occlusion culling (doc/plans/occlusion_culling.md
+  3b): `Retired_occlusion_counts::culled`, `Occlusion_view_check::culled`,
+  `Cull_classification_check::occlusion_culled_count`,
+  `Draw_occlusion_parameters::eye`, `Draw_list_renderer::get_color_view_eye()`,
+  `Gpu_cull_classifier::get_view_occlusion_header_offset()`,
+  `get_occlusion_eye_offset()`, `occlusion_indices_per_entry`.
 - `erhe::scene_renderer`: the raster occlusion test (doc/plans/occlusion_culling.md,
   doc/erhe/draw_list_renderer.md Q6 "Occlusion test"): `Occlusion_culling`,
   `Draw_list_scene::add_occlusion_view()`, `draw_occlusion()`
@@ -767,6 +773,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: the GPU classification consumes the previous
+  frame's occlusion result (doc/plans/occlusion_culling.md 3b): an occlusion
+  view's mask bit is cleared for an entry the same view found occluded in
+  the frame before, so the GPU-generated color commands and the passes'
+  counts include the occlusion term. `cull_classify.comp` binds the
+  occlusion words as `cull_occlusion` / `cull_occlusion_previous`
+  (`Gpu_cull_classifier::occlusion_words_binding_point`,
+  `occlusion_previous_words_binding_point`, replacing
+  `occlusion_test_binding_point` / `occlusion_result_binding_point`); the
+  occlusion test draws the three camera-facing faces of each box, indexed
+  (`occlusion_vertices_per_entry` is 7).
 - `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
   `Occlusion_culling` after the `Cull_classification`;
   `Gpu_cull_classifier::vec4s_per_view` is 10 (the near plane and flag of an

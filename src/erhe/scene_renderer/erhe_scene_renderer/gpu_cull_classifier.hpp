@@ -63,10 +63,12 @@ public:
     static constexpr unsigned int bounds_binding_point{0};
     static constexpr unsigned int views_binding_point {1};
     static constexpr unsigned int masks_binding_point {2};
-    // The occlusion test's start words, written by the classification of a
-    // frame with occlusion views (cull_classify.comp documents them).
-    static constexpr unsigned int occlusion_test_binding_point  {3};
-    static constexpr unsigned int occlusion_result_binding_point{4};
+    // The occlusion words of the frame's slot (test, result and culled
+    // regions, written by the classification of a frame with occlusion
+    // views) and those of the previous occlusion frame, which the
+    // classification consumes (cull_classify.comp documents them).
+    static constexpr unsigned int occlusion_words_binding_point         {3};
+    static constexpr unsigned int occlusion_previous_words_binding_point{4};
     static constexpr uint32_t     workgroup_size      {64};
     // GPU bounds: two vec4 per entry (center + 0, extent + purpose).
     static constexpr std::size_t  bounds_bytes_per_entry{2 * 4 * sizeof(float)};
@@ -108,8 +110,10 @@ public:
     static constexpr unsigned int occlusion_bounds_binding_point     {1}; // storage, vertex
     static constexpr unsigned int occlusion_draw_test_binding_point  {2}; // storage, vertex
     static constexpr unsigned int occlusion_draw_result_binding_point{3}; // storage, fragment
-    // Vertices per entry: the twelve triangles of its box, non-indexed.
-    static constexpr uint32_t     occlusion_vertices_per_entry       {36};
+    // Per entry the three faces of its box toward the camera: seven unique
+    // corners, two triangles per face (occlusion_test.vert), drawn indexed.
+    static constexpr uint32_t     occlusion_vertices_per_entry       {7};
+    static constexpr uint32_t     occlusion_indices_per_entry        {18};
 
     // The 32-bit halves (low, high) of a 64-bit value as the shaders read
     // them (flag bits, Item_filter masks).
@@ -141,6 +145,7 @@ public:
     [[nodiscard]] auto get_mask_buffer      () -> erhe::graphics::Ring_buffer_client&;
     [[nodiscard]] auto get_readback_buffer  () -> erhe::graphics::Ring_buffer_client&;
     [[nodiscard]] auto get_view_header_offset() const -> std::size_t { return m_view_header_offset; }
+    [[nodiscard]] auto get_view_occlusion_header_offset() const -> std::size_t { return m_view_occlusion_header_offset; }
     [[nodiscard]] auto get_view_data_offset  () const -> std::size_t { return m_view_data_offset; }
     // For Draw_list_scene's command generation.
     [[nodiscard]] auto get_compact_bind_group_layout() const -> const erhe::graphics::Bind_group_layout*;
@@ -160,6 +165,7 @@ public:
     [[nodiscard]] auto get_occlusion_view_buffer        () -> erhe::graphics::Ring_buffer_client&;
     [[nodiscard]] auto get_occlusion_view_block_bytes   () const -> std::size_t { return m_occlusion_view_block_bytes; }
     [[nodiscard]] auto get_occlusion_clip_from_world_offset() const -> std::size_t { return m_occlusion_clip_from_world_offset; }
+    [[nodiscard]] auto get_occlusion_eye_offset         () const -> std::size_t { return m_occlusion_eye_offset; }
     [[nodiscard]] auto get_occlusion_info_offset        () const -> std::size_t { return m_occlusion_info_offset; }
 
 private:
@@ -168,9 +174,10 @@ private:
     erhe::graphics::Shader_resource                           m_bounds_block;
     erhe::graphics::Shader_resource                           m_views_block;
     erhe::graphics::Shader_resource                           m_masks_block;
-    erhe::graphics::Shader_resource                           m_occlusion_tests_block;
-    erhe::graphics::Shader_resource                           m_occlusion_results_block;
+    erhe::graphics::Shader_resource                           m_occlusion_words_block;
+    erhe::graphics::Shader_resource                           m_occlusion_previous_words_block;
     std::size_t                                               m_view_header_offset{0};
+    std::size_t                                               m_view_occlusion_header_offset{0};
     std::size_t                                               m_view_data_offset  {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_shader_stages;
@@ -204,6 +211,7 @@ private:
     erhe::graphics::Shader_resource                           m_occlusion_draw_result_block;
     std::size_t                                               m_occlusion_view_block_bytes{0};
     std::size_t                                               m_occlusion_clip_from_world_offset{0};
+    std::size_t                                               m_occlusion_eye_offset{0};
     std::size_t                                               m_occlusion_info_offset{0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_occlusion_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_occlusion_shader_stages;

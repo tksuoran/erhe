@@ -189,6 +189,18 @@ auto Draw_list_renderer::get_color_clip_from_world(const Color_cull_view_paramet
     return view.camera->projection().clip_from_node_transform(view.viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions).get_matrix() * view.camera->node_from_world();
 }
 
+auto Draw_list_renderer::get_color_view_eye(const Color_cull_view_parameters& parameters) -> std::optional<glm::vec4>
+{
+    if ((parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
+        return {};
+    }
+    const erhe::scene::Camera_snapshot& camera = *parameters.views.front().camera;
+    if (camera.projection().is_orthographic()) {
+        return camera.world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f};
+    }
+    return camera.position_in_world();
+}
+
 auto Draw_list_renderer::add_color_occlusion_view(
     Draw_list_scene&                  draw_list_scene,
     const uint64_t                    frame_index,
