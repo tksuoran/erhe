@@ -514,9 +514,11 @@ public:
     // per-tile render resolution. Maps to VK_IMAGE_USAGE_FRAGMENT_DENSITY_MAP_BIT_EXT.
     static constexpr uint64_t fragment_density_map     = 13;
 
-    // Modifiers for Command_buffer::texture_barrier (doc/erhe/graphics.md
-    // "Resource barriers"); texture creation and render pass attachment
-    // descriptors ignore them. The stage qualifiers name the shader stages
+    // Modifiers for Command_buffer::texture_barrier and for render pass
+    // attachment usage_before / usage_after (doc/erhe/graphics.md "Resource
+    // barriers"); texture creation ignores them, and the Vulkan render pass
+    // barriers map an attachment's sampled to the fragment stage regardless
+    // of them. The stage qualifiers name the shader stages
     // that perform the sampled / storage / input_attachment accesses of a
     // barrier side; without one, those accesses cover every shader stage.
     // discard, on usage_before only, drops the texture's contents (Vulkan

@@ -98,13 +98,11 @@ What the broad barriers cost is overlap, not idle: on Metal 4 the
 producer barrier `F -> V|F|D` at the end of each post-processing pass
 holds the vertex stage of every later pass until the pass's fragment work
 is done, so the per-pass vertex / tiling phase of the 20 small passes runs
-serially. Experiment (measurement only, not committed): the unqualified
-`sampled` `usage_before` / `usage_after` of the frame's sampled color
-targets narrowed to `sampled | fragment_shader`
-(`post_processing.cpp:268-269` and `:317-318`, `render_target.cpp:178`,
-`:184`, `:186`, `viewport_scene_view.cpp:811`, `:817`, `:819`,
-`rendertarget_mesh.cpp:151`, `:153`), which makes those passes `F -> F` at
-both ends. GPU span after the main pass, Metal 3 / Metal 4, before ->
+serially. Experiment: the unqualified `sampled` `usage_before` /
+`usage_after` of the frame's sampled color targets narrowed to
+`sampled | fragment_shader` (the sites of item 1 below, including
+`rendertarget_mesh.cpp`), which makes those passes `F -> F` at both ends.
+GPU span after the main pass, Metal 3 / Metal 4, before ->
 after (us; Bistro over three runs each, spread 1 us; its main pass varies
 150 us run to run):
 
@@ -142,14 +140,36 @@ chain are 0.3-0.6 us on both back ends; the `memory_barrier`s between them
 
 What step 2 commits, in order of gain:
 
-1. The sampled color targets of the frame's render passes declare their
-   fragment-only use: `usage_before` / `usage_after` `sampled ->
-   sampled | fragment_shader` at the sites of the experiment, each after
-   checking that no compute or vertex consumer reads the target (the
-   experiment did not check consumers or run the image gates). Expected:
-   70-100 us GPU per frame on Metal 4 at any resolution (the cost is per
-   pass, not per pixel), up to 17 % of the tick in the small-viewport
-   bench. No change on Metal 3; Vulkan not measured.
+1. Done: the sampled color targets of the frame's render passes declare
+   the stages that read them. `sampled | fragment_shader` as `usage_before`
+   and `usage_after`: the post-processing pyramid levels
+   (`post_processing.cpp`; read by the downsample / upsample passes, the
+   overlay composition `overlay_copy.frag`, ImGui and the capture blit),
+   `Render_target`'s color texture, resolved and multisampled
+   (`render_target.cpp`; read by post-processing `s_input`, ImGui and the
+   capture blit) and the viewport overlay target (`viewport_scene_view.cpp`;
+   read by ImGui). `sampled | fragment_shader | compute_shader`: the
+   `Rendertarget_mesh` texture (`rendertarget_mesh.cpp`), the base color
+   texture of a ray traced material, which `ray_trace.comp`,
+   `ddgi_trace.comp`, `ddgi_reference.comp`, `rc_trace.comp` and
+   `rc_visibility.comp` sample through the texture heap
+   (`erhe_ray_hit.glsl`). No vertex shader samples a color target, and the
+   blits order their own transfer access. Metal 4 encodes `F -> F` at both
+   ends of every post-processing, viewport and overlay pass (25 consumer +
+   25 producer barriers per frame on the default scene, as before) and
+   `F|D -> F` / `F -> F|D` around the `Rendertarget_mesh` pass. Small-viewport
+   bench, default scene, Metal 4, pipelined, three runs: tick 281 -> 232 us,
+   Tracy `Post_processing` GPU zone 116 -> 78 us. Metal 3 and Vulkan record
+   the same work: Metal 3 orders by encoder fences, and the Vulkan render
+   pass barriers map an attachment's `sampled` to the fragment stage
+   whatever the qualifiers, so a compute reader of the `Rendertarget_mesh`
+   texture is not ordered on Vulkan (`vulkan_helpers.cpp`
+   `usage_to_vk_stage_access`; open). Verification: the editor image gates
+   on Metal 3, Metal 4 and MoltenVK (all four threading configurations),
+   the Bistro image on Metal 4 and the ray trace and radiance cascades
+   images byte-identical to the build before, DDGI within its run-to-run
+   spread; MoltenVK with synchronization validation free of hazards;
+   `ctest -L "gpu|editor"` on Metal 4 and MoltenVK.
 2. The `memory_barrier()` sites below, and the main pass begin barrier they
    feed (`all -> V|F`): no measurable cost (the gap before the main pass is
    the same on Metal 3); converted as cleanup only.

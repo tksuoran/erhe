@@ -265,8 +265,8 @@ auto Post_processing_node::update_size() -> bool
             render_pass_descriptor.color_attachments[0].texture_level = 0;
             render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Dont_care;
             render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
-            render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
-            render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+            render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
+            render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
             render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::undefined;
             render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
             render_pass_descriptor.render_target_width                = level_width;
@@ -314,8 +314,8 @@ auto Post_processing_node::update_size() -> bool
             render_pass_descriptor.color_attachments[0].texture_level = 0;
             render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Dont_care;
             render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
-            render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
-            render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+            render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
+            render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
             render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::undefined;
             render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
             render_pass_descriptor.render_target_width                = level_width;

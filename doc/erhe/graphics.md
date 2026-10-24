@@ -364,8 +364,14 @@ dependencies, with these calls or with the broad declarations below.
   backend. The qualifiers
   ride in the usage mask rather than in a separate stage argument so that
   each side of a call reads as one value, and a render graph pin can carry
-  one such value per access. Texture creation and render pass descriptors
-  ignore them.
+  one such value per access. Texture creation ignores them. A render pass
+  attachment's `usage_before` / `usage_after` name the stages that read a
+  sampled color target: every stage that reads it, so `sampled |
+  fragment_shader` for a target only fragment shaders sample, with
+  `compute_shader` added when a compute shader samples it too. Metal 4
+  orders the pass's begin and end barriers by them, while
+  the Vulkan render pass barriers map an attachment's `sampled` to the
+  fragment stage whatever the qualifiers.
 - `Barrier_scope::command_buffer` (the overloads without a scope) is the
   common case. `earlier_submissions` is for a producer in another command
   buffer; it also covers earlier work of the same command buffer.
