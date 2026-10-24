@@ -214,8 +214,9 @@ Each phase lands on its own, verified, before the next starts.
    issuing one indirect draw per command; GL `gl_BaseInstance(ARB) +
    gl_InstanceID`), `draw_position` is `ERHE_DRAW_ID`. Vulkan takes
    `first_instance` with `drawIndirectFirstInstance`, GL with base instance
-   and GLSL 4.60 / `ARB_shader_draw_parameters`; Metal and the null device
-   take `draw_position`, and so does every device without the capabilities;
+   and GLSL 4.60 / `ARB_shader_draw_parameters`; Metal always takes
+   `first_instance` (`[[instance_id]]` includes the base instance); the null
+   device and every device without the capabilities take `draw_position`;
    the device logs the choice. Every `Draw_indirect_buffer` writer sets a
    command's `first_instance` to its position (0 under `draw_position`), so
    the color, id and bucket passes draw exactly as before. Under
