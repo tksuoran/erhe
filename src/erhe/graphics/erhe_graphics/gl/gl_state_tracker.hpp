@@ -77,7 +77,12 @@ public:
     [[nodiscard]] auto get_cache() const -> const Rasterization_state& { return m_cache; }
 
 private:
-    Rasterization_state m_cache;
+    // The state of a fresh OpenGL context (GL_CULL_FACE disabled). Not
+    // Rasterization_state{}, which defaults face_cull_enable to true: a cache
+    // starting from it skips the first glEnable(GL_CULL_FACE).
+    [[nodiscard]] static auto initial_gl_state() -> Rasterization_state;
+
+    Rasterization_state m_cache{initial_gl_state()};
 };
 
 class Scissor_state_tracker
