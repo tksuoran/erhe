@@ -208,14 +208,6 @@ shared between encoders.
 - Index buffers are draw arguments (`drawIndexedPrimitives` takes the index
   buffer's GPU address and remaining length; indirect draws take the indirect
   buffer's address).
-- Push constant (index 15, `ERHE_DRAW_ID`): an immutable draw id table of
-  16-byte entries holding 0, 1, 2, ... (`Submission_pools::get_draw_id_table`,
-  4096 entries, grown to the next power of two when a multi-draw needs more,
-  earlier tables kept until the pools go). Draw i of a multi-draw points
-  index 15 at entry i; every pipeline bind, every encoder start and
-  `executeCommandsInBuffer` point it at entry 0 of the first table
-  (`get_draw_id_zero`, fixed for the pools' lifetime, read without a lock).
-  No per-draw data is written.
 - Inline constants (what `setBytes` carried: the `blit_framebuffer` source
   offset): `Command_buffer_impl::allocate_inline_bytes` copies them into
   shared, resident 64 KiB chunks the command buffer takes from the pools

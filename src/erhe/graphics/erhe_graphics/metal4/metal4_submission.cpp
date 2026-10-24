@@ -7,8 +7,6 @@
 #include <Metal/Metal.hpp>
 
 #include <algorithm>
-#include <bit>
-#include <cstring>
 
 namespace erhe::graphics {
 
@@ -22,8 +20,6 @@ static_assert(c_stage_mesh                   == static_cast<std::uint64_t>(MTL::
 static_assert(c_stage_dispatch               == static_cast<std::uint64_t>(MTL::StageDispatch));
 static_assert(c_stage_blit                   == static_cast<std::uint64_t>(MTL::StageBlit));
 static_assert(c_stage_acceleration_structure == static_cast<std::uint64_t>(MTL::StageAccelerationStructure));
-
-constexpr std::size_t c_initial_draw_id_count = 4096;
 
 } // anonymous namespace
 
@@ -299,10 +295,6 @@ Submission_pools::Submission_pools(MTL::Device* const mtl_device, Residency& res
     m_free_argument_tables.reserve(256);
     m_free_inline_bytes_chunks.reserve(64);
     m_all_inline_bytes_chunks.reserve(64);
-    if (!create_draw_id_table(c_initial_draw_id_count)) {
-        ERHE_FATAL("Metal 4: could not create the draw id table");
-    }
-    m_draw_id_zero = m_draw_id_tables.front()->gpuAddress();
 }
 
 Submission_pools::~Submission_pools() noexcept
@@ -321,11 +313,6 @@ Submission_pools::~Submission_pools() noexcept
     }
     m_all_inline_bytes_chunks.clear();
     m_free_inline_bytes_chunks.clear();
-    for (MTL::Buffer* const table : m_draw_id_tables) {
-        m_residency.remove(table);
-        table->release();
-    }
-    m_draw_id_tables.clear();
 }
 
 auto Submission_pools::acquire_recording() -> Recording*
@@ -442,41 +429,6 @@ void Submission_pools::release_inline_bytes_chunk(MTL::Buffer* const chunk)
     }
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_free_inline_bytes_chunks.push_back(chunk);
-}
-
-auto Submission_pools::create_draw_id_table(const std::size_t entry_count) -> bool
-{
-    MTL::Buffer* const table = m_mtl_device->newBuffer(entry_count * c_draw_id_stride, MTL::ResourceStorageModeShared);
-    if (table == nullptr) {
-        return false;
-    }
-    {
-        Scoped_transient_object_pool object_pool{};
-        table->setLabel(NS::String::string("erhe draw id table", NS::UTF8StringEncoding));
-    }
-    std::byte* const contents = static_cast<std::byte*>(table->contents());
-    std::memset(contents, 0, entry_count * c_draw_id_stride);
-    for (std::size_t i = 0; i < entry_count; ++i) {
-        const int32_t draw_id = static_cast<int32_t>(i);
-        std::memcpy(contents + (i * c_draw_id_stride), &draw_id, sizeof(draw_id));
-    }
-    m_residency.add(table);
-    m_draw_id_tables.push_back(table);
-    m_draw_id_capacity = entry_count;
-    return true;
-}
-
-auto Submission_pools::get_draw_id_table(const std::size_t draw_count) -> uint64_t
-{
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    if (draw_count > m_draw_id_capacity) {
-        const std::size_t entry_count = std::bit_ceil(draw_count);
-        log_context->info("Metal 4: draw id table grown to {} entries", entry_count);
-        if (!create_draw_id_table(entry_count)) {
-            ERHE_FATAL("Metal 4: could not grow the draw id table to %zu entries", entry_count);
-        }
-    }
-    return m_draw_id_tables.back()->gpuAddress();
 }
 
 } // namespace erhe::graphics

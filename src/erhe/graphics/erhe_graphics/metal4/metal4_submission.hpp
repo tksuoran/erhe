@@ -27,9 +27,8 @@ namespace NS   { class Object; }
 // holds every allocation the backend creates, the pooled recordings
 // (command buffer + allocator + commit options + everything the recording
 // holds until the GPU has completed it), the pools of argument tables and
-// inline constant chunks, the immutable draw id table the push constant
-// points into, and the stage mapping of the barriers (doc/erhe/metal4_backend.md
-// "Encoders and barriers").
+// inline constant chunks, and the stage mapping of the barriers
+// (doc/erhe/metal4_backend.md "Encoders and barriers").
 
 namespace erhe::graphics {
 
@@ -41,7 +40,6 @@ enum class Memory_barrier_mask : unsigned int;
 constexpr std::size_t c_argument_table_buffer_count  = 31;
 constexpr std::size_t c_argument_table_texture_count = 31;
 constexpr std::size_t c_argument_table_sampler_count = 16;
-constexpr std::size_t c_metal_push_constant_index    = 15;
 
 class Device_impl;
 class Recording;
@@ -160,22 +158,7 @@ public:
     [[nodiscard]] auto acquire_inline_bytes_chunk() -> MTL::Buffer*;
     void release_inline_bytes_chunk(MTL::Buffer* chunk);
 
-    // The push constant (ERHE_DRAW_ID, index 15) of draw i points at entry i
-    // of an immutable table, so draws set no inline data at all. Entries are
-    // c_draw_id_stride bytes apart (constant buffer offset alignment).
-    // Returns the address of entry 0 of a table holding at least
-    // draw_count entries; a table that grows keeps the earlier ones alive
-    // until the pools are destroyed (in-flight commands point into them).
-    static constexpr std::size_t c_draw_id_stride = 16;
-    [[nodiscard]] auto get_draw_id_table(std::size_t draw_count) -> uint64_t;
-    // Entry 0 (ERHE_DRAW_ID = 0) of the first table, which stays valid for
-    // the pools' lifetime: no lock, for every pipeline bind and encoder
-    // start.
-    [[nodiscard]] auto get_draw_id_zero() const -> uint64_t { return m_draw_id_zero; }
-
 private:
-    [[nodiscard]] auto create_draw_id_table(std::size_t entry_count) -> bool;
-
     MTL::Device*                        m_mtl_device{nullptr};
     Residency&                          m_residency;
     std::mutex                          m_mutex;
@@ -184,9 +167,6 @@ private:
     std::vector<MTL4::ArgumentTable*>   m_free_argument_tables;
     std::vector<MTL::Buffer*>           m_free_inline_bytes_chunks;
     std::vector<MTL::Buffer*>           m_all_inline_bytes_chunks;
-    std::vector<MTL::Buffer*>           m_draw_id_tables;          // newest last
-    std::size_t                         m_draw_id_capacity{0};
-    uint64_t                            m_draw_id_zero    {0};
 };
 
 // Barriers (MTL4 tracks no hazards; doc/erhe/metal4_backend.md "Encoders

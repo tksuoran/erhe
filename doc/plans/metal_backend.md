@@ -232,8 +232,8 @@ What changes (the MTL4 model; agfx's Metal 4 backend is a reference,
   in place of completed handlers (frame retirement, deferred destruction,
   the GPU timer resolve, the frame pacing GPU times).
 - Binding: `MTL4ArgumentTable` (GPU addresses and resource IDs) replaces
-  per-encoder `setBuffer` / `setVertexBytes`; push constants (index 15,
-  `ERHE_DRAW_ID`) need a new home.
+  per-encoder `setBuffer` / `setVertexBytes`; Metal has no push constants
+  (draw records are named by `first_instance`).
 - Residency: `MTLResidencySet` replaces `useResource` (the texture heap's
   per-encode loops, the ICB's index buffers).
 - Hazards: no automatic hazard tracking; explicit stage-to-stage barriers

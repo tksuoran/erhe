@@ -7,6 +7,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ## [Unreleased]
 
+### Removed
+
+- `erhe::graphics`: the Metal GLSL preamble no longer defines `ERHE_DRAW_ID`
+  and no longer maps a `push_constant` block to buffer index 15; a shader
+  with a `push_constant` block fails to compile on Metal. Both Metal devices
+  name draw records by `first_instance`, so shaders use
+  `ERHE_PRIMITIVE_INDEX` (doc/erhe/graphics.md "Draw records").
+
 ### Added
 
 - `erhe::graphics`: explicit per-resource barriers (doc/erhe/graphics.md

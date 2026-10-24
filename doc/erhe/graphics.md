@@ -551,10 +551,14 @@ final_source()`) defines two names for the index:
 - `ERHE_DRAW_ID` is the command's position in its multi-draw: `gl_DrawID`
   (`gl_DrawIDARB` with `GL_ARB_shader_draw_parameters`) where multi-draw
   indirect is native; a per-draw push constant on Vulkan without
-  `multiDrawIndirect` + `shaderDrawParameters`, on MoltenVK and on Metal
-  (vertex and compute stages only); a `uniform int` on GL with emulated
-  multi-draw (set per command when the program uses it; the commands of a
-  program that does not are drawn all the same).
+  `multiDrawIndirect` + `shaderDrawParameters` and on MoltenVK (vertex and
+  compute stages only); a `uniform int` on GL with emulated multi-draw (set
+  per command when the program uses it; the commands of a program that does
+  not are drawn all the same). Metal does not define it: it has no
+  `gl_DrawID`, its backends bind no push constants, and its draws name their
+  records by `first_instance` only. A device defines it exactly when one of
+  `Device_info::use_multi_draw_indirect_core`, `use_multi_draw_indirect_arb`
+  or `emulate_multi_draw_indirect` is set.
 - `ERHE_PRIMITIVE_INDEX` is the record index, chosen once at device init as
   `Device_info::record_indexing`:
   - `Record_indexing::first_instance`: the instance index that carries the
@@ -569,14 +573,16 @@ final_source()`) defines two names for the index:
     (GLSL 4.60 / `ARB_shader_draw_parameters`). Metal takes it always: each
     command is an indirect `drawIndexedPrimitives` that reads its base
     instance, and SPIRV-Cross lowers `gl_InstanceIndex` to `[[instance_id]]`,
-    which includes it.
+    which includes it; the Metal preamble verifies the choice.
   - `Record_indexing::draw_position`: `ERHE_DRAW_ID`, and every command's
     `first_instance` stays 0. The null device, and Vulkan / GL devices
     without the capabilities above.
 
 Both record arrays above are indexed by `ERHE_PRIMITIVE_INDEX`, and their
 commands carry `first_instance` only under `Record_indexing::first_instance`;
-outside the GPU tests (`Draw_indirect_test`) no shader reads `ERHE_DRAW_ID`.
+outside the GPU tests (`Draw_indirect_test`, which colors by
+`ERHE_PRIMITIVE_INDEX` where `ERHE_DRAW_ID` is not defined) no shader reads
+`ERHE_DRAW_ID`.
 A command can then name any record of the bound range, so passes that draw
 different subsets of the same records can share one upload
 (`doc/erhe/draw_list_renderer.md` "Record upload"). The device logs its choice
@@ -647,8 +653,8 @@ before it (no render encoder open).
   no erhe compute pipeline bound) that encodes each job's commands into an
   indirect command buffer and writes the job's execution range; the draw
   executes that range (`doc/erhe/metal_backend.md` "Multi-Draw Indirect").
-  `ERHE_DRAW_ID` reads 0 in every command, so shaders name their records by
-  `first_instance` (`Record_indexing::first_instance`, "Draw records" above).
+  Shaders name their records by `first_instance`
+  (`Record_indexing::first_instance`, "Draw records" above).
   The pipeline must be created with
   `Base_render_pipeline_create_info::indirect_count_draws =
   Indirect_count_draw_support::enabled`; Metal rejects that for a fragment

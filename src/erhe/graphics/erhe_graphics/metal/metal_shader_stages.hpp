@@ -106,7 +106,6 @@ class Shader_stages_tracker
 public:
     void reset  ();
     void execute(const Shader_stages* state);
-    [[nodiscard]] auto get_draw_id_uniform_location() const -> int;
 
 private:
     unsigned int m_last{0};

@@ -90,9 +90,11 @@ pass 3.1-3.8 us (a `F -> F` consumer barrier on Metal 4), each
 post-processing pass -> the next 0.22-0.26 us (20 pairs), the in-scene
 render target pass -> the capture blit 0.4-1.2 us. The gap before the main
 pass (heavy 37 us, draws 40 us, default 2 us, Bistro 5 us) is equal on
-Metal 3. Metal 4's main pass of `draws` is 75-85 us longer than Metal 3's
-(1500 draws; no barrier inside the pass, and narrowing does not change
-it).
+Metal 3. Metal 4's main pass equals Metal 3's (`draws`, 1500 draws: 526
+vs 523 us over three runs each; heavy 2658 vs 2660 us): it was 75-85 us
+longer while each draw of a multi-draw pointed the argument table's index
+15 at its draw id, which the GPU treated as new state per draw; Metal has no
+per-draw draw id since (`doc/erhe/graphics.md` "Draw records").
 
 What the broad barriers cost is overlap, not idle: on Metal 4 the
 producer barrier `F -> V|F|D` at the end of each post-processing pass
@@ -184,9 +186,8 @@ of an attachment's `usage_before` / `usage_after` the same way the
 `texture_barrier` path does: `sampled | compute_shader` reaches the compute
 stage, and an unqualified `sampled` keeps covering every shader stage.
 This closes the `Rendertarget_mesh` compute reader gap found in step 2
-item 1. Ordered after the Metal 4 per-draw main pass cost (the `draws`
-scene, see `doc/plans/metal_backend.md`) is fixed; it is gated by the
-MoltenVK image gates with synchronization validation on.
+item 1. It is gated by the MoltenVK image gates with synchronization
+validation on.
 
 The `texture_barrier ... a barrier chain is missing` warning becomes a
 VERIFY in `Texture_impl::record_usage_barrier` once the gates are silent.
