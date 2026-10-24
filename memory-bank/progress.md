@@ -23,7 +23,11 @@
 ✓texel-viz-own-barriers{7b2fc0917;plan-step-2-item-4-DONE;shadow-span-2014->1644us}
 ?open{Vk-tracked-layout-VERIFY(step-3);intra-dispatch-barrier-cleanup(step-4;fires-0/frame);M4-drawable-wait-tail;MoltenVK-WAW-vertex-pool-FIXED-17bf1d81d}
 
-[TASK::occlusion-culling]{NEXT;©User-2026-10-24;prompt_queue-item-1;doc/plans/occlusion_culling.md;via-harness;ask-user-"Decisions for the user"-first}
+[TASK::occlusion-culling]{started-2026-10-24;branch=render-thread;via-harness{opus-coder};doc/plans/occlusion_culling.md}
+✓decisions{©User-2026-10-24:views=viewport-scene-views+four-view+headset(previews-frustum-only);one-frame-lag-accepted(step-5-later-if-visible);color-pass-GPU-commands-first;eadd5a1e3}
+✓color-records-shared{2c9575cfc;FOUND:no-draw-list-shader-variant-reads-record-color/size->plan's-per-pass-constant-block-dropped;draw_color-binds-shared-chunk_entries-records;Shadow_record_scope-removed->frame-wide:Cull_frame_registry::add_record_scene/release_frame_records(editor-R-after-rendergraph);reads_record_pass_fields-VERIFY-at-variant-resolve;gates:gate.py-M4+MoltenVK-identical;heavy/draws/four-view/selected-cpu+gpu-identical-HEAD(heavy-needs-physics-off);counts-identical;ctest-99/99-x2;validation-0;bench-draws-R-within-noise}
+⚡color-commands-from-GPU-jobs{commit-2;per-job-filter+color-views-as-jobs+draw_color-gpu_generated+Metal-prepare-before-color-pass+count-readback-for-color-stats+MCP-check-includes-color-jobs}
+?then=occlusion-pass{sketch-steps-1-4,6,7;depth-from-main-pass;bounds-raster;visibility-bits-per-frame-slot;consumed-N+1}
 
 [TASK::bistro-gpu]{started-2026-10-21;branch=render-thread;Release-Metal-M4-Pro-Dell-120Hz}
 ✓profile{Bistro-GPU~6.5ms(viewport-4.3+point-faces-2.15+spot-0.3);R-2.15ms;main-0.38ms;no-meaningful-M/R-overlap(GPU-bound)}
