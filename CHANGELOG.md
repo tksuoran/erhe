@@ -1180,6 +1180,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `signal_cpu_completion()`, `wait_for_cpu(p)` is
   `wait_for_cpu_completion_of(p)`. The implicit primitives and the
   consumer-owned semaphore model are unchanged.
+- `erhe::graphics`: the OpenGL backend supports `format_8_vec4_bgra_unorm`
+  and `format_8_vec4_bgra_srgb` textures (stored as `GL_RGBA8` /
+  `GL_SRGB8_ALPHA8`, uploaded and read back with the `GL_BGRA` client
+  format); `erhe::gl::convert_to_gl()` maps them to those internal formats.
+  `Device::get_format_properties()` on OpenGL reports a format without an
+  OpenGL internal format (`format_8_scalar_srgb`, `format_8_vec2_srgb`) as not
+  supported; it aborted.
 - `erhe::graphics`: `Blit_command_encoder::blit_framebuffer()` on OpenGL is no
   longer clipped by a scissor rectangle left by an earlier pass.
 - `erhe::graphics`: `Gpu_timer` ranges may nest on every backend: explicit

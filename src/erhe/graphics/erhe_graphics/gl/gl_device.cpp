@@ -1547,8 +1547,12 @@ void Device_impl::memory_barrier(const Memory_barrier_mask barriers)
 
 auto Device_impl::get_format_properties(const erhe::dataformat::Format format) const -> Format_properties
 {
+    // A format without an OpenGL internal format (format_8_scalar_srgb,
+    // format_8_vec2_srgb) is not supported.
     const std::optional<gl::Internal_format> gl_format_opt = gl_helpers::convert_to_gl(format);
-    ERHE_VERIFY(gl_format_opt.has_value());
+    if (!gl_format_opt.has_value()) {
+        return {};
+    }
     const gl::Internal_format gl_format = gl_format_opt.value();
     auto i = format_properties.find(gl_format);
     if (i == format_properties.end()) {
