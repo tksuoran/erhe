@@ -1,6 +1,6 @@
 # Quest 3 performance
 
-Status: proposed
+Status: in progress
 
 The next focus after the culling plan ([culling.md](culling.md), phases 1
 to 6 done): the editor's frame time on a Meta Quest 3. This document holds
@@ -67,3 +67,82 @@ One editor at a time, nothing building on the host while a timed run is
 taken on the device; the desktop culling numbers were taken that way
 (`memory-bank/local/culling_perf_2026_10_17.md`) and Quest numbers follow
 the same rule.
+
+## Baseline 2026-10-24 (default OpenXR scene, release APK, 42c05810b)
+
+Phase timing at 72 Hz, averaged per 60 frames (us): M1 12000 (the
+`xrWaitFrame` wait; `frame_start_wait` 12), M2 780, M3 1000, R 5760
+(`draw_data_wait` 450), `join_wait` 0.1, full tick 13880. The main thread
+never blocks on R, so `xrWaitFrame(N+1)` runs inside R(N) as designed
+(`doc/editor/render_thread.md` section 2.2). `ovrgpuprofiler` over 30 s:
+GPU utilization 47 % at 456 MHz, 97 % of GPU time shading fragments,
+texture fetch stall 26 %, nearest filtered 85 %, non-base-level textures
+0 % (no mips sampled; unchanged since 2026-05-01), LRZ busy 84 %. Raw
+samples and the full logcat capture are in
+`memory-bank/local/quest_2026_10_24/`. The run was taken with the user
+wearing the headset, so the view and the controller rays were not
+reproducible; every later number comes from the benchmark mode below.
+
+## Benchmark mode
+
+Purpose: a timed run on the device that does not depend on where the user
+looks or what the controllers do, so two runs of two builds compare. The
+headset may lie on the desk.
+
+- **Activation.** `editor --benchmark <json>` (cxxopts, next to
+  `--commands`). On Android `ErheActivity.getArguments()` returns the
+  `args` string extra of the launch intent split on spaces, so
+  `adb shell am start ... --es args "--commands config/editor/commands_bench_heavy.json --benchmark config/editor/benchmark_orbit.json"`
+  reaches `main()` unchanged. The `config/editor/benchmark_*.json` files
+  are APK-bundled with the rest of `config/`.
+- **Benchmark file.** `name`, `warmup_frames`, `measure_frames`,
+  `camera_path`: either `{"type":"orbit","center":[x,y,z],"radius":r,"height":h,"period_frames":n,"look_at":[x,y,z]}`
+  or `{"type":"keyframes","frames":[{"frame":0,"position":[...],"yaw_pitch_roll_deg":[...]}, ...]}`
+  interpolated linearly and looped. The path is indexed by the frame
+  number, never by wall time, so run A and run B render the same frames.
+- **Pose independence.** `Headset_view` keeps a `Benchmark_pose` for the
+  frame: the head pose on the path. The located eye views are used only
+  for their offsets relative to the located head
+  (`Xr_session::update_view_pose` / `get_headset_pose`): eye_i =
+  path_head * inverse(located_head) * located_eye_i, so the IPD and the
+  per-eye fovs stay the runtime's. `update_camera_node()` poses the root
+  camera from the path head; `Headset_view_resources::update()` poses the
+  eye cameras from the overridden views, and the projection layers submit
+  the overridden poses (the compositor reprojects to the real head, which
+  is correct per the OpenXR spec: the layer pose is the pose the image
+  was rendered from).
+- **Action independence.** In benchmark mode `Headset_view` skips
+  `update_pointer_context_from_controller`, `update_quad_layer_hover`,
+  `update_id_render` and `update_hover_with_id_render`, draws no
+  controller ray and hides the controller visualization; `xrSyncActions`
+  still runs (the session needs it). The Hud and the hotbar follow the
+  settings as before (a benchmark file may want them off: use
+  `openxr_editor_settings.json` overrides, not benchmark flags).
+- **Measurement and report.** After `warmup_frames`, the driver records
+  per frame: full tick, M1, M2, M3, R (the `Phase_timing` terms, per
+  frame rather than per 60) and the `XR_META_performance_metrics`
+  counters already queried once per frame (`Xr_session::get_perf_counters`,
+  app CPU / GPU time, compositor GPU time, CPU / GPU utilization, dropped
+  and stale frame counts). After `measure_frames` it logs one
+  `Benchmark result <name>: ...` line (`editor.frame`, info) with mean,
+  median and p99 of each term, writes `logs/benchmark_<name>.json` with
+  the same summary plus the per-frame arrays and the commit id, and
+  requests exit (the `quit_after_frames` path). The per-frame storage is
+  reserved at start (`measure_frames` entries), so the measured frames
+  allocate nothing.
+- **Host script.** `scripts/quest_bench.py run --scene <commands.json> --bench <benchmark.json> [--off-head] [--gpu-metrics]`:
+  force-stops the app, starts `scripts/quest_logcat.sh`, launches with
+  the `args` extra, waits for the result line (bounded), pulls
+  `files/logs/benchmark_<name>.json` through `run-as`, prints the summary
+  table and stores the JSON under `memory-bank/local/quest_runs/`.
+  `--off-head` sends `am broadcast -a com.oculus.vrpowermanager.prox_close`
+  before the launch and `automation_disable` after the run so the session
+  does not pause with the headset on the desk; the headset-prompt protocol
+  still applies to the launch. `--gpu-metrics` runs `ovrgpuprofiler` for
+  the measured window. `compare a.json b.json` prints the two summaries
+  side by side with the deltas.
+- **Out of scope for the first commit.** Driving a desktop viewport
+  camera along the same path (the driver and the path type are
+  platform-neutral so this can follow), and recording the counters on
+  desktop.
+
