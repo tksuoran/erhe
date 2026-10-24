@@ -114,16 +114,16 @@ Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_
     // See Bind_group_layout_impl::get_metal_sampler_slot for why the GLSL
     // binding number cannot be reused as the [[sampler(N)]] index.
     {
-        std::vector<uint32_t> dedicated_sampler_bindings;
+        std::vector<std::pair<uint32_t, uint32_t>> dedicated_sampler_bindings; // GLSL binding, stage flags
         for (const Bind_group_layout_binding& binding : create_info.bindings) {
             if ((binding.type == Binding_type::combined_image_sampler) && !binding.is_texture_heap) {
-                dedicated_sampler_bindings.push_back(binding.binding_point + m_sampler_binding_offset);
+                dedicated_sampler_bindings.push_back({binding.binding_point + m_sampler_binding_offset, binding.stage_flags});
             }
         }
         std::sort(dedicated_sampler_bindings.begin(), dedicated_sampler_bindings.end());
         uint32_t next_slot = 0;
-        for (const uint32_t glsl_binding : dedicated_sampler_bindings) {
-            m_metal_sampler_slots[glsl_binding] = next_slot;
+        for (const std::pair<uint32_t, uint32_t>& entry : dedicated_sampler_bindings) {
+            m_dedicated_samplers[entry.first] = Dedicated_sampler{.sampler_slot = next_slot, .stage_flags = entry.second};
             ++next_slot;
         }
         // Metal caps [[sampler(N)]] at N < 16 per stage. A layout that declares
@@ -168,11 +168,21 @@ auto Bind_group_layout_impl::get_default_uniform_block() const -> const Shader_r
     return m_default_uniform_block;
 }
 
+auto Bind_group_layout_impl::get_dedicated_sampler(const uint32_t glsl_binding) const -> const Dedicated_sampler&
+{
+    const std::unordered_map<uint32_t, Dedicated_sampler>::const_iterator i = m_dedicated_samplers.find(glsl_binding);
+    ERHE_VERIFY(i != m_dedicated_samplers.end());
+    return i->second;
+}
+
 auto Bind_group_layout_impl::get_metal_sampler_slot(const uint32_t glsl_binding) const -> uint32_t
 {
-    const auto i = m_metal_sampler_slots.find(glsl_binding);
-    ERHE_VERIFY(i != m_metal_sampler_slots.end());
-    return i->second;
+    return get_dedicated_sampler(glsl_binding).sampler_slot;
+}
+
+auto Bind_group_layout_impl::get_sampler_stage_flags(const uint32_t glsl_binding) const -> uint32_t
+{
+    return get_dedicated_sampler(glsl_binding).stage_flags;
 }
 
 } // namespace erhe::graphics

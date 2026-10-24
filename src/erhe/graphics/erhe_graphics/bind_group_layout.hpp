@@ -87,8 +87,11 @@ public:
     const Sampler*   immutable_sampler{nullptr};
 
     // Shader stages this binding is accessed in (Shader_stage_flags bitmask).
-    // Honored by the Vulkan backend's VkDescriptorSetLayoutBinding::stageFlags;
-    // OpenGL and Metal are not stage-scoped and ignore it.
+    // Honored by the Vulkan backend's VkDescriptorSetLayoutBinding::stageFlags
+    // and by the Metal backend's dedicated samplers (set_sampled_image binds
+    // the texture and sampler to the vertex and / or fragment stage it names;
+    // Metal 4 binds one argument table to both stages); OpenGL is not
+    // stage-scoped and ignores it.
     //
     // Defaults to Shader_stage_flags::none to force every binding -- buffers
     // (UBO/SSBO) and samplers alike -- to declare its stages explicitly. The
