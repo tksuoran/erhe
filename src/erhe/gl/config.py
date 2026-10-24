@@ -98,10 +98,12 @@ FUNCTION_SUFFIXES = {
 HANDLE_TYPES = ['GLsync']
 EXCLUDED_ENUMS = ['GL_INVALID_INDEX', 'GL_TIMEOUT_IGNORED']
 EXTRA_ENUM_GROUPS = {
-    # gl.xml leaves GL_HALF_FLOAT out of PixelType, but GL 3.0+ accepts it as
-    # the type of pixel transfers (16-bit float textures).
+    # gl.xml leaves GL_HALF_FLOAT and GL_UNSIGNED_INT_10F_11F_11F_REV out of
+    # PixelType, but GL 3.0+ accepts both as the type of pixel transfers
+    # (16-bit float and R11F_G11F_B10F textures).
     'PixelType': [
-        'GL_HALF_FLOAT'],
+        'GL_HALF_FLOAT',
+        'GL_UNSIGNED_INT_10F_11F_11F_REV'],
     'ActiveAttribType': [
         'GL_UNSIGNED_INT',
         'GL_FLOAT',
