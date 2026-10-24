@@ -54,7 +54,8 @@ auto component_count(const gl::Pixel_format pixel_format) -> size_t
             return 4;
         }
 
-        case gl::Pixel_format::depth_component: {
+        case gl::Pixel_format::depth_component:
+        case gl::Pixel_format::stencil_index: {
             return 1;
         }
 
@@ -136,7 +137,8 @@ constexpr std::array INTERNAL_FORMAT_INFO =
     InternalFormatFormatType{ gl::Internal_format::rgba32i          ,  gl::Pixel_format::rgba_integer   , gl::Pixel_type::int_           },
     InternalFormatFormatType{ gl::Internal_format::depth_component16,  gl::Pixel_format::depth_component, gl::Pixel_type::unsigned_short },
     InternalFormatFormatType{ gl::Internal_format::depth_component16,  gl::Pixel_format::depth_component, gl::Pixel_type::unsigned_int   },
-    InternalFormatFormatType{ gl::Internal_format::depth_component32f, gl::Pixel_format::depth_component, gl::Pixel_type::float_         }
+    InternalFormatFormatType{ gl::Internal_format::depth_component32f, gl::Pixel_format::depth_component, gl::Pixel_type::float_         },
+    InternalFormatFormatType{ gl::Internal_format::stencil_index8    , gl::Pixel_format::stencil_index  , gl::Pixel_type::unsigned_byte  }
 };
 
 auto get_gl_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_t
