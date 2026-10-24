@@ -553,7 +553,8 @@ final_source()`) defines two names for the index:
   indirect is native; a per-draw push constant on Vulkan without
   `multiDrawIndirect` + `shaderDrawParameters`, on MoltenVK and on Metal
   (vertex and compute stages only); a `uniform int` on GL with emulated
-  multi-draw.
+  multi-draw (set per command when the program uses it; the commands of a
+  program that does not are drawn all the same).
 - `ERHE_PRIMITIVE_INDEX` is the record index, chosen once at device init as
   `Device_info::record_indexing`:
   - `Record_indexing::first_instance`: the instance index that carries the
@@ -573,6 +574,9 @@ final_source()`) defines two names for the index:
     `first_instance` stays 0. The null device, and Vulkan / GL devices
     without the capabilities above.
 
+Both record arrays above are indexed by `ERHE_PRIMITIVE_INDEX`, and their
+commands carry `first_instance` only under `Record_indexing::first_instance`;
+outside the GPU tests (`Draw_indirect_test`) no shader reads `ERHE_DRAW_ID`.
 A command can then name any record of the bound range, so passes that draw
 different subsets of the same records can share one upload
 (`doc/erhe/draw_list_renderer.md` "Record upload"). The device logs its choice

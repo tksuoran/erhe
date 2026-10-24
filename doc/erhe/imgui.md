@@ -35,7 +35,7 @@ management system that tracks, registers, and dispatches input events to ImGui w
 
 ## Notes
 - Each `Imgui_host` has its own `ImGuiContext`, enabling multiple independent ImGui viewports (e.g., main window + VR render targets).
-- The renderer uses indirect draw calls with a ring buffer strategy for vertex/index/draw-parameter data.
+- The renderer uses indirect draw calls with a ring buffer strategy for vertex/index/draw-parameter data. Each batch is one `multi_draw_indexed_primitives_indirect`; command `i` reads its clip rectangle, texture and array layer from `draw.draw_parameters[ERHE_PRIMITIVE_INDEX]` and carries `first_instance` `i` where `Device_info::record_indexing` is `Record_indexing::first_instance` (0 under `draw_position`, where `ERHE_PRIMITIVE_INDEX` is the command's position), so both name record `i` (`doc/erhe/graphics.md` "Draw records").
 - Font atlas is shared across all hosts.
 - A host with a layout ini path (`get_imgui_ini_path()`, `set_imgui_ini_path()`) persists its window positions, sizes and docking there. Under `erhe::codegen::Config_persistence::read_only` the ini is read before the host's first frame and never written (`io.IniFilename` stays null; the host loads it itself right before its first `ImGui::NewFrame()`).
 - The `windows/` subdirectory has reusable utility windows (performance, log, pipeline inspector, graph plotter, framebuffer viewer).

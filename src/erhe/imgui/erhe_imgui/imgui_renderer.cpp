@@ -100,7 +100,7 @@ void main()
     // the clip distances below stay in unrotated layout space and so still clip
     // correctly regardless of the final rotation.
     mat2 clip_rotation = mat2(draw.clip_rotation.x, draw.clip_rotation.y, draw.clip_rotation.z, draw.clip_rotation.w);
-    vec4 clip_rect     = draw.draw_parameters[ERHE_DRAW_ID].clip_rect;
+    vec4 clip_rect     = draw.draw_parameters[ERHE_PRIMITIVE_INDEX].clip_rect;
     gl_Position        = vec4(clip_rotation * (a_position * scale + translate), 0, 1);
 #if defined(ERHE_HAS_CLIP_DISTANCE)
     gl_ClipDistance[0] = a_position.x - clip_rect[0];
@@ -110,10 +110,10 @@ void main()
 #endif
     v_texcoord         = a_texcoord_0;
 #if defined(ERHE_TEXTURE_HEAP_OPENGL_BINDLESS)
-    v_texture          = draw.draw_parameters[ERHE_DRAW_ID].texture;
+    v_texture          = draw.draw_parameters[ERHE_PRIMITIVE_INDEX].texture;
 #else
-    v_texture_id       = draw.draw_parameters[ERHE_DRAW_ID].texture.x;
-    v_array_layer      = draw.draw_parameters[ERHE_DRAW_ID].array_layer;
+    v_texture_id       = draw.draw_parameters[ERHE_PRIMITIVE_INDEX].texture.x;
+    v_array_layer      = draw.draw_parameters[ERHE_PRIMITIVE_INDEX].array_layer;
 #endif
     v_color            = vec4(srgb_to_linear(a_color_0.rgb), a_color_0.a);
 }
@@ -1297,6 +1297,8 @@ void Imgui_renderer::render_draw_data(
         "Imgui_renderer::render_draw_data()"
     };
 
+    const erhe::graphics::Record_indexing record_indexing = m_graphics_device.get_info().record_indexing;
+
     auto&       program                       = m_imgui_program_interface;
     const auto& draw_parameter_struct_offsets = program.draw_parameter_struct_offsets;
     const auto  draw_parameter_entry_size     = program.draw_parameter_struct.get_size_bytes();
@@ -1566,12 +1568,21 @@ void Imgui_renderer::render_draw_data(
                         }
 
                         draw_parameter_write_offset += draw_parameter_entry_size;
+                        // The vertex shader reads draw_parameters[ERHE_PRIMITIVE_INDEX]
+                        // (doc/erhe/graphics.md "Draw records"): with
+                        // Record_indexing::first_instance the command names its
+                        // record in first_instance; with draw_position the
+                        // record is the command's position and first_instance
+                        // stays 0. Both equal draw_indirect_count here.
+                        const uint32_t first_instance = (record_indexing == erhe::graphics::Record_indexing::first_instance)
+                            ? static_cast<uint32_t>(draw_indirect_count)
+                            : 0u;
                         const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
                             pcmd->ElemCount,
                             1,
                             pcmd->IdxOffset + static_cast<uint32_t>(list_index_offset),
                             pcmd->VtxOffset,
-                            0
+                            first_instance
                         };
                         write(
                             draw_indirect_gpu_data,
