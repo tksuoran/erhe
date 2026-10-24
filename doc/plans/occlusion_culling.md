@@ -59,9 +59,10 @@ are described there. What the occlusion pass builds on:
   drawn with `multi_draw_indexed_primitives_indirect_count(set, job)`
   (`doc/erhe/draw_list_renderer.md`); the null device stays on the CPU
   path.
-- The color passes still draw CPU-written commands under `gpu`: their
-  primitive records are patched per pass, so a GPU-written command cannot
-  name a shared record (culling.md "Open", the color passes item). Step 7
+- The color passes still draw CPU-written commands under `gpu`; their
+  records are shared like the shadow records, so a GPU-written command can
+  name them, and generating their commands is culling.md "Open", the color
+  passes item (commit 2). Step 7
   of the sketch (draw the visible list through MDI) needs that solved
   first, or a CPU readback of the visibility bits, which adds frames of lag.
 - Gates and tools: MCP `get_cull_classification_check` (GPU vs CPU masks
@@ -82,7 +83,8 @@ Decisions (user, 2026-10-24):
 - Lag: the one-frame lag is accepted; the "just became visible" second draw
   (step 5) is built later only if the pop-in is visible in use.
 - Order: the color passes' GPU-written commands (culling.md "Open", the
-  color passes item: per-pass color and size move into a per-pass constant
-  block so the color records can be shared like the shadow records, then
-  the color commands come from the shadow passes' jobs) land first, as
-  their own gated step, before any occlusion pass.
+  color passes item: the color passes share the frame's records like the
+  shadow passes - no per-pass constant block, since no draw-list shader
+  variant reads a record's color or size - then the color commands come
+  from the shadow passes' jobs) land first, as their own gated step, before
+  any occlusion pass.

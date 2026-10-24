@@ -563,8 +563,8 @@ Drawing:
   `Ring_buffer_client::bind` verifies the range fits). `Draw_indirect_buffer`
   ring ranges grow on demand. A draw list larger than the cap - likelier than a
   bucket because R4 coarsens shadow lists - is drawn as chunks of at most cap
-  entries, each with its own primitive range (a shared shadow chunk range
-  holds every entry of the chunk, section 9.2 "Record upload"), indirect
+  entries, each with its own primitive range (a shared chunk range holds
+  every entry of the chunk, section 9.2 "Record upload"), indirect
   range and multi-draw.
   Silent truncation is not acceptable.
 - P4: Measurable: per-pass timing of the passes replaced demonstrates the win
@@ -796,8 +796,9 @@ Drawing:
   `get_scene_lights` reports the frame), the draw list and draw call counts
   being the frame's own. The CPU lanes still run on a `gpu` frame:
   `has_cull_view_survivors()` still skips empty cube faces, and the color
-  passes still write their commands on the CPU (their records are patched
-  per pass). A frame without a selection (no shadow renderer drew the
+  passes still write their commands on the CPU (they bind the shared
+  records, section 9.2 "Record upload"; their commands are not generated
+  yet). A frame without a selection (no shadow renderer drew the
   scene), and a renderer whose `Draw_indirect_buffer` has its debug index
   count clamp on (`is_index_count_clamped()`; the GPU commands carry the raw
   counts; refused and logged once), draw their shadow passes with CPU
@@ -939,45 +940,66 @@ jointly at the `Draw_list_scene` level.
 records reach the GPU depends on the device's `Record_indexing`, read once
 at construction from `Primitive_interface::record_indexing`:
 
-- Color passes always write their own records: per chunk,
-  `Primitive_buffer::update(draw_list, begin, end, entry_passes, settings,
-  count)` copies the passing entries' cached records into a ring-buffer range
-  and patches the pass-dependent color and size, and
-  `Draw_indirect_buffer::update(..., Draw_record_layout::packed)` writes one
-  command per passing entry whose `first_instance` is its position (0 under
-  `draw_position`, where `ERHE_PRIMITIVE_INDEX` is the position anyway).
-- Shadow passes with `Record_indexing::first_instance` share their records:
-  the first `draw_shadow()` that draws a chunk of a shadow list uploads the
+- Under `Record_indexing::first_instance` every draw-list pass shares its
+  records, shadow and color alike: the first `draw_shadow()` /
+  `draw_color()` of a frame that draws a chunk of a list uploads the
   records of every entry of the chunk once (`Primitive_buffer::update_records()`,
   one block copy from `Draw_list::primitive_records` plus the default
-  pass settings' color / size patch, the bytes a per-pass write produces), and
-  every shadow pass of the scope binds that range; its commands
+  `Primitive_interface_settings` color / size patch), and every later pass
+  of the frame over that list binds that range; its commands
   (`Draw_record_layout::chunk_entries`) carry `first_instance = entry -
-  chunk begin`, so a pass writes only its commands. The shadow records do not
-  depend on the light, so 18 passes over a list cost one record copy instead
-  of 18. The ranges are render-phase state of the `Draw_list_scene` (one
-  `Ring_buffer_range` per chunk per shadow list, in vectors kept with their
-  capacity), acquired lazily per chunk within a
-  `Draw_list_scene::Shadow_record_scope`
-  (`begin_shadow_record_scope()`), a move-only RAII object
-  `Shadow_renderer::draw()` holds across its passes; its destructor
-  releases the ranges in the frame that drew them (the release makes the
-  ring buffer's sync entry for that frame), so no return path leaks them. A
-  scope binds the ranges of one `Primitive_buffer` written with one set of
-  pass settings within the frame being culled (verified), and a new frame's
-  first `add_cull_view()` verifies the previous scope ended. A scene with one
-  shadow pass uploads every entry of a chunk where the per-pass write copied
-  only the passing ones (the trade measured in `doc/plans/culling.md` phase
-  4).
+  chunk begin`, so a pass writes only its commands. The 18 shadow passes
+  over a shadow list cost one record copy instead of 18, and the color
+  passes of several viewports (four view) one per color list.
+- The one patch is exact for every pass because no draw-list shader variant
+  reads a record's pass-dependent fields: `color` and `size` are read only
+  by `standard.vert` under `ERHE_VARIANT_POINTS`, `ERHE_SOLID_WIREFRAME`
+  and `ERHE_SHADER_DEBUG != 0` and by `standard.frag` under
+  `ERHE_VARIANT_ID_RENDER`, and the draw-list path takes polygon fill passes
+  without shader debug only (section 9.4); the passes that need per-pass
+  color and size (edge lines, corner points, solid wireframe, the id pass,
+  shader debug) take the bucket path with their own records. Every color
+  and shadow variant a list resolves verifies the invariant on its key
+  (`reads_record_pass_fields()` in `draw_list_scene.cpp`). The per-pass
+  settings therefore never reach a shared record: the hovered / active
+  flag bits and the constant colors of a color pass change nothing the
+  shader reads, so no "per-pass constant block" is needed for sharing.
+- The ranges are render-phase state of the `Draw_list_scene` (one
+  `Ring_buffer_range` per chunk per list, in vectors kept with their
+  capacity), acquired lazily per chunk. The frame's first acquisition
+  registers the scene with its `Cull_frame_registry`
+  (`add_record_scene()`), and the editor calls
+  `Cull_frame_registry::release_frame_records()` once per frame in the
+  render phase after the rendergraph (shadow, composition and headset
+  passes) executed, before the frame's submit; it calls
+  `Draw_list_scene::release_frame_records()` of each registered scene,
+  which releases the ranges in the frame that drew them (the release makes
+  the ring buffer's sync entry for that frame). Every pass of a frame over
+  one list binds the ranges of one `Primitive_buffer` (verified; the shadow
+  lists are bound by the `Shadow_renderer`'s, the color lists by the
+  `Draw_list_renderer`'s), and a new frame's first `add_cull_view()` or
+  shared record verifies the previous frame's records were released. A
+  list drawn by one pass uploads every entry of a chunk where a per-pass
+  write copied only the passing ones (the trade measured in
+  `doc/plans/culling.md` phase 4).
+- Under `Record_indexing::draw_position` (null device, devices without base
+  instance) every pass writes its own records: per chunk,
+  `Primitive_buffer::update(draw_list, begin, end, entry_passes, settings,
+  count)` copies the passing entries' cached records into a ring-buffer
+  range and patches the pass's color and size, and
+  `Draw_indirect_buffer::update(..., Draw_record_layout::packed)` writes one
+  command per passing entry (`first_instance` 0, where
+  `ERHE_PRIMITIVE_INDEX` is the draw position anyway).
 - Shadow passes under `Cull_classification::gpu` (doc/plans/culling.md
   phase 6, Q6 "GPU command generation") bind the same shared records and
   draw the commands the GPU generated for their view and chunk with the
   count draw: they name the same records through the same `first_instance`,
-  so the record upload is unchanged and the pass writes no commands.
-- Shadow passes under `Record_indexing::draw_position` (null device, devices
-  without base instance) and on devices without a GPU-read draw count
-  (MoltenVK) write their records per pass like the color
-  passes.
+  so the record upload is unchanged and the pass writes no commands. The
+  color passes write their commands on the CPU under `gpu` too, over the
+  shared records (their GPU-generated commands: `doc/plans/culling.md`
+  "Open").
+- Shadow passes on devices without a GPU-read draw count (MoltenVK) draw
+  CPU-written commands over the shared records.
 
 ### 9.3 Scene-side hooks and the threading contract
 

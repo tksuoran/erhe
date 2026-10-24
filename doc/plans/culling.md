@@ -229,8 +229,10 @@ Each phase lands on its own, verified, before the next starts.
    (`Draw_record_layout::chunk_entries`, `first_instance = entry - chunk
    begin`), and the `Draw_list_scene::Shadow_record_scope` that
    `Shadow_renderer::render()` holds across its passes releases the ranges
-   when it ends, in the same frame. The color passes keep their per-pass records (their
-   color and size are per pass). `draw_position` devices keep the per-pass
+   when it ends, in the same frame. (The color passes share their records
+   since the color passes item of "Open", commit 1, and the scope became
+   the frame-wide release of `Cull_frame_registry::release_frame_records()`.)
+   `draw_position` devices keep the per-pass
    shadow records, the phase 3 path. `erhe_graphics_gpu_tests`
    `Draw_indirect_test.draw_indexed_indirect_first_instance` checks that a
    command's `first_instance` reaches `ERHE_PRIMITIVE_INDEX`. Images
@@ -487,13 +489,19 @@ measured on the GPU timers.
   ("Headset passes"); per-eye views would cull tighter but need the eye
   poses of R's locate before the classification (`erhe::xr` locating once
   in the hook and `render_frame()` reusing it).
-- The color passes stay on CPU-written commands under `gpu` (phase 6b):
-  their records are patched per pass (color and size from the pass's
-  `Primitive_interface_settings`), so they are not shared and a command's
-  `first_instance` cannot name a shared record. The fix direction: move the
-  per-pass color and size into a per-pass constant block the shaders read,
-  so the color records can be shared like the shadow records, then generate
-  their commands with the shadow passes' jobs (one more filter per job).
+- The color passes stay on CPU-written commands under `gpu` (phase 6b).
+  Their records are shared (commit 1, done): every draw-list pass of a
+  frame, shadow and color, binds the frame's one record range per list
+  chunk, uploaded by the first pass that draws the chunk with the default
+  color / size patch and released by `Cull_frame_registry::
+  release_frame_records()` at the end of the frame's render phase
+  (`doc/erhe/draw_list_renderer.md` "Record upload"); the color commands
+  carry `first_instance = entry - chunk begin` like the shadow commands. No
+  per-pass constant block was needed: no draw-list shader variant reads a
+  record's color or size (the draw-list path takes polygon fill without
+  shader debug only; verified per resolved variant), so the per-pass patch
+  was dead on that path. Open (commit 2): generate the color passes'
+  commands with the shadow passes' jobs (one more filter per job).
 - Under `gpu` the CPU lanes still run for `has_cull_view_survivors()` and
   the color passes; dropping them for the shadow passes needs the empty
   face skip from a GPU-written survivor count (an indirect clear-only
