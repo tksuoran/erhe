@@ -23,7 +23,7 @@
 ✓texel-viz-own-barriers{7b2fc0917;plan-step-2-item-4-DONE;shadow-span-2014->1644us}
 ?open{Vk-tracked-layout-VERIFY(step-3);intra-dispatch-barrier-cleanup(step-4;fires-0/frame);M4-drawable-wait-tail;MoltenVK-WAW-vertex-pool-FIXED-17bf1d81d}
 
-[TASK::occlusion-culling]{started-2026-10-24;branch=render-thread;via-harness{opus-coder};doc/plans/occlusion_culling.md}
+[TASK::occlusion-culling]{started-2026-10-24;branch=render-thread;via-harness{opus-coder};doc/plans/occlusion_culling.md;PHASE-7-BUILT;left=user-decisions}
 ✓decisions{©User-2026-10-24:views=viewport-scene-views+four-view+headset(previews-frustum-only);one-frame-lag-accepted(step-5-later-if-visible);color-pass-GPU-commands-first;eadd5a1e3}
 ✓color-records-shared{2c9575cfc;FOUND:no-draw-list-shader-variant-reads-record-color/size->plan's-per-pass-constant-block-dropped;draw_color-binds-shared-chunk_entries-records;Shadow_record_scope-removed->frame-wide:Cull_frame_registry::add_record_scene/release_frame_records(editor-R-after-rendergraph);reads_record_pass_fields-VERIFY-at-variant-resolve;gates:gate.py-M4+MoltenVK-identical;heavy/draws/four-view/selected-cpu+gpu-identical-HEAD(heavy-needs-physics-off);counts-identical;ctest-99/99-x2;validation-0;bench-draws-R-within-noise}
 ✓metal-fragment-argument-buffer{COMMIT-2a;FOUND:Metal-ICB-refuses-fragment-functions-with-directly-bound-textures/samplers(forward-shaders-bound-shadow-maps+samplers+lightmap+DDGI-directly)->both-Metal-backends:per-layout-fragment-argument-buffer-[[buffer(15)]]-set-6(texture-2k/sampler-2k+1;encoded-per-draw-when-changed-into-ring-range);vertex/compute-keep-direct;get_pipeline_for(Indirect_count_draw_support);draw_color-requests-enabled;Sampler_comparison_test-ICB-case(neg-control-fails-HEAD);comparison-samplers-from-argument-buffer-WORK-on-M4-Pro;gates-all-identical-M3/M4/MoltenVK;ctest-99/99-x3;gpu-tests-211/211-MTL_DEBUG_LAYER;draws-tick-+5us(0.3%,untraced)}
@@ -32,8 +32,8 @@
 ✓gpu-color-command-cost-split{2fe732487;xctrace-200-frames:cost=ICB-execution-of-main-pass(+68us-vertex+40us-fragment;identical-M3/M4=hardware/driver-path);encode-kernel-6us;tail-slots-0(range=dense-count);©User:+105us-acceptable-for-now;no-fix}
 ✓occlusion-pass-3a{Composition_pass_kind::occlusion_test-after-alpha-tested-fills;cull_classify-writes-test-bits+preset-visible(no-bounds/near-plane/outside-frustum);36-verts-per-entry-gl_VertexID-grown-AABB;early_fragment_tests;read-then-atomicOr(first-version-+1390us->+193us-heavy);Device_info::fragment_stores_and_atomics;setting-occlusion_culling(default-off)+MCP-set_occlusion_culling/get_occlusion_check;scripts/occlusion_wall_check.py(static-bodies;6/6-occluded-M3/M4/KK);Bistro-73%-occluded;images-identical-on/off;cost-M4-Release-GPU-Main-heavy-+193us-Bistro-+480us(pass-alone);open:cull-none-doubles-fragments;3b-needs-view-mapping-by-key-between-frames}
 ✓occlusion-3b{classify-consumes-previous-frame-bits(same-view-by-Gpu_command_key;frame-right-before;entry_layout_serial-unchanged;else-nothing-culled);culled-region+stats+check;consumer-barrier-earlier_submissions;boxes=3-camera-facing-faces-mirrored-template(©Aaltonen-thread)+static-uint32-index-buffer-7-verts/18-idx(©User:index-buffer=transform-cache);Occlusion_culling-enum-replaces-bool;gates:images-identical-on/off-3-backends+0-mismatch+wall-culls-6+inside-box-ok+teleport-1-lag-frame+soak-clean;M4-Release-GPU-Main-off->on:heavy-2764->2861(+97;31/1003-occluded)|Bistro-framed-3844->3150(-694)|Bistro-bench-cam-3384->~2590(-790);pass-alone:heavy-+107(3a-+193)|Bistro-+256(3a-+480)|Bistro-bench-cam-+1009(large-near-boxes-fill);setting-default-OFF-pending-user}
-?user-decisions{default-on?;step-5-second-draw(lag-visible?);cost-candidates:screen-size-threshold|hierarchical-Z-compute-test(plan-Open);headset-unculled}
-?then=occlusion-pass{sketch-steps-1-4,6,7;depth-from-main-pass;bounds-raster;visibility-bits-per-frame-slot;consumed-N+1}
+✓PHASE-7-BUILT-2026-10-24{rebased-onto-Windows-session+pushed-1f59cbc43}
+?user-decisions{default-on?(heavy-+97us-vs-Bistro--700us);step-5-second-draw(1-lag-frame-measured;not-visible-in-screenshots);fill-cost-near-large-boxes(Bistro-bench-cam-+1009us:screen-size-threshold|hierarchical-Z-compute-test;plan-Open);headset-occlusion-view(headset-has-union-frustum-view-since-39265add1;occlusion-test-pass-not-registered-for-it)}
 
 [TASK::bistro-gpu]{started-2026-10-21;branch=render-thread;Release-Metal-M4-Pro-Dell-120Hz}
 ✓profile{Bistro-GPU~6.5ms(viewport-4.3+point-faces-2.15+spot-0.3);R-2.15ms;main-0.38ms;no-meaningful-M/R-overlap(GPU-bound)}
@@ -82,7 +82,7 @@
 ✓phase-5{ffa58f817;Gpu_cull_classifier+cull_classify.comp;per-slot-bounds-buffer;per-batch-mask-regions;MCP-check-0-mismatches;review-fixes:per-list-writes+no-dispatch-barrier+check-waits-for-gpu-frame+generations+cull_classification.hpp+enum-static_asserts}
 ✓phase-6a{9d21b1bd9;pre_execute hook+callback;Cull_frame_registry;review-fixes:registry-not-classifier-owned+callback-VERIFY+one-timer+params-once+one-color-view-source+cull_view-in-prepared;headset-per-eye-unculled=open}
 ✓phase-6b{GPU-shadow-commands;count-draw;review-fixes:no-per-entry-CPU-loop+readback-stats+index-clamp-refusal+flat-dispatch+chunk-size-once+split_uint64}
-?phase-7{occlusion;queued-after-Metal-draw-count+Metal-4(2026-10-23);doc/plans/occlusion_culling.md}
+✓phase-7{occlusion;BUILT-2026-10-24;->[TASK::occlusion-culling]}
 ✓gpu-shutdown-fix{d00438512}
 ✓perf-summary-report{memory-bank/local/culling_perf_2026_10_17.md;plan-6b-numbers-c66811366}
 
