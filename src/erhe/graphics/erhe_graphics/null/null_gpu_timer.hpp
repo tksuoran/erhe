@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_graphics/gpu_timer.hpp"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -19,7 +21,7 @@ public:
     Gpu_timer_impl(Gpu_timer_impl&&)      = delete;
     auto operator=(Gpu_timer_impl&&)      = delete;
 
-    [[nodiscard]] auto last_result() -> uint64_t;
+    [[nodiscard]] auto last_result() -> Gpu_timer_result;
     [[nodiscard]] auto label      () const -> const char*;
 
     void write_begin_timestamp(Command_buffer& command_buffer);

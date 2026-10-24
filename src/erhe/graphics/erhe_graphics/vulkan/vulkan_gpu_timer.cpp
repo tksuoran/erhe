@@ -48,13 +48,13 @@ void Gpu_timer_impl::write_end_timestamp(Command_buffer& command_buffer)
     m_device_impl->record_gpu_timer_end_query(vk_cb, command_buffer.get_impl().get_frame_id(), m_slot);
 }
 
-void Gpu_timer_impl::store_last_result_ns(uint64_t nanoseconds)
+void Gpu_timer_impl::store_last_result_ns(const uint64_t nanoseconds, const uint64_t frame_id)
 {
     const std::lock_guard<std::mutex> lock{m_result_mutex};
-    m_last_result = nanoseconds;
+    m_last_result = Gpu_timer_result{.nanoseconds = nanoseconds, .frame_id = frame_id};
 }
 
-auto Gpu_timer_impl::last_result() -> uint64_t
+auto Gpu_timer_impl::last_result() -> Gpu_timer_result
 {
     const std::lock_guard<std::mutex> lock{m_result_mutex};
     return m_last_result;

@@ -17,6 +17,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -26,6 +27,7 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 
+#include <fmt/format.h>
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
@@ -52,6 +54,8 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     register_output("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
 
     m_frame_target.resize(rendergraph.get_graphics_device().get_number_of_frames_in_flight());
+    m_gpu_timer_label = fmt::format("ImGui {}", get_debug_label().string_view());
+    m_gpu_timer       = std::make_unique<erhe::graphics::Gpu_timer>(rendergraph.get_graphics_device(), m_gpu_timer_label.c_str());
 
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
@@ -560,6 +564,8 @@ void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_b
     // which may run while this frame renders. No ImGui context is touched
     // here (Window_imgui_host::execute_rendergraph_node).
     m_app_context.imgui_renderer->wait_for_draw_data();
+
+    erhe::graphics::Scoped_gpu_timer scoped_gpu_timer{*m_gpu_timer, command_buffer};
 
     // Process pending ImGui texture create/update/destroy BEFORE opening
     // the render pass -- Blit_command_encoder (used for texture uploads)

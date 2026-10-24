@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_graphics/gpu_timer.hpp"
+
 #include <array>
 #include <condition_variable>
 #include <cstddef>
@@ -103,6 +105,7 @@ public:
     int                                       last_ended_end     {-1};
     std::size_t                               record_count       {0};
     std::array<Gpu_timer_record, max_records> records            {};
+    uint64_t                                  frame_id           {0}; // Command_buffer frame id, set by the first timer write
 };
 
 // Device-owned: the counter sample buffers (split into per-command-buffer
@@ -208,7 +211,7 @@ public:
     Gpu_timer_impl(Gpu_timer_impl&&)      = delete;
     auto operator=(Gpu_timer_impl&&)      = delete;
 
-    [[nodiscard]] auto last_result() -> uint64_t;
+    [[nodiscard]] auto last_result() -> Gpu_timer_result;
     [[nodiscard]] auto label      () const -> const char*;
 
     void write_begin_timestamp(Command_buffer& command_buffer);
@@ -216,15 +219,16 @@ public:
 
     // Called by Gpu_timer_sample_pool::resolve_command_buffer_samples, with
     // the pool mutex held (unregister_timer takes the same mutex, so the
-    // timer is never written while being destroyed).
-    void store_last_result_ns(uint64_t nanoseconds);
+    // timer is never written while being destroyed). frame_id is the
+    // command buffer's frame id.
+    void store_last_result_ns(uint64_t nanoseconds, uint64_t frame_id);
 
 private:
     Gpu_timer_sample_pool* m_pool        {nullptr};
     const char*            m_label       {nullptr};
     uint64_t               m_serial      {0};
     std::mutex             m_result_mutex;
-    uint64_t               m_last_result {0};
+    Gpu_timer_result       m_last_result {};
 };
 
 } // namespace erhe::graphics

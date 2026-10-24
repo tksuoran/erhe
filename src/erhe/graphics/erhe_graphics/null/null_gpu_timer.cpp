@@ -23,9 +23,9 @@ void Gpu_timer_impl::write_end_timestamp(Command_buffer& command_buffer)
     static_cast<void>(command_buffer);
 }
 
-auto Gpu_timer_impl::last_result() -> uint64_t
+auto Gpu_timer_impl::last_result() -> Gpu_timer_result
 {
-    return 0;
+    return Gpu_timer_result{};
 }
 
 auto Gpu_timer_impl::label() const -> const char*

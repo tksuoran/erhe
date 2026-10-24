@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -10,6 +11,16 @@ class Command_buffer;
 class Device;
 class Render_pass;
 class Gpu_timer_impl;
+
+// One completed measurement of a Gpu_timer: the GPU time and the device frame
+// id (Command_buffer::get_frame_id()) of the frame whose command buffer
+// recorded it. frame_id 0: no result yet (device frame ids start at 1).
+class Gpu_timer_result
+{
+public:
+    uint64_t nanoseconds{0};
+    uint64_t frame_id   {0};
+};
 
 // A GPU-side wall-clock timer. The result of a measurement becomes available
 // via last_result() roughly one or two frames later (after the frame that
@@ -51,6 +62,10 @@ public:
     // Last completed measurement, in nanoseconds. May briefly read 0 before
     // the first frame's results are available.
     [[nodiscard]] auto last_result() -> uint64_t;
+    // last_result() together with the frame that recorded it, read as one
+    // value. A timer whose work was not recorded in a later frame keeps its
+    // older result, so a reader keyed by frame compares frame_id.
+    [[nodiscard]] auto last_result_with_frame_id() -> Gpu_timer_result;
     [[nodiscard]] auto label      () const -> const char*;
 
     // Explicit-range timers only (constructed with a Device): record the
@@ -71,6 +86,13 @@ public:
     // Snapshot of every live Gpu_timer in the process. Used by
     // Performance_window to discover plots automatically.
     [[nodiscard]] static auto all_gpu_timers() -> std::vector<Gpu_timer*>;
+
+    // Calls callback for every live Gpu_timer while holding the registry
+    // lock, so no timer is destroyed during the walk (the pointers of an
+    // all_gpu_timers() snapshot can dangle once the lock is released). The
+    // callback must not create or destroy a Gpu_timer. Allocation-free
+    // (for per-frame readers).
+    static void for_each_gpu_timer(const std::function<void(Gpu_timer&)>& callback);
 
 private:
     enum class Binding : unsigned int

@@ -1972,9 +1972,11 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
         // but because the slice may still be in the "never reset" state on
         // the first frame, where reading is undefined.
         std::array<bool, s_max_gpu_timers> fired_snapshot{};
-        bool any_fired = false;
+        bool     any_fired        = false;
+        uint64_t slice_frame_id   = 0;
         {
             const std::lock_guard<std::mutex> lock{m_gpu_timer_mutex};
+            slice_frame_id = m_gpu_timer_slice_frame_id[slot];
             std::array<bool, s_max_gpu_timers>& fired = m_gpu_timer_fired[slot];
             for (std::size_t i = 0; i < s_max_gpu_timers; ++i) {
                 fired_snapshot[i] = fired[i];
@@ -2027,7 +2029,7 @@ auto Device_impl::acquire_frame_slot(const uint64_t frame_id) -> bool
                     if (timer == nullptr) {
                         continue;
                     }
-                    timer->store_last_result_ns(static_cast<uint64_t>(delta_ns));
+                    timer->store_last_result_ns(static_cast<uint64_t>(delta_ns), slice_frame_id);
                 }
             }
         }
@@ -2845,7 +2847,8 @@ void Device_impl::record_gpu_timer_begin_query(VkCommandBuffer cb, const uint64_
     const std::size_t query_idx  = in_flight * slice_size + index * 2;
     {
         const std::lock_guard<std::mutex> lock{m_gpu_timer_mutex};
-        m_gpu_timer_fired[in_flight][index] = true;
+        m_gpu_timer_fired[in_flight][index]  = true;
+        m_gpu_timer_slice_frame_id[in_flight] = frame_id;
     }
     vkCmdWriteTimestamp(
         cb,

@@ -439,6 +439,12 @@ def headline(result: dict) -> dict:
         values[term] = summary.get(term, {}).get("median", 0.0)
     for counter, stats in summary.get("xr_counters", {}).items():
         values[f"xr:{counter}"] = stats.get("median", 0.0)
+    # GPU timer series: only the passes that ran in the measured window.
+    for gpu_pass, stats in summary.get("gpu_passes", {}).items():
+        if stats.get("max", 0.0) > 0.0:
+            values[f"gpu_pass:{gpu_pass}"] = stats.get("median", 0.0)
+    if "gpu_total_us" in summary:
+        values["gpu_pass:(total)"] = summary["gpu_total_us"].get("median", 0.0)
     for metric, stats in result.get("host", {}).get("gpu_metrics", {}).items():
         values[f"gpu:{metric}"] = stats.get("mean", 0.0)
     return values

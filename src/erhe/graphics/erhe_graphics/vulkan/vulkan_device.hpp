@@ -949,6 +949,8 @@ private:
     std::array<bool,                  s_max_gpu_timers> m_gpu_timer_slot_used{};
     std::array<std::array<bool, s_max_gpu_timers>, s_number_of_frames_in_flight> m_gpu_timer_fired{};
     std::array<bool, s_number_of_frames_in_flight>                              m_gpu_timer_reset_pending{};
+    // The frame id that last recorded timer queries into each slice.
+    std::array<uint64_t, s_number_of_frames_in_flight>                          m_gpu_timer_slice_frame_id{};
 
 #if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
     // Tracy Vulkan GPU profiling context, created in vulkan_device_init.cpp

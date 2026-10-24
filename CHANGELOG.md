@@ -23,6 +23,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Gpu_timer_result` (nanoseconds + recording frame id),
+  `Gpu_timer::last_result_with_frame_id()` and the allocation-free
+  `Gpu_timer::for_each_gpu_timer(const std::function<void(Gpu_timer&)>&)`
+  (walks the live timers under the registry lock).
 - `erhe::xr`: head pose override for scripted runs:
   `Headset::set_head_pose_override(const std::optional<Pose>&)` and
   `Xr_session::set_head_pose_override()` / `get_head_pose_override()`.

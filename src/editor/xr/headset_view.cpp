@@ -43,6 +43,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -289,6 +290,8 @@ Headset_view::Headset_view(
     m_rendergraph_node = erhe::rendergraph::make_rendergraph_node<Headset_view_node>(rendergraph, *this);
 
     m_shadow_render_node = app_rendering.create_shadow_node_for_scene_view(graphics_device, rendergraph, app_settings, *this);
+    m_multiview_gpu_timer         = std::make_unique<erhe::graphics::Gpu_timer>(graphics_device, "XR multiview");
+    m_multiview_compute_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>(graphics_device, "XR multiview line compute");
     rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_render_node.get(), m_rendergraph_node.get());
 
     if (m_context.OpenXR_mirror) {
@@ -340,10 +343,11 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
 
 }
 
-void Headset_view::enable_benchmark_mode(const std::optional<float> display_refresh_rate_hz)
+void Headset_view::enable_benchmark_mode(const std::optional<float> display_refresh_rate_hz, const Benchmark_passthrough passthrough)
 {
     m_benchmark_mode                    = true;
     m_benchmark_display_refresh_rate_hz = display_refresh_rate_hz;
+    m_benchmark_passthrough             = passthrough;
     reset_hover();
     if (m_controller_visualization) {
         m_controller_visualization->hide();
@@ -1031,8 +1035,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // across the init boundary) leaves passthrough untouched. This also
     // handles the init -> scene hand-off: the init status screen always runs
     // with passthrough, and the first rendered scene frame settles it to the
-    // state the Settings imply.
-    if (m_frame_timing.should_render) {
+    // state the Settings imply. In benchmark mode the benchmark file's
+    // passthrough value decides instead, for the whole run.
+    if (m_frame_timing.should_render && m_benchmark_mode) {
+        m_headset->set_passthrough_active(m_benchmark_passthrough == Benchmark_passthrough::on);
+    } else if (m_frame_timing.should_render) {
         // Sky enable resolved per scene (#239): a scene may override the sky off,
         // which enables passthrough for this headset view.
         const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
@@ -1256,6 +1263,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // and vertex-attribute readers downstream regardless of
             // which compute ran.
             {
+                erhe::graphics::Scoped_gpu_timer scoped_compute_gpu_timer{*m_multiview_compute_gpu_timer, views_cb};
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = m_app_context.graphics_device->make_compute_command_encoder(views_cb);
                     if (drive_wide_lines) {
@@ -1376,6 +1384,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             }
 
             {
+                // Outside the render pass: a timestamp written inside a
+                // multiview render pass instance takes one query per view.
+                erhe::graphics::Scoped_gpu_timer scoped_gpu_timer{*m_multiview_gpu_timer, views_cb};
                 erhe::graphics::Render_command_encoder encoder = m_app_context.graphics_device->make_render_command_encoder(views_cb);
                 erhe::graphics::Scoped_render_pass scoped_render_pass{multiview_render_pass, views_cb};
 

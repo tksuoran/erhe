@@ -5,6 +5,7 @@
     "frame_dt": 0.008333333,
     "settle_timeout_frames": 1800,
     "display_refresh_rate_hz": 120,
+    "passthrough": false,
     "camera_path": {
         "type": "orbit",
         "center": [0.0, 0.0, 0.0],

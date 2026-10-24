@@ -678,7 +678,7 @@ public:
         );
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         if (m_headset_view) {
-            m_headset_view->enable_benchmark_mode(m_benchmark_driver->get_display_refresh_rate_hz());
+            m_headset_view->enable_benchmark_mode(m_benchmark_driver->get_display_refresh_rate_hz(), m_benchmark_driver->get_passthrough());
         }
 #endif
     }
@@ -1438,6 +1438,12 @@ public:
         const bool acquire_ok = m_graphics_device->acquire_frame_slot(packet.device_frame_id);
         ERHE_VERIFY(acquire_ok);
         m_phase_timing.slot_acquire_us += elapsed_us(slot_acquire_begin, std::chrono::steady_clock::now());
+        // Benchmark mode: acquire_frame_slot() just stored the GPU timer
+        // results of the frame that last held this slot; the driver reads
+        // them keyed by their frame id.
+        if (m_benchmark_driver) {
+            m_benchmark_driver->sample_gpu_timers();
+        }
 
         packet.upload_command_buffer = nullptr;
 

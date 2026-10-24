@@ -4,6 +4,7 @@
     "measure_frames": 600,
     "frame_dt": 0.013888889,
     "settle_timeout_frames": 1800,
+    "passthrough": false,
     "camera_path": {
         "type": "keyframes",
         "frames": [

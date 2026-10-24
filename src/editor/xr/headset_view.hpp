@@ -6,6 +6,7 @@
 #include "xr/hand_tracker.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/headset_view_resources.hpp"
+#include "benchmark_driver.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
@@ -29,6 +30,7 @@
 namespace erhe::graphics {
     class Command_buffer;
     class Device;
+    class Gpu_timer;
     class Swapchain;
 }
 namespace erhe::imgui {
@@ -223,8 +225,10 @@ public:
     // ID pick pass, no controller ray, no XR input events injected, and the
     // controller visualization is hidden. xrSyncActions still runs.
     // display_refresh_rate_hz, when set, is requested through
-    // XR_FB_display_refresh_rate once the session runs.
-    void enable_benchmark_mode(std::optional<float> display_refresh_rate_hz);
+    // XR_FB_display_refresh_rate once the session runs. passthrough replaces
+    // the per-frame passthrough reconcile's sky / passthrough_fb decision
+    // for the whole run.
+    void enable_benchmark_mode(std::optional<float> display_refresh_rate_hz, Benchmark_passthrough passthrough);
     // Main thread, M1 before wait_frame(): the head pose the frame renders
     // from (stage space; erhe::xr::Headset::set_head_pose_override()).
     void set_benchmark_head_pose(const glm::vec3& position, const glm::quat& orientation);
@@ -365,6 +369,7 @@ private:
     // and R afterwards.
     bool                                                 m_benchmark_mode{false};
     std::optional<float>                                 m_benchmark_display_refresh_rate_hz{};
+    Benchmark_passthrough                                m_benchmark_passthrough{Benchmark_passthrough::off};
     bool                                                 m_benchmark_display_refresh_rate_requested{false};
     std::string                                          m_benchmark_display_refresh_rate_failure;
 
@@ -379,6 +384,11 @@ private:
     erhe::xr::Headset*                                   m_headset;
 #endif
     std::unique_ptr<erhe::graphics::Render_pass>         m_mirror_mode_window_render_pass;
+    // GPU time of the multiview color pass (the pass object is per frame,
+    // so the timer is an explicit range around it) and of the wide-line /
+    // debug-line compute dispatches before it.
+    std::unique_ptr<erhe::graphics::Gpu_timer>           m_multiview_gpu_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer>           m_multiview_compute_gpu_timer;
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
     // The headset's own prim: a Camera is an Xformable (C5), so the headset
     // pose is set on the camera itself.
