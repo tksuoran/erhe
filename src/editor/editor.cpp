@@ -573,7 +573,7 @@ public:
             .r_us               = now.render_us    - prev.render_us,
             .wall_clock_s       = std::chrono::duration<double>{tick_end - m_benchmark_clock_origin}.count(),
             .frame_rendered                = true,
-            .refresh_rate_request_refused  = false,
+            .refresh_rate_failure          = nullptr,
             .scene_settled                 = false,
             .refresh_rate_settled          = false,
             .display_refresh_hz            = 0.0,
@@ -591,7 +591,7 @@ public:
         if (m_app_context.OpenXR && m_headset_view) {
             const erhe::xr::Frame_timing& timing = m_frame_packet.headset_frame_timing;
             inputs.frame_rendered               = timing.wait_ok && timing.should_render && m_headset_view->is_update_actions_ok();
-            inputs.refresh_rate_request_refused = m_headset_view->is_benchmark_display_refresh_rate_refused();
+            inputs.refresh_rate_failure         = &m_headset_view->get_benchmark_display_refresh_rate_failure();
         }
 #endif
         // The settle conditions have no change notification to drive them

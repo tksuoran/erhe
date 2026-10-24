@@ -12,6 +12,7 @@
 #include <numbers>
 
 #if defined(ERHE_OS_ANDROID)
+#   include <SDL3/SDL_system.h>
 #   include <android/api-level.h>
 #   include <android/thermal.h>
 #   include <sys/system_properties.h>
@@ -127,6 +128,17 @@ auto query_system_property(const char* name) -> std::string
 }
 
 } // anonymous namespace
+
+auto get_benchmark_output_directory() -> std::string
+{
+#if defined(ERHE_OS_ANDROID)
+    const char* external = SDL_GetAndroidExternalStoragePath();
+    if ((external != nullptr) && (external[0] != '\0')) {
+        return fmt::format("{}/logs", external);
+    }
+#endif
+    return "logs";
+}
 
 auto Benchmark_camera_path::evaluate(const int64_t frame) const -> Benchmark_pose
 {
@@ -354,6 +366,15 @@ auto Benchmark_driver::is_done() const -> bool
 void Benchmark_driver::set_run_identity(const Benchmark_run_identity& identity)
 {
     m_identity = identity;
+    // Cold (before the frame loop): the scene setup the run started from
+    // seeds input_hash, so results of different scenes cannot match.
+    m_commands_file_hash = 0;
+    if (!m_identity.commands_path.empty()) {
+        const std::optional<std::string> content = erhe::file::read("benchmark commands file", m_identity.commands_path);
+        if (content.has_value()) {
+            m_commands_file_hash = fnv1a(c_fnv_offset_basis, content.value().data(), content.value().size());
+        }
+    }
 }
 
 void Benchmark_driver::set_xr_display_period(const uint64_t predicted_display_period_ns)
@@ -398,7 +419,7 @@ void Benchmark_driver::begin_measure(const Benchmark_frame_inputs& inputs)
     m_thermal_step_downs_begin   = inputs.thermal_step_down_count;
     m_measure_begin_wall_clock_s = inputs.wall_clock_s;
     m_settle_frames              = m_state_frame;
-    m_input_hash                 = c_fnv_offset_basis;
+    m_input_hash                 = fnv1a(c_fnv_offset_basis, &m_commands_file_hash, sizeof(m_commands_file_hash));
     m_path_frame                 = 0;
     m_state                      = State::measure;
     m_state_frame                = 0;
@@ -416,8 +437,8 @@ void Benchmark_driver::fail(const std::string& reason)
 
 void Benchmark_driver::on_frame_end(const Benchmark_frame_inputs& inputs)
 {
-    if ((m_state != State::done) && inputs.refresh_rate_request_refused) {
-        fail("display refresh rate request refused");
+    if ((m_state != State::done) && (inputs.refresh_rate_failure != nullptr) && !inputs.refresh_rate_failure->empty()) {
+        fail(*inputs.refresh_rate_failure);
         m_previous_wall_clock_s = inputs.wall_clock_s;
         return;
     }
@@ -561,6 +582,7 @@ void Benchmark_driver::finish(const Benchmark_frame_inputs& inputs)
             {"benchmark_file",        m_path},
             {"benchmark_file_hash",   fmt::format("{:016x}", m_file_hash)},
             {"commands_path",         m_identity.commands_path},
+            {"commands_file_hash",    fmt::format("{:016x}", m_commands_file_hash)},
             {"device_model",          query_system_property("ro.product.model")},
             {"os_build",              query_system_property("ro.build.display.id")},
             {"cpu_performance_level", m_identity.cpu_performance_level},
@@ -594,8 +616,9 @@ void Benchmark_driver::finish(const Benchmark_frame_inputs& inputs)
         }}
     };
 
-    const std::string output_path = fmt::format("logs/benchmark_{}.json", m_name);
-    static_cast<void>(erhe::file::ensure_directory_exists("logs"));
+    const std::string output_directory = get_benchmark_output_directory();
+    const std::string output_path      = fmt::format("{}/benchmark_{}.json", output_directory, m_name);
+    static_cast<void>(erhe::file::ensure_directory_exists(output_directory));
     if (!erhe::file::write_file(output_path, result.dump(2))) {
         log_frame->error("Benchmark {}: writing {} failed", m_name, output_path);
     } else {

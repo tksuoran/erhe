@@ -141,6 +141,10 @@ public:
     // extension or the session is unavailable or the call fails.
     [[nodiscard]] auto request_display_refresh_rate(float refresh_rate_hz) -> bool;
     [[nodiscard]] auto get_display_refresh_rate    () const -> float;
+    // The refresh rates the runtime offers (xrEnumerateDisplayRefreshRatesFB),
+    // empty when unavailable. Enumerated once when the session begins
+    // (logged there with the current rate).
+    [[nodiscard]] auto get_display_refresh_rates   () const -> const std::vector<float>&;
 
     // Quad composition layers. create_quad_layer() creates a dedicated color
     // swapchain (using the session's selected swapchain color format) and a
@@ -310,6 +314,7 @@ private:
     // and of the frame begin_frame() began (from its Frame_timing).
     std::optional<Pose>                           m_head_pose_override{};
     std::optional<Pose>                           m_render_head_pose_override{};
+    std::vector<float>                            m_display_refresh_rates;
     Hand_tracker                                  m_hand_tracker_left;
     Hand_tracker                                  m_hand_tracker_right;
     XrPassthroughFB                               m_passthrough_fb      {XR_NULL_HANDLE};

@@ -698,6 +698,7 @@ auto Xr_instance::create_instance() -> bool
     }
 
     if (extensions.FB_display_refresh_rate) {
+        xrEnumerateDisplayRefreshRatesFB = get_proc_addr<PFN_xrEnumerateDisplayRefreshRatesFB>("xrEnumerateDisplayRefreshRatesFB");
         xrGetDisplayRefreshRateFB     = get_proc_addr<PFN_xrGetDisplayRefreshRateFB    >("xrGetDisplayRefreshRateFB");
         xrRequestDisplayRefreshRateFB = get_proc_addr<PFN_xrRequestDisplayRefreshRateFB>("xrRequestDisplayRefreshRateFB");
     }

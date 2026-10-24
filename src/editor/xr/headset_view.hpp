@@ -216,7 +216,9 @@ public:
     // the number of thermal step-downs (XR_EXT_performance_settings level
     // values; -1 unset, -2 never applied).
     [[nodiscard]] auto is_update_actions_ok                   () const -> bool;
-    [[nodiscard]] auto is_benchmark_display_refresh_rate_refused() const -> bool;
+    // Why the benchmark's refresh rate request failed (not offered by the
+    // runtime, or refused), empty when it did not fail.
+    [[nodiscard]] auto get_benchmark_display_refresh_rate_failure() const -> const std::string&;
     [[nodiscard]] auto get_applied_cpu_performance_level      () const -> int;
     [[nodiscard]] auto get_applied_gpu_performance_level      () const -> int;
     [[nodiscard]] auto get_thermal_step_down_count            () const -> int;
@@ -335,7 +337,7 @@ private:
     bool                                                 m_benchmark_mode{false};
     std::optional<float>                                 m_benchmark_display_refresh_rate_hz{};
     bool                                                 m_benchmark_display_refresh_rate_requested{false};
-    bool                                                 m_benchmark_display_refresh_rate_refused{false};
+    std::string                                          m_benchmark_display_refresh_rate_failure;
 
     // Quad composition layers to hover-test (see register_quad_view()).
     std::vector<Quad_view*>                              m_quad_views;
