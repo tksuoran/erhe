@@ -2,6 +2,13 @@
 
 @rule::active-tasks-only;DONE-task-sections-move-to-memory-bank/topics/<topic>.md[PROGRESS]
 
+[TASK::quest-performance]{started-2026-10-24;branch=render-thread;via-harness{opus-coder+fable-review};doc/plans/quest_performance.md;memory-bank/topics/quest.md}
+✓quest-topic+queue{42c05810b;Quest-items-1-5-at-queue-front}
+✓build-fix{5460e0c3b;NDK-libc++-lacks-float-from_chars->strtod-hexfloat;graphics-tests-15/15}
+✓baseline-default-scene{72Hz;M1-12.0ms(xrWaitFrame)+M2-0.78+M3-1.0;R-5.76(draw_data_wait-0.45);join_wait-0.1=>xrWaitFrame(N+1)-inside-R(N)-CONFIRMED;GPU-util-47%@456MHz;nearest-85%;non-base-level-0%(no-mips);tex-fetch-stall-26%;LRZ-busy-84%;raw->memory-bank/local/quest_2026_10_24/}
+⚡benchmark-mode{©User-2026-10-24:profiling-independent-of-pose+actions;spec=plan-"Benchmark mode";coder-running;3-commits:argv-passthrough|driver+pose-override|quest_bench.py+docs}
+?then=heavy-scene-run(commands_bench_heavy-via-args-extra)->rank-CPU(R-5.8ms-default)-vs-GPU(mips)->items-2-5
+
 [TASK::metal-draw-count]{2026-10-23..24;branch=render-thread;CODE-DONE;detail->memory-bank/topics/metal.md[PROGRESS_2026-10-24]}
 ✓Metal-GPU-read-draw-count(ICB)+Metal-4-separate-backend-all-rows-MTL4+barrier-API+declared-barriers+narrowing(5cf6e13d2)+ImGui-first_instance(07330bebc)+Metal-draw-id-removed(2ae347dfe;M4==M3-per-draw)+vertex-stage-sampler-remap(c9e5f8faf)+Vk-render-pass-qualifiers(1fd30277d)+shadow-qualifiers(f52f201e0)
 ?pending-user-at-Dell{pacing-live-gate-cached-vs-fresh;M4-vs-M3;fullscreen-re-gate-Dell+ProMotion}->Metal-3-keep/remove-decision(Metal-3-still-per-bind-PSO)=prompt_queue-item-2
