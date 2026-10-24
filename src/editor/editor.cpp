@@ -6,6 +6,7 @@
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/display_refresh_resolver.hpp"
 #include "app_context.hpp"
+#include "benchmark_driver.hpp"
 #include "config/generated/add_cameras_args.hpp"
 #include "config/generated/add_cameras_args_serialization.hpp"
 #include "config/generated/add_lights_args.hpp"
@@ -516,6 +517,9 @@ public:
         const std::chrono::steady_clock::time_point tick_end = std::chrono::steady_clock::now();
         m_phase_timing.full_tick_us += elapsed_us(tick_begin, tick_end);
         ++m_phase_timing.frame_count;
+        if (m_benchmark_driver) {
+            hand_off_benchmark_frame(tick_end);
+        }
         constexpr unsigned int phase_timing_log_interval = 60;
         if (m_phase_timing.frame_count < phase_timing_log_interval) {
             return;
@@ -547,7 +551,136 @@ public:
             m_phase_timing.join_latency_us / frame_count,
             full_us
         );
-        m_phase_timing = Phase_timing{};
+        m_phase_timing           = Phase_timing{};
+        m_benchmark_phase_timing = Phase_timing{};
+    }
+
+    // Benchmark mode, end of frame(): this frame's phase terms are the
+    // accumulator deltas since the previous frame's end (R: the frame joined
+    // during this tick), handed to the driver with the settle state.
+    Phase_timing                          m_benchmark_phase_timing{}; // m_phase_timing at the previous frame's end
+    std::chrono::steady_clock::time_point m_benchmark_clock_origin{std::chrono::steady_clock::now()};
+
+    void hand_off_benchmark_frame(const std::chrono::steady_clock::time_point tick_end)
+    {
+        const Phase_timing& now  = m_phase_timing;
+        const Phase_timing& prev = m_benchmark_phase_timing;
+        Benchmark_frame_inputs inputs{
+            .full_tick_us       = now.full_tick_us - prev.full_tick_us,
+            .m1_us              = now.m1_us        - prev.m1_us,
+            .m2_us              = now.m2_us        - prev.m2_us,
+            .m3_us              = now.m3_us        - prev.m3_us,
+            .r_us               = now.render_us    - prev.render_us,
+            .wall_clock_s       = std::chrono::duration<double>{tick_end - m_benchmark_clock_origin}.count(),
+            .frame_rendered                = true,
+            .refresh_rate_request_refused  = false,
+            .scene_settled                 = false,
+            .refresh_rate_settled          = false,
+            .display_refresh_hz            = 0.0,
+            .applied_cpu_performance_level = -2,
+            .applied_gpu_performance_level = -2,
+            .thermal_step_down_count       = 0
+        };
+        // Whether this frame could render: under OpenXR the frame was
+        // waited, the runtime asked for rendering and the actions updated
+        // (the headset view renders only then); without OpenXR every frame
+        // renders. A session that never runs (e.g. the headset off-head
+        // without the proximity override) never settles, and a frame that
+        // does not render fails the measured window.
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_app_context.OpenXR && m_headset_view) {
+            const erhe::xr::Frame_timing& timing = m_frame_packet.headset_frame_timing;
+            inputs.frame_rendered               = timing.wait_ok && timing.should_render && m_headset_view->is_update_actions_ok();
+            inputs.refresh_rate_request_refused = m_headset_view->is_benchmark_display_refresh_rate_refused();
+        }
+#endif
+        // The settle conditions have no change notification to drive them
+        // (async workers, the asset manager and the brush queue count down
+        // on their own), so they are polled, and only while the driver waits
+        // for them (and on the last measured frame, for the refresh rate at
+        // the end). A requested display refresh rate takes effect at a frame
+        // boundary of the runtime's choice, so it is part of settling: the
+        // achieved rate must be within 0.5 Hz of the requested one.
+        if (m_benchmark_driver->needs_settle_inputs()) {
+            inputs.scene_settled =
+                !m_app_context.is_scene_load_in_flight() &&
+                (!m_scene_builder || m_scene_builder->is_brush_geometry_idle());
+            inputs.display_refresh_hz = get_benchmark_display_refresh_hz();
+            const std::optional<float> requested_refresh_hz = m_benchmark_driver->get_display_refresh_rate_hz();
+            inputs.refresh_rate_settled =
+                !requested_refresh_hz.has_value() ||
+                (std::abs(inputs.display_refresh_hz - static_cast<double>(requested_refresh_hz.value())) <= 0.5);
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+            if (m_app_context.OpenXR && m_headset_view) {
+                inputs.applied_cpu_performance_level = m_headset_view->get_applied_cpu_performance_level();
+                inputs.applied_gpu_performance_level = m_headset_view->get_applied_gpu_performance_level();
+                inputs.thermal_step_down_count       = m_headset_view->get_thermal_step_down_count();
+            }
+#endif
+        }
+        m_benchmark_driver->on_frame_end(inputs);
+        m_benchmark_phase_timing = m_phase_timing;
+    }
+
+    // The achieved display refresh rate: the XR runtime's
+    // (XR_FB_display_refresh_rate), else the window's display.
+    [[nodiscard]] auto get_benchmark_display_refresh_hz() const -> double
+    {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_app_context.OpenXR && m_headset_view && (m_headset_view->get_headset() != nullptr)) {
+            erhe::xr::Xr_session* session = m_headset_view->get_headset()->get_xr_session();
+            const float xr_refresh_hz = (session != nullptr) ? session->get_display_refresh_rate() : 0.0f;
+            if (xr_refresh_hz > 0.0f) {
+                return static_cast<double>(xr_refresh_hz);
+            }
+        }
+#endif
+        const double refresh_duration_s = m_graphics_device->get_display_refresh_duration_seconds();
+        return (refresh_duration_s > 0.0) ? (1.0 / refresh_duration_s) : 0.0;
+    }
+
+    // Benchmark mode, M2 after the XR actions: the XR_META_performance_metrics
+    // counters the render phase of the previous frame queried
+    // (Headset::begin_frame()); R is idle in M2 under the serial schedule
+    // OpenXR runs.
+    void sample_benchmark_xr_counters()
+    {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        erhe::xr::Headset*    headset = m_headset_view->get_headset();
+        erhe::xr::Xr_session* session = (headset != nullptr) ? headset->get_xr_session() : nullptr;
+        if (session == nullptr) {
+            return;
+        }
+        const std::vector<erhe::xr::Xr_perf_counter>& counters = session->get_perf_counters();
+        for (std::size_t i = 0, end = counters.size(); i < end; ++i) {
+            const XrPerformanceMetricsCounterMETA& last = counters[i].last;
+            const bool float_valid = (last.counterFlags & XR_PERFORMANCE_METRICS_COUNTER_FLOAT_VALUE_VALID_BIT_META) != 0;
+            const bool uint_valid  = (last.counterFlags & XR_PERFORMANCE_METRICS_COUNTER_UINT_VALUE_VALID_BIT_META ) != 0;
+            const double value =
+                float_valid ? static_cast<double>(last.floatValue) :
+                uint_valid  ? static_cast<double>(last.uintValue)  :
+                              0.0;
+            m_benchmark_driver->set_counter(i, counters[i].display_name, value);
+        }
+#endif
+    }
+
+    // run(), before the frame loop: the run identity and the headset's
+    // benchmark mode.
+    void begin_benchmark()
+    {
+        m_benchmark_driver->set_run_identity(
+            Benchmark_run_identity{
+                .commands_path         = m_resolved_startup_commands_path,
+                .cpu_performance_level = std::string{to_string(m_editor_settings.headset.cpu_performance_level)},
+                .gpu_performance_level = std::string{to_string(m_editor_settings.headset.gpu_performance_level)}
+            }
+        );
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_headset_view) {
+            m_headset_view->enable_benchmark_mode(m_benchmark_driver->get_display_refresh_rate_hz());
+        }
+#endif
     }
 
     // One frame is three phases (doc/editor/render_thread.md section 2.1):
@@ -1144,6 +1277,14 @@ public:
         m_frame_start_begin = std::chrono::steady_clock::now();
         packet.device_frame_id    = m_graphics_device->wait_for_frame_start();
         packet.display_advance_ns = frame_start_pacing(packet);
+        // Benchmark mode: the simulation advances by exactly the benchmark's
+        // frame_dt per measured frame (0 before), whatever the wall clock
+        // and the pacer say, so every run simulates the same timeline. The
+        // display advance is the one source of the frame's simulation
+        // advance (Time::prepare_update and the animation player).
+        if (m_benchmark_driver) {
+            packet.display_advance_ns = m_benchmark_driver->get_frame_advance_ns();
+        }
         m_phase_timing.frame_start_wait_us += elapsed_us(m_frame_start_begin, std::chrono::steady_clock::now());
         m_frame_started = true;
     }
@@ -1178,7 +1319,16 @@ public:
             // the session state it applies is read by R's frame functions.
             // wait_frame() does not wait when the previous M2's poll failed.
             erhe::log::set_breadcrumb("tick: xr wait_frame");
+            // Benchmark mode: the head pose of this frame is the camera
+            // path's; the frame waited next carries it to R.
+            if (m_benchmark_driver) {
+                const Benchmark_pose pose = m_benchmark_driver->get_head_pose();
+                m_headset_view->set_benchmark_head_pose(pose.position, pose.orientation);
+            }
             packet.headset_frame_timing = m_headset_view->wait_frame();
+            if (m_benchmark_driver && packet.headset_frame_timing.wait_ok) {
+                m_benchmark_driver->set_xr_display_period(packet.headset_frame_timing.predicted_display_pediod);
+            }
             if (!packet.headset_frame_timing.wait_ok) {
                 ERHE_PROFILE_SCOPE("OpenXR sleep");
                 // Throttle loop since xrWaitFrame won't be called.
@@ -1415,6 +1565,9 @@ public:
             ERHE_PROFILE_SCOPE("OpenXR update events");
             erhe::log::set_breadcrumb("tick: xr update_actions");
             const bool headset_update_actions_ok = m_headset_view->update_actions(packet.headset_frame_timing);
+            if (headset_update_actions_ok && m_benchmark_driver) {
+                sample_benchmark_xr_counters();
+            }
             if (headset_update_actions_ok) {
                 // TOOD m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
                 // TODO m_scene_view_config_window
@@ -2405,7 +2558,7 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights)
+    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights, const std::string& benchmark_path)
         : m_startup_commands_path{std::move(startup_commands_path)}
         , m_startup_scene_path   {std::move(startup_scene_path)}
         , m_no_startup_scene     {no_startup_scene}
@@ -2466,6 +2619,17 @@ public:
         m_app_context.fix_gltf_spot_lights = fix_gltf_spot_lights;
         if (fix_gltf_spot_lights) {
             log_startup->info("glTF spot light fixup enabled for this session (--fix-spot-lights)");
+        }
+
+        // --benchmark <file>: a timedemo run (doc/plans/quest_performance.md
+        // "Benchmark mode"). A file that does not load ends the run at once
+        // (the failure is logged), so a host script waiting for the result
+        // does not wait for a run that measures nothing.
+        if (!benchmark_path.empty()) {
+            m_benchmark_driver = Benchmark_driver::load(benchmark_path);
+            if (!m_benchmark_driver) {
+                m_close_requested = true;
+            }
         }
 
         // Editor is constructed on the main thread; anything capturing an
@@ -4826,6 +4990,7 @@ public:
         // resulting Scene_created_message homes the global tools (Hud / Hotbar /
         // Headset_view) onto it. Takes precedence over the commands.json script.
         if (!m_startup_scene_path.empty()) {
+            m_resolved_startup_commands_path = m_startup_scene_path;
             log_startup->info("Loading startup scene '{}' (--scene); skipping procedural startup script", m_startup_scene_path);
             m_app_message_bus->load_scene_file.queue_message(
                 Load_scene_file_message{ .path = std::filesystem::path{m_startup_scene_path} }
@@ -4854,6 +5019,7 @@ public:
             log_startup->info("startup commands script '{}' not found; skipping startup script", commands_path);
             return;
         }
+        m_resolved_startup_commands_path = commands_path;
 
         simdjson::ondemand::parser parser;
         simdjson::padded_string padded{file_content.value()};
@@ -5084,6 +5250,9 @@ public:
         ERHE_PROFILE_FUNCTION();
 
         m_run_started = true;
+        if (m_benchmark_driver) {
+            begin_benchmark();
+        }
         // The frame loop starts: from here on the render-side asserts and
         // the frame phase asserts are live (see the constructor). In
         // dedicated mode the render thread published itself when
@@ -5173,6 +5342,10 @@ public:
                 (m_time->get_frame_number() >= static_cast<uint64_t>(m_editor_settings.quit_after_frames))) {
                 m_close_requested = true;
             }
+            // A benchmark run exits when it has measured (or failed).
+            if (m_benchmark_driver && m_benchmark_driver->is_done()) {
+                m_close_requested = true;
+            }
 
             ERHE_PROFILE_FRAME_END
         }
@@ -5236,6 +5409,10 @@ public:
 
 
     std::string                         m_startup_commands_path; // startup script path (--commands); declared first so it initializes before run_startup_script() runs
+    std::string                         m_resolved_startup_commands_path; // the script run_startup_script() ran (OpenXR may substitute openxr_commands.json), or the --scene file
+    // --benchmark: the timedemo driver (doc/plans/quest_performance.md
+    // "Benchmark mode"), null otherwise. Main thread only.
+    std::unique_ptr<Benchmark_driver>   m_benchmark_driver;
     std::string                         m_startup_scene_path;    // startup scene bundle path (--scene); when set, loaded instead of running the commands.json scene build
     bool                                m_no_startup_scene{false}; // --no-scene: start empty (no procedural scene, no scene load); takes precedence over --scene
     Graphics_config                     m_graphics_config;
@@ -5484,7 +5661,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights)
+void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights, const std::string& benchmark_path)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -5633,7 +5810,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         //    editor.tick();
         //}
 
-        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights};
+        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights, benchmark_path};
         editor.run();
     }
 

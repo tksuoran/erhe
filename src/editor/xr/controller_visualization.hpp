@@ -62,6 +62,10 @@ public:
     // input state. No-op until the hand has a render model.
     void update_hand_controls(bool right_hand, const erhe::xr::Xr_actions* actions);
 
+    // Hides both hand nodes. The caller stops calling update_hand() (which
+    // shows a tracked hand again); used by the headset benchmark mode.
+    void hide();
+
 private:
     // One control joint driven along a neutral -> actuated pose pair,
     // both sampled from the render model's "All Animations" timeline.

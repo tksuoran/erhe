@@ -108,6 +108,8 @@ erhe_target_sources_grouped(
     ai_driver.hpp
     app_context.cpp
     app_context.hpp
+    benchmark_driver.cpp
+    benchmark_driver.hpp
     crash_handler.cpp
     crash_handler.hpp
     app_message.hpp

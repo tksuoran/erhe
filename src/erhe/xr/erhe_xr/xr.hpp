@@ -3,6 +3,7 @@
 #include <openxr/openxr.h>
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_xr/pose.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -15,13 +16,6 @@
 namespace erhe::graphics { class Texture; }
 
 namespace erhe::xr {
-
-class Pose
-{
-public:
-    glm::quat orientation{};
-    glm::vec3 position{};
-};
 
 class Render_view
 {
