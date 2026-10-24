@@ -748,7 +748,9 @@ public:
     // The occlusion counts of the view named key in the newest frame whose
     // occlusion words this scene decoded (the classification of the frame
     // that reuses its frame slot reads them from host memory, so frames in
-    // flight late); empty when that frame had no such view.
+    // flight late; only frames an occlusion check recorded are decoded,
+    // see request_occlusion_check()); empty when that frame had no such
+    // view or no frame was decoded yet.
     [[nodiscard]] auto get_retired_occlusion_counts(const Gpu_command_key& key) const -> std::optional<Retired_occlusion_counts>;
     // Render thread, render phase, after the frame's last pass and before
     // its submit (Cull_frame_registry::record_frame_end()): orders the
@@ -1050,9 +1052,10 @@ private:
     // m_retired_gpu_shadow_counts and m_retired_gpu_color_counts and
     // releases it.
     void decode_retired_gpu_counts(uint64_t frame_index);
-    // classify_frame_cull_views(): decodes the occlusion words of the frame
-    // that last used frame_index's occlusion slot (retired) into
-    // m_retired_occlusion_counts and, for a check of that frame, the check.
+    // classify_frame_cull_views(): releases the occlusion slot of the frame
+    // that last used frame_index's slot (retired); when an occlusion check
+    // recorded that frame, first decodes its words into
+    // m_retired_occlusion_counts and the check.
     void decode_retired_occlusion(uint64_t frame_index);
     // dispatch_gpu_cull_views(): the slot's occlusion buffer, grown to
     // hold the frame's two occlusion regions (created at the first dispatch,

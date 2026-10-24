@@ -645,9 +645,11 @@ python3 scripts/mcp_call.py get_occlusion_check '{"scene_name":"Default Scene"}'
 
 Returns: `{scene, frame_index, entry_count, view_count, views: [{view,
 scene_view, bounded_in_frustum, tested, visible, occluded, untested,
-culled, near_plane, near_plane_occluded, first_occluded}]}`. The per frame counts of
-the same test are in `get_composition_passes` (`last_occlusion_*` of the
-"Occlusion test" pass).
+culled, near_plane, near_plane_occluded, first_occluded}]}`. The counts of
+the same test are also in `get_composition_passes` (`last_occlusion_*` of the
+"Occlusion test" pass); they are decoded only for frames a
+`get_occlusion_check` recorded, so they update only when a check runs
+(`last_occlusion_counts_frame_index` names the frame, 0 before the first).
 
 ### set_light_cluster_binning
 

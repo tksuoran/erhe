@@ -781,6 +781,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Draw_list_scene` reads a retired frame's
+  occlusion words back on the CPU only when an occlusion check
+  (`request_occlusion_check()`) recorded that frame, so
+  `get_retired_occlusion_counts()` updates only for checked frames (empty
+  before the first). The per-frame readback cost ~4.5 ms of render thread
+  time on Bistro.
 - `erhe::scene_renderer`: the GPU classification consumes the previous
   frame's occlusion result (doc/plans/occlusion_culling.md 3b): an occlusion
   view's mask bit is cleared for an entry the same view found occluded in

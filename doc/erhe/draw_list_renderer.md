@@ -924,9 +924,13 @@ Drawing:
   `record_frame_end()` (`Cull_frame_registry::record_frame_end()`, the
   editor: before `release_frame_records()`) declares the frame's writes ->
   host read, and the classification of the frame that reuses the slot
-  (retired) decodes the words into per view tested / occluded / untested /
-  culled counts (`get_retired_occlusion_counts(key)`, frames in flight
-  late). `request_occlusion_check()` / `poll_occlusion_check()` (MCP
+  (retired) releases it. Only a frame an occlusion check recorded is read
+  back: that classification first decodes its words into per view tested /
+  occluded / untested / culled counts (`get_retired_occlusion_counts(key)`,
+  frames in flight late); other frames' words are never read on the CPU
+  (reading every entry's words back costs milliseconds per frame on large
+  scenes, and the GPU classification needs none of it).
+  `request_occlusion_check()` / `poll_occlusion_check()` (MCP
   `get_occlusion_check`) add the frame's CPU side: per view the bounded
   entries in the frustum, the entries whose (not grown) box reaches the near
   plane, which must all be marked, and the first occluded entries with
