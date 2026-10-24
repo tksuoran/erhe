@@ -160,6 +160,5 @@ auto operator!=(const Shader_stages_impl& lhs, const Shader_stages_impl& rhs) no
 
 void Shader_stages_tracker::reset() { m_last = 0; }
 void Shader_stages_tracker::execute(const Shader_stages* state) { static_cast<void>(state); m_last = 0; }
-auto Shader_stages_tracker::get_draw_id_uniform_location() const -> int { return -1; }
 
 } // namespace erhe::graphics

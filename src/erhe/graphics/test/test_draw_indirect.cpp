@@ -51,9 +51,9 @@ namespace erhe::graphics::test {
 // ERHE_DRAW_ID: the erhe GLSL preamble defines it as gl_DrawID where multi-draw
 // indirect is native and as a per-draw push constant (Vulkan) or uniform (GL)
 // where it is emulated, so one shader and one golden serve every backend. On
-// Metal these variants write first_instance q into command q and place and
-// color by ERHE_PRIMITIVE_INDEX instead (Color_source::first_instance), the
-// way Metal's draws name their records; the image and golden are the same. The
+// Metal, which has neither (no ERHE_DRAW_ID), these variants write
+// first_instance q into command q and place and color by ERHE_PRIMITIVE_INDEX
+// instead (Color_source::first_instance); the image and golden are the same. The
 // vertex shader forwards it to the fragment shader as a flat varying (the
 // Vulkan emulation declares it in the vertex stage only). Quad q of the vertex
 // data spans the column's full width and the image rows [16 q, 48), so each
@@ -78,7 +78,9 @@ namespace erhe::graphics::test {
 // First-instance variant (draw_indexed_indirect_first_instance): command q
 // carries first_instance 2 - q, and the color comes from
 // ERHE_PRIMITIVE_INDEX instead of ERHE_DRAW_ID, so column q shows color 2 - q
-// where the record index travels in the command's first_instance
+// (placed by ERHE_DRAW_ID, or without it by the quad of the command's
+// vertices, gl_VertexID / 4) where the record index travels in the command's
+// first_instance
 // (Device_info::record_indexing == Record_indexing::first_instance; skipped
 // elsewhere). Its expected image is computed; it has no golden.
 //
@@ -146,6 +148,8 @@ void main()
     float column_width = 2.0 / float(COLUMN_COUNT);
 #if COLUMN_FROM_PRIMITIVE_INDEX
     float column       = float(ERHE_PRIMITIVE_INDEX);
+#elif COLUMN_FROM_VERTEX
+    float column       = float(gl_VertexID / 4);
 #else
     float column       = float(ERHE_DRAW_ID);
 #endif
@@ -237,6 +241,14 @@ constexpr std::array<std::array<uint8_t, 4>, c_column_count> c_column_colors{{
 class Draw_indirect_test : public Gpu_test
 {
 protected:
+    // ERHE_DRAW_ID exists where multi-draw indirect is native (core or ARB)
+    // or emulated (doc/erhe/graphics.md "Draw records"); Metal has neither.
+    [[nodiscard]] auto has_draw_id() -> bool
+    {
+        const erhe::graphics::Device_info& info = device().get_info();
+        return info.use_multi_draw_indirect_core || info.use_multi_draw_indirect_arb || info.emulate_multi_draw_indirect;
+    }
+
     // Write draw_count commands with a compute pass, draw them with
     // multi_draw_indexed_primitives_indirect and return the read-back target
     // (memory rows) in pixels. With count_setup, write its command slots,
@@ -279,6 +291,13 @@ protected:
         const bool        reversed               = (color_source == Color_source::first_instance_reversed);
         const bool        by_first_instance      = (color_source == Color_source::first_instance);
         const std::string first_instance_of_quad = reversed ? std::string{"(2u - q)"} : (by_first_instance ? std::string{"q"} : std::string{"0u"});
+        // first_instance_reversed without ERHE_DRAW_ID: the column comes from
+        // the quad the command's vertices belong to (indexed: vertices
+        // 4 q .. 4 q + 3), independent of the record index under test.
+        const bool        column_from_vertex     = reversed && !has_draw_id();
+        if (column_from_vertex) {
+            ASSERT_EQ(indexing, Indexing::indexed);
+        }
         const uint32_t    command_write_count    = (count_setup != nullptr) ? count_setup->command_slots : draw_count;
 
         const std::size_t vertex_bytes  = vertices.size() * sizeof(glm::vec4);
@@ -418,7 +437,8 @@ protected:
             .defines          = {
                 { "COLUMN_COUNT",                std::to_string(c_column_count) },
                 { "COLOR_FROM_PRIMITIVE_INDEX",  (reversed || by_first_instance) ? "1" : "0" },
-                { "COLUMN_FROM_PRIMITIVE_INDEX", by_first_instance ? "1" : "0" }
+                { "COLUMN_FROM_PRIMITIVE_INDEX", by_first_instance ? "1" : "0" },
+                { "COLUMN_FROM_VERTEX",          column_from_vertex ? "1" : "0" }
             },
             .interface_blocks = { &vertices_block },
             .fragment_outputs = &fragment_outputs,
@@ -616,18 +636,17 @@ protected:
         }
     }
 
-    // The draw-position variants: on Metal, whose draws name their records
-    // by first_instance only, command q names record q (Color_source::
-    // first_instance), which renders the same image and checks the same
-    // golden.
+    // The draw-position variants. Without ERHE_DRAW_ID (has_draw_id(), Metal)
+    // draws name their records by first_instance only, so command q names
+    // record q (Color_source::first_instance), which renders the same image
+    // and checks the same golden.
     void run(const uint32_t draw_count, const Indexing indexing, std::string_view golden_name)
     {
-#if defined(ERHE_GRAPHICS_API_METAL)
-        ASSERT_EQ(device().get_info().record_indexing, erhe::graphics::Record_indexing::first_instance);
-        const Color_source color_source = Color_source::first_instance;
-#else
-        const Color_source color_source = Color_source::draw_id;
-#endif
+        const bool draw_id = has_draw_id();
+        if (!draw_id && (device().get_info().record_indexing != erhe::graphics::Record_indexing::first_instance)) {
+            GTEST_SKIP() << "Neither ERHE_DRAW_ID nor Record_indexing::first_instance is available on this device";
+        }
+        const Color_source color_source = draw_id ? Color_source::draw_id : Color_source::first_instance;
         run(draw_count, indexing, color_source, golden_name);
     }
 

@@ -82,10 +82,6 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
     }
 
     m_argument_table = cb_impl.acquire_argument_table();
-    m_argument_table->setAddress(
-        m_device.get_impl().get_submission_pools().get_draw_id_zero(),
-        c_metal_push_constant_index
-    );
     m_encoder->setArgumentTable(m_argument_table);
 }
 

@@ -102,11 +102,15 @@ Index 0-12:  UBOs/SSBOs (= GLSL binding number, identity mapping; 9 is the
              shadow transforms)
 Index 13:    Acceleration structure (ray queries)
 Index 14:    Texture argument buffer
-Index 15:    Push constant (ERHE_DRAW_ID, vertex/compute only)
+Index 15:    Unused (a UBO/SSBO at GLSL binding 15 would land here)
 Index 16+:   Vertex attributes (vertex_buffer_index_offset)
 ```
 
-Push constant declaration is only emitted for vertex and compute shaders. Fragment shaders receive draw ID via interpolated varying.
+The Metal backends bind no push constants: a shader that declares a
+`push_constant` block fails to compile (SPIRV-Cross would give it an
+automatic index that collides with the identity-mapped ones). The GLSL
+preamble does not define `ERHE_DRAW_ID` on Metal; draws name their records
+by `first_instance` (`doc/erhe/graphics.md` "Draw records").
 
 ### Two Sampler Binding Paths: Texture Heap vs. Dedicated Bindings
 
@@ -575,10 +579,8 @@ loops on the CPU over the draw count and issues one indirect
 (index count, first index, base vertex, instance count, base instance) from the
 indirect buffer on the GPU. Records are named by `Record_indexing::first_instance`
 (`gl_InstanceIndex`, MSL `[[instance_id]]`, includes the base instance), so
-`use_base_instance` is set. Push constant index 15 still carries `ERHE_DRAW_ID`
-(the command's position) for vertex/compute shaders that read it; fragment
-shaders receive it via an interpolated varying (Metal does not support push
-constants in fragment).
+`use_base_instance` is set. Nothing else changes between the draws: no
+per-draw value is bound.
 
 The GPU-read draw count (`use_draw_indirect_count`, `doc/erhe/graphics.md`
 "Indirect count draws") goes through an indirect command buffer (ICB), since
@@ -605,7 +607,7 @@ count draw:
   job)` verifies the bound pipeline supports indirect command buffers, calls
   `useResource` on the job's index buffer (read, vertex stage) and on the
   ICB once each per MTL render encoder (the encoder remembers the last ones
-  made resident), sets the push constant to 0 and calls
+  made resident) and calls
   `executeCommandsInBuffer(icb, range_buffer, job * 8)`.
 - The ICB (`drawIndexed`, `inheritPipelineState`, `inheritBuffers`, bind
   counts 0, private storage), the range buffer (private) and the table buffer
@@ -617,10 +619,8 @@ count draw:
   handlers.
 - The commands inherit the encoder's pipeline, depth stencil, cull, winding
   and fill state (the macOS 26 `inherit*` properties default to true) and
-  every buffer binding, `setVertexBytes` ones included: a value set at index
-  15 before `executeCommandsInBuffer` reaches every command (measured), so
-  `ERHE_DRAW_ID` reads the same value in all of them; records are named by
-  `first_instance`, which reaches `[[instance_id]]`.
+  every buffer binding, `setVertexBytes` ones included (measured); records
+  are named by `first_instance`, which reaches `[[instance_id]]`.
 - A pipeline an ICB executes needs `supportIndirectCommandBuffers`, which
   Metal refuses for a fragment shader with directly bound textures or samplers
   ("Fragment shader cannot be used with indirect command buffers"), so it is

@@ -61,9 +61,6 @@ public:
 
 private:
     void apply_viewport();
-    // ERHE_DRAW_ID = 0: the push constant at index 15 points at entry 0 of
-    // the draw id table (Submission_pools::get_draw_id_table).
-    void set_draw_id_zero() const;
 
     const Bind_group_layout* m_bind_group_layout{nullptr};
     MTL::Buffer* m_index_buffer    {nullptr};

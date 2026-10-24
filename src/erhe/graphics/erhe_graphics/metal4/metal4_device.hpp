@@ -17,8 +17,6 @@
 #include <optional>
 #include <vector>
 
-typedef int GLint;
-
 namespace MTL { class ArgumentEncoder; }
 namespace MTL { class Device; }
 namespace MTL4 { class CommandQueue; }
@@ -243,7 +241,6 @@ public:
     [[nodiscard]] auto get_debug_state                    () const -> Device_debug_state;
 
     void reset_shader_stages_state_tracker();
-    [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
 
     [[nodiscard]] auto get_mtl_device              () const -> MTL::Device*;
     [[nodiscard]] auto get_mtl_command_queue       () const -> MTL4::CommandQueue*;

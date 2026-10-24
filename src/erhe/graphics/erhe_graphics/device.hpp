@@ -144,8 +144,9 @@ enum class Record_indexing : unsigned int {
     // multi-draw; indirect commands keep first_instance 0.
     draw_position = 0,
     // ERHE_PRIMITIVE_INDEX is the instance index that carries the command's
-    // first_instance (Vulkan gl_InstanceIndex, GL gl_BaseInstance(ARB) +
-    // gl_InstanceID), so a command can name any record of the bound range.
+    // first_instance (Vulkan and Metal gl_InstanceIndex, GL
+    // gl_BaseInstance(ARB) + gl_InstanceID), so a command can name any
+    // record of the bound range. The only choice on Metal.
     first_instance = 1
 };
 

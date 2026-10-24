@@ -94,8 +94,8 @@ public:
     // the encoder's pipeline, vertex buffers and bindings. Every backend with
     // Device_info::use_draw_indirect_count: the count draw above (Vulkan,
     // OpenGL; binds the set's index and command buffers) or the job's range
-    // of the indirect command buffer the prepare step encoded (Metal, where
-    // ERHE_DRAW_ID reads 0 in every command: name records by first_instance,
+    // of the indirect command buffer the prepare step encoded (Metal, which
+    // has no ERHE_DRAW_ID: name records by first_instance,
     // Device_info::record_indexing).
     void multi_draw_indexed_primitives_indirect_count(const Indirect_count_draw_set& set, uint32_t job_index);
 

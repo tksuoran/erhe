@@ -117,13 +117,6 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
         encoder->setDepthStencilState(impl.get_depth_stencil());
     }
 
-    // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage
-    {
-        static constexpr NS::UInteger metal_push_constant_index = 15;
-        int32_t draw_id = 0;
-        encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
-    }
-
     // Rasterization state from create info
     const Render_pipeline_create_info&      create_info = pipeline.get_create_info();
     const Base_render_pipeline_create_info& base        = create_info.base;
@@ -309,15 +302,6 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     // draws prepared count draws.
     m_pipeline_supports_indirect_count_draws = false;
     pso->release();
-
-    // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage.
-    // Push constant is always at fixed index 15 (metal_push_constant_index).
-    // Only vertex/compute shaders declare ERHE_DRAW_ID; fragment shaders do not.
-    {
-        static constexpr NS::UInteger metal_push_constant_index = 15;
-        int32_t draw_id = 0;
-        encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
-    }
 
     // Depth stencil state
     {
@@ -552,13 +536,9 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         ? static_cast<NS::UInteger>(stride)
         : static_cast<NS::UInteger>(sizeof(Draw_indexed_primitives_indirect_command));
 
-    // Update ERHE_DRAW_ID per draw call at fixed push constant index
-    static constexpr NS::UInteger metal_push_constant_index = 15;
-
+    // One indirect draw per command; each names its record by its
+    // first_instance (Record_indexing::first_instance).
     for (std::uintptr_t i = 0; i < drawcount; ++i) {
-        int32_t draw_id = static_cast<int32_t>(i);
-        encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
-
         const NS::UInteger offset = static_cast<NS::UInteger>(indirect_offset) + i * actual_stride;
         encoder->drawIndexedPrimitives(
             mtl_primitive_type,
@@ -636,12 +616,8 @@ void Render_command_encoder_impl::execute_indirect_count_draws(
         encoder->useResource(resources.icb, MTL::ResourceUsageRead, MTL::RenderStageVertex | MTL::RenderStageFragment);
         m_resident_icb = resources.icb;
     }
-    // The commands inherit the encoder's buffer bindings, the push constant
-    // (ERHE_DRAW_ID) at index 15 among them: one value for all of them,
-    // 0 here (records are named by first_instance).
-    static constexpr NS::UInteger metal_push_constant_index = 15;
-    const int32_t draw_id = 0;
-    encoder->setVertexBytes(&draw_id, sizeof(draw_id), metal_push_constant_index);
+    // The commands inherit the encoder's buffer bindings; each names its
+    // record by its first_instance.
     encoder->executeCommandsInBuffer(
         resources.icb,
         resources.range_buffer,

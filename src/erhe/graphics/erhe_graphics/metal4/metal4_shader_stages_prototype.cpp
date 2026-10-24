@@ -59,11 +59,10 @@ auto compile_spirv_to_mtl_function(
     static constexpr uint32_t texture_descriptor_set = 7;
 
     // Fixed Metal buffer indices -- UBOs/SSBOs use identity mapping (GLSL binding = Metal index).
-    // These higher indices are reserved for the argument buffer and push
-    // constant; c_metal_acceleration_structure_buffer_index (13) is reserved
-    // for the ray query top level acceleration structure the same way.
+    // Index 14 is reserved for the texture argument buffer;
+    // c_metal_acceleration_structure_buffer_index (13) is reserved for the
+    // ray query top level acceleration structure the same way.
     static constexpr uint32_t metal_arg_buffer_index    = 14;
-    static constexpr uint32_t metal_push_constant_index = 15;
 
     spv::ExecutionModel exec_model = compiler.get_execution_model();
 
@@ -235,14 +234,15 @@ auto compile_spirv_to_mtl_function(
             rb.msl_buffer = c_metal_acceleration_structure_buffer_index;
             compiler.add_msl_resource_binding(rb);
         }
-        for (const spirv_cross::Resource& resource : pre_resources.push_constant_buffers) {
-            static_cast<void>(resource);
-            spirv_cross::MSLResourceBinding rb{};
-            rb.stage      = exec_model;
-            rb.desc_set   = spirv_cross::kPushConstDescSet;
-            rb.binding    = spirv_cross::kPushConstBinding;
-            rb.msl_buffer = metal_push_constant_index;
-            compiler.add_msl_resource_binding(rb);
+        // The Metal backends bind no push constants: draws name their
+        // records by first_instance (doc/erhe/graphics.md "Draw records"),
+        // and a push constant block would take an automatic buffer index
+        // that collides with the identity-mapped UBO/SSBO indices.
+        if (!pre_resources.push_constant_buffers.empty()) {
+            const std::string error_msg = fmt::format("SPIR-V -> MSL {} compilation failed for '{}': the Metal backend has no push constants", stage_name, shader_name);
+            log_program->error("{}", error_msg);
+            device.shader_error(error_msg, "");
+            return nullptr;
         }
 
         // Argument buffer for texture descriptor set -> fixed index 14
@@ -278,10 +278,6 @@ auto compile_spirv_to_mtl_function(
         uint32_t glsl_binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
         uint32_t metal_index  = compiler.get_automatic_msl_resource_binding(resource.id);
         log_program->info("  {} UBO '{}': glsl_binding={} -> metal_buffer={}", stage_name, resource.name, glsl_binding, metal_index);
-    }
-    for (const spirv_cross::Resource& resource : resources.push_constant_buffers) {
-        uint32_t metal_index = compiler.get_automatic_msl_resource_binding(resource.id);
-        log_program->info("  {} PushConstant '{}': metal_buffer={}", stage_name, resource.name, metal_index);
     }
     for (const spirv_cross::Resource& resource : resources.sampled_images) {
         uint32_t glsl_binding   = compiler.get_decoration(resource.id, spv::DecorationBinding);

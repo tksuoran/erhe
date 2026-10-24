@@ -121,9 +121,6 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
         encoder->setDepthStencilState(impl.get_depth_stencil());
     }
 
-    // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage
-    set_draw_id_zero();
-
     // Rasterization state from create info
     const Render_pipeline_create_info&      create_info = pipeline.get_create_info();
     const Base_render_pipeline_create_info& base        = create_info.base;
@@ -199,11 +196,6 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     // Render_pipeline created with Indirect_count_draw_support::enabled
     // draws prepared count draws.
     m_pipeline_supports_indirect_count_draws = false;
-
-    // Bind push constant (ERHE_DRAW_ID = 0) for vertex stage.
-    // Push constant is always at fixed index 15 (c_metal_push_constant_index).
-    // Only vertex/compute shaders declare ERHE_DRAW_ID; fragment shaders do not.
-    set_draw_id_zero();
 
     // Depth stencil state
     {
@@ -414,18 +406,14 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         ? static_cast<NS::UInteger>(stride)
         : static_cast<NS::UInteger>(sizeof(Draw_indexed_primitives_indirect_command));
 
-    // ERHE_DRAW_ID per draw call at the fixed push constant index: entry i
-    // of the draw id table.
-    MTL4::ArgumentTable* const argument_table = Render_pass_impl::get_active_argument_table();
-    ERHE_VERIFY(argument_table != nullptr);
-    const uint64_t draw_id_table = m_device.get_impl().get_submission_pools().get_draw_id_table(static_cast<std::size_t>(drawcount));
-    const uint64_t index_address = m_index_buffer->gpuAddress();
-    const NS::UInteger index_length = m_index_buffer->length();
-    const uint64_t indirect_address = indirect_buffer->gpuAddress();
+    const uint64_t     index_address    = m_index_buffer->gpuAddress();
+    const NS::UInteger index_length     = m_index_buffer->length();
+    const uint64_t     indirect_address = indirect_buffer->gpuAddress();
 
+    // One indirect draw per command; each names its record by its
+    // first_instance (Record_indexing::first_instance), so the argument
+    // table does not change between the draws.
     for (std::uintptr_t i = 0; i < drawcount; ++i) {
-        argument_table->setAddress(draw_id_table + (i * Submission_pools::c_draw_id_stride), c_metal_push_constant_index);
-
         const uint64_t offset = static_cast<uint64_t>(indirect_offset) + (i * actual_stride);
         encoder->drawIndexedPrimitives(
             mtl_primitive_type,
@@ -435,7 +423,6 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
             indirect_address + offset
         );
     }
-    set_draw_id_zero();
 }
 
 void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect_count(
@@ -489,24 +476,13 @@ void Render_command_encoder_impl::execute_indirect_count_draws(
 
     // The commands reach the index buffer by address only, the ICB is not
     // bound: both are resident through the device's residency set. The
-    // commands inherit the encoder's argument table bindings, the push
-    // constant (ERHE_DRAW_ID) at index 15 among them: one value for all of
-    // them, 0 here (records are named by first_instance).
+    // commands inherit the encoder's argument table bindings; each names its
+    // record by its first_instance.
     static_cast<void>(mtl_index_buffer);
-    set_draw_id_zero();
     encoder->executeCommandsInBuffer(
         resources.icb,
         resources.range_buffer->gpuAddress() + (static_cast<uint64_t>(job_index) * sizeof(MTL::IndirectCommandBufferExecutionRange))
     );
-}
-
-void Render_command_encoder_impl::set_draw_id_zero() const
-{
-    MTL4::ArgumentTable* const argument_table = Render_pass_impl::get_active_argument_table();
-    if (argument_table == nullptr) {
-        return;
-    }
-    argument_table->setAddress(m_device.get_impl().get_submission_pools().get_draw_id_zero(), c_metal_push_constant_index);
 }
 
 void Render_command_encoder_impl::dump_state(const char* label) const

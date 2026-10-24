@@ -1644,11 +1644,6 @@ void Device_impl::reset_shader_stages_state_tracker()
     // TODO Implement if needed for Metal
 }
 
-auto Device_impl::get_draw_id_uniform_location() const -> GLint
-{
-    return -1;
-}
-
 auto Device_impl::get_mtl_device() const -> MTL::Device*
 {
     return m_mtl_device;

@@ -381,13 +381,8 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         }
     }
 
-    // The pass's argument table, for both stages; the push constant
-    // (ERHE_DRAW_ID) starts at 0.
+    // The pass's argument table, for both stages.
     m_argument_table = cb_impl.acquire_argument_table();
-    m_argument_table->setAddress(
-        m_device.get_impl().get_submission_pools().get_draw_id_zero(),
-        c_metal_push_constant_index
-    );
     m_mtl_encoder->setArgumentTable(m_argument_table, MTL::RenderStageVertex | MTL::RenderStageFragment);
 
     // Apply debug labels to command buffer and encoder

@@ -449,19 +449,13 @@ auto Shader_stages_create_info::final_source(
     }
 #endif
 #if defined(ERHE_GRAPHICS_API_METAL)
-    // Metal does not support multi-draw indirect / gl_DrawID; emulate with push constant.
-    // Only emit for vertex/compute -- fragment shaders receive draw ID via interpolated varying.
-    if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {
-        sb << "layout(push_constant) uniform Erhe_draw_id_block { int ERHE_DRAW_ID; };\n";
-    }
-    // ERHE_PRIMITIVE_INDEX (doc/erhe/graphics.md "Draw records"): the Metal
-    // device names records by first_instance; SPIRV-Cross lowers
+    // ERHE_PRIMITIVE_INDEX (doc/erhe/graphics.md "Draw records"): both Metal
+    // devices name records by first_instance; SPIRV-Cross lowers
     // gl_InstanceIndex to [[instance_id]], which includes the base instance.
-    if (graphics_device.get_info().record_indexing == Record_indexing::first_instance) {
-        sb << "#define ERHE_PRIMITIVE_INDEX gl_InstanceIndex\n";
-    } else {
-        sb << "#define ERHE_PRIMITIVE_INDEX ERHE_DRAW_ID\n";
-    }
+    // Metal has no gl_DrawID and the backend binds no push constants, so
+    // ERHE_DRAW_ID is not defined.
+    ERHE_VERIFY(graphics_device.get_info().record_indexing == Record_indexing::first_instance);
+    sb << "#define ERHE_PRIMITIVE_INDEX gl_InstanceIndex\n";
     sb << "#define ERHE_BACKEND_METAL 1\n";
     // ERHE_TEXTURE_HEAP_METAL_ARGUMENT_BUFFER is the Metal-specific shader code
     // path for the texture heap. It is intentionally kept distinct from the
