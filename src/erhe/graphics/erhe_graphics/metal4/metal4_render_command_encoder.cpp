@@ -77,8 +77,9 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
     }
     ERHE_VERIFY(m_bind_group_layout != nullptr);
 
-    // Scalar named samplers are emitted as direct [[texture(N)]]/[[sampler(M)]]
-    // bindings on Metal (see metal4_shader_stages_prototype.cpp).
+    // Dedicated samplers of vertex functions are direct [[texture(N)]] /
+    // [[sampler(M)]] bindings, those of fragment functions entries of the
+    // fragment argument buffer (see metal4_shader_stages_prototype.cpp).
     //
     // The texture slot is the GLSL binding number, computed the same way
     // SPIRV-Cross sees it: the user-facing binding_point plus the bind group
@@ -97,8 +98,21 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
     if (mtl_texture == nullptr || mtl_sampler == nullptr) {
         return;
     }
-    argument_table->setTexture     (mtl_texture->gpuResourceID(), static_cast<NS::UInteger>(glsl_binding));
-    argument_table->setSamplerState(mtl_sampler->gpuResourceID(), static_cast<NS::UInteger>(sampler_slot));
+    // Vertex functions read their dedicated samplers from the argument
+    // table at [[texture(N)]] / [[sampler(M)]]; fragment functions from the
+    // layout's fragment argument buffer, encoded before the next draw
+    // (Render_pass_impl::flush_fragment_arguments()).
+    const uint32_t stage_flags = m_bind_group_layout->get_impl().get_sampler_stage_flags(glsl_binding);
+    ERHE_VERIFY((stage_flags & (Shader_stage_flags::vertex | Shader_stage_flags::fragment)) != 0);
+    if ((stage_flags & Shader_stage_flags::vertex) != 0) {
+        argument_table->setTexture     (mtl_texture->gpuResourceID(), static_cast<NS::UInteger>(glsl_binding));
+        argument_table->setSamplerState(mtl_sampler->gpuResourceID(), static_cast<NS::UInteger>(sampler_slot));
+    }
+    if ((stage_flags & Shader_stage_flags::fragment) != 0) {
+        const std::optional<std::size_t> argument_index = m_bind_group_layout->get_impl().get_fragment_argument_index(glsl_binding);
+        ERHE_VERIFY(argument_index.has_value());
+        Render_pass_impl::set_fragment_argument(m_bind_group_layout->get_impl(), argument_index.value(), mtl_texture, mtl_sampler);
+    }
 }
 
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)
@@ -331,6 +345,7 @@ void Render_command_encoder_impl::draw_primitives(
     if (encoder == nullptr) {
         return;
     }
+    Render_pass_impl::flush_fragment_arguments();
     encoder->drawPrimitives(
         to_mtl_primitive_type(primitive_type),
         static_cast<NS::UInteger>(vertex_start),
@@ -360,6 +375,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
     if ((encoder == nullptr) || (m_index_buffer == nullptr)) {
         return;
     }
+    Render_pass_impl::flush_fragment_arguments();
     encoder->drawIndexedPrimitives(
         to_mtl_primitive_type(primitive_type),
         static_cast<NS::UInteger>(index_count),
@@ -410,6 +426,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     const NS::UInteger index_length     = m_index_buffer->length();
     const uint64_t     indirect_address = indirect_buffer->gpuAddress();
 
+    Render_pass_impl::flush_fragment_arguments();
     // One indirect draw per command; each names its record by its
     // first_instance (Record_indexing::first_instance), so the argument
     // table does not change between the draws.
@@ -479,6 +496,7 @@ void Render_command_encoder_impl::execute_indirect_count_draws(
     // commands inherit the encoder's argument table bindings; each names its
     // record by its first_instance.
     static_cast<void>(mtl_index_buffer);
+    Render_pass_impl::flush_fragment_arguments();
     encoder->executeCommandsInBuffer(
         resources.icb,
         resources.range_buffer->gpuAddress() + (static_cast<uint64_t>(job_index) * sizeof(MTL::IndirectCommandBufferExecutionRange))

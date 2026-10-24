@@ -1,4 +1,6 @@
 #include "erhe_graphics/metal/metal_render_pass.hpp"
+#include "erhe_graphics/metal/metal_bind_group_layout.hpp"
+#include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/metal/metal_surface.hpp"
@@ -11,11 +13,16 @@
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
+
+#include <span>
 
 namespace erhe::graphics {
 
@@ -62,6 +69,67 @@ auto Render_pass_impl::get_render_target_width() const -> int { return m_render_
 auto Render_pass_impl::get_render_target_height() const -> int { return m_render_target_height; }
 auto Render_pass_impl::get_swapchain() const -> Swapchain* { return m_swapchain; }
 auto Render_pass_impl::get_debug_label() const -> erhe::utility::Debug_label { return m_debug_label; }
+
+void Render_pass_impl::set_fragment_argument(
+    const Bind_group_layout_impl& layout,
+    const std::size_t             index,
+    MTL::Texture* const           texture,
+    MTL::SamplerState* const      sampler
+)
+{
+    Render_pass_impl* const pass = Device_impl::s_active_render_pass;
+    if (pass == nullptr) {
+        return;
+    }
+    const std::size_t entry_count = layout.get_fragment_arguments().size();
+    ERHE_VERIFY(index < entry_count);
+    if (pass->m_fragment_argument_layout != &layout) {
+        pass->m_fragment_argument_layout = &layout;
+        pass->m_fragment_argument_textures.assign(entry_count, nullptr);
+        pass->m_fragment_argument_samplers.assign(entry_count, nullptr);
+    }
+    if ((pass->m_fragment_argument_textures[index] == texture) && (pass->m_fragment_argument_samplers[index] == sampler)) {
+        return;
+    }
+    pass->m_fragment_argument_textures[index] = texture;
+    pass->m_fragment_argument_samplers[index] = sampler;
+    pass->m_fragment_arguments_dirty = true;
+}
+
+void Render_pass_impl::flush_fragment_arguments()
+{
+    Render_pass_impl* const pass = Device_impl::s_active_render_pass;
+    if ((pass == nullptr) || !pass->m_fragment_arguments_dirty) {
+        return;
+    }
+    pass->m_fragment_arguments_dirty = false;
+    const Bind_group_layout_impl& layout  = *pass->m_fragment_argument_layout;
+    MTL::ArgumentEncoder* const   encoder = layout.get_fragment_argument_encoder();
+    ERHE_VERIFY(encoder != nullptr);
+    const std::size_t byte_count = static_cast<std::size_t>(encoder->encodedLength());
+    Ring_buffer_range range = pass->m_device.allocate_ring_buffer_entry(Buffer_target::storage, Ring_buffer_usage::CPU_write, byte_count);
+    ERHE_VERIFY(range.get_buffer() != nullptr);
+    MTL::Buffer* const       mtl_buffer = range.get_buffer()->get_buffer()->get_impl().get_mtl_buffer();
+    const NS::UInteger       offset     = static_cast<NS::UInteger>(range.get_byte_start_offset_in_buffer());
+    encoder->setArgumentBuffer(mtl_buffer, offset);
+    const std::span<const Bind_group_layout_impl::Fragment_argument> arguments = layout.get_fragment_arguments();
+    MTL::RenderCommandEncoder* const render_encoder = pass->m_mtl_encoder;
+    for (std::size_t k = 0, end = arguments.size(); k < end; ++k) {
+        MTL::Texture*      const texture = pass->m_fragment_argument_textures[k];
+        MTL::SamplerState* const sampler = pass->m_fragment_argument_samplers[k];
+        if (texture != nullptr) {
+            encoder->setTexture(texture, arguments[k].texture_id);
+            render_encoder->useResource(texture, MTL::ResourceUsageRead | MTL::ResourceUsageSample, MTL::RenderStageFragment);
+        }
+        if (sampler != nullptr) {
+            encoder->setSamplerState(sampler, arguments[k].sampler_id);
+        }
+    }
+    range.bytes_written(byte_count);
+    range.close();
+    render_encoder->setFragmentBuffer(mtl_buffer, offset, Bind_group_layout_impl::fragment_argument_buffer_index);
+    range.release();
+}
 
 auto Render_pass_impl::get_active_mtl_encoder() -> MTL::RenderCommandEncoder*
 {
@@ -173,6 +241,10 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     static_cast<void>(render_pass_after);
 
     Device_impl::s_active_render_pass = this;
+    m_fragment_argument_layout = nullptr;
+    m_fragment_argument_textures.clear();
+    m_fragment_argument_samplers.clear();
+    m_fragment_arguments_dirty = false;
 
     // Record into the MTL::CommandBuffer that the caller's
     // Command_buffer owns. The cb must already have begin() called on it

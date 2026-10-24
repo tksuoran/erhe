@@ -252,7 +252,12 @@ protected:
         std::span<const Sampled_image>                          images,
         int                                                     width,
         int                                                     height,
-        erhe::dataformat::Format                                format = erhe::dataformat::Format::format_8_vec4_unorm
+        erhe::dataformat::Format                                format = erhe::dataformat::Format::format_8_vec4_unorm,
+        // The pipeline's Indirect_count_draw_support: enabled creates it as
+        // one that can draw prepared indirect count draws, which Metal
+        // refuses for a fragment function with directly bound textures or
+        // samplers (the draw itself stays a plain draw).
+        erhe::graphics::Indirect_count_draw_support indirect_count_draws = erhe::graphics::Indirect_count_draw_support::disabled
     ) -> std::shared_ptr<erhe::graphics::Texture>;
 
     // Reorder tightly packed rows between memory order (row 0 at the device's

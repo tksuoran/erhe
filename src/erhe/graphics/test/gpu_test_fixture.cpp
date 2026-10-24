@@ -675,7 +675,8 @@ auto Gpu_test::render_fullscreen_pass(
     const std::span<const Sampled_image>                    images,
     const int                                               width,
     const int                                               height,
-    const erhe::dataformat::Format                          format
+    const erhe::dataformat::Format                          format,
+    const erhe::graphics::Indirect_count_draw_support       indirect_count_draws
 ) -> std::shared_ptr<erhe::graphics::Texture>
 {
     const std::shared_ptr<erhe::graphics::Texture> color_target = make_color_target(width, height, format);
@@ -742,6 +743,7 @@ void main()
     pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
     pipeline_create_info.base.bind_group_layout                 = &layout;
     pipeline_create_info.base.color_blend                       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+    pipeline_create_info.base.indirect_count_draws              = indirect_count_draws;
     pipeline_create_info.shader_stages                          = &shader_stages;
     pipeline_create_info.vertex_input                           = nullptr;
     pipeline_create_info.set_format_from_render_pass(descriptor);

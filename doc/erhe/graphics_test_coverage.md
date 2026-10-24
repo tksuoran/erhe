@@ -83,7 +83,7 @@ limitation, not a coverage gap to fill).
 - [x] Sampler address modes: clamp_to_edge / repeat / mirrored_repeat (`test_sampler_modes.cpp`)
 - [x] Sampler filters and address modes as full images: a 16x16 source magnified 4x with nearest (exact) and linear (CPU bilinear reference, +-2) filtering; a 4x4 source over uv [-1, 2] with repeat, mirrored_repeat and clamp_to_edge, every output texel exact (`test_sampler_modes.cpp`, `Sampler_mode_test`)
 - [x] Texture gather: `textureGather` of the red component at every four-texel corner of an 8x8 texture, borders clamped, in the GLSL x / y / z / w footprint order (`test_texture_gather.cpp`)
-- [x] Comparison samplers: a format_d32_sfloat texture cleared to 0.5 sampled through a `sampler2DShadow` binding (`sampler_aspect` depth, `compare_enable`, immutable sampler) at references 0.25 / 0.5 / 0.75, for all eight compare operations (`test_sampler_comparison.cpp`, `Sampler_comparison_test`)
+- [x] Comparison samplers: a format_d32_sfloat texture cleared to 0.5 sampled through a `sampler2DShadow` binding (`sampler_aspect` depth, `compare_enable`, immutable sampler) at references 0.25 / 0.5 / 0.75, for all eight compare operations (`test_sampler_comparison.cpp`, `Sampler_comparison_test`); on Metal through the fragment argument buffer, and once more (`less_or_equal_indirect_count_draw_pipeline`) with a pipeline created with `Indirect_count_draw_support::enabled`, which Metal refuses for a fragment function with directly bound textures or samplers
 - [x] texelFetch from 2D, 2D array and 3D textures with mirrored x, swizzled channels and reversed layer / slice order (`test_texel_fetch.cpp`, `Texel_fetch_test`)
 - [x] A dedicated sampler read in the vertex stage behind a UBO binding and a fragment-stage dedicated sampler (texture slot 2, sampler slot 1), sampled with textureLod past the texture's edge so its clamp-to-edge sampler and the other binding's repeat sampler give different texels, the fragment stage reading the other texture; exact per pixel (`test_vertex_stage_sampler.cpp`, `Gpu_test.vertex_stage_sampler_behind_buffer_and_fragment_sampler`)
 - [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
@@ -194,7 +194,7 @@ render pass action and subresource target ports: `Pass_action_test` (3),
 `Render_target_subresource_test` (9), the copy ports:
 `Gpu_test.copy_buffer_to_buffer` (2 buffer goldens), `Copy_test` (3 image,
 3 buffer goldens), `Texture_copy_test` (3), and the sampling ports:
-`Sampler_mode_test` (5), `Sampler_comparison_test` (8), `Texel_fetch_test`
+`Sampler_mode_test` (5), `Sampler_comparison_test` (9), `Texel_fetch_test`
 (3), `Gpu_test.texture_sample_2d_image`, `texture_2d_array_sample_image`,
 `texture_3d_sample_image`, `texture_cube_sample_image`,
 `texture_gather_red_corners`, `draw_parameters_indirect` and

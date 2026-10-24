@@ -1,8 +1,11 @@
 #include "erhe_graphics/metal/metal_bind_group_layout.hpp"
+#include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
 #include "erhe_verify/verify.hpp"
+
+#include <Metal/Metal.hpp>
 
 #include <algorithm>
 #include <vector>
@@ -46,7 +49,56 @@ constexpr uint32_t c_metal_texture_heap_slot_count = 4096;
     return false;
 }
 
+// The argument descriptor texture type of a sampled image GLSL type (the
+// fragment argument buffer, Bind_group_layout_impl::Fragment_argument).
+[[nodiscard]] auto to_argument_texture_type(const Glsl_type glsl_type) -> MTL::TextureType
+{
+    switch (glsl_type) {
+        case Glsl_type::sampler_1d:
+        case Glsl_type::sampler_1d_shadow:
+        case Glsl_type::int_sampler_1d:
+        case Glsl_type::unsigned_int_sampler_1d:                   return MTL::TextureType1D;
+        case Glsl_type::sampler_1d_array:
+        case Glsl_type::sampler_1d_array_shadow:
+        case Glsl_type::int_sampler_1d_array:
+        case Glsl_type::unsigned_int_sampler_1d_array:             return MTL::TextureType1DArray;
+        case Glsl_type::sampler_3d:
+        case Glsl_type::int_sampler_3d:
+        case Glsl_type::unsigned_int_sampler_3d:                   return MTL::TextureType3D;
+        case Glsl_type::sampler_cube:
+        case Glsl_type::sampler_cube_shadow:
+        case Glsl_type::int_sampler_cube:
+        case Glsl_type::unsigned_int_sampler_cube:                 return MTL::TextureTypeCube;
+        case Glsl_type::sampler_cube_map_array:
+        case Glsl_type::sampler_cube_map_array_shadow:
+        case Glsl_type::int_sampler_cube_map_array:
+        case Glsl_type::unsigned_int_sampler_cube_map_array:       return MTL::TextureTypeCubeArray;
+        case Glsl_type::sampler_2d_array:
+        case Glsl_type::sampler_2d_array_shadow:
+        case Glsl_type::int_sampler_2d_array:
+        case Glsl_type::unsigned_int_sampler_2d_array:             return MTL::TextureType2DArray;
+        case Glsl_type::sampler_buffer:
+        case Glsl_type::int_sampler_buffer:
+        case Glsl_type::unsigned_int_sampler_buffer:               return MTL::TextureTypeTextureBuffer;
+        case Glsl_type::sampler_2d_multisample:
+        case Glsl_type::int_sampler_2d_multisample:
+        case Glsl_type::unsigned_int_sampler_2d_multisample:       return MTL::TextureType2DMultisample;
+        case Glsl_type::sampler_2d_multisample_array:
+        case Glsl_type::int_sampler_2d_multisample_array:
+        case Glsl_type::unsigned_int_sampler_2d_multisample_array: return MTL::TextureType2DMultisampleArray;
+        default:                                                   return MTL::TextureType2D;
+    }
+}
+
 } // anonymous namespace
+
+Bind_group_layout_impl::~Bind_group_layout_impl() noexcept
+{
+    if (m_fragment_argument_encoder != nullptr) {
+        m_fragment_argument_encoder->release();
+        m_fragment_argument_encoder = nullptr;
+    }
+}
 
 Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_layout_create_info& create_info)
     : m_debug_label         {create_info.debug_label}
@@ -134,6 +186,64 @@ Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_
         ERHE_VERIFY(next_slot <= c_metal_max_dedicated_samplers);
     }
 
+    // The fragment argument buffer: every dedicated sampler a fragment
+    // function reads, in ascending GLSL binding order, texture at id 2k and
+    // sampler at id 2k + 1 (see Fragment_argument).
+    {
+        std::vector<std::pair<uint32_t, Glsl_type>> fragment_bindings; // GLSL binding, type
+        for (const Bind_group_layout_binding& binding : create_info.bindings) {
+            if (
+                (binding.type == Binding_type::combined_image_sampler) &&
+                !binding.is_texture_heap &&
+                ((binding.stage_flags & Shader_stage_flags::fragment) != 0)
+            ) {
+                fragment_bindings.push_back({binding.binding_point + m_sampler_binding_offset, binding.glsl_type});
+            }
+        }
+        std::sort(
+            fragment_bindings.begin(), fragment_bindings.end(),
+            [](const std::pair<uint32_t, Glsl_type>& lhs, const std::pair<uint32_t, Glsl_type>& rhs) -> bool { return lhs.first < rhs.first; }
+        );
+        // [[buffer(15)]] holds the fragment argument buffer, so no buffer
+        // binding of the layout may claim it.
+        if (!fragment_bindings.empty()) {
+            for (const Bind_group_layout_binding& binding : create_info.bindings) {
+                if ((binding.type == Binding_type::uniform_buffer) || (binding.type == Binding_type::storage_buffer)) {
+                    ERHE_VERIFY(binding.binding_point != fragment_argument_buffer_index);
+                }
+            }
+        }
+        MTL::Device* const mtl_device = device.get_impl().get_mtl_device();
+        if (!fragment_bindings.empty() && (mtl_device != nullptr)) {
+            std::vector<MTL::ArgumentDescriptor*> descriptors;
+            for (std::size_t k = 0, end = fragment_bindings.size(); k < end; ++k) {
+                const uint32_t texture_id = static_cast<uint32_t>(2 * k);
+                const uint32_t sampler_id = texture_id + 1;
+                m_fragment_arguments.push_back(
+                    Fragment_argument{
+                        .glsl_binding = fragment_bindings[k].first,
+                        .texture_id   = texture_id,
+                        .sampler_id   = sampler_id
+                    }
+                );
+                MTL::ArgumentDescriptor* const texture_descriptor = MTL::ArgumentDescriptor::argumentDescriptor();
+                texture_descriptor->setDataType   (MTL::DataTypeTexture);
+                texture_descriptor->setIndex      (texture_id);
+                texture_descriptor->setAccess     (MTL::ArgumentAccessReadOnly);
+                texture_descriptor->setTextureType(to_argument_texture_type(fragment_bindings[k].second));
+                descriptors.push_back(texture_descriptor);
+                MTL::ArgumentDescriptor* const sampler_descriptor = MTL::ArgumentDescriptor::argumentDescriptor();
+                sampler_descriptor->setDataType(MTL::DataTypeSampler);
+                sampler_descriptor->setIndex   (sampler_id);
+                sampler_descriptor->setAccess  (MTL::ArgumentAccessReadOnly);
+                descriptors.push_back(sampler_descriptor);
+            }
+            NS::Array* const descriptor_array = NS::Array::array(reinterpret_cast<NS::Object* const*>(descriptors.data()), descriptors.size());
+            m_fragment_argument_encoder = mtl_device->newArgumentEncoder(descriptor_array);
+            ERHE_VERIFY(m_fragment_argument_encoder != nullptr);
+        }
+    }
+
     // Metal argument-buffer path: if no caller-supplied binding declared
     // a texture-heap sampler (and no dedicated binding has already
     // claimed the s_texture name), add a default s_texture so Metal's
@@ -183,6 +293,26 @@ auto Bind_group_layout_impl::get_metal_sampler_slot(const uint32_t glsl_binding)
 auto Bind_group_layout_impl::get_sampler_stage_flags(const uint32_t glsl_binding) const -> uint32_t
 {
     return get_dedicated_sampler(glsl_binding).stage_flags;
+}
+
+auto Bind_group_layout_impl::get_fragment_argument_index(const uint32_t glsl_binding) const -> std::optional<std::size_t>
+{
+    for (std::size_t k = 0, end = m_fragment_arguments.size(); k < end; ++k) {
+        if (m_fragment_arguments[k].glsl_binding == glsl_binding) {
+            return k;
+        }
+    }
+    return {};
+}
+
+auto Bind_group_layout_impl::get_fragment_arguments() const -> std::span<const Fragment_argument>
+{
+    return m_fragment_arguments;
+}
+
+auto Bind_group_layout_impl::get_fragment_argument_encoder() const -> MTL::ArgumentEncoder*
+{
+    return m_fragment_argument_encoder;
 }
 
 } // namespace erhe::graphics

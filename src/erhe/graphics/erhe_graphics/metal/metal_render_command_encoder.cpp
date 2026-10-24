@@ -105,8 +105,12 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
         encoder->setVertexSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
     }
     if (in_fragment) {
-        encoder->setFragmentTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
-        encoder->setFragmentSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
+        // Fragment functions read their dedicated samplers from the
+        // layout's fragment argument buffer, encoded before the next draw
+        // (Render_pass_impl::flush_fragment_arguments()).
+        const std::optional<std::size_t> argument_index = m_bind_group_layout->get_impl().get_fragment_argument_index(glsl_binding);
+        ERHE_VERIFY(argument_index.has_value());
+        Render_pass_impl::set_fragment_argument(m_bind_group_layout->get_impl(), argument_index.value(), mtl_texture, mtl_sampler);
     }
 }
 
@@ -474,6 +478,7 @@ void Render_command_encoder_impl::draw_primitives(
     if (encoder == nullptr) {
         return;
     }
+    Render_pass_impl::flush_fragment_arguments();
     encoder->drawPrimitives(
         to_mtl_primitive_type(primitive_type),
         static_cast<NS::UInteger>(vertex_start),
@@ -503,6 +508,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
     if ((encoder == nullptr) || (m_index_buffer == nullptr)) {
         return;
     }
+    Render_pass_impl::flush_fragment_arguments();
     encoder->drawIndexedPrimitives(
         to_mtl_primitive_type(primitive_type),
         static_cast<NS::UInteger>(index_count),
@@ -549,6 +555,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         ? static_cast<NS::UInteger>(stride)
         : static_cast<NS::UInteger>(sizeof(Draw_indexed_primitives_indirect_command));
 
+    Render_pass_impl::flush_fragment_arguments();
     // One indirect draw per command; each names its record by its
     // first_instance (Record_indexing::first_instance).
     for (std::uintptr_t i = 0; i < drawcount; ++i) {
@@ -629,6 +636,7 @@ void Render_command_encoder_impl::execute_indirect_count_draws(
         encoder->useResource(resources.icb, MTL::ResourceUsageRead, MTL::RenderStageVertex | MTL::RenderStageFragment);
         m_resident_icb = resources.icb;
     }
+    Render_pass_impl::flush_fragment_arguments();
     // The commands inherit the encoder's buffer bindings; each names its
     // record by its first_instance.
     encoder->executeCommandsInBuffer(

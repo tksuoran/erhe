@@ -2659,7 +2659,12 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 vertex_input.vertex_input.get(),
                 &vertex_input.vertex_format,
                 key.negative_determinant,
-                key.double_sided
+                key.double_sided,
+                // The color passes can draw GPU-generated commands (as the
+                // shadow passes do): on Metal their fragment functions read
+                // every texture and sampler from argument buffers
+                // (doc/erhe/metal_backend.md "Two Sampler Binding Paths").
+                erhe::graphics::Indirect_count_draw_support::enabled
             );
             if (render_pipeline == nullptr) {
                 log_draw_list->warn("No render pipeline for draw list {}: {}", list_index, key.describe());
