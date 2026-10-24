@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <span>
@@ -225,6 +226,105 @@ TEST_F(Gpu_test, generate_mipmaps_on_level_view)
         const std::vector<uint8_t> level0 = read_subresource_rgba8(*texture, 0, 0);
         ASSERT_EQ(level0.size(), level0_seed.size());
         EXPECT_EQ(level0, level0_seed) << "level 0 was modified by generating mipmaps of the level-1 view";
+    }
+}
+
+// generate_mipmaps on a VIEW of layers 1..2 of an 8x8, 4-level, 3-layer array
+// texture, recorded after a render pass left a 1x1 scissor rectangle. Each
+// layer of the view gets its own chain: level 1 (4x4) is the exact 2:1
+// downsample of the left-black / right-white split of level 0, and level 3
+// is mid-gray. Layer 0 (outside the view) keeps every level of its seed. On
+// OpenGL a view's chain is built with framebuffer blits, which the scissor
+// test clips, so a blit that does not set its own scissor would write only
+// texel (0, 0) of each level.
+TEST_F(Gpu_test, generate_mipmaps_on_array_layer_view_ignores_stale_scissor)
+{
+    constexpr int width       = 8;
+    constexpr int height      = 8;
+    constexpr int level_count = 4; // 8 -> 4 -> 2 -> 1
+    constexpr int layer_count = 3;
+
+    erhe::graphics::Device& graphics_device = device();
+    constexpr uint64_t usage_mask =
+        erhe::graphics::Image_usage_flag_bit_mask::sampled      |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst;
+    const std::shared_ptr<erhe::graphics::Texture> texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device            = graphics_device,
+            .usage_mask        = usage_mask,
+            .type              = erhe::graphics::Texture_type::texture_2d_array,
+            .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm,
+            .width             = width,
+            .height            = height,
+            .array_layer_count = layer_count,
+            .level_count       = level_count,
+            .debug_label       = erhe::utility::Debug_label{"mipmap array view source"}
+        }
+    );
+
+    const auto make_split = [](const int w, const int h, const uint8_t left, const uint8_t right) -> std::vector<uint8_t> {
+        std::vector<uint8_t> texels(static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4u);
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                const std::size_t i = (static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)) * 4u;
+                const uint8_t     v = (x < (w / 2)) ? left : right;
+                texels[i + 0] = v;
+                texels[i + 1] = v;
+                texels[i + 2] = v;
+                texels[i + 3] = 255u;
+            }
+        }
+        return texels;
+    };
+
+    // Layer 0: solid 77 on every level (outside the view; must survive).
+    std::vector<std::vector<uint8_t>> layer0_seeds;
+    for (int level = 0; level < level_count; ++level) {
+        layer0_seeds.push_back(make_split(width >> level, height >> level, 77u, 77u));
+        seed_subresource_rgba8(*texture, 0, static_cast<unsigned int>(level), layer0_seeds.back());
+    }
+    // Layers 1 and 2: black | white on level 0.
+    const std::vector<uint8_t> split_seed = make_split(width, height, 0u, 255u);
+    seed_subresource_rgba8(*texture, 1, 0, split_seed);
+    seed_subresource_rgba8(*texture, 2, 0, split_seed);
+
+    erhe::graphics::Texture_create_info view_create_info = erhe::graphics::Texture_create_info::make_view(graphics_device, texture, 0, 1);
+    view_create_info.usage_mask  = usage_mask;
+    view_create_info.debug_label = erhe::utility::Debug_label{"mipmap view of layers 1..2"};
+    const std::shared_ptr<erhe::graphics::Texture> view = std::make_shared<erhe::graphics::Texture>(graphics_device, view_create_info);
+    ASSERT_EQ(view->get_array_layer_count(), layer_count - 1);
+    ASSERT_EQ(view->get_level_count(),       level_count);
+
+    leave_narrow_scissor();
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
+            blit.generate_mipmaps(view.get());
+        }
+    );
+
+    const std::vector<uint8_t> level1_expected = make_split(width / 2, height / 2, 0u, 255u);
+    for (unsigned int layer = 1; layer < static_cast<unsigned int>(layer_count); ++layer) {
+        const std::vector<uint8_t> level1 = read_subresource_rgba8(*texture, layer, 1);
+        ASSERT_EQ(level1.size(), level1_expected.size());
+        int bad = 0;
+        for (std::size_t i = 0; i < level1.size(); ++i) {
+            if (std::abs(static_cast<int>(level1[i]) - static_cast<int>(level1_expected[i])) > 2) {
+                ++bad;
+            }
+        }
+        EXPECT_EQ(bad, 0) << "layer " << layer << " level 1: " << bad << " channels differ from the 2:1 downsample";
+
+        const std::vector<uint8_t> level3 = read_subresource_rgba8(*texture, layer, 3);
+        ASSERT_EQ(level3.size(), 4u);
+        EXPECT_GE(level3[0], 110) << "layer " << layer << " level-3 red not mid-gray: " << static_cast<int>(level3[0]);
+        EXPECT_LE(level3[0], 145) << "layer " << layer << " level-3 red not mid-gray: " << static_cast<int>(level3[0]);
+    }
+    for (int level = 0; level < level_count; ++level) {
+        const std::vector<uint8_t> layer0 = read_subresource_rgba8(*texture, 0, static_cast<unsigned int>(level));
+        EXPECT_EQ(layer0, layer0_seeds[static_cast<std::size_t>(level)]) << "layer 0 level " << level << " was modified by the view's mipmaps";
     }
 }
 
