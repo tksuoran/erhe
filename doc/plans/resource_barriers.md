@@ -176,7 +176,17 @@ What step 2 commits, in order of gain:
 3. The compute chain barriers (`draw_list_scene_gpu_cull.cpp`,
    `light_cluster_gpu_binner.cpp`): no measurable cost.
 
-## Step 3: Vulkan tracked layouts
+## Step 3: Vulkan render pass qualifiers, then tracked layouts
+
+The Vulkan render pass barriers (`vulkan_render_pass.cpp` begin and
+post-pass, through `usage_to_vk_stage_access`) honour the stage qualifiers
+of an attachment's `usage_before` / `usage_after` the same way the
+`texture_barrier` path does: `sampled | compute_shader` reaches the compute
+stage, and an unqualified `sampled` keeps covering every shader stage.
+This closes the `Rendertarget_mesh` compute reader gap found in step 2
+item 1. Ordered after the Metal 4 per-draw main pass cost (the `draws`
+scene, see `doc/plans/metal_backend.md`) is fixed; it is gated by the
+MoltenVK image gates with synchronization validation on.
 
 The `texture_barrier ... a barrier chain is missing` warning becomes a
 VERIFY in `Texture_impl::record_usage_barrier` once the gates are silent.
