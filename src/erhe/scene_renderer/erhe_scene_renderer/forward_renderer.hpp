@@ -241,12 +241,8 @@ public:
         uint32_t                                view_count{0};
         unsigned int                            color_attachment_count{0};
         std::array<erhe::dataformat::Format, 4> color_attachment_formats{};
-        std::array<uint64_t, 4>                 color_usage_before{};
-        std::array<uint64_t, 4>                 color_usage_after{};
         erhe::dataformat::Format                depth_attachment_format  {erhe::dataformat::Format::format_undefined};
         erhe::dataformat::Format                stencil_attachment_format{erhe::dataformat::Format::format_undefined};
-        uint64_t                                depth_usage_before{0};
-        uint64_t                                depth_usage_after {0};
         unsigned int                            sample_count{1};
     };
 

@@ -1233,6 +1233,29 @@ TEST_F(Resource_barrier_test, color_attachment_to_sampled)
     expect_probe(expected_pattern_probe(c_heavy_size), "color attachment -> sampled");
 }
 
+// Render pass color attachment write -> the pass's own usage_after
+// (sampled | compute_shader, no explicit barrier) -> sampled read in compute:
+// the render pass end barrier reaches the stage its qualifier names.
+TEST_F(Resource_barrier_test, color_attachment_usage_after_to_compute_sampled)
+{
+    ASSERT_TRUE(make_probe(Probe_kind::color_2d, c_heavy_size));
+    const std::shared_ptr<erhe::graphics::Texture> target = make_texture(
+        Image_usage::color_attachment | Image_usage::sampled, erhe::graphics::Texture_type::texture_2d,
+        erhe::dataformat::Format::format_8_vec4_unorm, c_heavy_size, 0, "barrier color attachment"
+    );
+    ASSERT_TRUE(make_slow_pass(*target, 0, Slow_target::color));
+    erhe::graphics::Render_pass_attachment_descriptor& attachment = m_slow_pass->descriptor.color_attachments[0];
+    attachment.usage_after  = Image_usage::sampled | Image_usage::compute_shader;
+    attachment.layout_after = erhe::graphics::Image_layout::shader_read_only_optimal;
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            record_slow_pass(command_buffer);
+            record_probe(command_buffer, *target);
+        }
+    );
+    expect_probe(expected_pattern_probe(c_heavy_size), "color attachment usage_after -> compute sampled");
+}
+
 // The subresource range overload: the producer renders into layer 1 of a
 // two-layer array; layer 0 (never accessed) and layer 1 get their own
 // barriers.

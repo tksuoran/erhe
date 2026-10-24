@@ -76,12 +76,6 @@ public:
     // compatibility, and only on the Vulkan backend. set_format_from_render_pass
     // derives this from desc.fragment_density_map_texture != nullptr.
     bool                                    fragment_density_map     {false};
-
-    // Attachment usage flags for render pass dependency derivation
-    std::array<uint64_t, 4>                 color_usage_before       {};
-    std::array<uint64_t, 4>                 color_usage_after        {};
-    uint64_t                                depth_usage_before       {0};
-    uint64_t                                depth_usage_after        {0};
 };
 
 class Render_pipeline_impl;

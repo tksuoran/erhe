@@ -1448,10 +1448,6 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     pipeline_create_info.color_attachment_formats[1]            = c_normal_format;
     pipeline_create_info.color_attachment_formats[2]            = c_albedo_format;
     pipeline_create_info.color_attachment_formats[3]            = c_position_format; // smooth position
-    for (int i = 0; i < 4; ++i) {
-        pipeline_create_info.color_usage_before[i]              = Image_usage_flag_bit_mask::sampled;
-        pipeline_create_info.color_usage_after[i]               = Image_usage_flag_bit_mask::sampled;
-    }
     pipeline_create_info.sample_count                           = 1;
 
     m_pipeline = std::make_unique<Render_pipeline>(graphics_device, pipeline_create_info);
@@ -1951,8 +1947,6 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
             origin_pipeline_create_info.vertex_input                           = vertex_input_entry.vertex_input.get();
             origin_pipeline_create_info.color_attachment_count                 = 1;
             origin_pipeline_create_info.color_attachment_formats[0]            = c_position_format;
-            origin_pipeline_create_info.color_usage_before[0]                  = Image_usage_flag_bit_mask::sampled;
-            origin_pipeline_create_info.color_usage_after[0]                   = Image_usage_flag_bit_mask::sampled;
             origin_pipeline_create_info.sample_count                           = 1;
             out_pipeline = std::make_unique<Render_pipeline>(graphics_device, origin_pipeline_create_info);
             if (!out_pipeline->is_valid()) {
@@ -2212,8 +2206,6 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     seam_pipeline_create_info.vertex_input                           = m_seam_vertex_input.get();
     seam_pipeline_create_info.color_attachment_count                 = 1;
     seam_pipeline_create_info.color_attachment_formats[0]            = c_atlas_format;
-    seam_pipeline_create_info.color_usage_before[0]                  = Image_usage_flag_bit_mask::storage;
-    seam_pipeline_create_info.color_usage_after[0]                   = Image_usage_flag_bit_mask::storage;
     seam_pipeline_create_info.sample_count                           = 1;
     m_seam_pipeline = std::make_unique<Render_pipeline>(graphics_device, seam_pipeline_create_info);
     if (!m_seam_pipeline->is_valid()) {

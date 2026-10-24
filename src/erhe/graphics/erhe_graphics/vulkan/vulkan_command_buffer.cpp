@@ -827,14 +827,11 @@ void Command_buffer_impl::cmd_texture_barrier(std::uint64_t usage_before, std::u
 {
     ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);
 
-    // Strip the user_synchronized modifier -- it only controls whether
-    // the automatic end-of-renderpass barrier fires; the actual
-    // stage/access mapping should ignore it.
-    const std::uint64_t src_usage = usage_before & ~Image_usage_flag_bit_mask::user_synchronized;
-    const std::uint64_t dst_usage = usage_after  & ~Image_usage_flag_bit_mask::user_synchronized;
-
-    const Vk_stage_access src_sa = usage_to_vk_stage_access(src_usage, false);
-    const Vk_stage_access dst_sa = usage_to_vk_stage_access(dst_usage, false);
+    // The texture_barrier mapping (stage qualifiers honoured); it ignores
+    // the user_synchronized modifier, which only controls whether the
+    // automatic end-of-renderpass barrier fires.
+    const Vk_stage_access_2 src_sa = image_usage_to_vk_barrier_scope(usage_before, Barrier_side::source);
+    const Vk_stage_access_2 dst_sa = image_usage_to_vk_barrier_scope(usage_after,  Barrier_side::destination);
 
     if ((src_sa.stage == 0) || (dst_sa.stage == 0)) {
         return;
@@ -843,10 +840,10 @@ void Command_buffer_impl::cmd_texture_barrier(std::uint64_t usage_before, std::u
     const VkMemoryBarrier2 memory_barrier{
         .sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .pNext         = nullptr,
-        .srcStageMask  = static_cast<VkPipelineStageFlags2>(src_sa.stage),
-        .srcAccessMask = static_cast<VkAccessFlags2>(src_sa.access),
-        .dstStageMask  = static_cast<VkPipelineStageFlags2>(dst_sa.stage),
-        .dstAccessMask = static_cast<VkAccessFlags2>(dst_sa.access),
+        .srcStageMask  = src_sa.stage,
+        .srcAccessMask = src_sa.access,
+        .dstStageMask  = dst_sa.stage,
+        .dstAccessMask = dst_sa.access,
     };
     const VkDependencyInfo dependency_info{
         .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
