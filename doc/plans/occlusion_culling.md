@@ -92,3 +92,63 @@ Decisions (user, 2026-10-24):
   per-pass constant block, since no draw-list shader variant reads a
   record's color or size - and their commands come from the frame's job
   table, one more filter per job).
+
+## Build order
+
+1. 3a, the occlusion pass produces visibility bits. Done. Editor setting
+   `occlusion_culling` (default off; Settings window, MCP
+   `set_occlusion_culling`), recorded per published slot as
+   `Occlusion_culling` and effective only with the `gpu` classification
+   on a device with `Device_info::use_draw_indirect_count` (the classifier)
+   and `Device_info::fragment_stores_and_atomics`
+   (`Gpu_cull_classifier::is_occlusion_supported()`). The views are the
+   viewport scene views' color views, four view included
+   (`Composer::add_cull_views()` registers them with
+   `Draw_list_renderer::add_color_occlusion_view()`); previews,
+   thumbnails, scene image captures and the id pass get none, and neither
+   does the headset: its per-eye passes draw unculled (`Cull_view::none`,
+   culling.md "Open"), so they have no view to test. The classification
+   dispatch writes the frame slot's start words (test bits: a bounded entry
+   in the frustum whose grown box lies beyond the near plane; result bits
+   preset visible for entries without bounds, boxes reaching the near
+   plane and entries outside the frustum), and the view's "Occlusion test"
+   composition pass, after the opaque and alpha-tested fills
+   (`doc/editor/rendering.md` pass 16), draws 36 vertices per entry whose
+   fragments (early fragment tests, no depth or color writes) OR the view's
+   bit into the entry's result word (`doc/erhe/draw_list_renderer.md` Q6
+   "Occlusion test"). Nothing consumes the bits: images are byte-identical
+   with the test on and off (default, heavy, draws, heavy in four view,
+   Bistro on Metal 4), and `get_cull_classification_check` stays at 0
+   mismatches.
+   Gate: `scripts/occlusion_wall_check.py` (a 30 x 12 m wall 10 m in front
+   of the viewport camera, six boxes behind it, four in front, one box
+   crossing the near plane): the six reported occluded, nothing else, the
+   near-plane box marked without a test (`near_plane` 1,
+   `near_plane_occluded` 0) on Metal 4, Metal 3 and KosmicKrisp; with the
+   wall deleted 0 occluded. MCP `get_occlusion_check` per view, viewport
+   camera of the startup commands: heavy 1003 tested, 31 occluded; heavy in
+   four view 1029 / 33 (perspective), 1257 / 5, 496 and 399 (the three
+   orthographic views); Bistro (opened, framed camera) 3852 tested, 2814
+   occluded (73 percent).
+   Cost before any saving (Metal 4, Apple M4 Pro, Release headless,
+   pipelined, `force_disable_vsync`, Tracy GPU zones, 12 s per run, two
+   runs each, off -> on): heavy GPU `Main` 2763 -> 2956 us, tick 3476 ->
+   3673 us, R 1050 -> 1090 us, `classify_frame` 58 -> 64 us; Bistro GPU
+   `Main` 3839 / 3856 -> 4335 / 4332 us, tick 4822 / 4849 -> 5322 / 5336 us,
+   R 1332 / 1384 -> 1416 / 1406 us, `classify_frame` 265 / 281 -> 294 / 296
+   us (the CPU decode of the retired frame's words). The pass runs inside
+   the view's render pass, so its own GPU time is not separable from
+   `Main` on this GPU (timestamps at stage boundaries only); the difference
+   is the pass. A first version that issued the atomic OR for every
+   fragment cost heavy 1390 us (the atomics of one large visible box on one
+   word serialize); the fragment shader now reads the word first.
+2. 3b, the classification consumes the bits: the masks of frame N + 1 AND
+   the result bits of frame N (one AND in `cull_classify.comp`, with the
+   barrier fragment write in frame N -> compute read in frame N + 1,
+   `earlier_submissions`). Next. The view indices of two frames need not
+   match (a view's index is its position in its frame's set), so the
+   consumer maps frame N's occlusion views to frame N + 1's by their key.
+   Open for it: back-face culling or a front-face-only box (three faces
+   from the eye's octant) to halve the pass's fragments.
+3. Step 5 of the sketch (the second draw of the entries that just became
+   visible), only if the one-frame pop-in shows in use.

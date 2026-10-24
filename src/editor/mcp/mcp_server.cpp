@@ -732,6 +732,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_shadow_map_cache_enabled",   &Mcp_server::action_set_shadow_map_cache_enabled  },
         { "set_shadow_fit_cache_enabled",   &Mcp_server::action_set_shadow_fit_cache_enabled  },
         { "get_cull_classification_check",  &Mcp_server::query_cull_classification_check      },
+        { "set_occlusion_culling",          &Mcp_server::action_set_occlusion_culling         },
+        { "get_occlusion_check",            &Mcp_server::query_occlusion_check                },
         { "set_light_cluster_binning",      &Mcp_server::action_set_light_cluster_binning     },
         { "get_light_cluster_stats",        &Mcp_server::query_light_cluster_stats            },
         { "get_light_cluster_check",        &Mcp_server::query_light_cluster_check            },

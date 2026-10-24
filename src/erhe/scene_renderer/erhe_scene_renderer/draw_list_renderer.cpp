@@ -171,14 +171,45 @@ auto Draw_list_renderer::add_color_cull_view(
     const Color_cull_view_parameters& parameters
 ) -> Cull_view
 {
-    if ((parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
+    const std::optional<glm::mat4> clip_from_world = get_color_clip_from_world(parameters);
+    if (!clip_from_world.has_value()) {
         return Cull_view::none;
     }
-    const Camera_view_input&       view            = parameters.views.front();
-    const glm::mat4                clip_from_world = view.camera->projection().clip_from_node_transform(view.viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions).get_matrix() * view.camera->node_from_world();
     const float                    clip_z_min      = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
-    const std::array<glm::vec4, 6> view_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world, clip_z_min, 1.0f);
+    const std::array<glm::vec4, 6> view_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world.value(), clip_z_min, 1.0f);
     return draw_list_scene.add_cull_view(frame_index, Draw_purpose::color, std::span<const glm::vec4>{view_frustum_planes});
+}
+
+auto Draw_list_renderer::get_color_clip_from_world(const Color_cull_view_parameters& parameters) -> std::optional<glm::mat4>
+{
+    if ((parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
+        return {};
+    }
+    const Camera_view_input& view = parameters.views.front();
+    return view.camera->projection().clip_from_node_transform(view.viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions).get_matrix() * view.camera->node_from_world();
+}
+
+auto Draw_list_renderer::add_color_occlusion_view(
+    Draw_list_scene&                  draw_list_scene,
+    const uint64_t                    frame_index,
+    const Cull_view                   cull_view,
+    const Color_cull_view_parameters& parameters,
+    const Gpu_command_key&            key
+) -> Cull_view
+{
+    if (cull_view == Cull_view::none) {
+        return Cull_view::none;
+    }
+    const std::optional<glm::mat4> clip_from_world = get_color_clip_from_world(parameters);
+    if (!clip_from_world.has_value()) {
+        return Cull_view::none;
+    }
+    // extract_frustum_planes() returns the clip_z_min plane at 4 and the
+    // clip z = 1 plane at 5: the near plane is 4, or 5 with reverse depth.
+    const float                    clip_z_min = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
+    const std::array<glm::vec4, 6> planes     = erhe::math::extract_frustum_planes(clip_from_world.value(), clip_z_min, 1.0f);
+    const glm::vec4&               near_plane = parameters.reverse_depth ? planes[5] : planes[4];
+    return draw_list_scene.add_occlusion_view(frame_index, cull_view, near_plane, key);
 }
 
 } // namespace erhe::scene_renderer

@@ -12,6 +12,7 @@
 
 #include "erhe_graphics/indirect_count_draws.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 
@@ -43,6 +44,7 @@ class Caster_vertex_extent;
 class Draw_indirect_buffer;
 class Cull_frame_registry;
 class Gpu_cull_check;
+class Gpu_occlusion_check;
 class Gpu_cull_classifier;
 class Mesh_memory;
 class Primitive_buffer;
@@ -143,6 +145,79 @@ public:
     std::string_view                        debug_label         {};
     // The frame being drawn (Draw_color_parameters::frame_index).
     uint64_t                                frame_index         {0};
+};
+
+// One view's raster occlusion test inside the view's render pass
+// (Draw_list_scene::draw_occlusion(), doc/plans/occlusion_culling.md): drawn
+// after the view's opaque and alpha-tested color passes, so the depth
+// attachment holds the frame's final opaque depth.
+class Draw_occlusion_parameters
+{
+public:
+    erhe::graphics::Render_command_encoder& render_encoder;
+    const erhe::graphics::Render_pass*      render_pass    {nullptr};
+    erhe::math::Viewport                    viewport       {0, 0, 0, 0};
+    // The view's clip_from_world, as its color passes rasterize with it
+    // (Draw_list_renderer::get_color_clip_from_world()).
+    glm::mat4                               clip_from_world{1.0f};
+    // The view's culling view, registered for the frame with
+    // add_occlusion_view() (verified).
+    Cull_view                               cull_view      {Cull_view::none};
+    uint64_t                                frame_index    {0};
+};
+
+// The occlusion test's counts of one occlusion view of a retired frame
+// (Draw_list_scene::get_retired_occlusion_counts()): entries the pass
+// rasterized, those of them no fragment marked (occluded), and the color
+// entries the classification marked visible without a test (no bounds, a
+// box reaching the near plane, outside the frustum).
+class Retired_occlusion_counts
+{
+public:
+    uint64_t frame_index{0};
+    uint32_t tested     {0};
+    uint32_t occluded   {0};
+    uint32_t untested   {0};
+};
+
+// One occluded entry of an occlusion check view.
+class Occlusion_check_entry
+{
+public:
+    uint32_t    list_index {0};
+    uint32_t    entry_index{0}; // in its list
+    std::string name       {}; // the entry's mesh's node, when it is still registered
+};
+
+// The occlusion test of one view of the checked frame
+// (Draw_list_scene::poll_occlusion_check()).
+class Occlusion_view_check
+{
+public:
+    uint32_t                           view                {0};
+    Gpu_command_key                    key                 {};
+    // Color entries with bounds inside the view's frustum (the CPU masks of
+    // the frame), and the counts of the GPU words (Retired_occlusion_counts).
+    uint32_t                           bounded_in_frustum  {0};
+    uint32_t                           tested              {0};
+    uint32_t                           visible             {0}; // tested and marked
+    uint32_t                           occluded            {0};
+    uint32_t                           untested            {0};
+    // Bounded entries inside the frustum whose box (not grown) intersects
+    // or crosses the near plane, and those of them not marked visible: a
+    // defect when nonzero (they are marked without a test).
+    uint32_t                           near_plane          {0};
+    uint32_t                           near_plane_occluded {0};
+    std::vector<Occlusion_check_entry> first_occluded;
+};
+
+class Occlusion_check
+{
+public:
+    uint64_t                          frame_index{0};
+    uint32_t                          entry_count{0}; // all published lists
+    uint32_t                          view_count {0}; // the frame's culling views
+    std::vector<Occlusion_view_check> views;
 };
 
 // The shadow pass filter: the objects that cast shadows. Shadow_renderer
@@ -482,9 +557,16 @@ public:
     // shadow passes draw the skinned objects with; a skinned object whose
     // poses differ from the last publish's is a change
     // (Draw_list_content_changes::skinned_changed_bounds).
-    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification, std::span<const Joint_pose> joint_poses);
+    // occlusion: the frame's occlusion culling setting
+    // (doc/plans/occlusion_culling.md), recorded in the slot; on takes effect
+    // only with the effective classification gpu and a Gpu_cull_classifier
+    // that supports the occlusion test (refused, logged once: the slot
+    // records off).
+    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification, Occlusion_culling occlusion, std::span<const Joint_pose> joint_poses);
     // The classification the last publish() recorded (main thread).
     [[nodiscard]] auto get_cull_classification() const -> Cull_classification { return m_published_cull_classification; }
+    // The occlusion culling the last publish() recorded (main thread).
+    [[nodiscard]] auto get_occlusion_culling() const -> Occlusion_culling { return m_published_occlusion_culling; }
     // Diagnostics: list bounds ranges publish() wrote to the slots' GPU
     // bounds buffers (a frame in which no list changed adds none).
     [[nodiscard]] auto get_gpu_bounds_write_count() const -> std::size_t { return m_gpu_bounds_write_count; }
@@ -626,6 +708,41 @@ public:
     // readback this scene decoded (as get_retired_gpu_shadow_counts(), frames
     // in flight late); empty when that frame had no such selection.
     [[nodiscard]] auto get_retired_gpu_color_counts(const Gpu_command_key& key) const -> std::optional<Retired_gpu_color_counts>;
+    // Raster occlusion test (doc/plans/occlusion_culling.md, doc/erhe/
+    // draw_list_renderer.md Q6 "Occlusion test"; render thread, render
+    // phase, with the frame's views, before its classification): makes the
+    // color view cull_view of frame_index an occlusion view, whose
+    // occlusion pass (draw_occlusion()) the caller draws in the view's
+    // render pass. near_plane is the view's inward near plane (world space,
+    // n.xyz + w); key names the pass and view for the retired counts.
+    // Returns cull_view, or none when the frame was not published for the
+    // GPU classification with occlusion on (the caller draws no occlusion
+    // pass then). A view registered twice (two passes of one camera) keeps
+    // one bit; each key gets the view's counts.
+    [[nodiscard]] auto add_occlusion_view(uint64_t frame_index, Cull_view cull_view, const glm::vec4& near_plane, const Gpu_command_key& key) -> Cull_view;
+    // Inside the view's render pass, after its last depth-writing color
+    // pass: one draw of every entry's box (Gpu_cull_classifier's occlusion
+    // pipeline), depth tested against the pass's depth, writing no depth and
+    // no color; a fragment that passes sets the entry's bit of the view in
+    // the slot's occlusion result words (atomic OR). The frame's
+    // classification wrote the words the draw starts from.
+    void draw_occlusion(const Draw_occlusion_parameters& parameters);
+    // The occlusion counts of the view named key in the newest frame whose
+    // occlusion words this scene decoded (the classification of the frame
+    // that reuses its frame slot reads them from host memory, so frames in
+    // flight late); empty when that frame had no such view.
+    [[nodiscard]] auto get_retired_occlusion_counts(const Gpu_command_key& key) const -> std::optional<Retired_occlusion_counts>;
+    // Render thread, render phase, after the frame's last pass and before
+    // its submit (Cull_frame_registry::record_frame_end()): orders the
+    // frame's occlusion word writes before the host reads them.
+    void record_frame_end(uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer);
+    // Diagnostic (main thread): request_...() asks the next frame with
+    // occlusion views to keep its CPU masks and entry identities;
+    // poll_...() returns complete, filling out, once that frame's occlusion
+    // words were decoded (a later frame reusing its slot), and is idle again
+    // after that.
+    void request_occlusion_check();
+    [[nodiscard]] auto poll_occlusion_check(Occlusion_check& out) -> Cull_classification_check_state;
     // The chunk size of draws through primitive_buffer (P3a): the job table
     // and draw_list_chunks() both cut the lists with it.
     [[nodiscard]] static auto get_records_per_chunk(const Primitive_buffer& primitive_buffer) -> std::size_t;
@@ -915,6 +1032,17 @@ private:
     // m_retired_gpu_shadow_counts and m_retired_gpu_color_counts and
     // releases it.
     void decode_retired_gpu_counts(uint64_t frame_index);
+    // classify_frame_cull_views(): decodes the occlusion words of the frame
+    // that last used frame_index's occlusion slot (retired) into
+    // m_retired_occlusion_counts and, for a check of that frame, the check.
+    void decode_retired_occlusion(uint64_t frame_index);
+    // dispatch_gpu_cull_views(): the slot's occlusion buffer, grown to
+    // hold the frame's two occlusion regions (created at the first dispatch,
+    // bound by every dispatch).
+    void prepare_occlusion_slot(uint64_t frame_index, std::size_t entry_count, std::size_t group_count, bool occlusion);
+    // dispatch_gpu_cull_views() of a frame with occlusion views, a check
+    // pending: the frame's CPU side of the check.
+    void capture_occlusion_check(uint64_t frame_index);
     // Index of filter in the frame's job filter table (m_gpu_job_filters),
     // added when new.
     [[nodiscard]] auto get_gpu_job_filter_index(const erhe::Item_filter& filter) -> uint32_t;
@@ -931,6 +1059,7 @@ private:
     // Whether layer_id is in layers (an empty span selects every layer).
     [[nodiscard]] static auto is_layer_selected(std::span<const erhe::scene::Layer_id> layers, erhe::scene::Layer_id layer_id) -> bool;
     [[nodiscard]] static auto make_gpu_cull_check() -> std::shared_ptr<Gpu_cull_check>;
+    [[nodiscard]] static auto make_gpu_occlusion_check() -> std::shared_ptr<Gpu_occlusion_check>;
     // Starts the view set of frame_index when it is a new frame.
     void begin_cull_frame(uint64_t frame_index);
     // Appends a view (no survivors yet) and returns it for the caller to fill.
@@ -1006,6 +1135,8 @@ private:
         bool                   published  {false};
         // The culling classification publish() recorded for the frame.
         Cull_classification    classification{Cull_classification::cpu};
+        // The occlusion culling publish() recorded (on only with gpu).
+        Occlusion_culling      occlusion     {Occlusion_culling::off};
         // The changes since the previous publish (Draw_list_content_changes):
         // m_draw_list_serial at that publish, and the accumulated
         // m_changed_bounds / m_changes_unbounded.
@@ -1194,7 +1325,9 @@ private:
     Gpu_cull_classifier*                                             m_gpu_cull_classifier{nullptr};
     Cull_frame_registry&                                             m_cull_frame_registry;
     Cull_classification                                              m_published_cull_classification{Cull_classification::cpu};
+    Occlusion_culling                                                m_published_occlusion_culling{Occlusion_culling::off};
     bool                                                             m_gpu_cull_refusal_logged{false};
+    bool                                                             m_occlusion_refusal_logged{false};
     std::size_t                                                      m_gpu_bounds_write_count{0};
     std::unique_ptr<erhe::graphics::Gpu_timer>                       m_gpu_cull_timer;
     // The check request and its read back state, shared with the
@@ -1335,6 +1468,59 @@ private:
     std::vector<Retired_color_selection_counts>                      m_retired_gpu_color_counts;
     Retired_gpu_shadow_counts                                        m_retired_gpu_shadow_counts{};
     bool                                                             m_has_retired_gpu_shadow_counts{false};
+
+    // Raster occlusion test (doc/plans/occlusion_culling.md), render phase.
+    // The frame's occlusion views (add_occlusion_view(), cleared by
+    // begin_cull_frame(); capacity kept).
+    class Occlusion_view_record
+    {
+    public:
+        Cull_view       cull_view {Cull_view::none};
+        glm::vec4       near_plane{0.0f};
+        Gpu_command_key key       {};
+    };
+    std::vector<Occlusion_view_record>                               m_occlusion_views;
+    // Per frame slot: the occlusion words of the slot's last frame with
+    // occlusion views, in one persistent host-readable buffer outside the
+    // ring buffers (written by that frame's classification and occlusion
+    // passes, read by the CPU once the frame retired): the test region at
+    // 0 and the result region at result_offset, group_count * entry_count
+    // uvec2 each (cull_classify.comp). Grows to the slot's high-water size
+    // (logged), only while nothing is pending in it.
+    class Occlusion_slot
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Buffer> buffer;
+        std::size_t                             region_bytes {0};
+        std::size_t                             result_offset{0};
+        uint64_t                                frame_index  {0};
+        uint32_t                                entry_count  {0};
+        uint32_t                                group_count  {0};
+        // The frame wrote occlusion words that were not decoded yet.
+        bool                                    pending      {false};
+        std::vector<Occlusion_view_record>      views;
+    };
+    std::vector<Occlusion_slot>                                      m_occlusion_slots;
+    // The frame being rendered dispatched its occlusion words (draw_occlusion()
+    // may draw, record_frame_end() orders them for the host).
+    uint64_t                                                         m_occlusion_frame_index{0};
+    bool                                                             m_occlusion_frame_active{false};
+    // The decoded frame's counts per occlusion view key (capacity kept).
+    class Retired_occlusion_view_counts
+    {
+    public:
+        Gpu_command_key key     {};
+        uint32_t        tested  {0};
+        uint32_t        occluded{0};
+        uint32_t        untested{0};
+    };
+    std::vector<Retired_occlusion_view_counts>                       m_retired_occlusion_counts;
+    uint64_t                                                         m_retired_occlusion_frame_index{0};
+    bool                                                             m_has_retired_occlusion_counts{false};
+    // The occlusion check (diagnostic; shared with nothing but guarded by
+    // its mutex: requested and polled on the main thread, captured and
+    // decoded on the render thread).
+    std::shared_ptr<Gpu_occlusion_check>                             m_occlusion_check;
 };
 
 } // namespace erhe::scene_renderer

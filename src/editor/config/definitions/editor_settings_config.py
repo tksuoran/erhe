@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=7,
+    version=8,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -149,6 +149,22 @@ struct("Editor_settings_config",
             default="Culling_classification::cpu",
             short_desc="Culling Classification",
             long_desc="Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU that generates the shadow and draw-list color passes' draw commands too (devices with native multi-draw indirect with a GPU-read draw count and first-instance record indexing; others use the CPU).",
+            visible=True,
+            developer=True
+        ),
+        # The raster occlusion test of the viewports' color views
+        # (doc/plans/occlusion_culling.md): with the gpu culling
+        # classification, each viewport's color render pass rasterizes the
+        # draw lists' entry boxes against its opaque depth and marks the
+        # visible entries. The bits are produced and checked; no pass reads
+        # them yet.
+        field(
+            "occlusion_culling",
+            Bool,
+            added_in=8,
+            default="false",
+            short_desc="Occlusion Culling",
+            long_desc="Run the raster occlusion test in the viewports (needs the gpu culling classification, a GPU-read draw count and fragment shader storage atomics): the draw lists' entry boxes are drawn against each view's opaque depth and the visible entries are marked. The marks are not used to skip draws yet.",
             visible=True,
             developer=True
         ),

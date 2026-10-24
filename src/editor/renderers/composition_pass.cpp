@@ -156,6 +156,8 @@ auto c_str(const Composition_pass_result result) -> const char*
         case Composition_pass_result::no_mesh_layers:          return "no_mesh_layers";
         case Composition_pass_result::submitted:               return "submitted";
         case Composition_pass_result::submitted_draw_lists:    return "submitted_draw_lists";
+        case Composition_pass_result::no_occlusion_view:       return "no_occlusion_view";
+        case Composition_pass_result::submitted_occlusion_test: return "submitted_occlusion_test";
         default:                                               return "?";
     }
 }
@@ -193,6 +195,18 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
         : context.scene_root;
     if (!scene_root) {
         out.result = Composition_pass_result::no_scene_root;
+        return;
+    }
+
+    // The raster occlusion test (doc/plans/occlusion_culling.md): its gates
+    // are its is_enabled predicate (App_rendering); it draws the scene's draw
+    // lists, so it needs the scene's Draw_list_scene. Whether the frame runs
+    // the test (gpu classification on a capable device) is decided in the
+    // render phase, when the view's pre-execute hook registers its view.
+    if (data.kind == Composition_pass_kind::occlusion_test) {
+        out.result = (scene_root->get_draw_list_scene() != nullptr)
+            ? Composition_pass_result::submitted
+            : Composition_pass_result::no_scene_root;
         return;
     }
 
@@ -410,6 +424,10 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         stats->draw_list_entry_count  = 0;
         stats->draw_list_culled_count = 0;
         stats->draw_list_counts_frame_index = 0;
+        stats->occlusion_tested_count       = 0;
+        stats->occlusion_occluded_count     = 0;
+        stats->occlusion_untested_count     = 0;
+        stats->occlusion_counts_frame_index = 0;
     }
 
     // The gating ran in the prepare phase (prepare()); a pass that did not
@@ -433,6 +451,44 @@ void Composition_pass::render(const Render_context& context, const Composition_p
     const float exposure = (!data.ignore_exposure && (context.camera_snapshot != nullptr))
         ? context.camera_snapshot->get_exposure()
         : 1.0f;
+
+    if (data.kind == Composition_pass_kind::occlusion_test) {
+        // The view's occlusion test (doc/plans/occlusion_culling.md), in the
+        // view's render pass after its depth-writing color passes; its view
+        // was registered by the view's pre-execute hook
+        // (Composer::add_cull_views()).
+        if (prepared.cull_view == erhe::scene_renderer::Cull_view::none) {
+            record_result(Composition_pass_result::no_occlusion_view);
+            return;
+        }
+        erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
+        ERHE_VERIFY(draw_list_scene != nullptr);
+        ERHE_VERIFY(context.render_pass != nullptr);
+        const std::optional<glm::mat4> clip_from_world = erhe::scene_renderer::Draw_list_renderer::get_color_clip_from_world(get_color_view_parameters(context));
+        ERHE_VERIFY(clip_from_world.has_value());
+        draw_list_scene->draw_occlusion(
+            erhe::scene_renderer::Draw_occlusion_parameters{
+                .render_encoder  = *context.encoder,
+                .render_pass     = context.render_pass,
+                .viewport        = context.viewport,
+                .clip_from_world = clip_from_world.value(),
+                .cull_view       = prepared.cull_view,
+                .frame_index     = context.app_context.graphics_device->get_frame_index()
+            }
+        );
+        if (stats != nullptr) {
+            const std::optional<erhe::scene_renderer::Retired_occlusion_counts> counts =
+                draw_list_scene->get_retired_occlusion_counts(get_gpu_command_key(*this, context.scene_view));
+            if (counts.has_value()) {
+                stats->occlusion_tested_count       = counts->tested;
+                stats->occlusion_occluded_count     = counts->occluded;
+                stats->occlusion_untested_count     = counts->untested;
+                stats->occlusion_counts_frame_index = counts->frame_index;
+            }
+        }
+        record_result(Composition_pass_result::submitted_occlusion_test);
+        return;
+    }
 
     if (data.mesh_layers.empty()) {
         // log_composer->debug("render_fullscreen");

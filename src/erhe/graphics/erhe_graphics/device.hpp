@@ -243,6 +243,12 @@ public:
     // indirect; OpenGL: 4.6 (glMultiDrawElementsIndirectCount); false on
     // Metal and the null device.
     bool use_draw_indirect_count     {false};
+    // Fragment shaders may write and atomically modify storage buffers.
+    // Vulkan: the fragmentStoresAndAtomics feature (enabled when the
+    // physical device has it); Metal: always; OpenGL: 4.3+ with fragment
+    // shader storage blocks; false on the null device. The raster occlusion
+    // test (doc/plans/occlusion_culling.md) needs it.
+    bool fragment_stores_and_atomics {false};
     // Compute shaders and shader storage buffers are required on every
     // backend (OpenGL requires 4.5 at device creation); there are no
     // capability flags for them and no fallback paths.

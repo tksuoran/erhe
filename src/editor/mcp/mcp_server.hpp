@@ -347,6 +347,8 @@ private:
     auto action_set_shadow_map_cache_enabled(const nlohmann::json& args) -> std::string;
     auto action_set_shadow_fit_cache_enabled(const nlohmann::json& args) -> std::string;
     auto query_cull_classification_check  (const nlohmann::json& args) -> std::string;
+    auto action_set_occlusion_culling     (const nlohmann::json& args) -> std::string;
+    auto query_occlusion_check            (const nlohmann::json& args) -> std::string;
     auto action_set_light_cluster_binning (const nlohmann::json& args) -> std::string;
     auto query_light_cluster_stats        (const nlohmann::json& args) -> std::string;
     auto query_light_cluster_check        (const nlohmann::json& args) -> std::string;
@@ -818,6 +820,10 @@ private:
     const Queued_request*                            m_cull_check_request{nullptr};
     std::chrono::steady_clock::time_point            m_cull_check_enqueued_at{};
     std::string                                      m_cull_check_scene_name;
+    // get_occlusion_check in flight (main thread only), as above.
+    const Queued_request*                            m_occlusion_check_request{nullptr};
+    std::chrono::steady_clock::time_point            m_occlusion_check_enqueued_at{};
+    std::string                                      m_occlusion_check_scene_name;
     // get_light_cluster_check in flight (main thread only): the request
     // whose re-runs poll the GPU binner's check.
     const Queued_request*                            m_light_cluster_check_request{nullptr};

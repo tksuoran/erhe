@@ -167,6 +167,13 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             // 0: the counts are the frame's own (CPU-written commands); else
             // the retired frame whose GPU count readback they come from.
             {"last_draw_list_counts_frame_index", stats.draw_list_counts_frame_index},
+            // The occlusion test pass (doc/plans/occlusion_culling.md): its
+            // view's counts in the retired frame named by
+            // last_occlusion_counts_frame_index (0: none yet).
+            {"last_occlusion_tested_count",   stats.occlusion_tested_count},
+            {"last_occlusion_occluded_count", stats.occlusion_occluded_count},
+            {"last_occlusion_untested_count", stats.occlusion_untested_count},
+            {"last_occlusion_counts_frame_index", stats.occlusion_counts_frame_index},
             {"last_cpu_time_us",     stats.cpu_time_us},
             {"total_cpu_time_us",    (frame_stats != nullptr) ? pass->get_total_cpu_time_us(*frame_stats) : 0.0},
             {"render_call_count",    (frame_stats != nullptr) ? pass->get_render_call_count(*frame_stats) : std::size_t{0}}
@@ -571,6 +578,125 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"command_gpu_time_ns",     check.command_gpu_time_ns},
         {"command_views",           std::move(command_views)},
         {"command_mismatches",      std::move(command_mismatches)}
+    }).dump();
+}
+
+auto Mcp_server::action_set_occlusion_culling(const json& args) -> std::string
+{
+    // The MCP counterpart of the Settings window's Occlusion Culling
+    // checkbox (doc/plans/occlusion_culling.md): edits the live editor
+    // setting, which the next frame's render settings snapshot carries to
+    // the draw lists' publish.
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("set_occlusion_culling: editor settings not available");
+    }
+    if (args.contains("enabled")) {
+        const json& value = args["enabled"];
+        if (!value.is_boolean()) {
+            return make_error_content("set_occlusion_culling: 'enabled' must be a boolean");
+        }
+        m_context.editor_settings->occlusion_culling = value.get<bool>();
+    }
+    const erhe::scene_renderer::Gpu_cull_classifier* classifier = m_context.gpu_cull_classifier;
+    return make_json_content(json{
+        {"enabled",        m_context.editor_settings->occlusion_culling},
+        {"classification", std::string{to_string(m_context.editor_settings->culling_classification)}},
+        {"gpu_supported",  (classifier != nullptr) && classifier->is_occlusion_supported()}
+    }).dump();
+}
+
+auto Mcp_server::query_occlusion_check(const json& args) -> std::string
+{
+    // The occlusion words of one frame with occlusion views
+    // (doc/plans/occlusion_culling.md): the first pass requests the check
+    // and defers; the re-runs poll until the checked frame retired and its
+    // words were decoded.
+    const bool continuation =
+        (m_occlusion_check_request != nullptr) &&
+        (m_occlusion_check_request == m_current_request) &&
+        (m_occlusion_check_enqueued_at == m_current_request->enqueued_at);
+    const std::string scene_name = continuation ? m_occlusion_check_scene_name : args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        m_occlusion_check_request = nullptr;
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    erhe::scene_renderer::Draw_list_scene* draw_list_scene = sr->get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        m_occlusion_check_request = nullptr;
+        return make_error_content("get_occlusion_check: the scene has no draw lists");
+    }
+
+    if (!continuation) {
+        const erhe::scene_renderer::Gpu_cull_classifier* classifier = m_context.gpu_cull_classifier;
+        if ((classifier == nullptr) || !classifier->is_occlusion_supported()) {
+            return make_error_content("get_occlusion_check: the device has no GPU occlusion test (no GPU culling classification, or no fragment shader storage atomics)");
+        }
+        if (
+            (m_context.editor_settings == nullptr) ||
+            (m_context.editor_settings->culling_classification != Culling_classification::gpu) ||
+            !m_context.editor_settings->occlusion_culling
+        ) {
+            return make_error_content("get_occlusion_check: needs culling_classification gpu and occlusion_culling on (set_culling_classification mode=gpu, set_occlusion_culling enabled=true first)");
+        }
+        draw_list_scene->request_occlusion_check();
+        m_occlusion_check_request    = m_current_request;
+        m_occlusion_check_enqueued_at = m_current_request->enqueued_at;
+        m_occlusion_check_scene_name = scene_name;
+        m_defer_current_request      = true;
+        return {};
+    }
+
+    erhe::scene_renderer::Occlusion_check check{};
+    const erhe::scene_renderer::Cull_classification_check_state state = draw_list_scene->poll_occlusion_check(check);
+    if (state == erhe::scene_renderer::Cull_classification_check_state::pending) {
+        m_defer_current_request = true;
+        return {};
+    }
+    m_occlusion_check_request = nullptr;
+    if (state != erhe::scene_renderer::Cull_classification_check_state::complete) {
+        return make_error_content("get_occlusion_check: the check was dropped");
+    }
+
+    json views = json::array();
+    for (const erhe::scene_renderer::Occlusion_view_check& view : check.views) {
+        // The key names the pass and the scene view (get_gpu_command_key()).
+        std::string scene_view_name{};
+        const Scene_view* const scene_view = static_cast<const Scene_view*>(view.key.view);
+        if (m_context.scene_views != nullptr) {
+            for (const std::shared_ptr<Viewport_scene_view>& candidate : m_context.scene_views->get_viewport_scene_views()) {
+                if (candidate.get() == scene_view) {
+                    scene_view_name = candidate->get_settings_key();
+                }
+            }
+        }
+        json first_occluded = json::array();
+        for (const erhe::scene_renderer::Occlusion_check_entry& entry : view.first_occluded) {
+            first_occluded.push_back(json{
+                {"list_index",  entry.list_index},
+                {"entry_index", entry.entry_index},
+                {"name",        entry.name}
+            });
+        }
+        views.push_back(json{
+            {"view",                view.view},
+            {"scene_view",          scene_view_name},
+            {"bounded_in_frustum",  view.bounded_in_frustum},
+            {"tested",              view.tested},
+            {"visible",             view.visible},
+            {"occluded",            view.occluded},
+            {"untested",            view.untested},
+            {"near_plane",          view.near_plane},
+            {"near_plane_occluded", view.near_plane_occluded},
+            {"first_occluded",      std::move(first_occluded)}
+        });
+    }
+    return make_json_content(json{
+        {"scene",       sr->get_name()},
+        {"frame_index", check.frame_index},
+        {"entry_count", check.entry_count},
+        {"view_count",  check.view_count},
+        {"views",       std::move(views)}
     }).dump();
 }
 

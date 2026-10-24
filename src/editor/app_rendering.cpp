@@ -503,6 +503,23 @@ App_rendering::App_rendering(
         erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only
     );
 
+    // The raster occlusion test (doc/plans/occlusion_culling.md): right
+    // after the last passes that write depth (the opaque and alpha-tested
+    // fills above; the outline, sky, grid and translucent passes below write
+    // none that occludes content), so it tests against the view's final
+    // opaque depth. Viewports only, with the gpu culling classification and
+    // the draw lists; it writes no color and no depth.
+    const std::shared_ptr<Composition_pass> occlusion_test = make_composition_pass("Occlusion test");
+    occlusion_test->data.kind       = Composition_pass_kind::occlusion_test;
+    occlusion_test->data.is_enabled = [](const Render_context& context) -> bool {
+        const Render_settings& settings = *context.app_context.render_settings;
+        return
+            (context.render_state != nullptr) &&
+            settings.occlusion_culling &&
+            settings.use_draw_lists &&
+            (settings.culling_classification == Culling_classification::gpu);
+    };
+
     selection_outline = make_composition_pass(
         "Content outline opaque selected",
         Composition_pass_data{

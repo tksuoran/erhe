@@ -20,4 +20,20 @@ enum class Cull_classification : uint8_t
 
 [[nodiscard]] auto c_str(Cull_classification classification) -> const char*;
 
+// Whether the frame's GPU classification also runs the raster occlusion
+// test (doc/plans/occlusion_culling.md): on, for a frame published for
+// Cull_classification::gpu on a device whose Gpu_cull_classifier supports it
+// (Gpu_cull_classifier::is_occlusion_supported()), the classification starts
+// each occlusion view's visibility bits and the views' occlusion passes
+// (Draw_list_scene::draw_occlusion()) set the bits of the entries they see.
+// The bits are produced and read back; no pass consumes them yet.
+enum class Occlusion_culling : uint8_t
+{
+    off   = 0,
+    on    = 1,
+    count = 2
+};
+
+[[nodiscard]] auto c_str(Occlusion_culling occlusion_culling) -> const char*;
+
 } // namespace erhe::scene_renderer

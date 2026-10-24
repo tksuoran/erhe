@@ -267,6 +267,7 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
         ? Record_upload::shared
         : Record_upload::per_pass;
     m_gpu_cull_check = make_gpu_cull_check();
+    m_occlusion_check = make_gpu_occlusion_check();
     // Draw_list_content_changes::scene_instance: unique for the process, so a cache
     // keyed on content serials never mistakes another scene's serial for
     // this one's.
@@ -1430,6 +1431,7 @@ void Draw_list_scene::publish(
     const uint64_t                    frame_index,
     const std::size_t                 frames_in_flight,
     const Cull_classification         classification,
+    const Occlusion_culling           occlusion,
     const std::span<const Joint_pose> joint_poses
 )
 {
@@ -1469,6 +1471,24 @@ void Draw_list_scene::publish(
     }
     slot.classification             = effective_classification;
     m_published_cull_classification = effective_classification;
+
+    // The occlusion test runs inside the GPU classification, on a device
+    // whose classifier supports it (fragment storage writes and atomics).
+    Occlusion_culling effective_occlusion = Occlusion_culling::off;
+    if (occlusion == Occlusion_culling::on) {
+        if (effective_classification != Cull_classification::gpu) {
+            effective_occlusion = Occlusion_culling::off;
+        } else if (!m_gpu_cull_classifier->is_occlusion_supported()) {
+            if (!m_occlusion_refusal_logged) {
+                log_draw_list->warn("GPU occlusion culling is not available on this device; no occlusion test runs");
+                m_occlusion_refusal_logged = true;
+            }
+        } else {
+            effective_occlusion = Occlusion_culling::on;
+        }
+    }
+    slot.occlusion                = effective_occlusion;
+    m_published_occlusion_culling = effective_occlusion;
 
     // A changed pose is a content change: it moves the content serial (no
     // list is copied for it).
@@ -2281,6 +2301,8 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     m_gpu_color_jobs              = Gpu_job_range{};
     m_color_selections.clear();
     m_color_selection_layers.clear();
+    m_occlusion_views.clear();
+    m_occlusion_frame_active = false;
     m_gpu_jobs.clear();
     m_gpu_job_infos.clear();
     for (std::vector<uint64_t>& masks : m_cull_masks) {
@@ -2507,6 +2529,7 @@ void Draw_list_scene::classify_frame_cull_views(const uint64_t frame_index, erhe
     ERHE_VERIFY(!m_cull_frame_classified);
     m_cull_frame_classified = true;
     decode_retired_gpu_counts(frame_index);
+    decode_retired_occlusion(frame_index);
     classify_cull_views();
     if (get_published_slot(frame_index).classification == Cull_classification::gpu) {
         dispatch_gpu_cull_views(frame_index, command_buffer);

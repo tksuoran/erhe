@@ -2249,6 +2249,10 @@ public:
         // records they bound (doc/erhe/draw_list_renderer.md "Record
         // upload").
         if (m_cull_frame_registry) {
+            // The frame's occlusion words (doc/plans/occlusion_culling.md),
+            // written by its classification and its views' occlusion
+            // passes, are read by the host once the frame retired.
+            m_cull_frame_registry->record_frame_end(command_buffer);
             m_cull_frame_registry->release_frame_records();
         }
 

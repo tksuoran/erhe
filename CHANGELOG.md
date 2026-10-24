@@ -50,6 +50,19 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::xr`: `Pose` moved to its own header `erhe_xr/pose.hpp` (included
   by `xr.hpp` and `frame_timing.hpp`), available in every
   `ERHE_XR_LIBRARY` configuration.
+- `erhe::scene_renderer`: the raster occlusion test (doc/plans/occlusion_culling.md,
+  doc/erhe/draw_list_renderer.md Q6 "Occlusion test"): `Occlusion_culling`,
+  `Draw_list_scene::add_occlusion_view()`, `draw_occlusion()`
+  (`Draw_occlusion_parameters`), `get_retired_occlusion_counts()`
+  (`Retired_occlusion_counts`), `record_frame_end()`,
+  `request_occlusion_check()` / `poll_occlusion_check()` (`Occlusion_check`,
+  `Occlusion_view_check`, `Occlusion_check_entry`),
+  `get_occlusion_culling()`; `Cull_frame_registry::add_frame_end_scene()` and
+  `record_frame_end()`; `Draw_list_renderer::get_color_clip_from_world()` and
+  `add_color_occlusion_view()`; `Gpu_cull_classifier::is_occlusion_supported()`,
+  the occlusion pipeline accessors and binding point constants.
+- `erhe::graphics`: `Device_info::fragment_stores_and_atomics` (Vulkan
+  enables `fragmentStoresAndAtomics` when the device has it).
 - `erhe::scene_renderer`: GPU-generated commands for the draw-list color
   passes (doc/erhe/draw_list_renderer.md Q6 "GPU command generation"):
   `Color_command_selection`, `Command_selection_id`, `Gpu_command_key`,
@@ -754,6 +767,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
+  `Occlusion_culling` after the `Cull_classification`;
+  `Gpu_cull_classifier::vec4s_per_view` is 10 (the near plane and flag of an
+  occlusion view), and `cull_classify.comp` binds two more storage blocks
+  (the occlusion test and result words).
 - `erhe::graphics` (Metal and Metal 4): fragment functions read every
   dedicated (non-heap) sampler of their bind group layout from one argument
   buffer at `[[buffer(15)]]` (descriptor set 6) instead of

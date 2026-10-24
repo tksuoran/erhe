@@ -701,6 +701,11 @@ void Settings_window::imgui()
             // headset's pre-execute hook (doc/plans/culling.md "Headset passes").
             static_cast<void>(ImGui::Checkbox("##", &m_context.app_settings->headset_culling_session));
         }, "Frustum-cull the headset's color passes against the union of the eye frusta (padded). Off draws every entry, for comparison. Session only, not saved.");
+        add_entry("Occlusion Culling", [&settings](){
+            // The render settings snapshot carries the value to the draw
+            // lists' publish (doc/plans/occlusion_culling.md).
+            static_cast<void>(ImGui::Checkbox("##", &settings.occlusion_culling));
+        }, "Run the raster occlusion test in the viewports (gpu culling classification only): the entries' boxes are drawn against each view's opaque depth and the visible entries are marked. The marks do not skip draws yet.");
         add_entry("Light Cluster Binning", [&settings](){
             // The render settings snapshot carries the value to the shadow
             // render nodes' light binning (doc/plans/clustered_lights.md C4).

@@ -493,6 +493,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::get_integer_v(gl::Get_p_name::max_compute_uniform_blocks,                &m_info.max_compute_uniform_blocks);
         gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &m_info.max_vertex_shader_storage_blocks);
         gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &m_info.max_fragment_shader_storage_blocks);
+        // GL 4.3+ fragment shader storage blocks take writes and atomics.
+        m_info.fragment_stores_and_atomics = (m_info.max_fragment_shader_storage_blocks > 0);
         gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &m_info.max_geometry_shader_storage_blocks);
         gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &m_info.max_tess_control_shader_storage_blocks);
         gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &m_info.max_tess_evaluation_shader_storage_blocks);

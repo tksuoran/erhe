@@ -58,7 +58,7 @@
     "name": "get_scene_nodes"
   },
   {
-    "description": "Inspect the Composer's composition passes and why each one drew or did not draw in the last rendered frame (never_rendered when the pass was not rendered in it): name, enabled flag, whether it has a render-time is_enabled predicate, mesh layer ids, item filter bits, and last_result - one of never_rendered / disabled / is_enabled_false / no_scene_root / primitive_mode_disabled / no_mesh_layers / submitted, plus the scene view it last ran for and how many meshes its layers held; for draw-list passes last_draw_list_entry_count / last_draw_list_culled_count and last_draw_list_counts_frame_index (0: the frame's own CPU counts; else the retired frame whose GPU count readback they come from, under culling_classification gpu). Use this when geometry is missing and a GPU frame capture shows NO draw calls and NO debug marker for the pass: a pass that returns early emits no marker at all, so the capture cannot tell a mis-gated pass from missing geometry. Note that 'submitted' only means the pass reached draw submission; its meshes may still have been rejected by the item filter. Also per pass: last_draw_list_entry_count, last_draw_list_culled_count (entries that passed the filter but lay outside the view frustum), last_cpu_time_us / total_cpu_time_us / render_call_count (CPU wall time inside render(); reset with reset_composition_pass_stats), and a shadow_nodes array with the same timing for each Shadow_render_node (rendered_last_frame false and no timing for a node that did not execute in the last rendered frame).",
+    "description": "Inspect the Composer's composition passes and why each one drew or did not draw in the last rendered frame (never_rendered when the pass was not rendered in it): name, enabled flag, whether it has a render-time is_enabled predicate, mesh layer ids, item filter bits, and last_result - one of never_rendered / disabled / is_enabled_false / no_scene_root / primitive_mode_disabled / no_mesh_layers / submitted, plus the scene view it last ran for and how many meshes its layers held; for draw-list passes last_draw_list_entry_count / last_draw_list_culled_count and last_draw_list_counts_frame_index (0: the frame's own CPU counts; else the retired frame whose GPU count readback they come from, under culling_classification gpu)); for the 'Occlusion test' pass (occlusion_culling on) last_occlusion_tested_count / last_occlusion_occluded_count / last_occlusion_untested_count of its view in the retired frame last_occlusion_counts_frame_index (0: none yet), and last_result no_occlusion_view or submitted_occlusion_test. Use this when geometry is missing and a GPU frame capture shows NO draw calls and NO debug marker for the pass: a pass that returns early emits no marker at all, so the capture cannot tell a mis-gated pass from missing geometry. Note that 'submitted' only means the pass reached draw submission; its meshes may still have been rejected by the item filter. Also per pass: last_draw_list_entry_count, last_draw_list_culled_count (entries that passed the filter but lay outside the view frustum), last_cpu_time_us / total_cpu_time_us / render_call_count (CPU wall time inside render(); reset with reset_composition_pass_stats), and a shadow_nodes array with the same timing for each Shadow_render_node (rendered_last_frame false and no timing for a node that did not execute in the last rendered frame).",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -8933,6 +8933,32 @@
       "type": "object"
     },
     "name": "get_cull_classification_check"
+  },
+  {
+    "description": "Set the editor's occlusion culling setting (Editor_settings_config::occlusion_culling, doc/plans/occlusion_culling.md; the live setting, saved only by a Settings window save): on runs the raster occlusion test in the viewports (four view included) of frames classified on the GPU (culling_classification gpu): the frame's classification starts per viewport color view a visibility bit per draw-list entry (preset visible for entries without bounds, boxes reaching the near plane and entries outside the frustum), and the view's 'Occlusion test' composition pass, right after its opaque and alpha-tested passes, draws every tested entry's world AABB against the view's depth (no depth or color writes) and sets the bit of every entry with a visible fragment. The bits are produced and read back (get_occlusion_check, get_composition_passes last_occlusion_* counts); no pass skips draws by them yet, so images do not change. Previews, thumbnails, render_scene_image and the headset get no occlusion test. Needs a device with the GPU culling path and fragment shader storage atomics (gpu_supported). Takes effect at the next frame's render settings snapshot. Omit enabled to read the setting.",
+    "inputSchema": {
+      "properties": {
+        "enabled": {
+          "description": "true or false",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_occlusion_culling"
+  },
+  {
+    "description": "Diagnostic of the raster occlusion test (doc/plans/occlusion_culling.md): requests that the next frame with occlusion views keep its CPU masks and entry identities; once that frame retired and the next frame using its frame slot decoded its occlusion words from host memory, returns frame_index, entry_count (all published lists), view_count (the frame's culling views) and per occlusion view: view (its index in the frame's view set), scene_view, bounded_in_frustum (color entries with bounds inside the view frustum, from the CPU masks), tested (entries whose box the occlusion pass rasterized), visible (tested and marked by a fragment), occluded (tested, no visible fragment), untested (color entries marked visible without a test: no bounds, a box reaching the near plane, outside the frustum), near_plane (bounded entries in the frustum whose box intersects the near plane) and near_plane_occluded (those of them not marked: 0 is the gate), and first_occluded [{list_index, entry_index, name}] (up to 16; name is the entry's mesh as it is now). Errors when the device has no GPU occlusion test or the settings are not culling_classification gpu with occlusion_culling on. The call waits a few frames.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Scene to check (default: the first scene)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_occlusion_check"
   },
   {
     "description": "Set the editor's light cluster binning setting (Editor_settings_config::light_cluster_binning, doc/plans/clustered_lights.md C4; the live setting, saved only by a Settings window save): gpu (default) bins each clustered view's spot and point lights into its cluster grid with a compute pass (res/shaders/light_cluster_bin.comp) writing fixed-offset lists into device memory; cpu bins them with the CPU binner (Light_cluster_binner) on the render thread. Both produce the same lists (get_light_cluster_check). Takes effect at the next frame's render settings snapshot; a device whose binning pipeline did not build bins on the CPU (gpu_supported false). Only views whose graphics preset light_shading is clustered are binned. Omit mode to read the setting.",

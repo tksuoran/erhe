@@ -50,6 +50,15 @@ public:
     // releases the shared records of every scene registered since the
     // previous call (Draw_list_scene::release_frame_records()).
     void release_frame_records();
+    // Draw_list_scene, when its classification of frame_index wrote
+    // occlusion words (doc/plans/occlusion_culling.md) that the host reads
+    // once the frame retired.
+    void add_frame_end_scene(Draw_list_scene& draw_list_scene, uint64_t frame_index);
+    // Render phase, after the frame's last pass and before its submit,
+    // outside any render pass (the editor: with release_frame_records()):
+    // records Draw_list_scene::record_frame_end() of every scene registered
+    // since the previous call into command_buffer.
+    void record_frame_end(erhe::graphics::Command_buffer& command_buffer);
 
 private:
     // Cleared (capacity kept) by classify_frame().
@@ -58,6 +67,9 @@ private:
     // Cleared (capacity kept) by release_frame_records().
     std::vector<Draw_list_scene*> m_record_scenes;
     uint64_t                      m_record_frame_index{std::numeric_limits<uint64_t>::max()};
+    // Cleared (capacity kept) by record_frame_end().
+    std::vector<Draw_list_scene*> m_frame_end_scenes;
+    uint64_t                      m_frame_end_frame_index{std::numeric_limits<uint64_t>::max()};
 };
 
 } // namespace erhe::scene_renderer

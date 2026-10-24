@@ -66,6 +66,14 @@ namespace {
     ) {
         return false;
     }
+    // The occlusion test runs in the viewports only (doc/plans/
+    // occlusion_culling.md); a scene image render leaves it out.
+    if (
+        (content != Render_content::scene_and_editor_aids) &&
+        (composition_pass.data.kind == Composition_pass_kind::occlusion_test)
+    ) {
+        return false;
+    }
     return true;
 }
 
@@ -126,6 +134,29 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
         Composition_pass_prepared& pass_prepared    = prepared.passes[i];
         pass_prepared.cull_view         = erhe::scene_renderer::Cull_view::none;
         pass_prepared.command_selection = erhe::scene_renderer::Command_selection_id::none;
+        // The occlusion test pass (doc/plans/occlusion_culling.md): its view
+        // is the view's color culling view (the one the view's draw-list
+        // passes share), made an occlusion view of the frame.
+        if (composition_pass.data.kind == Composition_pass_kind::occlusion_test) {
+            if (pass_prepared.result != Composition_pass_result::submitted) {
+                continue;
+            }
+            const std::shared_ptr<Scene_root>& occlusion_scene_root = composition_pass.data.override_scene_root
+                ? composition_pass.data.override_scene_root
+                : context.scene_root;
+            ERHE_VERIFY(occlusion_scene_root);
+            erhe::scene_renderer::Draw_list_scene* draw_list_scene = occlusion_scene_root->get_draw_list_scene();
+            ERHE_VERIFY(draw_list_scene != nullptr);
+            const erhe::scene_renderer::Cull_view cull_view = erhe::scene_renderer::Draw_list_renderer::add_color_cull_view(*draw_list_scene, prepared.frame_index, view_parameters);
+            pass_prepared.cull_view = erhe::scene_renderer::Draw_list_renderer::add_color_occlusion_view(
+                *draw_list_scene,
+                prepared.frame_index,
+                cull_view,
+                view_parameters,
+                get_gpu_command_key(composition_pass, context.scene_view)
+            );
+            continue;
+        }
         // The passes Composition_pass::render() draws through draw lists.
         if ((pass_prepared.result != Composition_pass_result::submitted) || !pass_prepared.use_draw_lists) {
             continue;

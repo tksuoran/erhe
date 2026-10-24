@@ -17,11 +17,27 @@
 // cull_bounds.bounds[2 * entry + 1] = extent.xyz, purpose (0 color, 1 shadow)
 //   extent.x < 0: no bounds (or a skinned list): inside every view of the
 //   entry's purpose.
-// cull_views.header = view_count, entry_count, 0, 0
-// cull_views.views[8 * view + k]:
+// cull_views.header = view_count, entry_count, occlusion (1: the frame has
+//   occlusion views, the occlusion words below are written), 0
+// cull_views.views[10 * view + k]:
 //   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
 //   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
-//   face (0..5 = +X -X +Y -Y +Z -Z), as exact small floats.
+//   face (0..5 = +X -X +Y -Y +Z -Z), as exact small floats, 8 the near
+//   plane of an occlusion view (inward), 9 = occlusion view (1.0) or not
+//   (0.0), 0, 0, 0.
+//
+// The raster occlusion test (doc/plans/occlusion_culling.md, occlusion_test
+// .vert/.frag) of the frame's occlusion views (the viewports' color views)
+// starts from two words per (group, entry), in the mask layout, when the
+// header asks for them: cull_occlusion_test.tests, the views whose entry the
+// occlusion pass rasterizes (a bounded entry inside the view's frustum whose
+// grown box, erhe_occlusion_bounds.glsl, lies wholly beyond the near plane:
+// its front faces are not clipped), and cull_occlusion_result.results, the
+// visibility bits the pass ORs into, preset for the entries of an occlusion
+// view that the pass does not test (no bounds, or a box reaching the near
+// plane: visible; outside the frustum: unknown, kept visible so an entry
+// entering the view is drawn). Entries of another purpose, and views that
+// are no occlusion views, hold 0 in both.
 
 layout(local_size_x = ERHE_CULL_CLASSIFY_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
@@ -52,6 +68,8 @@ float sphere_axis_gap(float c, float e, float s)
     return (signed_gap > 0.0) ? signed_gap : 0.0;
 }
 
+#include "erhe_occlusion_bounds.glsl"
+
 void main()
 {
     uint entry       = gl_GlobalInvocationID.x;
@@ -68,16 +86,26 @@ void main()
     uint purpose   = uint(extent_w.w);
     bool unbounded = !(e.x >= 0.0);
 
-    uint  group = 0u;
-    uvec2 bits  = uvec2(0u, 0u);
+    bool  occlusion       = (cull_views.header.z != 0u);
+    vec3  occlusion_e     = unbounded ? vec3(0.0) : occlusion_grown_extent(c, e);
+    uint  group           = 0u;
+    uvec2 bits            = uvec2(0u, 0u);
+    uvec2 occlusion_tests = uvec2(0u, 0u);
+    uvec2 occlusion_bits  = uvec2(0u, 0u);
     for (uint view = 0u; view < view_count; ++view) {
         uint view_group = view / 64u;
         if (view_group != group) {
             cull_masks.masks[(group * entry_count) + entry] = bits;
-            bits  = uvec2(0u, 0u);
-            group = view_group;
+            if (occlusion) {
+                cull_occlusion_test.tests    [(group * entry_count) + entry] = occlusion_tests;
+                cull_occlusion_result.results[(group * entry_count) + entry] = occlusion_bits;
+            }
+            bits            = uvec2(0u, 0u);
+            occlusion_tests = uvec2(0u, 0u);
+            occlusion_bits  = uvec2(0u, 0u);
+            group           = view_group;
         }
-        uint base = 8u * view;
+        uint base = 10u * view;
         vec4 info = cull_views.views[base + 7u];
         if (uint(info.x) != purpose) {
             continue;
@@ -112,14 +140,27 @@ void main()
                 }
             }
         }
+        uint  bit      = view % 64u;
+        uvec2 view_bit = (bit < 32u) ? uvec2(1u << bit, 0u) : uvec2(0u, 1u << (bit - 32u));
         if (inside) {
-            uint bit = view % 64u;
-            if (bit < 32u) {
-                bits.x |= (1u << bit);
+            bits |= view_bit;
+        }
+        if (occlusion && (cull_views.views[base + 9u].x > 0.5)) {
+            // The grown box wholly beyond the near plane (inside unless
+            // n . c + w - |n| . e < 0): its front faces rasterize unclipped.
+            vec4  near_plane    = cull_views.views[base + 8u];
+            float near_distance = dot(near_plane.xyz, c) + near_plane.w - dot(abs(near_plane.xyz), occlusion_e);
+            bool  tested        = inside && !unbounded && (near_distance >= 0.0);
+            if (tested) {
+                occlusion_tests |= view_bit;
             } else {
-                bits.y |= (1u << (bit - 32u));
+                occlusion_bits |= view_bit;
             }
         }
     }
     cull_masks.masks[(group * entry_count) + entry] = bits;
+    if (occlusion) {
+        cull_occlusion_test.tests    [(group * entry_count) + entry] = occlusion_tests;
+        cull_occlusion_result.results[(group * entry_count) + entry] = occlusion_bits;
+    }
 }

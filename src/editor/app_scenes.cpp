@@ -640,13 +640,18 @@ void App_scenes::snapshot_render_settings()
     const unsigned int cull_classification_value = static_cast<unsigned int>(m_context.render_settings->culling_classification);
     ERHE_VERIFY(cull_classification_value < static_cast<unsigned int>(erhe::scene_renderer::Cull_classification::count));
     const erhe::scene_renderer::Cull_classification cull_classification = static_cast<erhe::scene_renderer::Cull_classification>(cull_classification_value);
+    // The frame's occlusion culling setting (doc/plans/occlusion_culling.md),
+    // recorded in the slot with the classification.
+    const erhe::scene_renderer::Occlusion_culling occlusion_culling = m_context.render_settings->occlusion_culling
+        ? erhe::scene_renderer::Occlusion_culling::on
+        : erhe::scene_renderer::Occlusion_culling::off;
     for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
         // Order: the joint pose capture assigns the skins' joint slots, the
         // publish bakes them into the draw list records and copies the
         // changed lists (doc/editor/editor.md "Frame phases").
         scene_root->snapshot_render_settings(*m_context.editor_settings, *m_context.render_settings, frame_index, frames_in_flight);
         scene_root->prepare_shadow_bounds(frame_index, frames_in_flight);
-        scene_root->publish_draw_lists(frame_index, frames_in_flight, cull_classification);
+        scene_root->publish_draw_lists(frame_index, frames_in_flight, cull_classification, occlusion_culling);
     }
 }
 
