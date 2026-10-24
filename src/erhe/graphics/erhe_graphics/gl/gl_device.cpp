@@ -168,12 +168,25 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     );
     if (gl_vendor_lc.find("nvidia") != std::string::npos) {
         m_info.vendor = Vendor::Nvidia;
-    } else if (gl_vendor_lc.find("amd") != std::string::npos) {
+    } else if (
+        (gl_vendor_lc.find("amd") != std::string::npos) ||
+        (gl_vendor_lc.find("ati technologies") != std::string::npos) // AMD driver on Windows
+    ) {
         m_info.vendor = Vendor::Amd;
     } else if (gl_vendor_lc.find("intel") != std::string::npos) {
         m_info.vendor = Vendor::Intel;
     } else {
         m_info.vendor = Vendor::Unknown;
+    }
+
+#if defined(_WIN32)
+    // The AMD OpenGL driver on Windows ignores TEXTURE_VIEW_MIN_LEVEL in
+    // glGenerateTextureMipmap() on a texture view. Mesa (radeonsi) on Linux
+    // also reports vendor "AMD" and is not affected.
+    m_info.workaround_view_mipmap_generation_ignores_view_min_level = (m_info.vendor == Vendor::Amd);
+#endif
+    if (m_info.workaround_view_mipmap_generation_ignores_view_min_level) {
+        log_startup->info("Workaround: texture view mipmaps are built with per-level blits (view mipmap generation ignores TEXTURE_VIEW_MIN_LEVEL)");
     }
 
     auto versions = split(gl_version_str, '.');

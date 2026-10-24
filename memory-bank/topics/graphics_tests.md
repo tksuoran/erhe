@@ -21,6 +21,7 @@
 !Image_loader-default=premultiplied→goldens-read-with-Alpha_mode::straight
 !one-golden-set-all-backends::image-space-coords+texture_origin+native_depth_range;GL-bottom-left-origin-exercises-the-normalization
 !AMD-GL-driver::comparison-sampler-reads-never-after-a-never-draw-of-identical-source{state-probed-correct;not-erhe}
+!AMD-GL-Windows-driver::glGenerateTextureMipmap-on-view-ignores-VIEW_MIN_LEVEL{builds-from-storage-level-0;IMMUTABLE_LEVELS-misreported;workaround-gated:Device_info::workaround_view_mipmap_generation_ignores_view_min_level->per-level-blits;other-drivers-keep-glGenerateTextureMipmap}
 !GL-gpu-tests-in-build_vs2026_opengl(Tracy-on)+one-process-per-case::exposed-what-build_tests-hid-2026-10-24{rasterization-cache-initial-state;s8-transfer-entry(Tracy-only-path);16f=half_float;FILTER/FRAMEBUFFER_BLEND=support-levels;timer-timestamp-pairs}->run-GL-gpu-tests-in-a-Tracy-tree-too
 !VS-incremental-link-after-reconfigure::erhe_graphics_gpu_tests-called-0x0-from-__scrt_common_main_seh{silent-AV-at-gtest_list_tests;delete-exe+ilk-and-relink}
 !agfx_comparison.md-premise-stale::set_storage_image-works-on-Vk+GL+Metal(image_2d-level-0-only)

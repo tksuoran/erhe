@@ -32,6 +32,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Gpu_timer::last_result_with_frame_id()` and the allocation-free
   `Gpu_timer::for_each_gpu_timer(const std::function<void(Gpu_timer&)>&)`
   (walks the live timers under the registry lock).
+- `erhe::graphics`: `Device_info::workaround_view_mipmap_generation_ignores_view_min_level`,
+  set by the OpenGL backend for the AMD driver on Windows: there
+  `Blit_command_encoder::generate_mipmaps()` builds a texture view's mipmaps
+  with one blit per level and layer; every other driver keeps
+  `glGenerateTextureMipmap()`.
 - `erhe::xr`: head pose override for scripted runs:
   `Headset::set_head_pose_override(const std::optional<Pose>&)` and
   `Xr_session::set_head_pose_override()` / `get_head_pose_override()`.

@@ -37,6 +37,7 @@ public:
     [[nodiscard]] auto gl_name                   () const -> GLuint;
     [[nodiscard]] auto get_handle                () const -> uint64_t;
     [[nodiscard]] auto is_sparse                 () const -> bool;
+    [[nodiscard]] auto is_view                   () const -> bool;
 
     [[nodiscard]] auto get_gl_texture_target() const -> gl::Texture_target;
 
@@ -68,6 +69,7 @@ private:
     bool                       m_fixed_sample_locations{true};
     bool                       m_is_sparse             {false};
     bool                       m_allocated             {false};
+    bool                       m_is_view               {false};
     int                        m_sample_count          {0};
     int                        m_width                 {0};
     int                        m_height                {0};

@@ -2,6 +2,7 @@
 #include "erhe_graphics/gl/gl_buffer.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
+#include "erhe_graphics/gl/gl_state_tracker.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/gl/gl_context_index.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -485,13 +486,75 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
     );
 }
 
+namespace {
+
+// glGenerateTextureMipmap() on a texture view must treat the view's first
+// level as the base level (GL 4.6 8.14.4, TEXTURE_BASE_LEVEL of a view is
+// relative to TEXTURE_VIEW_MIN_LEVEL). Where the driver ignores the view's
+// min level (Device_info::workaround_view_mipmap_generation_ignores_view_min_level,
+// the AMD OpenGL driver on Windows), views build their chain with one linear
+// blit per level and layer, which only touches the view's own subresources.
+// A blit, unlike glGenerateMipmap, is clipped by the scissor test (always
+// enabled on this backend), so each blit sets the scissor rectangle to its
+// destination level.
+void generate_view_mipmaps_with_blits(Device& device, const Texture_impl& view)
+{
+    Scissor_state_tracker& scissor = device.get_impl().get_state_tracker().scissor;
+    const gl::Texture_target target  = view.get_gl_texture_target();
+    const bool               layered = Texture_impl::is_array_target(target) || (target == gl::Texture_target::texture_cube_map);
+    // A 3D level is a downsample in z too, which per-slice 2D blits cannot do.
+    ERHE_VERIFY(target != gl::Texture_target::texture_3d);
+    const int    level_count = view.get_level_count();
+    const int    layer_count = layered ? std::max(1, view.get_array_layer_count()) : 1;
+    const GLuint texture     = view.gl_name();
+
+    GLuint framebuffers[2]{0, 0};
+    gl::create_framebuffers(2, &framebuffers[0]);
+    const GLuint           read_framebuffer = framebuffers[0];
+    const GLuint           draw_framebuffer = framebuffers[1];
+    const gl::Color_buffer color_buffer     = gl::Color_buffer::color_attachment0;
+    gl::named_framebuffer_read_buffer (read_framebuffer, color_buffer);
+    gl::named_framebuffer_draw_buffers(draw_framebuffer, 1, &color_buffer);
+    for (int level = 1; level < level_count; ++level) {
+        const unsigned int source_level = static_cast<unsigned int>(level - 1);
+        const int          src_width    = view.get_width (source_level);
+        const int          src_height   = view.get_height(source_level);
+        const int          dst_width    = view.get_width (static_cast<unsigned int>(level));
+        const int          dst_height   = view.get_height(static_cast<unsigned int>(level));
+        scissor.execute(Scissor_state{.x = 0, .y = 0, .width = dst_width, .height = dst_height});
+        for (int layer = 0; layer < layer_count; ++layer) {
+            if (layered) {
+                gl::named_framebuffer_texture_layer(read_framebuffer, gl::Framebuffer_attachment::color_attachment0, texture, level - 1, layer);
+                gl::named_framebuffer_texture_layer(draw_framebuffer, gl::Framebuffer_attachment::color_attachment0, texture, level,     layer);
+            } else {
+                gl::named_framebuffer_texture(read_framebuffer, gl::Framebuffer_attachment::color_attachment0, texture, level - 1);
+                gl::named_framebuffer_texture(draw_framebuffer, gl::Framebuffer_attachment::color_attachment0, texture, level);
+            }
+            gl::blit_named_framebuffer(
+                read_framebuffer, draw_framebuffer,
+                0, 0, src_width, src_height,
+                0, 0, dst_width, dst_height,
+                gl::Clear_buffer_mask::color_buffer_bit,
+                gl::Blit_framebuffer_filter::linear
+            );
+        }
+    }
+    gl::delete_framebuffers(2, &framebuffers[0]);
+}
+
+} // anonymous namespace
+
 void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 {
     ERHE_VERIFY_GL_THREAD_HAS_CONTEXT();
     // Publication consumer: level 0 may have been uploaded on another
     // context; order the mipmap generation after that publication.
     texture->get_impl().wait_publication();
-    gl::generate_texture_mipmap(texture->get_impl().gl_name());
+    if (texture->get_impl().is_view() && m_device.get_info().workaround_view_mipmap_generation_ignores_view_min_level) {
+        generate_view_mipmaps_with_blits(m_device, texture->get_impl());
+    } else {
+        gl::generate_texture_mipmap(texture->get_impl().gl_name());
+    }
     // Writes the shared texture: a worker-side call is a publication point.
     if (gl_thread_is_worker_context()) {
         texture->get_impl().publish_from_worker();

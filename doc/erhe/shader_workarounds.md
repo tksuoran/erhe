@@ -63,7 +63,28 @@ driver, so a second driver with the same bug can reuse the define. Document the
 driver(s) currently known to need it in the `Device_info` field comment and at
 the detection site.
 
+A workaround is enabled only on the driver known to need it; every other
+driver keeps the spec path (AGENTS.md "Driver workarounds are gated on the
+driver"). A workaround with no shader side is a `Device_info` flag alone, with
+no define.
+
 ## Current workarounds
+
+### `Device_info::workaround_view_mipmap_generation_ignores_view_min_level` (C++ only)
+
+- **Limitation**: the AMD OpenGL driver on Windows (Radeon 890M, driver
+  32.0.32015.7029) ignores `TEXTURE_VIEW_MIN_LEVEL` in
+  `glGenerateTextureMipmap()` on a texture view: it builds the view's levels
+  from level 0 of the underlying storage, overwriting levels outside the view.
+- **Device flag**: set in `gl_device.cpp` for `Vendor::Amd` on Windows (Mesa
+  radeonsi on Linux also reports vendor "AMD" and is not affected).
+- **C++ side**: `Blit_command_encoder::generate_mipmaps()` on a view builds the
+  chain with one linear `glBlitNamedFramebuffer` per level and layer
+  (`gl_blit_command_encoder.cpp`); textures that are not views, and every other
+  driver, use `glGenerateTextureMipmap()`.
+- **Tests**: `Gpu_test.generate_mipmaps_on_level_view` fails on the
+  affected driver without the flag.
+- **Remove when**: the AMD Windows driver honours the view's min level.
 
 ### `WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ`
 
