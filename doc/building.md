@@ -235,7 +235,7 @@ From an x64 Native Tools Command Prompt:
 
 -   `scripts\configure_vs2026_vulkan.bat` -- Standard build on Windows using Visual Studio 2026 (Vulkan, the default backend)
 -   `scripts\configure_vs2026_vulkan_asan.bat` -- Vulkan with AddressSanitizer
--   `scripts\configure_vs2026_vulkan_headless.bat` -- Headless Vulkan (`ERHE_WINDOW_LIBRARY=none`); runs without a display and supports in-editor MCP screenshots
+-   `scripts\configure_vs2026_vulkan_headless.bat` -- Headless Vulkan (`ERHE_WINDOW_LIBRARY=none`, tests ON); runs without a display and supports in-editor MCP screenshots
 -   `scripts\configure_vs2026_opengl.bat` -- OpenGL backend
 -   `scripts\configure_vs2026_opengl_asan.bat` -- OpenGL with AddressSanitizer
 -   `scripts\configure_vs2026_opengl_no_tracy.bat` -- OpenGL without Tracy profiler

@@ -20,7 +20,7 @@ Executables land in `<build>/bin/`. Debugging with lldb: the
 
 ## Headless runs and GPU tests
 
-`scripts/configure_ninja_linux_vulkan_headless.sh -DERHE_BUILD_TESTS=ON`
+`scripts/configure_ninja_linux_vulkan_headless.sh` (tests ON)
 configures `build_ninja_linux_vulkan_headless` (no window library). Its
 editor and the `*_gpu_tests` executables need no display: a locked or absent
 session does not stall them. Select the Vulkan driver explicitly and keep

@@ -2,7 +2,7 @@
 
 # Linux Ninja configure for the Vulkan backend without a window library
 # (ERHE_WINDOW_LIBRARY=none): the editor and the GPU tests run without a
-# display. Pass -DERHE_BUILD_TESTS=ON to build the tests.
+# display. Tests are on (ERHE_BUILD_TESTS=ON).
 # OpenGL variant: configure_ninja_linux_opengl.sh
 # ERHE_SPIRV is forced ON for Vulkan by CMakeLists.txt, so it is not passed here.
 
