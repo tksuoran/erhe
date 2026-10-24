@@ -305,6 +305,15 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
 - **Empty border** - the pass sets a scissor rectangle inset by the border
   width on each side, keeping the outermost texel rings at the clear value
   (see [Empty border and receiver coverage](#empty-border-and-receiver-coverage)).
+- **Attachment usages** - the editor's shadow passes
+  (`shadow_render_node.cpp`) declare as `usage_before` / `usage_after` of
+  each attachment the shader stages that sample it (`doc/erhe/graphics.md`
+  "Resource barriers"): the depth map `sampled | vertex_shader |
+  fragment_shader` (the receivers in `standard.frag` and the depth
+  visualization `depth_to_color.frag` are fragment shaders; the texel visualization
+  `shadow_debug.vert` reads it in its vertex shader), the distance map and
+  the point cube array `sampled | fragment_shader`. No compute shader samples
+  a shadow map: the ray traced paths (`erhe_ray_hit.glsl`) trace shadow rays.
 - **Prewarm** - `prewarm_pipelines()` warms the active cull mode's two base
   pipelines (regular and depth clamp) times both winding variants, so neither
   toggling `depth_clamp` nor mirroring a mesh hitches at first draw. Changing
