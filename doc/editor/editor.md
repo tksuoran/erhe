@@ -731,6 +731,17 @@ period. With pipelining the R terms of a line belong to the frames joined
 in that interval, one frame behind the main thread's terms. The
 `poll_events` wait is in no term but the full tick.
 
+**Benchmark mode.** With `--benchmark <file>` (`Benchmark_driver`,
+`src/editor/benchmark_driver.{hpp,cpp}`) the end of `frame()` also hands
+the frame's phase terms (the per-frame deltas of the accumulators above)
+and its wall time to the driver, `start_frame()` takes the frame's
+simulation advance from the driver instead of the pacer, and M1 sets the
+headset's head pose from the driver's camera path before `xrWaitFrame`;
+the 60-frame log line is unchanged. The mode, its phases, determinism
+rules and report are specified in `doc/plans/quest_performance.md`
+"Benchmark mode"; running it on the Quest is in `doc/agents/quest.md`
+"Benchmark runs".
+
 **Watchdog and shutdown.** The main-loop stall watchdog
 (`doc/agents/debugging.md` "Main-loop stall watchdog") watches while
 `m_in_tick` is set: from M1 start to the end of `frame()`, the kick's wait

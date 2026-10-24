@@ -87,62 +87,158 @@ reproducible; every later number comes from the benchmark mode below.
 
 Purpose: a timed run on the device that does not depend on where the user
 looks or what the controllers do, so two runs of two builds compare. The
-headset may lie on the desk.
+headset may lie on the desk. The run is a timedemo: the simulation clock
+advances a fixed step per frame, so every run renders the same frames from
+the same inputs however fast the device is, and performance is the wall
+time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
+"Benchmark runs".
 
 - **Activation.** `editor --benchmark <json>` (cxxopts, next to
   `--commands`). On Android `ErheActivity.getArguments()` returns the
-  `args` string extra of the launch intent split on spaces, so
+  `args` string extra of the launch intent split on whitespace, so
   `adb shell am start ... --es args "--commands config/editor/commands_bench_heavy.json --benchmark config/editor/benchmark_orbit.json"`
   reaches `main()` unchanged. The `config/editor/benchmark_*.json` files
-  are APK-bundled with the rest of `config/`.
-- **Benchmark file.** `name`, `warmup_frames`, `measure_frames`,
-  `camera_path`: either `{"type":"orbit","center":[x,y,z],"radius":r,"height":h,"period_frames":n,"look_at":[x,y,z]}`
-  or `{"type":"keyframes","frames":[{"frame":0,"position":[...],"yaw_pitch_roll_deg":[...]}, ...]}`
-  interpolated linearly and looped. The path is indexed by the frame
-  number, never by wall time, so run A and run B render the same frames.
-- **Pose independence.** `Headset_view` keeps a `Benchmark_pose` for the
-  frame: the head pose on the path. The located eye views are used only
-  for their offsets relative to the located head
-  (`Xr_session::update_view_pose` / `get_headset_pose`): eye_i =
+  are APK-bundled with the rest of `config/`. A file that does not load
+  logs `Benchmark failed <path>: <reason>` and the editor exits.
+- **Benchmark file.** `name` (`[A-Za-z0-9_-]+`; names the result file),
+  `warmup_frames` (default 120), `measure_frames` (default 600),
+  `frame_dt` (seconds of simulation per measured frame, default 1/72, at
+  most 0.025: `Time::prepare_update()` caps a frame's advance at 25 ms),
+  `settle_timeout_frames` (default 1800), optional
+  `display_refresh_rate_hz`, and `camera_path`: either
+  `{"type":"orbit","center":[x,y,z],"radius":r,"height":h,"period_frames":n,"look_at":[x,y,z]}`
+  (position center + (r sin t, h, r cos t), t = 2 pi frame / n, looking at
+  `look_at` with +Y up) or
+  `{"type":"keyframes","frames":[{"frame":0,"position":[...],"yaw_pitch_roll_deg":[...]}, ...]}`
+  (integer frames start at 0 and increase; position and the three angles are
+  interpolated linearly, looped with the last keyframe's frame as the
+  loop length, so a seamless loop repeats the first keyframe last;
+  orientation = yaw about +Y * pitch about +X * roll about +Z, identity
+  looking down -Z; a single keyframe is a fixed pose).
+  `benchmark_orbit.json` orbits the default OpenXR room at 1.6 m height,
+  radius 2 m, looking at (0, 1, 0), period 720 frames, at 120 Hz;
+  `benchmark_static.json` holds one pose at the display's own rate.
+- **Phases.** Warmup: `warmup_frames` frames with the simulation clock
+  frozen and the camera path running from frame 0. Settle: the driver
+  waits until `App_context::is_scene_load_in_flight()` is false (async
+  operations, queued operations, pending scene commits and asset loads,
+  the terms MCP `get_async_status` reports) and the brush geometry queue
+  is idle (`Scene_builder::is_brush_geometry_idle()`, doc/editor/brushes.md
+  G5), the frame renders (under OpenXR: waited, `should_render` and the
+  actions updated; always without OpenXR) and, when the file sets
+  `display_refresh_rate_hz`, the achieved refresh rate is within 0.5 Hz
+  of it; after `settle_timeout_frames` frames it logs
+  `Benchmark failed <name>: <reason>` naming the first condition that did
+  not hold (`frames do not render ...`, `scene did not settle`, or
+  `display refresh rate did not settle (requested X Hz, achieved Y Hz)`),
+  writes no file and the editor exits. A refused refresh rate request
+  fails at once (`display refresh rate request refused`). Measure:
+  `measure_frames` frames, the camera path restarted at frame 0 and the
+  simulation advancing `frame_dt` per frame; a measured frame that does
+  not render fails the run at once (`frame N not rendered`, no file). The
+  line `Benchmark <name>: scene settled after N frames ...` marks the
+  start.
+- **Determinism.**
+  - Fixed simulation time per frame: in benchmark mode `start_frame()`
+    replaces the frame's display advance (the FR4 value that is the one
+    source of the frame's simulation advance, read by
+    `Time::prepare_update()` and the animation player) with the driver's:
+    0 during warmup and settle, exactly `frame_dt` per measured frame. The
+    measured window therefore starts from the same simulation state at
+    simulation time 0 however long loading and settling took.
+  - The camera path is indexed by the frame number of the measured
+    window, never by wall time.
+  - Measurement starts only on a settled scene (Phases above).
+  - No randomness in the measured path: the scene builders, the brush
+    placement and the render path use no unseeded generator. The
+    generators in the editor are seeded from constants (DDGI, radiance
+    cascades, the frame pacing window) or from a node parameter (the
+    instance graph nodes), or are off the measured path (the scene id of
+    a new scene, glTF uid generation on export, the fly camera's jitter
+    and synthesized input, both off by default).
+  - Run identity in the result: the erhe version string, the benchmark
+    file path and its FNV-1a hash, the startup commands file the editor
+    ran, the achieved display refresh rate and the XR predicted display
+    period, device model and OS build (Android system properties; the
+    host script fills them from `adb getprop` when empty), the XR CPU /
+    GPU performance levels from the settings and the levels actually
+    applied at the start and end of the measured window with the thermal
+    step-down count (`boost_on_thermal_warning` keeps stepping down in
+    benchmark mode), the Android thermal status at the start and end of
+    the measured window (`AThermal`; -1 when unavailable), and
+    `input_hash`: FNV-1a over, per measured frame, the benchmark file
+    hash, `frame_dt` and the measured frame index (the sources of the
+    pose rather than the float pose, so builds with a different libm or
+    code generation still match).
+  - `input_hash` proves identical inputs, not identical history. The
+    editor's frame number (`Time`, the camera block, the render thread's
+    draw data handoff) keeps counting through the run-dependent settle,
+    and progressive and temporal GPU state (DDGI / radiance cascades
+    budgets and histories, the shadow map cache) advances during settle;
+    that state is excluded from the determinism guarantee.
+- **Pose independence.** `erhe::xr::Headset::set_head_pose_override()`
+  (main thread, before `wait_frame()`) poses the head from the path: the
+  views are then located in the view reference space (each eye relative
+  to the tracked head) and composed with the path head, eye_i =
   path_head * inverse(located_head) * located_eye_i, so the IPD and the
-  per-eye fovs stay the runtime's. `update_camera_node()` poses the root
-  camera from the path head; `Headset_view_resources::update()` poses the
-  eye cameras from the overridden views, and the projection layers submit
-  the overridden poses (the compositor reprojects to the real head, which
-  is correct per the OpenXR spec: the layer pose is the pose the image
-  was rendered from).
+  per-eye fovs stay the runtime's. The wait side (`update_view_pose()`,
+  `get_headset_pose()`, `locate_views()`) uses the value set; the frame
+  carries it to R in `Frame_timing::head_pose_override`, and
+  `render_frame()` / `render_frame_multiview()` apply it to the views they
+  render and submit as the projection layer (the compositor reprojects to
+  the real head, which is correct per the OpenXR spec: the layer pose is
+  the pose the image was rendered from). `Headset_view` sets the path pose
+  in M1 before the wait.
 - **Action independence.** In benchmark mode `Headset_view` skips
-  `update_pointer_context_from_controller`, `update_quad_layer_hover`,
-  `update_id_render` and `update_hover_with_id_render`, draws no
-  controller ray and hides the controller visualization; `xrSyncActions`
-  still runs (the session needs it). The Hud and the hotbar follow the
-  settings as before (a benchmark file may want them off: use
-  `openxr_editor_settings.json` overrides, not benchmark flags).
-- **Measurement and report.** After `warmup_frames`, the driver records
-  per frame: full tick, M1, M2, M3, R (the `Phase_timing` terms, per
-  frame rather than per 60) and the `XR_META_performance_metrics`
-  counters already queried once per frame (`Xr_session::get_perf_counters`,
-  app CPU / GPU time, compositor GPU time, CPU / GPU utilization, dropped
-  and stale frame counts). After `measure_frames` it logs one
-  `Benchmark result <name>: ...` line (`editor.frame`, info) with mean,
-  median and p99 of each term, writes `logs/benchmark_<name>.json` with
-  the same summary plus the per-frame arrays and the commit id, and
-  requests exit (the `quit_after_frames` path). The per-frame storage is
-  reserved at start (`measure_frames` entries), so the measured frames
-  allocate nothing.
-- **Host script.** `scripts/quest_bench.py run --scene <commands.json> --bench <benchmark.json> [--off-head] [--gpu-metrics]`:
-  force-stops the app, starts `scripts/quest_logcat.sh`, launches with
-  the `args` extra, waits for the result line (bounded), pulls
-  `files/logs/benchmark_<name>.json` through `run-as`, prints the summary
-  table and stores the JSON under `memory-bank/local/quest_runs/`.
-  `--off-head` sends `am broadcast -a com.oculus.vrpowermanager.prox_close`
-  before the launch and `automation_disable` after the run so the session
-  does not pause with the headset on the desk; the headset-prompt protocol
-  still applies to the launch. `--gpu-metrics` runs `ovrgpuprofiler` for
-  the measured window. `compare a.json b.json` prints the two summaries
-  side by side with the deltas.
+  `update_pointer_context_from_controller` (with it the ray trace, ID
+  pick and quad layer hover merges), `update_id_render`, the controller
+  ray, the XR input event injection (so no button or thumbstick reaches
+  the commands, e.g. the camera offset) and the controller visualization
+  update, and hides the controller visualization; `xrSyncActions` still
+  runs (the session needs it). The Hud and the hotbar follow the settings
+  as before; their ImGui hosts keep the wall-clock `io.DeltaTime`, so
+  with those quad layers on their animations are wall-time driven inside
+  the window. Benchmark settings should turn the Hud and the hotbar off
+  (`openxr_editor_settings.json` overrides, not benchmark flags).
+- **Display refresh rate.** On OpenXR `xrWaitFrame` paces the app to the
+  display: when a frame fits the refresh period the wall time is pinned
+  at frames * period and only the breakdown terms show the headroom. The
+  result records the achieved refresh rate (`xrGetDisplayRefreshRateFB`
+  on OpenXR, the window's display otherwise) and
+  `frames_at_refresh_ceiling`, the measured frames whose wall time is
+  within 5 % of the refresh period, so a reader sees when the headline is
+  vsync-bound; the rate is read again on the last measured frame and
+  stored as `display_refresh_hz_end`, so a mid-run switch is visible. `display_refresh_rate_hz` in the benchmark file requests
+  that rate through `xrRequestDisplayRefreshRateFB` once the session
+  runs (nothing restores it; the run exits) to raise the ceiling.
+- **Measurement and report.** Per measured frame, at the end of `frame()`
+  (the same point of every frame): the steady-clock wall time since the
+  previous frame's end, and the phase timing terms full tick, M1, M2, M3
+  and R (deltas of `Phase_timing` per frame; R is the frame joined during
+  that tick), plus the `XR_META_performance_metrics` counters, read in M2
+  after the XR actions (they are queried in R by `Headset::begin_frame()`;
+  OpenXR runs the serial schedule, so R is idle in M2). After
+  `measure_frames` it logs one `Benchmark result <name>: wall_time_s ...
+  frames_per_second ...` line (`editor.frame`, info): the headline wall
+  time from the end of the last unmeasured frame to the end of the last
+  measured one and the derived frame rate first, then the frame count,
+  refresh rate, `frames_at_refresh_ceiling`, mean / median / p99 / max of
+  the per-frame wall time and the phase terms, mean / median / p99 of each
+  XR counter, and `input_hash`. `logs/benchmark_<name>.json` holds
+  `wall_time_s` and `frames_per_second` first, then the refresh block, the
+  identity, the summary (mean, median, p99, min, max per term and
+  counter) and the per-frame arrays. The editor then exits (the
+  `quit_after_frames` path). Every per-frame container is reserved before
+  the measured window, so the measured frames allocate nothing.
+- **Host script.** `scripts/quest_bench.py run --bench <benchmark.json> [--scene <commands.json>] [--worn] [--gpu-metrics] [--repeat N] [--push]`
+  and `compare a.json b.json`; usage in [../agents/quest.md](../agents/quest.md)
+  "Benchmark runs". `--repeat N` launches N runs and reports each term's
+  median across runs with the min / max spread, so thermal and DVFS noise
+  shows apart from code changes; with `--gpu-metrics` the GPU frequency
+  metrics are always captured, so clock changes between runs are
+  recorded.
 - **Out of scope for the first commit.** Driving a desktop viewport
   camera along the same path (the driver and the path type are
   platform-neutral so this can follow), and recording the counters on
-  desktop.
-
+  desktop. On the desktop the driver runs with the same phases and
+  report, without a camera path consumer.

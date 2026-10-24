@@ -20,14 +20,17 @@ needs beyond `AGENTS.md`. Building, packaging and the flavors are described in
 
 ## Launch protocol
 
-Install the APK FIRST, then prompt the user to put the headset on and
-activate the controllers, and wait for explicit confirmation before EVERY
-one-off `adb shell am start`; a confirmation applies only to that one launch.
-Batch / soak runs are the exception: one confirmation at the start covers the
-whole unattended sweep -- do not prompt between iterations, but stop and
-re-confirm if results suggest the headset went off-head. Pure builds and
-installs need no prompt. Poll for a readiness signal (recipes in the skill)
-instead of sleeping.
+- **Interactive launch** (the user will wear the headset): install the APK
+  first, prompt the user to put the headset on and activate the
+  controllers, and wait for explicit confirmation before EVERY one-off
+  `adb shell am start`; a confirmation covers only that launch.
+- **Automated run** (`scripts/quest_bench.py`, `scripts/soak_quest.py`, any
+  non-interactive test): no user prompt. The proximity-sensor bypass is
+  required before the launch, and normal sensor operation must be restored
+  after each run, also on failure or interruption; the commands are in
+  "Off-head runs" below.
+- Pure builds and installs never need a prompt. Poll for a readiness signal
+  (recipes in the skill) instead of sleeping.
 
 ## Vulkan validation on Quest
 
@@ -51,3 +54,69 @@ Android gates all socket creation -- even loopback -- behind it, so without it
 clash). Confirm the grant with
 `adb shell dumpsys package org.libsdl.app.quest | grep INTERNET`. See
 `doc/agents/mcp_server_usage.md` for the full recipe.
+
+## Benchmark runs
+
+The editor's benchmark mode (`--benchmark <file>`, a timedemo run: fixed
+simulation step per frame, camera on a scripted path, controllers
+ignored, result logged and written to `files/logs/benchmark_<name>.json`,
+then exit) is specified in `doc/plans/quest_performance.md` "Benchmark
+mode". `scripts/quest_bench.py` drives it on the device:
+
+```
+py -3 scripts/quest_bench.py run --bench config/editor/benchmark_orbit.json [--scene config/editor/commands_bench_heavy.json] [--worn] [--gpu-metrics] [--repeat N] [--push]
+py -3 scripts/quest_bench.py compare <a.json> <b.json>
+```
+
+`run` installs nothing: install the APK first (`scripts\install_android.bat
+quest release`). Each run force-stops the app, starts
+`scripts/quest_logcat.sh`, launches with the `args` intent extra, waits
+(bounded by `--timeout`, default 600 s) for the `Benchmark result <name>:`
+or `Benchmark failed <name>:` line in the capture, pulls the result JSON
+through `run-as`, and stores it under `memory-bank/local/quest_runs/`
+(gitignored). `--repeat N` launches N runs and stores a repeat summary
+(per-term median across runs, min / max spread). `--gpu-metrics` runs
+`ovrgpuprofiler` for the measured window; its metric ids come from
+`--gpu-metric-ids`, else an `ovrgpuprofiler_ids::<id,id,...>` line in
+`memory-bank/local/quest.md`, else the names listed in the script's
+`DEFAULT_GPU_METRIC_NAMES` looked up in `ovrgpuprofiler -m`, always with the
+GPU frequency metrics. The APK's `config/` files are copied to the
+writable directory only when missing there, so an edited benchmark or
+commands file reaches the device through `--push` (copies the local file
+over the device's copy) or a clean reinstall. `compare` prints two results
+or repeat summaries side by side with the deltas and whether their
+`input_hash` values match (same camera poses and `frame_dt`). Measure one
+editor at a time with nothing building on the host
+(`doc/plans/quest_performance.md` "Measurement rule").
+
+### Off-head runs
+
+An automated run (Launch protocol above) wraps each launch in this
+sequence; `quest_bench.py` does so for every run unless `--worn` (an
+interactive run the user confirmed) skips it. Verified with the headset
+lying on the desk on a Quest 3 (2026-10-24): the session
+reaches FOCUSED, frame 12 is logged after about 4 s and the phase log runs
+at the full 72 Hz, as when worn.
+
+Before the launch:
+
+```
+adb shell am force-stop org.libsdl.app.quest
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell am broadcast -a com.oculus.vrpowermanager.prox_close    # the runtime treats the headset as worn
+adb shell setprop debug.oculus.guardian_pause 1                     # no boundary interruptions
+```
+
+then the normal launch
+(`am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -c com.oculus.intent.category.VR -n org.libsdl.app.quest/org.libsdl.app.ErheActivity ...`).
+After the run, always (also on failure or Ctrl-C; the script does this in
+a `finally`):
+
+```
+adb shell am force-stop org.libsdl.app.quest
+adb shell am broadcast -a com.oculus.vrpowermanager.automation_disable
+adb shell setprop debug.oculus.guardian_pause 0
+```
+
+Readiness comes from the logcat capture (the session FOCUSED line, frame
+12, the benchmark's own lines), never from a blind sleep.
