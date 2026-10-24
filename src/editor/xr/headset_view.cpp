@@ -321,8 +321,54 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
             mesh_memory,
             *get_scene_root().get()
         );
+        if (m_benchmark_mode) {
+            m_controller_visualization->hide();
+        }
     }
 
+}
+
+void Headset_view::enable_benchmark_mode(const std::optional<float> display_refresh_rate_hz)
+{
+    m_benchmark_mode                    = true;
+    m_benchmark_display_refresh_rate_hz = display_refresh_rate_hz;
+    reset_hover();
+    if (m_controller_visualization) {
+        m_controller_visualization->hide();
+    }
+}
+
+auto Headset_view::is_update_actions_ok() const -> bool
+{
+    return m_update_actions_ok;
+}
+
+auto Headset_view::is_benchmark_display_refresh_rate_refused() const -> bool
+{
+    return m_benchmark_display_refresh_rate_refused;
+}
+
+auto Headset_view::get_applied_cpu_performance_level() const -> int
+{
+    return m_applied_cpu_level;
+}
+
+auto Headset_view::get_applied_gpu_performance_level() const -> int
+{
+    return m_applied_gpu_level;
+}
+
+auto Headset_view::get_thermal_step_down_count() const -> int
+{
+    return m_thermal_step_down_count;
+}
+
+void Headset_view::set_benchmark_head_pose(const glm::vec3& position, const glm::quat& orientation)
+{
+    if (m_headset == nullptr) {
+        return;
+    }
+    m_headset->set_head_pose_override(erhe::xr::Pose{.orientation = orientation, .position = position});
 }
 
 void Headset_view::update_fixed_step()
@@ -384,6 +430,12 @@ void Headset_view::render(const Render_context& render_context)
     ERHE_PROFILE_FUNCTION();
 
     if (!m_context.OpenXR || (m_headset == nullptr)) {
+        return;
+    }
+
+    // Benchmark mode: no controller ray (the controllers do not affect the
+    // frame).
+    if (m_benchmark_mode) {
         return;
     }
 
@@ -990,7 +1042,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // is read back next frame in update_hover_with_id_render(). Independent
     // of the multiview vs per-eye choice below: the ID pass is single-view
     // and writes its own framebuffer.
-    if (m_frame_timing.should_render) {
+    if (m_frame_timing.should_render && !m_benchmark_mode) {
         update_id_render(command_buffer);
     }
 
@@ -2005,7 +2057,11 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
 
     update_camera_node();
 
-    update_pointer_context_from_controller();
+    // Benchmark mode: no controller pointer hover (the ray trace and ID pick
+    // hover merges and the quad layer hover all run from here).
+    if (!m_benchmark_mode) {
+        update_pointer_context_from_controller();
+    }
     erhe::xr::Xr_instance* instance = m_headset->get_xr_instance();
     if (instance == nullptr) {
         return false;
@@ -2064,8 +2120,26 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
                 instance->apply_performance_level(xr_session, new_cpu, new_gpu);
                 m_applied_cpu_level = new_cpu;
                 m_applied_gpu_level = new_gpu;
+                ++m_thermal_step_down_count;
             }
         }
+    }
+
+    // Benchmark run at a requested display refresh rate: asked once, when
+    // the session first runs (the run exits at its end, nothing restores
+    // the previous rate).
+    if (m_benchmark_mode && m_benchmark_display_refresh_rate_hz.has_value() &&
+        !m_benchmark_display_refresh_rate_requested && session->is_session_running()) {
+        m_benchmark_display_refresh_rate_requested = true;
+        m_benchmark_display_refresh_rate_refused = !session->request_display_refresh_rate(m_benchmark_display_refresh_rate_hz.value());
+    }
+
+    // Benchmark mode: the controllers do not affect the frame. xrSyncActions
+    // has run (Headset::update_actions() above); no XR input event is
+    // injected and the controller visualization stays hidden.
+    if (m_benchmark_mode) {
+        m_update_actions_ok = true;
+        return true;
     }
 
     // Inject XR input events

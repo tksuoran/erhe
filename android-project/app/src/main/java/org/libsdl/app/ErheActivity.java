@@ -19,4 +19,18 @@ public class ErheActivity extends SDLActivity {
             "main"
         };
     }
+
+    @Override
+    protected String[] getArguments() {
+        // Command line for main(): the launch intent's "args" string extra,
+        // split on whitespace, e.g.
+        //   adb shell am start -n org.libsdl.app.quest/org.libsdl.app.ErheActivity
+        //       --es args "--benchmark config/editor/benchmark_orbit.json"
+        // No extra (a normal launch) gives no arguments.
+        String args = (getIntent() != null) ? getIntent().getStringExtra("args") : null;
+        if ((args == null) || args.trim().isEmpty()) {
+            return new String[0];
+        }
+        return args.trim().split("\\s+");
+    }
 }

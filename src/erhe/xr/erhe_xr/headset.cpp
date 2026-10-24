@@ -172,7 +172,8 @@ auto Headset::wait_frame() -> Frame_timing
         .predicted_display_pediod = 0,
         .wait_ok                  = false,
         .begin_ok                 = false,
-        .should_render            = true
+        .should_render            = true,
+        .head_pose_override       = m_xr_session->get_head_pose_override()
     };
 
     auto* xr_frame_state = m_xr_session->wait_frame();
@@ -186,6 +187,14 @@ auto Headset::wait_frame() -> Frame_timing
     result.should_render            = xr_frame_state->shouldRender;
 
     return result;
+}
+
+void Headset::set_head_pose_override(const std::optional<Pose>& head_pose)
+{
+    if (!m_xr_session) {
+        return;
+    }
+    m_xr_session->set_head_pose_override(head_pose);
 }
 
 auto Headset::begin_frame(const Frame_timing& timing) -> bool

@@ -1,0 +1,13 @@
+{
+    "name": "static",
+    "warmup_frames": 120,
+    "measure_frames": 600,
+    "frame_dt": 0.013888889,
+    "settle_timeout_frames": 1800,
+    "camera_path": {
+        "type": "keyframes",
+        "frames": [
+            {"frame": 0, "position": [0.0, 1.6, 2.0], "yaw_pitch_roll_deg": [0.0, -15.0, 0.0]}
+        ]
+    }
+}

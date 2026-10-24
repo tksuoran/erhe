@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 struct XrCompositionLayerProjectionView;
@@ -57,6 +58,17 @@ public:
     // Xr_session::locate_views). Safe after wait_frame(); used by the headset
     // shadow fit to build a combined culling frustum before the rendergraph.
     auto locate_views  (std::vector<Render_view>& out_views) -> bool;
+    // Head pose override (main thread, before wait_frame()): while set, the
+    // head is posed from `head_pose` (in the stage reference space) instead
+    // of the tracked head. The views keep the runtime's per-eye offsets and
+    // fovs relative to the head: view_i = head_pose * inverse(tracked_head)
+    // * tracked_view_i (each view located in the view reference space).
+    // get_headset_pose(), locate_views() and the views render() /
+    // render_multiview() hand to their callbacks and submit as the
+    // projection layer's views all use it; the frames waited after the call
+    // carry it in Frame_timing::head_pose_override. std::nullopt restores
+    // tracking. Used by the editor's benchmark mode.
+    void set_head_pose_override(const std::optional<Pose>& head_pose);
     // Create a quad composition layer backed by its own color swapchain.
     // Returns nullptr when no session exists or the swapchain cannot be
     // created (the caller is expected to fall back to scene-mesh rendering).

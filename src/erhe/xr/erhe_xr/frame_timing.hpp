@@ -1,6 +1,9 @@
 #pragma once
 
+#include "erhe_xr/pose.hpp"
+
 #include <cstdint>
+#include <optional>
 
 namespace erhe::xr {
 
@@ -16,6 +19,12 @@ public:
     bool     wait_ok                 {false}; // set by Headset::wait_frame()
     bool     begin_ok                {false}; // set by the caller from Headset::begin_frame()
     bool     should_render           {false};
+    // The head pose override in effect when the frame was waited
+    // (Headset::set_head_pose_override()), copied by Headset::wait_frame().
+    // Headset::begin_frame() hands it to the render side, so the views the
+    // frame renders and submits use the override of their own frame even
+    // when the next frame's wait already set another one.
+    std::optional<Pose> head_pose_override{};
 };
 
 } // namespace erhe::xr

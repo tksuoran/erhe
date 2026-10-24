@@ -139,6 +139,9 @@ public:
     // Test hooks: read-only size accessors used by the regression
     // test asserting that undo + redo of add_room does not leak.
     [[nodiscard]] auto floor_brushes_size   () const -> std::size_t;
+    // True when the palette's brush geometry preparation queue has nothing
+    // pending and no task in flight (doc/editor/brushes.md G5).
+    [[nodiscard]] auto is_brush_geometry_idle() const -> bool;
     [[nodiscard]] auto collision_shapes_size() const -> std::size_t;
 
 private:

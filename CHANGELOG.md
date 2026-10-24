@@ -23,6 +23,21 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::xr`: head pose override for scripted runs:
+  `Headset::set_head_pose_override(const std::optional<Pose>&)` and
+  `Xr_session::set_head_pose_override()` / `get_head_pose_override()`.
+  While set, the head is posed from the given stage-space pose and the
+  views keep the runtime's eye offsets and fovs (located in the view
+  space and composed with the override) in `get_headset_pose()`,
+  `locate_views()`, `render()` / `render_multiview()` and the submitted
+  projection layer; `Frame_timing::head_pose_override` carries the value
+  of each waited frame to its render side.
+- `erhe::xr`: `Xr_session::request_display_refresh_rate(float)` and
+  `get_display_refresh_rate()` (XR_FB_display_refresh_rate);
+  `Xr_instance::xrGetDisplayRefreshRateFB` / `xrRequestDisplayRefreshRateFB`.
+- `erhe::xr`: `Pose` moved to its own header `erhe_xr/pose.hpp` (included
+  by `xr.hpp` and `frame_timing.hpp`), available in every
+  `ERHE_XR_LIBRARY` configuration.
 - `erhe::graphics`: explicit per-resource barriers (doc/erhe/graphics.md
   "Resource barriers"): `Command_buffer::texture_barrier(texture, [range,]
   usage_before, usage_after[, scope])` and

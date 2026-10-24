@@ -201,6 +201,10 @@ public:
     // XR_EXT_performance_settings
     PFN_xrPerfSettingsSetPerformanceLevelEXT xrPerfSettingsSetPerformanceLevelEXT{nullptr};
 
+    // XR_FB_display_refresh_rate
+    PFN_xrGetDisplayRefreshRateFB          xrGetDisplayRefreshRateFB         {nullptr};
+    PFN_xrRequestDisplayRefreshRateFB      xrRequestDisplayRefreshRateFB     {nullptr};
+
     // XR_META_performance_metrics
     PFN_xrEnumeratePerformanceMetricsCounterPathsMETA xrEnumeratePerformanceMetricsCounterPathsMETA{nullptr};
     PFN_xrSetPerformanceMetricsStateMETA              xrSetPerformanceMetricsStateMETA             {nullptr};

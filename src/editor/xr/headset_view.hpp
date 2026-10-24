@@ -19,6 +19,7 @@
 #include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_xr/headset.hpp"
 
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -198,6 +199,28 @@ public:
 
     void update_fixed_step();
 
+    // Benchmark mode (doc/plans/quest_performance.md "Benchmark mode"; main
+    // thread, before the frame loop). From then on the controllers do not
+    // affect the frame: no controller pointer hover, no quad layer hover, no
+    // ID pick pass, no controller ray, no XR input events injected, and the
+    // controller visualization is hidden. xrSyncActions still runs.
+    // display_refresh_rate_hz, when set, is requested through
+    // XR_FB_display_refresh_rate once the session runs.
+    void enable_benchmark_mode(std::optional<float> display_refresh_rate_hz);
+    // Main thread, M1 before wait_frame(): the head pose the frame renders
+    // from (stage space; erhe::xr::Headset::set_head_pose_override()).
+    void set_benchmark_head_pose(const glm::vec3& position, const glm::quat& orientation);
+    // Main thread, end of the frame: whether this frame's update_actions()
+    // succeeded (the frame can render), whether the benchmark's refresh rate
+    // request was refused, and the XR performance levels applied so far with
+    // the number of thermal step-downs (XR_EXT_performance_settings level
+    // values; -1 unset, -2 never applied).
+    [[nodiscard]] auto is_update_actions_ok                   () const -> bool;
+    [[nodiscard]] auto is_benchmark_display_refresh_rate_refused() const -> bool;
+    [[nodiscard]] auto get_applied_cpu_performance_level      () const -> int;
+    [[nodiscard]] auto get_applied_gpu_performance_level      () const -> int;
+    [[nodiscard]] auto get_thermal_step_down_count            () const -> int;
+
     // Implements Scene_view
     auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
     auto get_projection_scale (float view_distance) const -> float                                override;
@@ -307,6 +330,12 @@ private:
     Headset_ray_log_command                              m_ray_log_left_command;
     Headset_ray_log_command                              m_ray_log_right_command;
     bool                                                 m_head_attached_ray_mode{false};
+    // Set once by enable_benchmark_mode() before the frame loop; read by M2
+    // and R afterwards.
+    bool                                                 m_benchmark_mode{false};
+    std::optional<float>                                 m_benchmark_display_refresh_rate_hz{};
+    bool                                                 m_benchmark_display_refresh_rate_requested{false};
+    bool                                                 m_benchmark_display_refresh_rate_refused{false};
 
     // Quad composition layers to hover-test (see register_quad_view()).
     std::vector<Quad_view*>                              m_quad_views;
@@ -386,6 +415,7 @@ private:
     // editor only re-applies when the configured level changes.
     int                                                  m_applied_cpu_level{-2};
     int                                                  m_applied_gpu_level{-2};
+    int                                                  m_thermal_step_down_count{0};
 
     // One Plot per XR_FB_performance_metrics counter the runtime exposed.
     // Allocated lazily after the session is up; registered with the

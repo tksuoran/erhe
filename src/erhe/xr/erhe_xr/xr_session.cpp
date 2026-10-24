@@ -319,6 +319,27 @@ auto Xr_session::enumerate_render_model_paths() -> std::vector<XrRenderModelPath
     return path_infos;
 }
 
+namespace {
+
+// Head pose override: the views were located in the view reference space,
+// so each is the eye pose relative to the tracked head; composing the
+// override head pose in front gives the eye pose in the stage space:
+// view_i = head_pose * inverse(tracked_head) * tracked_view_i.
+void apply_head_pose_override(XrView* views, const uint32_t view_count, const Pose& head_pose)
+{
+    for (uint32_t i = 0; i < view_count; ++i) {
+        XrView&         view            = views[i];
+        const glm::quat eye_orientation = to_glm(view.pose.orientation);
+        const glm::vec3 eye_position    = to_glm(view.pose.position);
+        const glm::quat orientation     = head_pose.orientation * eye_orientation;
+        const glm::vec3 position        = head_pose.position + (head_pose.orientation * eye_position);
+        view.pose.orientation = XrQuaternionf{.x = orientation.x, .y = orientation.y, .z = orientation.z, .w = orientation.w};
+        view.pose.position    = XrVector3f{.x = position.x, .y = position.y, .z = position.z};
+    }
+}
+
+} // anonymous namespace
+
 // Get model properties for a path, acknowledging both FB support levels
 // (SUBSET_1: single mesh / single texture / no transparency / unlit,
 // SUBSET_2: adds multiple meshes / textures / transparency). Both levels
@@ -1383,6 +1404,43 @@ auto Xr_session::get_perf_counters() const -> const std::vector<Xr_perf_counter>
     return m_perf_counters;
 }
 
+void Xr_session::set_head_pose_override(const std::optional<Pose>& head_pose)
+{
+    m_head_pose_override = head_pose;
+}
+
+auto Xr_session::get_head_pose_override() const -> const std::optional<Pose>&
+{
+    return m_head_pose_override;
+}
+
+auto Xr_session::request_display_refresh_rate(const float refresh_rate_hz) -> bool
+{
+    if ((m_xr_session == XR_NULL_HANDLE) || (m_instance.xrRequestDisplayRefreshRateFB == nullptr)) {
+        return false;
+    }
+    const XrResult result = m_instance.xrRequestDisplayRefreshRateFB(m_xr_session, refresh_rate_hz);
+    if (result != XR_SUCCESS) {
+        log_xr->warn("xrRequestDisplayRefreshRateFB({}) failed with {}", refresh_rate_hz, c_str(result));
+        return false;
+    }
+    log_xr->info("xrRequestDisplayRefreshRateFB({}) ok", refresh_rate_hz);
+    return true;
+}
+
+auto Xr_session::get_display_refresh_rate() const -> float
+{
+    if ((m_xr_session == XR_NULL_HANDLE) || (m_instance.xrGetDisplayRefreshRateFB == nullptr)) {
+        return 0.0f;
+    }
+    float refresh_rate_hz = 0.0f;
+    const XrResult result = m_instance.xrGetDisplayRefreshRateFB(m_xr_session, &refresh_rate_hz);
+    if (result != XR_SUCCESS) {
+        return 0.0f;
+    }
+    return refresh_rate_hz;
+}
+
 void Xr_session::set_passthrough_active(const bool active)
 {
     if ((m_passthrough_fb == XR_NULL_HANDLE) || (m_passthrough_layer_fb == XR_NULL_HANDLE)) {
@@ -1450,6 +1508,18 @@ void Xr_session::request_boundary_visibility(const XrBoundaryVisibilityMETA boun
 
 void Xr_session::update_view_pose()
 {
+    if (m_head_pose_override.has_value()) {
+        const Pose& head_pose = m_head_pose_override.value();
+        m_view_location.locationFlags =
+            XR_SPACE_LOCATION_ORIENTATION_VALID_BIT   |
+            XR_SPACE_LOCATION_POSITION_VALID_BIT      |
+            XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
+            XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+        m_view_location.pose.orientation = XrQuaternionf{.x = head_pose.orientation.x, .y = head_pose.orientation.y, .z = head_pose.orientation.z, .w = head_pose.orientation.w};
+        m_view_location.pose.position    = XrVector3f{.x = head_pose.position.x, .y = head_pose.position.y, .z = head_pose.position.z};
+        return;
+    }
+
     XrSpaceLocation location{
         .type          = XR_TYPE_SPACE_LOCATION,
         .next          = nullptr,
@@ -1614,7 +1684,8 @@ auto Xr_session::begin_frame(const Frame_timing& timing) -> bool
         return false;
     }
 
-    m_render_display_time = static_cast<XrTime>(timing.predicted_display_time);
+    m_render_display_time       = static_cast<XrTime>(timing.predicted_display_time);
+    m_render_head_pose_override = timing.head_pose_override;
 
     const XrFrameBeginInfo frame_begin_info{
         .type = XR_TYPE_FRAME_BEGIN_INFO,
@@ -1724,7 +1795,7 @@ auto Xr_session::locate_views(std::vector<Render_view>& out_views) -> bool
         .next                  = nullptr,
         .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
         .displayTime           = m_xr_frame_state.predictedDisplayTime,
-        .space                 = m_xr_reference_space_stage
+        .space                 = m_head_pose_override.has_value() ? m_xr_reference_space_view : m_xr_reference_space_stage
     };
 
     if (!check(
@@ -1738,6 +1809,9 @@ auto Xr_session::locate_views(std::vector<Render_view>& out_views) -> bool
         )
     )) {
         return false;
+    }
+    if (m_head_pose_override.has_value()) {
+        apply_head_pose_override(m_xr_views.data(), view_count_output, m_head_pose_override.value());
     }
 
     out_views.reserve(view_count_output);
@@ -1787,7 +1861,7 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
             .displayTime           = m_render_display_time,
             //.space                 = m_xr_reference_space_local
-            .space                 = m_xr_reference_space_stage
+            .space                 = m_render_head_pose_override.has_value() ? m_xr_reference_space_view : m_xr_reference_space_stage
         };
 
         ERHE_XR_CHECK(
@@ -1801,6 +1875,9 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             )
         );
         ERHE_VERIFY(view_count_output == view_capacity_input);
+        if (m_render_head_pose_override.has_value()) {
+            apply_head_pose_override(m_xr_views.data(), view_count_output, m_render_head_pose_override.value());
+        }
     }
 
     const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();
@@ -2050,7 +2127,7 @@ auto Xr_session::render_frame_multiview(
             .next                  = nullptr,
             .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
             .displayTime           = m_render_display_time,
-            .space                 = m_xr_reference_space_stage
+            .space                 = m_render_head_pose_override.has_value() ? m_xr_reference_space_view : m_xr_reference_space_stage
         };
 
         ERHE_XR_CHECK(
@@ -2064,6 +2141,9 @@ auto Xr_session::render_frame_multiview(
             )
         );
         ERHE_VERIFY(view_count_output == view_capacity_input);
+        if (m_render_head_pose_override.has_value()) {
+            apply_head_pose_override(m_xr_views.data(), view_count_output, m_render_head_pose_override.value());
+        }
     }
 
     const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();

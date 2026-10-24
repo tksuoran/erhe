@@ -1,0 +1,16 @@
+{
+    "name": "orbit",
+    "warmup_frames": 120,
+    "measure_frames": 600,
+    "frame_dt": 0.008333333,
+    "settle_timeout_frames": 1800,
+    "display_refresh_rate_hz": 120,
+    "camera_path": {
+        "type": "orbit",
+        "center": [0.0, 0.0, 0.0],
+        "radius": 2.0,
+        "height": 1.6,
+        "period_frames": 720,
+        "look_at": [0.0, 1.0, 0.0]
+    }
+}

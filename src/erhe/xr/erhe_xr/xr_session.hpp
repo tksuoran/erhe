@@ -127,6 +127,21 @@ public:
     [[nodiscard]] auto locate_views(std::vector<Render_view>& out_views) -> bool;
     [[nodiscard]] auto is_multiview_enabled        () const -> bool;
 
+    // Head pose override (see Headset::set_head_pose_override()). The wait
+    // side (main thread: update_view_pose(), locate_views()) uses the value
+    // set here; the render side (render_frame*(), the projection layer
+    // end_frame() submits) uses the one begin_frame() takes from its
+    // Frame_timing, like the display time.
+    void set_head_pose_override(const std::optional<Pose>& head_pose);
+    [[nodiscard]] auto get_head_pose_override() const -> const std::optional<Pose>&;
+
+    // XR_FB_display_refresh_rate: request a display refresh rate (Hz; the
+    // runtime switches at a frame boundary of its choice) and read the
+    // current one. request returns false and get returns 0 when the
+    // extension or the session is unavailable or the call fails.
+    [[nodiscard]] auto request_display_refresh_rate(float refresh_rate_hz) -> bool;
+    [[nodiscard]] auto get_display_refresh_rate    () const -> float;
+
     // Quad composition layers. create_quad_layer() creates a dedicated color
     // swapchain (using the session's selected swapchain color format) and a
     // Quad_layer that registers itself with this session; end_frame() then
@@ -291,6 +306,10 @@ private:
     // Predicted display time of the frame begin_frame() began; read by
     // render_frame*() and end_frame() on the thread that renders the frame.
     XrTime                                        m_render_display_time{0};
+    // Head pose override of the waiting thread (set_head_pose_override())
+    // and of the frame begin_frame() began (from its Frame_timing).
+    std::optional<Pose>                           m_head_pose_override{};
+    std::optional<Pose>                           m_render_head_pose_override{};
     Hand_tracker                                  m_hand_tracker_left;
     Hand_tracker                                  m_hand_tracker_right;
     XrPassthroughFB                               m_passthrough_fb      {XR_NULL_HANDLE};

@@ -697,6 +697,11 @@ auto Xr_instance::create_instance() -> bool
         xrSetColorSpaceFB                = get_proc_addr<PFN_xrSetColorSpaceFB       >("xrSetColorSpaceFB");
     }
 
+    if (extensions.FB_display_refresh_rate) {
+        xrGetDisplayRefreshRateFB     = get_proc_addr<PFN_xrGetDisplayRefreshRateFB    >("xrGetDisplayRefreshRateFB");
+        xrRequestDisplayRefreshRateFB = get_proc_addr<PFN_xrRequestDisplayRefreshRateFB>("xrRequestDisplayRefreshRateFB");
+    }
+
     if (extensions.EXT_performance_settings) {
         xrPerfSettingsSetPerformanceLevelEXT = get_proc_addr<PFN_xrPerfSettingsSetPerformanceLevelEXT>("xrPerfSettingsSetPerformanceLevelEXT");
     }

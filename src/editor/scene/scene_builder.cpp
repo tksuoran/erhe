@@ -1713,6 +1713,15 @@ void Scene_builder::unregister_floor_resources(
     }
 }
 
+auto Scene_builder::is_brush_geometry_idle() const -> bool
+{
+    if (!m_brush_geometry_queue) {
+        return true;
+    }
+    const std::shared_ptr<Brush_geometry_queue_state>& state = m_brush_geometry_queue->get_state();
+    return !state || ((state->get_pending_count() == 0) && (state->get_in_flight_count() == 0));
+}
+
 auto Scene_builder::floor_brushes_size() const -> std::size_t
 {
     return m_floor_brushes.size();

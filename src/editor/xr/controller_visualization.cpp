@@ -397,6 +397,15 @@ void Controller_visualization::update_hand_controls(const bool right_hand, const
     }
 }
 
+void Controller_visualization::hide()
+{
+    for (Hand* hand : {&m_left_hand, &m_right_hand}) {
+        if (hand->node) {
+            hand->node->hide();
+        }
+    }
+}
+
 void Controller_visualization::update_hand(
     const bool                      right_hand,
     const erhe::xr::Xr_action_pose* grip_pose,

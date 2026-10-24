@@ -24,12 +24,17 @@ namespace editor {
 // loaded in this session (--fix-spot-lights): full color value,
 // intensity 1000, doubled outer cone angle, and the original outer cone
 // angle as the inner cone angle. Source files are not modified.
+//
+// benchmark_path, when non-empty, runs the benchmark file (--benchmark): a
+// timedemo run that logs its result, writes logs/benchmark_<name>.json and
+// exits (doc/plans/quest_performance.md "Benchmark mode").
 void run_editor(
     const std::string& startup_commands_path     = "config/editor/commands.json",
     const std::string& startup_scene_path        = "",
     bool               no_startup_scene          = false,
     bool               force_post_processing_off = false,
-    bool               fix_gltf_spot_lights      = false
+    bool               fix_gltf_spot_lights      = false,
+    const std::string& benchmark_path            = ""
 );
 
 }
