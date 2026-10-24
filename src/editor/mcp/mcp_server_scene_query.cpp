@@ -173,6 +173,7 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             {"last_occlusion_tested_count",   stats.occlusion_tested_count},
             {"last_occlusion_occluded_count", stats.occlusion_occluded_count},
             {"last_occlusion_untested_count", stats.occlusion_untested_count},
+            {"last_occlusion_culled_count",   stats.occlusion_culled_count},
             {"last_occlusion_counts_frame_index", stats.occlusion_counts_frame_index},
             {"last_cpu_time_us",     stats.cpu_time_us},
             {"total_cpu_time_us",    (frame_stats != nullptr) ? pass->get_total_cpu_time_us(*frame_stats) : 0.0},
@@ -568,6 +569,7 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"view_count",              check.view_count},
         {"dispatch_count",          check.dispatch_count},
         {"mismatch_count",          check.mismatch_count},
+        {"occlusion_culled_count",  check.occlusion_culled_count},
         {"gpu_time_ns",             check.gpu_time_ns},
         {"gpu_bounds_write_count",  draw_list_scene->get_gpu_bounds_write_count()},
         {"lists",                   std::move(lists)},
@@ -686,6 +688,7 @@ auto Mcp_server::query_occlusion_check(const json& args) -> std::string
             {"visible",             view.visible},
             {"occluded",            view.occluded},
             {"untested",            view.untested},
+            {"culled",              view.culled},
             {"near_plane",          view.near_plane},
             {"near_plane_occluded", view.near_plane_occluded},
             {"first_occluded",      std::move(first_occluded)}

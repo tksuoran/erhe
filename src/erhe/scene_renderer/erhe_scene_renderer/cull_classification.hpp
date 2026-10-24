@@ -26,7 +26,8 @@ enum class Cull_classification : uint8_t
 // (Gpu_cull_classifier::is_occlusion_supported()), the classification starts
 // each occlusion view's visibility bits and the views' occlusion passes
 // (Draw_list_scene::draw_occlusion()) set the bits of the entries they see.
-// The bits are produced and read back; no pass consumes them yet.
+// The classification of the next frame clears the view's mask bit of the
+// entries the test found hidden (one frame of lag).
 enum class Occlusion_culling : uint8_t
 {
     off   = 0,

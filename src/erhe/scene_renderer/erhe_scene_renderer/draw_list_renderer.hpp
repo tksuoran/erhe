@@ -139,6 +139,11 @@ public:
     // occlusion test rasterize with it); empty for multiview passes and a
     // view without a camera.
     [[nodiscard]] static auto get_color_clip_from_world(const Color_cull_view_parameters& parameters) -> std::optional<glm::mat4>;
+    // The single-view color pass's camera, homogeneous: (world position, 1)
+    // for a perspective projection, (the camera's world +Z axis, 0) for an
+    // orthographic one (the direction toward a camera at infinity); empty
+    // where get_color_clip_from_world() is.
+    [[nodiscard]] static auto get_color_view_eye(const Color_cull_view_parameters& parameters) -> std::optional<glm::vec4>;
 
     // Render phase, with the pass's culling view and before the frame's
     // classification (doc/plans/occlusion_culling.md): registers the color

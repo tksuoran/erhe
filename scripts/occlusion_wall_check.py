@@ -6,8 +6,11 @@ MCP: places a wall in front of the viewport camera, N boxes behind it, M
 boxes in front of it and one small box that crosses the camera's near plane,
 turns on the gpu culling classification and occlusion culling, and reads
 get_occlusion_check. Passes when every box behind the wall is reported
-occluded, no box in front (nor the near-plane box) is, and no entry that
-crosses the near plane is left unmarked.
+occluded, no box in front (nor the near-plane box) is, no entry that
+crosses the near plane is left unmarked, and the classification culls
+exactly the occluded entries (one frame later; the scene is static).
+Then the camera moves inside a 6 m box: that box, and a box beyond its far
+wall, must not be occluded (back faces rasterize nothing).
 
 Usage: python3 scripts/occlusion_wall_check.py [--port N] [--scene "Default Scene"]
 """
@@ -26,6 +29,8 @@ Z_NEAR      = 1.0
 BEHIND      = [[x, 1.3, -6.0] for x in (-3.0, -1.8, -0.6, 0.6, 1.8, 3.0)]
 FRONT       = [[x, 1.3,  3.0] for x in (-1.5, -0.5, 0.5, 1.5)]
 NEAR_BOX    = [0.3, 1.05, EYE[2] - Z_NEAR]
+ROOM        = [0.0, 1.3, 40.0]
+BEYOND      = [0.0, 1.3, 34.0]
 
 
 def mcp(port, tool, args):
@@ -79,11 +84,36 @@ def main():
         failures.append(f"not occluded: {sorted(behind - occluded)}")
     if occluded & visible:
         failures.append(f"wrongly occluded: {sorted(occluded & visible)}")
+    # The classification of the checked frame consumed the frame before it
+    # (static scene and camera): what was occluded there is culled here.
+    if view.get("culled", 0) != view["occluded"]:
+        failures.append(f"culled {view.get('culled')} != occluded {view['occluded']}")
     if view["near_plane"] < 1:
         failures.append("no entry crosses the near plane")
     if view["near_plane_occluded"] != 0:
         failures.append(f"near plane entries not marked: {view['near_plane_occluded']}")
-    print(f"occluded {view['occluded']} tested {view['tested']} visible {view['visible']} untested {view['untested']} near_plane {view['near_plane']} near_plane_occluded {view['near_plane_occluded']}")
+    print(f"culled {view.get('culled')} occluded {view['occluded']} tested {view['tested']} visible {view['visible']} untested {view['untested']} near_plane {view['near_plane']} near_plane_occluded {view['near_plane_occluded']}")
+
+    # The camera inside a box that encloses it: the occlusion test culls
+    # back faces, so the box rasterizes nothing from inside; it must be
+    # marked visible without a test (its box reaches the near plane). The
+    # box's walls, back faces from inside, are not in the depth buffer
+    # either, so a box beyond its far wall is visible, not occluded.
+    box(port, scene, "occlusion_room", ROOM, [6.0, 6.0, 6.0])
+    box(port, scene, "occlusion_beyond", BEYOND, [1.0, 1.0, 1.0])
+    mcp(port, "set_node_transform", {"scene_name": scene, "node_name": camera, "translation": ROOM, "rotation_xyzw": [0, 0, 0, 1], "space": "world"})
+    time.sleep(2.0)
+    check = mcp(port, "get_occlusion_check", {"scene_name": scene})
+    view = next(v for v in check["views"] if v["scene_view"] == viewport.get("scene_view", v["scene_view"]))
+    occluded = {e["name"] for e in view["first_occluded"]}
+    for name in ("occlusion_room", "occlusion_beyond"):
+        if name in occluded:
+            failures.append(f"inside case: {name} occluded")
+    if view["near_plane"] < 1:
+        failures.append("inside case: the room does not reach the near plane")
+    if view["near_plane_occluded"] != 0:
+        failures.append(f"inside case: near plane entries not marked: {view['near_plane_occluded']}")
+    print(f"inside: culled {view.get('culled')} occluded {view['occluded']} tested {view['tested']} untested {view['untested']} near_plane {view['near_plane']} near_plane_occluded {view['near_plane_occluded']} occluded names {sorted(occluded)}")
     print("PASS" if not failures else "FAIL: " + "; ".join(failures))
     return 0 if not failures else 1
 

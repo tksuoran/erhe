@@ -247,6 +247,9 @@ public:
     std::size_t             occlusion_tested_count  {0};
     std::size_t             occlusion_occluded_count{0};
     std::size_t             occlusion_untested_count{0};
+    // Entries that frame's classification removed from the view because
+    // the frame before it found them occluded.
+    std::size_t             occlusion_culled_count  {0};
     uint64_t                occlusion_counts_frame_index{0};
     double                  cpu_time_us            {0.0};
     double                  total_cpu_time_us      {0.0};

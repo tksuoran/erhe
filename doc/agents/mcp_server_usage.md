@@ -614,8 +614,10 @@ Settings window save): `enabled` true or false
 culling classification on a device whose classifier supports the test
 (fragment shader storage atomics), every viewport's "Occlusion test"
 composition pass rasterizes the draw lists' entry boxes against the view's
-opaque depth and marks the visible entries; nothing skips draws by the marks
-yet, so images do not change. Omit `enabled` to query.
+opaque depth and marks the visible entries, and the next frame's
+classification removes the entries it found hidden from the view's GPU
+color commands (one frame of lag; a static view renders the same image).
+Omit `enabled` to query.
 
 Returns: `{enabled, classification, gpu_supported}`.
 
@@ -626,11 +628,16 @@ keeps its CPU masks and entry identities; once the frame retired and the
 frame reusing its slot decoded its occlusion words, the call returns per
 occlusion view `bounded_in_frustum` (CPU masks), `tested`, `visible`,
 `occluded`, `untested` (marked visible without a test), `near_plane` (boxes
-reaching the near plane) and `near_plane_occluded` (0 is the gate), and
+reaching the near plane), `near_plane_occluded` (0 is the gate), `culled`
+(entries that frame's classification removed because the frame before it
+found them occluded) and
 `first_occluded` `[{list_index, entry_index, name}]` (up to 16). Errors
 unless `culling_classification` is `gpu` and `occlusion_culling` is on, on
 a device with the test. `scripts/occlusion_wall_check.py` builds a wall with
-boxes behind and in front of it in a running editor and checks the result.
+boxes behind and in front of it, then a box around the camera, in a running
+editor and checks the result. `get_cull_classification_check` reports
+`occlusion_culled_count` and compares the masks with the culled bits added
+back.
 
 ```bash
 python3 scripts/mcp_call.py get_occlusion_check '{"scene_name":"Default Scene"}'
@@ -638,7 +645,7 @@ python3 scripts/mcp_call.py get_occlusion_check '{"scene_name":"Default Scene"}'
 
 Returns: `{scene, frame_index, entry_count, view_count, views: [{view,
 scene_view, bounded_in_frustum, tested, visible, occluded, untested,
-near_plane, near_plane_occluded, first_occluded}]}`. The per frame counts of
+culled, near_plane, near_plane_occluded, first_occluded}]}`. The per frame counts of
 the same test are in `get_composition_passes` (`last_occlusion_*` of the
 "Occlusion test" pass).
 

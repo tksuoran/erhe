@@ -111,44 +111,82 @@ Decisions (user, 2026-10-24):
    dispatch writes the frame slot's start words (test bits: a bounded entry
    in the frustum whose grown box lies beyond the near plane; result bits
    preset visible for entries without bounds, boxes reaching the near
-   plane and entries outside the frustum), and the view's "Occlusion test"
-   composition pass, after the opaque and alpha-tested fills
-   (`doc/editor/rendering.md` pass 16), draws 36 vertices per entry whose
-   fragments (early fragment tests, no depth or color writes) OR the view's
-   bit into the entry's result word (`doc/erhe/draw_list_renderer.md` Q6
-   "Occlusion test"). Nothing consumes the bits: images are byte-identical
-   with the test on and off (default, heavy, draws, heavy in four view,
-   Bistro on Metal 4), and `get_cull_classification_check` stays at 0
-   mismatches.
+   plane - a camera inside the box among them - and entries outside the
+   frustum), and the view's "Occlusion test" composition pass, after the
+   opaque and alpha-tested fills (`doc/editor/rendering.md` pass 16),
+   draws per entry the three faces of its box toward the camera (a +X +Y
+   +Z template mirrored per axis, 7 corners and 18 indices from a static
+   uint32 index buffer, no face culling) whose fragments (early fragment
+   tests, no depth or color writes) OR the view's bit into the entry's
+   result word (`doc/erhe/draw_list_renderer.md` Q6 "Occlusion test").
    Gate: `scripts/occlusion_wall_check.py` (a 30 x 12 m wall 10 m in front
    of the viewport camera, six boxes behind it, four in front, one box
-   crossing the near plane): the six reported occluded, nothing else, the
-   near-plane box marked without a test (`near_plane` 1,
-   `near_plane_occluded` 0) on Metal 4, Metal 3 and KosmicKrisp; with the
-   wall deleted 0 occluded. MCP `get_occlusion_check` per view, viewport
-   camera of the startup commands: heavy 1003 tested, 31 occluded; heavy in
-   four view 1029 / 33 (perspective), 1257 / 5, 496 and 399 (the three
-   orthographic views); Bistro (opened, framed camera) 3852 tested, 2814
-   occluded (73 percent).
-   Cost before any saving (Metal 4, Apple M4 Pro, Release headless,
-   pipelined, `force_disable_vsync`, Tracy GPU zones, 12 s per run, two
-   runs each, off -> on): heavy GPU `Main` 2763 -> 2956 us, tick 3476 ->
-   3673 us, R 1050 -> 1090 us, `classify_frame` 58 -> 64 us; Bistro GPU
-   `Main` 3839 / 3856 -> 4335 / 4332 us, tick 4822 / 4849 -> 5322 / 5336 us,
-   R 1332 / 1384 -> 1416 / 1406 us, `classify_frame` 265 / 281 -> 294 / 296
-   us (the CPU decode of the retired frame's words). The pass runs inside
-   the view's render pass, so its own GPU time is not separable from
-   `Main` on this GPU (timestamps at stage boundaries only); the difference
-   is the pass. A first version that issued the atomic OR for every
-   fragment cost heavy 1390 us (the atomics of one large visible box on one
-   word serialize); the fragment shader now reads the word first.
-2. 3b, the classification consumes the bits: the masks of frame N + 1 AND
-   the result bits of frame N (one AND in `cull_classify.comp`, with the
-   barrier fragment write in frame N -> compute read in frame N + 1,
-   `earlier_submissions`). Next. The view indices of two frames need not
-   match (a view's index is its position in its frame's set), so the
-   consumer maps frame N's occlusion views to frame N + 1's by their key.
-   Open for it: back-face culling or a front-face-only box (three faces
-   from the eye's octant) to halve the pass's fragments.
+   crossing the near plane; then the camera inside a 6 m box with a box
+   beyond its far wall): the six reported occluded, nothing else, the
+   near-plane box marked without a test, the box around the camera and the
+   box beyond it not occluded (the room's walls are back faces from inside
+   and write no depth), on Metal 4, Metal 3 and KosmicKrisp. MCP
+   `get_occlusion_check` per view, viewport camera of the startup
+   commands: heavy 1003 tested, 31 occluded; heavy in four view 1029 / 33
+   (perspective), 1257 / 5, 496 and 399 (the three orthographic views);
+   Bistro (opened, framed camera) 3852 tested, 2814 occluded (73 percent).
+   The pass's cost (Metal 4, Apple M4 Pro, Release headless, pipelined,
+   `force_disable_vsync`, Tracy GPU zones, 12 s per run, two runs each,
+   GPU `Main` with the pass but without consumption against occlusion off;
+   the pass runs inside the view's render pass, and this GPU times only
+   stage boundaries, so the difference is the pass): first version (36
+   non-indexed vertices per entry, both box faces of all six sides) heavy
+   +193 us, Bistro framed camera +480 us; now (three faces toward the
+   camera, indexed: 7 vertex invocations instead of 36 and 6 triangles
+   instead of 12 per entry) heavy 2764 -> 2871 us (+107), Bistro framed
+   3844 -> 4100 us (+256), Bistro bench camera (eye (-29.28, 9.68,
+   -16.34), target (0, 2, 0)) 3384 -> 4393 us (+1009: large boxes close to
+   that camera; fill, not vertices). An earlier version issued the atomic
+   OR for every fragment and cost heavy 1390 us (the atomics of one large
+   visible box on one word serialize); the fragment shader reads the word
+   first.
+2. 3b, the classification consumes the bits. Done. The classification of
+   frame N + 1 clears an occlusion view's mask bit of an entry that the same
+   view (matched by key: the scene view and pass, `Gpu_command_key`) tested
+   in frame N without a visible fragment; frame N must be the frame right
+   before, with the same entry layout (`entry_layout_serial`: no entry
+   added, removed or moved), else nothing is culled that frame (also the
+   frame the setting turns on, a new view). The culled entries are tested
+   again, so an entry that becomes visible is drawn one frame later: a fast
+   camera move or an object moving out from behind an occluder can pop in
+   for one frame (accepted, decision above). Gates: images byte-identical
+   with occlusion on and off after settling (default, heavy, draws, heavy in
+   four view, Bistro, the wall and inside-the-box scene; Metal 4, Metal 3,
+   KosmicKrisp); `get_cull_classification_check` 0 mismatches with the
+   culled bits added back to the GPU masks and dropped from the CPU
+   writer's commands (`occlusion_culled_count`); the wall scene culls the 6
+   boxes behind the wall; a camera teleport behind the wall captured
+   frame-exact by a check request: the first frame culls the 6 boxes the
+   old position found occluded (the lag frame), the next culls only what
+   the new position hides; adding or deleting a box: that frame culls 0.
+   Culled per view and the color passes' drawn counts, occlusion off -> on:
+   heavy 31 culled (opaque fill drawn 1003 -> 972), heavy in four view 33 /
+   5 / 496 / 399, Bistro framed 2814 (opaque 3724 -> 946, alpha tested 123
+   -> 89, translucent 5 -> 3), Bistro bench camera 2710 of 3086 tested.
+   Release headless Metal 4 (as above, two runs each, off -> on):
+
+   | Scene | GPU `Main` (us) | tick (us) | R (us) |
+   |---|---|---|---|
+   | heavy | 2764 / 2764 -> 2861 / 2861 | 3481 / 3482 -> 3580 / 3579 | 1127 / 1125 -> 1143 / 1142 |
+   | Bistro framed | 3850 / 3838 -> 3152 / 3147 | 4845 / 4825 -> 4132 / 4125 | 1376 / 1371 -> 1328 / 1252 |
+   | Bistro bench camera | 3386 / 3382 -> 2510 / 2677 | 4392 / 4398 -> 3516 / 3681 | 1398 / 1383 -> 1247 / 1243 |
+
+   The saving exceeds the pass's cost on Bistro (net GPU -700 us framed,
+   -790 us bench camera; the consumption alone saves about 950 and 1800
+   us) and not on heavy (31 of 1003 entries occluded: net +97 us).
 3. Step 5 of the sketch (the second draw of the entries that just became
    visible), only if the one-frame pop-in shows in use.
+
+## Open
+
+- The pass's fill cost grows with the screen area of the tested boxes
+  (Bistro bench camera +1 ms). Candidates: test only entries above a
+  screen-size threshold (small entries are cheap to draw anyway) and a
+  hierarchical-Z compute test instead of rasterized boxes.
+- A scene with little occlusion (heavy) pays the pass without a saving;
+  the setting stays off by default until measured on more scenes.

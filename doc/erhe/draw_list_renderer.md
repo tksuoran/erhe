@@ -870,38 +870,71 @@ Drawing:
   `Draw_list_renderer::get_color_clip_from_world()`) gets one visibility bit
   per entry, in the mask layout (`uvec2` per (group, entry), bit = the
   view's index). The classification dispatch writes, for the frame's
-  occlusion views (view record words 8 and 9: the near plane and the flag;
-  header `z` set), two regions of the frame slot's occlusion buffer: the
-  test words (a bounded color entry inside the view's frustum whose box,
-  grown by 2^-10 of its coordinate magnitude, `erhe_occlusion_bounds.glsl`,
-  lies wholly beyond the near plane) and the result words, preset to 1 for
-  the color entries the pass does not test (no bounds or skinned, a box
-  reaching the near plane, outside the frustum: unknown, kept visible), 0
-  elsewhere. A storage barrier (compute write -> vertex read and fragment
-  read / write) follows. `draw_occlusion(Draw_occlusion_parameters)`, inside
-  the view's render pass after its depth-writing color passes, draws 36
-  vertices per entry of the frame's lists (no vertex or index buffer: the
-  box corner from `gl_VertexID`), the vertex shader pushing an entry whose
-  test bit is clear outside the clip volume and transforming the grown
-  box's corners by the view's clip_from_world; the pipeline tests depth in
-  the device's direction (`greater_or_equal` with reverse depth), writes no
-  depth and no color and culls no face, and the fragment shader
-  (`early_fragment_tests`) atomically ORs the view's bit into the entry's
-  result word. The buffer is one persistent host-visible buffer per frame
-  slot (two regions at 256-byte alignment, grown to the slot's high-water
-  size, logged), bound by every `gpu` dispatch (a frame without occlusion
-  views binds it and writes nothing); `record_frame_end()`
-  (`Cull_frame_registry::record_frame_end()`, the editor: before
-  `release_frame_records()`) declares the frame's writes -> host read, and
-  the classification of the frame that reuses the slot (retired) decodes
-  the words into per view tested / occluded / untested counts
-  (`get_retired_occlusion_counts(key)`, frames in flight late).
-  `request_occlusion_check()` / `poll_occlusion_check()` (MCP
+  occlusion views (view record words 8 and 9: the near plane, the flag and
+  the previous frame's view; header `z` and `w`), three regions of the
+  frame slot's occlusion buffer: the test words (a bounded color entry
+  inside the view's frustum whose box, grown by 2^-10 of its coordinate
+  magnitude, `erhe_occlusion_bounds.glsl`, lies wholly beyond the near
+  plane), the result words, preset to 1 for the color entries the pass does
+  not test (no bounds or skinned, a box reaching the near plane - a camera
+  inside the box among them -, outside the frustum: unknown, kept visible),
+  0 elsewhere, and the culled words below. A storage barrier (compute write
+  -> vertex read and fragment read / write) follows.
+  `draw_occlusion(Draw_occlusion_parameters)`, inside the view's render
+  pass after its depth-writing color passes, draws per entry the three
+  faces of its grown box that can face the camera: a template of the faces
+  at the positive corner (+X, +Y, +Z: seven corners, 18 indices), mirrored
+  per axis toward the camera (`Draw_occlusion_parameters::eye`, homogeneous:
+  the position of a perspective camera, the +Z axis with w = 0 of an
+  orthographic one; `Draw_list_renderer::get_color_view_eye()`), one
+  indexed draw with the slot's uint32 index buffer (the pattern of entry e
+  at 7 e, written once per capacity, grown with the slot, logged), so the
+  vertex index names the entry and the corner and the post-transform cache
+  runs 7 vertex invocations per entry. The vertex shader pushes an entry
+  whose test bit is clear outside the clip volume; the pipeline tests depth
+  in the device's direction (`greater_or_equal` with reverse depth), writes
+  no depth and no color and culls no face (the mirroring varies the
+  winding; there are no back faces), and the fragment shader
+  (`early_fragment_tests`) ORs the view's bit into the entry's result word,
+  with an atomic OR only while a plain read sees the bit clear. **Occlusion
+  culling**: the classification of the frame right after an occlusion frame
+  (frame N + 1 after N, the published lists' entry layout unchanged:
+  `Draw_list_slot::entry_layout_serial`, which registration, unregistration,
+  swap-removal and `rebuild_all()` bump; transform and flag changes do not)
+  reads, per occlusion view, the same view of frame N (matched by
+  `Gpu_command_key`: view indices differ between frames) and clears the
+  view's mask bit of an entry inside the frustum that frame N tested and no
+  fragment marked; the bits it clears go to the culled words. A view
+  without a match, a frame after a gap or a layout change, and the frame
+  occlusion is turned on consume nothing (every entry visible). The
+  dependency is declared at the consumer: `buffer_barrier(previous slot
+  buffer, storage_write | compute_shader | fragment_shader, storage_read |
+  compute_shader, Barrier_scope::earlier_submissions)` before the dispatch.
+  The culled entries are still tested in N + 1 (their test bit follows the
+  frustum), so an entry that becomes visible returns one frame later: one
+  frame of lag, a pop-in after a fast camera or object move. The color
+  commands generated from the masks and the color passes' drawn / culled
+  counts (`Composition_pass_stats`) include the occlusion term; the
+  CPU masks do not (`has_cull_view_survivors()` and CPU-written passes stay
+  frustum-only). The buffer is one persistent host-visible buffer per frame
+  slot (three regions at 256-byte alignment, grown to the slot's
+  high-water size, logged), bound by every `gpu` dispatch (a frame without
+  occlusion views binds it and writes nothing; a dispatch consuming nothing
+  binds a small unread buffer for the previous words);
+  `record_frame_end()` (`Cull_frame_registry::record_frame_end()`, the
+  editor: before `release_frame_records()`) declares the frame's writes ->
+  host read, and the classification of the frame that reuses the slot
+  (retired) decodes the words into per view tested / occluded / untested /
+  culled counts (`get_retired_occlusion_counts(key)`, frames in flight
+  late). `request_occlusion_check()` / `poll_occlusion_check()` (MCP
   `get_occlusion_check`) add the frame's CPU side: per view the bounded
   entries in the frustum, the entries whose (not grown) box reaches the near
   plane, which must all be marked, and the first occluded entries with
-  their mesh names. Nothing consumes the bits yet (the classification's
-  masks and the generated commands are unchanged).
+  their mesh names. `get_cull_classification_check` reads the frame's
+  culled words back with the masks and compares the CPU masks with the GPU
+  masks plus the culled bits (the CPU lanes have no occlusion term), and
+  the GPU commands with the CPU writer's after dropping the culled entries;
+  a culled bit the CPU did not set is a mismatch.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.

@@ -64,22 +64,22 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .writeonly     = true
         }
     }
-    , m_occlusion_tests_block{
+    , m_occlusion_words_block{
         graphics_device,
         erhe::graphics::Shader_resource::Block_create_info{
-            .name          = "cull_occlusion_test",
-            .binding_point = static_cast<int>(occlusion_test_binding_point),
+            .name          = "cull_occlusion",
+            .binding_point = static_cast<int>(occlusion_words_binding_point),
             .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
             .writeonly     = true
         }
     }
-    , m_occlusion_results_block{
+    , m_occlusion_previous_words_block{
         graphics_device,
         erhe::graphics::Shader_resource::Block_create_info{
-            .name          = "cull_occlusion_result",
-            .binding_point = static_cast<int>(occlusion_result_binding_point),
+            .name          = "cull_occlusion_previous",
+            .binding_point = static_cast<int>(occlusion_previous_words_binding_point),
             .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
-            .writeonly     = true
+            .readonly      = true
         }
     }
     , m_view_buffer    {graphics_device, erhe::graphics::Buffer_target::storage,      "Gpu_cull_classifier views",         views_binding_point}
@@ -185,15 +185,17 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     // tightly (16 and 8 byte strides). cull_classify.comp documents the
     // contents.
     m_bounds_block.add_vec4("bounds", Shader_resource::unsized_array);
-    m_view_header_offset = m_views_block.add_uvec4("header"                             )->get_offset_in_parent();
+    m_view_header_offset           = m_views_block.add_uvec4("header"          )->get_offset_in_parent();
+    m_view_occlusion_header_offset = m_views_block.add_uvec4("occlusion_header")->get_offset_in_parent();
     m_view_data_offset   = m_views_block.add_vec4 ("views", Shader_resource::unsized_array)->get_offset_in_parent();
     m_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
-    m_occlusion_tests_block  .add_uvec2("tests",   Shader_resource::unsized_array);
-    m_occlusion_results_block.add_uvec2("results", Shader_resource::unsized_array);
+    m_occlusion_words_block         .add_uint("words", Shader_resource::unsized_array);
+    m_occlusion_previous_words_block.add_uint("words", Shader_resource::unsized_array);
     // The occlusion test (occlusion_test.vert / .frag): the view block
-    // (std140: a mat4 and a uvec4), the bounds as the classifier reads them,
+    // (std140: a mat4, a vec4 and a uvec4), the bounds as the classifier reads them,
     // and the two occlusion regions as uint words (the uvec2 layout's bytes).
     m_occlusion_clip_from_world_offset = m_occlusion_view_block.add_mat4 ("clip_from_world")->get_offset_in_parent();
+    m_occlusion_eye_offset             = m_occlusion_view_block.add_vec4 ("eye"            )->get_offset_in_parent();
     m_occlusion_info_offset            = m_occlusion_view_block.add_uvec4("info"           )->get_offset_in_parent();
     m_occlusion_view_block_bytes       = m_occlusion_view_block.get_size_bytes();
     m_occlusion_bounds_block     .add_vec4("bounds", Shader_resource::unsized_array);
@@ -222,8 +224,8 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
                 { .binding_point = bounds_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
                 { .binding_point = views_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
                 { .binding_point = masks_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = occlusion_test_binding_point,   .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = occlusion_result_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
+                { .binding_point = occlusion_words_binding_point,          .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
+                { .binding_point = occlusion_previous_words_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
             },
             .debug_label       = "Gpu_cull_classifier",
             .uses_texture_heap = false
@@ -235,7 +237,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
         Shader_stages_create_info{
             .name              = "cull_classify",
             .defines           = { { "ERHE_CULL_CLASSIFY_GROUP_SIZE", fmt::format("{}", workgroup_size) } },
-            .interface_blocks  = { &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_tests_block, &m_occlusion_results_block },
+            .interface_blocks  = { &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_words_block, &m_occlusion_previous_words_block },
             .shaders           = { { Shader_type::compute_shader, shader_path / std::filesystem::path{"cull_classify.comp"} } },
             .bind_group_layout = m_bind_group_layout.get()
         }
@@ -370,7 +372,9 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     }
     // Depth test against the view's depth (the device's depth direction:
     // a box face at or in front of the stored depth passes), no depth
-    // write, no color writes, both faces: the box only probes visibility.
+    // write, no color writes: the box only probes visibility. The vertex
+    // shader emits only the three faces toward the camera (mirrored per
+    // axis, so their winding varies): no face is culled.
     m_occlusion_pipeline = std::make_unique<Base_render_pipeline>(
         graphics_device,
         Base_render_pipeline_create_info{

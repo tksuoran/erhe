@@ -427,6 +427,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         stats->occlusion_tested_count       = 0;
         stats->occlusion_occluded_count     = 0;
         stats->occlusion_untested_count     = 0;
+        stats->occlusion_culled_count       = 0;
         stats->occlusion_counts_frame_index = 0;
     }
 
@@ -466,12 +467,15 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         ERHE_VERIFY(context.render_pass != nullptr);
         const std::optional<glm::mat4> clip_from_world = erhe::scene_renderer::Draw_list_renderer::get_color_clip_from_world(get_color_view_parameters(context));
         ERHE_VERIFY(clip_from_world.has_value());
+        const std::optional<glm::vec4> eye = erhe::scene_renderer::Draw_list_renderer::get_color_view_eye(get_color_view_parameters(context));
+        ERHE_VERIFY(eye.has_value());
         draw_list_scene->draw_occlusion(
             erhe::scene_renderer::Draw_occlusion_parameters{
                 .render_encoder  = *context.encoder,
                 .render_pass     = context.render_pass,
                 .viewport        = context.viewport,
                 .clip_from_world = clip_from_world.value(),
+                .eye             = eye.value(),
                 .cull_view       = prepared.cull_view,
                 .frame_index     = context.app_context.graphics_device->get_frame_index()
             }
@@ -483,6 +487,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 stats->occlusion_tested_count       = counts->tested;
                 stats->occlusion_occluded_count     = counts->occluded;
                 stats->occlusion_untested_count     = counts->untested;
+                stats->occlusion_culled_count       = counts->culled;
                 stats->occlusion_counts_frame_index = counts->frame_index;
             }
         }

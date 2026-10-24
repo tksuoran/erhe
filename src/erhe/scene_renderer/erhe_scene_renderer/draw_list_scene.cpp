@@ -363,6 +363,9 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
     ERHE_VERIFY(object.alive);
     ERHE_VERIFY(object.locations.empty());
     mark_shadow_bounds_changed();
+    // The entries' positions in the lists change (the occlusion bits of an
+    // earlier frame no longer name these entries).
+    ++m_entry_layout_serial;
     // No entries carry bounds yet: write_object_bounds() below records the
     // new ones only.
     object.has_world_aabb = false;
@@ -437,6 +440,7 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
 {
     Draw_list& draw_list = edit_draw_list(location.draw_list_index);
     ERHE_VERIFY(location.entry_index < draw_list.entries.size());
+    ++m_entry_layout_serial;
     const uint32_t last_index = static_cast<uint32_t>(draw_list.entries.size() - 1);
     if (location.entry_index != last_index) {
         // Swap-remove: the moved entry's owner must be told its new index.
@@ -1147,6 +1151,7 @@ void Draw_list_scene::rebuild_all()
     }
     // Every list is recreated: the dropped entries are not named.
     m_changes_unbounded = true;
+    ++m_entry_layout_serial;
     // Full rebuild is the one place lists are dropped (also compacts away
     // lists left empty by unregistration).
     m_draw_lists.clear();
@@ -1516,6 +1521,7 @@ void Draw_list_scene::publish(
     if ((slot.serial != m_draw_list_serial) || (slot.lists.size() != m_draw_lists.size())) {
         copy_to_slot(slot);
     }
+    slot.entry_layout_serial = m_entry_layout_serial;
     if (effective_classification == Cull_classification::gpu) {
         publish_gpu_bounds(slot);
     }
