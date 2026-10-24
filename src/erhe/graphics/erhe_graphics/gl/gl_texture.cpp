@@ -523,6 +523,11 @@ auto Texture_impl::gl_name() const -> GLuint
     return m_handle.gl_name();
 }
 
+auto Texture_impl::is_view() const -> bool
+{
+    return m_is_view;
+}
+
 auto Texture_impl::get_handle() const -> uint64_t
 {
     return gl::get_texture_handle_arb(m_handle.gl_name());
@@ -874,6 +879,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
 
     if (create_info.view_source) {
         ERHE_VERIFY(m_device.get_info().use_texture_view);
+        m_is_view = true;
         gl::texture_view(
             gl_name(), gl_texture_target, create_info.view_source->get_impl().gl_name(), internal_format,
             create_info.view_base_level, create_info.level_count, create_info.view_base_array_layer, 1 // TODO layer count

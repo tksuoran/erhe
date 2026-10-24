@@ -378,6 +378,14 @@ public:
     // source as a combined_image_sampler. Emits WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ.
     bool workaround_no_compute_storage_image_read{false};
 
+    // AMD OpenGL driver on Windows (Radeon 890M, 32.0.32015.7029):
+    // glGenerateTextureMipmap() on a texture view ignores the view's
+    // TEXTURE_VIEW_MIN_LEVEL and builds the levels from level 0 of the
+    // underlying storage, overwriting levels outside the view. C++ only (no
+    // shader define): Blit_command_encoder::generate_mipmaps() builds a view's
+    // chain with one blit per level and layer instead.
+    bool workaround_view_mipmap_generation_ignores_view_min_level{false};
+
     // limits
     int max_compute_workgroup_count[3] = { 1, 1, 1 };
     int max_compute_workgroup_size [3] = { 1, 1, 1 };

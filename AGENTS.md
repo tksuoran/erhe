@@ -51,6 +51,14 @@ A change to shared infrastructure (e.g. `erhe::scene_renderer`) keeps these targ
 
 Every proposed solution must be evaluated with the question: "is this just a band-aid?" If the answer is yes, the solution must be rejected. A band-aid is any change that masks, works around, or tolerates the symptom of a bug without addressing the root cause - for example, a defensive null check that lets shutdown proceed when an object should not have been null in the first place, a try/catch that swallows an unexpected error, or a "tolerant" code path that accommodates state the system was not supposed to enter. Find and fix the actual cause; do not paper over it.
 
+## Driver workarounds are gated on the driver
+
+A workaround for a graphics driver bug is enabled only on the driver that has
+the bug - for example the AMD OpenGL driver on Windows - and never for all
+drivers. Assume every other driver is correct and keep the normal path there.
+Detect the driver at device init, store a named `Device_info::workaround_*`
+flag and branch on that flag (`doc/erhe/shader_workarounds.md`).
+
 ## Never offer "pause" as an option
 
 Never prompt the user with a choice where one of the options is to pause, stop, or wrap up the current investigation/task (e.g. "continue digging, or pause here?"). When the work is mid-flight and the path forward is clear, just continue it. Only ask the user a question when there is a genuine decision *between substantive alternatives* that changes what gets done - and "stop working" is not one of those alternatives. If a natural checkpoint is reached, report progress and proceed with the obvious next step rather than asking for permission to keep going.
