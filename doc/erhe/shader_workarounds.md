@@ -82,7 +82,8 @@ no define.
   chain with one linear `glBlitNamedFramebuffer` per level and layer
   (`gl_blit_command_encoder.cpp`); textures that are not views, and every other
   driver, use `glGenerateTextureMipmap()`.
-- **Tests**: `Gpu_test.generate_mipmaps_on_level_view` fails on the
+- **Tests**: `Gpu_test.generate_mipmaps_on_level_view` and
+  `generate_mipmaps_on_array_layer_view_ignores_stale_scissor` fail on the
   affected driver without the flag.
 - **Remove when**: the AMD Windows driver honours the view's min level.
 
