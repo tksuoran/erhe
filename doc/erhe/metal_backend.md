@@ -158,10 +158,19 @@ These are named samplers like `s_shadow_compare`, `s_input`, `s_depth`, or
 encoder.set_sampled_image(/*binding_point=*/0, *texture, *sampler);
 ```
 
-The Metal implementation translates `binding_point` to the per-stage Metal
-slot via `binding_point + bind_group_layout->get_sampler_binding_offset()`
-(which mirrors how SPIRV-Cross numbers them after the buffer bindings) and
-calls `setFragmentTexture` / `setFragmentSamplerState`.
+The shader-stages prototype pins every dedicated sampler of the vertex,
+fragment and compute functions alike to `[[texture(N)]]` with N = its GLSL
+binding (`binding_point + bind_group_layout->get_sampler_binding_offset()`,
+which mirrors how SPIRV-Cross numbers them after the buffer bindings) and
+`[[sampler(M)]]` with M = the layout's compact dedicated-sampler slot. A
+texture-heap sampler used in a vertex function fails compilation (the heap
+is bound for the fragment and compute stages only). `set_sampled_image`
+computes the same N and M and binds the texture and sampler to the render
+stages the binding's `stage_flags` declare: `setVertexTexture` /
+`setVertexSamplerState` for `Shader_stage_flags::vertex` (e.g.
+`s_shadow_no_compare`, which `shadow_debug.vert` samples),
+`setFragmentTexture` / `setFragmentSamplerState` for `fragment`, both for
+both. A binding with neither stage is a configuration error (VERIFY).
 
 `set_sampled_image` reads the `Sampler_aspect` (`color` / `depth` /
 `stencil`) from the matching `combined_image_sampler` entry in the active
@@ -193,7 +202,9 @@ The texture heap manages Path A samplers through Metal argument buffers.
   material UBO and samples via `s_textures[index]` / equivalent.
 - `bind()` encodes when the slots changed or the current argument buffer
   was encoded in an earlier frame, then calls `setFragmentBuffer` +
-  `useResource(Read | Sample)`.
+  `useResource(Read | Sample)` for the fragment stage only (a vertex
+  function cannot use the heap, see "Path B" above).
+  Buffers (`set_buffer`) are bound to both render stages.
 - No pipeline change detection or re-encoding -- layout is fixed at
   construction.
 - Material textures occupy `[0, used_slot_count)` in the argument buffer.

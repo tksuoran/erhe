@@ -251,8 +251,9 @@ enum class Shader_type : unsigned int
 };
 
 // Bitmask of pipeline shader stages a descriptor binding is visible to.
-// Mirrors VkShaderStageFlags. Only the Vulkan backend honors it; OpenGL and
-// Metal samplers are not stage-scoped and ignore it. Combine bits with bitwise
+// Mirrors VkShaderStageFlags. Vulkan honors it for every binding, Metal for
+// dedicated samplers (Bind_group_layout_binding::stage_flags); OpenGL is not
+// stage-scoped and ignores it. Combine bits with bitwise
 // OR. A binding must include every stage that reads it -- e.g. a sampler
 // fetched in the vertex stage (a gl_VertexID-driven shader, or vertex pulling
 // via texelFetch) must include 'vertex', otherwise the descriptor is invisible

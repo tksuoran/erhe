@@ -85,16 +85,29 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
     // The sampler slot is *not* that number: Metal caps [[sampler(M)]] at
     // M <= 15, so dedicated samplers are allocated a separate compact index by
     // the bind group layout, which the shader-compile path pins to match.
+    //
+    // Metal binds textures and samplers per render stage: the binding goes to
+    // the stages its Bind_group_layout_binding::stage_flags declare.
     const uint32_t glsl_binding = binding_point + m_bind_group_layout->get_sampler_binding_offset();
     const uint32_t sampler_slot = m_bind_group_layout->get_impl().get_metal_sampler_slot(glsl_binding);
+    const uint32_t stage_flags  = m_bind_group_layout->get_impl().get_sampler_stage_flags(glsl_binding);
+    const bool     in_vertex    = (stage_flags & Shader_stage_flags::vertex)   != 0;
+    const bool     in_fragment  = (stage_flags & Shader_stage_flags::fragment) != 0;
+    ERHE_VERIFY(in_vertex || in_fragment);
 
     MTL::Texture*      mtl_texture = texture.get_impl().get_mtl_texture();
     MTL::SamplerState* mtl_sampler = sampler.get_impl().get_mtl_sampler();
     if (mtl_texture == nullptr || mtl_sampler == nullptr) {
         return;
     }
-    encoder->setFragmentTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
-    encoder->setFragmentSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
+    if (in_vertex) {
+        encoder->setVertexTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
+        encoder->setVertexSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
+    }
+    if (in_fragment) {
+        encoder->setFragmentTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
+        encoder->setFragmentSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
+    }
 }
 
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)

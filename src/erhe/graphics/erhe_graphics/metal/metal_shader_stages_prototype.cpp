@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <unordered_set>
 
 namespace erhe::graphics {
 
@@ -90,12 +91,14 @@ auto compile_spirv_to_mtl_function(
         //
         //   - **Dedicated named samplers** (e.g. `s_shadow_compare`,
         //     `s_depth`, `s_input`) stay in the discrete set 0 with explicit
-        //     [[texture(N)]]/[[sampler(N)]] bindings. They are bound by
-        //     Render_command_encoder::set_sampled_image() at draw time via
-        //     setFragmentTexture / setFragmentSamplerState. The Metal slot
-        //     index is the original SPIRV/GLSL binding number (which is
-        //     the user-facing binding_point + sampler_binding_offset, so
-        //     the host side and the shader side agree).
+        //     [[texture(N)]]/[[sampler(M)]] bindings, in the vertex,
+        //     fragment and compute functions alike. They are bound by
+        //     set_sampled_image() at draw / dispatch time to the stages the
+        //     binding's stage_flags declare. The Metal texture index is the
+        //     original SPIRV/GLSL binding number (which is the user-facing
+        //     binding_point + sampler_binding_offset, so the host side and
+        //     the shader side agree); the sampler index is the bind group
+        //     layout's compact slot (see below).
         //
         // The classification is driven by the explicit
         // Shader_resource::get_is_texture_heap() flag on each sampler member
@@ -103,10 +106,13 @@ auto compile_spirv_to_mtl_function(
         // a dedicated sampler may legitimately be declared as an array of size
         // 1 (or even larger), and a texture-heap sampler may have any size.
         //
-        // Vertex shaders don't sample textures; their sampled_image
-        // declarations (injected via default_uniform_block) are unused. Keep
-        // them in the discrete set 0 so they don't create an argument buffer.
-        if (exec_model == spv::ExecutionModelFragment || exec_model == spv::ExecutionModelGLCompute) {
+        // The texture heap is bound for the fragment and compute stages only:
+        // a vertex function gets every sampler of the default uniform block
+        // declared, and its heap samplers are skipped unless the function
+        // uses one, which is an error.
+        const bool is_vertex = (exec_model == spv::ExecutionModelVertex);
+        if (is_vertex || (exec_model == spv::ExecutionModelFragment) || (exec_model == spv::ExecutionModelGLCompute)) {
+            const std::unordered_set<spirv_cross::VariableID> active_variables = compiler.get_active_interface_variables();
             // Build a name -> is_texture_heap lookup from the bind group
             // layout's default uniform block. If no layout was supplied
             // (e.g. compute-only shaders that don't sample textures), the
@@ -143,6 +149,15 @@ auto compile_spirv_to_mtl_function(
                     array_size = 1;
                 }
                 const bool is_texture_heap = is_texture_heap_sampler(resource_ptr->name);
+                if (is_texture_heap && is_vertex) {
+                    if (active_variables.count(resource_ptr->id) != 0) {
+                        const std::string error_msg = fmt::format("SPIR-V -> MSL {} compilation failed for '{}': texture heap sampler '{}' is used in the vertex stage; the Metal texture heap is bound for the fragment and compute stages only", stage_name, shader_name, resource_ptr->name);
+                        log_program->error("{}", error_msg);
+                        device.shader_error(error_msg, "");
+                        return nullptr;
+                    }
+                    continue;
+                }
                 if (is_texture_heap) {
                     // Texture-heap sampler: move into argument buffer.
                     compiler.set_decoration(resource_ptr->id, spv::DecorationDescriptorSet, texture_descriptor_set);

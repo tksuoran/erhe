@@ -204,7 +204,10 @@ shared between encoders.
   acceleration structures with `setResource(gpuResourceID, 13)`.
 - Textures and samplers: `setTexture(gpuResourceID, index)` and
   `setSamplerState(gpuResourceID, index)` (samplers are created with
-  `supportArgumentBuffers`).
+  `supportArgumentBuffers`), at the dedicated-sampler indices the
+  shader-stages prototype pins in the vertex, fragment and compute functions
+  alike (`doc/erhe/metal_backend.md` "Two Sampler Binding Paths"); the
+  argument table reaches the vertex and fragment stages.
 - Index buffers are draw arguments (`drawIndexedPrimitives` takes the index
   buffer's GPU address and remaining length; indirect draws take the indirect
   buffer's address).

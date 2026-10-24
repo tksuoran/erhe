@@ -40,11 +40,26 @@ public:
     // sampler of this layout.
     [[nodiscard]] auto get_metal_sampler_slot(uint32_t glsl_binding) const -> uint32_t;
 
+    // The Shader_stage_flags the dedicated sampler at glsl_binding declared
+    // (Bind_group_layout_binding::stage_flags): the render stages
+    // Render_command_encoder_impl::set_sampled_image() binds it to. Asserts
+    // like get_metal_sampler_slot().
+    [[nodiscard]] auto get_sampler_stage_flags(uint32_t glsl_binding) const -> uint32_t;
+
 private:
-    erhe::utility::Debug_label                m_debug_label;
-    uint32_t                                  m_sampler_binding_offset{0};
-    Shader_resource                           m_default_uniform_block;
-    std::unordered_map<uint32_t, uint32_t>    m_metal_sampler_slots;
+    // A dedicated sampler's compact Metal sampler index and declared stages.
+    class Dedicated_sampler
+    {
+    public:
+        uint32_t sampler_slot{0};
+        uint32_t stage_flags {0};
+    };
+    [[nodiscard]] auto get_dedicated_sampler(uint32_t glsl_binding) const -> const Dedicated_sampler&;
+
+    erhe::utility::Debug_label                        m_debug_label;
+    uint32_t                                          m_sampler_binding_offset{0};
+    Shader_resource                                   m_default_uniform_block;
+    std::unordered_map<uint32_t, Dedicated_sampler>   m_dedicated_samplers; // by GLSL binding
 };
 
 } // namespace erhe::graphics
