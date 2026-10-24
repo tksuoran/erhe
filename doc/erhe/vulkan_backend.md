@@ -401,10 +401,11 @@ A pass is either a swapchain pass (`m_swapchain != nullptr`) or an off-screen
 pass.
 
 **Attachments.** `Load_action` maps to `VkAttachmentLoadOp`, `Store_action` to
-`VkAttachmentStoreOp`. The attachment descriptor's `usage_before` / `usage_after`
-masks map to `initialLayout` / `finalLayout` (via `to_vk_image_layout`). When the
-subresources of an off-screen attachment are still `VK_IMAGE_LAYOUT_UNDEFINED` and the load
-action is not `Load`, the pass advertises `UNDEFINED` as the initial layout so it
+`VkAttachmentStoreOp`. The attachment descriptor's `layout_before` /
+`layout_after` map to `initialLayout` / `finalLayout` (via
+`to_vk_image_layout`); `usage_before` / `usage_after` drive the barriers
+below. When the subresources of an off-screen attachment are still
+`VK_IMAGE_LAYOUT_UNDEFINED` and the load action is not `Load`, the pass advertises `UNDEFINED` as the initial layout so it
 drives its own discarding transition instead of a wasteful pre-transition. A
 `Load` with `UNDEFINED` is never emitted (`VUID-VkAttachmentDescription2-format-06699`).
 
@@ -449,16 +450,19 @@ combined with explicit barriers provides correctness:
   `finalLayout` on each attachment.
 - **Inter-pass barrier** (`compute_inter_pass_barrier`, emitted as a
   `VkMemoryBarrier2` via `vkCmdPipelineBarrier2` before `vkCmdBeginRenderPass2`
-  on off-screen passes). Its source stages/access come from each attachment's
-  `usage_before`; its destination always includes `FRAGMENT_SHADER + SHADER_READ`
-  (any pass may sample descriptor-bound textures not listed as attachments) plus
-  color/depth stages for the attachments present.
+  on off-screen passes). Its source stages/access come from each
+  attachment's `usage_before`, mapped as `Command_buffer::texture_barrier`
+  maps a `usage_before` (`image_usage_to_vk_barrier_scope`); its destination
+  always includes `FRAGMENT_SHADER + SHADER_READ` (any pass may sample
+  descriptor-bound textures not listed as attachments) plus color/depth
+  stages for the attachments present.
 - **Post-pass barrier** (`compute_post_render_pass_barrier`, emitted after
-  `vkCmdEndRenderPass2`). Makes attachment writes visible to the stages implied
-  by each attachment's `usage_after` (e.g. `FRAGMENT_SHADER` for
-  `usage_after = sampled`), which the subpass `0 -> EXTERNAL` dependency alone
-  does not cover. Skipped for attachments whose `usage_after` carries the
-  `user_synchronized` bit.
+  `vkCmdEndRenderPass2`). Makes attachment writes visible to the stages of
+  each attachment's `usage_after`, mapped as `texture_barrier` maps a
+  `usage_after` (`COMPUTE_SHADER` for `sampled | compute_shader`, every shader
+  stage for an unqualified `sampled`), which the subpass `0 -> EXTERNAL`
+  dependency alone does not cover. Skipped for attachments whose
+  `usage_after` carries the `user_synchronized` bit.
 - **Upload barrier.** `Command_buffer::upload_to_buffer` follows each
   `vkCmdCopyBuffer` with a range-scoped `VkBufferMemoryBarrier2` whose
   destination stage/access is derived from the destination buffer's own

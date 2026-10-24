@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::graphics`: `Render_pipeline_create_info::color_usage_before`,
+  `color_usage_after`, `depth_usage_before` and `depth_usage_after` (no
+  backend read them; render pass barriers come from the
+  `Render_pass_descriptor` attachments).
+- `erhe::scene_renderer`: `Forward_renderer::Warmup_target::color_usage_before`,
+  `color_usage_after`, `depth_usage_before` and `depth_usage_after`.
 - `erhe::graphics`: the Metal GLSL preamble no longer defines `ERHE_DRAW_ID`
   and no longer maps a `push_constant` block to buffer index 15; a shader
   with a `push_constant` block fails to compile on Metal. Both Metal devices
@@ -697,6 +703,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: on Vulkan the render pass begin and end barriers honour
+  the stage qualifiers of an attachment's `usage_before` / `usage_after` as
+  `Command_buffer::texture_barrier` does (`sampled | compute_shader` orders
+  compute readers; an unqualified `sampled` covers every shader stage, was
+  the fragment stage only); `Command_buffer::cmd_texture_barrier` maps its
+  usages the same way.
 - `erhe::graphics`: `Device::get_present_calibration()` returns a copy (the
   calibration changes at run time on a display change);
   `Device::set_present_calibration()` is replaced by

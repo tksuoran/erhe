@@ -280,8 +280,6 @@ auto Texture_renderer::get_compiled(
     pipeline_create_info.vertex_input                           = nullptr;
     pipeline_create_info.color_attachment_count                 = 1;
     pipeline_create_info.color_attachment_formats[0]            = color_format();
-    pipeline_create_info.color_usage_before[0]                  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
-    pipeline_create_info.color_usage_after[0]                   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
     pipeline_create_info.sample_count                           = 1;
 
     compiled.pipeline = std::make_unique<erhe::graphics::Render_pipeline>(m_device, pipeline_create_info);

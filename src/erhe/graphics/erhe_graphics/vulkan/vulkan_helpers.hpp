@@ -73,19 +73,9 @@ void convert_readback_to_rgba8_opaque(
 [[nodiscard]] auto to_vk_vertex_format      (erhe::dataformat::Format format) -> VkFormat;
 [[nodiscard]] auto to_vk_index_type         (erhe::dataformat::Format format) -> VkIndexType;
 
-class Vk_stage_access
-{
-public:
-    VkPipelineStageFlags stage;
-    VkAccessFlags        access;
-};
-[[nodiscard]] auto usage_to_vk_layout      (uint64_t usage, bool is_depth_stencil, bool is_final_layout = false) -> VkImageLayout;
-[[nodiscard]] auto usage_to_vk_stage_access(uint64_t usage, bool is_depth_stencil) -> Vk_stage_access;
 [[nodiscard]] auto to_vk_image_layout      (Image_layout layout) -> VkImageLayout;
 
-// Sync2 stage/access pair. Separate from Vk_stage_access (sync1) because the
-// sync2 bit values diverge for buffer-relevant stages like VERTEX_ATTRIBUTE_INPUT
-// that have no sync1 equivalent.
+// Sync2 stage/access pair.
 class Vk_stage_access_2
 {
 public:

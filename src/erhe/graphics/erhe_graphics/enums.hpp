@@ -517,11 +517,10 @@ public:
 
     // Modifiers for Command_buffer::texture_barrier and for render pass
     // attachment usage_before / usage_after (doc/erhe/graphics.md "Resource
-    // barriers"); texture creation ignores them, and the Vulkan render pass
-    // barriers map an attachment's sampled to the fragment stage regardless
-    // of them. The stage qualifiers name the shader stages
-    // that perform the sampled / storage / input_attachment accesses of a
-    // barrier side; without one, those accesses cover every shader stage.
+    // barriers"); texture creation ignores them. The stage qualifiers name
+    // the shader stages that perform the sampled / storage / input_attachment
+    // accesses of a barrier side; without one, those accesses cover every
+    // shader stage.
     // discard, on usage_before only, drops the texture's contents (Vulkan
     // oldLayout UNDEFINED) while the rest of usage_before still orders the
     // earlier accesses (sampled | fragment_shader | discard: a target the

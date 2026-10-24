@@ -631,18 +631,11 @@ auto Device_impl::get_or_create_compatible_render_pass(
     const erhe::dataformat::Format                 stencil_attachment_format,
     const unsigned int                             sample_count,
     const uint32_t                                 view_mask,
-    const bool                                     fragment_density_map,
-    VkPipelineStageFlags                           incoming_src_stage,
-    VkAccessFlags                                  incoming_src_access,
-    VkPipelineStageFlags                           incoming_dst_stage,
-    VkAccessFlags                                  incoming_dst_access,
-    VkPipelineStageFlags                           outgoing_src_stage,
-    VkAccessFlags                                  outgoing_src_access,
-    VkPipelineStageFlags                           outgoing_dst_stage,
-    VkAccessFlags                                  outgoing_dst_access
+    const bool                                     fragment_density_map
 ) -> VkRenderPass
 {
-    // Compute hash from format tuple and dependency masks
+    // Compute hash from the format tuple (the dependencies are canonical,
+    // see below)
     auto hash_combine = [](std::size_t& seed, std::size_t value) {
         seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
     };
@@ -657,14 +650,6 @@ auto Device_impl::get_or_create_compatible_render_pass(
     hash_combine(hash, static_cast<std::size_t>(sample_count));
     hash_combine(hash, static_cast<std::size_t>(view_mask));
     hash_combine(hash, static_cast<std::size_t>(fragment_density_map ? 1u : 0u));
-    hash_combine(hash, static_cast<std::size_t>(incoming_src_stage));
-    hash_combine(hash, static_cast<std::size_t>(incoming_src_access));
-    hash_combine(hash, static_cast<std::size_t>(incoming_dst_stage));
-    hash_combine(hash, static_cast<std::size_t>(incoming_dst_access));
-    hash_combine(hash, static_cast<std::size_t>(outgoing_src_stage));
-    hash_combine(hash, static_cast<std::size_t>(outgoing_src_access));
-    hash_combine(hash, static_cast<std::size_t>(outgoing_dst_stage));
-    hash_combine(hash, static_cast<std::size_t>(outgoing_dst_access));
 
     {
         std::lock_guard<std::mutex> lock{m_compatible_render_pass_mutex};
@@ -789,54 +774,11 @@ auto Device_impl::get_or_create_compatible_render_pass(
         .pPreserveAttachments    = nullptr
     };
 
-    // Dependencies must match the actual render passes for validation compatibility.
-    // Use caller-provided masks, or derive defaults from attachments.
-    if (incoming_src_stage == 0 && incoming_dst_stage == 0 && outgoing_src_stage == 0 && outgoing_dst_stage == 0) {
-        incoming_src_stage  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        incoming_src_access = VK_ACCESS_SHADER_READ_BIT;
-        outgoing_dst_stage  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        outgoing_dst_access = VK_ACCESS_SHADER_READ_BIT;
-        if (color_attachment_count > 0) {
-            incoming_dst_stage  |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            incoming_dst_access |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            outgoing_src_stage  |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            outgoing_src_access |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        }
-        if (has_depth || has_stencil) {
-            incoming_dst_stage  |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-            incoming_dst_access |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-            outgoing_src_stage  |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-            outgoing_src_access |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        }
-    }
-    if (incoming_src_stage == 0) {
-        incoming_src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    }
-    if (incoming_dst_stage == 0) {
-        incoming_dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    }
-    if (outgoing_src_stage == 0) {
-        outgoing_src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    }
-    if (outgoing_dst_stage == 0) {
-        outgoing_dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    }
-
     // The validation layer compares subpass dependency arrays as part of
-    // render-pass compatibility, so the compatibility render pass must use
-    // the exact same canonical dependencies that the in-use render passes
-    // produce. The caller-supplied stage/access masks are intentionally
-    // ignored here and only the structural (has_color / has_depth_stencil)
-    // bits drive the dependencies.
-    static_cast<void>(incoming_src_stage);
-    static_cast<void>(incoming_src_access);
-    static_cast<void>(incoming_dst_stage);
-    static_cast<void>(incoming_dst_access);
-    static_cast<void>(outgoing_src_stage);
-    static_cast<void>(outgoing_src_access);
-    static_cast<void>(outgoing_dst_stage);
-    static_cast<void>(outgoing_dst_access);
-
+    // render-pass compatibility, so the compatibility render pass uses the
+    // exact same canonical dependencies that the in-use render passes
+    // produce: only the structural (has_color / has_depth_stencil) bits
+    // drive them.
     VkSubpassDependency2 canonical_dependencies[2];
     make_canonical_subpass_dependencies2(color_attachment_count > 0, has_depth || has_stencil, canonical_dependencies);
 

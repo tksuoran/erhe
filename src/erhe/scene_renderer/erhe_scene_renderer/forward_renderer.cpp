@@ -593,12 +593,8 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                         }
                         ci.color_attachment_count    = target.color_attachment_count;
                         ci.color_attachment_formats  = target.color_attachment_formats;
-                        ci.color_usage_before        = target.color_usage_before;
-                        ci.color_usage_after         = target.color_usage_after;
                         ci.depth_attachment_format   = target.depth_attachment_format;
                         ci.stencil_attachment_format = target.stencil_attachment_format;
-                        ci.depth_usage_before        = target.depth_usage_before;
-                        ci.depth_usage_after         = target.depth_usage_after;
                         ci.sample_count              = target.sample_count;
                         {
                             ERHE_PROFILE_SCOPE("warmup_render_pipeline");

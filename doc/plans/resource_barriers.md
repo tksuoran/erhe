@@ -161,12 +161,9 @@ What step 2 commits, in order of gain:
    25 producer barriers per frame on the default scene, as before) and
    `F|D -> F` / `F -> F|D` around the `Rendertarget_mesh` pass. Small-viewport
    bench, default scene, Metal 4, pipelined, three runs: tick 281 -> 232 us,
-   Tracy `Post_processing` GPU zone 116 -> 78 us. Metal 3 and Vulkan record
-   the same work: Metal 3 orders by encoder fences, and the Vulkan render
-   pass barriers map an attachment's `sampled` to the fragment stage
-   whatever the qualifiers, so a compute reader of the `Rendertarget_mesh`
-   texture is not ordered on Vulkan (`vulkan_helpers.cpp`
-   `usage_to_vk_stage_access`; open). Verification: the editor image gates
+   Tracy `Post_processing` GPU zone 116 -> 78 us. Metal 3 records the same
+   work (it orders by encoder fences); Vulkan's render pass barriers follow
+   the qualifiers since step 3. Verification: the editor image gates
    on Metal 3, Metal 4 and MoltenVK (all four threading configurations),
    the Bistro image on Metal 4 and the ray trace and radiance cascades
    images byte-identical to the build before, DDGI within its run-to-run
@@ -177,17 +174,30 @@ What step 2 commits, in order of gain:
    the same on Metal 3); converted as cleanup only.
 3. The compute chain barriers (`draw_list_scene_gpu_cull.cpp`,
    `light_cluster_gpu_binner.cpp`): no measurable cost.
+4. Cleanup candidate: the shadow map passes' unqualified `sampled`
+   `usage_before` / `usage_after` (`shadow_render_node.cpp`, depth and color
+   attachments) order `PRE_RASTERIZATION` too on Vulkan since step 3, which
+   holds each shadow pass's vertex work behind the previous pass on desktop
+   drivers; they become `sampled | fragment_shader | compute_shader` once it
+   is confirmed which compute shaders sample shadow maps (`erhe_ray_hit.glsl`
+   includes `erhe_light.glsl`).
 
 ## Step 3: Vulkan render pass qualifiers, then tracked layouts
 
-The Vulkan render pass barriers (`vulkan_render_pass.cpp` begin and
-post-pass, through `usage_to_vk_stage_access`) honour the stage qualifiers
-of an attachment's `usage_before` / `usage_after` the same way the
-`texture_barrier` path does: `sampled | compute_shader` reaches the compute
-stage, and an unqualified `sampled` keeps covering every shader stage.
-This closes the `Rendertarget_mesh` compute reader gap found in step 2
-item 1. It is gated by the MoltenVK image gates with synchronization
-validation on.
+Done: the Vulkan render pass barriers (`vulkan_render_pass.cpp`
+`compute_inter_pass_barrier` and `compute_post_render_pass_barrier`) map an
+attachment's `usage_before` / `usage_after` through
+`image_usage_to_vk_barrier_scope`, the mapping of `texture_barrier`:
+`sampled | compute_shader` reaches the compute stage (the `Rendertarget_mesh`
+texture's ray tracing readers), and an unqualified `sampled` or `storage`
+covers every shader stage. `cmd_texture_barrier` uses the same mapping.
+Verification: the MoltenVK image gates (four threading configurations) with
+synchronization validation byte-identical to the build before, 0 hazards
+and 0 validation errors on both; `Resource_barrier_test`
+`color_attachment_usage_after_to_compute_sampled` fails on MoltenVK and
+KosmicKrisp with a `SYNC-HAZARD-READ-AFTER-WRITE` when the end barrier
+narrows `sampled` to the fragment stage, and passes with the qualifier
+honoured; `ctest -L "gpu|editor"` on both drivers.
 
 The `texture_barrier ... a barrier chain is missing` warning becomes a
 VERIFY in `Texture_impl::record_usage_barrier` once the gates are silent.

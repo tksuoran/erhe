@@ -535,15 +535,7 @@ public:
         erhe::dataformat::Format                       stencil_attachment_format,
         unsigned int                                   sample_count,
         uint32_t                                       view_mask,
-        bool                                           fragment_density_map,
-        VkPipelineStageFlags                           incoming_src_stage  = 0,
-        VkAccessFlags                                  incoming_src_access = 0,
-        VkPipelineStageFlags                           incoming_dst_stage  = 0,
-        VkAccessFlags                                  incoming_dst_access = 0,
-        VkPipelineStageFlags                           outgoing_src_stage  = 0,
-        VkAccessFlags                                  outgoing_src_access = 0,
-        VkPipelineStageFlags                           outgoing_dst_stage  = 0,
-        VkAccessFlags                                  outgoing_dst_access = 0
+        bool                                           fragment_density_map
     ) -> VkRenderPass;
     // Fallback descriptor sets (no VK_KHR_push_descriptor), allocated from
     // the descriptor pool of the frame-in-flight slot of frame_id (the frame

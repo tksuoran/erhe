@@ -39,19 +39,13 @@ void Render_pipeline_create_info::set_format_from_render_pass(const Render_pass_
     if (desc.swapchain != nullptr) {
         color_attachment_formats[0] = desc.swapchain->get_color_format();
         color_attachment_count = 1;
-        color_usage_before[0] = desc.color_attachments[0].usage_before;
-        color_usage_after [0] = desc.color_attachments[0].usage_after;
         erhe::dataformat::Format depth_fmt = desc.swapchain->get_depth_format();
         if (depth_fmt != erhe::dataformat::Format::format_undefined) {
             depth_attachment_format = depth_fmt;
-            depth_usage_before     = desc.depth_attachment.usage_before;
-            depth_usage_after      = desc.depth_attachment.usage_after;
         }
         // Swapchain depth may also come from an explicit depth attachment texture
         if (desc.depth_attachment.is_defined() && (desc.depth_attachment.texture != nullptr)) {
             depth_attachment_format = desc.depth_attachment.texture->get_pixelformat();
-            depth_usage_before     = desc.depth_attachment.usage_before;
-            depth_usage_after      = desc.depth_attachment.usage_after;
         }
         // Stencil format must be picked up too -- Metal validates that the
         // pipeline's stencil pixel format matches the framebuffer's, and a
@@ -74,13 +68,9 @@ void Render_pipeline_create_info::set_format_from_render_pass(const Render_pass_
         if (color_fmt != erhe::dataformat::Format::format_undefined) {
             color_attachment_formats[0] = color_fmt;
             color_attachment_count = 1;
-            color_usage_before[0] = desc.color_attachments[0].usage_before;
-            color_usage_after [0] = desc.color_attachments[0].usage_after;
             const erhe::dataformat::Format depth_fmt = desc.surface->get_depth_format();
             if (depth_fmt != erhe::dataformat::Format::format_undefined) {
                 depth_attachment_format = depth_fmt;
-                depth_usage_before     = desc.depth_attachment.usage_before;
-                depth_usage_after      = desc.depth_attachment.usage_after;
             }
             return;
         }
@@ -91,16 +81,12 @@ void Render_pipeline_create_info::set_format_from_render_pass(const Render_pass_
     for (std::size_t i = 0; i < desc.color_attachments.size(); ++i) {
         const Render_pass_attachment_descriptor& att = desc.color_attachments[i];
         if (att.is_defined() && (att.texture != nullptr)) {
-            color_usage_before[color_attachment_count] = att.usage_before;
-            color_usage_after [color_attachment_count] = att.usage_after;
             color_attachment_formats[color_attachment_count] = att.texture->get_pixelformat();
             ++color_attachment_count;
         }
     }
 
     if (desc.depth_attachment.is_defined() && (desc.depth_attachment.texture != nullptr)) {
-        depth_usage_before     = desc.depth_attachment.usage_before;
-        depth_usage_after      = desc.depth_attachment.usage_after;
         depth_attachment_format = desc.depth_attachment.texture->get_pixelformat();
         const int tex_sample_count = desc.depth_attachment.texture->get_sample_count();
         if (tex_sample_count > 0) {
@@ -233,7 +219,6 @@ auto Base_render_pipeline::operator=(Base_render_pipeline&& other) noexcept -> B
     // contexts -- include the bool in the variant cache key.
     v = erhe::hash::hash(static_cast<uint8_t>(fragment_density_map ? 1u : 0u), v);
 
-    // Usage before and after does not affect hash on purpose.
     return v;
 }
 

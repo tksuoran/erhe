@@ -146,15 +146,14 @@ auto vk_layout_str(VkImageLayout layout) -> const char*
     }
 }
 
-// Local aliases for the shared usage-to-Vulkan mapping functions
 // Build an inter-pass memory barrier from the attachment descriptors
 // of THIS render pass.
 //
 // Source side: derived from each attachment's usage_before, which
-// describes how the resource was used prior to this pass. This is
-// converted to Vulkan stage/access via usage_to_vk_stage_access().
-// This replaces the previous approach of inferring src from the
-// predecessor's attachment types (render_pass_before).
+// describes how the resource was used prior to this pass, through the
+// mapping Command_buffer::texture_barrier uses
+// (image_usage_to_vk_barrier_scope): the stage qualifiers name the shader
+// stages of a sampled / storage access, every shader stage without one.
 //
 // Destination side: derived from which attachment types are present.
 //
@@ -172,27 +171,29 @@ auto compute_inter_pass_barrier(
     // --- Source side (prior usage of each attachment) ---
     VkPipelineStageFlags2 src_stage_mask  = 0;
     VkAccessFlags2        src_access_mask = 0;
+    bool                  any_declared    = false;
 
-    for (const Render_pass_attachment_descriptor& att : color_attachments) {
-        if (att.is_defined() && (att.texture != nullptr) && (att.usage_before != Image_usage_flag_bit_mask::invalid)) {
-            const Vk_stage_access sa = usage_to_vk_stage_access(att.usage_before, false);
-            src_stage_mask  |= static_cast<VkPipelineStageFlags2>(sa.stage);
-            src_access_mask |= static_cast<VkAccessFlags2>(sa.access);
+    auto accumulate = [&](const Render_pass_attachment_descriptor& att) {
+        if (!att.is_defined() || (att.texture == nullptr) || (att.usage_before == Image_usage_flag_bit_mask::invalid)) {
+            return;
         }
+        // none (never accessed) adds no stage: nothing earlier to order. Any
+        // other usage_before names an access; one that maps to no stage
+        // (a modifier or qualifier alone) is a declaration error.
+        const Vk_stage_access_2 sa = image_usage_to_vk_barrier_scope(att.usage_before, Barrier_side::source);
+        ERHE_VERIFY((att.usage_before == Image_usage_flag_bit_mask::none) || (sa.stage != 0));
+        src_stage_mask  |= sa.stage;
+        src_access_mask |= sa.access;
+        any_declared = true;
+    };
+    for (const Render_pass_attachment_descriptor& att : color_attachments) {
+        accumulate(att);
     }
-    if (depth_attachment.is_defined() && (depth_attachment.texture != nullptr) && (depth_attachment.usage_before != Image_usage_flag_bit_mask::invalid)) {
-        const Vk_stage_access sa = usage_to_vk_stage_access(depth_attachment.usage_before, true);
-        src_stage_mask  |= static_cast<VkPipelineStageFlags2>(sa.stage);
-        src_access_mask |= static_cast<VkAccessFlags2>(sa.access);
-    }
-    if (stencil_attachment.is_defined() && (stencil_attachment.texture != nullptr) && (stencil_attachment.usage_before != Image_usage_flag_bit_mask::invalid)) {
-        const Vk_stage_access sa = usage_to_vk_stage_access(stencil_attachment.usage_before, true);
-        src_stage_mask  |= static_cast<VkPipelineStageFlags2>(sa.stage);
-        src_access_mask |= static_cast<VkAccessFlags2>(sa.access);
-    }
+    accumulate(depth_attachment);
+    accumulate(stencil_attachment);
 
-    // Fallback if no attachment had a valid usage_before.
-    if (src_stage_mask == 0) {
+    // Fallback if no attachment declared a usage_before.
+    if (!any_declared) {
         src_stage_mask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
                         | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
         src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
@@ -247,8 +248,9 @@ auto compute_inter_pass_barrier(
 // writes available but only extends the execution/memory dependency to
 // COLOR_ATTACHMENT_OUTPUT (for color) or EARLY/LATE_FRAGMENT_TESTS (for
 // depth). If usage_after includes stages outside that set -- for
-// example FRAGMENT_SHADER when usage_after = sampled -- the writes are
-// never made visible for those stages. This barrier closes that gap.
+// example COMPUTE_SHADER when usage_after = sampled | compute_shader --
+// the writes are never made visible for those stages. This barrier
+// closes that gap.
 //
 // Skipped when usage_after has the user_synchronized bit set; the
 // caller is then responsible for inserting an explicit barrier.
@@ -277,9 +279,11 @@ auto compute_post_render_pass_barrier(
         if (att.usage_after & Image_usage_flag_bit_mask::user_synchronized) {
             return;
         }
-        // Strip the user_synchronized bit for stage/access lookup
-        const uint64_t usage = att.usage_after & ~Image_usage_flag_bit_mask::user_synchronized;
-        const Vk_stage_access dst_sa = usage_to_vk_stage_access(usage, is_depth_stencil);
+        // The mapping Command_buffer::texture_barrier uses: the stage
+        // qualifiers name the shader stages of a sampled / storage access,
+        // every shader stage without one. It ignores user_synchronized.
+        // present adds no stage (the present semaphore orders it).
+        const Vk_stage_access_2 dst_sa = image_usage_to_vk_barrier_scope(att.usage_after, Barrier_side::destination);
         if (dst_sa.stage == 0) {
             return;
         }
@@ -294,8 +298,8 @@ auto compute_post_render_pass_barrier(
             src_access_mask |= VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
         }
 
-        dst_stage_mask  |= static_cast<VkPipelineStageFlags2>(dst_sa.stage);
-        dst_access_mask |= static_cast<VkAccessFlags2>(dst_sa.access);
+        dst_stage_mask  |= dst_sa.stage;
+        dst_access_mask |= dst_sa.access;
     };
 
     for (const Render_pass_attachment_descriptor& att : color_attachments) {
@@ -1451,7 +1455,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         //
         // Source side: each attachment's usage_before describes how the
         // resource was used prior to this pass. Converted to Vulkan
-        // stage/access via usage_to_vk_stage_access().
+        // stage/access via image_usage_to_vk_barrier_scope().
         //
         // Destination side: derived from which attachment types exist.
         // FRAGMENT_SHADER + SHADER_READ always included for descriptor-
@@ -1685,11 +1689,11 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
 
             // Option A: post-renderpass barrier. Makes attachment writes
             // visible for the usage_after stages (e.g. FRAGMENT_SHADER
-            // when usage_after = sampled). Without this, a subsequent
-            // pass that samples from a texture written as a color
-            // attachment would have a synchronization hazard: the
-            // subpass 0->EXTERNAL dependency only extends visibility to
-            // COLOR_ATTACHMENT_OUTPUT, not to FRAGMENT_SHADER.
+            // when usage_after = sampled | fragment_shader). Without
+            // this, a later pass or dispatch that samples from a texture
+            // written as a color attachment would have a synchronization
+            // hazard: the subpass 0->EXTERNAL dependency only extends
+            // visibility to COLOR_ATTACHMENT_OUTPUT.
             //
             // Skipped for attachments with the user_synchronized bit in
             // usage_after (Option B: caller manages barriers explicitly).

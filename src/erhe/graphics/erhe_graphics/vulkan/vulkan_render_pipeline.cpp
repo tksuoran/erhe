@@ -258,41 +258,6 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         return;
     }
 
-    // Compute dependency masks from attachment usage flags using shared mapping
-    VkPipelineStageFlags incoming_src_stage  = 0;
-    VkAccessFlags        incoming_src_access = 0;
-    VkPipelineStageFlags incoming_dst_stage  = 0;
-    VkAccessFlags        incoming_dst_access = 0;
-    VkPipelineStageFlags outgoing_src_stage  = 0;
-    VkAccessFlags        outgoing_src_access = 0;
-    VkPipelineStageFlags outgoing_dst_stage  = 0;
-    VkAccessFlags        outgoing_dst_access = 0;
-
-    for (unsigned int i = 0; i < create_info.color_attachment_count; ++i) {
-        const Vk_stage_access before = usage_to_vk_stage_access(create_info.color_usage_before[i], false);
-        const Vk_stage_access after  = usage_to_vk_stage_access(create_info.color_usage_after[i],  false);
-        incoming_src_stage  |= before.stage;
-        incoming_src_access |= before.access;
-        incoming_dst_stage  |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        incoming_dst_access |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        outgoing_src_stage  |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        outgoing_src_access |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        outgoing_dst_stage  |= after.stage;
-        outgoing_dst_access |= after.access;
-    }
-    if (create_info.depth_attachment_format != erhe::dataformat::Format::format_undefined) {
-        const Vk_stage_access before = usage_to_vk_stage_access(create_info.depth_usage_before, true);
-        const Vk_stage_access after  = usage_to_vk_stage_access(create_info.depth_usage_after,  true);
-        incoming_src_stage  |= before.stage;
-        incoming_src_access |= before.access;
-        incoming_dst_stage  |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        incoming_dst_access |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        outgoing_src_stage  |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        outgoing_src_access |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        outgoing_dst_stage  |= after.stage;
-        outgoing_dst_access |= after.access;
-    }
-
     // Create a compatible VkRenderPass from format info
     VkRenderPass compatible_render_pass = device_impl.get_or_create_compatible_render_pass(
         create_info.color_attachment_count,
@@ -301,15 +266,7 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         create_info.stencil_attachment_format,
         create_info.sample_count,
         create_info.view_mask,
-        create_info.fragment_density_map,
-        incoming_src_stage,
-        incoming_src_access,
-        incoming_dst_stage,
-        incoming_dst_access,
-        outgoing_src_stage,
-        outgoing_src_access,
-        outgoing_dst_stage,
-        outgoing_dst_access
+        create_info.fragment_density_map
     );
     if (compatible_render_pass == VK_NULL_HANDLE) {
         device.device_message(
