@@ -107,8 +107,10 @@ void Scene_open_operation::execute(App_context& context)
     // viewport to the opened scene -- while keeping its old camera, leaving
     // a cross-scene camera binding.) On redo this rebinds the viewport
     // window that undo() emptied (it stays open, empty, as a closed scene's
-    // viewports do).
-    if (context.scene_views != nullptr) {
+    // viewports do). On OpenXR the headset path renders the scene and there
+    // is no desktop window host for a viewport window to feed, so no
+    // viewport is opened (same rule as the startup scene, Scene_builder).
+    if ((context.scene_views != nullptr) && !context.OpenXR) {
         context.scene_views->open_new_viewport_scene_view_node(m_scene_root);
     }
 }
