@@ -1215,9 +1215,13 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_EMBREE)
     set(ERHE_RAYTRACE_TARGET embree)
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
+    # The pin is also the library tag of stored BVHs (ERHE_raytrace_bvh) and
+    # the cache/bvh directory key: erhe_raytrace receives it as the
+    # ERHE_BVH_LIBRARY_TAG compile definition (src/erhe/raytrace/CMakeLists.txt).
+    set(ERHE_BVH_GIT_TAG 5a9d759c51d9028130b5f25733e2b4b2dc67718b)
     CPMAddPackage(
         NAME              bvh
-        GIT_TAG           5a9d759c51d9028130b5f25733e2b4b2dc67718b
+        GIT_TAG           ${ERHE_BVH_GIT_TAG}
         #GIT_TAG           master
         GITHUB_REPOSITORY madmann91/bvh
     )

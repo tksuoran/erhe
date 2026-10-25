@@ -15,6 +15,7 @@
 #include <bvh/v2/bvh.h>
 #include <bvh/v2/tri.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -55,6 +56,12 @@ public:
     auto get_user_data() const -> const void*      override;
     auto is_enabled   () const -> bool             override;
     auto debug_label  () const -> std::string_view override;
+    auto get_triangle_hash         () const -> std::optional<uint64_t> override;
+    auto get_triangle_count        () const -> std::size_t             override;
+    auto export_bvh                (Prebuilt_bvh& out) const -> bool   override;
+    auto set_prebuilt_bvh          (Prebuilt_bvh&& prebuilt) -> bool   override;
+    auto get_bvh_source            () const -> Bvh_source              override;
+    auto get_prebuilt_bvh_rejection() const -> std::string_view        override;
 
     // Bvh_geometry public API
     auto intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool;
@@ -80,6 +87,7 @@ private:
     };
 
     void notify_parents_modified();
+    [[nodiscard]] auto try_use_prebuilt_bvh(const Prebuilt_bvh& prebuilt, uint64_t hash_code, std::size_t triangle_count) -> bool;
 
     std::vector<Bvh_scene*> m_parent_scenes;
     erhe::math::Aabb m_bbox{};
@@ -94,6 +102,12 @@ private:
 
     std::vector<bvh::v2::PrecomputedTri<float>> m_precomputed_triangles;
     bvh::v2::Bvh<bvh::v2::Node<float, 3>>       m_bvh;
+    Bvh_build_quality                           m_bvh_quality   {Bvh_build_quality::high};
+    Bvh_source                                  m_bvh_source    {Bvh_source::none};
+    std::optional<uint64_t>                     m_triangle_hash {};
+    std::size_t                                 m_triangle_count{0};
+    std::optional<Prebuilt_bvh>                 m_prebuilt_bvh  {};
+    std::string                                 m_prebuilt_bvh_rejection;
 };
 
 } // namespace erhe::raytrace

@@ -150,6 +150,9 @@ The loader rejects the extension on a primitive when any of these fails:
 - every node other than node 0 is a child of exactly one inner node, and
   node 0 is a child of none (a stored cycle could otherwise reach the
   traversal stack);
+- every node is reachable from node 0, and no path from node 0 passes
+  more than 64 inner nodes (the traversal stack size of the bvh_v2
+  backend);
 - `primitive_ids` is a permutation of `0 .. triangle_count - 1`.
 
 A rejected or unmatched `ERHE_raytrace_bvh` falls back to the path without

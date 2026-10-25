@@ -40,6 +40,7 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
         erhe_raytrace/bvh/bvh_scene.hpp
     )
     set(impl_link_libraries bvh)
+    target_compile_definitions(${_target} PRIVATE ERHE_BVH_LIBRARY_TAG="${ERHE_BVH_GIT_TAG}")
     # GCC -O3 reports a -Wstringop-overflow false positive from std::vector
     # insert inlined through bvh::v2::MiniTreeBuilder::Bin::merge (the bvh
     # headers are already a system include; the diagnostic is attributed to
@@ -67,6 +68,8 @@ erhe_target_sources_grouped(
     erhe_raytrace/igeometry.hpp
     erhe_raytrace/iinstance.hpp
     erhe_raytrace/iscene.hpp
+    erhe_raytrace/prebuilt_bvh.cpp
+    erhe_raytrace/prebuilt_bvh.hpp
     erhe_raytrace/ray.cpp
     erhe_raytrace/ray.hpp
     erhe_raytrace/raytrace_executor.cpp

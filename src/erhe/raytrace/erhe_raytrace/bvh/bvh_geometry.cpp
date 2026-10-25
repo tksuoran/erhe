@@ -40,8 +40,10 @@ using Bvh = bvh::v2::Bvh<bvh::v2::Node<float, 3>>;
 
 [[nodiscard]] auto get_bvh_cache_path(const uint64_t hash_code) -> std::filesystem::path
 {
+    // Keyed by the pinned library tag (a build-time constant, the same on
+    // every platform), not by the checkout's git commit.
     const std::filesystem::path bvh_cache_path =
-        std::filesystem::path{"cache"} / std::filesystem::path{"bvh"} / std::filesystem::path{ERHE_BVH_GIT_COMMIT};
+        std::filesystem::path{"cache"} / std::filesystem::path{"bvh"} / std::filesystem::path{ERHE_BVH_LIBRARY_TAG};
     const bool directory_ok = erhe::file::ensure_directory_exists(bvh_cache_path);
     if (!directory_ok) {
         return {};
@@ -202,6 +204,14 @@ using PrecomputedTri = bvh::v2::PrecomputedTri<Scalar>;
 
 static constexpr bool should_permute = true; // TODO
 
+// Traversal stack capacity in intersect_instance(); also the deepest a
+// prebuilt BVH may be (inner ancestors of any node).
+static constexpr std::size_t c_traversal_stack_size = 64;
+
+static_assert(sizeof(Node) == sizeof(Bvh_node_record));
+static_assert(sizeof(Node::Index::Type) == sizeof(uint32_t));
+static_assert(Node::Index::prim_count_bits == 4);
+
 class Executor_resources
 {
 public:
@@ -224,6 +234,14 @@ private:
 void Bvh_geometry::commit()
 {
     ERHE_PROFILE_FUNCTION();
+
+    // A supplied BVH applies to this commit() only.
+    const std::optional<Prebuilt_bvh> prebuilt = std::move(m_prebuilt_bvh);
+    m_prebuilt_bvh.reset();
+    m_prebuilt_bvh_rejection.clear();
+    m_bvh_source     = Bvh_source::none;
+    m_triangle_hash.reset();
+    m_triangle_count = 0;
 
     {
         const Buffer_info* index_buffer_info{nullptr};
@@ -307,10 +325,19 @@ void Bvh_geometry::commit()
 
         Executor_resources& executor_resources = Executor_resources::get_instance();
 
-        const bool load_ok = load_bvh(m_bvh, hash_code, triangle_count);
-        if (!load_ok) {
+        const bool prebuilt_ok = prebuilt.has_value() && try_use_prebuilt_bvh(prebuilt.value(), hash_code, triangle_count);
+        const bool load_ok     = !prebuilt_ok && load_bvh(m_bvh, hash_code, triangle_count);
+        if (prebuilt_ok) {
+            m_bvh_source  = Bvh_source::prebuilt;
+            m_bvh_quality = prebuilt.value().quality;
+        } else if (load_ok) {
+            m_bvh_source  = Bvh_source::cache;
+            m_bvh_quality = Bvh_build_quality::high; // cache entries are written by the build below
+        } else {
             typename bvh::v2::DefaultBuilder<Node>::Config config;
             config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High; // TODO Low
+            m_bvh_source  = Bvh_source::built;
+            m_bvh_quality = Bvh_build_quality::high;
 
             {
                 ERHE_PROFILE_SCOPE("bvh build");
@@ -352,9 +379,97 @@ void Bvh_geometry::commit()
                 }
             );
         }
+        m_triangle_hash  = hash_code;
+        m_triangle_count = triangle_count;
     }
 
     notify_parents_modified();
+}
+
+auto Bvh_geometry::try_use_prebuilt_bvh(const Prebuilt_bvh& prebuilt, const uint64_t hash_code, const std::size_t triangle_count) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::string reason = validate_prebuilt_bvh(
+        prebuilt,
+        get_prebuilt_bvh_backend(),
+        get_prebuilt_bvh_library(),
+        hash_code,
+        triangle_count,
+        c_traversal_stack_size
+    );
+    if (!reason.empty()) {
+        log_geometry->warn("Prebuilt BVH for {} rejected: {}", debug_label(), reason);
+        m_prebuilt_bvh_rejection = reason;
+        return false;
+    }
+
+    m_bvh.nodes.resize(prebuilt.nodes.size());
+    for (std::size_t n = 0, end = prebuilt.nodes.size(); n < end; ++n) {
+        const Bvh_node_record& record = prebuilt.nodes[n];
+        Node&                  node   = m_bvh.nodes[n];
+        for (std::size_t i = 0; i < 6; ++i) {
+            node.bounds[i] = record.bounds[i];
+        }
+        node.index = Node::Index{record.index};
+    }
+    m_bvh.prim_ids.resize(prebuilt.primitive_ids.size());
+    for (std::size_t i = 0, end = prebuilt.primitive_ids.size(); i < end; ++i) {
+        m_bvh.prim_ids[i] = prebuilt.primitive_ids[i];
+    }
+    return true;
+}
+
+auto Bvh_geometry::set_prebuilt_bvh(Prebuilt_bvh&& prebuilt) -> bool
+{
+    m_prebuilt_bvh = std::move(prebuilt);
+    return true;
+}
+
+auto Bvh_geometry::export_bvh(Prebuilt_bvh& out) const -> bool
+{
+    if ((m_bvh_source == Bvh_source::none) || !m_triangle_hash.has_value() || m_bvh.nodes.empty()) {
+        return false;
+    }
+    out.backend        = std::string{get_prebuilt_bvh_backend()};
+    out.library        = std::string{get_prebuilt_bvh_library()};
+    out.quality        = m_bvh_quality;
+    out.triangle_hash  = m_triangle_hash.value();
+    out.triangle_count = m_triangle_count;
+    out.nodes.resize(m_bvh.nodes.size());
+    for (std::size_t n = 0, end = m_bvh.nodes.size(); n < end; ++n) {
+        const Node&      node   = m_bvh.nodes[n];
+        Bvh_node_record& record = out.nodes[n];
+        for (std::size_t i = 0; i < 6; ++i) {
+            record.bounds[i] = node.bounds[i];
+        }
+        record.index = static_cast<uint32_t>(node.index.value);
+    }
+    out.primitive_ids.resize(m_bvh.prim_ids.size());
+    for (std::size_t i = 0, end = m_bvh.prim_ids.size(); i < end; ++i) {
+        out.primitive_ids[i] = static_cast<uint32_t>(m_bvh.prim_ids[i]);
+    }
+    return true;
+}
+
+auto Bvh_geometry::get_triangle_hash() const -> std::optional<uint64_t>
+{
+    return m_triangle_hash;
+}
+
+auto Bvh_geometry::get_triangle_count() const -> std::size_t
+{
+    return m_triangle_count;
+}
+
+auto Bvh_geometry::get_bvh_source() const -> Bvh_source
+{
+    return m_bvh_source;
+}
+
+auto Bvh_geometry::get_prebuilt_bvh_rejection() const -> std::string_view
+{
+    return m_prebuilt_bvh_rejection;
 }
 
 void Bvh_geometry::enable()
@@ -422,7 +537,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
     };
 
     static constexpr size_t invalid_id = std::numeric_limits<size_t>::max();
-    static constexpr size_t stack_size = 64;
+    static constexpr size_t stack_size = c_traversal_stack_size;
     static constexpr bool   use_robust_traversal = false;
 
     auto  prim_id = invalid_id;

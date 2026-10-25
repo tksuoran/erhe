@@ -26,7 +26,8 @@ public:
     std::unique_ptr<erhe::raytrace::IGeometry> geometry;
 };
 
-inline auto make_triangle_geometry(
+// Buffers set, commit() not called yet
+inline auto make_uncommitted_triangle_geometry(
     const std::string_view               name,
     const std::vector<glm::vec3>&        vertices,
     const std::vector<glm::uvec3>&       triangles
@@ -83,8 +84,17 @@ inline auto make_triangle_geometry(
         3 * sizeof(uint32_t),
         triangles.size()
     );
-    result.geometry->commit();
+    return result;
+}
 
+inline auto make_triangle_geometry(
+    const std::string_view               name,
+    const std::vector<glm::vec3>&        vertices,
+    const std::vector<glm::uvec3>&       triangles
+) -> Test_geometry
+{
+    Test_geometry result = make_uncommitted_triangle_geometry(name, vertices, triangles);
+    result.geometry->commit();
     return result;
 }
 
