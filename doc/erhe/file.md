@@ -22,6 +22,7 @@ No classes; this library exposes free functions in `erhe::file`.
   rename fails) the temporary file is removed, the old file is unchanged and the
   call returns false with the failure logged. On Windows the rename fails while
   another handle holds the target open without `FILE_SHARE_DELETE`.
+- `Positional_file_reader` -- A read-only handle for positional reads: `read_at(offset, out)` keeps no shared file position, so any number of threads read through one handle at once without a lock (`ReadFile` with an `OVERLAPPED` offset on Windows, `pread` elsewhere). Owners close it as soon as their reads are done: an open handle can keep a save from renaming over the file on Windows. Tests: `test_positional_file_reader.cpp`.
 - `to_string(path)` / `from_string(str)` -- Convert between `filesystem::path` and `string`.
 - `check_is_existing_non_empty_regular_file(description, path)` -- Validate a file path.
 - `ensure_directory_exists(path)` -- Create directory tree if needed.

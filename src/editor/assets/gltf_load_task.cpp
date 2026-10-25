@@ -162,11 +162,7 @@ void Gltf_load_task::start_build(Asset_load_tick_context& tick_context)
             build_state->skinned_build_info,
             build_state->primitive_count
         );
-        for (const Imported_build_job& job : build_state->jobs) {
-            if (job.primitive->is_prepared()) {
-                ++build_state->prepared_count;
-            }
-        }
+        build_state->release_soups = (get_cpu_mesh_data_retention(m_context) == Cpu_mesh_data_retention::release);
     }
     m_build_state = build_state;
 }
@@ -179,14 +175,22 @@ void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
     while (state.next_job < state.jobs.size()) {
         const std::size_t         job_index = state.next_job;
         const Imported_build_job& job       = state.jobs[job_index];
-        // The build's upload bytes wait in the loader transfer queue until
-        // the budgeted drain stages them; the lease pays for them until then
-        // and goes to the queue when the build is done.
-        std::shared_ptr<erhe::utility::Memory_budget_lease> lease = std::make_shared<erhe::utility::Memory_budget_lease>();
+        // Two leases: the soup the job reads (a deferred payload) for the
+        // job's duration, and the upload bytes, which wait in the loader
+        // transfer queue until the budgeted drain stages them - that lease
+        // goes to the queue when the build is done.
+        std::shared_ptr<erhe::utility::Memory_budget_lease> payload_lease = std::make_shared<erhe::utility::Memory_budget_lease>();
+        std::shared_ptr<erhe::utility::Memory_budget_lease> lease         = std::make_shared<erhe::utility::Memory_budget_lease>();
         if (tick_context.load_memory_budget) {
+            if (job.payload_byte_count > 0) {
+                *payload_lease = tick_context.load_memory_budget->try_acquire(job.payload_byte_count, erhe::utility::Memory_budget_kind::mesh);
+                if (payload_lease->is_empty()) {
+                    return; // resumes when finished jobs and drained uploads give bytes back
+                }
+            }
             *lease = tick_context.load_memory_budget->try_acquire(job.upload_byte_count, erhe::utility::Memory_budget_kind::mesh);
             if (lease->is_empty()) {
-                return; // resumes when drained uploads give bytes back
+                return; // the payload lease goes with it
             }
         }
         {
@@ -196,9 +200,10 @@ void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
         }
         erhe::task::spawn(
             tick_context.executor,
-            [build_state = m_build_state, job_index, lease, mesh_memory, graphics_device, path = m_handle->get_path()]() {
+            [build_state = m_build_state, job_index, payload_lease, lease, mesh_memory, graphics_device, path = m_handle->get_path()]() {
+                Imported_build_result result{};
                 try {
-                    run_imported_build_job(build_state->jobs[job_index], *graphics_device);
+                    result = run_imported_build_job(build_state->jobs[job_index], *graphics_device, build_state->release_soups);
                 } catch (const std::exception& e) {
                     // A primitive without buffer meshes is built by the
                     // main-thread finalize pass instead.
@@ -206,10 +211,17 @@ void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
                 } catch (...) {
                     log_parsers->error("async glTF load: buffer mesh build failed for '{}'", erhe::file::to_string(path));
                 }
+                payload_lease->reset(); // the soup is released or resident by now
                 mesh_memory->get_loader_transfer_queue().hold_until_drained(std::move(*lease));
                 const std::lock_guard<std::mutex> lock{build_state->mutex};
                 --build_state->running_count;
                 ++build_state->finished_count;
+                if (result.prepared) {
+                    ++build_state->prepared_count;
+                }
+                if (result.released) {
+                    ++build_state->released_count;
+                }
             }
         );
     }
@@ -255,8 +267,14 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
         .parallel        = (m_context.editor_settings == nullptr) || m_context.editor_settings->load.parallel_gltf_parse,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
         .prepared_mesh_data_use = get_prepared_mesh_data_use(m_context),
-        .triangle_soup_reload   = get_triangle_soup_reload(m_context)
+        .triangle_soup_reload   = get_triangle_soup_reload(m_context),
+        // The build jobs read the mesh payloads, in parallel under the load
+        // memory budget - only where workers may build (worker contexts).
+        .mesh_payload           = tick_context.graphics_device.supports_worker_contexts()
+            ? erhe::gltf::Mesh_payload_load::deferred
+            : erhe::gltf::Mesh_payload_load::in_parse
     };
+    m_mesh_payload_deferred = (parse_arguments.mesh_payload == erhe::gltf::Mesh_payload_load::deferred);
 
     m_parse_result = parse_result;
     erhe::task::spawn(
@@ -509,12 +527,21 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
                 return Asset_load_state::running;
             }
             log_parsers->info(
-                "build_imported_buffer_meshes: {} primitives, {} ms ({} unique shapes built in parallel, {} of them prepared)",
+                "build_imported_buffer_meshes: {} primitives, {} ms ({} unique shapes built in parallel, {} of them prepared, {} soups released){}",
                 m_build_state->primitive_count,
                 std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_build_state->start_time).count(),
                 m_build_state->jobs.size(),
-                m_build_state->prepared_count
+                m_build_state->prepared_count,
+                m_build_state->released_count,
+                m_mesh_payload_deferred ? " (mesh payloads read by the jobs)" : ""
             );
+            if (m_mesh_payload_deferred) {
+                // The jobs validated the prepared mesh data: the per-file
+                // summary. Every payload is read: the shared read handles
+                // close (a save may now replace the file).
+                erhe::gltf::finish_prepared_mesh_statistics(m_parse_result->gltf_data, m_handle->get_path());
+                erhe::gltf::close_source_files(m_parse_result->gltf_data);
+            }
             // Everything the build enqueued has a ticket at or below this.
             if (m_context.mesh_memory != nullptr) {
                 m_build_ticket = m_context.mesh_memory->get_loader_transfer_queue().get_last_ticket();

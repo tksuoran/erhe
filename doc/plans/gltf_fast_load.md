@@ -1017,6 +1017,41 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    renders identical; prepared 0 deferred tasks, foreign deferred phase
    unchanged; Quest VmHWM at most 1.2 GB, desktop `keep` peak at most idle
    + 0.35 GB; load times no worse than item 7; `mcp_server_tests`.
+
+   Result (2026-10-25): `Gltf_parse_arguments::mesh_payload = deferred` (the
+   editor's async load where workers may build): the parse gives each
+   file-backed soup primitive its source and counts; each build job reads
+   the payload (`Primitive::load_payload()`: soup + prepared data
+   validation), builds, and under `release` releases the soup at once
+   (doc/editor/async_asset_loading.md "Mesh build jobs"). The prepared
+   topology / BVH views are no longer read at the parse. All payload reads
+   go through one `erhe::file::Positional_file_reader` per buffer file,
+   shared by the jobs and closed after the last one (`Gltf_source_files`):
+   the first version opened the file per read and the jobs took 1.6 s
+   (Tracy: 11 worker-s in the soup reads, 21 in `validate()`, almost all
+   file opens); the shared positional handle brought the build to 0.8 s.
+   The step 1 shared `Gltf_range_reader` (serialized reads) is gone; an
+   in-parse load reads through the same handles. Tests: `erhe_gltf_tests`
+   18/18 (new: `deferred_mesh_payload_loads_like_the_parse`, including a
+   changed file refused), `erhe_file_tests` 6/6 (new: positional reads from
+   8 threads), `erhe_primitive_tests` 68/68, `erhe_gltf_gpu_tests` 3/3,
+   `ctest -R Mcp_` 92/95 (same 3).
+
+   | | step 3 | step 4 |
+   |---|---|---|
+   | desktop prepared Bistro `parse_gltf` / build phase | 751 / 358 ms | 211-219 / 785-831 ms |
+   | desktop listed / idle | 2.61-2.70 / same | 1.97-2.02 / 2.37-2.44 s (3 runs) |
+   | desktop peak working set (`keep`) | 1151-1154 MB | 1134-1149 MB |
+   | desktop re-save of the untouched file | byte-identical | byte-identical |
+   | foreign Bistro listed / idle | 2.37 / 5.67 s | 2.38 / 5.14 s; 2727 deferred tasks as before |
+   | Quest VmHWM (`release`) | 1109-1138 MB | 798-809 MB |
+   | Quest listed (= idle) | 6.20-6.42 s | 5.55-5.62 s |
+   | Quest parse / build phase | - | 300 ms / 2.18 s, 3852 soups released in the jobs |
+
+   Renders d488fefc... for both files; prepared Bistro 0 deferred tasks.
+   Against the pre-item-9 numbers the desktop listed time is 0.9-1.1 s
+   lower (step 0 era 3.1-3.5 s) and the Quest load 2 s faster with 60 % less
+   peak memory.
 5. **Post-save rebind.** Gates: prepared Bistro with `release` saved onto
    its own path, then meshes selected (soups read back, no refusal) and
    saved again (byte-identical); a foreign file saved onto itself pins its

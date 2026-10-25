@@ -8,6 +8,8 @@ erhe_target_sources_grouped(
     erhe_file/file.hpp
     erhe_file/file_log.cpp
     erhe_file/file_log.hpp
+    erhe_file/positional_file_reader.cpp
+    erhe_file/positional_file_reader.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

@@ -713,6 +713,24 @@ namespace {
     return (counts.vertex_count * vertex_stride_sum) + (variant_count * counts.index_count * index_size);
 }
 
+// The soup a job reads for a shape whose payload the parse deferred,
+// estimated at the base vertex format's size; 0 when nothing is pending.
+[[nodiscard]] auto get_build_payload_byte_count(
+    const erhe::primitive::Primitive&  primitive,
+    const erhe::primitive::Build_info& build_info
+) -> std::size_t
+{
+    if (!primitive.render_shape->is_payload_pending()) {
+        return 0;
+    }
+    const erhe::primitive::Triangle_soup_counts counts = primitive.render_shape->get_triangle_soup_counts();
+    std::size_t soup_stride = 0;
+    for (const erhe::dataformat::Vertex_stream& stream : build_info.buffer_info.vertex_format.streams) {
+        soup_stride += stream.stride;
+    }
+    return (counts.vertex_count * soup_stride) + (counts.index_count * sizeof(uint32_t));
+}
+
 } // anonymous namespace
 
 auto collect_imported_build_jobs(
@@ -761,7 +779,8 @@ auto collect_imported_build_jobs(
                     .primitive         = &primitive,
                     .build_info        = &mesh_build_info,
                     .mesh              = mesh.get(),
-                    .upload_byte_count = get_build_upload_byte_count(primitive, mesh_build_info)
+                    .upload_byte_count  = get_build_upload_byte_count(primitive, mesh_build_info),
+                    .payload_byte_count = get_build_payload_byte_count(primitive, mesh_build_info)
                 }
             );
         }
@@ -770,9 +789,17 @@ auto collect_imported_build_jobs(
     return jobs;
 }
 
-void run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device)
+auto run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device, const bool release_soups) -> Imported_build_result
 {
     ERHE_PROFILE_SCOPE("build_imported_buffer_mesh");
+    Imported_build_result result{};
+    // The payload first: a deferred parse left the soup in the file. A
+    // primitive whose payload does not load builds nothing here; the
+    // main-thread finalize pass reports it.
+    if (!job.primitive->load_payload()) {
+        log_parsers->error("async glTF load: reading the mesh data of '{}' failed", job.mesh->get_name());
+        return result;
+    }
     // On GL the GPU buffer allocations inside the build need a worker share
     // context; no-op on other backends.
     const erhe::graphics::Scoped_worker_context worker_context{graphics_device};
@@ -791,6 +818,21 @@ void run_imported_build_job(const Imported_build_job& job, erhe::graphics::Devic
             job.mesh->get_name()
         );
     }
+    result.prepared = job.primitive->is_prepared();
+    // The predicate finalize_imported_meshes releases with: the deferred
+    // finalize task rebuilds nothing of such a primitive from its soup.
+    const bool optimize_meshes = job.build_info->buffer_info.optimize_meshes && (job.build_info->buffer_info.optimized_vertex_format != nullptr);
+    if (
+        built &&
+        release_soups &&
+        result.prepared &&
+        job.primitive->has_real_raytrace() &&
+        (!optimize_meshes || job.primitive->optimized_render_shape) &&
+        job.primitive->release_triangle_soup()
+    ) {
+        result.released = true;
+    }
+    return result;
 }
 
 // Attaches the optimized mesh variant to one imported primitive, per

@@ -95,6 +95,35 @@ per-frame cost. The fields come from `Load_config` (v2):
 | `max_publish_items_per_frame` | 256 | publish slice |
 | `load_time_slice_ms` | 4 | hard cap, checked between items, wins over the byte budgets |
 
+### Mesh build jobs
+
+Where the device supports worker contexts, the load task parses with
+`erhe::gltf::Mesh_payload_load::deferred`: the parse reads the JSON and the
+structure only, and each soup primitive whose bytes are in the file gets its
+`Triangle_soup_source` and counts, no soup. Each build job
+(`run_imported_build_job`, one per unique render shape) then:
+
+1. reads the payload (`Primitive::load_payload()`): the soup's byte ranges
+   and the prepared mesh data payload views, through the load's shared
+   positional read handles (doc/erhe/gltf.md "Reading buffers by range"),
+   and validates the prepared data;
+2. builds the primitive (`make_prepared_meshes()` or
+   `make_renderable_mesh()`), its loader-queue uploads leased from the load
+   memory budget;
+3. with `load.cpu_mesh_data` release, releases the soup of a primitive that
+   reached its final state (the `finalize_imported_meshes` predicate, below),
+   so a load never holds every soup at once.
+
+The job takes two leases: its estimated soup bytes, returned when the job
+ends, and its upload bytes, handed to the loader queue. When the last job
+has finished, the task logs the `build_imported_buffer_meshes` line (with
+the prepared and released counts), runs
+`erhe::gltf::finish_prepared_mesh_statistics()` (the per-file prepared mesh
+data summary) and `erhe::gltf::close_source_files()`. A payload that fails
+to load (the file changed since the parse) builds nothing; the finalize pass
+reports the primitive. Without worker contexts the parse reads the payloads
+itself (`in_parse`).
+
 ### Load memory budget
 
 One `erhe::utility::Memory_budget`, owned by `Asset_manager` and shared by
@@ -368,8 +397,10 @@ own `make_geometry` then no-ops.
 `release`; the committed desktop config says `keep`, the OpenXR config
 `release`) decides whether a load keeps a primitive's CPU triangle soup.
 With `release`, every editor glTF parse records triangle soup reload sources
-(`get_triangle_soup_reload()`, doc/erhe/gltf.md "Triangle soup reload") and
-`finalize_imported_meshes` releases the soup of each prepared primitive that
+(`get_triangle_soup_reload()`, doc/erhe/gltf.md "Triangle soup reload"); the
+build job releases the soup right after its build ("Mesh build jobs"), and
+`finalize_imported_meshes` releases (or confirms released) the soup of each
+prepared primitive that
 is final - its buffers built, its stored-BVH raytrace committed and, when
 meshes are optimized, its optimized variant built (the predicate of the
 kickoff's skip) - with `Primitive::release_triangle_soup()`; it logs

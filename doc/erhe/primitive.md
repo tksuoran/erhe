@@ -217,6 +217,23 @@ core primitive") plus the payloads of `ERHE_mesh_optimized`,
 Shapes are prepared in parallel; one shape by one caller at a time. Tests:
 `src/erhe/primitive/test/test_prepared_primitive.cpp`.
 
+## Deferred payload
+
+`Primitive(source, counts)` / `Primitive_shape(source, counts)` make a soup
+shape whose payload is not read yet (a deferred glTF load,
+doc/editor/async_asset_loading.md "Mesh build jobs"): only the
+`Triangle_soup_source` and the vertex / index counts are known, and the
+shape reads as released (`is_payload_pending()`). `load_payload()` reads the
+soup (`Triangle_soup_source::load()`) and its validated prepared mesh data
+(`Triangle_soup_source::load_prepared_data()`, null by default and for a
+rejected marker); afterwards the shape is what the soup + prepared data
+constructor makes. It refuses, with an error logged, a soup that cannot be
+read or whose counts differ, and leaves the payload pending. It runs on a
+loader worker before the shape is built or shared (the prepared data slot is
+not locked); a second call does nothing. Tests:
+`Gltf_roundtrip.deferred_mesh_payload_loads_like_the_parse`
+(`src/erhe/gltf/test/test_gltf_roundtrip.cpp`).
+
 ## Prepared mesh data on load
 
 A soup primitive loaded with accepted prepared mesh data carries it as an

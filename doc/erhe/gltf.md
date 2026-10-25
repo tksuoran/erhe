@@ -142,7 +142,9 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
 - Prepared mesh data on parse (`doc/plans/gltf_fast_load.md` "Loader"): with
   `Gltf_parse_arguments::prepared_mesh_data_use = Prepared_mesh_data_use::use`
   (the default) a soup primitive carrying `ERHE_mesh_optimized` is validated
-  in its mesh parse task against
+  when its soup is read - in its mesh parse task, or in the build job of a
+  deferred load (`Mesh_payload_load::deferred`, "Reading buffers by range") -
+  against
   `doc/gltf_extensions/ERHE_mesh_optimized.md`, `ERHE_mesh_topology.md` and
   `ERHE_raytrace_bvh.md` ("Validation / fallback", including the full
   `erhe::raytrace::validate_prebuilt_bvh()` check), all-or-nothing per
@@ -153,7 +155,11 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   plain soup. `Gltf_data::prepared_mesh_statistics` counts the unique soup
   primitives that used every extension they carry and those with a
   rejection, by `"<extension>: <reason>"`, and one info line per file reads
-  `prepared mesh data: N used, M rejected (<reasons>); topology T, BVH B`.
+  `prepared mesh data: N used, M rejected (<reasons>); topology T, BVH B`
+  (`finish_prepared_mesh_statistics()`, which a deferred load's caller runs
+  after the last job). The checks the JSON and the accessors decide run at
+  the parse (`read_mesh_optimized_metadata()`); the payload checks run in
+  `Gltf_prepared_payload::validate()`.
   Primitives sharing accessors share one validation only when their payloads
   are identical. `ignore` skips the extensions entirely (counted as
   `ignored_count`, glTF primitives); geometry-normative (`ERHE_geometry`)
@@ -214,19 +220,35 @@ buffers in data URIs are resident and read through the asset as usual.
   whose index and attribute accessors all lie in a buffer that is in a file
   and are neither sparse nor meshopt compressed, is read per primitive. A
   view on which every accessor is such a per-primitive accessor, and which
-  no sparse accessor, image or other user (morph targets, skins, animations,
-  instancing, geometry-normative primitives) reads, is left unread. Every
-  other view in a non-resident buffer - images, animation and skin data, the
-  `ERHE_*` payload views, anything shared with them - is read whole into a
-  buffer of its own and the view is repointed at it; the file places of all
-  views stay in `Gltf_buffer_origins::view_places`. One info line per file
-  gives the bytes read whole and the count of views left unread.
-- Every soup primitive with a file origin is built through its
-  `Gltf_triangle_soup_source` (below): during the parse the ranges are read
-  through `Gltf_range_reader`, one handle per file shared by the parse's
-  tasks and closed when the parse ends, so no handle outlives the load (an
-  open handle makes a save's rename onto the file fail on Windows).
-  Primitives without an origin are built from the asset.
+  no sparse accessor or other user (morph targets, skins, animations,
+  instancing, geometry-normative primitives) reads, is left unread, and so
+  are a per-primitive primitive's `ERHE_mesh_topology` / `ERHE_raytrace_bvh`
+  payload views (read with its payload) and every image view (Image source
+  streams, below). Every other view in a non-resident buffer - animation
+  and skin data, anything shared with them - is read whole into a buffer of
+  its own and the view is repointed at it; the file places of all views
+  stay in `Gltf_buffer_origins::view_places`. One info line per file gives
+  the bytes read whole and the count of views left unread.
+- Every soup primitive with a file origin has a `Gltf_triangle_soup_source`
+  (below) carrying its prepared mesh data payload (`Gltf_prepared_payload`:
+  the marker fields, the extension JSON and the payload views' file places).
+  `Gltf_parse_arguments::mesh_payload` decides who reads it:
+  `Mesh_payload_load::in_parse` (default) reads the soup in the mesh parse
+  task and validates the prepared data there; `deferred` gives the
+  primitive the source and its counts only
+  (`erhe::primitive::Primitive(source, counts)`), and the caller's jobs read
+  each payload with `Primitive::load_payload()`
+  (doc/editor/async_asset_loading.md "Mesh build jobs"). Primitives
+  without an origin are built from the asset in the parse either way.
+- All these reads go through `Gltf_source_files` (`Gltf_data::source_files`):
+  one `erhe::file::Positional_file_reader` per buffer file, opened at the
+  first read and shared by every task, which read at their own offsets in
+  parallel without a lock. `close_source_files()` closes the handles once
+  every payload is read - parse_gltf itself unless the payloads are
+  deferred, the caller after its last job otherwise - and later reads (a
+  released soup read back) open the file for that read only, so no handle
+  outlives the load (an open handle makes a save's rename onto the file fail
+  on Windows).
 
 ## Image source streams
 

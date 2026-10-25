@@ -28,6 +28,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::file`: `Positional_file_reader` (lock-free parallel positional reads through one handle).
+- `erhe::primitive`: `Primitive(source, counts)` / `Primitive_shape(source, counts)`
+  / `Primitive_render_shape(source, counts)` make a shape whose payload is
+  read later; `Primitive::load_payload()`, `Primitive_shape::load_payload()`,
+  `Primitive_shape::is_payload_pending()`; `Triangle_soup_source::load_prepared_data()`
+  (virtual, null by default).
+- `erhe::gltf`: `Gltf_parse_arguments::mesh_payload` (`Mesh_payload_load`:
+  `in_parse` default, `deferred`), `Gltf_data::prepared_statistics`,
+  `Gltf_data::source_files`, `finish_prepared_mesh_statistics()`,
+  `close_source_files()`.
+
 - `erhe::gltf`: `Gltf_image_source` can be file-backed (`file_path`,
   `file_offset`, `byte_length`, `file_size`, `file_write_time`) with
   `is_file_backed()`, `get_byte_count()` and `read()`; `parse_gltf` gives
