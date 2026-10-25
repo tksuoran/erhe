@@ -277,6 +277,38 @@ Tests: `test_gltf_texture_gpu.cpp` (`raw_ktx2_texture_round_trips_through_erhe_t
 the parsed source is file-backed and reads the written bytes;
 `file_backed_image_source_re_exports_and_refuses_a_changed_file`).
 
+## GPU vertex streams on export
+
+`Gltf_export_arguments::gpu_vertex_formats` (a `Gltf_gpu_vertex_formats`:
+the base and optimized vertex formats, skinned or not, the index format and
+the encoder version) makes a prepared export write each prepared core as
+GPU-ready vertex streams (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md`).
+The editor's "Save for Quest" fills it from the running `Mesh_memory`.
+
+`erhe::primitive::pack_triangle_soup_streams()` runs the loader's soup build
+(`build_buffer_mesh_from_triangle_soup()`) into a capturing sink, so the
+stored bytes are the bytes a loader's build uploads, plus the position and
+texcoord affines it encoded them with. Per prepared primitive the exporter
+writes:
+
+- the indices as one `UNSIGNED_INT` accessor;
+- each non-zero base stream as its own buffer view with `byteStride`, and the
+  core attributes as accessors over those views, so a reader that ignores the
+  extension reads the same soup as from a plain prepared save;
+- each non-zero optimized stream as a view, with accessors named only by the
+  extension (`POSITION` and `TEXCOORD_0/1` carry `scale` / `offset`);
+- an all-zero stream as `{"fill":"zero","byteStride":s}`.
+
+A primitive the layouts cannot express (a core attribute missing from the
+base layout or packed to all zeros, a non-32-bit index format) is written as
+the plain core and counted in
+`Gltf_export_prepared_statistics::gpu_vertex_stream_skipped`;
+`gpu_vertex_stream_count` and `gpu_vertex_stream_ms` count the written ones
+and the packing time. Test: `test_gltf_roundtrip.cpp`
+(`gpu_vertex_streams_hold_the_loader_pack`: stored optimized streams equal
+the pack of the parsed core byte for byte; the soup equals a plain prepared
+save's).
+
 ## Rebinding after a save
 
 `Gltf_export_arguments::written_layout` receives where an export wrote the

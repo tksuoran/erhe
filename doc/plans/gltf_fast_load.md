@@ -1116,6 +1116,17 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    has no skinning); file size and save time recorded; a test compares the
    stored stream bytes with the loader's pack of the same core, byte for
    byte.
+
+   Result (2026-10-25, Release headless, fresh prepared Bistro): "Save for
+   Quest" wrote 3852 of 3852 primitives with streams, 0 skipped. File
+   857.1 MB -> 1052.9 MB (+22.8%: the optimized streams; the base streams
+   replace the core vertex data). Save 8.4 s, of which stream packing
+   2.4 s (serial in the writer). Khronos validator 2.0.0-dev.3.10: errors
+   478 -> 478 and warnings 4178 -> 4178 (the same codes as the step 4 Quest
+   file), infos +23113 `UNUSED_OBJECT` (the extension-only accessors) and
+   +1 `UNSUPPORTED_EXTENSION`. Loaded with the extension ignored: md5
+   74c47fa9 equal to the step 4 Quest file's render, prepared 3852 used, 0
+   rejected. Test `gpu_vertex_streams_hold_the_loader_pack`.
 9. **Loader GPU ready path.** Gates: `gpu vertex streams: 3852 stored, 0
    portable` on Quest and desktop; renders identical to the step 8
    portable load; Quest VmHWM, listed / idle and build time recorded

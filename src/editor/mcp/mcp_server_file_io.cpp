@@ -110,7 +110,10 @@ enum class Save_report_textures : unsigned int {
             {"bvh_stored_count",             report.prepared.bvh_stored_count},
             {"bvh_none_count",               report.prepared.bvh_none_count},
             {"dropped_degenerate_triangles", report.prepared.dropped_degenerate_triangles},
-            {"preparation_ms",               report.prepared.preparation_ms}
+            {"preparation_ms",               report.prepared.preparation_ms},
+            {"gpu_vertex_stream_count",      report.prepared.gpu_vertex_stream_count},
+            {"gpu_vertex_stream_skipped",    report.prepared.gpu_vertex_stream_skipped},
+            {"gpu_vertex_stream_ms",         report.prepared.gpu_vertex_stream_ms}
         }},
         {"sources", {
             {"overwrote_sources",        report.overwrote_sources},

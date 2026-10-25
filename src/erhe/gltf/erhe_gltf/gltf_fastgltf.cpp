@@ -7391,6 +7391,7 @@ private:
     std::unordered_map<erhe::primitive::Triangle_soup*, erhe::primitive::Prepare_primitive_result> m_prepared_primitives;
     std::map<std::pair<std::size_t, std::size_t>, std::string>                                     m_prepared_primitive_extensions;
     bool                                                                                           m_uses_raytrace_bvh{false};
+    bool                                                                                           m_uses_gpu_vertex_streams{false};
     Gltf_export_prepared_statistics                                                                m_prepared_statistics;
 
     void collect_soup_shapes(
@@ -7495,11 +7496,257 @@ private:
     // The prepared core as the primitive's accessors, plus the members of the
     // three extensions (doc/gltf_extensions/ERHE_mesh_optimized.md,
     // ERHE_mesh_topology.md, ERHE_raytrace_bvh.md) with their raw bufferViews.
+    // A view over one packed GPU vertex stream: its own buffer, byteStride.
+    [[nodiscard]] auto add_stream_view(std::vector<uint8_t>&& bytes, const std::size_t stride) -> std::size_t
+    {
+        const std::size_t byte_length  = bytes.size();
+        const std::size_t buffer_index = m_gltf_asset.buffers.size();
+        {
+            const std::byte* begin = reinterpret_cast<const std::byte*>(bytes.data());
+            fastgltf::Buffer buffer{
+                .byteLength = byte_length,
+                .data = fastgltf::sources::Vector{
+                    .bytes    = std::vector<std::byte>{begin, begin + byte_length},
+                    .mimeType = fastgltf::MimeType::GltfBuffer
+                },
+                .name = {}
+            };
+            m_gltf_asset.buffers.emplace_back(std::move(buffer));
+        }
+        const std::size_t buffer_view_index = m_gltf_asset.bufferViews.size();
+        fastgltf::BufferView buffer_view{};
+        buffer_view.bufferIndex = buffer_index;
+        buffer_view.byteOffset  = 0;
+        buffer_view.byteLength  = byte_length;
+        buffer_view.byteStride  = stride;
+        buffer_view.target      = fastgltf::BufferTarget::ArrayBuffer;
+        m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        return buffer_view_index;
+    }
+
+    enum class Accessor_bounds : unsigned int { none, min_max };
+
+    // One accessor over a GPU stream view, with min / max when asked.
+    [[nodiscard]] auto add_stream_accessor(
+        const std::size_t                       view_index,
+        const erhe::dataformat::Vertex_attribute& attribute,
+        const std::size_t                       stride,
+        const std::size_t                       vertex_count,
+        const std::vector<uint8_t>&             stream_bytes,
+        const std::string&                      name,
+        const Accessor_bounds                   bounds
+    ) -> std::size_t
+    {
+        fastgltf::Accessor accessor{
+            .byteOffset      = attribute.offset,
+            .count           = vertex_count,
+            .type            = get_accessor_type (attribute.format),
+            .componentType   = get_component_type(attribute.format),
+            .normalized      = get_normalized    (attribute.format),
+            .max             = {},
+            .min             = {},
+            .bufferViewIndex = view_index,
+            .sparse          = {},
+            .name            = FASTGLTF_STD_PMR_NS::string{name}
+        };
+        if (bounds == Accessor_bounds::min_max) {
+            const std::size_t dimension = get_component_count(attribute.format);
+            fastgltf::AccessorBoundsArray min_value{dimension, fastgltf::AccessorBoundsArray::BoundsType::float64};
+            fastgltf::AccessorBoundsArray max_value{dimension, fastgltf::AccessorBoundsArray::BoundsType::float64};
+            for (std::size_t c = 0; c < dimension; ++c) {
+                max_value.set<double>(c, static_cast<double>(std::numeric_limits<float>::lowest()));
+                min_value.set<double>(c, static_cast<double>(std::numeric_limits<float>::max()));
+            }
+            for (std::size_t i = 0; i < vertex_count; ++i) {
+                float v[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                erhe::dataformat::convert(
+                    stream_bytes.data() + (i * stride) + attribute.offset, attribute.format,
+                    &v[0], erhe::dataformat::Format::format_32_vec4_float,
+                    1.0f
+                );
+                for (std::size_t c = 0; c < dimension; ++c) {
+                    min_value.set<double>(c, std::min(min_value.get<double>(c), static_cast<double>(v[c])));
+                    max_value.set<double>(c, std::max(max_value.get<double>(c), static_cast<double>(v[c])));
+                }
+            }
+            accessor.max = std::move(max_value);
+            accessor.min = std::move(min_value);
+        }
+        const std::size_t accessor_index = m_gltf_asset.accessors.size();
+        m_gltf_asset.accessors.emplace_back(std::move(accessor));
+        return accessor_index;
+    }
+
+    // The ERHE_gpu_vertex_streams name of an optimized-layout attribute;
+    // empty for one the extension does not name.
+    [[nodiscard]] static auto gpu_stream_attribute_name(const erhe::dataformat::Vertex_attribute& attribute) -> std::string
+    {
+        using usage = erhe::dataformat::Vertex_attribute_usage;
+        switch (attribute.usage_type) {
+            case usage::position:      return (attribute.usage_index == 0) ? std::string{"POSITION"} : std::string{};
+            case usage::tangent:       return (attribute.format == erhe::dataformat::Format::format_16_vec4_sint) ? std::string{"_TBN_QUATERNION"} : std::string{"TANGENT"};
+            case usage::tex_coord:     return fmt::format("TEXCOORD_{}", attribute.usage_index);
+            case usage::color:         return fmt::format("COLOR_{}", attribute.usage_index);
+            case usage::joint_indices: return fmt::format("JOINTS_{}", attribute.usage_index);
+            case usage::joint_weights: return (attribute.format == erhe::dataformat::Format::format_16_vec3_unorm) ? std::string{"_WEIGHTS_IMPLICIT"} : fmt::format("WEIGHTS_{}", attribute.usage_index);
+            case usage::normal:        return (attribute.usage_index == 0) ? std::string{"NORMAL"} : std::string{};
+            default:                   return {};
+        }
+    }
+
+    [[nodiscard]] static auto is_all_zero(const std::vector<uint8_t>& bytes) -> bool
+    {
+        return std::all_of(bytes.begin(), bytes.end(), [](const uint8_t value) { return value == 0; });
+    }
+
+    // GPU-ready vertex streams of one prepared core (ERHE_gpu_vertex_streams):
+    // writes the index accessor, the base streams as the core accessors and
+    // the optimized streams, and returns the extension members; nullopt,
+    // writing nothing, when the layouts cannot express the core (the caller
+    // writes the plain core then).
+    [[nodiscard]] auto write_gpu_vertex_streams(Export_entry& entry, const erhe::primitive::Triangle_soup& core) -> std::optional<std::string>
+    {
+        const Gltf_gpu_vertex_formats& formats = *m_arguments.gpu_vertex_formats;
+        if (formats.index_type != erhe::dataformat::Format::format_32_scalar_uint) {
+            return std::nullopt; // the core indices are UNSIGNED_INT
+        }
+        const bool skinned = core.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::joint_indices, 0).attribute != nullptr;
+        const erhe::dataformat::Vertex_format* base_format      = skinned ? formats.base_skinned      : formats.base;
+        const erhe::dataformat::Vertex_format* optimized_format = skinned ? formats.optimized_skinned : formats.optimized;
+        if ((base_format == nullptr) || (optimized_format == nullptr)) {
+            return std::nullopt;
+        }
+        // Every core attribute must be a base layout attribute (it becomes a
+        // core accessor over the base stream).
+        for (const erhe::dataformat::Attribute_stream& attribute : core.vertex_format.get_attributes()) {
+            const erhe::dataformat::Attribute_stream base_attribute = base_format->find_attribute(attribute.attribute->usage_type, static_cast<unsigned int>(attribute.attribute->usage_index));
+            if ((base_attribute.attribute == nullptr) || vertex_attribute_usage_from_erhe(*attribute.attribute).empty()) {
+                return std::nullopt;
+            }
+        }
+        std::optional<erhe::primitive::Packed_vertex_streams> base      = erhe::primitive::pack_triangle_soup_streams(core, *base_format,      formats.index_type);
+        std::optional<erhe::primitive::Packed_vertex_streams> optimized = erhe::primitive::pack_triangle_soup_streams(core, *optimized_format, formats.index_type);
+        if (!base.has_value() || !optimized.has_value()) {
+            return std::nullopt;
+        }
+        const std::size_t vertex_count = core.get_vertex_count();
+        std::vector<bool> base_zero(base_format->streams.size());
+        for (std::size_t i = 0; i < base_zero.size(); ++i) {
+            base_zero[i] = is_all_zero(base->streams[i]);
+        }
+        for (const erhe::dataformat::Attribute_stream& attribute : core.vertex_format.get_attributes()) {
+            const erhe::dataformat::Attribute_stream base_attribute = base_format->find_attribute(attribute.attribute->usage_type, static_cast<unsigned int>(attribute.attribute->usage_index));
+            if (base_zero[static_cast<std::size_t>(base_attribute.stream - base_format->streams.data())]) {
+                return std::nullopt; // a core attribute must be stored
+            }
+        }
+
+        add_index_data_source(entry, vertex_count, core.index_data);
+
+        const auto write_streams = [this](
+            const erhe::dataformat::Vertex_format& format,
+            std::vector<std::vector<uint8_t>>&      streams,
+            std::vector<std::optional<std::size_t>>& out_views
+        ) -> std::string
+        {
+            std::string json;
+            for (std::size_t i = 0, end = format.streams.size(); i < end; ++i) {
+                const std::size_t stride = format.streams[i].stride;
+                if (i > 0) {
+                    json += ',';
+                }
+                if (is_all_zero(streams[i])) {
+                    out_views.push_back(std::nullopt);
+                    json += fmt::format("{{\"fill\":\"zero\",\"byteStride\":{}}}", stride);
+                } else {
+                    // Keep the bytes for the accessors' bounds.
+                    std::vector<uint8_t> copy = streams[i];
+                    const std::size_t view = add_stream_view(std::move(copy), stride);
+                    out_views.push_back(view);
+                    json += fmt::format("{{\"bufferView\":{}}}", view);
+                }
+            }
+            return json;
+        };
+
+        // Base: the stored streams are the core accessors' views.
+        std::vector<std::optional<std::size_t>> base_views;
+        const std::string base_streams_json = write_streams(*base_format, base->streams, base_views);
+        for (const erhe::dataformat::Attribute_stream& attribute : core.vertex_format.get_attributes()) {
+            const erhe::dataformat::Attribute_stream base_attribute = base_format->find_attribute(attribute.attribute->usage_type, static_cast<unsigned int>(attribute.attribute->usage_index));
+            const std::size_t stream_index = static_cast<std::size_t>(base_attribute.stream - base_format->streams.data());
+            const std::string name         = vertex_attribute_usage_from_erhe(*attribute.attribute);
+            const std::size_t accessor     = add_stream_accessor(
+                base_views[stream_index].value(), *base_attribute.attribute, base_attribute.stream->stride, vertex_count,
+                base->streams[stream_index], name, Accessor_bounds::min_max
+            );
+            entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{name}, accessor);
+        }
+
+        // Optimized: named by the extension only.
+        std::vector<std::optional<std::size_t>> optimized_views;
+        const std::string optimized_streams_json = write_streams(*optimized_format, optimized->streams, optimized_views);
+        std::string attributes_json;
+        const auto vec_json = [](const glm::vec4& v, const std::size_t first, const std::size_t count) -> std::string {
+            std::string text = "[";
+            for (std::size_t c = 0; c < count; ++c) {
+                text += fmt::format("{}{}", (c > 0) ? "," : "", v[static_cast<glm::length_t>(first + c)]);
+            }
+            return text + "]";
+        };
+        for (std::size_t stream_index = 0, end = optimized_format->streams.size(); stream_index < end; ++stream_index) {
+            if (!optimized_views[stream_index].has_value()) {
+                continue;
+            }
+            const erhe::dataformat::Vertex_stream& stream = optimized_format->streams[stream_index];
+            for (const erhe::dataformat::Vertex_attribute& attribute : stream.attributes) {
+                const std::string name = gpu_stream_attribute_name(attribute);
+                if (name.empty()) {
+                    continue;
+                }
+                const std::size_t accessor = add_stream_accessor(
+                    optimized_views[stream_index].value(), attribute, stream.stride, vertex_count,
+                    optimized->streams[stream_index], name, Accessor_bounds::none
+                );
+                std::string affine;
+                if (name == "POSITION") {
+                    affine = fmt::format(",\"scale\":{},\"offset\":{}", vec_json(optimized->position_quantization.scale, 0, 3), vec_json(optimized->position_quantization.offset, 0, 3));
+                } else if ((name == "TEXCOORD_0") || (name == "TEXCOORD_1")) {
+                    const std::size_t first = (name == "TEXCOORD_0") ? 0 : 2;
+                    affine = fmt::format(",\"scale\":{},\"offset\":{}", vec_json(optimized->texcoord_quantization.scale, first, 2), vec_json(optimized->texcoord_quantization.offset, first, 2));
+                }
+                attributes_json += fmt::format("{}\"{}\":{{\"accessor\":{}{}}}", attributes_json.empty() ? "" : ",", name, accessor, affine);
+            }
+        }
+        m_uses_gpu_vertex_streams = true;
+        return fmt::format(
+            ",\"ERHE_gpu_vertex_streams\":{{\"version\":1,\"encoding_version\":{},\"variants\":["
+            "{{\"role\":\"base\",\"signature\":\"{}\",\"streams\":[{}]}},"
+            "{{\"role\":\"optimized\",\"signature\":\"{}\",\"streams\":[{}],\"attributes\":{{{}}}}}]}}",
+            formats.encoding_version,
+            erhe::dataformat::get_vertex_format_signature(*base_format), base_streams_json,
+            erhe::dataformat::get_vertex_format_signature(*optimized_format), optimized_streams_json, attributes_json
+        );
+    }
+
     void write_prepared_primitive(Export_entry& entry, const erhe::primitive::Prepared_primitive_export& prepared)
     {
         const erhe::primitive::Triangle_soup& core = erhe::primitive::get_export_core(prepared);
-        add_index_data_source(entry, core.get_vertex_count(), core.index_data);
-        add_vertex_data_source(entry, core.get_vertex_count(), core.vertex_format, core.vertex_data);
+        std::optional<std::string> gpu_streams_members;
+        if (m_arguments.gpu_vertex_formats != nullptr) {
+            const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+            gpu_streams_members = write_gpu_vertex_streams(entry, core);
+            m_prepared_statistics.gpu_vertex_stream_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+            if (gpu_streams_members.has_value()) {
+                ++m_prepared_statistics.gpu_vertex_stream_count;
+            } else {
+                ++m_prepared_statistics.gpu_vertex_stream_skipped;
+            }
+        }
+        if (!gpu_streams_members.has_value()) {
+            add_index_data_source(entry, core.get_vertex_count(), core.index_data);
+            add_vertex_data_source(entry, core.get_vertex_count(), core.vertex_format, core.vertex_data);
+        }
 
         std::string passes = "\"weld_bitwise\"";
         if (prepared.options.vertex_cache) {
@@ -7540,6 +7787,9 @@ private:
                 bvh.nodes.size(), nodes_view, primitive_ids_view
             );
             m_uses_raytrace_bvh = true;
+        }
+        if (gpu_streams_members.has_value()) {
+            members += gpu_streams_members.value();
         }
         entry.prepared_extensions = std::move(members);
     }
@@ -10312,6 +10562,9 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
         if (m_uses_raytrace_bvh) {
             declare_extension_used("ERHE_raytrace_bvh");
+        }
+        if (m_uses_gpu_vertex_streams) {
+            declare_extension_used("ERHE_gpu_vertex_streams");
         }
         if (!m_internal_node_extensions.empty()) {
             declare_extension_used("ERHE_node");

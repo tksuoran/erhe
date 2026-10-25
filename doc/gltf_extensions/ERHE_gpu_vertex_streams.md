@@ -6,8 +6,10 @@ Stability: experimental
 
 erhe project. Draft vendor extension. The plan that introduces it is
 [`../plans/gltf_fast_load.md`](../plans/gltf_fast_load.md) ("Item 9:
-streaming load"): "Save for Quest" writes it (step 8) and the loader uses it
-(step 9).
+streaming load"): "Save for Quest" writes it (step 8, landed) and the loader
+uses it (step 9). The writer is `erhe::gltf::export_gltf()` with
+`Gltf_export_arguments::gpu_vertex_formats` (`doc/erhe/gltf.md` "GPU vertex
+streams on export").
 
 ## Dependencies
 

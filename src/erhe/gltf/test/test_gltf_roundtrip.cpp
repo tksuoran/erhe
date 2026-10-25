@@ -5,6 +5,8 @@
 #include "gltf_test_util.hpp"
 
 #include "erhe_item/item.hpp"
+#include "erhe_primitive/mesh_optimizer.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/prepared_primitive.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -637,6 +639,145 @@ TEST(Gltf_roundtrip, save_onto_source_rebinds_released_soups)
     const std::shared_ptr<erhe::primitive::Triangle_soup> resident = mesh_primitives[1].primitive->render_shape->get_triangle_soup();
     ASSERT_TRUE(resident);
     EXPECT_EQ(resident->vertex_data, originals[1].vertex_data);
+}
+
+// The vertex layouts Mesh_memory derives on a device with position
+// quantization and unorm16x3 vertex input (doc/gltf_extensions/ERHE_gpu_vertex_streams.md
+// "Signature"), built here without a device.
+[[nodiscard]] auto make_test_gpu_formats() -> std::pair<erhe::dataformat::Vertex_format, erhe::dataformat::Vertex_format>
+{
+    using erhe::dataformat::Format;
+    using erhe::dataformat::Vertex_attribute_usage;
+    erhe::dataformat::Vertex_format base{
+        {
+            {0, {{Format::format_32_vec3_float, Vertex_attribute_usage::position, 0}}},
+            {1, {
+                {Format::format_32_vec3_float, Vertex_attribute_usage::normal,    erhe::dataformat::normal_attribute},
+                {Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
+                {Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
+                {Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
+                {Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 2},
+                {Format::format_32_vec4_float, Vertex_attribute_usage::color,     0}
+            }},
+            {2, {
+                {Format::format_32_vec3_float, Vertex_attribute_usage::normal, erhe::dataformat::normal_attribute_smooth},
+                {Format::format_8_vec2_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_aniso_control},
+                {Format::format_16_vec2_uint,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_valency_edge_count},
+                {Format::format_8_vec4_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_id}
+            }}
+        }
+    };
+    erhe::dataformat::Vertex_format optimized{
+        {
+            {0, {{Format::format_16_vec3_snorm, Vertex_attribute_usage::position, 0}}},
+            {1, {
+                {Format::format_16_vec4_sint,  Vertex_attribute_usage::tangent,   0},
+                {Format::format_16_vec2_unorm, Vertex_attribute_usage::tex_coord, 0},
+                {Format::format_16_vec2_unorm, Vertex_attribute_usage::tex_coord, 1},
+                {Format::format_16_vec2_unorm, Vertex_attribute_usage::tex_coord, 2},
+                {Format::format_8_vec4_unorm,  Vertex_attribute_usage::color,     0}
+            }},
+            {2, {{Format::format_8_vec2_unorm, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_aniso_control}}}
+        }
+    };
+    const erhe::dataformat::Vertex_stream_packing packing{.min_attribute_alignment = 1, .min_stride_alignment = 4};
+    base.repack(packing);
+    optimized.repack(packing);
+    return {std::move(base), std::move(optimized)};
+}
+
+// "Save for Quest" GPU vertex streams: each prepared primitive's base
+// streams are its core accessors and its optimized streams are named by
+// ERHE_gpu_vertex_streams; the stored optimized bytes are exactly what the
+// loader's pack of the core writes, and a loader that ignores the extension
+// reads the same soup as from a plain prepared save.
+TEST(Gltf_roundtrip, gpu_vertex_streams_hold_the_loader_pack)
+{
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = erhe_gltf_test::parse_file(data_path("variants.gltf"), source_scene);
+    static_cast<void>(source);
+    const auto [base_format, optimized_format] = make_test_gpu_formats();
+    const erhe::gltf::Gltf_gpu_vertex_formats formats{
+        .base              = &base_format,
+        .base_skinned      = &base_format,
+        .optimized         = &optimized_format,
+        .optimized_skinned = &optimized_format,
+        .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+        .encoding_version  = erhe::primitive::vertex_encoding_version
+    };
+    erhe::gltf::Gltf_export_prepared_statistics statistics;
+    erhe::gltf::Gltf_export_arguments arguments{
+        .root_node          = *source_scene.get_root_node(),
+        .binary             = true,
+        .prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write
+    };
+    arguments.prepared_statistics = &statistics;
+    arguments.gpu_vertex_formats  = &formats;
+    const std::string glb = erhe::gltf::export_gltf(arguments);
+    ASSERT_FALSE(glb.empty());
+    EXPECT_EQ(statistics.gpu_vertex_stream_count, 2u);
+
+    // A loader that ignores the extension reads the same soups as from a plain
+    // prepared save.
+    erhe::scene::Scene          plain_scene{"plain", nullptr};
+    const erhe::gltf::Gltf_data plain = parse_glb(make_prepared_glb(), "gpu_streams_plain.glb", plain_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    erhe::scene::Scene          gpu_scene{"gpu", nullptr};
+    const erhe::gltf::Gltf_data gpu = parse_glb(glb, "gpu_streams.glb", gpu_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    EXPECT_EQ(gpu.prepared_mesh_statistics.used_count, 2u);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> plain_shapes = get_panel_shapes(plain);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> gpu_shapes   = get_panel_shapes(gpu);
+    ASSERT_EQ(plain_shapes.size(), 2u);
+    ASSERT_EQ(gpu_shapes.size(),   2u);
+
+    // The stored optimized streams equal the pack of the core, byte for byte.
+    const Glb_chunks             chunks = split_glb(glb);
+    simdjson::dom::parser        parser;
+    const simdjson::dom::element root   = parser.parse(chunks.json);
+    bool used = false;
+    for (const simdjson::dom::element name : root["extensionsUsed"].get_array()) {
+        used = used || (name.get_string().value() == "ERHE_gpu_vertex_streams");
+    }
+    EXPECT_TRUE(used);
+    const simdjson::dom::array buffer_views = root["bufferViews"].get_array();
+    const simdjson::dom::array primitives   = root["meshes"].at(0)["primitives"].get_array();
+    ASSERT_EQ(primitives.size(), 2u);
+    for (std::size_t p = 0; p < 2; ++p) {
+        const std::shared_ptr<erhe::primitive::Triangle_soup> plain_soup = plain_shapes[p]->get_triangle_soup();
+        const std::shared_ptr<erhe::primitive::Triangle_soup> gpu_soup   = gpu_shapes[p]->get_triangle_soup();
+        ASSERT_TRUE(plain_soup);
+        ASSERT_TRUE(gpu_soup);
+        EXPECT_EQ(gpu_soup->vertex_data, plain_soup->vertex_data);
+        EXPECT_EQ(gpu_soup->index_data,  plain_soup->index_data);
+
+        const simdjson::dom::element extension = primitives.at(p)["extensions"]["ERHE_gpu_vertex_streams"];
+        EXPECT_EQ(extension["version"].get_uint64().value(), 1u);
+        const simdjson::dom::element optimized = extension["variants"].at(1);
+        EXPECT_EQ(optimized["role"].get_string().value(), "optimized");
+        EXPECT_EQ(optimized["signature"].get_string().value(), erhe::dataformat::get_vertex_format_signature(optimized_format));
+        const std::optional<erhe::primitive::Packed_vertex_streams> pack =
+            erhe::primitive::pack_triangle_soup_streams(*gpu_soup, optimized_format, erhe::dataformat::Format::format_32_scalar_uint);
+        ASSERT_TRUE(pack.has_value());
+        const simdjson::dom::array streams = optimized["streams"].get_array();
+        ASSERT_EQ(streams.size(), optimized_format.streams.size());
+        for (std::size_t i = 0; i < streams.size(); ++i) {
+            std::uint64_t view_index = 0;
+            if (streams.at(i)["bufferView"].get_uint64().get(view_index) != simdjson::SUCCESS) {
+                EXPECT_EQ(streams.at(i)["fill"].get_string().value(), "zero");
+                for (const uint8_t value : pack->streams[i]) {
+                    EXPECT_EQ(value, 0u);
+                }
+                continue;
+            }
+            const simdjson::dom::element view = buffer_views.at(view_index);
+            const std::uint64_t offset = view["byteOffset"].get_uint64().value();
+            const std::uint64_t length = view["byteLength"].get_uint64().value();
+            ASSERT_EQ(length, pack->streams[i].size());
+            EXPECT_EQ(std::memcmp(chunks.bin.data() + offset, pack->streams[i].data(), length), 0) << "stream " << i;
+        }
+        const simdjson::dom::element position = optimized["attributes"]["POSITION"];
+        EXPECT_FLOAT_EQ(static_cast<float>(position["scale"].at(0).get_double().value()), pack->position_quantization.scale.x);
+        EXPECT_FLOAT_EQ(static_cast<float>(position["offset"].at(2).get_double().value()), pack->position_quantization.offset.z);
+    }
 }
 
 TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)

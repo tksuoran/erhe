@@ -274,14 +274,17 @@ public:
 };
 
 // texture_export selects the image form (erhe::gltf::Gltf_texture_export);
-// source unless "Save for Quest". 'report', when not null, receives the
-// statistics of the save.
+// source unless "Save for Quest". gpu_vertex_formats, when not null, makes
+// the save write each prepared primitive's GPU-ready vertex streams in those
+// layouts (ERHE_gpu_vertex_streams; "Save for Quest"). 'report', when not
+// null, receives the statistics of the save.
 [[nodiscard]] auto save_scene_gltf(
-    Scene_root&                         scene_root,
-    const std::filesystem::path&        path,
-    tf::Executor*                       executor,
-    erhe::gltf::Gltf_texture_export     texture_export = erhe::gltf::Gltf_texture_export::source,
-    Gltf_scene_save_report*             report         = nullptr
+    Scene_root&                                scene_root,
+    const std::filesystem::path&               path,
+    tf::Executor*                              executor,
+    erhe::gltf::Gltf_texture_export            texture_export     = erhe::gltf::Gltf_texture_export::source,
+    Gltf_scene_save_report*                    report             = nullptr,
+    const erhe::gltf::Gltf_gpu_vertex_formats* gpu_vertex_formats = nullptr
 ) -> bool;
 
 // THE scene save entry point (File > Save Scene, MCP save_scene): writes the
@@ -302,8 +305,10 @@ public:
 // transcoded at save time to a raw ASTC 4x4 KTX2 image referenced through
 // ERHE_texture_ktx2 (doc/gltf_extensions/ERHE_texture_ktx2.md), so a device
 // with ASTC uploads the blocks with no transcode. PNG / JPEG images are
-// written as they are. An export: the scene's source file and dirty state
-// are left alone; the asset browser rescans.
+// written as they are. Each prepared primitive also gets its GPU-ready vertex
+// streams in the running Mesh_memory layouts (ERHE_gpu_vertex_streams,
+// doc/gltf_extensions/ERHE_gpu_vertex_streams.md). An export: the scene's
+// source file and dirty state are left alone; the asset browser rescans.
 [[nodiscard]] auto save_scene_gltf_for_quest(
     App_context&                 context,
     Scene_root&                  scene_root,
