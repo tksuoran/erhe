@@ -2417,11 +2417,10 @@ auto Mcp_server::query_mesh_buffer_info(const json& args) -> std::string
         streams.push_back(stream_json);
     }
 
-    // The affine the vertex shader applies to a snorm16x3 position, recomputed
-    // from this primitive's AABB exactly as Primitive_buffer does - so a caller
-    // reading the bytes can reproduce the decoded position without guessing at
-    // the convention.
-    const erhe::scene_renderer::Position_quantization quantization = erhe::scene_renderer::get_position_quantization(buffer_mesh->bounding_box);
+    // The affine the vertex shader applies to a snorm16x3 position, the one
+    // the build stored on the Buffer_mesh - so a caller reading the bytes can
+    // reproduce the decoded position without guessing at the convention.
+    const erhe::scene_renderer::Position_quantization quantization = buffer_mesh->position_quantization;
     const erhe::dataformat::Vertex_position_encoding  position_encoding = erhe::dataformat::get_vertex_position_encoding(&vertex_format);
 
     json index_range = buffer_range_json(buffer_mesh->index_buffer_range);

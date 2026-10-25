@@ -418,6 +418,8 @@ void Build_context_root::calculate_bounding_volume()
 
     const Mesh_point_source point_source{mesh};
     erhe::math::calculate_bounding_volume(point_source, buffer_mesh.bounding_box, buffer_mesh.bounding_sphere);
+    // The affine a quantized position of this build is encoded with.
+    buffer_mesh.position_quantization = get_position_quantization(buffer_mesh.bounding_box);
 }
 
 void Build_context_root::calculate_joint_bounding_volumes(erhe::geometry::Mesh_attributes& mesh_attributes)
@@ -755,17 +757,13 @@ Build_context::Build_context(
     // pass over the mesh.
     root.position_encoding = erhe::dataformat::get_vertex_position_encoding(&root.vertex_format);
     if (root.position_encoding != erhe::dataformat::Vertex_position_encoding::passthrough) {
-        // Same affine the primitive buffer, the BLAS build and the shaders use;
-        // get_position_quantization() in erhe_scene_renderer is the C++ mirror.
-        // Encoder and decoder must agree exactly, so a degenerate axis has to
-        // encode to exactly 0 and decode back to the centre - which it does,
-        // because the epsilon is only ever multiplied by zero.
-        constexpr float epsilon = 1e-6f;
-        const erhe::math::Aabb& bounding_box = root.buffer_mesh.bounding_box;
-        if (bounding_box.is_valid_3d()) {
-            const glm::vec3 center      = bounding_box.center();
-            const glm::vec3 half_extent = 0.5f * bounding_box.diagonal();
-            const glm::vec3 scale       = glm::max(half_extent, glm::vec3{epsilon});
+        // The affine stored on the Buffer_mesh (calculate_bounding_volume()),
+        // which the primitive records, the BLAS build and the shaders read.
+        // A degenerate axis encodes to exactly 0 and decodes back to the
+        // centre, because the epsilon is only ever multiplied by zero.
+        if (root.buffer_mesh.bounding_box.is_valid_3d()) {
+            const glm::vec3 center = glm::vec3{root.buffer_mesh.position_quantization.offset};
+            const glm::vec3 scale  = glm::vec3{root.buffer_mesh.position_quantization.scale};
             root.position_encode_center    = GEO::vec3f{center.x, center.y, center.z};
             root.position_encode_inv_scale = GEO::vec3f{1.0f / scale.x, 1.0f / scale.y, 1.0f / scale.z};
         }
@@ -1190,16 +1188,12 @@ auto Build_context::take_optimizable_snapshot(
     // keeps meshopt_quantizeSnorm() bit-identical to float_to_snorm16().
     GEO::vec3f position_encode_center   {0.0f, 0.0f, 0.0f};
     GEO::vec3f position_encode_inv_scale{1.0f, 1.0f, 1.0f};
-    {
-        constexpr float epsilon = 1e-6f;
-        const erhe::math::Aabb& bounding_box = root.buffer_mesh.bounding_box;
-        if (bounding_box.is_valid_3d()) {
-            const glm::vec3 center      = bounding_box.center();
-            const glm::vec3 half_extent = 0.5f * bounding_box.diagonal();
-            const glm::vec3 scale       = glm::max(half_extent, glm::vec3{epsilon});
-            position_encode_center    = GEO::vec3f{center.x, center.y, center.z};
-            position_encode_inv_scale = GEO::vec3f{1.0f / scale.x, 1.0f / scale.y, 1.0f / scale.z};
-        }
+    if (root.buffer_mesh.bounding_box.is_valid_3d()) {
+        // The affine stored on the Buffer_mesh (calculate_bounding_volume()).
+        const glm::vec3 center = glm::vec3{root.buffer_mesh.position_quantization.offset};
+        const glm::vec3 scale  = glm::vec3{root.buffer_mesh.position_quantization.scale};
+        position_encode_center    = GEO::vec3f{center.x, center.y, center.z};
+        position_encode_inv_scale = GEO::vec3f{1.0f / scale.x, 1.0f / scale.y, 1.0f / scale.z};
     }
 
     // UV ranges for the affine texcoord channels, over the same corner prefix the
@@ -1240,6 +1234,7 @@ auto Build_context::take_optimizable_snapshot(
         root.buffer_mesh.has_vertex_colors = root.vertex_attributes.color[0].is_valid();
     }
     const Texcoord_quantization texcoord_quantization = get_texcoord_quantization(root.buffer_mesh);
+    root.buffer_mesh.texcoord_quantization = texcoord_quantization;
 
     std::vector<Mesh_optimize_stream> streams;
     streams.reserve(optimized_format.streams.size());

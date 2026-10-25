@@ -25,23 +25,6 @@
 
 namespace erhe::scene_renderer {
 
-auto get_position_quantization(const erhe::math::Aabb& bounding_box) -> Position_quantization
-{
-    if (!bounding_box.is_valid_3d()) {
-        return Position_quantization{};
-    }
-    // Small enough that it never perturbs a real extent, large enough to keep
-    // the encoder's division finite on a degenerate (zero thickness) axis.
-    constexpr float epsilon = 1e-6f;
-    const glm::vec3 center      = bounding_box.center();
-    const glm::vec3 half_extent = 0.5f * bounding_box.diagonal();
-    const glm::vec3 scale       = glm::max(half_extent, glm::vec3{epsilon});
-    return Position_quantization{
-        .scale  = glm::vec4{scale,  0.0f},
-        .offset = glm::vec4{center, 0.0f}
-    };
-}
-
 Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device, const int max_primitive_count)
     : primitive_block{
         graphics_device,
@@ -209,8 +192,8 @@ void Primitive_buffer::write_primitive(
     const float     skinning_factor  = skin ? 1.0f : 0.0f;
     const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
     const uint32_t  base_vertex      = buffer_mesh->base_vertex();
-    const Position_quantization quantization = get_position_quantization(buffer_mesh->bounding_box);
-    const erhe::primitive::Texcoord_quantization texcoord_quantization = erhe::primitive::get_texcoord_quantization(*buffer_mesh);
+    const Position_quantization&                 quantization          = buffer_mesh->position_quantization;
+    const erhe::primitive::Texcoord_quantization& texcoord_quantization = buffer_mesh->texcoord_quantization;
 
     using erhe::graphics::as_span;
     const glm::vec4 color = (settings.color_source == Primitive_color_source::id_offset)

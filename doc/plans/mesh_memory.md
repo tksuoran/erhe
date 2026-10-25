@@ -67,13 +67,6 @@ window, with the same shape of problem in a different subsystem.
 Quantization applies to the meshoptimizer optimized variant only; see
 `doc/erhe/vertex_position_quantization.md` for the design it follows.
 
-- **One definition of the affine.** The encode affine is written out in
-  `primitive_builder.cpp`, `primitive.cpp`, `primitive_buffer.cpp` and
-  `mesh_component_transform.cpp` with the same epsilon, because
-  `erhe_primitive` cannot see `erhe_scene_renderer`. They agree by inspection
-  only. Move `Position_quantization` / `get_position_quantization` down into
-  `erhe_math` next to `Aabb`, the way `Vertex_position_encoding` sits in
-  `erhe_dataformat`. Do this before anyone touches the encoding.
 - **Metal attribute alignment.** `Device_info::min_vertex_attribute_alignment`
   is read in `Mesh_memory` and assigned by no backend, so it stays 1. With
   quantization on, the skinned stream 0 puts `joint_indices` at offset 6 and
