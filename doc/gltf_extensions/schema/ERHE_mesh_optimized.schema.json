@@ -1,0 +1,29 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_mesh_optimized.schema.json",
+    "title": "ERHE_mesh_optimized glTF mesh primitive extension",
+    "type": "object",
+    "properties": {
+        "version":            {"type": "integer", "const": 1},
+        "passes": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["weld_bitwise", "vertex_cache", "overdraw", "vertex_fetch"]},
+            "uniqueItems": true,
+            "contains": {"const": "weld_bitwise"}
+        },
+        "overdraw_threshold": {"type": "number", "minimum": 1.0, "description": "Threshold given to meshopt_optimizeOverdraw(); present exactly when passes contains overdraw"},
+        "content_hash":       {"type": "string", "pattern": "^[0-9a-f]{16}$", "description": "64-bit FNV-1a over indices (uint32 LE) then POSITION (float32 LE), 16 lowercase hex digits"},
+        "bounding_sphere": {
+            "type": "object",
+            "properties": {
+                "center": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                "radius": {"type": "number", "minimum": 0}
+            },
+            "required": ["center", "radius"]
+        }
+    },
+    "required": ["version", "passes", "content_hash", "bounding_sphere"],
+    "if":   {"properties": {"passes": {"contains": {"const": "overdraw"}}}},
+    "then": {"required": ["overdraw_threshold"]},
+    "else": {"not": {"required": ["overdraw_threshold"]}}
+}

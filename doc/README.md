@@ -413,8 +413,11 @@ flowchart TD
 - [gltf_extensions/ERHE_geometry.md](gltf_extensions/ERHE_geometry.md) (mostly stable): ERHE_geometry
 - [gltf_extensions/ERHE_light.md](gltf_extensions/ERHE_light.md) (mostly stable): ERHE_light
 - [gltf_extensions/ERHE_material.md](gltf_extensions/ERHE_material.md) (mostly stable): ERHE_material
+- [gltf_extensions/ERHE_mesh_optimized.md](gltf_extensions/ERHE_mesh_optimized.md) (experimental): ERHE_mesh_optimized
+- [gltf_extensions/ERHE_mesh_topology.md](gltf_extensions/ERHE_mesh_topology.md) (experimental): ERHE_mesh_topology
 - [gltf_extensions/ERHE_node.md](gltf_extensions/ERHE_node.md) (mostly stable): ERHE_node
 - [gltf_extensions/ERHE_node_graphs.md](gltf_extensions/ERHE_node_graphs.md) (mostly stable): ERHE_node_graphs
+- [gltf_extensions/ERHE_raytrace_bvh.md](gltf_extensions/ERHE_raytrace_bvh.md) (experimental): ERHE_raytrace_bvh
 - [gltf_extensions/ERHE_scene.md](gltf_extensions/ERHE_scene.md) (mostly stable): ERHE_scene
 
 ### Plans (`plans/`)
