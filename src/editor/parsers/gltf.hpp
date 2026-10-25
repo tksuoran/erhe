@@ -156,19 +156,36 @@ void import_gltf(
 // Shared by import_gltf and Prefab_library. When out_mesh_node_items is
 // non-null, nodes carrying meshes are appended to it (for the raytrace
 // kickoff operation).
-// Worker-side Buffer_mesh build for an asynchronous load
-// (doc/editor/async_asset_loading_design.md phase 3a). Safe off the main thread; the
-// build_infos must be made on the main thread by the caller. Builds the
-// unique shapes as parallel tasks on `executor`; the caller must not hold a
-// Scoped_worker_context (see the definition). finalize_imported_meshes still
-// runs afterwards on the main thread and fast-paths over the built primitives.
-void build_imported_buffer_meshes(
-    tf::Executor&                      executor,
-    erhe::graphics::Device&            graphics_device,
+// One unique render shape of an asynchronous load's Buffer_mesh build
+// (doc/editor/async_asset_loading.md "Load memory budget"): the primitive,
+// the Build_info for its vertex format (skinned or not), and the bytes its
+// build enqueues on the loader transfer queue, which the build's
+// Memory_budget lease pays for until the queue has drained them.
+class Imported_build_job
+{
+public:
+    erhe::primitive::Primitive*        primitive {nullptr};
+    const erhe::primitive::Build_info* build_info{nullptr};
+    const erhe::scene::Mesh*           mesh      {nullptr};
+    std::size_t                        upload_byte_count{0};
+};
+
+// The build jobs of a parsed glTF, one per unique render shape (a shape
+// shared by instancing meshes is built once). Main thread or worker; the
+// Build_infos must outlive the jobs. out_primitive_count receives the count
+// of primitives the jobs cover.
+[[nodiscard]] auto collect_imported_build_jobs(
+    const erhe::gltf::Gltf_data&       gltf_data,
     const erhe::primitive::Build_info& build_info,
     const erhe::primitive::Build_info& skinned_build_info,
-    const erhe::gltf::Gltf_data&       gltf_data
-);
+    std::size_t&                       out_primitive_count
+) -> std::vector<Imported_build_job>;
+
+// Builds one job's Buffer_meshes (the prepared load build or the renderable
+// soup build) on a worker, inside its own Scoped_worker_context.
+// finalize_imported_meshes still runs afterwards on the main thread and
+// fast-paths over the built primitives.
+void run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device);
 
 // The nodes overload is the implementation and is format-neutral: the USD
 // import (parsers/usd.cpp) hands it its own node list.

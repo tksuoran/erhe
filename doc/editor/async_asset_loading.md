@@ -50,17 +50,20 @@ an async result is compared against.
 |---|---|---|
 | `scan` | worker | one task |
 | `parse` | worker | one task |
-| `build` (`Buffer_mesh` construction) | workers | one task fanning out one build task per unique render shape |
-| `residency` (image decode + textures + samplers) | decode on workers, upload on main, in tick; starts when the parse is done and overlaps `build` | decoded bytes in flight, GPU upload bytes/frame, upload staging cap, items/frame, time slice |
+| `build` (`Buffer_mesh` construction) | workers; dispatched from the tick | one task per unique render shape, started while its upload bytes fit the load memory budget |
+| `residency` (image decode + textures + samplers) | decode on workers, upload on main, in tick; starts when the parse is done and overlaps `build` | load memory budget, GPU upload bytes/frame, upload staging cap, items/frame, time slice |
 | `publish` | main, in tick | atomic, gated on the loader watermark |
 
 The scan decides erhe-authored-scene vs plain glTF asset; it is a whole-file
 read plus a full JSON parse, which is why it does not run on the main thread.
 Import and prefab modes skip it - neither cares.
 
-The build phase (`build_imported_buffer_meshes`) builds the primitives in
-parallel: one executor task per unique render shape, deduplicated before
-dispatch so a shape shared by instancing meshes is built once.
+The build phase builds the primitives in parallel: `collect_imported_build_jobs`
+makes one job per unique render shape (a shape shared by instancing meshes is
+built once), and the tick dispatches each job as an executor task
+(`run_imported_build_job`) once its upload bytes fit the load memory budget
+(below). The phase ends with the `build_imported_buffer_meshes: ...` summary
+line when every job has finished.
 
 Three threading invariants hold (design record 2.3): only the main thread
 touches `erhe::graphics::Device`, creates GPU objects or records commands, and
@@ -86,11 +89,41 @@ per-frame cost. The fields come from `Load_config` (v2):
 | `gpu_upload_bytes_per_frame` | 4 MiB | texture + buffer bytes recorded per frame while no load is in progress |
 | `gpu_upload_bytes_per_frame_while_loading` | 0 = platform default: 32 MiB desktop, 16 MiB OpenXR | texture + buffer bytes recorded per frame while a load is in progress (v6) |
 | `io_read_bytes_per_frame` | 64 MiB | file bytes per frame |
-| `max_decoded_bytes_in_flight` | 128 MiB | decode backpressure: image decodes start only while the decoded pixels waiting for upload plus those being decoded stay below it; a standing cap carried on the tick context, not a per-frame allowance |
+| `max_in_flight_bytes` | 0 = platform default: 128 MiB desktop, 64 MiB OpenXR | the load memory budget (v7; replaces v2-v6 `max_decoded_bytes_in_flight`, whose key an older file still carries and the load ignores): a standing cap on the CPU bytes waiting for upload, not a per-frame allowance |
 | `max_upload_staging_bytes` | 64 MiB (32 MiB in `openxr_editor_settings.json`) | hard cap on the host-visible staging of the budgeted uploads (v4); carried on the tick context |
 | `max_residency_items_per_frame` | 64 | guards against many tiny items |
 | `max_publish_items_per_frame` | 256 | publish slice |
 | `load_time_slice_ms` | 4 | hard cap, checked between items, wins over the byte budgets |
+
+### Load memory budget
+
+One `erhe::utility::Memory_budget`, owned by `Asset_manager` and shared by
+every live load (`Asset_load_tick_context::load_memory_budget`), bounds the
+CPU memory made ahead of its GPU upload. Its capacity is
+`load.max_in_flight_bytes` (0: 128 MiB desktop, 64 MiB OpenXR), applied each
+tick.
+
+- A mesh build job starts only with a lease of the bytes its build enqueues
+  on the `Mesh_memory` loader queue (every base and optimized vertex stream
+  and the index buffers, from the soup's counts). When the build is done the
+  lease goes to the queue (`Buffer_transfer_queue::hold_until_drained`), which
+  drops it once the watermark has passed everything enqueued before it - so
+  the bytes count until the budgeted drain has copied them into upload
+  staging, and the loader queue never holds more than the budget.
+- An image decode holds a lease of its decoded size from the start of the
+  decode until its upload (`Gltf_image_residency::set_memory_budget`, see
+  "Image residency").
+- A single item larger than the whole budget is granted while nothing else
+  holds any of it, so it still makes progress, alone.
+- The build jobs are dispatched before the residency step in each tick:
+  publish waits for the meshes, the textures may lag.
+- The "resident" log line of each load reports the budget's high-water mark
+  (overall, meshes, images), the lease counts and the refused requests since
+  the load phase began.
+
+On the prepared Bistro the high-water mark reaches the budget (134.2 of
+134.2 MB desktop, 67.1 of 67.1 MB on Quest) and the build takes as long as
+without the budget (doc/plans/gltf_fast_load.md item 9 step 2).
 
 ### Upload budget while loading
 
@@ -165,12 +198,12 @@ decodes nothing: it records each image's encoded stream (the same bytes
 retained for byte-exact export), the sampler `Sampler_create_info`s and the
 material texture bindings. Residency decodes / transcodes the images on
 executor workers (`schedule_decodes`, called every residency tick) ahead of
-the upload, bounded by `max_decoded_bytes_in_flight`: a decode starts only
-while the decoded pixels waiting for upload plus those being decoded fit the
-budget (a task opens the image header first and gives its turn back when
-the decoded size does not fit; an image larger than the whole budget decodes
-alone), and uploading an image releases its bytes. So a load never holds
-every image's pixels at once - the peak is the budget. Residency starts as
+the upload, bounded by the load memory budget: a decode starts only while
+its decoded pixels fit the budget (a task opens the image header first and
+gives its turn back when the decoded size does not fit; an image larger than
+the whole budget decodes while nothing else holds the budget), and uploading
+an image releases its lease. So a load never holds every image's pixels at
+once - the peak is the budget, shared with the mesh builds. Residency starts as
 soon as the parse is done and runs during the `build` phase too; the
 material slots are bound once every image is resident, after the build. Texture and sampler objects are created
 before publish - creation is cheap and only the pixel copies may lag under the
@@ -232,7 +265,7 @@ load as plain soups. It exists for A/B runs.
 
 A primitive loaded with prepared mesh data (`Primitive::is_prepared()`)
 reaches its final load state in the build phase and has nothing deferred:
-`build_imported_buffer_meshes` (worker, before the scene insert, so nothing
+`run_imported_build_job` (worker, before the scene insert, so nothing
 draws or traces it yet) calls `Primitive::make_prepared_meshes()`, which
 builds the fill-only soup buffer mesh over the core, the optimized variant as
 one linear pack of the core into the optimized vertex format (no

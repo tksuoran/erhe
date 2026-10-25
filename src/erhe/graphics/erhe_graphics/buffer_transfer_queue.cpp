@@ -67,6 +67,32 @@ void Buffer_transfer_queue::flush(Command_buffer& command_buffer)
     // from the ticket counter rather than from the last drained entry is what
     // keeps a full drain of an EMPTY queue advancing the watermark too.
     m_watermark = m_next_ticket - 1;
+    // Dropped at the end of this scope; a lease release takes only the
+    // budget's own mutex.
+    std::vector<erhe::utility::Memory_budget_lease> drained_leases;
+    take_drained_leases_locked(drained_leases);
+}
+
+void Buffer_transfer_queue::take_drained_leases_locked(std::vector<erhe::utility::Memory_budget_lease>& out)
+{
+    while (!m_held_leases.empty() && (m_held_leases.front().ticket <= m_watermark)) {
+        out.push_back(std::move(m_held_leases.front().lease));
+        m_held_leases.pop_front();
+    }
+}
+
+void Buffer_transfer_queue::hold_until_drained(erhe::utility::Memory_budget_lease&& lease)
+{
+    if (lease.is_empty()) {
+        return;
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    const Ticket ticket = m_next_ticket - 1;
+    if (ticket <= m_watermark) {
+        lease.reset(); // nothing outstanding
+        return;
+    }
+    m_held_leases.push_back(Held_lease{.ticket = ticket, .lease = std::move(lease)});
 }
 
 auto Buffer_transfer_queue::flush_budgeted(
@@ -118,6 +144,7 @@ auto Buffer_transfer_queue::flush_budgeted(
 
     // Record in FIFO order; the first entry the staging cannot take stops
     // the drain, so every recorded ticket is older than every unrecorded one.
+    std::vector<erhe::utility::Memory_budget_lease> drained_leases;
     std::size_t recorded_count      = 0;
     std::size_t recorded_byte_count = 0;
     Ticket      recorded_watermark  = 0;
@@ -163,10 +190,13 @@ auto Buffer_transfer_queue::flush_budgeted(
         if (drained_watermark > m_watermark) {
             m_watermark = drained_watermark;
         }
+        take_drained_leases_locked(drained_leases);
     }
 
-    // Recorded; release the staging copies outside m_mutex.
+    // Recorded; release the staging copies and the budget leases outside
+    // m_mutex.
     m_drain_batch.clear();
+    drained_leases.clear();
     return recorded_byte_count;
 }
 

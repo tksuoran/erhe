@@ -20,6 +20,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/xform.hpp"
+#include "erhe_utility/memory_budget.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <taskflow/taskflow.hpp>
@@ -84,7 +85,7 @@ auto Gltf_load_task::is_worker_idle() const -> bool
     // machinery, not by this task.)
     const bool scan_idle  = !m_scan_result  || m_scan_result ->finished.load(std::memory_order_acquire);
     const bool parse_idle = !m_parse_result || m_parse_result->finished.load(std::memory_order_acquire);
-    const bool build_idle = !m_build_result || m_build_result->finished.load(std::memory_order_acquire);
+    const bool build_idle = !m_build_state || m_build_state->is_worker_idle();
     // The image decode tasks residency starts (they write only into the
     // residency's shared decode state, but this task owns them).
     const bool decode_idle = !parse_idle || !m_parse_result || m_parse_result->gltf_data.image_residency.is_decode_idle();
@@ -111,21 +112,22 @@ void Gltf_load_task::start_scan(Asset_load_tick_context& tick_context)
     );
 }
 
+auto Gltf_load_task::Build_state::is_finished() -> bool
+{
+    const std::lock_guard<std::mutex> lock{mutex};
+    return (next_job == jobs.size()) && (finished_count == jobs.size());
+}
+
+auto Gltf_load_task::Build_state::is_worker_idle() -> bool
+{
+    const std::lock_guard<std::mutex> lock{mutex};
+    return running_count == 0;
+}
+
 void Gltf_load_task::start_build(Asset_load_tick_context& tick_context)
 {
     erhe::scene_renderer::Mesh_memory* const mesh_memory = m_context.mesh_memory;
     ERHE_VERIFY(mesh_memory != nullptr);
-
-    // Without worker contexts (GL, headless / null window) the worker may
-    // not allocate GPU buffers: skip the async build entirely and let the
-    // main-thread finalize pass (finalize_imported_meshes) build the buffer
-    // meshes - the pre-async import behavior.
-    if (!tick_context.graphics_device.supports_worker_contexts()) {
-        auto build_result = std::make_shared<Build_result>();
-        build_result->finished.store(true, std::memory_order_release);
-        m_build_result = build_result;
-        return;
-    }
 
     // Both Build_infos are made HERE, on the main thread:
     // make_primitive_buffer_info can create a Vertex_input_state, which is a
@@ -145,31 +147,72 @@ void Gltf_load_task::start_build(Asset_load_tick_context& tick_context)
         .autocolor       = build_info.autocolor
     };
 
-    auto build_result = std::make_shared<Build_result>();
-    auto parse_result = m_parse_result;
-    m_build_result    = build_result;
-    erhe::graphics::Device* const graphics_device = &tick_context.graphics_device;
-    tf::Executor* const           executor        = &tick_context.executor;
-    const std::filesystem::path   path            = m_handle->get_path();
-    erhe::task::spawn(
-        tick_context.executor,
-        [build_result, parse_result, build_info, skinned_build_info, graphics_device, executor, path]() {
-            try {
-                // Fans the builds out as executor tasks; each task takes its
-                // own GL worker context (no-op on other backends), so this
-                // worker must not hold one while scheduling them.
-                build_imported_buffer_meshes(*executor, *graphics_device, build_info, skinned_build_info, parse_result->gltf_data);
-            } catch (const std::exception& e) {
-                // A failed build leaves primitives without buffer meshes
-                // (tasks not yet started when one threw are skipped); the
-                // main-thread finalize pass then builds them itself.
-                log_parsers->error("async glTF load: buffer mesh build failed for '{}': {}", erhe::file::to_string(path), e.what());
-            } catch (...) {
-                log_parsers->error("async glTF load: buffer mesh build failed for '{}'", erhe::file::to_string(path));
+    std::shared_ptr<Build_state> build_state = std::make_shared<Build_state>(build_info, skinned_build_info);
+    build_state->start_time = std::chrono::steady_clock::now();
+    // Without worker contexts (GL, headless / null window) the worker may
+    // not allocate GPU buffers: no async build at all, the main-thread
+    // finalize pass (finalize_imported_meshes) builds the buffer meshes - the
+    // pre-async import behavior.
+    if (tick_context.graphics_device.supports_worker_contexts()) {
+        // gltf_data.nodes keeps the meshes (and through them the primitives)
+        // alive until the task is reaped, which waits for the build tasks.
+        build_state->jobs = collect_imported_build_jobs(
+            m_parse_result->gltf_data,
+            build_state->build_info,
+            build_state->skinned_build_info,
+            build_state->primitive_count
+        );
+        for (const Imported_build_job& job : build_state->jobs) {
+            if (job.primitive->is_prepared()) {
+                ++build_state->prepared_count;
             }
-            build_result->finished.store(true, std::memory_order_release);
         }
-    );
+    }
+    m_build_state = build_state;
+}
+
+void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
+{
+    Build_state& state = *m_build_state;
+    erhe::scene_renderer::Mesh_memory* const mesh_memory     = m_context.mesh_memory;
+    erhe::graphics::Device* const            graphics_device = &tick_context.graphics_device;
+    while (state.next_job < state.jobs.size()) {
+        const std::size_t         job_index = state.next_job;
+        const Imported_build_job& job       = state.jobs[job_index];
+        // The build's upload bytes wait in the loader transfer queue until
+        // the budgeted drain stages them; the lease pays for them until then
+        // and goes to the queue when the build is done.
+        std::shared_ptr<erhe::utility::Memory_budget_lease> lease = std::make_shared<erhe::utility::Memory_budget_lease>();
+        if (tick_context.load_memory_budget) {
+            *lease = tick_context.load_memory_budget->try_acquire(job.upload_byte_count, erhe::utility::Memory_budget_kind::mesh);
+            if (lease->is_empty()) {
+                return; // resumes when drained uploads give bytes back
+            }
+        }
+        {
+            const std::lock_guard<std::mutex> lock{state.mutex};
+            ++state.next_job;
+            ++state.running_count;
+        }
+        erhe::task::spawn(
+            tick_context.executor,
+            [build_state = m_build_state, job_index, lease, mesh_memory, graphics_device, path = m_handle->get_path()]() {
+                try {
+                    run_imported_build_job(build_state->jobs[job_index], *graphics_device);
+                } catch (const std::exception& e) {
+                    // A primitive without buffer meshes is built by the
+                    // main-thread finalize pass instead.
+                    log_parsers->error("async glTF load: buffer mesh build failed for '{}': {}", erhe::file::to_string(path), e.what());
+                } catch (...) {
+                    log_parsers->error("async glTF load: buffer mesh build failed for '{}'", erhe::file::to_string(path));
+                }
+                mesh_memory->get_loader_transfer_queue().hold_until_drained(std::move(*lease));
+                const std::lock_guard<std::mutex> lock{build_state->mutex};
+                --build_state->running_count;
+                ++build_state->finished_count;
+            }
+        );
+    }
 }
 
 void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
@@ -243,6 +286,9 @@ auto Gltf_load_task::advance_residency(Asset_load_tick_context& tick_context) ->
     erhe::gltf::Gltf_data& gltf_data = m_parse_result->gltf_data;
 
     if (!m_image_transfer) {
+        // The decoded pixels share the load memory budget with the mesh
+        // builds (set before the first decode).
+        gltf_data.image_residency.set_memory_budget(tick_context.load_memory_budget);
         m_image_transfer = std::make_unique<erhe::gltf::Image_transfer>(
             tick_context.graphics_device,
             erhe::gltf::Image_transfer_mode::frame_recording,
@@ -254,7 +300,7 @@ auto Gltf_load_task::advance_residency(Asset_load_tick_context& tick_context) ->
     // upload, as far as the decoded-bytes budget allows (decoded pixels
     // waiting here plus those being decoded); each upload below frees its
     // image's bytes for the next decode.
-    gltf_data.image_residency.schedule_decodes(tick_context.max_decoded_bytes_in_flight);
+    gltf_data.image_residency.schedule_decodes();
 
     const std::size_t total = gltf_data.image_residency.decoded_images.size();
     while (!tick_context.budget.is_exhausted() && tick_context.budget.take_residency_item()) {
@@ -290,13 +336,28 @@ void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_contex
 {
     const erhe::gltf::Gltf_image_residency& residency = m_parse_result->gltf_data.image_residency;
     const erhe::graphics::Upload_staging_usage staging = tick_context.graphics_device.get_upload_staging_usage();
+    erhe::utility::Memory_budget::Statistics budget{};
+    if (tick_context.load_memory_budget) {
+        budget = tick_context.load_memory_budget->get_statistics();
+    }
+    constexpr std::size_t mesh  = static_cast<std::size_t>(erhe::utility::Memory_budget_kind::mesh);
+    constexpr std::size_t image = static_cast<std::size_t>(erhe::utility::Memory_budget_kind::image);
     log_parsers->info(
-        "async load '{}' resident: decoded pixels high-water {} of {} bytes budget; "
+        "async load '{}' resident: load memory budget high-water {} of {} bytes (meshes {}, images {}; "
+        "{} mesh / {} image leases, {} oversize, {} refused; since the load phase began); "
+        "decoded pixels high-water {} bytes; "
         "upload staging high-water {} of {} bytes cap (device lifetime), {} waits, {} oversize; "
         "upload budget {} bytes per frame",
         erhe::file::to_string(m_handle->get_path().filename()),
+        budget.high_water_byte_count,
+        budget.capacity_byte_count,
+        budget.high_water_by_kind[mesh],
+        budget.high_water_by_kind[image],
+        budget.lease_count_by_kind[mesh],
+        budget.lease_count_by_kind[image],
+        budget.oversize_grant_count,
+        budget.refused_count,
         residency.get_pending_byte_high_water(),
-        tick_context.max_decoded_bytes_in_flight,
         staging.high_water_bytes,
         staging.capacity_byte_count,
         staging.refused_count,
@@ -438,13 +499,22 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
         }
 
         case Phase::building: {
-            if (!m_build_result->finished.load(std::memory_order_acquire)) {
+            // Mesh builds first: publish waits for them, textures may lag.
+            dispatch_build_jobs(tick_context);
+            if (!m_build_state->is_finished()) {
                 // The images need nothing from the build: decode and upload
                 // them meanwhile, so the decode overlaps the build instead
                 // of following it. Publish still waits for both.
                 static_cast<void>(advance_residency(tick_context));
                 return Asset_load_state::running;
             }
+            log_parsers->info(
+                "build_imported_buffer_meshes: {} primitives, {} ms ({} unique shapes built in parallel, {} of them prepared)",
+                m_build_state->primitive_count,
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_build_state->start_time).count(),
+                m_build_state->jobs.size(),
+                m_build_state->prepared_count
+            );
             // Everything the build enqueued has a ticket at or below this.
             if (m_context.mesh_memory != nullptr) {
                 m_build_ticket = m_context.mesh_memory->get_loader_transfer_queue().get_last_ticket();

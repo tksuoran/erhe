@@ -6,6 +6,7 @@
 #include "assets/asset_reference.hpp"
 
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_utility/memory_budget.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <atomic>
@@ -306,6 +307,13 @@ public:
     // while at least one load task is live, load.gpu_upload_bytes_per_frame
     // otherwise. The phase switches where load tasks are queued and reaped.
     [[nodiscard]] auto get_gpu_upload_bytes_per_frame() const -> std::size_t;
+
+    // The load memory budget shared by every load task
+    // (doc/editor/async_asset_loading.md "Load memory budget"), and its
+    // capacity: load.max_in_flight_bytes, 0 selecting the platform default
+    // (128 MiB desktop, 64 MiB OpenXR).
+    [[nodiscard]] auto get_load_memory_budget() const -> const std::shared_ptr<erhe::utility::Memory_budget>& { return m_load_memory_budget; }
+    [[nodiscard]] auto get_max_in_flight_bytes(std::size_t configured_byte_count) const -> std::size_t;
 
     // Registers a procedural item as a builtin-scope asset (Scene_builder
     // palette brushes). Builtin names are a persistence contract.
@@ -609,6 +617,8 @@ private:
     App_context&     m_context;
     App_message_bus& m_app_message_bus;
     App_scenes&      m_app_scenes;
+    // After m_context: its initializer reads the context.
+    std::shared_ptr<erhe::utility::Memory_budget> m_load_memory_budget;
 
     erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
 

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <memory>
 
 namespace tf {
     class Executor;
@@ -9,6 +10,9 @@ namespace tf {
 namespace erhe::graphics {
     class Command_buffer;
     class Device;
+}
+namespace erhe::utility {
+    class Memory_budget;
 }
 
 // Codegen emits the config structs at global scope
@@ -33,9 +37,9 @@ class App_context;
 // and every take_* call reports how much it actually granted, which may be
 // less than requested (or zero) - the task then resumes next frame.
 //
-// max_decoded_bytes_in_flight is deliberately NOT here: it is a standing cap
-// on the decoded bytes waiting for upload across frames, so it is manager
-// state, not a per-frame allowance. It is carried on the tick context.
+// The load memory budget is deliberately NOT here: it is a standing cap on
+// the CPU bytes waiting for upload across frames, so it is manager state,
+// not a per-frame allowance. It is carried on the tick context.
 class Frame_load_budget
 {
 public:
@@ -87,10 +91,15 @@ public:
     tf::Executor&                   executor;
     Frame_load_budget&              budget;
 
-    // Standing backpressure cap (plan 2.4): a task must not schedule further
-    // image decodes while this many decoded bytes are waiting for upload or
-    // being decoded (Gltf_image_residency::schedule_decodes).
-    std::size_t max_decoded_bytes_in_flight{0};
+    // load.max_in_flight_bytes as set (0: the platform default); the
+    // Asset_manager sizes its load memory budget from it each tick.
+    std::size_t max_in_flight_bytes{0};
+
+    // The load memory budget (doc/editor/async_asset_loading.md "Load memory
+    // budget"), shared by every live load: a mesh build job or an image
+    // decode starts only with a lease of it, held until its bytes are in
+    // upload staging. Set by Asset_manager::tick before the tasks tick.
+    std::shared_ptr<erhe::utility::Memory_budget> load_memory_budget;
 
     // Hard cap on the host-visible staging the budgeted uploads use
     // (Device::allocate_upload_staging): passed with every staged upload.

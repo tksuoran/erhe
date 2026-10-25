@@ -1,9 +1,11 @@
 #pragma once
 
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/memory_budget.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <mutex>
 #include <utility>
 #include <vector>
@@ -93,6 +95,14 @@ public:
 
     [[nodiscard]] auto get_queued_byte_count() const -> std::size_t;
 
+    // Keeps `lease` until every upload enqueued so far has been recorded
+    // (the watermark reaches the last ticket issued at this call), then
+    // drops it. A producer that enqueued uploads paid by a load memory
+    // budget hands its lease in after its last enqueue, so the budget counts
+    // the bytes while they wait in this queue (doc/editor/async_asset_loading.md
+    // "Load memory budget"). Dropped at once when nothing is outstanding.
+    void hold_until_drained(erhe::utility::Memory_budget_lease&& lease);
+
 private:
     // m_drain_mutex serializes the drainers (flush, flush_budgeted) against
     // each other; m_mutex guards the queue state and is what enqueue takes.
@@ -114,6 +124,16 @@ private:
     // Transfer_entry stays move-construct-only (no move ASSIGNMENT, which
     // erase-shifting would need) and a big queue is not shifted per drain.
     std::size_t                    m_drain_position{0};
+    class Held_lease
+    {
+    public:
+        Ticket                             ticket{0};
+        erhe::utility::Memory_budget_lease lease;
+    };
+    // Leases waiting for the watermark, in ticket order. Guarded by m_mutex.
+    std::deque<Held_lease>         m_held_leases;
+    // Moves the held leases the watermark has passed into `out`; m_mutex held.
+    void take_drained_leases_locked(std::vector<erhe::utility::Memory_budget_lease>& out);
     Device&                        m_device;
     Ticket                         m_next_ticket{1};
     Ticket                         m_watermark  {0};

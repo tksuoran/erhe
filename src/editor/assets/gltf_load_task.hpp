@@ -5,10 +5,15 @@
 
 #include "erhe_gltf/gltf.hpp"
 
+#include "erhe_primitive/build_info.hpp"
+
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 namespace erhe::gltf {
     class Image_transfer;
@@ -107,10 +112,35 @@ private:
 
     // Worker-side Buffer_mesh build (phase 3a). Separate from Parse_result
     // so the two worker stages have independent completion flags.
-    class Build_result
+    // The Buffer_mesh build: one job per unique render shape, dispatched from
+    // tick() as executor tasks while the job's upload bytes fit the load
+    // memory budget (doc/editor/async_asset_loading.md "Load memory
+    // budget"). Shared with the tasks; the Build_infos the jobs point at
+    // live here.
+    class Build_state
     {
     public:
-        std::atomic<bool> finished{false};
+        Build_state(const erhe::primitive::Build_info& build_info_in, const erhe::primitive::Build_info& skinned_build_info_in)
+            : build_info        {build_info_in}
+            , skinned_build_info{skinned_build_info_in}
+        {
+        }
+
+        erhe::primitive::Build_info           build_info;
+        erhe::primitive::Build_info           skinned_build_info;
+        std::vector<Imported_build_job>       jobs;
+        std::size_t                           primitive_count{0};
+        std::size_t                           prepared_count {0};
+        std::size_t                           next_job       {0}; // main thread only
+        std::chrono::steady_clock::time_point start_time;
+
+        // Guarded by mutex: written by the tasks, read by the main thread.
+        std::mutex  mutex;
+        std::size_t running_count {0};
+        std::size_t finished_count{0};
+
+        [[nodiscard]] auto is_finished() -> bool;     // every job dispatched and finished
+        [[nodiscard]] auto is_worker_idle() -> bool;  // no job task running
     };
 
     enum class Mode : unsigned int {
@@ -139,6 +169,8 @@ private:
     void start_scan (Asset_load_tick_context& tick_context);
     void start_parse(Asset_load_tick_context& tick_context);
     void start_build(Asset_load_tick_context& tick_context);
+    // Dispatches the build jobs whose upload bytes fit the load memory budget.
+    void dispatch_build_jobs(Asset_load_tick_context& tick_context);
     void notify_done();
     auto advance_residency(Asset_load_tick_context& tick_context) -> bool; // true when every image is resident (not yet bound)
     void log_staging_statistics(Asset_load_tick_context& tick_context) const;
@@ -157,7 +189,7 @@ private:
     // into the frame command buffer, staging comes from the device ring and
     // is reclaimed by frame completion (plan 2.6).
     std::unique_ptr<erhe::gltf::Image_transfer> m_image_transfer;
-    std::shared_ptr<Build_result> m_build_result;
+    std::shared_ptr<Build_state>  m_build_state;
     // Highest LOADER-queue ticket the worker build enqueued. Publish waits
     // until Mesh_memory's loader watermark has reached it, because a
     // budget-drained queue does not guarantee "enqueued implies uploaded"

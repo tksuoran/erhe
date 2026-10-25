@@ -113,7 +113,9 @@ codegen; the fields and their defaults are listed in
   the upper bound within that slice. `gpu_upload_bytes_per_frame` defaults to
   4 MiB rather than something larger because a memcpy into staging of that
   size is already a meaningful fraction of a 4 ms slice.
-- `max_decoded_bytes_in_flight` is what keeps memory bounded: without it a
+- The memory cap (`max_decoded_bytes_in_flight` then, the shared load memory
+  budget `max_in_flight_bytes` now, async_asset_loading.md "Load memory
+  budget") is what keeps memory bounded: without it a
   fast decoder queues an entire scene's decompressed pixels waiting for upload
   budget. It is a standing cap on the tick context rather than a per-frame
   allowance, and it must throttle worker scheduling, not just buffer results.
