@@ -40,7 +40,7 @@ Bistro figures from `doc/plans/bistro_load_profiling.md`.
 
 | Step | Where | Cost | Removed by |
 |---|---|---|---|
-| KTX2 Basis transcode | parse worker | 0.9 s wall, 21 worker-s | step 8 (texture decision) |
+| KTX2 Basis transcode | parse worker | 0.9 s wall, 21 worker-s | stays (decision 3: KTX2 kept in the file; transcode cache deferred) |
 | mikktspace for primitives without TANGENT | parse worker | part of mesh parse | TANGENT always written (step 4) |
 | fill-only soup buffer mesh | build phase, parallel | 0.16-0.25 s | stays (now the only build) |
 | residency upload | main thread, budgeted | 0.45-1.4 s | stays |
@@ -317,8 +317,19 @@ byte-for-byte against the foreign Bistro at idle.
    `scale` / `translation` / `rotation` values of 1771 nodes (a float
    round-trip drift of the node transforms on load and save, outside the
    mesh data).
-8. **Textures**, depending on decision 3: a transcode cache, or embedded
-   per-target images.
+8. **Textures** (decision 3): the retained KTX2 source bytes stay in the
+   saved file; the exporter writes a KTX2 image's texture through
+   `KHR_texture_basisu` (no core `source`, extension used and required) and
+   declares the KHR material extensions it writes (`KHR_materials_ior`, ...).
+   Gate: the Khronos validator reports no KTX2 MIME or undeclared-extension
+   errors on the saved Bistro, and the saved file reloads with its textures
+   bound. Result (2026-10-25, Release headless): the validator's errors on the
+   saved Bistro go from 1077 to 478, all `ACCESSOR_VECTOR3_NON_UNIT`
+   (the zero-length TANGENT vectors from the import, a separate issue);
+   the 393 `TEXTURE_INVALID_IMAGE_MIME_TYPE` and 206 `UNDECLARED_EXTENSION`
+   errors are gone. The saved file reloads with "prepared mesh data: 3852
+   used", no texture warnings, and a `render_scene_image` byte-identical
+   to the pre-change reload.
 9. **Quest.** Push the erhe-saved Bistro to the headset and time the load
    against the foreign file, with logcat phase lines and memory, following
    `doc/agents/quest.md`. Gate: 0 deferred tasks, plus load time and peak
@@ -330,8 +341,9 @@ byte-for-byte against the foreign Bistro at idle.
    (reorder, colocation snap within 1e-5, degenerate triangles dropped,
    tangents baked, weights normalized). No lossless remap form.
 2. `Geometry` and the full buffer mesh are lazy (step 7).
-3. Textures: a device-local transcode cache under `cache/` (step 8); no
-   per-target images in the file. Revisit after the Quest measurement.
+3. Textures stay Basis Universal KTX2 in the saved file, written through
+   `KHR_texture_basisu` (user 2026-10-25: "for now - use basis universal,
+   store in erhe gltf"); transcode cache / per-target images deferred.
 4. `save_scene` always writes the extensions; `export_gltf` only when its
    arguments ask for it.
 5. The BVH is stored in the file; `cache/bvh` keeps serving foreign files.

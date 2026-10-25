@@ -139,7 +139,17 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   `ERHE_node` / `ERHE_light` / `ERHE_camera` local properties and their unauthored values,
   the fixture's meshes, the prepared-mesh-data extensions and payload sizes, the
   prepared data read back as used, and tampered copies rejected with their
-  reason while the primitive still loads as a soup).
+  reason while the primitive still loads as a soup). `erhe_gltf_gpu_tests` (same
+  directory, device-backed because a material texture slot needs a `Texture`): a
+  KTX2 texture exports through `KHR_texture_basisu` and a PNG through the core
+  `source`, and the parse binds both material slots to their images.
+- Image export: the retained encoded stream (`Gltf_image_source`) is embedded
+  verbatim as a buffer view. A PNG / JPEG image is the texture's core `source`; a
+  KTX2 (Basis Universal) image is named only by `KHR_texture_basisu` (no fallback
+  image), which the export lists in `extensionsUsed` and `extensionsRequired`.
+  The KHR material extensions fastgltf writes for the exported materials
+  (`KHR_materials_ior`, `_transmission`, `_unlit`, ...) are declared in
+  `extensionsUsed` from the same conditions fastgltf writes them under.
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
   `ERHE_material`, `ERHE_geometry`) round-trip erhe-specific state that has no standard
   glTF representation; editor-domain extensions (`ERHE_scene`, collections, brushes,

@@ -28,9 +28,11 @@ add_subdirectory(geometry_renderer)
 if (ERHE_GRAPHICS_API_OPENGL)
     add_subdirectory(gl)
 endif ()
-add_subdirectory(gltf)
 add_subdirectory(graph)
 add_subdirectory(graphics)
+# After graphics: the gltf tests' device-backed half checks for
+# erhe::gpu_test_support, which src/erhe/graphics/test defines.
+add_subdirectory(gltf)
 add_subdirectory(hash)
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     add_subdirectory(imgui)
