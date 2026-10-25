@@ -411,6 +411,7 @@ flowchart TD
 - [gltf_extensions/ERHE_camera.md](gltf_extensions/ERHE_camera.md) (mostly stable): ERHE_camera
 - [gltf_extensions/ERHE_collections.md](gltf_extensions/ERHE_collections.md) (mostly stable): ERHE_collections
 - [gltf_extensions/ERHE_geometry.md](gltf_extensions/ERHE_geometry.md) (mostly stable): ERHE_geometry
+- [gltf_extensions/ERHE_gpu_vertex_streams.md](gltf_extensions/ERHE_gpu_vertex_streams.md) (experimental): ERHE_gpu_vertex_streams (draft, design only)
 - [gltf_extensions/ERHE_light.md](gltf_extensions/ERHE_light.md) (mostly stable): ERHE_light
 - [gltf_extensions/ERHE_material.md](gltf_extensions/ERHE_material.md) (mostly stable): ERHE_material
 - [gltf_extensions/ERHE_mesh_optimized.md](gltf_extensions/ERHE_mesh_optimized.md) (experimental): ERHE_mesh_optimized
