@@ -20,6 +20,7 @@
 
 #include <array>
 #include <cstring>
+#include <initializer_list>
 
 namespace erhe::primitive {
 
@@ -307,6 +308,100 @@ auto compute_mesh_content_hash(const std::span<const uint32_t> indices, const st
     hash_code = erhe::hash::hash(indices.data(),       indices.size_bytes(),       hash_code);
     hash_code = erhe::hash::hash(positions_xyz.data(), positions_xyz.size_bytes(), hash_code);
     return hash_code;
+}
+
+namespace {
+
+[[nodiscard]] auto same_position(const std::span<const float> positions_xyz, const uint32_t a, const uint32_t b) -> bool
+{
+    return std::memcmp(&positions_xyz[3 * static_cast<std::size_t>(a)], &positions_xyz[3 * static_cast<std::size_t>(b)], 3 * sizeof(float)) == 0;
+}
+
+} // anonymous namespace
+
+auto validate_prepared_core(
+    const std::span<const uint32_t> indices,
+    const std::span<const float>    positions_xyz,
+    const uint64_t                  content_hash
+) -> std::string
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if ((positions_xyz.size() % 3) != 0) {
+        return "position count is not whole";
+    }
+    const std::size_t vertex_count = positions_xyz.size() / 3;
+    if (indices.empty() || ((indices.size() % 3) != 0)) {
+        return "index count is not a positive multiple of 3";
+    }
+    // Every vertex referenced: count the vertices seen for the first time.
+    // A local vector is fine here: this runs once per primitive at load.
+    std::vector<uint8_t> referenced(vertex_count, uint8_t{0});
+    std::size_t          referenced_count = 0;
+    for (std::size_t corner = 0, end = indices.size(); corner < end; corner += 3) {
+        const uint32_t v0 = indices[corner + 0];
+        const uint32_t v1 = indices[corner + 1];
+        const uint32_t v2 = indices[corner + 2];
+        if ((v0 >= vertex_count) || (v1 >= vertex_count) || (v2 >= vertex_count)) {
+            return "index out of range";
+        }
+        if (same_position(positions_xyz, v0, v1) || same_position(positions_xyz, v1, v2) || same_position(positions_xyz, v2, v0)) {
+            return "degenerate triangle";
+        }
+        for (const uint32_t v : {v0, v1, v2}) {
+            if (referenced[v] == 0) {
+                referenced[v] = 1;
+                ++referenced_count;
+            }
+        }
+    }
+    if (referenced_count != vertex_count) {
+        return "unreferenced vertex";
+    }
+    if (compute_mesh_content_hash(indices, positions_xyz) != content_hash) {
+        return "content_hash mismatch";
+    }
+    return {};
+}
+
+auto validate_vertex_points(
+    const std::span<const uint32_t> vertex_points,
+    const uint32_t                  point_count,
+    const std::span<const float>    positions_xyz
+) -> std::string
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::size_t vertex_count = positions_xyz.size() / 3;
+    if (vertex_points.size() != vertex_count) {
+        return "vertex_points size mismatch";
+    }
+    if ((point_count == 0) || (point_count > vertex_count)) {
+        return "point_count out of range";
+    }
+    // first_vertex[p]: the first vertex of point p; its size is the count of
+    // distinct ids seen so far.
+    std::vector<uint32_t> first_vertex;
+    first_vertex.reserve(point_count);
+    for (std::size_t v = 0; v < vertex_count; ++v) {
+        const uint32_t point = vertex_points[v];
+        if (point < first_vertex.size()) {
+            if (!same_position(positions_xyz, first_vertex[point], static_cast<uint32_t>(v))) {
+                return "point vertices differ in position";
+            }
+        } else if (point == first_vertex.size()) {
+            if (first_vertex.size() == point_count) {
+                return "point id out of range";
+            }
+            first_vertex.push_back(static_cast<uint32_t>(v));
+        } else {
+            return "not in first-reference order";
+        }
+    }
+    if (first_vertex.size() != point_count) {
+        return "point_count mismatch";
+    }
+    return {};
 }
 
 auto get_float_positions(const Triangle_soup& soup) -> std::vector<float>

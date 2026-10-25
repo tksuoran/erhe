@@ -28,6 +28,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Prepared_primitive_data`, `validate_prepared_core()`
+  and `validate_vertex_points()` (`prepared_primitive.hpp`); the
+  constructors `Primitive(soup, prepared_data)`,
+  `Primitive_render_shape(soup, prepared_data)`,
+  `Primitive_shape(soup, prepared_data)` and
+  `Primitive_shape::get_prepared_data()`.
+- `erhe::gltf`: `Gltf_parse_arguments::prepared_mesh_data_use`
+  (`Prepared_mesh_data_use::use` by default) and
+  `Gltf_data::prepared_mesh_statistics` (`Gltf_prepared_mesh_statistics`):
+  the parse validates and attaches `ERHE_mesh_optimized` /
+  `ERHE_mesh_topology` / `ERHE_raytrace_bvh` payloads.
+
 - `erhe::primitive`: `prepare_primitive_for_export()`,
   `Prepared_primitive_export`, `Prepare_primitive_result`,
   `Prepared_bvh_source`, `compute_mesh_content_hash()` and

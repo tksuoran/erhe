@@ -207,7 +207,8 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
         .mesh_layer_id   = m_mesh_layer_id,
         .path            = path,
         .parallel        = (m_context.editor_settings == nullptr) || m_context.editor_settings->load.parallel_gltf_parse,
-        .fix_spot_lights = m_context.fix_gltf_spot_lights
+        .fix_spot_lights = m_context.fix_gltf_spot_lights,
+        .prepared_mesh_data_use = get_prepared_mesh_data_use(m_context)
     };
 
     m_parse_result = parse_result;

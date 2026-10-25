@@ -263,6 +263,13 @@ byte-for-byte against the foreign Bistro at idle.
 5. **Parser read and validate, data not used yet.** Gates: the log reads
    `3852 used, 0 rejected`; parse time grows by less than 100 ms; the render
    is identical.
+
+   Result (2026-10-25, Release headless, Bistro prepared save, two runs of
+   two opens per setting): `prepared mesh data: 3852 used, 0 rejected ();
+   topology 3852, BVH 3852`. Mesh parse 115-182 ms on vs 74-122 ms off
+   (+41 to +63 ms, the full `validate_prebuilt_bvh()` check included);
+   `async parse_gltf` +40 to +58 ms. All eight renders at idle are
+   byte-identical (on and off, first and second open).
 6. **Load fast path:** base build plus optimized pack plus stored BVH, and
    the kickoff skips prepared primitives. Gates:
    - idle within 0.2 s of listed;

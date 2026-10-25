@@ -24,6 +24,7 @@
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_raytrace/prebuilt_bvh.hpp"
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
@@ -54,6 +55,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <future>
@@ -1155,6 +1157,19 @@ public:
     std::string prim_type_name;
 };
 
+// The prepared mesh data extension payloads of one glTF primitive
+// (ERHE_mesh_optimized, ERHE_mesh_topology, ERHE_raytrace_bvh; empty string
+// when absent), captured by the generic extensions callback.
+class Prepared_extension_json
+{
+public:
+    std::string optimized;
+    std::string topology;
+    std::string bvh;
+
+    [[nodiscard]] auto operator==(const Prepared_extension_json&) const -> bool = default;
+};
+
 class Gltf_parser
 {
 private:
@@ -2187,6 +2202,7 @@ private:
         std::size_t                                     index_accessor;
         std::vector<std::size_t>                        attribute_accessors;
         bool                                            tangent_frame_needed;
+        Prepared_extension_json                         prepared_json;
         std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup;
         std::shared_ptr<erhe::primitive::Primitive>     primitive;
     };
@@ -2202,6 +2218,7 @@ private:
         std::size_t                                     index_accessor;
         std::vector<std::size_t>                        attribute_accessors;
         bool                                            tangent_frame_needed;
+        Prepared_extension_json                         prepared_json;
         std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup;
         std::shared_ptr<erhe::primitive::Primitive>     primitive;
         std::promise<void>                              promise;
@@ -2533,9 +2550,11 @@ private:
         primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
     }
     auto get_primitive_geometry(
-        const fastgltf::Primitive& primitive, 
-        Primitive_entry&           primitive_entry,
-        const bool                 tangent_frame_needed
+        const fastgltf::Primitive&     primitive,
+        Primitive_entry&               primitive_entry,
+        const bool                     tangent_frame_needed,
+        const Prepared_extension_json& prepared_json,
+        const std::string&             name
     )
     {
         ERHE_PROFILE_FUNCTION();
@@ -2546,6 +2565,7 @@ private:
         primitive_entry.index_accessor = primitive.indicesAccessor.value();
         primitive_entry.attribute_accessors.clear();
         primitive_entry.tangent_frame_needed = tangent_frame_needed;
+        primitive_entry.prepared_json        = prepared_json;
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
             const fastgltf::Attribute& attribute = primitive.attributes[i];
             primitive_entry.attribute_accessors.push_back(attribute.accessorIndex);
@@ -2560,6 +2580,7 @@ private:
                 if (old_slot->index_accessor != primitive_entry.index_accessor) continue;
                 if (old_slot->attribute_accessors != primitive_entry.attribute_accessors) continue;
                 if (old_slot->tangent_frame_needed != primitive_entry.tangent_frame_needed) continue;
+                if (old_slot->prepared_json != primitive_entry.prepared_json) continue;
                 // Found existing (possibly still building) entry: wait for it
                 // outside the lock instead of building a duplicate.
                 slot = old_slot;
@@ -2570,6 +2591,7 @@ private:
                 slot->index_accessor       = primitive_entry.index_accessor;
                 slot->attribute_accessors  = primitive_entry.attribute_accessors;
                 slot->tangent_frame_needed = primitive_entry.tangent_frame_needed;
+                slot->prepared_json        = primitive_entry.prepared_json;
                 slot->ready = slot->promise.get_future().share();
                 m_primitive_entries.push_back(slot);
                 claimed = true;
@@ -2585,6 +2607,13 @@ private:
 
         // This task claimed the slot; build outside the lock and publish.
         load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
+        if (primitive_entry.triangle_soup && !prepared_json.optimized.empty()) {
+            std::shared_ptr<const erhe::primitive::Prepared_primitive_data> prepared_data =
+                read_prepared_mesh_data(primitive, prepared_json, *primitive_entry.triangle_soup, name);
+            if (prepared_data) {
+                primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup, prepared_data);
+            }
+        }
         slot->triangle_soup = primitive_entry.triangle_soup;
         slot->primitive     = primitive_entry.primitive;
         slot->promise.set_value();
@@ -2611,7 +2640,480 @@ public:
     {
         m_primitive_geometry_extensions = std::move(extensions);
     }
+
+    // Prepared mesh data extension payloads per (mesh index, primitive
+    // index), handed in by parse_gltf() before parse_and_build() when
+    // Gltf_parse_arguments::prepared_mesh_data_use is use.
+    void set_primitive_prepared_extensions(std::map<std::pair<std::size_t, std::size_t>, Prepared_extension_json>&& extensions)
+    {
+        m_primitive_prepared_extensions = std::move(extensions);
+    }
 private:
+    std::map<std::pair<std::size_t, std::size_t>, Prepared_extension_json> m_primitive_prepared_extensions;
+    const Prepared_extension_json                                           m_no_prepared_extensions{};
+    // Guards m_data_out.prepared_mesh_statistics, written by the parallel
+    // per-mesh parse tasks.
+    ERHE_PROFILE_MUTEX(std::mutex, m_prepared_statistics_mutex);
+
+    // Raw bufferView bytes of a prepared mesh data payload: the view must
+    // exist, have no byteStride, be backed by a loaded buffer and hold
+    // exactly expected_byte_length bytes (doc/gltf_extensions/ERHE_mesh_topology.md,
+    // ERHE_raytrace_bvh.md). Returns the rejection reason, or empty with
+    // out_bytes set.
+    [[nodiscard]] auto get_prepared_buffer_view(
+        const std::uint64_t         view_index,
+        const std::size_t           expected_byte_length,
+        std::span<const std::byte>& out_bytes
+    ) const -> std::string
+    {
+        if (view_index >= m_asset->bufferViews.size()) {
+            return "bufferView out of range";
+        }
+        const fastgltf::BufferView& buffer_view = m_asset->bufferViews[view_index];
+        if (buffer_view.byteStride.has_value()) {
+            return "bufferView has byteStride";
+        }
+        if (buffer_view.byteLength != expected_byte_length) {
+            return "bufferView byteLength mismatch";
+        }
+        if (buffer_view.bufferIndex >= m_asset->buffers.size()) {
+            return "bufferView buffer out of range";
+        }
+        const fastgltf::Buffer& buffer       = m_asset->buffers[buffer_view.bufferIndex];
+        const auto*             array_source = std::get_if<fastgltf::sources::Array>(&buffer.data);
+        if (array_source == nullptr) {
+            return "buffer not loaded";
+        }
+        if ((buffer_view.byteOffset > array_source->bytes.size()) || ((array_source->bytes.size() - buffer_view.byteOffset) < buffer_view.byteLength)) {
+            return "bufferView outside its buffer";
+        }
+        out_bytes = std::span<const std::byte>{
+            reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset,
+            buffer_view.byteLength
+        };
+        return {};
+    }
+
+    // 16 lowercase hexadecimal digits, most significant first.
+    [[nodiscard]] static auto parse_hex_hash(const std::string_view text, std::uint64_t& out_value) -> bool
+    {
+        if (text.size() != 16) {
+            return false;
+        }
+        std::uint64_t value = 0;
+        for (const char c : text) {
+            std::uint64_t digit = 0;
+            if ((c >= '0') && (c <= '9')) {
+                digit = static_cast<std::uint64_t>(c - '0');
+            } else if ((c >= 'a') && (c <= 'f')) {
+                digit = static_cast<std::uint64_t>(c - 'a') + 10;
+            } else {
+                return false;
+            }
+            value = (value << 4) | digit;
+        }
+        out_value = value;
+        return true;
+    }
+
+    // Parses one prepared mesh data extension payload: a JSON object with
+    // "version": 1.
+    [[nodiscard]] static auto parse_extension_object(
+        simdjson::dom::parser& json_parser,
+        const std::string&     json,
+        simdjson::dom::object& out_object
+    ) -> bool
+    {
+        simdjson::dom::element root;
+        if (json_parser.parse(simdjson::padded_string{json}).get(root) != simdjson::SUCCESS) {
+            return false;
+        }
+        if (root.get_object().get(out_object) != simdjson::SUCCESS) {
+            return false;
+        }
+        std::uint64_t version = 0;
+        return (out_object.at_key("version").get_uint64().get(version) == simdjson::SUCCESS) && (version == 1);
+    }
+
+    // ERHE_mesh_optimized (doc/gltf_extensions/ERHE_mesh_optimized.md
+    // "Validation / fallback"). Fills the marker fields of out_data. Returns
+    // the rejection reason, empty when accepted.
+    [[nodiscard]] auto read_mesh_optimized(
+        const fastgltf::Primitive&                primitive,
+        const std::string&                        json,
+        const std::span<const uint32_t>           indices,
+        const std::span<const float>              positions_xyz,
+        erhe::primitive::Prepared_primitive_data& out_data
+    ) const -> std::string
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        if (!parse_extension_object(json_parser, json, extension_object)) {
+            return "malformed JSON or unsupported version";
+        }
+
+        erhe::primitive::Mesh_optimize_options options{};
+        options.weld         = false;
+        options.vertex_cache = false;
+        options.overdraw     = false;
+        options.vertex_fetch = false;
+        simdjson::dom::array passes;
+        if (extension_object.at_key("passes").get_array().get(passes) != simdjson::SUCCESS) {
+            return "missing passes";
+        }
+        for (const simdjson::dom::element pass_element : passes) {
+            std::string_view pass;
+            if (pass_element.get_string().get(pass) != simdjson::SUCCESS) {
+                return "unknown pass";
+            }
+            if      (pass == "weld_bitwise") { options.weld         = true; }
+            else if (pass == "vertex_cache") { options.vertex_cache = true; }
+            else if (pass == "overdraw"    ) { options.overdraw     = true; }
+            else if (pass == "vertex_fetch") { options.vertex_fetch = true; }
+            else {
+                return "unknown pass";
+            }
+        }
+        double overdraw_threshold = 0.0;
+        if (extension_object.at_key("overdraw_threshold").get_double().get(overdraw_threshold) == simdjson::SUCCESS) {
+            options.overdraw_threshold = static_cast<float>(overdraw_threshold);
+        }
+
+        std::string_view content_hash_text;
+        std::uint64_t    content_hash{0};
+        if (
+            (extension_object.at_key("content_hash").get_string().get(content_hash_text) != simdjson::SUCCESS) ||
+            !parse_hex_hash(content_hash_text, content_hash)
+        ) {
+            return "malformed content_hash";
+        }
+
+        simdjson::dom::object sphere_object;
+        simdjson::dom::array  center_array;
+        double                radius{0.0};
+        if (
+            (extension_object.at_key("bounding_sphere").get_object().get(sphere_object) != simdjson::SUCCESS) ||
+            (sphere_object.at_key("center").get_array().get(center_array) != simdjson::SUCCESS) ||
+            (center_array.size() != 3) ||
+            (sphere_object.at_key("radius").get_double().get(radius) != simdjson::SUCCESS) ||
+            !std::isfinite(radius) ||
+            (radius < 0.0)
+        ) {
+            return "malformed bounding_sphere";
+        }
+        glm::vec3 center{0.0f};
+        for (std::size_t i = 0; i < 3; ++i) {
+            double value{0.0};
+            if ((center_array.at(i).get_double().get(value) != simdjson::SUCCESS) || !std::isfinite(value)) {
+                return "malformed bounding_sphere";
+            }
+            center[static_cast<glm::vec3::length_type>(i)] = static_cast<float>(value);
+        }
+
+        // Contract items 1 and 2: TRIANGLES with indices, no morph targets,
+        // float POSITION / NORMAL / TANGENT, one count for every attribute.
+        if ((primitive.type != fastgltf::PrimitiveType::Triangles) || !primitive.indicesAccessor.has_value() || !primitive.targets.empty()) {
+            return "not an indexed TRIANGLES primitive without targets";
+        }
+        const auto* position_attribute = primitive.findAttribute("POSITION");
+        const auto* normal_attribute   = primitive.findAttribute("NORMAL");
+        const auto* tangent_attribute  = primitive.findAttribute("TANGENT");
+        if (
+            (position_attribute == primitive.attributes.end()) ||
+            (normal_attribute   == primitive.attributes.end()) ||
+            (tangent_attribute  == primitive.attributes.end())
+        ) {
+            return "missing POSITION, NORMAL or TANGENT";
+        }
+        const auto is_float_accessor = [this](const std::size_t accessor_index, const fastgltf::AccessorType type) -> bool {
+            const fastgltf::Accessor& accessor = m_asset->accessors[accessor_index];
+            return (accessor.type == type) && (accessor.componentType == fastgltf::ComponentType::Float) && !accessor.normalized;
+        };
+        if (
+            !is_float_accessor(position_attribute->accessorIndex, fastgltf::AccessorType::Vec3) ||
+            !is_float_accessor(normal_attribute  ->accessorIndex, fastgltf::AccessorType::Vec3) ||
+            !is_float_accessor(tangent_attribute ->accessorIndex, fastgltf::AccessorType::Vec4)
+        ) {
+            return "POSITION, NORMAL or TANGENT is not float";
+        }
+        const fastgltf::Accessor& position_accessor = m_asset->accessors[position_attribute->accessorIndex];
+        for (const fastgltf::Attribute& attribute : primitive.attributes) {
+            if (m_asset->accessors[attribute.accessorIndex].count != position_accessor.count) {
+                return "attribute counts differ";
+            }
+        }
+        if ((positions_xyz.size() / 3) != position_accessor.count) {
+            return "attribute counts differ";
+        }
+        if (!position_accessor.min || !position_accessor.max || (position_accessor.min->size() < 3) || (position_accessor.max->size() < 3)) {
+            return "POSITION has no min / max";
+        }
+
+        // Contract items 5 and 6, index range, content hash.
+        const std::string core_reason = erhe::primitive::validate_prepared_core(indices, positions_xyz, content_hash);
+        if (!core_reason.empty()) {
+            return core_reason;
+        }
+
+        // The box comes from the POSITION accessor's required min / max.
+        const auto bounds_component = [](const fastgltf::AccessorBoundsArray& bounds, const std::size_t i) -> float {
+            return (bounds.type() == fastgltf::AccessorBoundsArray::BoundsType::float64)
+                ? static_cast<float>(bounds.data<double>()[i])
+                : static_cast<float>(bounds.data<std::int64_t>()[i]);
+        };
+        out_data.options          = options;
+        out_data.content_hash     = content_hash;
+        out_data.bounding_box.min = glm::vec3{bounds_component(*position_accessor.min, 0), bounds_component(*position_accessor.min, 1), bounds_component(*position_accessor.min, 2)};
+        out_data.bounding_box.max = glm::vec3{bounds_component(*position_accessor.max, 0), bounds_component(*position_accessor.max, 1), bounds_component(*position_accessor.max, 2)};
+        out_data.bounding_sphere  = erhe::math::Sphere{.center = center, .radius = static_cast<float>(radius)};
+        return {};
+    }
+
+    // ERHE_mesh_topology (doc/gltf_extensions/ERHE_mesh_topology.md
+    // "Validation / fallback"); the marker is already accepted.
+    [[nodiscard]] auto read_mesh_topology(
+        const std::string&                  json,
+        const std::span<const float>        positions_xyz,
+        erhe::primitive::Vertex_colocation& out_colocation
+    ) const -> std::string
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        if (!parse_extension_object(json_parser, json, extension_object)) {
+            return "malformed JSON or unsupported version";
+        }
+        std::uint64_t point_count{0};
+        std::uint64_t view_index{0};
+        if (
+            (extension_object.at_key("point_count").get_uint64().get(point_count) != simdjson::SUCCESS) ||
+            (extension_object.at_key("vertex_points").get_uint64().get(view_index) != simdjson::SUCCESS) ||
+            (point_count > std::numeric_limits<uint32_t>::max())
+        ) {
+            return "malformed point_count or vertex_points";
+        }
+        const std::size_t          vertex_count = positions_xyz.size() / 3;
+        std::span<const std::byte> bytes;
+        const std::string view_reason = get_prepared_buffer_view(view_index, sizeof(uint32_t) * vertex_count, bytes);
+        if (!view_reason.empty()) {
+            return view_reason;
+        }
+        std::vector<uint32_t> vertex_points(vertex_count);
+        std::memcpy(vertex_points.data(), bytes.data(), bytes.size());
+        const std::string reason = erhe::primitive::validate_vertex_points(vertex_points, static_cast<uint32_t>(point_count), positions_xyz);
+        if (!reason.empty()) {
+            return reason;
+        }
+        out_colocation.vertex_points = std::move(vertex_points);
+        out_colocation.point_count   = static_cast<uint32_t>(point_count);
+        return {};
+    }
+
+    // ERHE_raytrace_bvh (doc/gltf_extensions/ERHE_raytrace_bvh.md
+    // "Validation / fallback"); the marker is already accepted. Runs the full
+    // check, including erhe::raytrace::validate_prebuilt_bvh(); the detailed
+    // reason of a structural rejection goes to out_detail.
+    [[nodiscard]] auto read_raytrace_bvh(
+        const std::string&              json,
+        const std::span<const uint32_t> indices,
+        const std::span<const float>    positions_xyz,
+        erhe::raytrace::Prebuilt_bvh&   out_bvh,
+        std::string&                    out_detail
+    ) const -> std::string
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        if (!parse_extension_object(json_parser, json, extension_object)) {
+            return "malformed JSON or unsupported version";
+        }
+        const std::size_t triangle_count = indices.size() / 3;
+        std::uint64_t     stored_triangle_count{0};
+        if (extension_object.at_key("triangle_count").get_uint64().get(stored_triangle_count) != simdjson::SUCCESS) {
+            return "malformed triangle_count";
+        }
+        if (stored_triangle_count != triangle_count) {
+            return "triangle_count mismatch";
+        }
+        std::string_view triangle_hash_text;
+        std::uint64_t    stored_triangle_hash{0};
+        if (
+            (extension_object.at_key("triangle_hash").get_string().get(triangle_hash_text) != simdjson::SUCCESS) ||
+            !parse_hex_hash(triangle_hash_text, stored_triangle_hash)
+        ) {
+            return "malformed triangle_hash";
+        }
+        const std::uint64_t triangle_hash = erhe::raytrace::compute_triangle_hash(indices, positions_xyz);
+        if (stored_triangle_hash != triangle_hash) {
+            return "triangle_hash mismatch";
+        }
+
+        // The first entry whose backend and library match the running
+        // raytrace backend; entries of other backends are skipped.
+        const std::string_view backend = erhe::raytrace::get_prebuilt_bvh_backend();
+        const std::string_view library = erhe::raytrace::get_prebuilt_bvh_library();
+        simdjson::dom::array builds;
+        if (extension_object.at_key("builds").get_array().get(builds) != simdjson::SUCCESS) {
+            return "malformed builds";
+        }
+        simdjson::dom::object build;
+        bool                  found = false;
+        if (!backend.empty()) {
+            for (const simdjson::dom::element build_element : builds) {
+                simdjson::dom::object candidate;
+                std::string_view      candidate_backend;
+                std::string_view      candidate_library;
+                if (
+                    (build_element.get_object().get(candidate) != simdjson::SUCCESS) ||
+                    (candidate.at_key("backend").get_string().get(candidate_backend) != simdjson::SUCCESS) ||
+                    (candidate.at_key("library").get_string().get(candidate_library) != simdjson::SUCCESS)
+                ) {
+                    continue;
+                }
+                if ((candidate_backend == backend) && (candidate_library == library)) {
+                    build = candidate;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            return "no build for the running backend and library";
+        }
+
+        std::string_view quality_text;
+        std::uint64_t    node_count{0};
+        std::uint64_t    nodes_view{0};
+        std::uint64_t    primitive_ids_view{0};
+        if (
+            (build.at_key("quality").get_string().get(quality_text) != simdjson::SUCCESS) ||
+            (build.at_key("node_count").get_uint64().get(node_count) != simdjson::SUCCESS) ||
+            (build.at_key("nodes").get_uint64().get(nodes_view) != simdjson::SUCCESS) ||
+            (build.at_key("primitive_ids").get_uint64().get(primitive_ids_view) != simdjson::SUCCESS) ||
+            (node_count == 0) ||
+            (node_count > (std::numeric_limits<uint32_t>::max() / sizeof(erhe::raytrace::Bvh_node_record)))
+        ) {
+            return "malformed build";
+        }
+        erhe::raytrace::Bvh_build_quality quality{erhe::raytrace::Bvh_build_quality::high};
+        if      (quality_text == "low"   ) { quality = erhe::raytrace::Bvh_build_quality::low;    }
+        else if (quality_text == "medium") { quality = erhe::raytrace::Bvh_build_quality::medium; }
+        else if (quality_text == "high"  ) { quality = erhe::raytrace::Bvh_build_quality::high;   }
+        else {
+            return "malformed build";
+        }
+
+        std::span<const std::byte> node_bytes;
+        std::string view_reason = get_prepared_buffer_view(nodes_view, sizeof(erhe::raytrace::Bvh_node_record) * node_count, node_bytes);
+        if (!view_reason.empty()) {
+            return "nodes " + view_reason;
+        }
+        std::span<const std::byte> primitive_id_bytes;
+        view_reason = get_prepared_buffer_view(primitive_ids_view, sizeof(uint32_t) * triangle_count, primitive_id_bytes);
+        if (!view_reason.empty()) {
+            return "primitive_ids " + view_reason;
+        }
+
+        erhe::raytrace::Prebuilt_bvh bvh{};
+        bvh.backend        = std::string{backend};
+        bvh.library        = std::string{library};
+        bvh.quality        = quality;
+        bvh.triangle_hash  = stored_triangle_hash;
+        bvh.triangle_count = triangle_count;
+        bvh.nodes.resize(node_count);
+        std::memcpy(bvh.nodes.data(), node_bytes.data(), node_bytes.size());
+        bvh.primitive_ids.resize(triangle_count);
+        std::memcpy(bvh.primitive_ids.data(), primitive_id_bytes.data(), primitive_id_bytes.size());
+
+        const std::string structure_reason = erhe::raytrace::validate_prebuilt_bvh(
+            bvh, backend, library, triangle_hash, triangle_count, erhe::raytrace::bvh_v2_traversal_stack_size
+        );
+        if (!structure_reason.empty()) {
+            out_detail = structure_reason;
+            return "invalid BVH structure";
+        }
+        out_bvh = std::move(bvh);
+        return {};
+    }
+
+    // Validates the prepared mesh data of one soup primitive, all-or-nothing
+    // per extension with the dependency rule (a rejected ERHE_mesh_optimized
+    // rejects the other two as well), and counts the outcome in
+    // m_data_out.prepared_mesh_statistics. Returns the accepted payloads, or
+    // null when ERHE_mesh_optimized is rejected (the primitive then loads as
+    // a plain soup).
+    [[nodiscard]] auto read_prepared_mesh_data(
+        const fastgltf::Primitive&            primitive,
+        const Prepared_extension_json&        json,
+        const erhe::primitive::Triangle_soup& soup,
+        const std::string&                    name
+    ) -> std::shared_ptr<const erhe::primitive::Prepared_primitive_data>
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        std::vector<std::string> rejections; // "<extension>: <reason>"
+        const auto reject = [&rejections, &name](const char* const extension, const std::string& reason, const std::string& detail) {
+            log_gltf->warn(
+                "prepared mesh data: primitive '{}' {} rejected: {}{}{}",
+                name, extension, reason, detail.empty() ? "" : " - ", detail
+            );
+            rejections.push_back(fmt::format("{}: {}", extension, reason));
+        };
+
+        const std::vector<float>        positions_xyz = erhe::primitive::get_float_positions(soup);
+        const std::span<const uint32_t> indices{soup.index_data};
+        std::shared_ptr<erhe::primitive::Prepared_primitive_data> data = std::make_shared<erhe::primitive::Prepared_primitive_data>();
+        bool topology_used = false;
+        bool bvh_used      = false;
+
+        const std::string optimized_reason = positions_xyz.empty()
+            ? std::string{"POSITION, NORMAL or TANGENT is not float"}
+            : read_mesh_optimized(primitive, json.optimized, indices, positions_xyz, *data);
+        if (!optimized_reason.empty()) {
+            reject("ERHE_mesh_optimized", optimized_reason, {});
+            data.reset();
+        } else {
+            if (!json.topology.empty()) {
+                erhe::primitive::Vertex_colocation colocation;
+                const std::string reason = read_mesh_topology(json.topology, positions_xyz, colocation);
+                if (!reason.empty()) {
+                    reject("ERHE_mesh_topology", reason, {});
+                } else {
+                    data->colocation = std::move(colocation);
+                    topology_used = true;
+                }
+            }
+            if (!json.bvh.empty()) {
+                erhe::raytrace::Prebuilt_bvh bvh;
+                std::string                  detail;
+                const std::string reason = read_raytrace_bvh(json.bvh, indices, positions_xyz, bvh, detail);
+                if (!reason.empty()) {
+                    reject("ERHE_raytrace_bvh", reason, detail);
+                } else {
+                    data->bvh = std::move(bvh);
+                    bvh_used = true;
+                }
+            }
+        }
+
+        {
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_prepared_statistics_mutex};
+            Gltf_prepared_mesh_statistics& statistics = m_data_out.prepared_mesh_statistics;
+            if (rejections.empty()) {
+                ++statistics.used_count;
+            } else {
+                ++statistics.rejected_count;
+                for (const std::string& rejection : rejections) {
+                    ++statistics.rejection_reasons[rejection];
+                }
+            }
+            if (topology_used) {
+                ++statistics.topology_used_count;
+            }
+            if (bvh_used) {
+                ++statistics.bvh_used_count;
+            }
+        }
+        return data;
+    }
 
     // Reads a uint32 accessor referenced by an ERHE_geometry field.
     [[nodiscard]] auto read_extension_u32_accessor(
@@ -2811,8 +3313,13 @@ private:
             }
         }
 
+        const auto prepared_extension_it = m_primitive_prepared_extensions.find({mesh_index, primitive_index});
+        const Prepared_extension_json& prepared_json = (prepared_extension_it != m_primitive_prepared_extensions.end())
+            ? prepared_extension_it->second
+            : m_no_prepared_extensions;
+
         Primitive_entry primitive_entry;
-        get_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
+        get_primitive_geometry(primitive, primitive_entry, tangent_frame_needed, prepared_json, name);
         // get_primitive_geometry can produce no primitive (non-indexed
         // primitives - valid glTF - and draco-compressed content are not
         // supported): skip the primitive instead of adding a null one,
@@ -4048,6 +4555,36 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         erhe_parser.set_primitive_geometry_extensions(std::move(geometry_extensions));
     }
 
+    // Hand the captured prepared mesh data payloads (ERHE_mesh_optimized,
+    // ERHE_mesh_topology, ERHE_raytrace_bvh) to the parser, which validates
+    // them in the per-mesh parse tasks (doc/plans/gltf_fast_load.md
+    // "Loader"). A primitive without ERHE_mesh_optimized carries none.
+    std::size_t prepared_ignored_count = 0;
+    {
+        std::map<std::pair<std::size_t, std::size_t>, Prepared_extension_json> prepared_extensions;
+        for (const auto& [key, captured] : parse_extras_context.mesh_primitive_extensions) {
+            Prepared_extension_json json;
+            for (const auto& [extension_name, extension_value] : captured.entries) {
+                if (extension_name == "ERHE_mesh_optimized") {
+                    json.optimized = extension_value;
+                } else if (extension_name == "ERHE_mesh_topology") {
+                    json.topology = extension_value;
+                } else if (extension_name == "ERHE_raytrace_bvh") {
+                    json.bvh = extension_value;
+                }
+            }
+            if (json.optimized.empty()) {
+                continue;
+            }
+            if (arguments.prepared_mesh_data_use == Prepared_mesh_data_use::use) {
+                prepared_extensions[key] = std::move(json);
+            } else {
+                ++prepared_ignored_count;
+            }
+        }
+        erhe_parser.set_primitive_prepared_extensions(std::move(prepared_extensions));
+    }
+
     // Hand the prim classes the captured ERHE_node payloads name to the
     // parser: a node listed here is created as that class instead of an
     // Xform (see parse_prim_node).
@@ -4084,6 +4621,28 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     }
 
     erhe_parser.parse_and_build();
+
+    {
+        Gltf_prepared_mesh_statistics& statistics = result.prepared_mesh_statistics;
+        statistics.ignored_count = prepared_ignored_count;
+        if (statistics.ignored_count > 0) {
+            log_gltf->info(
+                "prepared mesh data: {} primitives ignored (use_prepared_mesh_data is off) in {}",
+                statistics.ignored_count, arguments.path.string()
+            );
+        } else if ((statistics.used_count + statistics.rejected_count) > 0) {
+            std::string reasons;
+            for (const auto& [reason, count] : statistics.rejection_reasons) {
+                reasons += fmt::format("{}{}: {}", reasons.empty() ? "" : ", ", reason, count);
+            }
+            log_gltf->info(
+                "prepared mesh data: {} used, {} rejected ({}); topology {}, BVH {} in {}",
+                statistics.used_count, statistics.rejected_count, reasons,
+                statistics.topology_used_count, statistics.bvh_used_count,
+                arguments.path.string()
+            );
+        }
+    }
 
     // Apply serialized erhe Item flags to parsed nodes (Gltf_data::nodes is
     // parallel to the glTF nodes array).

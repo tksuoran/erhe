@@ -176,6 +176,28 @@ core primitive") plus the payloads of `ERHE_mesh_optimized`,
 Shapes are prepared in parallel; one shape by one caller at a time. Tests:
 `src/erhe/primitive/test/test_prepared_primitive.cpp`.
 
+## Prepared mesh data on load
+
+A soup primitive loaded with accepted prepared mesh data carries it as an
+immutable `Prepared_primitive_data` on its render shape
+(`Primitive(soup, prepared_data)`, `Primitive_shape::get_prepared_data()`,
+null for every other shape):
+
+- `options`, `content_hash`, `bounding_box` (the POSITION accessor min /
+  max) and `bounding_sphere` from `ERHE_mesh_optimized`;
+- `colocation` (`Vertex_colocation`, first-reference order) when
+  `ERHE_mesh_topology` was accepted;
+- `bvh` (`erhe::raytrace::Prebuilt_bvh` for the running backend and library
+  tag) when `ERHE_raytrace_bvh` was accepted.
+
+The data describes the shape's soup exactly: the soup is the core the file
+stores. The content checks of the specs' "Validation / fallback" sections
+are `validate_prepared_core()` (index count and range, every vertex
+referenced, no degenerate triangle, content hash) and
+`validate_vertex_points()` (size, first-reference order, point count,
+bitwise-identical positions per point); both return a fixed reason phrase,
+or an empty string when the input passes.
+
 ## Empty primitives
 
 A `Geometry` with no facets is a legal source: mesh operations produce one when
