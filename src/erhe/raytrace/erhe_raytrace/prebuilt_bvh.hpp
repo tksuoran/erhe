@@ -1,7 +1,10 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -59,6 +62,23 @@ enum class Bvh_source : unsigned int {
 // BVH (embree, tinybvh, none).
 [[nodiscard]] auto get_prebuilt_bvh_backend() -> std::string_view;
 [[nodiscard]] auto get_prebuilt_bvh_library() -> std::string_view;
+
+// The triangle_hash of doc/gltf_extensions/ERHE_raytrace_bvh.md (also the
+// cache/bvh key): 64-bit FNV-1a (erhe::hash::hash()) over, triangle by
+// triangle, the three corner positions in index order, each as three
+// float32 values with the bits as stored. hash_triangle_positions() is one
+// triangle's step, seeded with the hash so far (erhe::hash::c_seed for the
+// first triangle); Bvh_geometry::commit() hashes with it.
+[[nodiscard]] auto hash_triangle_positions(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, uint64_t seed) -> uint64_t;
+
+// The same hash over an indexed triangle list: triangle t is
+// indices[3t .. 3t + 2], positions_xyz holds three floats per vertex. The
+// caller guarantees every index is below positions_xyz.size() / 3.
+[[nodiscard]] auto compute_triangle_hash(std::span<const uint32_t> indices, std::span<const float> positions_xyz) -> uint64_t;
+
+// The traversal stack size of the bvh_v2 backend: the deepest a prebuilt
+// bvh_v2 BVH may be (validate_prebuilt_bvh() max_depth).
+constexpr std::size_t bvh_v2_traversal_stack_size = 64;
 
 // Checks the backend-neutral structure of a bvh_v2 Prebuilt_bvh against the
 // content it claims to describe, per doc/gltf_extensions/ERHE_raytrace_bvh.md:

@@ -4,6 +4,7 @@
 #include "erhe_log/log.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_property/property_log.hpp"
+#include "erhe_raytrace/raytrace_log.hpp"
 
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/command_line_args.h>
@@ -34,6 +35,7 @@ int main(int argc, char** argv)
     erhe::item::initialize_logging();
     erhe::geometry::initialize_logging();
     erhe::primitive::initialize_logging();
+    erhe::raytrace::initialize_logging();
 
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

@@ -19,6 +19,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/prepared_primitive.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
@@ -4724,6 +4725,9 @@ private:
         // ERHE_geometry extension members for geometry-normative primitives
         // (empty for triangle-soup primitives).
         std::string                      erhe_geometry_extension;
+        // ERHE_mesh_optimized / ERHE_mesh_topology / ERHE_raytrace_bvh
+        // members of a prepared soup primitive (empty otherwise).
+        std::string                      prepared_extensions;
     };
     void add_index_data_source(
         Export_entry&              entry,
@@ -4886,7 +4890,7 @@ private:
     }
 
     std::unordered_map<erhe::primitive::Triangle_soup*, Export_entry> m_erhe_triangle_soup_entries;
-    [[nodiscard]] auto process_triangle_soup(erhe::primitive::Triangle_soup* triangle_soup) -> Export_entry
+    [[nodiscard]] auto process_triangle_soup(erhe::primitive::Primitive_render_shape& render_shape, erhe::primitive::Triangle_soup* triangle_soup) -> Export_entry
     {
         ERHE_VERIFY(triangle_soup != nullptr);
 
@@ -4896,11 +4900,178 @@ private:
         }
 
         Export_entry entry{};
+        if (m_arguments.prepared_mesh_data == Prepared_mesh_data::write) {
+            erhe::primitive::Prepare_primitive_result result = take_prepared_primitive(render_shape, triangle_soup);
+            count_prepared_primitive(result);
+            if (result.prepared.has_value()) {
+                write_prepared_primitive(entry, result.prepared.value());
+                m_erhe_triangle_soup_entries.insert({triangle_soup, entry});
+                return entry;
+            }
+            log_gltf->debug("glTF export: soup primitive written without prepared mesh data: {}", result.skip_reason);
+        }
         add_index_data_source(entry, triangle_soup->get_vertex_count(), triangle_soup->index_data);
         add_vertex_data_source(entry, triangle_soup->get_vertex_count(), triangle_soup->vertex_format, triangle_soup->vertex_data);
 
         m_erhe_triangle_soup_entries.insert({triangle_soup, entry});
         return entry;
+    }
+
+    // Prepared mesh data (doc/plans/gltf_fast_load.md "Exporter"): every
+    // unique soup primitive of the export is prepared up front, in parallel
+    // on the executor, and written by process_triangle_soup(). A soup the
+    // up-front walk did not reach (a physics collider mesh) is prepared when
+    // it is written.
+    std::unordered_map<erhe::primitive::Triangle_soup*, erhe::primitive::Prepare_primitive_result> m_prepared_primitives;
+    std::map<std::pair<std::size_t, std::size_t>, std::string>                                     m_prepared_primitive_extensions;
+    bool                                                                                           m_uses_raytrace_bvh{false};
+    Gltf_export_prepared_statistics                                                                m_prepared_statistics;
+
+    void collect_soup_shapes(
+        const erhe::Hierarchy&                                                                         node,
+        std::unordered_map<erhe::primitive::Triangle_soup*, erhe::primitive::Primitive_render_shape*>& out_shapes
+    )
+    {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
+            const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(child.get());
+            if (
+                (mesh != nullptr) &&
+                !m_arguments.excluded_meshes.contains(mesh) &&
+                ((mesh->get_flag_bits() & m_arguments.excluded_item_flag_bits) == 0)
+            ) {
+                for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                    erhe::primitive::Primitive_render_shape* const render_shape =
+                        mesh_primitive.primitive ? mesh_primitive.primitive->render_shape.get() : nullptr;
+                    if (render_shape == nullptr) {
+                        continue;
+                    }
+                    const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = render_shape->get_triangle_soup();
+                    if (soup) {
+                        out_shapes.emplace(soup.get(), render_shape);
+                    }
+                }
+            }
+            collect_soup_shapes(*child, out_shapes);
+        }
+    }
+
+    void prepare_soup_primitives()
+    {
+        if (m_arguments.prepared_mesh_data != Prepared_mesh_data::write) {
+            return;
+        }
+        ERHE_PROFILE_FUNCTION();
+        const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+
+        std::unordered_map<erhe::primitive::Triangle_soup*, erhe::primitive::Primitive_render_shape*> shapes;
+        collect_soup_shapes(m_arguments.root_node, shapes);
+        std::vector<std::pair<erhe::primitive::Triangle_soup*, erhe::primitive::Primitive_render_shape*>> work{shapes.begin(), shapes.end()};
+        std::vector<erhe::primitive::Prepare_primitive_result> results(work.size());
+        if ((m_arguments.executor != nullptr) && (work.size() > 1)) {
+            ::tf::Taskflow taskflow;
+            for (std::size_t i = 0, end = work.size(); i < end; ++i) {
+                taskflow.emplace(
+                    [&work, &results, i]() {
+                        results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second);
+                    }
+                );
+            }
+            erhe::task::run(*m_arguments.executor, taskflow).wait();
+        } else {
+            for (std::size_t i = 0, end = work.size(); i < end; ++i) {
+                results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second);
+            }
+        }
+        for (std::size_t i = 0, end = work.size(); i < end; ++i) {
+            m_prepared_primitives.emplace(work[i].first, std::move(results[i]));
+        }
+        m_prepared_statistics.preparation_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+    }
+
+    [[nodiscard]] auto take_prepared_primitive(
+        erhe::primitive::Primitive_render_shape& render_shape,
+        erhe::primitive::Triangle_soup*          triangle_soup
+    ) -> erhe::primitive::Prepare_primitive_result
+    {
+        const auto it = m_prepared_primitives.find(triangle_soup);
+        if (it != m_prepared_primitives.end()) {
+            erhe::primitive::Prepare_primitive_result result = std::move(it->second);
+            m_prepared_primitives.erase(it);
+            return result;
+        }
+        const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+        erhe::primitive::Prepare_primitive_result result = erhe::primitive::prepare_primitive_for_export(render_shape);
+        m_prepared_statistics.preparation_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+        return result;
+    }
+
+    void count_prepared_primitive(const erhe::primitive::Prepare_primitive_result& result)
+    {
+        if (!result.prepared.has_value()) {
+            ++m_prepared_statistics.skipped_count;
+            ++m_prepared_statistics.skip_reasons[result.skip_reason];
+            return;
+        }
+        const erhe::primitive::Prepared_primitive_export& prepared = result.prepared.value();
+        ++m_prepared_statistics.prepared_count;
+        m_prepared_statistics.dropped_degenerate_triangles += prepared.dropped_degenerate_triangle_count;
+        switch (prepared.bvh_source) {
+            case erhe::primitive::Prepared_bvh_source::reused:  ++m_prepared_statistics.bvh_reused_count;  break;
+            case erhe::primitive::Prepared_bvh_source::rebuilt: ++m_prepared_statistics.bvh_rebuilt_count; break;
+            default:                                            ++m_prepared_statistics.bvh_none_count;    break;
+        }
+    }
+
+    // The prepared core as the primitive's accessors, plus the members of the
+    // three extensions (doc/gltf_extensions/ERHE_mesh_optimized.md,
+    // ERHE_mesh_topology.md, ERHE_raytrace_bvh.md) with their raw bufferViews.
+    void write_prepared_primitive(Export_entry& entry, const erhe::primitive::Prepared_primitive_export& prepared)
+    {
+        const erhe::primitive::Triangle_soup& core = prepared.core;
+        add_index_data_source(entry, core.get_vertex_count(), core.index_data);
+        add_vertex_data_source(entry, core.get_vertex_count(), core.vertex_format, core.vertex_data);
+
+        std::string passes = "\"weld_bitwise\"";
+        if (prepared.options.vertex_cache) {
+            passes += ",\"vertex_cache\"";
+        }
+        if (prepared.options.overdraw) {
+            passes += ",\"overdraw\"";
+        }
+        if (prepared.options.vertex_fetch) {
+            passes += ",\"vertex_fetch\"";
+        }
+        const glm::vec3& center = prepared.bounding_sphere.center;
+        std::string members = fmt::format(
+            "\"ERHE_mesh_optimized\":{{\"version\":1,\"passes\":[{}]{},\"content_hash\":\"{:016x}\","
+            "\"bounding_sphere\":{{\"center\":[{},{},{}],\"radius\":{}}}}}",
+            passes,
+            prepared.options.overdraw ? fmt::format(",\"overdraw_threshold\":{}", prepared.options.overdraw_threshold) : std::string{},
+            prepared.content_hash,
+            center.x, center.y, center.z, prepared.bounding_sphere.radius
+        );
+
+        const std::span<const uint32_t> vertex_points{prepared.vertex_points};
+        const std::size_t vertex_points_view = add_raw_buffer_view(std::as_bytes(vertex_points));
+        members += fmt::format(
+            ",\"ERHE_mesh_topology\":{{\"version\":1,\"point_count\":{},\"vertex_points\":{}}}",
+            prepared.point_count, vertex_points_view
+        );
+
+        if (prepared.bvh.has_value()) {
+            const erhe::raytrace::Prebuilt_bvh& bvh = prepared.bvh.value();
+            const std::size_t nodes_view         = add_raw_buffer_view(std::as_bytes(std::span<const erhe::raytrace::Bvh_node_record>{bvh.nodes}));
+            const std::size_t primitive_ids_view = add_raw_buffer_view(std::as_bytes(std::span<const uint32_t>{bvh.primitive_ids}));
+            members += fmt::format(
+                ",\"ERHE_raytrace_bvh\":{{\"version\":1,\"triangle_hash\":\"{:016x}\",\"triangle_count\":{},"
+                "\"builds\":[{{\"backend\":\"{}\",\"library\":\"{}\",\"quality\":\"{}\",\"node_count\":{},\"nodes\":{},\"primitive_ids\":{}}}]}}",
+                bvh.triangle_hash, bvh.triangle_count,
+                json_escape(bvh.backend), json_escape(bvh.library), erhe::raytrace::c_str(bvh.quality),
+                bvh.nodes.size(), nodes_view, primitive_ids_view
+            );
+            m_uses_raytrace_bvh = true;
+        }
+        entry.prepared_extensions = std::move(members);
     }
 
     // Appends one tightly packed uint32 scalar accessor (own buffer + view).
@@ -5500,6 +5671,7 @@ private:
         std::vector<std::optional<std::size_t>>& primitive_index_map = m_erhe_mesh_primitive_index_map[erhe_mesh];
         primitive_index_map.resize(erhe_primitives.size());
         std::vector<std::pair<std::size_t, std::string>> pending_geometry_extensions; // (gltf primitive index, extension members)
+        std::vector<std::pair<std::size_t, std::string>> pending_prepared_extensions; // (gltf primitive index, extension members)
         for (std::size_t primitive_index = 0; primitive_index < erhe_primitives.size(); ++primitive_index) {
             const erhe::scene::Mesh_primitive& erhe_mesh_primitive = erhe_primitives[primitive_index];
             const erhe::primitive::Primitive& erhe_primitive = *erhe_mesh_primitive.primitive.get();
@@ -5528,7 +5700,7 @@ private:
             // holds per-corner. Authored geometry (no soup) exports
             // geometry-normative with the ERHE_geometry extension.
             Export_entry export_entry = triangle_soup
-                ? process_triangle_soup(triangle_soup.get())
+                ? process_triangle_soup(*erhe_primitive.render_shape, triangle_soup.get())
                 : process_geometry(geometry.get());
             for (const fastgltf::Attribute& attribute : export_entry.attributes) {
                 gltf_primitive.attributes.emplace_back(attribute.name, attribute.accessorIndex);
@@ -5539,6 +5711,9 @@ private:
             }
             if (!export_entry.erhe_geometry_extension.empty()) {
                 pending_geometry_extensions.emplace_back(gltf_mesh.primitives.size(), export_entry.erhe_geometry_extension);
+            }
+            if (!export_entry.prepared_extensions.empty()) {
+                pending_prepared_extensions.emplace_back(gltf_mesh.primitives.size(), export_entry.prepared_extensions);
             }
             primitive_index_map[primitive_index] = gltf_mesh.primitives.size();
             gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
@@ -5551,6 +5726,9 @@ private:
         }
         for (auto& [gltf_primitive_index, extension_members] : pending_geometry_extensions) {
             m_geometry_primitive_extensions[{gltf_mesh_index, gltf_primitive_index}] = std::move(extension_members);
+        }
+        for (auto& [gltf_primitive_index, extension_members] : pending_prepared_extensions) {
+            m_prepared_primitive_extensions[{gltf_mesh_index, gltf_primitive_index}] = std::move(extension_members);
         }
         return gltf_mesh_index;
     }
@@ -7207,6 +7385,9 @@ auto Gltf_exporter::export_gltf() -> std::string
     };
     m_gltf_asset.defaultScene = std::size_t{0};
 
+    // Before the node pass, which writes the prepared cores.
+    prepare_soup_primitives();
+
     {
         fastgltf::Scene scene{};
         // Direct children only (see the matching comment in process_node);
@@ -7358,6 +7539,9 @@ auto Gltf_exporter::export_gltf() -> std::string
         for (const auto& [key, extension_members] : m_geometry_primitive_extensions) {
             merge_extension_members(export_extras_context.mesh_primitive_extensions[key], extension_members);
         }
+        for (const auto& [key, extension_members] : m_prepared_primitive_extensions) {
+            merge_extension_members(export_extras_context.mesh_primitive_extensions[key], extension_members);
+        }
         for (const auto& [index, payload] : m_internal_node_extensions) {
             // The node indices of the items the node's object-reference
             // values name, now that every node is emitted. A target outside
@@ -7432,6 +7616,13 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
         if (!m_geometry_primitive_extensions.empty()) {
             declare_extension_used("ERHE_geometry");
+        }
+        if (!m_prepared_primitive_extensions.empty()) {
+            declare_extension_used("ERHE_mesh_optimized");
+            declare_extension_used("ERHE_mesh_topology");
+        }
+        if (m_uses_raytrace_bvh) {
+            declare_extension_used("ERHE_raytrace_bvh");
         }
         if (!m_internal_node_extensions.empty()) {
             declare_extension_used("ERHE_node");
@@ -7518,6 +7709,10 @@ auto Gltf_exporter::export_gltf() -> std::string
     // material extras migrated to the ERHE_node / ERHE_material extensions
     // (doc/editor/gltf_scene_roundtrip.md phase 3); the extras remain parsed
     // for files written before the migration.
+
+    if (m_arguments.prepared_statistics != nullptr) {
+        *m_arguments.prepared_statistics = m_prepared_statistics;
+    }
 
     if (m_arguments.binary)
     {

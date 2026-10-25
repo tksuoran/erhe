@@ -76,6 +76,12 @@ if (other->get_bvh_source() != Bvh_source::prebuilt) {
   logs one warning with the reason, keeps it in
   `get_prebuilt_bvh_rejection()`, and continues with `cache/bvh`, then a
   build.
+- `hash_triangle_positions()` is one triangle's step of that hash and
+  `compute_triangle_hash(indices, positions_xyz)` the hash over an indexed
+  triangle list; `commit()` hashes with the former, so a writer that
+  reorders triangles (the glTF exporter's prepared core) recomputes the hash
+  the loader's `commit()` will compare. `bvh_v2_traversal_stack_size` (64)
+  is the `max_depth` for `validate_prebuilt_bvh()`.
 - `get_bvh_source()` tells which of `prebuilt`, `cache` or `built` the last
   commit used. A cache entry and a prebuilt BVH give the same nodes, ids and
   hits as the build they were taken from (`test/test_prebuilt_bvh.cpp`).

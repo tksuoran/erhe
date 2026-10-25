@@ -247,6 +247,29 @@ public:
     std::vector<std::optional<std::size_t>>                           extra_mesh_indices;
 };
 
+// Whether the exporter writes triangle-soup primitives as prepared cores with
+// the ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh
+// extensions (doc/plans/gltf_fast_load.md "Exporter") instead of the raw soup.
+enum class Prepared_mesh_data : unsigned int {
+    none  = 0,
+    write = 1
+};
+
+// What the prepared-mesh-data pass of one export did (filled when
+// Gltf_export_arguments::prepared_mesh_data is write).
+class Gltf_export_prepared_statistics
+{
+public:
+    std::size_t                        prepared_count             {0}; // unique soup primitives written as prepared cores
+    std::size_t                        skipped_count              {0}; // unique soup primitives written as raw soups
+    std::map<std::string, std::size_t> skip_reasons;                   // reason -> count
+    std::size_t                        bvh_reused_count           {0}; // committed raytrace BVH remapped onto the core
+    std::size_t                        bvh_rebuilt_count          {0}; // BVH built over the core
+    std::size_t                        bvh_none_count             {0}; // no ERHE_raytrace_bvh written
+    std::size_t                        dropped_degenerate_triangles{0};
+    double                             preparation_ms             {0.0}; // wall time of the parallel preparation
+};
+
 class Gltf_export_arguments
 {
 public:
@@ -265,6 +288,15 @@ public:
     std::vector<Gltf_export_extra_mesh> extra_meshes;
     std::vector<std::shared_ptr<erhe::primitive::Material>> extra_materials;
     std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder;
+    // Prepared mesh data for triangle-soup primitives. none (the default)
+    // writes the raw soups; save_scene passes write. Geometry-normative
+    // primitives (ERHE_geometry) are unaffected.
+    Prepared_mesh_data prepared_mesh_data{Prepared_mesh_data::none};
+    // Executor the per-primitive preparation runs on (one task per unique
+    // soup); serial on the calling thread when null.
+    ::tf::Executor* executor{nullptr};
+    // Receives the prepared-mesh-data statistics when non-null.
+    Gltf_export_prepared_statistics* prepared_statistics{nullptr};
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

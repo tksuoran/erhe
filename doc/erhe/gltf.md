@@ -94,6 +94,21 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   with no exportable primitive is not exported either (a glTF mesh needs at
   least one primitive); its node is written without `mesh`, and a physics
   collider whose geometry is such a mesh is skipped with a warning.
+- Prepared mesh data (`doc/plans/gltf_fast_load.md` "Exporter"):
+  `Gltf_export_arguments::prepared_mesh_data = Prepared_mesh_data::write`
+  writes each triangle-soup primitive as the core
+  `erhe::primitive::prepare_primitive_for_export()` produces, with
+  `ERHE_mesh_optimized`, `ERHE_mesh_topology` (`vertex_points` raw
+  bufferView) and, when the raytrace backend exports BVHs,
+  `ERHE_raytrace_bvh` (`nodes` and `primitive_ids` raw bufferViews), named
+  in `extensionsUsed` only. The unique soups of the exported subtree are
+  prepared up front, one task each on `Gltf_export_arguments::executor`
+  (serial when null); a soup the walk misses (a physics collider mesh) is
+  prepared when written. A soup the preparation refuses is written raw.
+  `prepared_statistics` receives the counts (prepared, skipped with
+  reasons, BVH reused / rebuilt / none) and the preparation time. The
+  default `none` writes raw soups; geometry-normative primitives are
+  unaffected either way. The editor's `save_scene` passes `write`.
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
 - A primitive with an index at or past its vertex count (invalid glTF) is skipped with an
@@ -103,7 +118,7 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   materials, `KHR_materials_variants` bindings, Geometry build; `out_of_range_indices.gltf`:
   the invalid primitive is skipped) and GLB round trips (node hierarchy and transforms,
   `ERHE_node` / `ERHE_light` / `ERHE_camera` local properties and their unauthored values,
-  the fixture's meshes).
+  the fixture's meshes, the prepared-mesh-data extensions and payload sizes).
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
   `ERHE_material`, `ERHE_geometry`) round-trip erhe-specific state that has no standard
   glTF representation; editor-domain extensions (`ERHE_scene`, collections, brushes,

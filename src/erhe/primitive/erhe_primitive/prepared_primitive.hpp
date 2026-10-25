@@ -1,0 +1,111 @@
+#pragma once
+
+#include "erhe_primitive/mesh_optimizer.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
+#include "erhe_math/aabb.hpp"
+#include "erhe_math/sphere.hpp"
+#include "erhe_raytrace/prebuilt_bvh.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string>
+#include <vector>
+
+namespace erhe::primitive {
+
+class Primitive_shape;
+
+// How the BVH of a Prepared_primitive_export was obtained.
+enum class Prepared_bvh_source : unsigned int {
+    none    = 0, // no BVH: the raytrace backend cannot export one (embree, tinybvh, none) or the build failed
+    reused  = 1, // the shape's committed raytrace BVH, primitive ids remapped onto the core triangle order
+    rebuilt = 2  // built over the core triangles, because the committed one did not map 1:1 onto them
+};
+
+[[nodiscard]] auto c_str(Prepared_bvh_source source) -> const char*;
+
+// A soup primitive prepared for export with the ERHE_mesh_optimized,
+// ERHE_mesh_topology and ERHE_raytrace_bvh glTF extensions
+// (doc/plans/gltf_fast_load.md "Saved core primitive",
+// doc/gltf_extensions/ERHE_mesh_optimized.md): the core accessors and the
+// three payloads.
+class Prepared_primitive_export
+{
+public:
+    // The core primitive: TRIANGLES with uint32 indices and one interleaved
+    // vertex stream holding POSITION (vec3 float), NORMAL (vec3 float),
+    // TANGENT (vec4 float), and, as the source soup carries them,
+    // TEXCOORD_0..2 (vec2 float), COLOR_0..1 (vec4 float), JOINTS_0..1
+    // (vec4 uint8 / uint16, the soup's width) and WEIGHTS_0..1 (vec4 float).
+    // Every value is what erhe's content build writes for the corner (the
+    // Normal_style::corner_normals build of the shape's Geometry): positions
+    // are the Geometry's colocated point positions, tangents include the ones
+    // computed when the soup had none, WEIGHTS_0 is normalized. Welded
+    // bitwise, no degenerate triangles, in meshoptimizer vertex-cache,
+    // overdraw and vertex-fetch order.
+    Triangle_soup         core;
+
+    // ERHE_mesh_topology: the point of each core vertex, in first-reference
+    // order (vertex_points[0] == 0, each value at most one more than the
+    // largest before it, largest == point_count - 1).
+    std::vector<uint32_t> vertex_points;
+    uint32_t              point_count{0};
+
+    // ERHE_mesh_optimized
+    Mesh_optimize_options options;
+    uint64_t              content_hash{0};
+    erhe::math::Aabb      bounding_box{};
+    erhe::math::Sphere    bounding_sphere{};
+
+    // ERHE_raytrace_bvh: over the core triangles in index order. Empty when
+    // bvh_source is none.
+    std::optional<erhe::raytrace::Prebuilt_bvh> bvh;
+    Prepared_bvh_source                         bvh_source{Prepared_bvh_source::none};
+
+    // Triangles of the content build dropped because two of their corners
+    // had bitwise-identical positions (distinct points that round to one
+    // float position).
+    std::size_t           dropped_degenerate_triangle_count{0};
+};
+
+class Prepare_primitive_result
+{
+public:
+    std::optional<Prepared_primitive_export> prepared;
+    // Why the primitive was not prepared; empty when it was.
+    std::string                              skip_reason;
+};
+
+// Prepares the soup primitive of `shape` for export. Builds the shape's
+// Geometry when it does not exist yet (Primitive_shape::get_geometry()), runs
+// the content build of it into float CPU buffers, drops degenerate
+// triangles, runs the meshoptimizer passes (optimize_indexed_mesh() with
+// default Mesh_optimize_options), derives vertex_points from the Geometry,
+// computes the content hash and the bounding volume, and takes the BVH from
+// the shape's committed real raytrace (remapped through the triangle
+// permutation) or, when that does not map 1:1 onto the core triangles,
+// builds one over the core. Refuses (empty `prepared`, `skip_reason` set) a
+// shape without a soup, with a non-triangle facet, with attributes the
+// content build does not write (TEXCOORD_3+, COLOR_2+, JOINTS_2+ /
+// WEIGHTS_2+, or a set with a gap such as TEXCOORD_1 without TEXCOORD_0),
+// or with nothing to draw.
+//
+// Thread safety: shapes may be prepared in parallel; one shape is prepared
+// by one caller at a time (the content build writes the facet id attribute
+// of the Geometry, as every build does).
+[[nodiscard]] auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_result;
+
+// The ERHE_mesh_optimized content_hash: 64-bit FNV-1a (erhe::hash::hash())
+// over every index as 4 bytes little-endian, then every position as three
+// float32 values, 4 bytes little-endian each, the bits as stored.
+// positions_xyz holds three floats per vertex.
+[[nodiscard]] auto compute_mesh_content_hash(std::span<const uint32_t> indices, std::span<const float> positions_xyz) -> uint64_t;
+
+// The positions of a core soup (Prepared_primitive_export::core) as three
+// floats per vertex. Empty when the soup has no vec3 float POSITION in its
+// first stream.
+[[nodiscard]] auto get_float_positions(const Triangle_soup& soup) -> std::vector<float>;
+
+} // namespace erhe::primitive

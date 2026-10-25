@@ -206,7 +206,7 @@ static constexpr bool should_permute = true; // TODO
 
 // Traversal stack capacity in intersect_instance(); also the deepest a
 // prebuilt BVH may be (inner ancestors of any node).
-static constexpr std::size_t c_traversal_stack_size = 64;
+static constexpr std::size_t c_traversal_stack_size = bvh_v2_traversal_stack_size;
 
 static_assert(sizeof(Node) == sizeof(Bvh_node_record));
 static_assert(sizeof(Node::Index::Type) == sizeof(uint32_t));
@@ -280,7 +280,7 @@ void Bvh_geometry::commit()
 
         std::vector<Tri> tris;
 
-        uint64_t hash_code{0xcbf29ce484222325};
+        uint64_t hash_code{erhe::hash::c_seed};
         std::vector<BBox> bboxes(triangle_count);
         std::vector<Vec3> centers(triangle_count);
         m_bbox = erhe::math::Aabb{};
@@ -304,9 +304,12 @@ void Bvh_geometry::commit()
                 const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * vertex_buffer_info->byte_stride + 1 * sizeof(float));
                 const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * vertex_buffer_info->byte_stride + 2 * sizeof(float));
 
-                hash_code = erhe::hash::hash(p0_x, p0_y, p0_z, hash_code);
-                hash_code = erhe::hash::hash(p1_x, p1_y, p1_z, hash_code);
-                hash_code = erhe::hash::hash(p2_x, p2_y, p2_z, hash_code);
+                hash_code = hash_triangle_positions(
+                    glm::vec3{p0_x, p0_y, p0_z},
+                    glm::vec3{p1_x, p1_y, p1_z},
+                    glm::vec3{p2_x, p2_y, p2_z},
+                    hash_code
+                );
 
                 const bvh::v2::Tri<float, 3> triangle{
                     Vec3{p2_x, p2_y, p2_z},

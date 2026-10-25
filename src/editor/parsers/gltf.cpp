@@ -1603,7 +1603,7 @@ auto collect_gltf_export_animations(const std::shared_ptr<Content_library>& cont
     return content_library->get_all<erhe::scene::Animation>();
 }
 
-auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) -> bool
+auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path, tf::Executor* const executor) -> bool
 {
     const erhe::scene::Scene& scene = scene_root.get_scene();
     const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
@@ -1623,21 +1623,48 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) 
         .excluded_item_flag_bits = Editor_item_flags::rendertarget,
         .excluded_item_type_bits = Editor_item_types::joint
     };
+    // A scene save always writes prepared mesh data (doc/plans/gltf_fast_load.md
+    // decision 4).
+    erhe::gltf::Gltf_export_prepared_statistics prepared_statistics;
+    export_arguments.prepared_mesh_data  = erhe::gltf::Prepared_mesh_data::write;
+    export_arguments.executor            = executor;
+    export_arguments.prepared_statistics = &prepared_statistics;
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
     add_gltf_editor_state(export_arguments, scene_root, path, physics_items);
+    const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
+    const double export_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
     if (!erhe::file::write_file(path, gltf)) {
         log_parsers->error("save_scene_gltf: failed to write '{}'", erhe::file::to_string(path));
         return false;
     }
+    std::string skip_reasons;
+    for (const auto& [reason, count] : prepared_statistics.skip_reasons) {
+        skip_reasons += fmt::format("{}{}: {}", skip_reasons.empty() ? "" : ", ", reason, count);
+    }
+    log_parsers->info(
+        "save_scene_gltf: '{}' prepared mesh data: {} prepared, {} skipped ({}), BVH reused {} / rebuilt {} / none {}, "
+        "degenerate triangles dropped {}, preparation {:.1f} ms, export {:.1f} ms, file {} bytes",
+        erhe::file::to_string(path),
+        prepared_statistics.prepared_count,
+        prepared_statistics.skipped_count,
+        skip_reasons,
+        prepared_statistics.bvh_reused_count,
+        prepared_statistics.bvh_rebuilt_count,
+        prepared_statistics.bvh_none_count,
+        prepared_statistics.dropped_degenerate_triangles,
+        prepared_statistics.preparation_ms,
+        export_ms,
+        gltf.size()
+    );
     return true;
 }
 
 auto save_scene_gltf(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
 {
-    if (!save_scene_gltf(scene_root, path)) {
+    if (!save_scene_gltf(scene_root, path, context.executor)) {
         return false;
     }
     // R5.8: a successful save clears the scene's container record dirty flag

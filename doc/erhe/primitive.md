@@ -135,6 +135,47 @@ a bit-identical mesh and mappings, and `Geometry::process()` then gives
 identical edges and smooth vertex normals
 (`src/erhe/primitive/test/test_stored_colocation.cpp`).
 
+## Export preparation
+
+`prepare_primitive_for_export(shape)` (`prepared_primitive.hpp`) turns a
+soup primitive into the saved core of `doc/plans/gltf_fast_load.md` ("Saved
+core primitive") plus the payloads of `ERHE_mesh_optimized`,
+`ERHE_mesh_topology` and `ERHE_raytrace_bvh`, as a
+`Prepared_primitive_export`:
+
+1. Gets the shape's `Geometry` (`get_geometry()`, which builds it if
+   missing) and refuses a facet that is not a triangle.
+2. Runs the content build (`build_buffer_mesh()`,
+   `Normal_style::corner_normals`, fill triangles) into CPU buffers with a
+   float vertex format: POSITION, NORMAL, TANGENT always, TEXCOORD_0..2,
+   COLOR_0..1, JOINTS_0..1 (the soup's uint8 / uint16 width) and
+   WEIGHTS_0..1 as the soup carries them. Every corner therefore carries
+   exactly what the build writes: the colocated point position, the
+   tangent computed when the soup had none, normalized WEIGHTS_0. A soup
+   with a set the build does not write (TEXCOORD_3, COLOR_2, JOINTS_2, a
+   gap such as TEXCOORD_1 without TEXCOORD_0) or another JOINTS format is
+   refused and exports as its raw soup.
+3. Drops triangles with two bitwise-identical corner positions, then runs
+   `optimize_indexed_mesh()` (bitwise weld, vertex cache, overdraw 1.05,
+   vertex fetch).
+4. `vertex_points[v]` is the geogram point of the first built vertex the
+   weld mapped to output vertex `v`, renumbered in first-reference order.
+   `mesh_from_triangle_soup()` over the core with these `vertex_points` and
+   with `colocate()` builds the same mesh bit for bit, and facet `t` is core
+   triangle `t`.
+5. `compute_mesh_content_hash()` and `erhe::math::calculate_bounding_volume()`
+   over the core give `content_hash` and the bounding sphere.
+6. The BVH is the shape's committed real raytrace BVH when its triangles map
+   1:1 onto the core triangles (through `Primitive_raytrace` facet ids and the
+   optimizer's triangle permutation) and hash to the committed
+   `triangle_hash` in raytrace order: its primitive ids are remapped and the
+   hash recomputed with `erhe::raytrace::compute_triangle_hash()`
+   (`Prepared_bvh_source::reused`). Otherwise a BVH is built over the core
+   (`rebuilt`). Backends without BVH export give `none`.
+
+Shapes are prepared in parallel; one shape by one caller at a time. Tests:
+`src/erhe/primitive/test/test_prepared_primitive.cpp`.
+
 ## Empty primitives
 
 A `Geometry` with no facets is a legal source: mesh operations produce one when
