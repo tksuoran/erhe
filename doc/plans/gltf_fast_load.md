@@ -304,6 +304,19 @@ byte-for-byte against the foreign Bistro at idle.
    - `mcp_server_tests` mesh-component and lightmap cases pass;
    - an export of an untouched prepared scene is byte-identical to its
      source.
+
+   Result (2026-10-25, Release headless, the step 5 prepared Bistro): at idle
+   `render_shapes {count 3852, prepared 3852, with_geometry 0}`, RSS 1407 MB
+   (off: 3852 with Geometry, 5048 MB). MCP `set_viewport_style edge_lines`
+   queues 2683 full-build tasks, idle 3.25 s later with 3852 Geometry and
+   5253 MB; the viewport capture with edge lines is byte-identical to the
+   off path's (and differs from the capture before the toggle). Saving the
+   untouched prepared scene retains all 3852 primitives (`3852 prepared
+   (3852 retained)`, BVH stored 3852) in 1.66 s (step 4: 3.0 s); the BIN
+   chunk is byte-identical to the source, the JSON differs only in node
+   `scale` / `translation` / `rotation` values of 1771 nodes (a float
+   round-trip drift of the node transforms on load and save, outside the
+   mesh data).
 8. **Textures**, depending on decision 3: a transcode cache, or embedded
    per-target images.
 9. **Quest.** Push the erhe-saved Bistro to the headset and time the load

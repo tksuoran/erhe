@@ -188,9 +188,35 @@ optimized, their optimized variant; a mixed mesh keeps its task, which skips
 the full build of its prepared primitives. The kickoff logs
 `Async_raytrace_kickoff: N deferred finalize tasks queued, M meshes skipped`.
 A primitive whose stored BVH the backend does not use falls back to the
-proxy and the deferred raytrace. The Geometry of a prepared primitive is
-built only on demand (`get_geometry()`, from the soup), and with it no edge
-lines exist until a full build runs.
+proxy and the deferred raytrace.
+
+After the load a prepared primitive holds no `Geometry`
+(`get_memory_usage` `render_shapes.with_geometry`). `get_geometry()` builds
+one on demand from the core and the stored colocation (no `colocate()`, no
+geogram lock); mesh colliders, geometry-graph sources and the lightmap baker
+take that path. The full build (edge lines, corner points, centroids, solid
+wireframe triangles, element mappings, the geometry-path optimized variant)
+runs on demand through the same deferred finalize task, queued at the change
+site that starts needing it (`request_prepared_full_builds()`):
+
+- a selection change queues it for the newly selected meshes
+  (`Selection_tool`): the mesh component tools, paint, weight paint, the
+  geometry spreadsheet and the properties all work on the selection, and
+  their element-mapping reads find the mesh as the off path leaves it in the
+  first moments after a load until the task commits;
+- a Visual Style checkbox (or MCP `set_viewport_style`) turning on edge
+  lines, points, centroids or solid wireframe queues it for every mesh of
+  every scene (`request_prepared_full_builds_in_all_scenes()`);
+- a load while some viewport already draws one of those modes builds the
+  prepared primitives in full in its kickoff (`viewports_need_full_builds()`).
+
+Until its full build a prepared primitive has no per-facet id in its vertex
+data, so the ID buffer cannot resolve its facets; nothing default-on reads
+them (hover and click picking use the raytrace, whose triangle t is facet t),
+and the mesh component tools that do are reached through the selection,
+which requests the full build. `Mesh_primitive` count properties read the
+soup while there is no `Geometry` (facets and corners from the indices,
+vertices from the stored colocation, edges 0).
 
 `deferred_edge_lines` puts a GPU buffer-mesh build on a worker, which on GL
 needs a worker share context; without one (headless, null window) the edge

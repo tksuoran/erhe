@@ -18,6 +18,10 @@
 #include "geometry_graph/graph_mesh.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
+#include "config/generated/viewport_config.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "parsers/gltf_extensions_names.hpp"
 #include "windows/transform_update_stats.hpp"
 #include "renderers/composition_pass.hpp"
@@ -604,6 +608,53 @@ auto Mcp_server::action_set_occlusion_culling(const json& args) -> std::string
         {"enabled",        m_context.editor_settings->occlusion_culling},
         {"classification", std::string{to_string(m_context.editor_settings->culling_classification)}},
         {"gpu_supported",  (classifier != nullptr) && classifier->is_occlusion_supported()}
+    }).dump();
+}
+
+auto Mcp_server::action_set_viewport_style(const json& args) -> std::string
+{
+    // The MCP counterpart of the Visual Style popup's checkboxes
+    // (Viewport_config_window::render_style_ui), applied to every viewport
+    // scene view, with the same change-site call into the prepared full
+    // builds.
+    if ((m_context.scene_views == nullptr) || m_context.scene_views->get_viewport_scene_views().empty()) {
+        return make_error_content("set_viewport_style: no viewport scene views");
+    }
+    const std::string style_name = args.value("style", std::string{"not_selected"});
+    if ((style_name != "not_selected") && (style_name != "selected")) {
+        return make_error_content("set_viewport_style: 'style' must be \"not_selected\" or \"selected\"");
+    }
+    for (const char* const key : {"edge_lines", "corner_points", "polygon_centroids", "solid_wireframe"}) {
+        if (args.contains(key) && !args[key].is_boolean()) {
+            return make_error_content(fmt::format("set_viewport_style: '{}' must be a boolean", key));
+        }
+    }
+    const bool needed_before = viewports_need_full_builds(m_context);
+    for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_context.scene_views->get_viewport_scene_views()) {
+        if (!scene_view) {
+            continue;
+        }
+        Viewport_config&   config = scene_view->get_config();
+        Render_style_data& style  = (style_name == "selected") ? config.render_style_selected : config.render_style_not_selected;
+        if (args.contains("edge_lines"))        { style.edge_lines        = args["edge_lines"].get<bool>(); }
+        if (args.contains("corner_points"))     { style.corner_points     = args["corner_points"].get<bool>(); }
+        if (args.contains("polygon_centroids")) { style.polygon_centroids = args["polygon_centroids"].get<bool>(); }
+        if (args.contains("solid_wireframe"))   { style.solid_wireframe   = args["solid_wireframe"].get<bool>(); }
+    }
+    bool full_builds_queued = false;
+    if (!needed_before && viewports_need_full_builds(m_context)) {
+        request_prepared_full_builds_in_all_scenes(m_context);
+        full_builds_queued = true;
+    }
+    const Viewport_config& first = m_context.scene_views->get_viewport_scene_views().front()->get_config();
+    const Render_style_data& style = (style_name == "selected") ? first.render_style_selected : first.render_style_not_selected;
+    return make_json_content(json{
+        {"style",              style_name},
+        {"edge_lines",         style.edge_lines},
+        {"corner_points",      style.corner_points},
+        {"polygon_centroids",  style.polygon_centroids},
+        {"solid_wireframe",    style.solid_wireframe},
+        {"full_builds_queued", full_builds_queued}
     }).dump();
 }
 

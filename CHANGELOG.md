@@ -28,6 +28,23 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Primitive_shape::has_stored_bvh()`,
+  `mark_prepared_data_stale()`, `is_prepared_data_current()`,
+  `Prepared_primitive_export::retained_core`, `get_export_core()` and
+  `Prepared_bvh_source::stored`. The prepared-data constructors of
+  `Primitive`, `Primitive_render_shape` and `Primitive_shape` now take
+  `std::shared_ptr<Prepared_primitive_data>` (was a pointer to const) and move
+  its `bvh` into the shape; `Primitive_raytrace`'s soup constructor takes
+  `std::unique_ptr<erhe::raytrace::Prebuilt_bvh>`. `get_geometry()` of a
+  prepared shape uses the stored colocation, and
+  `prepare_primitive_for_export()` retains a shape whose prepared data is
+  current.
+- `erhe::scene`: `Mesh::begin_optimized_variant_edit()` marks the
+  primitive's prepared data stale; the `Mesh_primitive` count properties fall
+  back to the soup counts while there is no `Geometry`.
+- `erhe::gltf`: `Gltf_export_prepared_statistics::bvh_stored_count` and
+  `retained_count`.
+
 - `erhe::primitive`: `Primitive::make_prepared_meshes()` and
   `Primitive::is_prepared()` (the load build of a primitive with prepared
   mesh data), `Primitive_shape::make_prepared_raytrace()` and

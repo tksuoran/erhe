@@ -448,11 +448,9 @@ TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)
         ASSERT_TRUE(prepared->colocation.has_value());
         EXPECT_EQ(prepared->colocation->vertex_points.size(), 4u);
         EXPECT_EQ(prepared->colocation->point_count, 4u);
-        EXPECT_EQ(prepared->bvh.has_value(), has_bvh_backend);
-        if (prepared->bvh.has_value()) {
-            EXPECT_EQ(prepared->bvh->triangle_count, 2u);
-            EXPECT_EQ(prepared->bvh->primitive_ids.size(), 2u);
-        }
+        // The stored BVH moves into the shape at construction.
+        EXPECT_FALSE(prepared->bvh.has_value());
+        EXPECT_EQ(shape->has_stored_bvh(), has_bvh_backend);
     }
 
     erhe::scene::Scene          ignored{"ignored", nullptr};
@@ -493,7 +491,7 @@ void expect_one_rejected(const std::string& glb, const std::string_view file_nam
     std::size_t tampered_count = 0;
     for (const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape : shapes) {
         const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared = shape->get_prepared_data();
-        const bool full = prepared && prepared->colocation.has_value() && (prepared->bvh.has_value() == has_bvh_backend);
+        const bool full = prepared && prepared->colocation.has_value() && (shape->has_stored_bvh() == has_bvh_backend);
         if (full) {
             ++full_count;
             continue;
@@ -502,7 +500,7 @@ void expect_one_rejected(const std::string& glb, const std::string_view file_nam
         EXPECT_EQ(prepared != nullptr, expectation.marker_accepted) << file_name;
         if (prepared) {
             EXPECT_EQ(prepared->colocation.has_value(), expectation.has_colocation) << file_name;
-            EXPECT_EQ(prepared->bvh.has_value(),        expectation.has_bvh)        << file_name;
+            EXPECT_EQ(shape->has_stored_bvh(),          expectation.has_bvh)        << file_name;
         }
     }
     EXPECT_EQ(full_count,     1u) << file_name;

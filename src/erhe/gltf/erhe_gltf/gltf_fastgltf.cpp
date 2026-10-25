@@ -2608,10 +2608,10 @@ private:
         // This task claimed the slot; build outside the lock and publish.
         load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
         if (primitive_entry.triangle_soup && !prepared_json.optimized.empty()) {
-            std::shared_ptr<const erhe::primitive::Prepared_primitive_data> prepared_data =
+            std::shared_ptr<erhe::primitive::Prepared_primitive_data> prepared_data =
                 read_prepared_mesh_data(primitive, prepared_json, *primitive_entry.triangle_soup, name);
             if (prepared_data) {
-                primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup, prepared_data);
+                primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup, std::move(prepared_data));
             }
         }
         slot->triangle_soup = primitive_entry.triangle_soup;
@@ -3045,7 +3045,7 @@ private:
         const Prepared_extension_json&        json,
         const erhe::primitive::Triangle_soup& soup,
         const std::string&                    name
-    ) -> std::shared_ptr<const erhe::primitive::Prepared_primitive_data>
+    ) -> std::shared_ptr<erhe::primitive::Prepared_primitive_data>
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -5573,10 +5573,14 @@ private:
         }
         const erhe::primitive::Prepared_primitive_export& prepared = result.prepared.value();
         ++m_prepared_statistics.prepared_count;
+        if (prepared.retained_core) {
+            ++m_prepared_statistics.retained_count;
+        }
         m_prepared_statistics.dropped_degenerate_triangles += prepared.dropped_degenerate_triangle_count;
         switch (prepared.bvh_source) {
             case erhe::primitive::Prepared_bvh_source::reused:  ++m_prepared_statistics.bvh_reused_count;  break;
             case erhe::primitive::Prepared_bvh_source::rebuilt: ++m_prepared_statistics.bvh_rebuilt_count; break;
+            case erhe::primitive::Prepared_bvh_source::stored:  ++m_prepared_statistics.bvh_stored_count;  break;
             default:                                            ++m_prepared_statistics.bvh_none_count;    break;
         }
     }
@@ -5586,7 +5590,7 @@ private:
     // ERHE_mesh_topology.md, ERHE_raytrace_bvh.md) with their raw bufferViews.
     void write_prepared_primitive(Export_entry& entry, const erhe::primitive::Prepared_primitive_export& prepared)
     {
-        const erhe::primitive::Triangle_soup& core = prepared.core;
+        const erhe::primitive::Triangle_soup& core = erhe::primitive::get_export_core(prepared);
         add_index_data_source(entry, core.get_vertex_count(), core.index_data);
         add_vertex_data_source(entry, core.get_vertex_count(), core.vertex_format, core.vertex_data);
 

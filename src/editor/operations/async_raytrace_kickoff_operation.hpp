@@ -26,6 +26,25 @@ class Scene_root;
 // the build on the main thread the caller is trying to keep free.
 void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
+// On-demand full build of prepared primitives (doc/editor/async_asset_loading.md
+// "Prepared mesh data"). A primitive loaded with prepared mesh data has no
+// Geometry and no full buffer mesh (edge lines, points, solid-wireframe
+// triangles, element mappings) until something needs them. The change sites
+// that start needing them call these: the selection of a mesh (mesh
+// component tools, paint, the geometry spreadsheet and properties all work
+// on the selection), and a viewport style turning on a full-build mode.
+// Each queues the existing deferred finalize task, with the full build of
+// prepared primitives enabled, for every mesh among `items` (all scenes for
+// the second) with a prepared primitive that has no edge lines yet. A task
+// for a mesh that is already complete does nothing.
+void request_prepared_full_builds(App_context& context, const std::vector<std::shared_ptr<erhe::Item_base>>& items);
+void request_prepared_full_builds_in_all_scenes(App_context& context);
+
+// Some viewport style draws a primitive mode only the full build provides
+// (edge lines, corner points, polygon centroids, solid wireframe). A load
+// then builds prepared primitives in full in its deferred finalize.
+[[nodiscard]] auto viewports_need_full_builds(App_context& context) -> bool;
+
 class Async_raytrace_kickoff_operation : public Operation
 {
 public:

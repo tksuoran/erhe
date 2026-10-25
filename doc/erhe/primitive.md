@@ -216,7 +216,26 @@ primitive, with no Geometry:
   otherwise nothing is installed and the caller takes the proxy path.
 
 It is idempotent and has the threading of `make_renderable_mesh()`. The
-stored BVH stays in the prepared data after the raytrace takes its copy.
+`Prepared_primitive_data::bvh` moves into the shape at construction
+(`has_stored_bvh()`) and from there into the raytrace backend, so no second
+copy of the BVH stays in memory.
+
+`get_geometry()` on a prepared shape builds the `Geometry` from the soup with
+the stored colocation (`mesh_from_triangle_soup()` with `vertex_points`, no
+`colocate()`, no geogram lock), then runs `Geometry::process()` as for any
+soup; a refused colocation falls back to `colocate()` with a warning.
+
+`prepare_primitive_for_export()` retains a shape whose prepared data is
+current (`is_prepared_data_current()`): it returns the shape's soup as
+`retained_core`, the stored colocation, marker values and the BVH read back
+from the raytrace (`IGeometry::export_bvh()`, `Prepared_bvh_source::stored`),
+with no `Geometry`, no content build and no meshoptimizer.
+`get_export_core()` gives the core to write. An in-place content edit marks
+the data stale (`mark_prepared_data_stale()`, called by
+`erhe::scene::Mesh::begin_optimized_variant_edit()`, which every GPU vertex
+edit - paint, weight paint, mesh component drags - takes), and the export then
+prepares the shape afresh; an edit that replaces the primitive makes a new
+shape without prepared data.
 Tests: `Prepared_primitive.prepared_meshes_build_without_geometry`.
 
 ## Empty primitives

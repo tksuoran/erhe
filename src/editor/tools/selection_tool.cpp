@@ -5,6 +5,7 @@
 #include "tools/mesh_component_selection.hpp"
 
 #include "app_context.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
@@ -965,6 +966,11 @@ void Selection::end_selection_change()
     // from an N-call loop that dispatches N times
     // (doc/editor/import_undo_reference_clearing.md).
     ++m_selection_change_count;
+    // Selecting a mesh is the change site of the on-demand full build of its
+    // prepared primitives (doc/editor/async_asset_loading.md "Prepared mesh
+    // data"): the mesh component tools, paint, the geometry spreadsheet and
+    // the properties all work on the selection.
+    request_prepared_full_builds(m_context, selection_change.newly_selected);
     m_context.app_message_bus->selection.send_message(
         Selection_message{
             .selection_change = selection_change

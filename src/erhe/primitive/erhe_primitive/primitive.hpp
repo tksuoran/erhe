@@ -33,12 +33,12 @@ public:
     Primitive_raytrace();
     explicit Primitive_raytrace(const GEO::Mesh& mesh);
     // Real triangle raytrace straight from a soup, triangle t of the BVH
-    // being soup triangle t. When `prebuilt` is non-null it is offered to the
-    // BVH backend before the commit (IGeometry::set_prebuilt_bvh()); whether
-    // it was used is get_bvh_source(). The facet mapping is the identity
+    // being soup triangle t. A non-null `prebuilt` is moved to the BVH
+    // backend before the commit (IGeometry::set_prebuilt_bvh()); whether it
+    // was used is get_bvh_source(). The facet mapping is the identity
     // (triangle t is facet t), which holds for a prepared soup core
     // (doc/gltf_extensions/ERHE_mesh_optimized.md contract item 5).
-    Primitive_raytrace(const erhe::primitive::Triangle_soup& triangle_soup, const erhe::raytrace::Prebuilt_bvh* prebuilt);
+    Primitive_raytrace(const erhe::primitive::Triangle_soup& triangle_soup, std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt);
     // AABB proxy: a 12-triangle box over the given bounds. Cheap enough for
     // load time, so picking works immediately after a deferred-raytrace
     // import; hits report the right primitive but approximate position /
@@ -92,8 +92,11 @@ public:
     // A soup shape loaded with validated prepared mesh data (the
     // ERHE_mesh_optimized / ERHE_mesh_topology / ERHE_raytrace_bvh glTF
     // extensions, doc/plans/gltf_fast_load.md). The data describes exactly
-    // this soup and is fixed for the lifetime of the shape.
-    Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data);
+    // this soup and is fixed for the lifetime of the shape, except that its
+    // `bvh` moves into the shape here (the stored BVH, has_stored_bvh()),
+    // which make_prepared_raytrace() hands to the raytrace, so the BVH is
+    // never held twice.
+    Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data);
     ~Primitive_shape() noexcept;
 
     // Two locks, see doc/erhe/primitive_shape_locking.md:
@@ -157,6 +160,17 @@ public:
     // The validated prepared mesh data the shape was loaded with; null when
     // there is none. Immutable: set at construction, never replaced.
     [[nodiscard]] auto get_prepared_data           () const -> const std::shared_ptr<const Prepared_primitive_data>&;
+    // The stored BVH of the prepared data is still waiting for
+    // make_prepared_raytrace().
+    [[nodiscard]] auto has_stored_bvh              () const -> bool;
+    // In-place content edits (GPU vertex edits: paint, weight paint, mesh
+    // component drags - everything that takes Mesh::begin_optimized_variant_edit())
+    // change the shape's data without a new shape, so the prepared data no
+    // longer describes it. Marks it so; is_prepared_data_current() is then
+    // false for the rest of the shape's life.
+    void mark_prepared_data_stale();
+    // Prepared data is present and no in-place edit has touched the shape.
+    [[nodiscard]] auto is_prepared_data_current    () const -> bool;
     // Mesh <-> vertex-buffer/triangle correspondence of THIS shape's
     // Buffer_mesh. The correspondence is order-dependent, so it lives in the
     // same object as the mesh it describes and the two can never disagree; a
@@ -186,6 +200,8 @@ protected:
     std::shared_ptr<erhe::geometry::Geometry> m_geometry{};
     std::shared_ptr<Triangle_soup>            m_triangle_soup{};
     std::shared_ptr<const Prepared_primitive_data> m_prepared_data{};
+    std::unique_ptr<erhe::raytrace::Prebuilt_bvh>  m_stored_bvh{};          // under m_build_mutex
+    bool                                           m_prepared_data_stale{false}; // under m_state_mutex
     Primitive_raytrace                        m_raytrace{};
     mutable std::mutex                        m_build_mutex;
     mutable std::mutex                        m_state_mutex;
@@ -207,7 +223,7 @@ public:
     explicit Primitive_render_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     explicit Primitive_render_shape(Buffer_mesh&& renderable_mesh);
     explicit Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
-    Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data);
+    Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data);
     // A variant build: a soup that is a REORDERING of another shape's, with the
     // Element_mappings already composed to describe that new order
     // (compose_element_mappings()). Mappings normally arrive from a build, and
@@ -300,7 +316,7 @@ public:
     explicit Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup);
     // A soup primitive with validated prepared mesh data on its render shape
     // (Primitive_shape::get_prepared_data()).
-    Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data);
+    Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data);
     explicit Primitive(Buffer_mesh&& renderable_mesh);
     explicit Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     Primitive(

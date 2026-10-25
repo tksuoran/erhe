@@ -8948,6 +8948,31 @@
     "name": "set_occlusion_culling"
   },
   {
+    "description": "Set the Visual Style toggles of every viewport scene view (the toolbar Visual Style popup's Default Style checkboxes; style = not selected, or selected for the Selection checkboxes): edge_lines, corner_points, polygon_centroids, solid_wireframe, each true or false, omitted keeps the value. Turning on a mode only a full mesh build provides queues the on-demand full build of every prepared primitive (meshes loaded with prepared mesh data, doc/editor/async_asset_loading.md 'Prepared mesh data') in every scene, exactly as the checkbox does; wait for get_async_status idle before rendering. Returns the resulting style of the first viewport and full_builds_queued.",
+    "inputSchema": {
+      "properties": {
+        "style": {
+          "description": "not_selected (default) or selected",
+          "type": "string"
+        },
+        "edge_lines": {
+          "type": "boolean"
+        },
+        "corner_points": {
+          "type": "boolean"
+        },
+        "polygon_centroids": {
+          "type": "boolean"
+        },
+        "solid_wireframe": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_viewport_style"
+  },
+  {
     "description": "Diagnostic of the raster occlusion test (doc/plans/occlusion_culling.md): requests that the next frame with occlusion views keep its CPU masks and entry identities; once that frame retired and the next frame using its frame slot decoded its occlusion words from host memory, returns frame_index, entry_count (all published lists), view_count (the frame's culling views) and per occlusion view: view (its index in the frame's view set), scene_view, bounded_in_frustum (color entries with bounds inside the view frustum, from the CPU masks), tested (entries whose box the occlusion pass rasterized), visible (tested and marked by a fragment), occluded (tested, no visible fragment), untested (color entries marked visible without a test: no bounds, a box reaching the near plane, outside the frustum), near_plane (bounded entries in the frustum whose box intersects the near plane) and near_plane_occluded (those of them not marked: 0 is the gate), culled (entries that frame's classification removed because the frame before it found them occluded), and first_occluded [{list_index, entry_index, name}] (up to 16; name is the entry's mesh as it is now). Errors when the device has no GPU occlusion test or the settings are not culling_classification gpu with occlusion_culling on. The call waits a few frames.",
     "inputSchema": {
       "properties": {
@@ -9852,7 +9877,7 @@
     "name": "get_four_views"
   },
   {
-    "description": "Report where loaded content's memory sits: per-pool mesh vertex/index bytes (capacity only ever grows because pool blocks are never destroyed, so 'used_bytes' is the figure that drops when meshes are released), estimated texture bytes and count, the driver memory budget (Vulkan only), the cached bottom-level acceleration structure count, mesh optimization totals (mesh_optimization: how many primitives were optimized, how many of those replayed from the disk cache, vertex counts and vertex-fetch bytes before and after, and triangle-weighted ACMR and overdraw before and after - session-wide and cumulative, and the right place to read them because geometry-path optimizations land asynchronously after a load), undo/redo entry counts, and the loaded asset containers. Mesh and texture releases are frame-deferred, so advance a few frames before sampling after a removal. See doc/reloadable-asset-loads.md.",
+    "description": "Report where loaded content's memory sits: per-pool mesh vertex/index bytes (capacity only ever grows because pool blocks are never destroyed, so 'used_bytes' is the figure that drops when meshes are released), estimated texture bytes and count, the driver memory budget (Vulkan only), the cached bottom-level acceleration structure count, mesh optimization totals (mesh_optimization: how many primitives were optimized, how many of those replayed from the disk cache, vertex counts and vertex-fetch bytes before and after, and triangle-weighted ACMR and overdraw before and after - session-wide and cumulative, and the right place to read them because geometry-path optimizations land asynchronously after a load), undo/redo entry counts, the loaded asset containers, and render_shapes (the unique render shapes of every scene's meshes: count, with_geometry = those holding an erhe::geometry::Geometry, prepared = those loaded with prepared mesh data, which build a Geometry only on demand). Mesh and texture releases are frame-deferred, so advance a few frames before sampling after a removal. See doc/reloadable-asset-loads.md.",
     "inputSchema": {
       "properties": {},
       "required": [],

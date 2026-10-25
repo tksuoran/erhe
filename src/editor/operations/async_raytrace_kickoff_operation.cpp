@@ -6,7 +6,11 @@
 #include "operations/mesh_operation.hpp"
 #include "parsers/gltf.hpp"
 #include "scene/scene_commit_queue.hpp"
+#include "app_scenes.hpp"
+#include "config/generated/viewport_config.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 
 #include "erhe_graphics/scoped_worker_context.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -63,10 +67,18 @@ enum class Mesh_optimize_cache_use : unsigned int
 // produced the result, so this also covers the deferred_raytrace /
 // deferred_edge_lines = false configurations, where it degenerates to the
 // pre-existing "ensure raytrace exists" behavior.
+// Whether the finalize builds prepared primitives (doc/editor/async_asset_loading.md
+// "Prepared mesh data") in full; skip leaves their load state as it is.
+enum class Prepared_full_build : unsigned int {
+    skip  = 0,
+    build = 1
+};
+
 void deferred_finalize_mesh_items(
     Mesh_operation_parameters&&        parameters,
     const std::shared_ptr<Scene_root>& scene_root,
-    const Mesh_optimize_cache_use      cache_use
+    const Mesh_optimize_cache_use      cache_use,
+    const Prepared_full_build          prepared_full_build
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -143,7 +155,7 @@ void deferred_finalize_mesh_items(
             // (doc/editor/async_asset_loading.md "Prepared mesh data"): no
             // full build for it.
             const bool needs_full_build =
-                !primitive.is_prepared() &&
+                (!primitive.is_prepared() || (prepared_full_build == Prepared_full_build::build)) &&
                 render_shape && render_shape->has_buffer_mesh_triangles() && !render_shape->has_edge_lines();
             // A complete mesh whose optimized variant is missing (snapshot
             // decision above) is rebuilt in full with force_rebuild: the
@@ -336,6 +348,11 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
     // and the scene lock is held only for each mesh's short commit phase.
     // async_for_nodes_with_mesh chains each task after any pending task for
     // the same item.
+    // A viewport drawing edge lines or points needs the full build of
+    // prepared primitives too; nothing is skipped then.
+    const Prepared_full_build prepared_full_build = viewports_need_full_builds(context)
+        ? Prepared_full_build::build
+        : Prepared_full_build::skip;
     std::size_t queued_count  = 0;
     std::size_t skipped_count = 0;
     for (const std::shared_ptr<erhe::Item_base>& item : m_mesh_node_items) {
@@ -344,7 +361,7 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
         // it. A mesh mixing prepared and other primitives keeps its task;
         // the task skips the prepared ones.
         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(item);
-        if (mesh && is_load_complete(context, *mesh)) {
+        if ((prepared_full_build == Prepared_full_build::skip) && mesh && is_load_complete(context, *mesh)) {
             ++skipped_count;
             continue;
         }
@@ -353,9 +370,9 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
         async_for_nodes_with_mesh(
             context,
             single_item,
-            [scene_root](Mesh_operation_parameters&& mesh_operation_parameters)
+            [scene_root, prepared_full_build](Mesh_operation_parameters&& mesh_operation_parameters)
             {
-                deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache);
+                deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache, prepared_full_build);
             },
             // The finalize manages its own NARROW worker-context scope
             // around the GPU build only (the BVH build is CPU-heavy and
@@ -397,11 +414,111 @@ void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe:
         single_item,
         [scene_root](Mesh_operation_parameters&& mesh_operation_parameters)
         {
-            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::uncached);
+            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::uncached, Prepared_full_build::skip);
         },
         // The finalize manages its own narrow worker-context scope.
         /*op_builds_gpu_meshes=*/false
     );
+}
+
+namespace {
+
+// A prepared primitive of the mesh has no full build yet.
+[[nodiscard]] auto needs_prepared_full_build(const erhe::scene::Mesh& mesh) -> bool
+{
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+        if ((primitive != nullptr) && primitive->is_prepared() && !primitive->render_shape->has_edge_lines()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void queue_prepared_full_build(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, std::size_t& queued_count)
+{
+    erhe::Item_host* const item_host = mesh->get_item_host();
+    Scene_root* const      host      = dynamic_cast<Scene_root*>(item_host);
+    if (host == nullptr) {
+        return;
+    }
+    const std::shared_ptr<Scene_root>                   scene_root = host->shared_from_this();
+    const std::vector<std::shared_ptr<erhe::Item_base>> single_item{mesh->shared_from_this()};
+    async_for_nodes_with_mesh(
+        context,
+        single_item,
+        [scene_root](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache, Prepared_full_build::build);
+        },
+        // The finalize manages its own narrow worker-context scope.
+        /*op_builds_gpu_meshes=*/false
+    );
+    ++queued_count;
+}
+
+} // anonymous namespace
+
+void request_prepared_full_builds(App_context& context, const std::vector<std::shared_ptr<erhe::Item_base>>& items)
+{
+    std::size_t queued_count = 0;
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(item);
+        if (mesh && needs_prepared_full_build(*mesh)) {
+            queue_prepared_full_build(context, mesh, queued_count);
+        }
+    }
+    if (queued_count > 0) {
+        log_operations->info("prepared mesh data: {} full build tasks queued for the selection", queued_count);
+    }
+}
+
+void request_prepared_full_builds_in_all_scenes(App_context& context)
+{
+    if (context.app_scenes == nullptr) {
+        return;
+    }
+    std::size_t queued_count = 0;
+    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+        if (!scene_root) {
+            continue;
+        }
+        std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
+        {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+            for (const std::shared_ptr<erhe::scene::Mesh_layer>& mesh_layer : scene_root->get_scene().get_mesh_layers()) {
+                for (const std::shared_ptr<erhe::scene::Mesh>& mesh : mesh_layer->meshes) {
+                    if (mesh && needs_prepared_full_build(*mesh)) {
+                        meshes.push_back(mesh);
+                    }
+                }
+            }
+        }
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+            queue_prepared_full_build(context, mesh, queued_count);
+        }
+    }
+    log_operations->info("prepared mesh data: {} full build tasks queued (a viewport style needs full builds)", queued_count);
+}
+
+auto viewports_need_full_builds(App_context& context) -> bool
+{
+    if (context.scene_views == nullptr) {
+        return false;
+    }
+    const auto needs = [](const Render_style_data& style) -> bool {
+        return style.edge_lines || style.corner_points || style.polygon_centroids || style.solid_wireframe;
+    };
+    for (const std::shared_ptr<Viewport_scene_view>& scene_view : context.scene_views->get_viewport_scene_views()) {
+        if (!scene_view) {
+            continue;
+        }
+        const Viewport_config& config = scene_view->get_config();
+        if (needs(config.render_style_not_selected) || needs(config.render_style_selected)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }

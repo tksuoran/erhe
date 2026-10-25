@@ -621,6 +621,20 @@ Omit `enabled` to query.
 
 Returns: `{enabled, classification, gpu_supported}`.
 
+### set_viewport_style
+
+Set the Visual Style toggles of every viewport scene view, as the toolbar
+Visual Style popup's checkboxes do: `style` `not_selected` (default) or
+`selected`, and any of `edge_lines`, `corner_points`, `polygon_centroids`,
+`solid_wireframe` (booleans; omitted keeps the value). Turning on a mode only
+a full mesh build provides queues the on-demand full build of every prepared
+primitive in every scene (doc/editor/async_asset_loading.md "Prepared mesh
+data"), exactly as the checkbox does; wait for `get_async_status` idle before
+capturing. `render_scene_image` draws no edge lines; capture them with
+`capture_screenshot` of a viewport.
+
+Returns: `{style, edge_lines, corner_points, polygon_centroids, solid_wireframe, full_builds_queued}`.
+
 ### get_occlusion_check
 
 The gate of the raster occlusion test: the next frame with occlusion views

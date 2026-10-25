@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -21,7 +22,8 @@ class Primitive_shape;
 enum class Prepared_bvh_source : unsigned int {
     none    = 0, // no BVH: the raytrace backend cannot export one (embree, tinybvh, none) or the build failed
     reused  = 1, // the shape's committed raytrace BVH, primitive ids remapped onto the core triangle order
-    rebuilt = 2  // built over the core triangles, because the committed one did not map 1:1 onto them
+    rebuilt = 2, // built over the core triangles, because the committed one did not map 1:1 onto them
+    stored  = 3  // a retained prepared primitive: the BVH its raytrace loaded with, exported back from the raytrace
 };
 
 [[nodiscard]] auto c_str(Prepared_bvh_source source) -> const char*;
@@ -46,6 +48,11 @@ public:
     // bitwise, no degenerate triangles, in meshoptimizer vertex-cache,
     // overdraw and vertex-fetch order.
     Triangle_soup         core;
+    // Set instead of `core` (which then stays empty) for a retained
+    // primitive: one loaded with prepared mesh data and not edited since
+    // (Primitive_shape::is_prepared_data_current()). Its soup is the core the
+    // file held, written back unchanged.
+    std::shared_ptr<const Triangle_soup> retained_core;
 
     // ERHE_mesh_topology: the point of each core vertex, in first-reference
     // order (vertex_points[0] == 0, each value at most one more than the
@@ -78,7 +85,12 @@ public:
     std::string                              skip_reason;
 };
 
-// Prepares the soup primitive of `shape` for export. Builds the shape's
+// Prepares the soup primitive of `shape` for export. A shape whose prepared
+// mesh data is current (loaded with it, not edited since) is retained: its
+// soup, stored colocation, marker values and the BVH exported from its
+// raytrace are returned as they are (retained_core, Prepared_bvh_source::stored
+// or none without a real raytrace), with no Geometry and no meshoptimizer.
+// Otherwise it builds the shape's
 // Geometry when it does not exist yet (Primitive_shape::get_geometry()), runs
 // the content build of it into float CPU buffers, drops degenerate
 // triangles, runs the meshoptimizer passes (optimize_indexed_mesh() with
@@ -96,6 +108,9 @@ public:
 // by one caller at a time (the content build writes the facet id attribute
 // of the Geometry, as every build does).
 [[nodiscard]] auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_result;
+
+// The core to write: retained_core when set, otherwise core.
+[[nodiscard]] auto get_export_core(const Prepared_primitive_export& prepared) -> const Triangle_soup&;
 
 // The ERHE_mesh_optimized content_hash: 64-bit FNV-1a (erhe::hash::hash())
 // over every index as 4 bytes little-endian, then every position as three

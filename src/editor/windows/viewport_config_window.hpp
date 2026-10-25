@@ -39,7 +39,8 @@ public:
     static void sync_render_with_lightmaps(App_context& context);
 
     // Public API
-    static void render_style_ui(Render_style_data& render_style);
+    // Returns true when a checkbox was edited this frame.
+    static auto render_style_ui(Render_style_data& render_style) -> bool;
 
 };
 

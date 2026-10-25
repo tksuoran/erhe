@@ -562,7 +562,7 @@ void Primitive_raytrace::make_raytrace_geometry()
     }
 }
 
-Primitive_raytrace::Primitive_raytrace(const Triangle_soup& triangle_soup, const erhe::raytrace::Prebuilt_bvh* const prebuilt)
+Primitive_raytrace::Primitive_raytrace(const Triangle_soup& triangle_soup, std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -606,9 +606,9 @@ Primitive_raytrace::Primitive_raytrace(const Triangle_soup& triangle_soup, const
         erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
     );
     m_rt_geometry->set_user_data(nullptr);
-    if (prebuilt != nullptr) {
-        erhe::raytrace::Prebuilt_bvh prebuilt_copy = *prebuilt;
-        static_cast<void>(m_rt_geometry->set_prebuilt_bvh(std::move(prebuilt_copy)));
+    if (prebuilt) {
+        static_cast<void>(m_rt_geometry->set_prebuilt_bvh(std::move(*prebuilt)));
+        prebuilt.reset();
     }
     // Identity facet mapping: triangle t of the soup is facet t.
     const std::size_t soup_triangle_count = index_count / 3;
@@ -691,6 +691,8 @@ Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept
     , m_geometry               {std::move(old.m_geometry)}
     , m_triangle_soup          {std::move(old.m_triangle_soup)}
     , m_prepared_data          {std::move(old.m_prepared_data)}
+    , m_stored_bvh             {std::move(old.m_stored_bvh)}
+    , m_prepared_data_stale    {old.m_prepared_data_stale}
     , m_raytrace               {std::move(old.m_raytrace)}
     , m_pending_raytrace       {std::move(old.m_pending_raytrace)}
     , m_retired_proxy_raytrace {std::move(old.m_retired_proxy_raytrace)}
@@ -708,6 +710,8 @@ Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
         m_geometry               = std::move(old.m_geometry);
         m_triangle_soup          = std::move(old.m_triangle_soup);
         m_prepared_data          = std::move(old.m_prepared_data);
+        m_stored_bvh             = std::move(old.m_stored_bvh);
+        m_prepared_data_stale    = old.m_prepared_data_stale;
         m_raytrace               = std::move(old.m_raytrace);
         m_pending_raytrace       = std::move(old.m_pending_raytrace);
         m_retired_proxy_raytrace = std::move(old.m_retired_proxy_raytrace);
@@ -727,11 +731,15 @@ Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_
 {
 }
 
-Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data)
+Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data)
     : m_triangle_soup{triangle_soup}
-    , m_prepared_data{prepared_data}
 {
     ERHE_VERIFY(m_triangle_soup);
+    if (prepared_data && prepared_data->bvh.has_value()) {
+        m_stored_bvh = std::make_unique<erhe::raytrace::Prebuilt_bvh>(std::move(prepared_data->bvh.value()));
+        prepared_data->bvh.reset();
+    }
+    m_prepared_data = std::move(prepared_data);
 }
 
 Primitive_shape::~Primitive_shape() noexcept
@@ -778,8 +786,25 @@ auto Primitive_shape::make_geometry_build_locked() -> std::shared_ptr<erhe::geom
     // Geogram concurrency: mesh_from_triangle_soup (colocate) serializes
     // itself internally on erhe::geometry::geogram_lock();
     // Geometry::process and compute_mesh_tangents are mesh-local and need
-    // no lock.
-    mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, element_mappings);
+    // no lock. A prepared soup carries its colocation (ERHE_mesh_topology):
+    // the stored-colocation overload builds the same mesh with no colocate()
+    // and no geogram lock.
+    const bool stored_colocation_ok =
+        m_prepared_data &&
+        m_prepared_data->colocation.has_value() &&
+        mesh_from_triangle_soup(
+            *m_triangle_soup.get(),
+            m_prepared_data->colocation->vertex_points,
+            m_prepared_data->colocation->point_count,
+            mesh,
+            element_mappings
+        );
+    if (!stored_colocation_ok) {
+        if (m_prepared_data && m_prepared_data->colocation.has_value()) {
+            log_primitive->warn("make_geometry: the stored colocation was refused - colocating");
+        }
+        mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, element_mappings);
+    }
 
     const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
     if (tangent_stream.attribute == nullptr) {
@@ -841,6 +866,24 @@ auto Primitive_shape::get_triangle_soup() const -> const std::shared_ptr<Triangl
 auto Primitive_shape::get_prepared_data() const -> const std::shared_ptr<const Prepared_primitive_data>&
 {
     return m_prepared_data;
+}
+
+auto Primitive_shape::has_stored_bvh() const -> bool
+{
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    return static_cast<bool>(m_stored_bvh);
+}
+
+void Primitive_shape::mark_prepared_data_stale()
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_prepared_data_stale = true;
+}
+
+auto Primitive_shape::is_prepared_data_current() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_prepared_data && !m_prepared_data_stale;
 }
 
 auto Primitive_shape::has_raytrace_triangles() const -> bool
@@ -913,11 +956,12 @@ auto Primitive_shape::make_prepared_raytrace() -> bool
             return true;
         }
     }
-    if (!m_triangle_soup || !m_prepared_data || !m_prepared_data->bvh.has_value()) {
+    if (!m_triangle_soup || !m_prepared_data || !m_stored_bvh) {
         return false;
     }
-    // Built aside with no state lock held, like every raytrace build.
-    Primitive_raytrace raytrace{*m_triangle_soup, &m_prepared_data->bvh.value()};
+    // Built aside with no state lock held, like every raytrace build. The
+    // stored BVH moves into the backend: used or not, it is not kept twice.
+    Primitive_raytrace raytrace{*m_triangle_soup, std::move(m_stored_bvh)};
     if (!raytrace.has_raytrace_triangles()) {
         return false;
     }
@@ -1048,8 +1092,8 @@ Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_so
 {
 }
 
-Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data)
-    : Primitive_shape{triangle_soup, prepared_data}
+Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data)
+    : Primitive_shape{triangle_soup, std::move(prepared_data)}
     , m_normal_style {Normal_style::corner_normals}
 {
 }
@@ -1614,8 +1658,8 @@ Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup)
 {
 }
 
-Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data)
-    : render_shape{std::make_shared<Primitive_render_shape>(triangle_soup, prepared_data)}
+Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data)
+    : render_shape{std::make_shared<Primitive_render_shape>(triangle_soup, std::move(prepared_data))}
 {
 }
 
