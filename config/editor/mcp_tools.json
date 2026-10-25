@@ -3430,7 +3430,7 @@
     "name": "save_scene"
   },
   {
-    "description": "Save for Quest: write a glTF scene the way save_scene does (same erhe-authored file with the prepared mesh data extensions and the ERHE_* editor state) but transcode every Basis Universal KTX2 texture at save time to a raw ASTC 4x4 KTX2 image (all mip levels; SRGB for color textures, UNORM for data textures; a two component X+Y normal map keeps its layout) referenced through the ERHE_texture_ktx2 extension, so a device with ASTC (Quest) uploads the blocks with no transcode, and a device without ASTC decodes them on the CPU. PNG / JPEG images are written as they are. An export: the scene's source file binding and dirty state are not changed. Asynchronous like save_scene: the reply returns the queued job at once; get_save_status {job_id} reports its state and, when done, the path, file_bytes, save_ms, the prepared mesh data statistics and the texture transcode counts (textures{image_count, transcoded_count, transcode_failed_count, raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}).",
+    "description": "Save for Quest: write a glTF scene the way save_scene does (same erhe-authored file with the prepared mesh data extensions and the ERHE_* editor state) but transcode every Basis Universal KTX2 texture at save time to a raw ASTC 4x4 KTX2 image (all mip levels, Zstandard supercompressed unless texture_supercompression is none; SRGB for color textures, UNORM for data textures; a two component X+Y normal map keeps its layout) referenced through the ERHE_texture_ktx2 extension, so a device with ASTC (Quest) uploads the blocks with no transcode, and a device without ASTC decodes them on the CPU. Each prepared primitive also carries its GPU-ready vertex streams in the running layouts (ERHE_gpu_vertex_streams), which a matching device uploads with no vertex packing. PNG / JPEG images are written as they are. An export: the scene's source file binding and dirty state are not changed. Asynchronous like save_scene: the reply returns the queued job at once; get_save_status {job_id} reports its state and, when done, the path, file_bytes, save_ms, the prepared mesh data statistics and the texture transcode counts (textures{image_count, transcoded_count, transcode_failed_count, raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}).",
     "inputSchema": {
       "properties": {
         "path": {
@@ -3439,6 +3439,14 @@
         },
         "scene_name": {
           "description": "Name of the scene (a glTF scene; a USD-backed scene is refused)",
+          "type": "string"
+        },
+        "texture_supercompression": {
+          "description": "Supercompression of the ASTC levels: \"zstd\" (default; Zstandard, the smaller file) or \"none\" (levels stored as they upload)",
+          "enum": [
+            "zstd",
+            "none"
+          ],
           "type": "string"
         }
       },
@@ -3450,7 +3458,7 @@
     "name": "save_scene_for_quest"
   },
   {
-    "description": "Status of the asynchronous scene saves queued by save_scene and save_scene_for_quest. With job_id: that job's object {job_id, tool, scene_name, path, format, state, saved, ...}; state is 'pending' (queued), 'running' (the save holds the main thread), 'done' (saved true, file_bytes, save_ms, export_ms, prepared{prepared_count, retained_count, skipped_count, skip_reasons, bvh_reused_count, bvh_rebuilt_count, bvh_stored_count, bvh_none_count, dropped_degenerate_triangles, preparation_ms}, plus textures{...} for save_scene_for_quest; a USD save reports file_bytes and save_ms only) or 'failed' (error). Without job_id: {jobs: [...]} of the most recent 64 jobs. Answered by the MCP server thread directly, so it replies also while a save is running and other tools wait for the main thread.",
+    "description": "Status of the asynchronous scene saves queued by save_scene and save_scene_for_quest. With job_id: that job's object {job_id, tool, scene_name, path, format, state, saved, ...}; state is 'pending' (queued), 'running' (the save holds the main thread), 'done' (saved true, file_bytes, save_ms, export_ms, prepared{prepared_count, retained_count, skipped_count, skip_reasons, bvh_reused_count, bvh_rebuilt_count, bvh_stored_count, bvh_none_count, dropped_degenerate_triangles, preparation_ms, gpu_vertex_stream_count, gpu_vertex_stream_skipped, gpu_vertex_stream_ms}, plus textures{...} for save_scene_for_quest; a USD save reports file_bytes and save_ms only) or 'failed' (error). Without job_id: {jobs: [...]} of the most recent 64 jobs. Answered by the MCP server thread directly, so it replies also while a save is running and other tools wait for the main thread.",
     "inputSchema": {
       "properties": {
         "job_id": {

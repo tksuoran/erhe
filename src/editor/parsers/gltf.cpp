@@ -789,10 +789,45 @@ auto collect_imported_build_jobs(
     return jobs;
 }
 
-auto run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device, const bool release_soups) -> Imported_build_result
+auto run_imported_build_job(
+    const Imported_build_job&       job,
+    erhe::graphics::Device&         graphics_device,
+    const bool                      release_soups,
+    const Stored_vertex_streams_use stored_streams
+) -> Imported_build_result
 {
     ERHE_PROFILE_SCOPE("build_imported_buffer_mesh");
     Imported_build_result result{};
+    // GPU-ready vertex streams stored in the file: uploaded as they are, no
+    // soup is read (doc/editor/async_asset_loading.md "Stored vertex
+    // streams"). Kept soups (load.cpu_mesh_data keep) take the soup path,
+    // which leaves the soup resident.
+    if (stored_streams == Stored_vertex_streams_use::ignore) {
+        result.portable_reason = "setting off";
+    } else if (!release_soups) {
+        result.portable_reason = "soups kept";
+    } else {
+        const erhe::graphics::Scoped_worker_context worker_context{graphics_device};
+        const erhe::primitive::Primitive::Stored_build_result stored = job.primitive->make_stored_meshes(*job.build_info, result.portable_reason);
+        if (stored == erhe::primitive::Primitive::Stored_build_result::failed) {
+            log_parsers->error(
+                "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
+                job.mesh->get_name()
+            );
+            return result;
+        }
+        if (stored == erhe::primitive::Primitive::Stored_build_result::built) {
+            result.stored   = true;
+            result.prepared = true;
+            result.portable_reason.clear();
+            const bool optimize_meshes = job.build_info->buffer_info.optimize_meshes && (job.build_info->buffer_info.optimized_vertex_format != nullptr);
+            result.released =
+                job.primitive->has_real_raytrace() &&
+                (!optimize_meshes || job.primitive->optimized_render_shape) &&
+                job.primitive->release_triangle_soup();
+            return result;
+        }
+    }
     // The payload first: a deferred parse left the soup in the file. A
     // primitive whose payload does not load builds nothing here; the
     // main-thread finalize pass reports it.
@@ -1833,7 +1868,7 @@ auto save_scene_gltf(
     erhe::gltf::Gltf_export_written_layout written_layout;
     std::size_t detached_primitive_count = 0;
     if (!overwritten.empty()) {
-        if (texture_export == erhe::gltf::Gltf_texture_export::ktx2_astc_4x4) {
+        if (erhe::gltf::is_astc_texture_export(texture_export)) {
             // Decision D4 (doc/plans/gltf_fast_load.md item 9): the Quest file
             // rewrites textures and is a delivery format, not the scene's source.
             log_parsers->error(
@@ -1945,7 +1980,7 @@ auto save_scene_gltf(
             prepared_statistics.gpu_vertex_stream_ms
         );
     }
-    if (texture_export == erhe::gltf::Gltf_texture_export::ktx2_astc_4x4) {
+    if (erhe::gltf::is_astc_texture_export(texture_export)) {
         log_parsers->info(
             "save_scene_gltf: '{}' textures: {} images, {} transcoded to ASTC 4x4 KTX2 ({} -> {} bytes, {:.1f} ms), "
             "{} transcodes failed, {} raw KTX2 images in the file",
@@ -1973,12 +2008,14 @@ auto save_scene_gltf(
 }
 
 auto save_scene_gltf_for_quest(
-    App_context&                  context,
-    Scene_root&                   scene_root,
-    const std::filesystem::path&  path,
-    Gltf_scene_save_report* const report
+    App_context&                          context,
+    Scene_root&                           scene_root,
+    const std::filesystem::path&          path,
+    Gltf_scene_save_report* const         report,
+    const erhe::gltf::Gltf_texture_export texture_export
 ) -> bool
 {
+    ERHE_VERIFY(erhe::gltf::is_astc_texture_export(texture_export));
     // The running device's vertex layouts: the Quest file carries GPU-ready
     // vertex streams in them (ERHE_gpu_vertex_streams).
     std::optional<erhe::gltf::Gltf_gpu_vertex_formats> gpu_vertex_formats;
@@ -1993,7 +2030,7 @@ auto save_scene_gltf_for_quest(
             .encoding_version  = erhe::primitive::vertex_encoding_version
         };
     }
-    if (!save_scene_gltf(scene_root, path, context.executor, erhe::gltf::Gltf_texture_export::ktx2_astc_4x4, report, gpu_vertex_formats ? &gpu_vertex_formats.value() : nullptr)) {
+    if (!save_scene_gltf(scene_root, path, context.executor, texture_export, report, gpu_vertex_formats ? &gpu_vertex_formats.value() : nullptr)) {
         return false;
     }
     context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});

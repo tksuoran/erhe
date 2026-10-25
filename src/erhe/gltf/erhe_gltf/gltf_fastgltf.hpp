@@ -691,10 +691,18 @@ public:
 //   Zstandard supercompressed) on the executor
 //   and referenced through ERHE_texture_ktx2; PNG / JPEG images are written
 //   as they are.
+// ktx2_astc_4x4 (Zstandard supercompressed levels) and
+// ktx2_astc_4x4_uncompressed (levels stored as they upload) are the two
+// "Save for Quest" forms (doc/plans/gltf_fast_load.md decision D3).
 enum class Gltf_texture_export : unsigned int {
-    source        = 0,
-    ktx2_astc_4x4 = 1
+    source                     = 0,
+    ktx2_astc_4x4              = 1,
+    ktx2_astc_4x4_uncompressed = 2
 };
+[[nodiscard]] constexpr auto is_astc_texture_export(const Gltf_texture_export texture_export) -> bool
+{
+    return (texture_export == Gltf_texture_export::ktx2_astc_4x4) || (texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed);
+}
 
 // Where an export wrote data a later rebind can point sources at
 // (rebind_sources_to_written_file()): the primitives written from their
@@ -780,7 +788,7 @@ public:
     double                             preparation_ms             {0.0}; // wall time of the parallel preparation
     std::size_t                        gpu_vertex_stream_count    {0}; // prepared primitives written with ERHE_gpu_vertex_streams
     std::size_t                        gpu_vertex_stream_skipped  {0}; // prepared primitives the GPU formats cannot express
-    double                             gpu_vertex_stream_ms       {0.0}; // packing time of the GPU vertex streams
+    double                             gpu_vertex_stream_ms       {0.0}; // packing time of the GPU vertex streams, summed over the parallel preparation tasks
 };
 
 // The running device's vertex layouts, for an export that writes each

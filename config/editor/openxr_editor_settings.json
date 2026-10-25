@@ -305,10 +305,11 @@
         "bicubic_sampling": true
     },
     "load": {
-        "_version": 7,
+        "_version": 8,
         "deferred_raytrace": true,
         "deferred_edge_lines": true,
         "use_prepared_mesh_data": true,
+        "use_gpu_vertex_streams": true,
         "cpu_mesh_data": "release",
         "parallel_gltf_parse": true,
         "async_gltf_load": true,

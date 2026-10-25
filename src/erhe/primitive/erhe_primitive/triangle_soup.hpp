@@ -18,6 +18,8 @@ namespace erhe::primitive {
 
 class Element_mappings;
 class Prepared_primitive_data;
+class Stored_vertex_stream_request;
+class Stored_vertex_streams;
 
 class Triangle_soup
 {
@@ -60,6 +62,13 @@ public:
     // Primitive_shape::load_payload()); null otherwise and when it is
     // rejected (the primitive then loads as a plain soup).
     [[nodiscard]] virtual auto load_prepared_data(const Triangle_soup& soup) const -> std::shared_ptr<Prepared_primitive_data>;
+    // The GPU-ready vertex streams the source stores for the soup in the
+    // requested layouts (ERHE_gpu_vertex_streams), read and validated with
+    // the prepared mesh data now, without building the soup; null, with
+    // out_reason set to a fixed phrase, when the source stores none that
+    // match or the read or a validation fails (the caller then loads the
+    // soup, Primitive_shape::load_payload()). The default stores none.
+    [[nodiscard]] virtual auto load_stored_vertex_streams(const Stored_vertex_stream_request& request, std::string& out_reason) const -> std::unique_ptr<Stored_vertex_streams>;
     // The source reads from the file at `path` (the same file, however the
     // path is spelled). A save onto that file replaces it: the saver then
     // gives the shape a new source or makes its soup resident.

@@ -491,9 +491,14 @@ save succeeds.
 `save_scene_for_quest` ("Save for Quest", File > Save glTF for Quest)
 writes a glTF scene like `save_scene` (prepared mesh data, editor state),
 but every Basis Universal KTX2 texture is transcoded at save time to a raw
-ASTC 4x4 KTX2 image (Zstandard supercompressed) referenced through
-`ERHE_texture_ktx2` (`doc/gltf_extensions/ERHE_texture_ktx2.md`); PNG / JPEG
-images are written as they are. An export: the scene's source binding and
+ASTC 4x4 KTX2 image referenced through `ERHE_texture_ktx2`
+(`doc/gltf_extensions/ERHE_texture_ktx2.md`; levels Zstandard
+supercompressed, or stored as they upload with
+`"texture_supercompression": "none"`), and each prepared primitive carries
+its GPU-ready vertex streams (`ERHE_gpu_vertex_streams`); PNG / JPEG images
+are written as they are. The save status reports the streams in
+`prepared` (`gpu_vertex_stream_count`, `gpu_vertex_stream_skipped`,
+`gpu_vertex_stream_ms`). An export: the scene's source binding and
 dirty state stay. A USD-backed scene is refused. `path` defaults to
 `res/editor/scenes/<scene name>_quest.glb`; `.glb` is appended when the
 extension is neither `.glb` nor `.gltf`.

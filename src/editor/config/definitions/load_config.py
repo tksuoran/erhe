@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Load_config",
     reflect=True,
-    version=7,
+    version=8,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",
     developer=False,
@@ -34,6 +34,16 @@ struct("Load_config",
             default="true",
             short_desc="Use Prepared Mesh Data",
             long_desc="Read the prepared mesh data a scene save writes into glTF files (ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh: optimized vertex order, stored colocation and stored BVH) and use what validates. Disable to load such files as plain triangle soups, as files without the extensions.",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "use_gpu_vertex_streams",
+            Bool,
+            added_in=8,
+            default="true",
+            short_desc="Use GPU Vertex Streams",
+            long_desc="Upload the GPU-ready vertex streams a Save for Quest writes into glTF files (ERHE_gpu_vertex_streams) as they are, when their layout matches this device's, with no vertex packing at load. Applies to primitives loaded with prepared mesh data while CPU Mesh Data is release. Disable to build the vertex buffers from the triangle soup, as for files without the extension.",
             visible=True,
             developer=True
         ),

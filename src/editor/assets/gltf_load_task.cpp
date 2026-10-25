@@ -163,6 +163,9 @@ void Gltf_load_task::start_build(Asset_load_tick_context& tick_context)
             build_state->primitive_count
         );
         build_state->release_soups = (get_cpu_mesh_data_retention(m_context) == Cpu_mesh_data_retention::release);
+        build_state->stored_streams = ((m_context.editor_settings == nullptr) || m_context.editor_settings->load.use_gpu_vertex_streams)
+            ? Stored_vertex_streams_use::use
+            : Stored_vertex_streams_use::ignore;
     }
     m_build_state = build_state;
 }
@@ -203,7 +206,7 @@ void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
             [build_state = m_build_state, job_index, payload_lease, lease, mesh_memory, graphics_device, path = m_handle->get_path()]() {
                 Imported_build_result result{};
                 try {
-                    result = run_imported_build_job(build_state->jobs[job_index], *graphics_device, build_state->release_soups);
+                    result = run_imported_build_job(build_state->jobs[job_index], *graphics_device, build_state->release_soups, build_state->stored_streams);
                 } catch (const std::exception& e) {
                     // A primitive without buffer meshes is built by the
                     // main-thread finalize pass instead.
@@ -221,6 +224,11 @@ void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
                 }
                 if (result.released) {
                     ++build_state->released_count;
+                }
+                if (result.stored) {
+                    ++build_state->stored_count;
+                } else if (!result.portable_reason.empty()) {
+                    ++build_state->portable_reasons[result.portable_reason];
                 }
             }
         );
@@ -535,6 +543,27 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
                 m_build_state->released_count,
                 m_mesh_payload_deferred ? " (mesh payloads read by the jobs)" : ""
             );
+            {
+                // One line per file that stores GPU vertex streams
+                // (ERHE_gpu_vertex_streams): how many were uploaded as
+                // stored, how many took the soup path and why.
+                std::size_t portable_count = 0;
+                std::size_t no_streams     = 0;
+                std::string reasons;
+                for (const auto& [reason, count] : m_build_state->portable_reasons) {
+                    portable_count += count;
+                    if ((reason == "no stored streams") || (reason == "payload not deferred")) {
+                        no_streams += count;
+                    }
+                    reasons += fmt::format("{}{}: {}", reasons.empty() ? "" : ", ", reason, count);
+                }
+                if ((m_build_state->stored_count > 0) || (portable_count > no_streams)) {
+                    log_parsers->info(
+                        "gpu vertex streams: {} stored, {} portable ({}) in '{}'",
+                        m_build_state->stored_count, portable_count, reasons, erhe::file::to_string(m_handle->get_path())
+                    );
+                }
+            }
             if (m_mesh_payload_deferred) {
                 // The jobs validated the prepared mesh data: the per-file
                 // summary. Every payload is read: the shared read handles

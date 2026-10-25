@@ -124,6 +124,24 @@ to load (the file changed since the parse) builds nothing; the finalize pass
 reports the primitive. Without worker contexts the parse reads the payloads
 itself (`in_parse`).
 
+### Stored vertex streams
+
+A file written by "Save for Quest" stores each prepared primitive's GPU
+vertex streams (`ERHE_gpu_vertex_streams`,
+doc/gltf_extensions/ERHE_gpu_vertex_streams.md). With
+`load.use_gpu_vertex_streams` on (the default) and `load.cpu_mesh_data`
+release, the job first tries `Primitive::make_stored_meshes()`: when the
+stored signatures and encoding version equal the running `Mesh_memory`
+layouts, it reads the index and stream ranges, validates the prepared data
+against the stored base positions, and enqueues the bytes as they are - no
+soup is read or packed. The bounds come from the stored positions, the
+quantization affines from the file, and the real raytrace from the positions
+with the stored BVH. Any mismatch leaves the primitive to the soup path
+above (step 1), which counts the prepared data validation; with
+`cpu_mesh_data` keep the soup path runs, so the soup stays resident. The
+task logs one line per file that stores streams:
+`gpu vertex streams: N stored, M portable (reasons)`.
+
 ### Load memory budget
 
 One `erhe::utility::Memory_budget`, owned by `Asset_manager` and shared by

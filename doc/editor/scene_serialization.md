@@ -226,8 +226,11 @@ prefab source is Save Scene on the scene opened from that source.
   `res/editor/scenes/<scene name>_quest.glb`) and **MCP
   `save_scene_for_quest`** run `editor::save_scene_gltf_for_quest()`: the
   same file, with every Basis Universal KTX2 texture transcoded to a raw
-  ASTC 4x4 KTX2 image (`doc/gltf_extensions/ERHE_texture_ktx2.md`), so the
-  Quest uploads the blocks with no transcode. It is an export: the scene's
+  ASTC 4x4 KTX2 image (`doc/gltf_extensions/ERHE_texture_ktx2.md`;
+  Zstandard supercompressed levels unless the MCP call passes
+  `texture_supercompression: "none"`), so the Quest uploads the blocks with
+  no transcode, and each prepared primitive carries its GPU-ready vertex
+  streams (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md`). It is an export: the scene's
   source file binding and dirty state are not changed; only
   `Scene_saved_message` is sent.
 - **MCP `export_gltf`** exports plain interchange (same call minus
