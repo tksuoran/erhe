@@ -118,3 +118,4 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
 
 - [plans/gltf.md](../plans/gltf.md) - open items of the glTF persistence design.
 - [plans/gltf_prefabs.md](../plans/gltf_prefabs.md) - the remaining prefab phases.
+- [plans/gltf_fast_load.md](../plans/gltf_fast_load.md) - prepared mesh data (optimized core, stored colocation, BVH) so an erhe-saved scene loads with no deferred work.

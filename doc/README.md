@@ -449,6 +449,7 @@ flowchart TD
 - [plans/geometry_graph/openvdb_sdf.md](plans/geometry_graph/openvdb_sdf.md) (in progress): OpenVDB SDF support in the geometry graph (phase 3 onward)
 - [plans/gl_worker_contexts.md](plans/gl_worker_contexts.md) (proposed): GL worker contexts: outstanding work
 - [plans/gltf.md](plans/gltf.md) (in progress): glTF: outstanding work
+- [plans/gltf_fast_load.md](plans/gltf_fast_load.md) (in progress): glTF fast load: prepared mesh data in ERHE_* extensions
 - [plans/gltf_prefabs.md](plans/gltf_prefabs.md) (in progress): glTF scene prefabs: remaining phases
 - [plans/gltf_properties_extension.md](plans/gltf_properties_extension.md) (in progress): ERHE_*_properties glTF extensions (steps 2-5)
 - [plans/graph_editor.md](plans/graph_editor.md) (proposed): Graph editor: remaining shared-layer work
