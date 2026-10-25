@@ -343,6 +343,50 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
 
 }
 
+auto Headset_view::resolve_pending_scene_and_camera() -> bool
+{
+    const std::string& scene_name = m_pending_scene_and_camera.scene_name;
+    if (scene_name.empty()) {
+        return true;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+        if (scene_root->get_name() != scene_name) {
+            continue;
+        }
+        if (scene_root != get_scene_root()) {
+            m_app_context.app_message_bus->home_tools.queue_message(Home_tools_message{.scene_root = scene_root});
+        }
+        return true;
+    }
+    return false; // the named scene is not open yet; retried on a later frame
+}
+
+void Headset_view::detach_from_scene()
+{
+    // The visualization's destructor takes its hand nodes and the materials
+    // it added out of the scene; the render models are fetched again for the
+    // next scene.
+    m_controller_visualization.reset();
+    m_controller_render_models_loaded = false;
+    // The cameras stay alive (the render phase of a frame in flight may
+    // still read the pointer pick camera); they leave the scene and
+    // setup_root_camera() parents them into the next one.
+    if (m_root_camera) {
+        m_root_camera->set_parent(std::shared_ptr<erhe::scene::Node>{});
+    }
+    if (m_pointer_pick_camera) {
+        m_pointer_pick_camera->set_parent(std::shared_ptr<erhe::scene::Node>{});
+    }
+    m_root_node.reset();
+    // Hover entries name meshes of the scene being left.
+    reset_hover();
+    set_scene_root(std::shared_ptr<Scene_root>{});
+    // This frame's update_actions() ran for the scene being left; the frame
+    // renders no scene (render_headset() ends it with no layers), also when
+    // attach_to_scene() re-homes the headset in the same pump.
+    m_update_actions_ok = false;
+}
+
 void Headset_view::enable_benchmark_mode(const std::optional<float> display_refresh_rate_hz, const Benchmark_passthrough passthrough)
 {
     m_benchmark_mode                    = true;
@@ -406,12 +450,12 @@ void Headset_view::imgui()
     if (!m_context.OpenXR) {
         return;
     }
-    // Scene selection
-    auto                        old_scene_root = m_scene_root;
-    std::shared_ptr<Scene_root> scene_root     = get_scene_root();
+    // Scene selection: re-homes the headset together with the Hud and the
+    // Hotbar (Editor::home_tools(), from the message bus pump).
+    std::shared_ptr<Scene_root> scene_root = get_scene_root();
     const bool combo_used = m_app_context.app_scenes->scene_combo("##Scene", scene_root, false);
-    if (combo_used) {
-        m_scene_root = scene_root;
+    if (combo_used && scene_root && (scene_root != get_scene_root())) {
+        m_app_context.app_message_bus->home_tools.queue_message(Home_tools_message{.scene_root = scene_root});
     }
 
 
@@ -659,7 +703,7 @@ void Headset_view::render(const Render_context& render_context)
     }
 }
 
-auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>
+auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view, const std::shared_ptr<erhe::scene::Node>& scene_root_node) -> std::shared_ptr<Headset_view_resources>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -671,9 +715,10 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
     if (i == m_view_resources.end()) {
         auto resource = std::make_shared<Headset_view_resources>(
             *m_context.graphics_device,
-            render_view,                               // erhe::xr::Render_view& render_view,
-            *this,                                     // Headset_view&          headset_view,
-            static_cast<std::size_t>(render_view.slot) // const std::size_t      slot
+            render_view,                                // erhe::xr::Render_view& render_view,
+            *this,                                      // Headset_view&          headset_view,
+            static_cast<std::size_t>(render_view.slot), // const std::size_t      slot
+            scene_root_node
         );
         //const std::string label = fmt::format(
         //    "Headset Viewport_scene_view slot {} color texture {}",
@@ -686,7 +731,7 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
     return *i;
 }
 
-auto Headset_view::get_multiview_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>
+auto Headset_view::get_multiview_view_resources(erhe::xr::Render_view& render_view, const std::shared_ptr<erhe::scene::Node>& scene_root_node) -> std::shared_ptr<Headset_view_resources>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -700,7 +745,8 @@ auto Headset_view::get_multiview_view_resources(erhe::xr::Render_view& render_vi
             *m_context.graphics_device,
             render_view,
             *this,
-            slot
+            slot,
+            scene_root_node
         );
     }
     return entry;
@@ -809,7 +855,8 @@ void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buff
     if (!world_from_control.has_value()) {
         return;
     }
-    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    // The scene this frame renders (render phase; see render_headset()).
+    const std::shared_ptr<Scene_root> scene_root = get_render_scene_root();
     if (!scene_root) {
         return;
     }
@@ -1023,6 +1070,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         return false;
     }
 
+    // The scene this frame renders: the render view copy
+    // prepare_render_view() took in this frame's M2, after update_actions()
+    // found the headset homed. A later M2 may re-home the headset
+    // (Editor::home_tools()) while this frame renders.
+    const std::shared_ptr<Scene_root> frame_scene_root = get_render_scene_root();
+    ERHE_VERIFY(frame_scene_root);
+    const std::shared_ptr<erhe::scene::Node> frame_scene_root_node = frame_scene_root->get_scene().get_root_node();
+
     // Reconcile the passthrough state with what the scene needs this frame:
     // keep passthrough running when the sky is disabled (the scene clears its
     // background to transparent, so the room shows around the scene content)
@@ -1042,7 +1097,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     } else if (m_frame_timing.should_render) {
         // Sky enable resolved per scene (#239): a scene may override the sky off,
         // which enables passthrough for this headset view.
-        const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
+        const std::shared_ptr<Scene_root> sky_scene_root = frame_scene_root;
         const bool sky_enabled = (sky_scene_root != nullptr)
             ? sky_scene_root->get_render_settings(m_app_context.graphics_device->get_frame_index()).sky.enabled
             : m_app_context.render_settings->sky.enabled;
@@ -1080,7 +1135,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // skipped under multiview; the ID pick pass runs once above,
     // independent of this path.
     if (m_frame_timing.should_render && m_use_multiview) {
-        auto multiview_callback = [this](const erhe::xr::Render_views_frame& frame_in, erhe::graphics::Command_buffer& views_cb) -> bool {
+        auto multiview_callback = [this, &frame_scene_root, &frame_scene_root_node](const erhe::xr::Render_views_frame& frame_in, erhe::graphics::Command_buffer& views_cb) -> bool {
             erhe::graphics::Texture* color_texture         = frame_in.shared_color_texture;
             erhe::graphics::Texture* depth_stencil_texture = frame_in.shared_depth_stencil_texture;
             ERHE_VERIFY(color_texture != nullptr);
@@ -1105,12 +1160,12 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             };
             erhe::scene::Camera* primary_camera = nullptr;
             for (erhe::xr::Render_view& render_view : frame.views) {
-                const std::shared_ptr<Headset_view_resources>& view_resources = get_multiview_view_resources(render_view);
+                const std::shared_ptr<Headset_view_resources>& view_resources = get_multiview_view_resources(render_view, frame_scene_root_node);
                 if (!view_resources->is_valid()) {
                     return false;
                 }
                 const erhe::scene::Projection::Fov_sides fov_sides{render_view.fov_left, render_view.fov_right, render_view.fov_up, render_view.fov_down};
-                view_resources->update(render_view, fov_sides);
+                view_resources->update(render_view, fov_sides, frame_scene_root_node);
                 erhe::scene::Camera* camera = view_resources->get_camera();
                 if (primary_camera == nullptr) {
                     primary_camera = camera;
@@ -1127,8 +1182,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             }
 
             // Update scene transforms once per frame (not per view).
-            std::shared_ptr<Scene_root> scene_root = get_scene_root();
-            ERHE_VERIFY(scene_root);
+            const std::shared_ptr<Scene_root>& scene_root = frame_scene_root;
             scene_root->get_scene().update_node_transforms();
             m_app_context.app_message_bus->hover_scene_view.send_message(Hover_scene_view_message{.scene_view = this});
             m_app_context.app_message_bus->render_scene_view.send_message(Render_scene_view_message{.scene_view = this});
@@ -1189,7 +1243,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .camera              = primary_camera,
                 .camera_snapshot     = view_inputs.empty() ? nullptr : view_inputs.front().camera,
                 .viewport_scene_view = nullptr,
-                .scene_root          = get_scene_root(),
+                .scene_root          = frame_scene_root,
                 .viewport            = viewport_xy,
                 .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
             };
@@ -1375,7 +1429,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // Generate the atmosphere LUTs once before the render pass (compute
             // dispatches + barriers cannot run inside a render pass). Sky mode is
             // resolved per scene (#239).
-            const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
+            const std::shared_ptr<Scene_root> sky_scene_root = frame_scene_root;
             const int sky_mode = (sky_scene_root != nullptr)
                 ? sky_scene_root->get_render_settings(m_app_context.graphics_device->get_frame_index()).sky.mode
                 : m_app_context.render_settings->sky.mode;
@@ -1400,7 +1454,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .camera              = primary_camera,
                     .camera_snapshot     = view_inputs.empty() ? nullptr : view_inputs.front().camera,
                     .viewport_scene_view = nullptr,
-                    .scene_root          = get_scene_root(),
+                    .scene_root          = frame_scene_root,
                     .viewport            = viewport_xy,
                     .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                     .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
@@ -1443,8 +1497,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
 
     if (m_frame_timing.should_render) {
         bool first_view = true;
-        auto callback = [this, &first_view](erhe::xr::Render_view& render_view, erhe::graphics::Command_buffer& view_cb) -> bool {
-            const std::shared_ptr<Headset_view_resources>& view_resources = get_headset_view_resources(render_view);
+        auto callback = [this, &first_view, &frame_scene_root, &frame_scene_root_node](erhe::xr::Render_view& render_view, erhe::graphics::Command_buffer& view_cb) -> bool {
+            const std::shared_ptr<Headset_view_resources>& view_resources = get_headset_view_resources(render_view, frame_scene_root_node);
             if (!view_resources->is_valid()) {
                 return false;
             }
@@ -1474,16 +1528,16 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     render_view.fov_up,
                     render_view.fov_down
                 };
-                view_resources->update(render_view, expanded_fov_sides);
+                view_resources->update(render_view, expanded_fov_sides, frame_scene_root_node);
             } else {
-                view_resources->update(render_view, fov_sides);
+                view_resources->update(render_view, fov_sides, frame_scene_root_node);
             }
 
             // Update scene node transforms
             // TODO can we do most of this only once per frame, not for each view?
             {
 #if 1
-                std::shared_ptr<Scene_root> scene_root = get_scene_root();
+                std::shared_ptr<Scene_root> scene_root = frame_scene_root;
                 ERHE_VERIFY(scene_root);
                 scene_root->get_scene().update_node_transforms();
 #endif
@@ -1526,7 +1580,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .camera              = view_camera,
                 .camera_snapshot     = &view_camera_snapshot,
                 .viewport_scene_view = nullptr,
-                .scene_root          = get_scene_root(),
+                .scene_root          = frame_scene_root,
                 .viewport            = viewport,
                 .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                 .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
@@ -1570,7 +1624,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
 
             // Generate the atmosphere LUTs once before the render pass. Sky mode is
             // resolved per scene (#239).
-            const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
+            const std::shared_ptr<Scene_root> sky_scene_root = frame_scene_root;
             const int sky_mode = (sky_scene_root != nullptr)
                 ? sky_scene_root->get_render_settings(m_app_context.graphics_device->get_frame_index()).sky.mode
                 : m_app_context.render_settings->sky.mode;
@@ -1703,13 +1757,17 @@ void Headset_view::setup_root_camera()
     );
 
     m_root_node = get_scene_root()->get_scene().get_root_node();
-    m_root_camera = std::make_shared<erhe::scene::Camera>("Root Camera");
+    // Re-homing (detach_from_scene() + attach_to_scene()) keeps the cameras
+    // and moves them into the new scene.
+    if (!m_root_camera) {
+        m_root_camera = std::make_shared<erhe::scene::Camera>("Root Camera");
+        m_root_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        m_root_camera->set_fov_y             (glm::radians(35.0f));
+        m_root_camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+        m_root_camera->set_perspective_z_near(0.03f);
+        m_root_camera->set_perspective_z_far (200.0f);
+    }
     m_root_camera->set_parent(m_root_node);
-    m_root_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-    m_root_camera->set_fov_y             (glm::radians(35.0f));
-    m_root_camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
-    m_root_camera->set_perspective_z_near(0.03f);
-    m_root_camera->set_perspective_z_far (200.0f);
 
     setup_pointer_pick_camera();
 }
@@ -1722,12 +1780,14 @@ void Headset_view::setup_pointer_pick_camera()
     // (-Z). A narrow vertical fov concentrates angular resolution around the
     // ray so the centre texel samples the surface the controller points at.
     // No content flag and hidden: it must never be composited or listed.
-    m_pointer_pick_camera = std::make_shared<erhe::scene::Camera>("Pointer Pick Camera");
-    m_pointer_pick_camera->hide();
-    m_pointer_pick_camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
-    m_pointer_pick_camera->set_fov_y             (glm::radians(10.0f));
-    m_pointer_pick_camera->set_perspective_z_near(0.03f);
-    m_pointer_pick_camera->set_perspective_z_far (200.0f);
+    if (!m_pointer_pick_camera) {
+        m_pointer_pick_camera = std::make_shared<erhe::scene::Camera>("Pointer Pick Camera");
+        m_pointer_pick_camera->hide();
+        m_pointer_pick_camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+        m_pointer_pick_camera->set_fov_y             (glm::radians(10.0f));
+        m_pointer_pick_camera->set_perspective_z_near(0.03f);
+        m_pointer_pick_camera->set_perspective_z_far (200.0f);
+    }
     m_pointer_pick_camera->set_parent(m_root_node);
 }
 
@@ -1770,9 +1830,10 @@ void Headset_view::update_camera_node()
 void Headset_view::prepare_render_view()
 {
     // The root camera as the copy the shadow render node fits to
-    // (Scene_view::get_render_camera()); null before the headset is
-    // attached to a scene (setup_root_camera()).
-    snapshot_render_view(m_root_camera.get());
+    // (Scene_view::get_render_camera()), and the scene root the render
+    // phase renders (get_render_scene_root()); no camera while the headset
+    // is not homed in a scene.
+    snapshot_render_view(m_root_node ? m_root_camera.get() : nullptr);
 }
 
 void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views, const glm::quat& head_orientation)
@@ -1915,11 +1976,11 @@ void Headset_view::add_render_cull_view()
     m_render_cull_draw_list_scene = nullptr;
     m_render_cull_view            = erhe::scene_renderer::Cull_view::none;
 
-    // The gates render_headset() renders the scene under. m_frame_timing and
-    // get_scene_root() are R-side state here: begin_frame() stores the
-    // timing at the start of this render phase and render_headset() renders
-    // the same get_scene_root() later in it; nothing here reads M2 state
-    // except the planes slot M2 wrote for this frame.
+    // The gates render_headset() renders the scene under. m_frame_timing is
+    // R-side state here: begin_frame() stores the timing at the start of this
+    // render phase. The scene root is this frame's render view copy, the
+    // same render_headset() renders later in it; nothing else here reads M2
+    // state except the planes slot M2 wrote for this frame.
     if (!m_context.OpenXR || (m_headset == nullptr) || !m_frame_timing.begin_ok || !m_frame_timing.should_render) {
         return;
     }
@@ -1931,8 +1992,8 @@ void Headset_view::add_render_cull_view()
     if ((slot.frame_index != frame_index) || (slot.plane_count == 0)) {
         return;
     }
-    // The scene root render_headset() renders.
-    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    // The scene root render_headset() renders (this frame's render view).
+    const std::shared_ptr<Scene_root> scene_root = get_render_scene_root();
     if (!scene_root) {
         return;
     }
@@ -2221,15 +2282,16 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
     // scene.create command, and a saved scene arrives via scene.load_scene -
     // both run after init (from the startup script or a file dialog), so the
     // first ticks can execute before on_scene_created() -> attach_to_scene()
-    // has built m_root_camera via setup_root_camera(). update_camera_node()
-    // and the scene-relative pointer/action handling below require it, so idle
-    // until the headset has been attached to a scene. Returning false also
+    // has homed the headset (setup_root_camera() sets m_root_node). The same
+    // holds after detach_from_scene() while no scene is open.
+    // update_camera_node() and the scene-relative pointer/action handling
+    // below require a scene, so idle until the headset is attached to one. Returning false also
     // keeps m_update_actions_ok false, so render_headset() skips the frame too.
     // Mirrors Scene_view::update_transforms()'s no-scene-root guard. The XR
     // session stays healthy because poll_events()/wait_frame()/xrSyncActions
     // have already run for this frame above (begin_frame() runs in the
     // render phase).
-    if (m_root_camera == nullptr) {
+    if (!m_root_node) {
         return false;
     }
 

@@ -177,6 +177,20 @@ Controller_visualization::Controller_visualization(
         erhe::scene::set_mesh_parent(hand.placeholder_mesh, hand.node);
         hand.node->set_parent(view_root);
     }
+    m_library_materials.push_back(controller_material);
+}
+
+Controller_visualization::~Controller_visualization() noexcept
+{
+    for (const bool right_hand : { false, true }) {
+        Hand& hand = get_hand(right_hand);
+        if (hand.node) {
+            hand.node->set_parent(std::shared_ptr<erhe::scene::Node>{});
+        }
+    }
+    for (const std::shared_ptr<erhe::primitive::Material>& material : m_library_materials) {
+        static_cast<void>(m_material_library->remove(material));
+    }
 }
 
 auto Controller_visualization::get_hand(const bool right_hand) -> Hand&
@@ -288,6 +302,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
     for (const std::shared_ptr<erhe::primitive::Material>& material : gltf_data.materials) {
         if (material) {
             m_material_library->add(material);
+            m_library_materials.push_back(material);
         }
     }
 

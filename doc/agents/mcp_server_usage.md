@@ -635,6 +635,20 @@ capturing. `render_scene_image` draws no edge lines; capture them with
 
 Returns: `{style, edge_lines, corner_points, polygon_centroids, solid_wireframe, full_builds_queued}`.
 
+### set_headset_scene
+
+Home the global tools (Hud, Hotbar and, under OpenXR, the headset view) in
+the open scene `scene_name`, so the headset renders that scene; the same as
+the headset window's scene combo (`doc/editor/tools.md` "Headset scene").
+The move is queued and completes on a following frame; the log line
+`Global tools homed in scene '<name>'` marks it. Closing the scene the tools
+are homed in (`close_scene`) moves them to the most recently opened
+remaining scene without this call. On Quest, the headset passes'
+`last_mesh_count` in `get_composition_passes` and the `XR multiview` timer
+in `get_gpu_timers` show which scene the headset renders.
+
+Returns: `{queued, scene_name}`; an error when no scene has that name.
+
 ### get_occlusion_check
 
 The gate of the raster occlusion test: the next frame with occlusion views

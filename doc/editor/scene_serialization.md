@@ -242,7 +242,9 @@ through it:
   viewport, no lights, no meshes; under OpenXR no desktop viewport, as for
   any opened scene) and loads nothing; it takes precedence
   over `--scene`. The tools (Hud, Hotbar, OpenXR headset) home in that
-  empty scene, so a scene loaded later opens beside it.
+  empty scene, so a scene loaded later opens beside it; closing "Scene 1"
+  or MCP `set_headset_scene` moves them (`doc/editor/tools.md` "Headset
+  scene").
 - `scene.load_scene` in `config/editor/commands.json`
 
 The handler scans the file (`editor::scan_gltf` -> `Gltf_scan_summary`,

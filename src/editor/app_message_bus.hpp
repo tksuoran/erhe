@@ -31,6 +31,7 @@ public:
     erhe::message_bus::Message_bus<Scene_saved_message,           sync>  scene_saved;
     erhe::message_bus::Message_bus<Create_scene_message,           queue> create_scene;
     erhe::message_bus::Message_bus<Close_scene_message,            queue> close_scene;
+    erhe::message_bus::Message_bus<Home_tools_message,             queue> home_tools;
     erhe::message_bus::Message_bus<Tool_select_message,           sync>  tool_select;
     erhe::message_bus::Message_bus<Skin_registered_message,       queue> skin_registered;
     erhe::message_bus::Message_bus<Bone_changed_message,          queue> bone_changed;

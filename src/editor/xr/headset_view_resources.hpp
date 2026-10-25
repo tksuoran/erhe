@@ -27,14 +27,20 @@ class Viewport_scene_view;
 class Headset_view_resources
 {
 public:
+    // scene_root_node: the root node of the scene the frame renders (the
+    // headset's render view scene root); the eye camera is its child.
     Headset_view_resources(
-        erhe::graphics::Device& graphics_device,
-        erhe::xr::Render_view&  render_view,
-        Headset_view&           headset_view,
-        const std::size_t       slot
+        erhe::graphics::Device&                   graphics_device,
+        erhe::xr::Render_view&                    render_view,
+        Headset_view&                             headset_view,
+        const std::size_t                         slot,
+        const std::shared_ptr<erhe::scene::Node>& scene_root_node
     );
 
-    void update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides);
+    // Render phase. Moves the eye camera under scene_root_node when the
+    // frame renders another scene than the camera is in (the headset was
+    // re-homed), then poses it for the view.
+    void update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides, const std::shared_ptr<erhe::scene::Node>& scene_root_node);
 
     [[nodiscard]] auto is_valid                 () const -> bool;
     [[nodiscard]] auto get_render_pass          () const -> erhe::graphics::Render_pass*;
