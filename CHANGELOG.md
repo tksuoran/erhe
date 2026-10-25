@@ -28,6 +28,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Vertex_colocation`, the overload
+  `mesh_from_triangle_soup(const Triangle_soup&, GEO::Mesh&, Element_mappings&, Vertex_colocation&)`
+  that also returns the colocation the colocate path used, and
+  `mesh_from_triangle_soup(const Triangle_soup&, std::span<const uint32_t> vertex_points, uint32_t point_count, GEO::Mesh&, Element_mappings&) -> bool`,
+  which builds the mesh from a supplied colocation without `colocate()` or
+  the geogram lock and returns false on invalid input.
+
 - `erhe::graphics`: `Gpu_timer_result` (nanoseconds + recording frame id),
   `Gpu_timer::last_result_with_frame_id()` and the allocation-free
   `Gpu_timer::for_each_gpu_timer(const std::function<void(Gpu_timer&)>&)`

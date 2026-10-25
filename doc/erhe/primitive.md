@@ -19,7 +19,8 @@ volume computation, and PBR material definitions.
 - `Build_info` / `Buffer_info` -- configuration for mesh building (primitive types, vertex format, index type). `Buffer_info` carries both `vertex_buffer_sink` and `index_buffer_sink` references plus a `vertex_input_key`.
 - `Primitive_builder` / `Build_context` -- orchestrates the conversion from GEO::Mesh to Buffer_mesh
 - `Material` -- PBR material: base color, roughness, metallic, emissive, texture samplers. It is a typed prim (`erhe::Typed`, `doc/erhe/item.md` "Prim classes") whose fixed `typeName` token is `Material`, USD's `UsdShadeMaterial`.
-- `Triangle_soup` -- raw vertex/index data container (e.g., from glTF import)
+- `Triangle_soup` -- raw vertex/index data container (e.g., from glTF import); `mesh_from_triangle_soup()` converts it to a `GEO::Mesh` ("Triangle soup to mesh" below)
+- `Vertex_colocation` -- per-soup-vertex point ids plus point count: the colocation of a soup's vertices into mesh points
 - `Vertex_buffer_writer` / `Index_buffer_writer` -- write vertex attributes and indices to byte buffers; on destruction they call `vertex_writer_ready` / `index_writer_ready` on the owning sink.
 - `mesh_optimizer.hpp` -- `optimize_triangle_soup()` / `optimize_triangle_soup_cached()`:
   meshoptimizer passes (vertex weld/remap, vertex-cache order, overdraw order,
@@ -85,6 +86,54 @@ draws after them, and the translucent draws blend over both. The standard
 fragment shader evaluates the alpha test and the screen-door dither before
 the ambient term and the light loops (`doc/erhe/scene_renderer.md`), and
 writes alpha 1 for both discard modes.
+
+## Triangle soup to mesh
+
+`mesh_from_triangle_soup()` (`triangle_soup.hpp`) converts a
+`Triangle_soup` into a `GEO::Mesh` plus the soup-index `Element_mappings`
+(`triangle_to_mesh_facet`, `mesh_corner_to_vertex_buffer_index`). Only the
+vertices the indices reference become mesh points. The conversion has two
+halves:
+
+- **Colocation**: which soup vertices share a point (geogram vertex), and
+  the point numbering. A `Vertex_colocation` holds it as `vertex_points[v]`,
+  the point of soup vertex `v` (`Vertex_colocation::no_point` for a vertex
+  no index references), plus `point_count`.
+- **Build**: points, facets, corners and attributes from the colocation.
+  A triangle whose corners land on fewer than three points is dropped
+  (`triangle_to_mesh_facet` holds `GEO::NO_INDEX` for it). Per-point
+  attributes (position, joints) take the value of the point's last
+  referenced vertex; per-corner attributes (normal, tangent, texcoord,
+  color) are copied per corner.
+
+The colocation comes from one of two sources, and the build is the same
+code for both:
+
+- `mesh_from_triangle_soup(soup, mesh, mappings)` runs
+  `GEO::Geom::colocate()` (tolerance 1e-5) under
+  `erhe::geometry::geogram_lock()`. Each vertex's representative is the
+  smallest vertex index of its cluster, and the points are numbered by
+  ascending representative, which is the order of first reference by
+  ascending vertex index. The overload with a `Vertex_colocation&` out
+  parameter also returns the colocation it used.
+- `mesh_from_triangle_soup(soup, vertex_points, point_count, mesh, mappings)`
+  takes the colocation from the caller (the `ERHE_mesh_topology` glTF
+  payload, `doc/gltf_extensions/ERHE_mesh_topology.md`). It takes no
+  geogram lock and runs no geogram algorithm, so conversions of different
+  soups run fully in parallel. It validates before it builds:
+  `vertex_points` has one entry per soup vertex; every index is below the
+  vertex count; every referenced vertex names a point below `point_count`;
+  every point is named by a referenced vertex; an unreferenced vertex
+  carries `no_point` or an id below `point_count`; the soup has one vertex
+  stream with a position attribute. On any failure it returns false and
+  leaves the mesh and the mappings untouched. The point order is the
+  caller's; the extension's first-reference order check belongs to the
+  loader.
+
+Given the colocation the colocate path returned, the supplied path builds
+a bit-identical mesh and mappings, and `Geometry::process()` then gives
+identical edges and smooth vertex normals
+(`src/erhe/primitive/test/test_stored_colocation.cpp`).
 
 ## Empty primitives
 
