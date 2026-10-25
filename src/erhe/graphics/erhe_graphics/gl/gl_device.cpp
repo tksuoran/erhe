@@ -1176,6 +1176,30 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const vo
     staging_buffer_range.release();
 }
 
+auto Device_impl::try_upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length, const size_t staging_capacity_byte_count) -> bool
+{
+    // As upload_to_buffer, but staged through the capped upload staging
+    // ring: no room means nothing is copied and the caller retries.
+    Ring_buffer_range staging_buffer_range = allocate_upload_staging(Buffer_target::transfer_src, length, staging_capacity_byte_count);
+    if (staging_buffer_range.get_buffer() == nullptr) {
+        return false;
+    }
+    buffer.get_impl().wait_publication();
+    std::span<std::byte> staging_buffer_span = staging_buffer_range.get_span();
+    memcpy(staging_buffer_span.data(), data, length);
+    staging_buffer_range.bytes_written(length);
+    staging_buffer_range.close();
+    gl::copy_named_buffer_sub_data(
+        staging_buffer_range.get_buffer()->get_buffer()->get_impl().gl_name(),
+        buffer.get_impl().gl_name(),
+        staging_buffer_range.get_byte_start_offset_in_buffer(),
+        offset,
+        length
+    );
+    staging_buffer_range.release();
+    return true;
+}
+
 void Device_impl::upload_to_texture(
     const Texture&               texture,
     const int                    level,
@@ -1539,6 +1563,22 @@ auto Device_impl::allocate_ring_buffer_entry(
     m_need_sync = true;
     const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
     return m_ring_buffer_pool.allocate(required_alignment, ring_buffer_usage, byte_count);
+}
+
+auto Device_impl::allocate_upload_staging(
+    const Buffer_target buffer_target,
+    const std::size_t   byte_count,
+    const std::size_t   capacity_byte_count
+) -> Ring_buffer_range
+{
+    m_need_sync = true;
+    const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
+    return m_ring_buffer_pool.allocate_upload_staging(required_alignment, byte_count, capacity_byte_count);
+}
+
+auto Device_impl::get_upload_staging_usage() const -> Upload_staging_usage
+{
+    return m_ring_buffer_pool.get_upload_staging_usage();
 }
 
 void Device_impl::memory_barrier(const Memory_barrier_mask barriers)

@@ -1,6 +1,7 @@
 #include "graphics/texture_file_loader.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
@@ -285,11 +286,16 @@ void Texture_file_loader::tick(erhe::graphics::Command_buffer& command_buffer)
     ERHE_PROFILE_FUNCTION();
 
     if (!m_image_transfer) {
-        // frame_recording: staging comes from the device ring and the copies
+        // frame_recording: staging comes from the device's capped upload
+        // staging (the load.max_upload_staging_bytes setting) and the copies
         // go into the frame's command buffer, so this allocates nothing.
+        const std::size_t staging_capacity_byte_count = (m_context.editor_settings != nullptr)
+            ? static_cast<std::size_t>(std::max(1, m_context.editor_settings->load.max_upload_staging_bytes))
+            : erhe::gltf::Image_transfer::default_staging_capacity_byte_count;
         m_image_transfer = std::make_unique<erhe::gltf::Image_transfer>(
             *m_context.graphics_device,
-            erhe::gltf::Image_transfer_mode::frame_recording
+            erhe::gltf::Image_transfer_mode::frame_recording,
+            staging_capacity_byte_count
         );
     }
 

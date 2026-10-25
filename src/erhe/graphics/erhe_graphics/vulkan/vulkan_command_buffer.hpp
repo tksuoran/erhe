@@ -16,6 +16,7 @@ namespace erhe::dataformat {
 namespace erhe::graphics {
 
 class Buffer;
+class Buffer_impl;
 class Command_buffer;
 class Device;
 class Device_impl;
@@ -108,6 +109,7 @@ public:
     // recording state (caller has called begin()); the caller is
     // responsible for ending and submitting the cb.
     void upload_to_buffer         (const Buffer& buffer, std::size_t offset, const void* data, std::size_t length);
+    [[nodiscard]] auto try_upload_to_buffer(const Buffer& buffer, std::size_t offset, const void* data, std::size_t length, std::size_t staging_capacity_byte_count) -> bool;
     void upload_to_texture        (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void clear_texture            (const Texture& texture, std::array<double, 4> clear_value);
     void transition_texture_layout(const Texture& texture, Image_layout new_layout);
@@ -182,6 +184,8 @@ public:
     void collect_synchronization(Vulkan_submit_info& submit_info);
 
 private:
+    void record_buffer_upload_copy(VkBuffer source_buffer, std::size_t source_offset, Buffer_impl& impl, std::size_t offset, std::size_t length);
+
     // Held as Device_impl* (not Device*) so that a Command_buffer_impl
     // destroyed during Device_impl::~Device_impl can still reach its
     // Device_impl. unique_ptr::reset() zeroes its raw pointer before

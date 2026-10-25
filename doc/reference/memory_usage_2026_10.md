@@ -158,6 +158,12 @@ today:
 
 ## Ranked optimization candidates
 
+Status (2026-10-25): candidates 1 and 6 are done (doc/plans/gltf_fast_load.md
+follow-up item 6): decoded pixels stay within a 128 MiB budget and the
+.glb is streamed, so the prepared Bistro's peak working set fell from 3.9 to
+1.7 GB on desktop and VmHWM from 3.9 to 1.7 GB on Quest. Candidates 2-5 and
+7-8 are open.
+
 | # | Candidate | Saves (idle / peak) | Cost | Notes |
 |---|---|---|---|---|
 | 1 | Bound the decoded pixels: decode images inside residency with an in-flight byte budget instead of all in `parse_gltf` | peak about -1.5 GB on both | medium | Makes VmHWM about idle + file. The likely cause of the foreign load's lmkd kill on Quest (step 9) |

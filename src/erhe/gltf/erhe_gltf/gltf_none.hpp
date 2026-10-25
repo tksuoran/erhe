@@ -93,12 +93,17 @@ class Gltf_image_residency
 {
 public:
     [[nodiscard]] auto get_pending_image_count() const -> std::size_t { return 0; }
-    [[nodiscard]] auto get_pending_byte_count () const -> std::size_t { return 0; }
+    static constexpr std::size_t default_max_decoded_bytes_in_flight = 128 * 1024 * 1024;
 
-    auto process_next_image(Gltf_data&, erhe::graphics::Device&, Image_transfer&) -> bool { return false; }
+    [[nodiscard]] auto get_pending_byte_count () const -> std::size_t { return 0; }
+    [[nodiscard]] auto get_pending_byte_high_water() const -> std::size_t { return 0; }
+    void schedule_decodes(std::size_t) {}
+    [[nodiscard]] auto is_decode_idle() const -> bool { return true; }
+
+    auto process_next_image(Gltf_data&, erhe::graphics::Device&, Image_transfer&, std::size_t = default_max_decoded_bytes_in_flight) -> bool { return false; }
     auto process_next_image_into_frame(Gltf_data&, erhe::graphics::Device&, Image_transfer&, erhe::graphics::Command_buffer&, std::size_t&) -> bool { return false; }
     void bind_material_textures(Gltf_data&) const {}
-    void drain(Gltf_data&, erhe::graphics::Device&, Image_transfer&) {}
+    void drain(Gltf_data&, erhe::graphics::Device&, Image_transfer&, std::size_t = default_max_decoded_bytes_in_flight) {}
 };
 
 // What the parse did with the prepared mesh data of a file

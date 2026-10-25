@@ -114,6 +114,11 @@ public:
     // submit it via Device::submit_command_buffers (or batch it
     // with other cbs that the caller submits).
     void upload_to_buffer         (const Buffer& buffer, std::size_t offset, const void* data, std::size_t length);
+    // Like upload_to_buffer, for uploads that may wait a frame: host-visible
+    // staging, when the backend needs any, comes from
+    // Device::allocate_upload_staging with the given cap. Returns false and
+    // records nothing when the staging has no room now; retry next frame.
+    [[nodiscard]] auto try_upload_to_buffer(const Buffer& buffer, std::size_t offset, const void* data, std::size_t length, std::size_t staging_capacity_byte_count) -> bool;
     void upload_to_texture        (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void clear_texture            (const Texture& texture, std::array<double, 4> clear_value);
     void transition_texture_layout(const Texture& texture, Image_layout new_layout);

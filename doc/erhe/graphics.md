@@ -94,6 +94,7 @@ on every push.
 - `Device device(surface_create_info)` -- Create the graphics device.
 - `device.make_render_command_encoder()` -- Get a command encoder for drawing.
 - `device.allocate_ring_buffer_entry(target, usage, size)` -- Allocate from ring buffer.
+- `device.allocate_upload_staging(target, size, capacity)` / `device.get_upload_staging_usage()` -- Host-visible staging for uploads that may wait a frame, capped at `capacity` (an empty range means retry next frame); `command_buffer.try_upload_to_buffer(buffer, offset, data, size, capacity)` is `upload_to_buffer` staged through it (doc/erhe/ring_buffer_memory.md "Upload staging cap").
 - `device.create_render_pipeline(Render_pipeline_create_info)` -- Up-front pipeline creation.
 - `Buffer(device, create_info)` / `Texture(device, create_info)` -- Create GPU resources.
 - `Buffer::get_memory_statistics()` / `Texture::get_memory_statistics()` / `Texture::get_estimated_byte_count()` / `Device::get_memory_budget()` -- Memory accounting: the live buffers' capacity by creation usage (mutex-guarded process-wide counters), the textures' estimated bytes, and the driver budget with the backend allocator's block and allocation bytes (Vulkan: VMA over every allocator; with VK_EXT_memory_budget `device_local_usage` is the driver's figure for the whole process). `Device_debug_state::ring_buffer_capacity_bytes` is the ring buffer pool's total capacity.

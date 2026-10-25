@@ -940,11 +940,15 @@ auto Mesh_memory::get_loader_transfer_queue() -> erhe::graphics::Buffer_transfer
     return m_loader_transfer_queue;
 }
 
-auto Mesh_memory::flush_budgeted(erhe::graphics::Command_buffer& command_buffer, const std::size_t max_byte_count) -> std::size_t
+auto Mesh_memory::flush_budgeted(
+    erhe::graphics::Command_buffer& command_buffer,
+    const std::size_t               max_byte_count,
+    const std::size_t               staging_capacity_byte_count
+) -> std::size_t
 {
     // ONLY the loader queue. The interactive queue keeps its full-drain
     // contract in flush() below - see Mesh_memory_queue.
-    const std::size_t recorded = m_loader_transfer_queue.flush_budgeted(command_buffer, max_byte_count);
+    const std::size_t recorded = m_loader_transfer_queue.flush_budgeted(command_buffer, max_byte_count, staging_capacity_byte_count);
     if (recorded > 0) {
         log_mesh_memory->trace(
             "Mesh_memory::flush_budgeted(): recorded {} of {} budgeted bytes, watermark now {}",

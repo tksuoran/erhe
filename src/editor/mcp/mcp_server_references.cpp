@@ -543,6 +543,16 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
             {"capacity_bytes", debug_state.ring_buffer_capacity_bytes},
             {"bytes_in_use",   debug_state.ring_buffer_bytes_in_use}
         };
+        // The capped upload staging of asynchronous loads
+        // (doc/erhe/ring_buffer_memory.md "Upload staging cap").
+        const erhe::graphics::Upload_staging_usage staging = m_context.graphics_device->get_upload_staging_usage();
+        result["upload_staging"] = {
+            {"capacity_bytes",   staging.capacity_byte_count},
+            {"bytes_in_use",     staging.bytes_in_use},
+            {"high_water_bytes", staging.high_water_bytes},
+            {"refused_count",    staging.refused_count},
+            {"oversize_count",   staging.oversize_count}
+        };
     }
 
     result["process"] = get_process_memory_json();

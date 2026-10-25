@@ -5,6 +5,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -194,6 +195,65 @@ TEST_F(Gpu_test, copy_buffer_to_buffer)
 
     expect_buffer_matches_golden("copy_buffer_to_buffer_whole", whole_bytes);
     expect_buffer_matches_golden("copy_buffer_to_buffer_offset", offset_bytes);
+}
+
+// Device::allocate_upload_staging is a hard cap (doc/erhe/ring_buffer_memory.md
+// "Upload staging cap"): a request that does not fit the room left gets an
+// empty range instead of a new buffer, smaller requests then wait behind it,
+// a request larger than the cap waits while anything is staged, and a staged
+// range copies like any ring range.
+TEST_F(Gpu_test, upload_staging_cap)
+{
+    constexpr std::size_t cap          = 1024 * 1024;
+    constexpr std::size_t large_bytes  = 600 * 1024;
+    constexpr std::size_t small_bytes  = 64 * 1024;
+    constexpr uint32_t    n            = static_cast<uint32_t>(large_bytes / sizeof(uint32_t));
+
+    std::vector<uint32_t> src(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        src[i] = 0x5EED0000u ^ (i * 2654435761u);
+    }
+    const std::shared_ptr<erhe::graphics::Buffer> destination =
+        make_host_buffer(large_bytes, erhe::graphics::Buffer_usage::transfer_dst, "upload_staging_dst");
+
+    bool second_large_refused = false;
+    bool small_refused        = false;
+    bool oversize_refused     = false;
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Ring_buffer_range range = device().allocate_upload_staging(erhe::graphics::Buffer_target::transfer_src, large_bytes, cap);
+            ASSERT_NE(range.get_buffer(), nullptr);
+            ASSERT_GE(range.get_span().size(), large_bytes);
+            std::memcpy(range.get_span().data(), src.data(), large_bytes);
+            range.bytes_written(large_bytes);
+            range.close();
+            {
+                erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
+                blit.copy_from_buffer(range.get_buffer()->get_buffer(), range.get_byte_start_offset_in_buffer(), destination.get(), 0, large_bytes);
+            }
+            range.release();
+
+            erhe::graphics::Ring_buffer_range second_large = device().allocate_upload_staging(erhe::graphics::Buffer_target::transfer_src, large_bytes, cap);
+            second_large_refused = (second_large.get_buffer() == nullptr);
+            erhe::graphics::Ring_buffer_range small = device().allocate_upload_staging(erhe::graphics::Buffer_target::transfer_src, small_bytes, cap);
+            small_refused = (small.get_buffer() == nullptr);
+            erhe::graphics::Ring_buffer_range oversize = device().allocate_upload_staging(erhe::graphics::Buffer_target::transfer_src, 2 * cap, cap);
+            oversize_refused = (oversize.get_buffer() == nullptr);
+        }
+    );
+
+    EXPECT_TRUE(second_large_refused) << "a request beyond the room left under the cap must wait, not spill";
+    EXPECT_TRUE(small_refused)        << "a smaller request must wait behind the refused larger one";
+    EXPECT_TRUE(oversize_refused)     << "a request larger than the cap must wait while anything is staged";
+
+    const erhe::graphics::Upload_staging_usage usage = device().get_upload_staging_usage();
+    EXPECT_EQ(usage.capacity_byte_count, cap);
+    EXPECT_GE(usage.high_water_bytes, large_bytes);
+    EXPECT_LE(usage.high_water_bytes, cap);
+    EXPECT_EQ(usage.refused_count, 3u);
+
+    const std::vector<std::byte> raw = read_buffer(*destination, large_bytes);
+    EXPECT_EQ(std::memcmp(raw.data(), src.data(), large_bytes), 0) << "staged bytes differed after the copy";
 }
 
 } // namespace erhe::graphics::test

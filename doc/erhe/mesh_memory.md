@@ -166,8 +166,12 @@ also applies pending pool frees (below). Entries are recorded in enqueue
 order and each upload is ordered after the earlier writes to its buffer
 (`doc/erhe/graphics.md` "Resource barriers"), so overlapping writes - a live
 vertex edit writing one vertex twice before a flush - land last-enqueued-wins. Callers schedule this once per frame
-around mesh uploads. `flush_budgeted(command_buffer, max_bytes)` drains only
-the loader queue and is called only from `Asset_manager::tick`.
+around mesh uploads. `flush_budgeted(command_buffer, max_bytes,
+staging_capacity_bytes)` drains only the loader queue and is called only
+from `Asset_manager::tick`; its host-visible staging comes from the device's
+capped upload staging (doc/erhe/ring_buffer_memory.md "Upload staging cap"),
+and an entry that finds no staging room stays at the front of the queue for
+the next drain, so the watermark only covers what was recorded.
 
 ### Frame-safe frees, and the loader free gate
 

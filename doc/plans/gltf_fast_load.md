@@ -404,6 +404,46 @@ byte-for-byte against the foreign Bistro at idle.
    explicitly (`doc/editor/tools.md` "Headset scene"). On Quest, `--no-scene`
    + `load_scene` of the prepared Bistro + `close_scene "Scene 1"` renders
    Bistro in the headset.
+6. **Limit the CPU-visible memory used for GPU uploads.** Done:
+   - `parse_gltf` decodes no image; `Gltf_image_residency` decodes /
+     transcodes on workers ahead of the upload under
+     `load.max_decoded_bytes_in_flight` (128 MiB), starting when the parse
+     is done and overlapping the build (doc/editor/async_asset_loading.md
+     "Image residency").
+   - Texture and loader-queue buffer uploads stage through one capped ring,
+     `load.max_upload_staging_bytes` (64 MiB desktop, 32 MiB OpenXR); a
+     full ring makes the upload wait a frame, an upload larger than the cap
+     goes alone through a one-shot buffer (doc/erhe/ring_buffer_memory.md
+     "Upload staging cap").
+   - `parse_gltf` / `scan_gltf` stream the file, which removes the .glb
+     double copy (memory report candidate 6).
+
+   Result (2026-10-25, Release headless desktop, AMD iGPU, warm caches, two
+   opens per file; listed / idle from `scene_load_profile.py --tool
+   load_scene`, peaks from MCP `get_memory_usage` process sampling):
+
+   | Open | listed before / after | idle before / after | peak working set before / after | peak heap before / after |
+   |---|---|---|---|---|
+   | prepared `.glb` | 4.35-4.50 / 3.08-3.40 s | 4.35-4.50 / 3.48-3.81 s | 3916 / 1675 MB | 3140 / 1225 MB |
+   | foreign `.gltf` | 3.01-4.01 / 2.26-3.71 s | 6.18-6.90 / 5.50-6.90 s | load phase 2746 / about 1100 MB | 4403 / 4404 MB (deferred phase) |
+
+   `parse_gltf` 1.86-2.31 s before, 0.82-0.93 s after (prepared). The
+   foreign file's overall peak is its deferred `Geometry` phase, unchanged
+   (4.9 GB working set). Renders byte-identical before / after (prepared
+   md5 89832b62..., foreign d488fefc...). Logged per load: decoded pixels
+   high-water 128.6 MB of the 128 MiB budget, upload staging high-water
+   33-45 MB of the 64 MiB cap, 0 waits; no main-role ring buffer spill, no
+   outpacing warning. Stress run with a 4 MiB cap and a 16 MiB decode
+   budget: both files load in 11-13 s, the 325 images larger than the cap
+   (5.6 MB BC7 chains) take the one-shot path, staging high-water equals
+   the largest image, renders identical.
+
+   Quest 3 (release APK, off-head automated, `--no-scene` then
+   `load_scene` of the prepared Bistro): listed 16.7 s before, 11.2-11.5 s
+   after (3 runs); VmHWM 3879 MB before, 1660-1728 MB after. Upload staging
+   high-water 20-29 MB (the device's writable config predates the setting,
+   so these runs used the 64 MiB default; a fresh install gets 32 MiB),
+   decoded pixels high-water 128.6 MB.
 
 Decisions on the follow-up items (user, 2026-10-25):
 

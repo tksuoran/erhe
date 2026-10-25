@@ -421,7 +421,7 @@ void Asset_manager::tick(Asset_load_tick_context& tick_context)
             tick_context.budget.get_remaining_gpu_upload_bytes()
         );
         if (granted > 0) {
-            const std::size_t recorded = mesh_memory->flush_budgeted(tick_context.command_buffer, granted);
+            const std::size_t recorded = mesh_memory->flush_budgeted(tick_context.command_buffer, granted, tick_context.max_upload_staging_bytes);
             // Hand back what the drain did not use, so texture residency in
             // the same tick can spend it.
             tick_context.budget.give_back_gpu_upload_bytes(granted - recorded);

@@ -30,6 +30,19 @@ class Present_calibration_summary;
 class Present_calibration_store;
 enum class Present_path : unsigned int;
 
+// Device::get_upload_staging_usage(): the capped upload staging behind
+// Device::allocate_upload_staging (doc/erhe/ring_buffer_memory.md
+// "Upload staging cap").
+class Upload_staging_usage
+{
+public:
+    std::size_t capacity_byte_count{0}; // the staging ring's size (0 before the first request)
+    std::size_t bytes_in_use       {0}; // unretired staged bytes, ring plus oversize buffer
+    std::size_t high_water_bytes   {0}; // largest bytes_in_use since the device was created
+    std::size_t refused_count      {0}; // requests that found no room and waited
+    std::size_t oversize_count     {0}; // requests larger than the cap, served by a one-shot buffer
+};
+
 class Format_properties
 {
 public:
@@ -760,6 +773,18 @@ public:
     [[nodiscard]] auto is_frame_completed                 (uint64_t frame) const -> bool;
 
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+
+    // Host-visible staging for uploads that may wait a frame, with a hard
+    // cap of capacity_byte_count bytes in flight: one CPU_write ring of that
+    // size that never spills. Returns an EMPTY range when there is no room
+    // now; the caller retries next frame, once frame completion retired
+    // older ranges. A request larger than the cap gets a one-shot buffer,
+    // only while nothing else is staged, so it still makes progress. The
+    // capacity is a parameter of the request (callers pass their setting);
+    // a different value replaces the ring once it is idle. Main thread role
+    // only. See doc/erhe/ring_buffer_memory.md "Upload staging cap".
+    [[nodiscard]] auto allocate_upload_staging            (Buffer_target buffer_target, std::size_t byte_count, std::size_t capacity_byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto get_upload_staging_usage           () const -> Upload_staging_usage;
     [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
     [[nodiscard]] auto make_render_command_encoder        (Command_buffer& command_buffer) -> Render_command_encoder;

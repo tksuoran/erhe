@@ -79,6 +79,56 @@ ring is inside the command buffer that was just flushed, which is not true of
 the shared pool, whose frame-stamped entries may be consumed by the frame's
 still-unsubmitted command buffer.
 
+## Upload staging cap
+
+Uploads that may wait a frame - the budgeted asset-load uploads - stage
+through `Device::allocate_upload_staging(target, byte_count,
+capacity_byte_count)` instead of `allocate_ring_buffer_entry`. Behind it,
+`Ring_buffer_pool` keeps one more `CPU_write` ring of exactly
+`capacity_byte_count` bytes, shared by those uploads and never spilled:
+
+- **No room means wait.** A request the ring cannot hold right now gets an
+  empty range; the caller records nothing and retries next frame, after
+  frame completion retired older ranges. Users: `Image_transfer` in
+  `frame_recording` mode (glTF texture residency, standalone image files)
+  and `Buffer_transfer_queue::flush_budgeted` (the `Mesh_memory` loader
+  queue, through `Command_buffer::try_upload_to_buffer`).
+- **A request larger than the cap still makes progress.** It gets a
+  one-shot `CPU_write` buffer sized to it, but only while the ring and any
+  earlier one-shot buffer are idle, and the ring takes nothing while the
+  one-shot buffer is live; the pool destroys it at the first frame
+  completion that finds it idle. So the staged bytes in flight never exceed
+  max(cap, largest single request).
+- **Large requests are not starved.** A request refused for lack of room
+  leaves its size as a mark, and smaller requests are refused until one at
+  least that large is served. Every owner retries the refused request first
+  (the loader queue is FIFO and keeps unrecorded entries at its front;
+  `Gltf_image_residency` retries the same image), so the ring drains for it.
+  The mark expires after `upload_staging_wait_expiry_frames` completed
+  frames without such a retry (a cancelled load).
+- **An idle ring restarts at offset 0** (`Ring_buffer::complete_all_syncs`),
+  so a caught-up but mid-buffer write position does not refuse a request the
+  empty ring can hold.
+- **The capacity is a parameter of the request.** Callers pass their
+  setting with every request (the editor's `load.max_upload_staging_bytes`,
+  doc/editor/async_asset_loading.md "Budget"); a different value replaces
+  the ring once it is idle, and requests wait until then.
+- **Main role only:** like every ring, it retires space in acquisition
+  order, which holds for one role's frames.
+
+Backends that stage nothing need no room: on Metal and for a host-visible
+Vulkan buffer, `try_upload_to_buffer` is a memcpy and always succeeds.
+Interactive uploads (`Command_buffer::upload_to_buffer`, the full-drain
+`Mesh_memory::flush`) keep their per-upload staging - their contract is
+"recorded this frame", which a cap cannot honor - and so does
+`Image_transfer` in `blocking_drain` mode, whose private ring is sized by
+the same staging capacity.
+
+`Device::get_upload_staging_usage()` reports the capacity, the bytes in
+use, the high-water mark, and the refused and oversize request counts; the
+editor logs them when a load becomes resident and MCP `get_memory_usage`
+returns them as `upload_staging`.
+
 ## Diagnostics
 
 - Every ring-buffer creation logs at info: size, usage class, the new buffer
@@ -109,4 +159,4 @@ or synchronous import (no frames) - and check `logs/log.txt`:
 
 ## Future work
 
-- [plans/asset_loading.md](../plans/asset_loading.md) - dedicated one-shot staging for oversize uploads, a device-level ring-buffer budget.
+- [plans/asset_loading.md](../plans/asset_loading.md) - outstanding asset loading work.

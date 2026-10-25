@@ -172,6 +172,11 @@ void Command_buffer::upload_to_buffer(const Buffer& buffer, std::size_t offset, 
     m_impl->upload_to_buffer(buffer, offset, data, length);
 }
 
+auto Command_buffer::try_upload_to_buffer(const Buffer& buffer, const std::size_t offset, const void* data, const std::size_t length, const std::size_t staging_capacity_byte_count) -> bool
+{
+    return m_impl->try_upload_to_buffer(buffer, offset, data, length, staging_capacity_byte_count);
+}
+
 void Command_buffer::upload_to_texture(
     const Texture&           texture,
     int                      level,

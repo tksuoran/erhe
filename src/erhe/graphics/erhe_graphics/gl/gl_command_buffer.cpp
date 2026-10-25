@@ -131,6 +131,12 @@ void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, std::size_t off
     m_device->get_impl().upload_to_buffer(buffer, offset, data, length);
 }
 
+auto Command_buffer_impl::try_upload_to_buffer(const Buffer& buffer, const std::size_t offset, const void* data, const std::size_t length, const std::size_t staging_capacity_byte_count) -> bool
+{
+    ERHE_VERIFY(m_device != nullptr);
+    return m_device->get_impl().try_upload_to_buffer(buffer, offset, data, length, staging_capacity_byte_count);
+}
+
 void Command_buffer_impl::upload_to_texture(
     const Texture&           texture,
     int                      level,

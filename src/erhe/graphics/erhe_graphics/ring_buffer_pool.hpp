@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 
@@ -52,6 +53,9 @@ class Ring_buffer_pool
 public:
     static constexpr uint64_t    idle_frame_threshold     = 16;
     static constexpr std::size_t warn_buffer_count        = 8;
+    // Completed frames after which the size mark of an upload staging
+    // request that found no room is dropped if nothing that large retried.
+    static constexpr uint64_t    upload_staging_wait_expiry_frames = 8;
 
     Ring_buffer_pool(Device& device, std::size_t min_buffer_size);
     ~Ring_buffer_pool() noexcept;
@@ -59,6 +63,20 @@ public:
     Ring_buffer_pool& operator=(const Ring_buffer_pool&) = delete;
 
     [[nodiscard]] auto allocate(std::size_t required_alignment, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+
+    // Host-visible staging for GPU uploads that may wait a frame (the
+    // budgeted asset-load uploads), with a hard cap: one CPU_write ring of
+    // capacity_byte_count bytes, never spilled. Returns an EMPTY range when
+    // the ring has no room right now - the caller retries next frame, after
+    // frame completion has retired older ranges. A request larger than the
+    // whole cap is served by a one-shot buffer sized to it, and only while
+    // the ring and any earlier one-shot buffer are idle, so the staged
+    // bytes in flight never exceed max(cap, largest single request). The
+    // ring takes the capacity of the request; a different capacity
+    // replaces it once it is idle (requests wait until then). Main role
+    // only: the ring retires ranges in acquisition order.
+    [[nodiscard]] auto allocate_upload_staging(std::size_t required_alignment, std::size_t byte_count, std::size_t capacity_byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto get_upload_staging_usage() const -> Upload_staging_usage;
     void frame_completed(uint64_t completed_frame);
     // Destroys every buffer; the backend calls this before draining its
     // completion handlers (buffer destructors enqueue some).
@@ -73,11 +91,23 @@ private:
 
     [[nodiscard]] static auto get_calling_role_index() -> std::size_t;
     void frame_completed_in_role(std::vector<std::unique_ptr<Ring_buffer>>& ring_buffers, uint64_t completed_frame);
+    [[nodiscard]] auto get_upload_staging_bytes_in_use_locked() const -> std::size_t;
+
+    enum class Upload_staging_wait : unsigned int {
+        forget   = 0, // refused for a reason that is not lack of room
+        remember = 1  // refused for lack of room: smaller requests wait behind it
+    };
 
     Device&                                                             m_device;
     std::size_t                                                         m_min_buffer_size;
     mutable std::mutex                                                  m_mutex;
     std::array<std::vector<std::unique_ptr<Ring_buffer>>, s_role_count> m_ring_buffers;
+    std::unique_ptr<Ring_buffer>                                        m_upload_staging;          // the capped ring
+    std::unique_ptr<Ring_buffer>                                        m_upload_staging_oversize; // one-shot, for a request larger than the cap
+    Upload_staging_usage                                                m_upload_staging_usage;
+    std::size_t                                                         m_upload_staging_waiting_byte_count{0}; // size of the request that found no room, 0 when none waits
+    uint64_t                                                            m_upload_staging_waiting_frame     {0}; // m_last_completed_frame when it last retried
+    uint64_t                                                            m_last_completed_frame             {0};
 };
 
 } // namespace erhe::graphics

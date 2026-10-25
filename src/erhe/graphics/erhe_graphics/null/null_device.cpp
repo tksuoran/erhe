@@ -425,6 +425,23 @@ auto Device_impl::allocate_ring_buffer_entry(
     return Ring_buffer_range{};
 }
 
+auto Device_impl::allocate_upload_staging(
+    const Buffer_target buffer_target,
+    const std::size_t   byte_count,
+    const std::size_t   capacity_byte_count
+) -> Ring_buffer_range
+{
+    static_cast<void>(buffer_target);
+    static_cast<void>(byte_count);
+    static_cast<void>(capacity_byte_count);
+    return Ring_buffer_range{};
+}
+
+auto Device_impl::get_upload_staging_usage() const -> Upload_staging_usage
+{
+    return Upload_staging_usage{};
+}
+
 auto Device_impl::make_blit_command_encoder(Command_buffer& command_buffer) -> Blit_command_encoder
 {
     return Blit_command_encoder{m_device, command_buffer};

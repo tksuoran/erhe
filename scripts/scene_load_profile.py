@@ -204,7 +204,11 @@ def main():
             image_path = os.path.abspath(image_path)
             # Fixed camera over the Bistro content fit (center 24.4 -4.2 18.0, radius 129); the same
             # view for every build so the images byte-compare.
+            # --no-scene starts with an empty "Scene 1", so name the loaded scene.
+            stem = os.path.splitext(os.path.basename(scene_path))[0]
+            loaded_scene = next((n for n in (scene_names(port) or []) if stem in n), None)
             render = mcp(port, "render_scene_image", {
+                **({"scene": loaded_scene} if loaded_scene else {}),
                 "camera": {"eye": [114.4, 45.8, 108.0], "target": [24.4, -4.2, 18.0], "up": [0.0, 1.0, 0.0],
                            "fov_y_degrees": 45.0, "near": 0.1, "far": 1000.0},
                 "width": 1024, "height": 768, "output": "png", "path": image_path

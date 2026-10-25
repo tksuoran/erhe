@@ -74,7 +74,12 @@ public:
     // by design, which is why it exists on its own queue: a consumer of a
     // budget-drained queue MUST gate on get_watermark() before drawing from
     // the bytes it enqueued (doc/editor/async_asset_loading_design.md 2.5).
-    auto flush_budgeted(Command_buffer& command_buffer, std::size_t max_byte_count) -> std::size_t;
+    //
+    // Host-visible staging comes from Device::allocate_upload_staging with a
+    // cap of staging_capacity_byte_count (Command_buffer::try_upload_to_buffer):
+    // when the staging has no room the drain stops early, the unrecorded
+    // entries stay queued in order, and they go first next drain.
+    auto flush_budgeted(Command_buffer& command_buffer, std::size_t max_byte_count, std::size_t staging_capacity_byte_count) -> std::size_t;
 
     auto enqueue(const Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data) -> Ticket;
 
@@ -100,6 +105,10 @@ private:
     // flush_budgeted's batch, moved out of m_queued under m_mutex and
     // recorded outside it. Cleared after each drain, capacity kept.
     std::vector<Transfer_entry>    m_drain_batch;
+    // Entries a budgeted drain selected but could not record because the
+    // upload staging was full. They are older than everything in m_queued
+    // and are drained first, in order. Guarded by m_mutex, like m_queued.
+    std::vector<Transfer_entry>    m_retry;
     // Entries before this index have been recorded and their data released.
     // A partial drain advances it instead of erasing from the front, so the
     // Transfer_entry stays move-construct-only (no move ASSIGNMENT, which
