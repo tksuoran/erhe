@@ -1,4 +1,5 @@
 #include "renderers/indirect_diffuse.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 
 #include "app_context.hpp"
 #include "renderers/render_settings.hpp"
@@ -34,6 +35,11 @@ void set_indirect_diffuse_source(App_context& context, const Indirect_diffuse_so
     erhe::utility::Thread_roles::assert_main_thread();
     if (context.editor_settings != nullptr) {
         context.editor_settings->indirect_diffuse_source = source;
+    }
+    // DDGI and radiance cascades trace the base variants
+    // (doc/plans/gltf_fast_load.md "Item 10").
+    if (source != Indirect_diffuse_source::ambient) {
+        request_deferred_base_builds_in_all_scenes(context);
     }
 }
 

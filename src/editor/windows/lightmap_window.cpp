@@ -1,4 +1,5 @@
 #include "windows/lightmap_window.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 
 #include "app_context.hpp"
 #include "app_settings.hpp"
@@ -356,6 +357,8 @@ auto Lightmap_window::reorder_charts_by_bake(const int tile) -> bool
 
 auto Lightmap_window::start_bake_to_disk() -> bool
 {
+    // Baking reads the base variants (deferred ones get built).
+    request_deferred_base_builds_in_all_scenes(m_context);
     if (m_context.lightmap_baker == nullptr) {
         return false;
     }
@@ -1214,6 +1217,10 @@ void Lightmap_window::imgui()
         const bool baking = m_context.lightmap_baker->is_baking_enabled();
         if (ImGui::Button(baking ? "Stop###bake_toggle" : "Start###bake_toggle")) {
             m_context.lightmap_baker->set_baking_enabled(!baking);
+            if (!baking) {
+                // Baking reads the base variants (deferred ones get built).
+                request_deferred_base_builds_in_all_scenes(m_context);
+            }
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(

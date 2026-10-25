@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "tools/paint_tool.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -480,6 +481,13 @@ void Paint_tool::paint_vertex(
     const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
     if (!primitive.render_shape) {
         return ;
+    }
+    // A deferred base variant (load.base_variant on_demand) has no vertex
+    // buffer to paint into: the stroke requests its build and skips the
+    // primitive until it has committed.
+    if (primitive.render_shape->is_base_deferred()) {
+        request_deferred_base_build(m_context, std::static_pointer_cast<erhe::scene::Mesh>(scene_mesh.shared_from_this()), Deferred_base_build::full);
+        return;
     }
 
     // Requirement 11: the first touch of this primitive in the stroke drops

@@ -282,4 +282,13 @@ extern const erhe::property::Enum_info c_sampler_mipmap_mode_enum_info;
 [[nodiscard]] auto to_uint32(Texture_channel texture_channel) -> uint32_t;
 [[nodiscard]] auto to_uint32(Material_input_source input_source) -> uint32_t;
 
+// Whether a load builds a prepared primitive's base vertex variant now or
+// leaves it to the first feature that needs it (doc/plans/gltf_fast_load.md
+// "Item 10"): deferred installs a descriptor base Buffer_mesh (bounds,
+// affines, vertex input key, no buffers) beside the optimized variant.
+enum class Base_mesh_build : unsigned int {
+    at_load  = 0,
+    deferred = 1
+};
+
 } // namespace erhe::primitive

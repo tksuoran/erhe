@@ -40,6 +40,24 @@ void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe:
 void request_prepared_full_builds(App_context& context, const std::vector<std::shared_ptr<erhe::Item_base>>& items);
 void request_prepared_full_builds_in_all_scenes(App_context& context);
 
+// Deferred base variants (load.base_variant on_demand,
+// doc/plans/gltf_fast_load.md "Item 10"): a primitive whose load left its
+// base variant a descriptor draws from the optimized variant until a feature
+// needs the base; the sites that turn such a feature on call these, which
+// queue a build of the base once per primitive: base_only (the soup build
+// of the base, the optimized variant kept) for readers of the base buffers,
+// full (the prepared full build: Geometry, edge lines, a new optimized
+// variant) for in-place edits. The all-scenes request is base_only (DDGI,
+// radiance cascades, GPU ray tracing, lightmap bakes).
+// has_deferred_base() tells a consumer the base is not there yet.
+enum class Deferred_base_build : unsigned int {
+    base_only = 0,
+    full      = 1
+};
+[[nodiscard]] auto has_deferred_base(const erhe::scene::Mesh& mesh) -> bool;
+void request_deferred_base_build(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, Deferred_base_build build);
+void request_deferred_base_builds_in_all_scenes(App_context& context);
+
 // Some viewport style draws a primitive mode only the full build provides
 // (edge lines, corner points, polygon centroids, solid wireframe). A load
 // then builds prepared primitives in full in its deferred finalize.

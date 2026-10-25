@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Load_config",
     reflect=True,
-    version=8,
+    version=9,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",
     developer=False,
@@ -54,6 +54,16 @@ struct("Load_config",
             default="Cpu_mesh_data_retention::platform_default",
             short_desc="CPU Mesh Data",
             long_desc="What a glTF load does with a primitive's CPU triangle soup once its GPU buffers and raytrace are built. release frees it and reads it back from the source file on demand (export, Geometry builds, display color rebuilds) - this saves the soup memory (hundreds of MB for large scenes); keep holds it. Only primitives loaded with prepared mesh data from a file are released. platform_default keeps on desktop and releases in OpenXR.",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "base_variant",
+            EnumRef("Base_variant_load"),
+            added_in=9,
+            default="Base_variant_load::platform_default",
+            short_desc="Base Variant",
+            long_desc="When a glTF load builds the base vertex variant of a primitive loaded with prepared mesh data. on_demand draws from the optimized variant and builds the base variant only when a feature needs it (edge lines and other non-fill styles, selection, region selection, in-place edits, ray tracing, lightmap bakes), saving its GPU memory (about 450 MB for Bistro). Applies to non-skinned primitives with an optimized variant while CPU Mesh Data is release. platform_default is at_load on desktop and on_demand in OpenXR.",
             visible=True,
             developer=True
         ),

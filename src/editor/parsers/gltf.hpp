@@ -2,6 +2,7 @@
 
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_math/aabb.hpp"
+#include "erhe_primitive/enums.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <filesystem>
@@ -23,6 +24,7 @@ namespace erhe::scene     { class Animation; class Camera; class Xformable; usin
 namespace tf              { class Executor; }
 
 enum class Cpu_mesh_data_retention : unsigned int; // config/generated/cpu_mesh_data_retention.hpp
+enum class Base_variant_load : unsigned int;       // config/generated/base_variant_load.hpp
 
 namespace editor {
 
@@ -148,6 +150,18 @@ void import_gltf(
 // triangle soup reload sources (doc/editor/async_asset_loading.md "Releasing
 // CPU mesh data").
 [[nodiscard]] auto get_cpu_mesh_data_retention(const App_context& context) -> Cpu_mesh_data_retention;
+// load.base_variant resolved: at_load or on_demand (platform_default is
+// on_demand in OpenXR).
+[[nodiscard]] auto get_base_variant_load(const App_context& context) -> Base_variant_load;
+// Whether a load defers the base variant of a prepared primitive of `mesh`
+// (doc/plans/gltf_fast_load.md "Item 10"): on_demand, released soups, not
+// skinned, and the build packs an optimized variant.
+[[nodiscard]] auto get_base_mesh_build(
+    Base_variant_load                  base_variant,
+    bool                               release_soups,
+    const erhe::scene::Mesh&           mesh,
+    const erhe::primitive::Build_info& build_info
+) -> erhe::primitive::Base_mesh_build;
 [[nodiscard]] auto get_triangle_soup_reload  (const App_context& context) -> erhe::gltf::Triangle_soup_reload;
 
 // Make freshly parsed glTF meshes renderable: build geometry edges +
@@ -167,6 +181,7 @@ public:
     erhe::primitive::Primitive*        primitive {nullptr};
     const erhe::primitive::Build_info* build_info{nullptr};
     const erhe::scene::Mesh*           mesh      {nullptr};
+    erhe::primitive::Base_mesh_build   base_mesh_build{erhe::primitive::Base_mesh_build::at_load};
     std::size_t                        upload_byte_count {0}; // waits in the loader queue until drained
     std::size_t                        payload_byte_count{0}; // the soup a deferred payload load reads, for the job's duration
 };
@@ -179,6 +194,8 @@ public:
     const erhe::gltf::Gltf_data&       gltf_data,
     const erhe::primitive::Build_info& build_info,
     const erhe::primitive::Build_info& skinned_build_info,
+    Base_variant_load                  base_variant,
+    bool                               release_soups,
     std::size_t&                       out_primitive_count
 ) -> std::vector<Imported_build_job>;
 

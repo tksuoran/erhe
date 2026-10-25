@@ -156,13 +156,15 @@ void Gltf_load_task::start_build(Asset_load_tick_context& tick_context)
     if (tick_context.graphics_device.supports_worker_contexts()) {
         // gltf_data.nodes keeps the meshes (and through them the primitives)
         // alive until the task is reaped, which waits for the build tasks.
+        build_state->release_soups = (get_cpu_mesh_data_retention(m_context) == Cpu_mesh_data_retention::release);
         build_state->jobs = collect_imported_build_jobs(
             m_parse_result->gltf_data,
             build_state->build_info,
             build_state->skinned_build_info,
+            get_base_variant_load(m_context),
+            build_state->release_soups,
             build_state->primitive_count
         );
-        build_state->release_soups = (get_cpu_mesh_data_retention(m_context) == Cpu_mesh_data_retention::release);
         build_state->stored_streams = ((m_context.editor_settings == nullptr) || m_context.editor_settings->load.use_gpu_vertex_streams)
             ? Stored_vertex_streams_use::use
             : Stored_vertex_streams_use::ignore;

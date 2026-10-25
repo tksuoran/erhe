@@ -69,9 +69,13 @@ enum class Mesh_optimize_cache_use : unsigned int
 // pre-existing "ensure raytrace exists" behavior.
 // Whether the finalize builds prepared primitives (doc/editor/async_asset_loading.md
 // "Prepared mesh data") in full; skip leaves their load state as it is.
+// base_only builds only the deferred base variants (Base_mesh_build::deferred,
+// doc/plans/gltf_fast_load.md "Item 10"): the soup build of the base, the
+// optimized variant kept.
 enum class Prepared_full_build : unsigned int {
-    skip  = 0,
-    build = 1
+    skip      = 0,
+    build     = 1,
+    base_only = 2
 };
 
 void deferred_finalize_mesh_items(
@@ -154,16 +158,23 @@ void deferred_finalize_mesh_items(
             // A prepared primitive's load state is final without a Geometry
             // (doc/editor/async_asset_loading.md "Prepared mesh data"): no
             // full build for it.
+            // A deferred base variant (Base_mesh_build::deferred) is built
+            // by this full build.
             const bool needs_full_build =
                 (!primitive.is_prepared() || (prepared_full_build == Prepared_full_build::build)) &&
-                render_shape && render_shape->has_buffer_mesh_triangles() && !render_shape->has_edge_lines();
+                render_shape && (render_shape->has_buffer_mesh_triangles() || render_shape->is_base_deferred()) && !render_shape->has_edge_lines();
             // A complete mesh whose optimized variant is missing (snapshot
             // decision above) is rebuilt in full with force_rebuild: the
             // fresh optimized variant comes out of the same staged bytes,
             // and the identical base swaps in benignly.
             const bool needs_reoptimize =
                 !needs_full_build && force_optimized_rebuild[primitive_index] && render_shape && render_shape->has_buffer_mesh_triangles();
-            if (needs_full_build || needs_reoptimize) {
+            if ((prepared_full_build == Prepared_full_build::base_only) && render_shape && render_shape->is_base_deferred()) {
+                erhe::graphics::Scoped_worker_context worker_context{*context.graphics_device};
+                if (!render_shape->prepare_deferred_base_mesh(mesh_build_info.buffer_info)) {
+                    log_operations->warn("Deferred base variant: could not build the base mesh for '{}' (out of GPU mesh memory?)", scene_mesh->get_name());
+                }
+            } else if (needs_full_build || needs_reoptimize) {
                 // On GL a worker needs a share context for the GPU buffer
                 // allocation inside prepare_geometry_buffer_mesh. Scope is
                 // deliberately NARROW - around the GPU build only, not the
@@ -255,6 +266,10 @@ void deferred_finalize_mesh_items(
                     erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
                     const std::shared_ptr<erhe::primitive::Primitive_shape> raytrace_shape = primitive.get_shape_for_raytrace();
                     if (raytrace_shape && raytrace_shape->commit_real_raytrace()) {
+                        swapped_a_shape = true;
+                    }
+                    if (primitive.render_shape && primitive.render_shape->commit_deferred_base_mesh()) {
+                        // A base-only build: the optimized variant stays.
                         swapped_a_shape = true;
                     }
                     if (primitive.render_shape) {
@@ -435,7 +450,12 @@ namespace {
     return false;
 }
 
-void queue_prepared_full_build(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, std::size_t& queued_count)
+void queue_prepared_full_build(
+    App_context&                              context,
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    std::size_t&                              queued_count,
+    const Prepared_full_build                 mode = Prepared_full_build::build
+)
 {
     erhe::Item_host* const item_host = mesh->get_item_host();
     Scene_root* const      host      = dynamic_cast<Scene_root*>(item_host);
@@ -447,9 +467,9 @@ void queue_prepared_full_build(App_context& context, const std::shared_ptr<erhe:
     async_for_nodes_with_mesh(
         context,
         single_item,
-        [scene_root](Mesh_operation_parameters&& mesh_operation_parameters)
+        [scene_root, mode](Mesh_operation_parameters&& mesh_operation_parameters)
         {
-            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache, Prepared_full_build::build);
+            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache, mode);
         },
         // The finalize manages its own narrow worker-context scope.
         /*op_builds_gpu_meshes=*/false
@@ -499,6 +519,81 @@ void request_prepared_full_builds_in_all_scenes(App_context& context)
         }
     }
     log_operations->info("prepared mesh data: {} full build tasks queued (a viewport style needs full builds)", queued_count);
+}
+
+auto has_deferred_base(const erhe::scene::Mesh& mesh) -> bool
+{
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+        if ((primitive != nullptr) && primitive->render_shape && primitive->render_shape->is_base_deferred()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+namespace {
+
+// Claims the build request of every deferred base of the mesh; true when one
+// was not claimed before (the mesh's full build is to be queued).
+[[nodiscard]] auto claim_deferred_base_builds(const erhe::scene::Mesh& mesh) -> bool
+{
+    bool claimed = false;
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+        if ((primitive != nullptr) && primitive->render_shape && primitive->render_shape->claim_base_build_request()) {
+            claimed = true;
+        }
+    }
+    return claimed;
+}
+
+} // anonymous namespace
+
+void request_deferred_base_build(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, const Deferred_base_build build)
+{
+    if (!mesh || !claim_deferred_base_builds(*mesh)) {
+        return;
+    }
+    std::size_t queued_count = 0;
+    queue_prepared_full_build(context, mesh, queued_count, (build == Deferred_base_build::base_only) ? Prepared_full_build::base_only : Prepared_full_build::build);
+    if (queued_count > 0) {
+        log_operations->info(
+            "deferred base variant: {} queued for '{}'",
+            (build == Deferred_base_build::base_only) ? "base build" : "full build",
+            mesh->get_name()
+        );
+    }
+}
+
+void request_deferred_base_builds_in_all_scenes(App_context& context)
+{
+    if (context.app_scenes == nullptr) {
+        return;
+    }
+    std::size_t queued_count = 0;
+    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+        if (!scene_root) {
+            continue;
+        }
+        std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
+        {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+            for (const std::shared_ptr<erhe::scene::Mesh_layer>& mesh_layer : scene_root->get_scene().get_mesh_layers()) {
+                for (const std::shared_ptr<erhe::scene::Mesh>& mesh : mesh_layer->meshes) {
+                    if (mesh && claim_deferred_base_builds(*mesh)) {
+                        meshes.push_back(mesh);
+                    }
+                }
+            }
+        }
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+            queue_prepared_full_build(context, mesh, queued_count, Prepared_full_build::base_only);
+        }
+    }
+    if (queued_count > 0) {
+        log_operations->info("deferred base variant: {} base build tasks queued (a feature reads every base variant)", queued_count);
+    }
 }
 
 auto viewports_need_full_builds(App_context& context) -> bool

@@ -26,8 +26,13 @@
 #include "prefabs/prefab_library.hpp"
 
 #include "scene/generated/gltf_source_reference.hpp"
+#include "config/generated/base_variant_load.hpp"
 #include "config/generated/cpu_mesh_data_retention.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/indirect_diffuse_source.hpp"
+#include "renderers/id_renderer.hpp"
+#include "renderers/lightmap_baker.hpp"
+#include "renderers/ray_trace_renderer.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 
 #include "items.hpp"
@@ -633,6 +638,53 @@ auto get_cpu_mesh_data_retention(const App_context& context) -> Cpu_mesh_data_re
     }
 }
 
+auto get_base_variant_load(const App_context& context) -> Base_variant_load
+{
+    const Base_variant_load configured = (context.editor_settings != nullptr)
+        ? context.editor_settings->load.base_variant
+        : Base_variant_load::platform_default;
+    Base_variant_load resolved = Base_variant_load::at_load;
+    switch (configured) {
+        case Base_variant_load::at_load:   resolved = Base_variant_load::at_load; break;
+        case Base_variant_load::on_demand: resolved = Base_variant_load::on_demand; break;
+        default:                           resolved = context.OpenXR ? Base_variant_load::on_demand : Base_variant_load::at_load; break;
+    }
+    if (resolved == Base_variant_load::at_load) {
+        return resolved;
+    }
+    // Features already on at load that read every content mesh's base
+    // variant keep it at load (doc/plans/gltf_fast_load.md "Item 10"): an ID
+    // pass covering all meshes (fixed at startup), DDGI / radiance cascades
+    // (their ray queries read the base buffers), GPU ray tracing, lightmap
+    // baking.
+    const bool id_pass_covers_all = (context.id_renderer != nullptr) && context.id_renderer->covers_all_meshes();
+    const bool indirect_diffuse_traced =
+        (context.editor_settings != nullptr) &&
+        (context.editor_settings->indirect_diffuse_source != Indirect_diffuse_source::ambient);
+    const bool ray_tracing  = (context.ray_trace_renderer != nullptr) && context.ray_trace_renderer->is_enabled();
+    const bool baking       = (context.lightmap_baker != nullptr) && context.lightmap_baker->is_baking_enabled();
+    if (id_pass_covers_all || indirect_diffuse_traced || ray_tracing || baking) {
+        return Base_variant_load::at_load;
+    }
+    return resolved;
+}
+
+auto get_base_mesh_build(
+    const Base_variant_load            base_variant,
+    const bool                         release_soups,
+    const erhe::scene::Mesh&           mesh,
+    const erhe::primitive::Build_info& build_info
+) -> erhe::primitive::Base_mesh_build
+{
+    const bool defer =
+        (base_variant == Base_variant_load::on_demand) &&
+        release_soups &&
+        !mesh.skin &&
+        build_info.buffer_info.optimize_meshes &&
+        (build_info.buffer_info.optimized_vertex_format != nullptr);
+    return defer ? erhe::primitive::Base_mesh_build::deferred : erhe::primitive::Base_mesh_build::at_load;
+}
+
 auto get_triangle_soup_reload(const App_context& context) -> erhe::gltf::Triangle_soup_reload
 {
     return (get_cpu_mesh_data_retention(context) == Cpu_mesh_data_retention::release)
@@ -737,6 +789,8 @@ auto collect_imported_build_jobs(
     const erhe::gltf::Gltf_data&       gltf_data,
     const erhe::primitive::Build_info& build_info,
     const erhe::primitive::Build_info& skinned_build_info,
+    const Base_variant_load            base_variant,
+    const bool                         release_soups,
     std::size_t&                       out_primitive_count
 ) -> std::vector<Imported_build_job>
 {
@@ -779,6 +833,7 @@ auto collect_imported_build_jobs(
                     .primitive         = &primitive,
                     .build_info        = &mesh_build_info,
                     .mesh              = mesh.get(),
+                    .base_mesh_build   = get_base_mesh_build(base_variant, release_soups, *mesh, mesh_build_info),
                     .upload_byte_count  = get_build_upload_byte_count(primitive, mesh_build_info),
                     .payload_byte_count = get_build_payload_byte_count(primitive, mesh_build_info)
                 }
@@ -808,7 +863,7 @@ auto run_imported_build_job(
         result.portable_reason = "soups kept";
     } else {
         const erhe::graphics::Scoped_worker_context worker_context{graphics_device};
-        const erhe::primitive::Primitive::Stored_build_result stored = job.primitive->make_stored_meshes(*job.build_info, result.portable_reason);
+        const erhe::primitive::Primitive::Stored_build_result stored = job.primitive->make_stored_meshes(*job.build_info, job.base_mesh_build, result.portable_reason);
         if (stored == erhe::primitive::Primitive::Stored_build_result::failed) {
             log_parsers->error(
                 "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
@@ -845,7 +900,7 @@ auto run_imported_build_job(
     // the scene insert happens after the build phase - so the optimized
     // variant and the raytrace are installed directly.
     const bool built = job.primitive->is_prepared()
-        ? job.primitive->make_prepared_meshes(*job.build_info)
+        ? job.primitive->make_prepared_meshes(*job.build_info, job.base_mesh_build)
         : job.primitive->make_renderable_mesh(*job.build_info, erhe::primitive::Normal_style::corner_normals);
     if (!built) {
         log_parsers->error(
@@ -956,6 +1011,7 @@ void finalize_imported_meshes(
     // demand (doc/editor/async_asset_loading.md "Releasing CPU mesh data").
     const bool release_soups    = (get_cpu_mesh_data_retention(context) == Cpu_mesh_data_retention::release);
     const bool optimize_meshes  = (context.mesh_memory_config != nullptr) && context.mesh_memory_config->optimize_meshes;
+    const Base_variant_load base_variant = get_base_variant_load(context);
     std::unordered_set<const erhe::primitive::Primitive*> released_primitives;
 
     // Build_info variant for skinned meshes -- same as the caller's
@@ -1006,7 +1062,7 @@ void finalize_imported_meshes(
             // falls back to the proxy + deferred raytrace.
             if (primitive.is_prepared()) {
                 ++prepared_count;
-                if (!primitive.make_prepared_meshes(mesh_build_info)) {
+                if (!primitive.make_prepared_meshes(mesh_build_info, get_base_mesh_build(base_variant, release_soups, *mesh, mesh_build_info))) {
                     log_parsers->error(
                         "glTF import: failed to build renderable mesh for '{}' (out of GPU mesh memory?) - primitive skipped",
                         mesh->get_name()

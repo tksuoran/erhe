@@ -405,7 +405,30 @@ public:
     // validated prepared data and, when built, the real raytrace; the payload
     // is then loaded and the soup stays released (read back from the source
     // on demand). False, installing nothing, when the payload is not pending.
-    auto install_stored_build(Buffer_mesh&& buffer_mesh, std::shared_ptr<Prepared_primitive_data> prepared_data, std::optional<Primitive_raytrace>&& raytrace) -> bool;
+    auto install_stored_build(Buffer_mesh&& buffer_mesh, std::shared_ptr<Prepared_primitive_data> prepared_data, std::optional<Primitive_raytrace>&& raytrace, Base_mesh_build base_mesh_build) -> bool;
+    // A loaded prepared shape whose base variant the load deferred
+    // (Base_mesh_build::deferred): installs `descriptor` (bounds, affines,
+    // vertex input key; no buffers, no index ranges) when no base buffer mesh
+    // is built. False, installing nothing, otherwise.
+    auto install_deferred_base_mesh(Buffer_mesh&& descriptor) -> bool;
+    // The base buffer mesh is a descriptor: the load deferred the base
+    // variant, and no build (the prepared full build) has replaced it yet.
+    // Fill passes draw the optimized variant; a feature that needs the base
+    // variant requests the full build at the site that turns it on.
+    [[nodiscard]] auto is_base_deferred() const -> bool;
+    // The first call on a deferred base returns true (the caller queues the
+    // build that replaces it); later calls, and calls on a built base, return
+    // false, so the change sites can ask on every use without queueing twice.
+    [[nodiscard]] auto claim_base_build_request() -> bool;
+    // Base-only build of a deferred base variant: the soup build of the base
+    // (what Base_mesh_build::at_load would have built), staged aside on a
+    // worker (no scene lock) and swapped in by commit_deferred_base_mesh()
+    // under the item host lock. The optimized variant stays as it is. False
+    // when the base is not deferred or the build fails.
+    auto prepare_deferred_base_mesh(const Buffer_info& buffer_info) -> bool;
+    // Caller holds the item host lock (as for commit_geometry_buffer_mesh());
+    // true when a staged base was swapped in.
+    auto commit_deferred_base_mesh() -> bool;
 
 private:
     // Caller holds m_build_mutex; see the locking note on Primitive_shape.
@@ -427,6 +450,9 @@ private:
 
     Normal_style                         m_normal_style   {Normal_style::none};
     Buffer_mesh                          m_renderable_mesh{};
+    bool                                 m_base_deferred  {false}; // under m_state_mutex; m_renderable_mesh is a descriptor
+    bool                                 m_base_build_requested{false}; // under m_state_mutex
+    std::unique_ptr<Buffer_mesh>         m_pending_base_mesh{};          // under m_state_mutex; prepare_deferred_base_mesh()
     std::unique_ptr<Pending_buffer_mesh> m_pending_buffer_mesh{};
 };
 
@@ -484,7 +510,9 @@ public:
     // no prepared data or the base build fails; a missing raytrace (no stored
     // BVH, or the backend refused it) is reported by has_real_raytrace().
     // Same threading as make_renderable_mesh(): one caller per Primitive.
-    [[nodiscard]] auto make_prepared_meshes    (const Build_info& build_info) -> bool;
+    // base_mesh_build deferred (with the optimized variant built) installs
+    // a descriptor base mesh instead of building the base variant.
+    [[nodiscard]] auto make_prepared_meshes    (const Build_info& build_info, Base_mesh_build base_mesh_build = Base_mesh_build::at_load) -> bool;
     // Load path of a deferred-payload primitive whose source stores GPU-ready
     // vertex streams in the build's layouts (ERHE_gpu_vertex_streams,
     // Triangle_soup_source::load_stored_vertex_streams()): the base and, when
@@ -496,7 +524,7 @@ public:
     // (load_payload(), make_prepared_meshes()); `failed` is a buffer
     // allocation failure.
     enum class Stored_build_result : unsigned int { built, declined, failed };
-    [[nodiscard]] auto make_stored_meshes      (const Build_info& build_info, std::string& out_reason) -> Stored_build_result;
+    [[nodiscard]] auto make_stored_meshes      (const Build_info& build_info, Base_mesh_build base_mesh_build, std::string& out_reason) -> Stored_build_result;
     // The render shape carries prepared mesh data.
     [[nodiscard]] auto is_prepared             () const -> bool;
     // Loads the render shape's pending payload (Primitive_shape::load_payload());
