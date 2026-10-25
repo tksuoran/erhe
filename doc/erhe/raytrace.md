@@ -16,6 +16,9 @@ intersection tests.
 - `Hit` -- intersection result: normal, UV, triangle ID, geometry pointer, instance pointer
 - `Buffer_type` -- enum for buffer slot types (index, vertex, normal, etc.)
 - `Geometry_type` -- enum: triangle, quad, subdivision
+- `Prebuilt_bvh` -- an exported / importable BVH with its content hash, triangle count, backend and library tag (`prebuilt_bvh.hpp`)
+- `Bvh_node_record` -- one 28-byte node in the `bvh_v2` record layout
+- `Bvh_source` -- where a committed geometry's BVH came from: `none`, `built`, `cache`, `prebuilt`
 
 ## Public API
 ```cpp
@@ -31,6 +34,52 @@ Hit hit{};
 if (scene->intersect(ray, hit)) { /* hit.geometry, hit.triangle_id, etc. */ }
 ```
 
+## Prebuilt BVH
+
+A committed geometry's BVH can be exported and supplied to a later
+`commit()` of the same triangles, so the BVH is neither built nor read from
+`cache/bvh`. This is the runtime half of the glTF extension
+[`ERHE_raytrace_bvh`](../gltf_extensions/ERHE_raytrace_bvh.md), whose
+`bvh_v2` payload `Prebuilt_bvh` mirrors: `nodes` are `Bvh_node_record`s laid
+out like `bvh::v2::Node<float, 3>` (six floats, then `index.value` with
+`prim_count` in bits 0-3 and `first_id` in bits 4-31), and
+`primitive_ids[i]` is the core triangle index (index order) of BVH slot `i`.
+
+```cpp
+// After commit()
+Prebuilt_bvh bvh;
+if (geometry->export_bvh(bvh)) { /* bvh.triangle_hash, bvh.library, bvh.nodes, ... */ }
+
+// Before commit() of a geometry with the same vertex and index buffers
+other->set_prebuilt_bvh(std::move(bvh));
+other->commit();
+if (other->get_bvh_source() != Bvh_source::prebuilt) {
+    log->info("rejected: {}", other->get_prebuilt_bvh_rejection());
+}
+```
+
+- `get_triangle_hash()` is the FNV-1a hash `commit()` computes over the
+  triangle positions in order (also the `cache/bvh` key);
+  `get_triangle_count()` is the triangle count of the last commit.
+- `get_prebuilt_bvh_backend()` is `bvh_v2` and `get_prebuilt_bvh_library()`
+  the bvh dependency's pinned `GIT_TAG` (compile definition
+  `ERHE_BVH_LIBRARY_TAG`, set from `ERHE_BVH_GIT_TAG` in the top-level
+  `CMakeLists.txt`), the same on every platform. Both are empty on the other
+  backends, whose `export_bvh()` and `set_prebuilt_bvh()` return false.
+- `commit()` takes the supplied BVH for that commit only and checks it with
+  `validate_prebuilt_bvh()`: backend and library tag, triangle count and
+  hash, node count, child and slot ranges, the tree shape (node 0 has no
+  parent, every other node exactly one inner parent, all nodes reachable from
+  node 0, at most 64 inner ancestors = the traversal stack size) and that
+  `primitive_ids` is a permutation. When it passes, the nodes and ids are
+  installed and the usual triangle precompute runs; otherwise `commit()`
+  logs one warning with the reason, keeps it in
+  `get_prebuilt_bvh_rejection()`, and continues with `cache/bvh`, then a
+  build.
+- `get_bvh_source()` tells which of `prebuilt`, `cache` or `built` the last
+  commit used. A cache entry and a prebuilt BVH give the same nodes, ids and
+  hits as the build they were taken from (`test/test_prebuilt_bvh.cpp`).
+
 ## Dependencies
 - `erhe::dataformat` -- `Format` enum for buffer types
 - `erhe::buffer` -- `Cpu_buffer` for geometry data (supports `tail_padding` for Embree 4 alignment)
@@ -43,7 +92,8 @@ Backend selected at CMake time via `ERHE_RAYTRACE_LIBRARY`:
 ### `bvh` (default) -- madmann91/bvh v2
 - Header-only BVH library fetched via CPM (pinned to specific commit)
 - Parallel BVH build via `bvh::v2::ThreadPool` + `bvh::v2::ParallelExecutor`
-- Hash-based BVH disk caching in `cache/bvh/<git-commit>/<hash>`
+- Hash-based BVH disk caching in `cache/bvh/<library-tag>/<hash>`, where `<library-tag>` is the pinned `GIT_TAG` (`ERHE_BVH_LIBRARY_TAG`), so the key is the same on Android, where the checkout has no `.git`
+- BVH export / import, see "Prebuilt BVH"
 - Manual ray traversal with precomputed triangles
 - No scene-level acceleration -- O(N) linear scan of instances per ray
 - Multi-level instance nesting supported (recursive traversal)
@@ -90,6 +140,7 @@ Tests in `test/` using Google Test, run via `scripts/test_raytrace_all_backends.
 - **test_instance.cpp** -- identity/translated/scaled transforms, instance mask, multiple instances
 - **test_hierarchy.cpp** -- multi-level nesting: nested translation, rotation+translation, scale propagation, three-level nesting
 - **test_scene.cpp** -- empty scene, attach/detach geometry and instances
+- **test_prebuilt_bvh.cpp** -- BVH export / import round trip (identical nodes, primitive ids and hits over 400 rays through a transformed instance) and rejection of a wrong tag, backend, count or hash, truncated or out-of-range nodes and ids, shared or root-referencing children, unreachable nodes, excess depth and non-permutation ids
 
 Build with `-DERHE_BUILD_TESTS=ON`. Configure headless (`-DERHE_GRAPHICS_API=none -DERHE_WINDOW_LIBRARY=none`) since raytrace has no GPU dependency.
 

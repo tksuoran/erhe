@@ -6,6 +6,7 @@ add_executable(${_target}
     test_geometry.cpp
     test_hierarchy.cpp
     test_masking.cpp
+    test_prebuilt_bvh.cpp
     test_instance.cpp
     test_scene.cpp
 )

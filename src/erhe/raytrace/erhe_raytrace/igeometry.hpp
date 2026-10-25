@@ -1,8 +1,11 @@
 #pragma once
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_raytrace/prebuilt_bvh.hpp"
+
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string_view>
 
 namespace erhe::buffer {
@@ -65,6 +68,29 @@ public:
     [[nodiscard]] virtual auto get_user_data() const -> const void*      = 0;
     [[nodiscard]] virtual auto is_enabled   () const -> bool             = 0;
     [[nodiscard]] virtual auto debug_label  () const -> std::string_view = 0;
+
+    // BVH export and import (doc/erhe/raytrace.md "Prebuilt BVH"). Backends
+    // without it (embree, tinybvh, none) keep these defaults: nothing to
+    // report, export and import not available.
+
+    // Content hash of the committed triangles (the cache/bvh key); empty
+    // before a successful commit() or when the backend does not compute it.
+    [[nodiscard]] virtual auto get_triangle_hash () const -> std::optional<uint64_t> { return {}; }
+    // Triangle count of the last successful commit(), 0 otherwise.
+    [[nodiscard]] virtual auto get_triangle_count() const -> std::size_t { return 0; }
+    // Fills out with the committed BVH. Returns false when there is no
+    // committed BVH or the backend cannot export one.
+    [[nodiscard]] virtual auto export_bvh(Prebuilt_bvh& out) const -> bool { static_cast<void>(out); return false; }
+    // Supplies a BVH for the next commit(). commit() validates it against the
+    // content and, when it is accepted, uses it instead of the cache or a
+    // build. A rejected BVH logs one warning and commit() continues as if
+    // none was supplied. Returns false when the backend cannot import a BVH.
+    [[nodiscard]] virtual auto set_prebuilt_bvh(Prebuilt_bvh&& prebuilt) -> bool { static_cast<void>(prebuilt); return false; }
+    // Where the BVH of the last commit() came from.
+    [[nodiscard]] virtual auto get_bvh_source() const -> Bvh_source { return Bvh_source::none; }
+    // Why the BVH supplied for the last commit() was rejected; empty when
+    // none was supplied or it was used.
+    [[nodiscard]] virtual auto get_prebuilt_bvh_rejection() const -> std::string_view { return {}; }
 
     [[nodiscard]] static auto create       (std::string_view debug_label, Geometry_type geometry_type) -> IGeometry*;
     [[nodiscard]] static auto create_shared(std::string_view debug_label, Geometry_type geometry_type) -> std::shared_ptr<IGeometry>;

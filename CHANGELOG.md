@@ -28,6 +28,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::raytrace`: BVH export and import (`erhe_raytrace/prebuilt_bvh.hpp`):
+  `Prebuilt_bvh`, `Bvh_node_record`, `Bvh_build_quality`, `Bvh_source`,
+  `get_prebuilt_bvh_backend()`, `get_prebuilt_bvh_library()`,
+  `validate_prebuilt_bvh()`, and the `IGeometry` virtuals
+  `get_triangle_hash()`, `get_triangle_count()`, `export_bvh()`,
+  `set_prebuilt_bvh()`, `get_bvh_source()` and
+  `get_prebuilt_bvh_rejection()` (implemented by the `bvh` backend; the other
+  backends report them not available). The `bvh` backend's `cache/bvh`
+  directory key is now the pinned `GIT_TAG` (`ERHE_BVH_LIBRARY_TAG`) instead
+  of `git rev-parse` of the checkout.
+
 - `erhe::primitive`: `Vertex_colocation`, the overload
   `mesh_from_triangle_soup(const Triangle_soup&, GEO::Mesh&, Element_mappings&, Vertex_colocation&)`
   that also returns the colocation the colocate path used, and
