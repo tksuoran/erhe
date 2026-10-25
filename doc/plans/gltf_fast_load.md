@@ -72,14 +72,16 @@ It remains a plain TRIANGLES primitive.
 
 ### `ERHE_mesh_optimized` (primitive)
 
-This is the marker and the contract that the core is in that form:
+This is the marker and the contract that the core is in that form. The format
+contract, including the exact `content_hash` byte sequence, is
+`doc/gltf_extensions/ERHE_mesh_optimized.md`:
 
 ```json
 "ERHE_mesh_optimized": {
   "version": 1,
   "passes": ["weld_bitwise", "vertex_cache", "overdraw", "vertex_fetch"],
   "overdraw_threshold": 1.05,
-  "content_hash": "<hex u64 over indices + POSITION>",
+  "content_hash": "<16 hex digits: FNV-1a 64 over indices + POSITION>",
   "bounding_sphere": {"center": [0, 0, 0], "radius": 1}
 }
 ```
@@ -99,8 +101,11 @@ This is the marker and the contract that the core is in that form:
 "ERHE_mesh_topology": {"version": 1, "point_count": 1234, "vertex_points": 17}
 ```
 
-`vertex_points` is a SCALAR uint32 accessor that gives the geogram point of
-each core vertex.
+`vertex_points` is a bufferView of uint32 values that gives the geogram
+point of each core vertex, in first-reference order (the colocate path's
+order). It is a raw bufferView because glTF allows UNSIGNED_INT accessors
+only for primitive indices. Format contract:
+`doc/gltf_extensions/ERHE_mesh_topology.md`.
 
 - It replaces `colocate()`. Building a `Geometry` from the soup then needs no
   kd-tree and no global lock, and the point order is deterministic.
@@ -111,15 +116,17 @@ each core vertex.
 ```json
 "ERHE_raytrace_bvh": {
   "version": 1, "triangle_hash": "<hex>", "triangle_count": 1000,
-  "builds": [{"backend": "bvh_v2", "library": "<pinned tag>", "quality": "high",
-              "nodes": 21, "primitive_ids": 22}]
+  "builds": [{"backend": "bvh_v2", "library": "<pinned GIT_TAG>", "quality": "high",
+              "node_count": 1999, "nodes": 21, "primitive_ids": 22}]
 }
 ```
 
 - The BVH is built over the core triangles in order.
 - Nodes are stored in erhe's own documented layout: six floats plus one
-  packed uint32, as interleaved typed accessors. The bvh::v2 stream format is
-  not used, because it serializes `size_t`.
+  packed uint32 per 28-byte record, in a raw bufferView (no valid glTF
+  accessor describes the record). The bvh::v2 stream format is not used,
+  because it serializes `size_t`. Format contract:
+  `doc/gltf_extensions/ERHE_raytrace_bvh.md`.
 - The loader compares three things: the triangle hash it computes anyway,
   the triangle count, and the backend/library tag. On any mismatch it
   rebuilds.

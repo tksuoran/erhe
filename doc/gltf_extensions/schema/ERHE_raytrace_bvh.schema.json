@@ -1,0 +1,29 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_raytrace_bvh.schema.json",
+    "title": "ERHE_raytrace_bvh glTF mesh primitive extension",
+    "type": "object",
+    "properties": {
+        "version":        {"type": "integer", "const": 1},
+        "triangle_hash":  {"type": "string", "pattern": "^[0-9a-f]{16}$", "description": "64-bit FNV-1a over triangle corner positions (float32 LE) in index order, 16 lowercase hex digits"},
+        "triangle_count": {"type": "integer", "minimum": 0},
+        "builds": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "backend":       {"type": "string", "description": "bvh_v2 (madmann91/bvh); tinybvh reserved; unknown values are skipped"},
+                    "library":       {"type": "string", "minLength": 1, "description": "GIT_TAG of the backend's CPMAddPackage() pin"},
+                    "quality":       {"type": "string", "enum": ["low", "medium", "high"]},
+                    "node_count":    {"type": "integer", "minimum": 1},
+                    "nodes":         {"type": "integer", "minimum": 0, "description": "bufferView index: 28-byte node records"},
+                    "primitive_ids": {"type": "integer", "minimum": 0, "description": "bufferView index: uint32 LE triangle index per primitive slot"}
+                },
+                "required": ["backend", "library"],
+                "if":   {"properties": {"backend": {"const": "bvh_v2"}}},
+                "then": {"required": ["quality", "node_count", "nodes", "primitive_ids"]}
+            }
+        }
+    },
+    "required": ["version", "triangle_hash", "triangle_count", "builds"]
+}

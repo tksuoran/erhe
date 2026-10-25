@@ -28,6 +28,9 @@ importing it as an asset).
 | Extension | Attaches to | Carries |
 |---|---|---|
 | [`ERHE_geometry`](ERHE_geometry.md) | mesh primitive | polygon rings + full geogram attribute dump (bit-exact geometry) |
+| [`ERHE_mesh_optimized`](ERHE_mesh_optimized.md) | mesh primitive | marker: the core is welded, colocated and in meshoptimizer order (prepared for fast load) |
+| [`ERHE_mesh_topology`](ERHE_mesh_topology.md) | mesh primitive | stored vertex-to-point colocation (replaces `colocate()` at load) |
+| [`ERHE_raytrace_bvh`](ERHE_raytrace_bvh.md) | mesh primitive | prebuilt raytrace BVH over the core triangles |
 | [`ERHE_node`](ERHE_node.md) | node | node Item flags, mesh-prim Item flags |
 | [`ERHE_camera`](ERHE_camera.md) | camera | full erhe projection, exposure, shadow range, Item flags |
 | [`ERHE_light`](ERHE_light.md) | node (light-carrying) | cast_shadow, infinite_range, Item flags |

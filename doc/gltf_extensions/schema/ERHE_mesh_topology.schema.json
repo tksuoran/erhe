@@ -1,0 +1,12 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_mesh_topology.schema.json",
+    "title": "ERHE_mesh_topology glTF mesh primitive extension",
+    "type": "object",
+    "properties": {
+        "version":       {"type": "integer", "const": 1},
+        "point_count":   {"type": "integer", "minimum": 1},
+        "vertex_points": {"type": "integer", "minimum": 0, "description": "bufferView index: uint32 LE point id per core vertex, in first-reference order"}
+    },
+    "required": ["version", "point_count", "vertex_points"]
+}
