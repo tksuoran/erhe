@@ -175,10 +175,11 @@ VmHWM and idle RSS.
 
 ## Open items
 
-- **Headset cannot switch scenes:** after `load_scene` the headset keeps
-  showing Scene 1, because the scene the tools are homed in cannot be
-  closed under OpenXR and there is no re-home. So these Quest figures
-  measure Bistro as resident, not rendered.
+- **Bistro resident, not rendered:** in these runs the headset showed
+  Scene 1, so the Quest figures measure Bistro as resident, not rendered.
+  The headset can now be moved to the loaded scene (`close_scene` of
+  Scene 1, or MCP `set_headset_scene`; `doc/editor/tools.md` "Headset
+  scene").
 - **Unexplained CPU remainder:** 86 MB on desktop and 161 MB on Quest. It is
   not broken down by owner (scene graph, materials, Draw_list_scene,
   content library, allocator overhead).

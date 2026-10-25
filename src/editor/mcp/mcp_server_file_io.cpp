@@ -157,6 +157,30 @@ auto Mcp_server::action_close_scene(const json& args) -> std::string
     }).dump();
 }
 
+// set_headset_scene - homes the global tools (Hud, Hotbar, OpenXR headset)
+// in the named scene, so the headset shows it (doc/editor/tools.md "Headset
+// scene"). Same path as the headset's scene combo: a Home_tools_message,
+// handled from the message bus pump on a following frame.
+auto Mcp_server::action_set_headset_scene(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    m_context.app_message_bus->home_tools.queue_message(
+        Home_tools_message{
+            .scene_root = std::dynamic_pointer_cast<Scene_root>(sr->shared_from_this())
+        }
+    );
+    return make_json_content({
+        {"queued",     true},
+        {"scene_name", sr->get_name()}
+    }).dump();
+}
+
 auto Mcp_server::make_reset_result() -> std::string
 {
     json result = m_reset_counts;

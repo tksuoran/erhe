@@ -72,6 +72,35 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 
 - **`Tool_window`** -- Helper class that creates an `Imgui_window` for a tool's properties.
 
+## Headset scene
+
+The global tools - `Hud`, `Hotbar` and, under OpenXR, `Headset_view` - are
+homed in one scene at a time: their nodes (the Hud and Hotbar quads, the
+headset's root and pointer pick cameras, the controller visualization and
+its materials) are content of that scene, and the headset renders it.
+`Editor` owns the homing (`attach_tools()`, `detach_tools()`,
+`home_tools()`):
+
+- The first scene created or loaded homes the tools (`Scene_created_message`).
+  A `--no-scene` start homes them in the empty "Scene 1".
+- Closing the scene the tools are homed in (the Scene row's Close, MCP
+  `close_scene`) detaches them and homes them in the most recently opened
+  remaining scene. Closing the last scene leaves them sceneless; the next
+  created or loaded scene homes them.
+- A `Home_tools_message` (MCP `set_headset_scene`, the headset window's
+  scene combo) moves them into a named open scene. It is queue-only: the
+  move destroys and creates the tools' rendertarget ImGui hosts.
+- The headset's persisted scene (the "Headset" scene view in
+  `editor_settings.json`) is resolved the same way: once a scene of that
+  name is open, the tools are homed in it.
+
+`Headset_view::detach_from_scene()` keeps its camera objects (a frame in
+flight may still read the pointer pick camera) and reparents them on the
+next attach. The frame of a move renders no headset layers. The render phase
+renders the scene of the frame's render view
+(`Headset_view::prepare_render_view()`, taken after the message bus pump),
+and the eye cameras follow that scene (`Headset_view_resources::update()`).
+
 ## Public API / Integration Points
 
 - `Tools::register_tool()` -- register a tool

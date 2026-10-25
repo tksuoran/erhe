@@ -3502,6 +3502,22 @@
     "name": "close_scene"
   },
   {
+    "description": "Home the global tools (Hud, Hotbar and the OpenXR headset view) in an open scene, so the headset renders that scene (doc/editor/tools.md 'Headset scene'); the same as the headset's scene combo. Closing the scene the tools are homed in moves them to the most recently opened remaining scene on its own. The move is queued and completes on a following frame.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the open scene to home the tools in",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "set_headset_scene"
+  },
+  {
     "description": "Create a new, empty scene with its own camera, viewport and content library (same as the Create > Scene menu command). The new scene's content library is populated with the standard brushes shared from the default scene. The creation is queued and completes on a following frame; discover the new scene name (\"Scene N\") via list_scenes.",
     "inputSchema": {
       "properties": {},

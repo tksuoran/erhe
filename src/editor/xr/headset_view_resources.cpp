@@ -15,10 +15,11 @@ using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Headset_view_resources::Headset_view_resources(
-    erhe::graphics::Device& graphics_device,
-    erhe::xr::Render_view&  render_view,
-    Headset_view&           headset_view,
-    const std::size_t       slot
+    erhe::graphics::Device&                   graphics_device,
+    erhe::xr::Render_view&                    render_view,
+    Headset_view&                             headset_view,
+    const std::size_t                         slot,
+    const std::shared_ptr<erhe::scene::Node>& scene_root_node
 )
     : m_headset_view{headset_view}
 {
@@ -119,7 +120,7 @@ Headset_view_resources::Headset_view_resources(
 
     // A Camera is a prim (doc/erhe/usd_compatibility_design.md C5): the per-view
     // pose is set on the camera itself.
-    m_camera->set_parent(headset_view.get_root_node());
+    m_camera->set_parent(scene_root_node);
 
     m_is_valid = true;
 }
@@ -168,8 +169,11 @@ auto Headset_view_resources::get_depth_stencil_texture() const -> erhe::graphics
     return m_depth_stencil_texture;
 }
 
-void Headset_view_resources::update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides)
+void Headset_view_resources::update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides, const std::shared_ptr<erhe::scene::Node>& scene_root_node)
 {
+    if (m_camera->get_parent_node() != scene_root_node) {
+        m_camera->set_parent(scene_root_node);
+    }
     m_camera->set_projection(
         erhe::scene::Projection{
             .projection_type    = erhe::scene::Projection::Type::perspective_xr,

@@ -398,3 +398,9 @@ byte-for-byte against the foreign Bistro at idle.
    textures as KTX2 with a raw ASTC 4x4 vkFormat (transcoded from the
    Basis source), so Quest uploads them without transcoding; desktop
    loaders without ASTC support decode them on the CPU.
+5. **Headset scene selection.** Done: closing the scene the global tools
+   are homed in moves them to the most recently opened remaining scene, and
+   MCP `set_headset_scene` (or the headset window's scene combo) moves them
+   explicitly (`doc/editor/tools.md` "Headset scene"). On Quest, `--no-scene`
+   + `load_scene` of the prepared Bistro + `close_scene "Scene 1"` renders
+   Bistro in the headset.

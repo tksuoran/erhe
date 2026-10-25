@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -10,6 +11,9 @@ namespace erhe::xr {
     class Xr_action_pose;
     class Xr_actions;
     class Xr_session;
+}
+namespace erhe::primitive {
+    class Material;
 }
 namespace erhe::scene {
     class Animation;
@@ -40,6 +44,11 @@ public:
         erhe::scene_renderer::Mesh_memory& mesh_memory,
         Scene_root&                        scene_root
     );
+    // Takes the hand nodes and the materials the visualization added to the
+    // scene's content library out of the scene (Headset_view::detach_from_scene()).
+    ~Controller_visualization() noexcept;
+    Controller_visualization(const Controller_visualization&) = delete;
+    Controller_visualization& operator=(const Controller_visualization&) = delete;
 
     // Fetch and build the runtime controller models, one attempt per hand.
     // Requires a running Xr_session and an active frame command buffer
@@ -114,6 +123,9 @@ private:
 
     erhe::scene_renderer::Mesh_memory&    m_mesh_memory;
     std::shared_ptr<Content_library> m_material_library;
+    // Every material added to m_material_library, removed again by the
+    // destructor.
+    std::vector<std::shared_ptr<erhe::primitive::Material>> m_library_materials;
     uint64_t                              m_content_layer_id{0};
     Hand                                  m_left_hand;
     Hand                                  m_right_hand;

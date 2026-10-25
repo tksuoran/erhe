@@ -171,7 +171,19 @@ public:
     // includes this header to also include xr_perf_metric_plot.hpp).
     ~Headset_view() override;
 
+    // Homes the headset in a scene: the root camera, the pointer pick camera
+    // and the controller visualization become content of scene_root, and the
+    // headset renders that scene. The Editor homes the headset together with
+    // the Hud and the Hotbar (Editor::home_tools(), doc/editor/tools.md
+    // "Headset scene").
     void attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe::scene_renderer::Mesh_memory& mesh_memory);
+    // The reverse of attach_to_scene(): takes the headset's own nodes and
+    // the controller materials out of the scene and leaves the headset
+    // sceneless (update_actions() idles, nothing renders) until the next
+    // attach_to_scene(). M2. The eye cameras are owned by the render phase;
+    // they follow the scene of the frame's render view
+    // (Headset_view_resources::update()).
+    void detach_from_scene();
 
     // Public API
     // Frame phases (doc/editor/render_thread.md section 2.2): wait_frame()
@@ -188,14 +200,15 @@ public:
     // Requires a waited frame (frame_timing.wait_ok), not a begun one:
     // xrSyncActions and the view pose use the wait's predicted display time.
     auto update_actions(const erhe::xr::Frame_timing& frame_timing) -> bool;
-    // M2, every frame under OpenXR, after update_actions() (whether or not
-    // the frame was waited, the headset is attached to a scene or the head
-    // pose located): copies this frame's Render_view (scene root and root
-    // camera, which update_actions() posed) for the headset's
-    // Shadow_render_node, which the rendergraph runs every frame and which
-    // reads Scene_view::get_render_view() for its scene root and camera.
-    // Without a scene there is no root camera; the copy then carries no
-    // scene root and no camera, and the shadow node renders nothing.
+    // M2, every frame under OpenXR, after the message bus pump and the
+    // scenes' render settings snapshot (whether or not the frame was waited,
+    // the headset is attached to a scene or the head pose located): copies
+    // this frame's Render_view (scene root and root camera, which
+    // update_actions() posed). The render phase reads it: the headset's
+    // Shadow_render_node, which the rendergraph runs every frame, and
+    // render_headset(), which renders its scene root. Without a scene there
+    // is no root camera; the copy then carries no scene root and no camera,
+    // and the shadow node renders nothing.
     void prepare_render_view();
     auto render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool;
     // Render phase, the rendergraph node's pre-execute hook (before the
@@ -297,15 +310,21 @@ public:
     void render(const Render_context&) override;
 
 private:
-    [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
+    [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view, const std::shared_ptr<erhe::scene::Node>& scene_root_node) -> std::shared_ptr<Headset_view_resources>;
     // Multiview path uses one Headset_view_resources per view slot. The
     // per-eye fallback path matches by color_texture, but on the
     // multiview path every Render_view has color_texture = nullptr (the
     // shared layered swapchain is exposed via Render_views_frame::shared_*),
     // so a color-texture lookup would collapse all eyes onto the same
     // resources object and both eyes would share one Camera/Node.
-    [[nodiscard]] auto get_multiview_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
+    [[nodiscard]] auto get_multiview_view_resources(erhe::xr::Render_view& render_view, const std::shared_ptr<erhe::scene::Node>& scene_root_node) -> std::shared_ptr<Headset_view_resources>;
 
+    // The persisted headset scene (editor_settings.json, "Headset" scene
+    // view) names the scene to home the global tools in once it is open:
+    // queues a Home_tools_message instead of pointing this view at the scene
+    // alone, so the headset's nodes and the Hud / Hotbar always share the
+    // scene the headset renders.
+    auto resolve_pending_scene_and_camera() -> bool override;
     void setup_root_camera();
     void setup_pointer_pick_camera();
     void update_camera_node();

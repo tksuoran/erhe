@@ -1585,12 +1585,6 @@ public:
                 std::this_thread::sleep_for(std::chrono::milliseconds{250});
             }
         }
-        if (m_app_context.OpenXR) {
-            // Every frame: the headset's Shadow_render_node runs in every
-            // frame's rendergraph and reads this frame's Render_view, also
-            // on frames update_actions() did not run or returned early.
-            m_headset_view->prepare_render_view();
-        }
 #endif
 
         // The node-writing fixed-step updates for the steps the overlap
@@ -1778,6 +1772,18 @@ public:
         erhe::log::set_breadcrumb("tick: snapshot_render_settings");
         m_render_settings.snapshot(m_graphics_device->get_frame_index(), m_editor_settings, m_app_settings);
         m_app_scenes->snapshot_render_settings();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_app_context.OpenXR) {
+            // Every frame: the headset's Shadow_render_node runs in every
+            // frame's rendergraph and reads this frame's Render_view, also
+            // on frames update_actions() did not run or returned early. Taken
+            // here, after the message bus pump, like the viewports' copies
+            // below: a scene closed or a re-home of the headset this frame
+            // (Editor::home_tools()) is already reflected, so the copy never
+            // names a scene that took no render settings snapshot above.
+            m_headset_view->prepare_render_view();
+        }
+#endif
 
         // The tools, renderables and debug visualizations of every viewport
         // record their lines and labels here, after this frame's transforms,
@@ -4031,6 +4037,15 @@ public:
                 on_close_scene(message);
             }
         );
+        // Explicit re-home of the global tools (MCP set_headset_scene, the
+        // headset's scene combo). Queue-only, like close_scene.
+        m_home_tools_subscription = m_app_message_bus->home_tools.subscribe(
+            [this](Home_tools_message& message) {
+                if (message.scene_root) {
+                    home_tools(message.scene_root);
+                }
+            }
+        );
         m_items_removed_subscription = m_app_message_bus->items_removed.subscribe(
             [this](Items_removed_message& message) {
                 on_items_removed(message);
@@ -4544,24 +4559,70 @@ public:
 
     // Attach the global tools to the FIRST scene that is created (scene.create) or
     // loaded. Subsequent scenes do not re-home the tools.
+    // The global tools (Hud, Hotbar, OpenXR Headset_view) are homed in one
+    // scene at a time: their nodes are content of that scene and the headset
+    // renders it (doc/editor/tools.md "Headset scene"). The first scene created
+    // or loaded homes them; closing their scene moves them to the most
+    // recently opened remaining scene; home_tools() moves them on request.
     void on_scene_created(Scene_created_message& message)
     {
         if (m_tools_attached_to_scene || !message.scene_root) {
             return;
         }
+        attach_tools(message.scene_root);
+    }
+
+    void attach_tools(const std::shared_ptr<Scene_root>& scene_root)
+    {
         m_tools_attached_to_scene = true;
-        m_tools_scene_root = message.scene_root;
+        m_tools_scene_root = scene_root;
         if (m_hud) {
-            m_hud->attach_to_scene(message.scene_root);
+            m_hud->attach_to_scene(scene_root);
         }
         if (m_hotbar) {
-            m_hotbar->attach_to_scene(message.scene_root);
+            m_hotbar->attach_to_scene(scene_root);
         }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         if (m_app_context.OpenXR && m_headset_view) {
-            m_headset_view->attach_to_scene(message.scene_root, *m_mesh_memory.get());
+            m_headset_view->attach_to_scene(scene_root, *m_mesh_memory.get());
         }
 #endif
+        log_scene->info("Global tools homed in scene '{}'", scene_root->get_name());
+    }
+
+    void detach_tools()
+    {
+        if (m_hud) {
+            m_hud->detach_from_scene();
+        }
+        if (m_hotbar) {
+            m_hotbar->detach_from_scene();
+        }
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_app_context.OpenXR && m_headset_view) {
+            m_headset_view->detach_from_scene();
+        }
+#endif
+        m_tools_attached_to_scene = false;
+        m_tools_scene_root.reset();
+    }
+
+    // Moves the global tools into scene_root (a registered scene). From the
+    // message bus pump (Home_tools_message).
+    void home_tools(const std::shared_ptr<Scene_root>& scene_root)
+    {
+        const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_app_scenes->get_scene_roots();
+        if (std::find(scene_roots.begin(), scene_roots.end(), scene_root) == scene_roots.end()) {
+            log_scene->warn("Cannot home the global tools in scene '{}': the scene is not open", scene_root->get_name());
+            return;
+        }
+        if (m_tools_attached_to_scene && (m_tools_scene_root.lock() == scene_root)) {
+            return;
+        }
+        if (m_tools_attached_to_scene) {
+            detach_tools();
+        }
+        attach_tools(scene_root);
     }
 
     // Close a scene (Hierarchy window Scene row "Close" context menu entry).
@@ -4620,14 +4681,6 @@ public:
         }
 
         const bool is_tools_scene = m_tools_attached_to_scene && (m_tools_scene_root.lock() == scene_root);
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-        if (is_tools_scene && m_app_context.OpenXR) {
-            // Headset_view scene content has no detach path yet; refuse rather
-            // than leave the headset rendering a dead scene.
-            log_scene->warn("Cannot close scene '{}': the OpenXR headset view is homed in it", scene_root->get_name());
-            return;
-        }
-#endif
 
         // Drop selected items hosted by this scene (including the Scene item,
         // whose host is also this scene_root) so the selection does not keep
@@ -4654,14 +4707,7 @@ public:
         // Detach the global tools when they are homed in this scene; they
         // re-home to another scene below (or to the next created scene).
         if (is_tools_scene) {
-            if (m_hud) {
-                m_hud->detach_from_scene();
-            }
-            if (m_hotbar) {
-                m_hotbar->detach_from_scene();
-            }
-            m_tools_attached_to_scene = false;
-            m_tools_scene_root.reset();
+            detach_tools();
         }
 
         // Recorded undo/redo operations hold shared_ptrs to scene content and
@@ -4729,12 +4775,13 @@ public:
             m_scene_builder->set_scene_root(std::shared_ptr<Scene_root>{});
         }
 
-        // Re-home the tools to the first remaining scene, when one exists;
-        // otherwise the next Scene_created_message re-attaches them.
+        // Re-home the tools to the most recently opened remaining scene
+        // (scenes are registered in open order), when one exists; otherwise
+        // the next Scene_created_message re-attaches them.
         if (is_tools_scene) {
             const std::vector<std::shared_ptr<Scene_root>>& remaining = m_app_scenes->get_scene_roots();
             if (!remaining.empty()) {
-                m_app_message_bus->scene_created.send_message(Scene_created_message{remaining.front()});
+                attach_tools(remaining.back());
             }
         }
 
@@ -5509,6 +5556,7 @@ public:
     // The scene the global tools are currently homed in (set by
     // on_scene_created, cleared when that scene is closed).
     std::weak_ptr<Scene_root>               m_tools_scene_root{};
+    erhe::message_bus::Subscription<Home_tools_message> m_home_tools_subscription;
 
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;

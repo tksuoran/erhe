@@ -168,6 +168,17 @@ struct Close_scene_message
     std::shared_ptr<Scene_root> scene_root{};
 };
 
+// Homes the global tools (Hud, Hotbar, OpenXR Headset_view) in scene_root:
+// the headset then shows that scene (MCP set_headset_scene, the headset's
+// scene combo). Handled by Editor::home_tools(). Queue-only because the move
+// destroys and creates the tools' rendertarget ImGui hosts, which must not
+// happen inside ImGui window iteration.
+class Home_tools_message
+{
+public:
+    std::shared_ptr<Scene_root> scene_root{};
+};
+
 struct Tool_select_message
 {
 };
