@@ -34,6 +34,7 @@ erhe_target_sources_grouped(
     erhe_primitive/primitive.cpp
     erhe_primitive/primitive.hpp
     erhe_primitive/triangle_soup.cpp
+    erhe_primitive/stored_vertex_streams.hpp
     erhe_primitive/triangle_soup.hpp
     erhe_primitive/vertex_attribute_info.cpp
     erhe_primitive/vertex_attribute_info.hpp

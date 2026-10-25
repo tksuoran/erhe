@@ -160,7 +160,16 @@ auto Mcp_server::action_save_scene_for_quest(const json& args) -> std::string
     if ((path.extension() != std::filesystem::path{".glb"}) && (path.extension() != std::filesystem::path{".gltf"})) {
         path = std::filesystem::path{path.string() + ".glb"};
     }
-    return make_json_content(queue_save(Save_job_kind::scene_for_quest, scene_root, path, Save_job_source_binding::keep)).dump();
+    // Decision D3: the ASTC levels Zstandard supercompressed ("zstd") or
+    // stored as they upload ("none").
+    const std::string supercompression = args.value("texture_supercompression", "zstd");
+    erhe::gltf::Gltf_texture_export texture_export = erhe::gltf::Gltf_texture_export::ktx2_astc_4x4;
+    if (supercompression == "none") {
+        texture_export = erhe::gltf::Gltf_texture_export::ktx2_astc_4x4_uncompressed;
+    } else if (supercompression != "zstd") {
+        return make_error_content("save_scene_for_quest: texture_supercompression must be \"zstd\" or \"none\"");
+    }
+    return make_json_content(queue_save(Save_job_kind::scene_for_quest, scene_root, path, Save_job_source_binding::keep, texture_export)).dump();
 }
 
 auto Mcp_server::action_save_scene(const json& args) -> std::string
@@ -213,7 +222,8 @@ auto Mcp_server::queue_save(
     const Save_job_kind                kind,
     const std::shared_ptr<Scene_root>& scene_root,
     const std::filesystem::path&       path,
-    const Save_job_source_binding      source_binding
+    const Save_job_source_binding      source_binding,
+    const erhe::gltf::Gltf_texture_export texture_export
 ) -> json
 {
     const bool        for_quest = (kind == Save_job_kind::scene_for_quest);
@@ -243,7 +253,8 @@ auto Mcp_server::queue_save(
         .kind           = kind,
         .scene_root     = scene_root,
         .path           = path,
-        .source_binding = source_binding
+        .source_binding = source_binding,
+        .texture_export = texture_export
     });
     log_mcp->info("MCP server: {} job {} queued for '{}' -> '{}'", tool, job_id, scene_root->get_name(), path.string());
     job["message"] = "queued - poll get_save_status {job_id} until state is done or failed";
@@ -290,7 +301,7 @@ void Mcp_server::run_save(const Queued_save& save)
     bool ok = false;
     switch (save.kind) {
         case Save_job_kind::scene_for_quest: {
-            ok = editor::save_scene_gltf_for_quest(m_context, *scene_root, save.path, &report);
+            ok = editor::save_scene_gltf_for_quest(m_context, *scene_root, save.path, &report, save.texture_export);
             break;
         }
         case Save_job_kind::scene: {

@@ -70,6 +70,18 @@ public:
     // (triangle t is facet t), which holds for a prepared soup core
     // (doc/gltf_extensions/ERHE_mesh_optimized.md contract item 5).
     Primitive_raytrace(const erhe::primitive::Triangle_soup& triangle_soup, std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt);
+    // The same raytrace from float positions (xyz per vertex) and uint32
+    // triangle indices, the stored vertex stream build that has no soup
+    // (Primitive::make_stored_meshes()). The bounds are the volumes computed
+    // from the same positions (calculate_bounding_volume()), which is what
+    // the soup constructor's build computes.
+    Primitive_raytrace(
+        std::span<const float>                        positions_xyz,
+        std::span<const uint32_t>                     indices,
+        const erhe::math::Aabb&                       bounding_box,
+        const erhe::math::Sphere&                     bounding_sphere,
+        std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt
+    );
     // AABB proxy: a 12-triangle box over the given bounds. Cheap enough for
     // load time, so picking works immediately after a deferred-raytrace
     // import; hits report the right primitive but approximate position /
@@ -84,7 +96,8 @@ public:
 
     [[nodiscard]] auto has_raytrace_triangles() const -> bool;
     [[nodiscard]] auto is_proxy              () const -> bool;
-    void make_raytrace_geometry();
+    // A non-null `prebuilt` is moved to the backend before the commit.
+    void make_raytrace_geometry(std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt = {});
 
     [[nodiscard]] auto get_raytrace_mesh    () const -> const Buffer_mesh&;
     [[nodiscard]] auto get_raytrace_geometry() const -> const std::shared_ptr<erhe::raytrace::IGeometry>&;
@@ -387,6 +400,13 @@ public:
     // list. Set to null when there is none, which clears any stale variant.
     auto commit_geometry_buffer_mesh(std::shared_ptr<Primitive_render_shape>& out_optimized_shape) -> bool;
 
+    // The stored vertex stream build of a shape whose payload is pending
+    // (Primitive::make_stored_meshes()): installs the base buffer mesh, the
+    // validated prepared data and, when built, the real raytrace; the payload
+    // is then loaded and the soup stays released (read back from the source
+    // on demand). False, installing nothing, when the payload is not pending.
+    auto install_stored_build(Buffer_mesh&& buffer_mesh, std::shared_ptr<Prepared_primitive_data> prepared_data, std::optional<Primitive_raytrace>&& raytrace) -> bool;
+
 private:
     // Caller holds m_build_mutex; see the locking note on Primitive_shape.
     auto make_buffer_mesh_build_locked(const Build_info& build_info, Normal_style normal_style, std::shared_ptr<Primitive_render_shape>* out_optimized_shape) -> bool;
@@ -465,6 +485,18 @@ public:
     // BVH, or the backend refused it) is reported by has_real_raytrace().
     // Same threading as make_renderable_mesh(): one caller per Primitive.
     [[nodiscard]] auto make_prepared_meshes    (const Build_info& build_info) -> bool;
+    // Load path of a deferred-payload primitive whose source stores GPU-ready
+    // vertex streams in the build's layouts (ERHE_gpu_vertex_streams,
+    // Triangle_soup_source::load_stored_vertex_streams()): the base and, when
+    // buffer_info.optimize_meshes is set, the optimized buffer mesh enqueued
+    // as stored, the bounds from the stored float positions, the affines as
+    // stored, and the real raytrace from the positions with the stored BVH.
+    // No soup is built: the render shape's soup stays released. `declined`
+    // (out_reason set) leaves the primitive untouched for the soup path
+    // (load_payload(), make_prepared_meshes()); `failed` is a buffer
+    // allocation failure.
+    enum class Stored_build_result : unsigned int { built, declined, failed };
+    [[nodiscard]] auto make_stored_meshes      (const Build_info& build_info, std::string& out_reason) -> Stored_build_result;
     // The render shape carries prepared mesh data.
     [[nodiscard]] auto is_prepared             () const -> bool;
     // Loads the render shape's pending payload (Primitive_shape::load_payload());

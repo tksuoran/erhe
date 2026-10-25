@@ -186,8 +186,17 @@ public:
 class Imported_build_result
 {
 public:
-    bool prepared{false}; // the primitive carries prepared mesh data
-    bool released{false}; // its CPU soup was released after the build
+    bool        prepared{false}; // the primitive carries prepared mesh data
+    bool        released{false}; // its CPU soup was released after the build
+    bool        stored  {false}; // built from the GPU vertex streams stored in the file
+    std::string portable_reason; // why the stored streams were not used (empty when stored)
+};
+
+// Whether a build job uploads the GPU-ready vertex streams a file stores
+// (ERHE_gpu_vertex_streams, load.use_gpu_vertex_streams).
+enum class Stored_vertex_streams_use : unsigned int {
+    ignore = 0,
+    use    = 1
 };
 
 // Builds one job's primitive on a worker, inside its own
@@ -199,7 +208,15 @@ public:
 // variant when meshes are optimized - is released right away, so a load
 // never holds every soup at once. finalize_imported_meshes still runs
 // afterwards on the main thread and fast-paths over the built primitives.
-auto run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device, bool release_soups) -> Imported_build_result;
+// With stored_streams use and release_soups, a deferred primitive whose file
+// stores GPU vertex streams in the running layouts is built from them
+// (Primitive::make_stored_meshes()): no soup is read or packed.
+auto run_imported_build_job(
+    const Imported_build_job&  job,
+    erhe::graphics::Device&    graphics_device,
+    bool                       release_soups,
+    Stored_vertex_streams_use  stored_streams
+) -> Imported_build_result;
 
 // The nodes overload is the implementation and is format-neutral: the USD
 // import (parsers/usd.cpp) hands it its own node list.
@@ -309,11 +326,15 @@ public:
 // streams in the running Mesh_memory layouts (ERHE_gpu_vertex_streams,
 // doc/gltf_extensions/ERHE_gpu_vertex_streams.md). An export: the scene's
 // source file and dirty state are left alone; the asset browser rescans.
+// texture_export is one of the two ASTC forms (decision D3:
+// ktx2_astc_4x4 supercompresses the levels with Zstandard,
+// ktx2_astc_4x4_uncompressed stores them as they upload).
 [[nodiscard]] auto save_scene_gltf_for_quest(
-    App_context&                 context,
-    Scene_root&                  scene_root,
-    const std::filesystem::path& path,
-    Gltf_scene_save_report*      report = nullptr
+    App_context&                    context,
+    Scene_root&                     scene_root,
+    const std::filesystem::path&    path,
+    Gltf_scene_save_report*         report         = nullptr,
+    erhe::gltf::Gltf_texture_export texture_export = erhe::gltf::Gltf_texture_export::ktx2_astc_4x4
 ) -> bool;
 
 // Default location for saved scene files: res/editor/scenes, relative to the

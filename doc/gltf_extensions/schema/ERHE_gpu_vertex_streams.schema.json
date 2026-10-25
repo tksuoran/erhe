@@ -29,8 +29,8 @@
             "type": "object",
             "properties": {
                 "accessor": {"type": "integer", "minimum": 0},
-                "scale":    {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 3},
-                "offset":   {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 3}
+                "scale":    {"type": "array", "items": {"type": "string", "pattern": "^-?0[xX][0-9a-fA-F]+(\\.[0-9a-fA-F]*)?[pP][-+]?[0-9]+$"}, "minItems": 2, "maxItems": 3},
+                "offset":   {"type": "array", "items": {"type": "string", "pattern": "^-?0[xX][0-9a-fA-F]+(\\.[0-9a-fA-F]*)?[pP][-+]?[0-9]+$"}, "minItems": 2, "maxItems": 3}
             },
             "required": ["accessor"],
             "dependentRequired": {"scale": ["offset"], "offset": ["scale"]},

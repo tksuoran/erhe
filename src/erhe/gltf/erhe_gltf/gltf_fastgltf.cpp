@@ -26,6 +26,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
+#include "erhe_primitive/stored_vertex_streams.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/prebuilt_bvh.hpp"
 #include "erhe_property/dependency_object.hpp"
@@ -1212,6 +1213,7 @@ public:
     std::string optimized;
     std::string topology;
     std::string bvh;
+    std::string gpu_streams; // ERHE_gpu_vertex_streams
 
     [[nodiscard]] auto operator==(const Prepared_extension_json&) const -> bool = default;
 };
@@ -1790,6 +1792,7 @@ class Gltf_prepared_view
 {
 public:
     bool                   has_stride {false};
+    std::size_t            byte_stride{0};
     std::size_t            byte_length{0};
     bool                   is_resident{false}; // resident_bytes holds the view
     std::vector<std::byte> resident_bytes;
@@ -1862,6 +1865,22 @@ namespace {
             indices.push_back(value);
         }
     }
+    if (!json.gpu_streams.empty() && parse_extension_object(json_parser, json.gpu_streams, object)) {
+        simdjson::dom::array variants;
+        if (object.at_key("variants").get_array().get(variants) == simdjson::SUCCESS) {
+            for (const simdjson::dom::element variant : variants) {
+                simdjson::dom::array streams;
+                if (variant["streams"].get_array().get(streams) != simdjson::SUCCESS) {
+                    continue;
+                }
+                for (const simdjson::dom::element stream : streams) {
+                    if (stream["bufferView"].get_uint64().get(value) == simdjson::SUCCESS) {
+                        indices.push_back(value);
+                    }
+                }
+            }
+        }
+    }
     if (!json.bvh.empty() && parse_extension_object(json_parser, json.bvh, object)) {
         simdjson::dom::array builds;
         if (object.at_key("builds").get_array().get(builds) == simdjson::SUCCESS) {
@@ -1882,6 +1901,74 @@ namespace {
     return indices;
 }
 
+// The accessors ERHE_gpu_vertex_streams names in its variants' attributes.
+[[nodiscard]] auto collect_gpu_stream_accessor_indices(const Prepared_extension_json& json) -> std::vector<std::uint64_t>
+{
+    std::vector<std::uint64_t> indices;
+    simdjson::dom::parser json_parser;
+    simdjson::dom::object object;
+    if (json.gpu_streams.empty() || !parse_extension_object(json_parser, json.gpu_streams, object)) {
+        return indices;
+    }
+    simdjson::dom::array variants;
+    if (object.at_key("variants").get_array().get(variants) != simdjson::SUCCESS) {
+        return indices;
+    }
+    for (const simdjson::dom::element variant : variants) {
+        simdjson::dom::object attributes;
+        if (variant["attributes"].get_object().get(attributes) != simdjson::SUCCESS) {
+            continue;
+        }
+        for (const simdjson::dom::key_value_pair attribute : attributes) {
+            std::uint64_t value{0};
+            if (attribute.value["accessor"].get_uint64().get(value) == simdjson::SUCCESS) {
+                indices.push_back(value);
+            }
+        }
+    }
+    return indices;
+}
+
+// A float written as a C99 hexadecimal floating-point string (%a), parsed
+// exactly. ERHE_gpu_vertex_streams stores its affines this way so they reach
+// the decoders bit for bit.
+[[nodiscard]] auto parse_hex_float(const std::string_view text, float& out_value) -> bool
+{
+    if ((text.size() < 3) || (text.size() > 40)) {
+        return false;
+    }
+    const std::string terminated{text};
+    char* end = nullptr;
+    const double value = std::strtod(terminated.c_str(), &end);
+    if ((end != terminated.c_str() + terminated.size()) || (terminated.find('x') == std::string::npos)) {
+        return false;
+    }
+    const float narrowed = static_cast<float>(value);
+    if (static_cast<double>(narrowed) != value) {
+        return false; // not a float value
+    }
+    out_value = narrowed;
+    return true;
+}
+
+// `count` hexadecimal floats from a JSON array of strings.
+[[nodiscard]] auto parse_hex_float_array(const simdjson::dom::element element, const std::size_t count, float* const out_values) -> bool
+{
+    simdjson::dom::array array;
+    if ((element.get_array().get(array) != simdjson::SUCCESS) || (array.size() != count)) {
+        return false;
+    }
+    std::size_t i = 0;
+    for (const simdjson::dom::element item : array) {
+        std::string_view text;
+        if ((item.get_string().get(text) != simdjson::SUCCESS) || !parse_hex_float(text, out_values[i])) {
+            return false;
+        }
+        ++i;
+    }
+    return true;
+}
+
 } // anonymous namespace
 
 // The prepared mesh data of one soup primitive, captured at the parse
@@ -1899,6 +1986,7 @@ public:
     std::size_t                                position_count{0};
     std::string                                topology_json;
     std::string                                bvh_json;
+    std::string                                gpu_streams_json; // ERHE_gpu_vertex_streams
     std::map<std::uint64_t, Gltf_prepared_view> views;
     std::shared_ptr<const Gltf_buffer_origins> origins;
     std::shared_ptr<Gltf_prepared_statistics>  statistics;
@@ -1907,6 +1995,22 @@ public:
     // (the primitive then loads as a plain soup). Reads the file-backed
     // views now, with a handle of its own.
     [[nodiscard]] auto validate(const erhe::primitive::Triangle_soup& soup) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data>
+    {
+        const std::vector<float> positions_xyz = erhe::primitive::get_float_positions(soup);
+        return validate(soup.index_data, positions_xyz, Validation_counting::always);
+    }
+
+    enum class Validation_counting : unsigned int {
+        always,          // a soup load: every validation is counted
+        accepted_only    // a stored stream load: a rejection is not counted, the soup load that follows counts it
+    };
+
+    // The checks of validate() on the core's indices and float positions.
+    [[nodiscard]] auto validate(
+        const std::span<const uint32_t> indices,
+        const std::vector<float>&       positions_xyz,
+        const Validation_counting       counting
+    ) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data>
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -1919,8 +2023,6 @@ public:
             rejections.push_back(fmt::format("{}: {}", extension, reason));
         };
 
-        const std::vector<float>        positions_xyz = erhe::primitive::get_float_positions(soup);
-        const std::span<const uint32_t> indices{soup.index_data};
         std::shared_ptr<erhe::primitive::Prepared_primitive_data> data = std::make_shared<erhe::primitive::Prepared_primitive_data>(marker);
         bool topology_used = false;
         bool bvh_used      = false;
@@ -1964,6 +2066,9 @@ public:
             }
         }
 
+        if ((counting == Validation_counting::accepted_only) && !rejections.empty()) {
+            return {};
+        }
         if (statistics) {
             const std::lock_guard<std::mutex> lock{statistics->mutex};
             Gltf_prepared_mesh_statistics& counts = statistics->statistics;
@@ -1985,7 +2090,209 @@ public:
         return data;
     }
 
+    // ERHE_gpu_vertex_streams (doc/gltf_extensions/ERHE_gpu_vertex_streams.md
+    // "Loader"): the variants matching the request, read, with the core
+    // indices (read by the caller, UNSIGNED_INT) validated with the prepared
+    // mesh data against the stored base positions. Null with out_reason (a
+    // fixed phrase) when anything does not match; the soup path then loads.
+    [[nodiscard]] auto load_stored_streams(
+        const erhe::primitive::Stored_vertex_stream_request& request,
+        std::vector<uint8_t>&&                               indices,
+        const std::size_t                                    index_count,
+        const bool                                           has_vertex_colors,
+        std::string&                                         out_reason
+    ) const -> std::unique_ptr<erhe::primitive::Stored_vertex_streams>
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        if (gpu_streams_json.empty()) {
+            out_reason = "no stored streams";
+            return {};
+        }
+        if (!marker_reason.empty()) {
+            out_reason = "prepared data rejected";
+            return {};
+        }
+        if ((request.base_format == nullptr) || (request.index_type != erhe::dataformat::Format::format_32_scalar_uint)) {
+            out_reason = "index format differs";
+            return {};
+        }
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        if (!parse_extension_object(json_parser, gpu_streams_json, extension_object)) {
+            out_reason = "malformed JSON or unsupported version";
+            return {};
+        }
+        std::int64_t encoding_version{0};
+        if ((extension_object.at_key("encoding_version").get_int64().get(encoding_version) != simdjson::SUCCESS) || (encoding_version != request.encoding_version)) {
+            out_reason = "encoding version differs";
+            return {};
+        }
+        simdjson::dom::array variants;
+        if (extension_object.at_key("variants").get_array().get(variants) != simdjson::SUCCESS) {
+            out_reason = "malformed variants";
+            return {};
+        }
+        simdjson::dom::object base_variant;
+        simdjson::dom::object optimized_variant;
+        bool has_base      = false;
+        bool has_optimized = false;
+        for (const simdjson::dom::element element : variants) {
+            simdjson::dom::object variant;
+            std::string_view      role;
+            if ((element.get_object().get(variant) != simdjson::SUCCESS) || (variant.at_key("role").get_string().get(role) != simdjson::SUCCESS)) {
+                continue;
+            }
+            if ((role == "base") && !has_base) {
+                base_variant = variant;
+                has_base     = true;
+            } else if ((role == "optimized") && !has_optimized) {
+                optimized_variant = variant;
+                has_optimized     = true;
+            }
+        }
+        if (!has_base || !has_optimized) {
+            out_reason = "missing variant";
+            return {};
+        }
+
+        std::unique_ptr<erhe::primitive::Stored_vertex_streams> stored = std::make_unique<erhe::primitive::Stored_vertex_streams>();
+        stored->vertex_count      = position_count;
+        stored->index_count       = index_count;
+        stored->has_vertex_colors = has_vertex_colors;
+
+        // Affines of the optimized encoding, as stored; the base build of the
+        // same core computes the same ones.
+        simdjson::dom::object optimized_attributes;
+        if (optimized_variant.at_key("attributes").get_object().get(optimized_attributes) != simdjson::SUCCESS) {
+            out_reason = "malformed attributes";
+            return {};
+        }
+        {
+            simdjson::dom::element position;
+            if (optimized_attributes.at_key("POSITION").get(position) == simdjson::SUCCESS) {
+                float scale [3];
+                float offset[3];
+                if (!parse_hex_float_array(position["scale"], 3, scale) || !parse_hex_float_array(position["offset"], 3, offset)) {
+                    out_reason = "malformed affine";
+                    return {};
+                }
+                // w as get_position_quantization() writes it.
+                stored->position_quantization.scale  = glm::vec4{scale [0], scale [1], scale [2], 0.0f};
+                stored->position_quantization.offset = glm::vec4{offset[0], offset[1], offset[2], 0.0f};
+            }
+            for (int channel = 0; channel < 2; ++channel) {
+                simdjson::dom::element texcoord;
+                if (optimized_attributes.at_key((channel == 0) ? "TEXCOORD_0" : "TEXCOORD_1").get(texcoord) != simdjson::SUCCESS) {
+                    continue;
+                }
+                float scale [2];
+                float offset[2];
+                if (!parse_hex_float_array(texcoord["scale"], 2, scale) || !parse_hex_float_array(texcoord["offset"], 2, offset)) {
+                    out_reason = "malformed affine";
+                    return {};
+                }
+                stored->texcoord_quantization.scale [(2 * channel) + 0] = scale [0];
+                stored->texcoord_quantization.scale [(2 * channel) + 1] = scale [1];
+                stored->texcoord_quantization.offset[(2 * channel) + 0] = offset[0];
+                stored->texcoord_quantization.offset[(2 * channel) + 1] = offset[1];
+            }
+        }
+
+        const auto read_variant = [&](const simdjson::dom::object& variant, const erhe::dataformat::Vertex_format& format, erhe::primitive::Stored_vertex_variant& out_variant) -> std::string {
+            std::string_view signature;
+            if ((variant.at_key("signature").get_string().get(signature) != simdjson::SUCCESS) || (signature != erhe::dataformat::get_vertex_format_signature(format))) {
+                return "signature differs";
+            }
+            simdjson::dom::array streams;
+            if ((variant.at_key("streams").get_array().get(streams) != simdjson::SUCCESS) || (streams.size() != format.streams.size())) {
+                return "signature differs";
+            }
+            std::size_t stream_index = 0;
+            for (const simdjson::dom::element stream : streams) {
+                const std::size_t stride      = format.streams[stream_index].stride;
+                const std::size_t byte_length = stride * position_count;
+                std::uint64_t view_index{0};
+                std::string_view fill;
+                std::uint64_t fill_stride{0};
+                if (stream["bufferView"].get_uint64().get(view_index) == simdjson::SUCCESS) {
+                    const auto i = views.find(view_index);
+                    if ((i == views.end()) || !i->second.has_stride || (i->second.byte_stride != stride) || (i->second.byte_length != byte_length)) {
+                        return "stream view mismatch";
+                    }
+                    std::vector<uint8_t> bytes(byte_length);
+                    const std::string read_reason = read_view_into(i->second, std::span<std::byte>{reinterpret_cast<std::byte*>(bytes.data()), bytes.size()});
+                    if (!read_reason.empty()) {
+                        return read_reason;
+                    }
+                    out_variant.streams.push_back(std::move(bytes));
+                } else if (
+                    (stream["fill"].get_string().get(fill) == simdjson::SUCCESS) && (fill == "zero") &&
+                    (stream["byteStride"].get_uint64().get(fill_stride) == simdjson::SUCCESS) && (fill_stride == stride)
+                ) {
+                    out_variant.streams.emplace_back(byte_length, uint8_t{0});
+                } else {
+                    return "stream view mismatch";
+                }
+                ++stream_index;
+            }
+            return {};
+        };
+        std::string reason = read_variant(base_variant, *request.base_format, stored->base);
+        if (!reason.empty()) {
+            out_reason = "base " + reason;
+            return {};
+        }
+        if (request.optimized_format != nullptr) {
+            stored->optimized.emplace();
+            reason = read_variant(optimized_variant, *request.optimized_format, stored->optimized.value());
+            if (!reason.empty()) {
+                out_reason = "optimized " + reason;
+                return {};
+            }
+        }
+
+        // Float positions of the core from the base stream that holds them.
+        const erhe::dataformat::Attribute_stream position = request.base_format->find_attribute(erhe::dataformat::Vertex_attribute_usage::position, 0);
+        if ((position.attribute == nullptr) || (position.attribute->format != erhe::dataformat::Format::format_32_vec3_float)) {
+            out_reason = "base positions not float";
+            return {};
+        }
+        const std::size_t           position_stream = static_cast<std::size_t>(position.stream - request.base_format->streams.data());
+        const std::vector<uint8_t>& position_bytes  = stored->base.streams[position_stream];
+        stored->positions_xyz.resize(3 * position_count);
+        for (std::size_t i = 0; i < position_count; ++i) {
+            std::memcpy(&stored->positions_xyz[3 * i], position_bytes.data() + (i * position.stream->stride) + position.attribute->offset, 3 * sizeof(float));
+        }
+
+        const std::span<const uint32_t> index_span{reinterpret_cast<const uint32_t*>(indices.data()), index_count};
+        stored->prepared_data = validate(index_span, stored->positions_xyz, Validation_counting::accepted_only);
+        if (!stored->prepared_data) {
+            out_reason = "prepared data rejected";
+            return {};
+        }
+        stored->indices = std::move(indices);
+        return stored;
+    }
+
 private:
+    // Reads a file-backed (or copies a resident) prepared view into `out`,
+    // which has the view's size. Returns the failure reason, or empty.
+    [[nodiscard]] auto read_view_into(const Gltf_prepared_view& view, const std::span<std::byte> out) const -> std::string
+    {
+        if (view.is_resident) {
+            std::memcpy(out.data(), view.resident_bytes.data(), out.size());
+            return {};
+        }
+        if (!view.in_file || !origins || (view.file_index >= origins->files.size())) {
+            return "buffer not loaded";
+        }
+        if (!origins->source_files->read(view.file_index, view.file_offset, out)) {
+            return "bufferView outside its buffer";
+        }
+        return {};
+    }
+
     // Raw bufferView bytes of a prepared mesh data payload: the view must
     // exist, have no byteStride, be readable and hold exactly
     // expected_byte_length bytes (doc/gltf_extensions/ERHE_mesh_topology.md,
@@ -2278,6 +2585,60 @@ public:
     [[nodiscard]] auto load_prepared_data(const erhe::primitive::Triangle_soup& soup) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data> override
     {
         return prepared ? prepared->validate(soup) : std::shared_ptr<erhe::primitive::Prepared_primitive_data>{};
+    }
+
+    [[nodiscard]] auto load_stored_vertex_streams(
+        const erhe::primitive::Stored_vertex_stream_request& request,
+        std::string&                                         out_reason
+    ) const -> std::unique_ptr<erhe::primitive::Stored_vertex_streams> override
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        if (!prepared || prepared->gpu_streams_json.empty()) {
+            out_reason = "no stored streams";
+            return {};
+        }
+        if (indices_accessor >= accessors.size()) {
+            out_reason = "malformed indices";
+            return {};
+        }
+        const fastgltf::Accessor& index_accessor = accessors[indices_accessor];
+        if (
+            (index_accessor.componentType != fastgltf::ComponentType::UnsignedInt) ||
+            !index_accessor.bufferViewIndex.has_value() ||
+            (index_accessor.bufferViewIndex.value() >= views.size())
+        ) {
+            out_reason = "index format differs";
+            return {};
+        }
+        const View& index_view = views[index_accessor.bufferViewIndex.value()];
+        if (index_view.byte_stride.has_value() && (index_view.byte_stride.value() != sizeof(uint32_t))) {
+            out_reason = "index format differs";
+            return {};
+        }
+        const std::size_t index_count = index_accessor.count;
+        if ((index_accessor.byteOffset + (index_count * sizeof(uint32_t))) > index_view.byte_length) {
+            out_reason = "malformed indices";
+            return {};
+        }
+        if (!check_files()) {
+            out_reason = "source file changed";
+            return {};
+        }
+        std::vector<uint8_t> indices(index_count * sizeof(uint32_t));
+        if (!origins->source_files->read(
+            index_view.file_index,
+            index_view.file_offset + index_accessor.byteOffset,
+            std::span<std::byte>{reinterpret_cast<std::byte*>(indices.data()), indices.size()}
+        )) {
+            out_reason = "read failed";
+            return {};
+        }
+        bool has_vertex_colors = false;
+        for (const Attribute& attribute : attributes) {
+            has_vertex_colors = has_vertex_colors || (attribute.name == "COLOR_0");
+        }
+        return prepared->load_stored_streams(request, std::move(indices), index_count, has_vertex_colors, out_reason);
     }
 
     // The file must be the one the parse read: same size, same modification
@@ -2680,6 +3041,7 @@ public:
     Gltf_buffer_origins&                                   origins,
     const std::set<std::pair<std::size_t, std::size_t>>&   geometry_primitives,
     const std::map<std::pair<std::size_t, std::size_t>, std::vector<std::uint64_t>>& payload_views,
+    const std::set<std::uint64_t>&                         payload_accessors,
     std::size_t&                                           out_eager_byte_count,
     std::size_t&                                           out_lazy_view_count
 ) -> bool
@@ -2817,6 +3179,9 @@ public:
         const std::size_t view_index = accessor.bufferViewIndex.value();
         if (lazy_accessor[accessor_index] && !eager_accessor[accessor_index]) {
             view_has_lazy[view_index] = true;
+        } else if (payload_accessors.contains(accessor_index) && !eager_accessor[accessor_index]) {
+            // An ERHE_gpu_vertex_streams accessor: its view is read with the
+            // primitive's payload.
         } else {
             // Read through the asset, or by an extension that names it.
             view_is_needed[view_index] = true;
@@ -4285,6 +4650,7 @@ private:
         payload->marker_reason = read_mesh_optimized_metadata(primitive, json.optimized, payload->marker, payload->position_count);
         payload->topology_json = json.topology;
         payload->bvh_json      = json.bvh;
+        payload->gpu_streams_json = json.gpu_streams;
         payload->origins       = m_buffer_origins;
         payload->statistics    = m_prepared_statistics;
         for (const std::uint64_t view_index : collect_prepared_view_indices(json)) {
@@ -4294,6 +4660,7 @@ private:
             const fastgltf::BufferView& buffer_view = m_asset->bufferViews[view_index];
             Gltf_prepared_view view;
             view.has_stride  = buffer_view.byteStride.has_value();
+            view.byte_stride = buffer_view.byteStride.has_value() ? buffer_view.byteStride.value() : 0;
             view.byte_length = buffer_view.byteLength;
             const fastgltf::Buffer& buffer = m_asset->buffers.at(buffer_view.bufferIndex);
             if (is_buffer_resident(buffer)) {
@@ -6367,6 +6734,9 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         // The raw bufferViews the prepared mesh data extensions name, per
         // primitive (read with the primitive's payload).
         std::map<std::pair<std::size_t, std::size_t>, std::vector<std::uint64_t>> payload_views;
+        // The accessors only ERHE_gpu_vertex_streams names: nothing reads
+        // them through the asset.
+        std::set<std::uint64_t> payload_accessors;
         for (const auto& [key, captured] : parse_extras_context.mesh_primitive_extensions) {
             Prepared_extension_json json;
             for (const auto& [extension_name, extension_value] : captured.entries) {
@@ -6374,14 +6744,19 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     json.topology = extension_value;
                 } else if (extension_name == "ERHE_raytrace_bvh") {
                     json.bvh = extension_value;
+                } else if (extension_name == "ERHE_gpu_vertex_streams") {
+                    json.gpu_streams = extension_value;
                 }
             }
             std::vector<std::uint64_t> indices = collect_prepared_view_indices(json);
             if (!indices.empty()) {
                 payload_views[key] = std::move(indices);
             }
+            for (const std::uint64_t accessor_index : collect_gpu_stream_accessor_indices(json)) {
+                payload_accessors.insert(accessor_index);
+            }
         }
-        if (!load_eager_buffer_views(asset.get(), buffer_origins ? *buffer_origins : no_origins, geometry_primitives, payload_views, eager_byte_count, lazy_view_count)) {
+        if (!load_eager_buffer_views(asset.get(), buffer_origins ? *buffer_origins : no_origins, geometry_primitives, payload_views, payload_accessors, eager_byte_count, lazy_view_count)) {
             log_gltf->error("glTF load error: cannot read the buffers of '{}'", arguments.path.string());
             return {};
         }
@@ -6435,6 +6810,8 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     json.topology = extension_value;
                 } else if (extension_name == "ERHE_raytrace_bvh") {
                     json.bvh = extension_value;
+                } else if (extension_name == "ERHE_gpu_vertex_streams") {
+                    json.gpu_streams = extension_value;
                 }
             }
             if (json.optimized.empty()) {
@@ -7354,6 +7731,16 @@ private:
         return m_held_soups.emplace(&shape, shape.get_triangle_soup()).first->second;
     }
 
+    // The packed GPU vertex streams of one prepared core, both variants.
+    class Gpu_stream_pack
+    {
+    public:
+        const erhe::dataformat::Vertex_format* base_format     {nullptr};
+        const erhe::dataformat::Vertex_format* optimized_format{nullptr};
+        erhe::primitive::Packed_vertex_streams base;
+        erhe::primitive::Packed_vertex_streams optimized;
+    };
+
     std::unordered_map<erhe::primitive::Triangle_soup*, Export_entry> m_erhe_triangle_soup_entries;
     [[nodiscard]] auto process_triangle_soup(erhe::primitive::Primitive_render_shape& render_shape, erhe::primitive::Triangle_soup* triangle_soup) -> Export_entry
     {
@@ -7366,10 +7753,11 @@ private:
 
         Export_entry entry{};
         if (m_arguments.prepared_mesh_data == Prepared_mesh_data::write) {
-            erhe::primitive::Prepare_primitive_result result = take_prepared_primitive(render_shape, triangle_soup);
+            std::optional<Gpu_stream_pack>            gpu_stream_pack;
+            erhe::primitive::Prepare_primitive_result result = take_prepared_primitive(render_shape, triangle_soup, gpu_stream_pack);
             count_prepared_primitive(result);
             if (result.prepared.has_value()) {
-                write_prepared_primitive(entry, result.prepared.value());
+                write_prepared_primitive(entry, result.prepared.value(), gpu_stream_pack);
                 entry.retained_core = static_cast<bool>(result.prepared.value().retained_core);
                 m_erhe_triangle_soup_entries.insert({triangle_soup, entry});
                 return entry;
@@ -7389,6 +7777,7 @@ private:
     // up-front walk did not reach (a physics collider mesh) is prepared when
     // it is written.
     std::unordered_map<erhe::primitive::Triangle_soup*, erhe::primitive::Prepare_primitive_result> m_prepared_primitives;
+    std::unordered_map<erhe::primitive::Triangle_soup*, std::optional<Gpu_stream_pack>>           m_gpu_stream_packs; // packed by the preparation
     std::map<std::pair<std::size_t, std::size_t>, std::string>                                     m_prepared_primitive_extensions;
     bool                                                                                           m_uses_raytrace_bvh{false};
     bool                                                                                           m_uses_gpu_vertex_streams{false};
@@ -7434,41 +7823,65 @@ private:
         collect_soup_shapes(m_arguments.root_node, shapes);
         std::vector<std::pair<erhe::primitive::Triangle_soup*, erhe::primitive::Primitive_render_shape*>> work{shapes.begin(), shapes.end()};
         std::vector<erhe::primitive::Prepare_primitive_result> results(work.size());
+        // "Save for Quest": each task also packs its core's GPU vertex
+        // streams (ERHE_gpu_vertex_streams).
+        std::vector<std::optional<Gpu_stream_pack>> packs(work.size());
+        std::vector<double>                         pack_ms(work.size(), 0.0);
+        const Gltf_gpu_vertex_formats* const        gpu_formats = m_arguments.gpu_vertex_formats;
+        const auto prepare = [&work, &results, &packs, &pack_ms, gpu_formats](const std::size_t i) {
+            results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second);
+            if ((gpu_formats != nullptr) && results[i].prepared.has_value()) {
+                const std::chrono::steady_clock::time_point pack_start = std::chrono::steady_clock::now();
+                packs[i] = pack_gpu_vertex_streams(*gpu_formats, erhe::primitive::get_export_core(results[i].prepared.value()));
+                pack_ms[i] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pack_start).count();
+            }
+        };
         if ((m_arguments.executor != nullptr) && (work.size() > 1)) {
             ::tf::Taskflow taskflow;
             for (std::size_t i = 0, end = work.size(); i < end; ++i) {
-                taskflow.emplace(
-                    [&work, &results, i]() {
-                        results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second);
-                    }
-                );
+                taskflow.emplace([&prepare, i]() { prepare(i); });
             }
             erhe::task::run(*m_arguments.executor, taskflow).wait();
         } else {
             for (std::size_t i = 0, end = work.size(); i < end; ++i) {
-                results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second);
+                prepare(i);
             }
         }
         for (std::size_t i = 0, end = work.size(); i < end; ++i) {
             m_prepared_primitives.emplace(work[i].first, std::move(results[i]));
+            if (gpu_formats != nullptr) {
+                m_gpu_stream_packs.emplace(work[i].first, std::move(packs[i]));
+                m_prepared_statistics.gpu_vertex_stream_ms += pack_ms[i]; // summed task time
+            }
         }
         m_prepared_statistics.preparation_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
     }
 
     [[nodiscard]] auto take_prepared_primitive(
         erhe::primitive::Primitive_render_shape& render_shape,
-        erhe::primitive::Triangle_soup*          triangle_soup
+        erhe::primitive::Triangle_soup*          triangle_soup,
+        std::optional<Gpu_stream_pack>&          out_gpu_stream_pack
     ) -> erhe::primitive::Prepare_primitive_result
     {
         const auto it = m_prepared_primitives.find(triangle_soup);
         if (it != m_prepared_primitives.end()) {
             erhe::primitive::Prepare_primitive_result result = std::move(it->second);
             m_prepared_primitives.erase(it);
+            const auto pack = m_gpu_stream_packs.find(triangle_soup);
+            if (pack != m_gpu_stream_packs.end()) {
+                out_gpu_stream_pack = std::move(pack->second);
+                m_gpu_stream_packs.erase(pack);
+            }
             return result;
         }
         const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
         erhe::primitive::Prepare_primitive_result result = erhe::primitive::prepare_primitive_for_export(render_shape);
         m_prepared_statistics.preparation_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+        if ((m_arguments.gpu_vertex_formats != nullptr) && result.prepared.has_value()) {
+            const std::chrono::steady_clock::time_point pack_start = std::chrono::steady_clock::now();
+            out_gpu_stream_pack = pack_gpu_vertex_streams(*m_arguments.gpu_vertex_formats, erhe::primitive::get_export_core(result.prepared.value()));
+            m_prepared_statistics.gpu_vertex_stream_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pack_start).count();
+        }
         return result;
     }
 
@@ -7533,7 +7946,6 @@ private:
         const std::size_t                       stride,
         const std::size_t                       vertex_count,
         const std::vector<uint8_t>&             stream_bytes,
-        const std::string&                      name,
         const Accessor_bounds                   bounds
     ) -> std::size_t
     {
@@ -7547,7 +7959,7 @@ private:
             .min             = {},
             .bufferViewIndex = view_index,
             .sparse          = {},
-            .name            = FASTGLTF_STD_PMR_NS::string{name}
+            .name            = {} // unnamed: keeps the JSON (parsed whole at load) small
         };
         if (bounds == Accessor_bounds::min_max) {
             const std::size_t dimension = get_component_count(attribute.format);
@@ -7599,14 +8011,12 @@ private:
         return std::all_of(bytes.begin(), bytes.end(), [](const uint8_t value) { return value == 0; });
     }
 
-    // GPU-ready vertex streams of one prepared core (ERHE_gpu_vertex_streams):
-    // writes the index accessor, the base streams as the core accessors and
-    // the optimized streams, and returns the extension members; nullopt,
-    // writing nothing, when the layouts cannot express the core (the caller
-    // writes the plain core then).
-    [[nodiscard]] auto write_gpu_vertex_streams(Export_entry& entry, const erhe::primitive::Triangle_soup& core) -> std::optional<std::string>
+    // Packs one prepared core into the layouts (thread-safe: run by the
+    // parallel preparation); nullopt when the layouts cannot express it (the
+    // plain core is written then).
+    [[nodiscard]] static auto pack_gpu_vertex_streams(const Gltf_gpu_vertex_formats& formats, const erhe::primitive::Triangle_soup& core) -> std::optional<Gpu_stream_pack>
     {
-        const Gltf_gpu_vertex_formats& formats = *m_arguments.gpu_vertex_formats;
+        ERHE_PROFILE_FUNCTION();
         if (formats.index_type != erhe::dataformat::Format::format_32_scalar_uint) {
             return std::nullopt; // the core indices are UNSIGNED_INT
         }
@@ -7629,7 +8039,6 @@ private:
         if (!base.has_value() || !optimized.has_value()) {
             return std::nullopt;
         }
-        const std::size_t vertex_count = core.get_vertex_count();
         std::vector<bool> base_zero(base_format->streams.size());
         for (std::size_t i = 0; i < base_zero.size(); ++i) {
             base_zero[i] = is_all_zero(base->streams[i]);
@@ -7640,6 +8049,25 @@ private:
                 return std::nullopt; // a core attribute must be stored
             }
         }
+        return Gpu_stream_pack{
+            .base_format      = base_format,
+            .optimized_format = optimized_format,
+            .base             = std::move(base.value()),
+            .optimized        = std::move(optimized.value())
+        };
+    }
+
+    // GPU-ready vertex streams of one prepared core (ERHE_gpu_vertex_streams):
+    // writes the index accessor, the base streams as the core accessors and
+    // the optimized streams of `pack`, and returns the extension members.
+    [[nodiscard]] auto write_gpu_vertex_streams(Export_entry& entry, const erhe::primitive::Triangle_soup& core, Gpu_stream_pack& pack) -> std::string
+    {
+        const Gltf_gpu_vertex_formats&               formats          = *m_arguments.gpu_vertex_formats;
+        const erhe::dataformat::Vertex_format* const base_format      = pack.base_format;
+        const erhe::dataformat::Vertex_format* const optimized_format = pack.optimized_format;
+        erhe::primitive::Packed_vertex_streams* const base      = &pack.base;
+        erhe::primitive::Packed_vertex_streams* const optimized = &pack.optimized;
+        const std::size_t vertex_count = core.get_vertex_count();
 
         add_index_data_source(entry, vertex_count, core.index_data);
 
@@ -7678,7 +8106,9 @@ private:
             const std::string name         = vertex_attribute_usage_from_erhe(*attribute.attribute);
             const std::size_t accessor     = add_stream_accessor(
                 base_views[stream_index].value(), *base_attribute.attribute, base_attribute.stream->stride, vertex_count,
-                base->streams[stream_index], name, Accessor_bounds::min_max
+                base->streams[stream_index],
+                // glTF requires min / max on POSITION only.
+                (name == "POSITION") ? Accessor_bounds::min_max : Accessor_bounds::none
             );
             entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{name}, accessor);
         }
@@ -7687,10 +8117,11 @@ private:
         std::vector<std::optional<std::size_t>> optimized_views;
         const std::string optimized_streams_json = write_streams(*optimized_format, optimized->streams, optimized_views);
         std::string attributes_json;
+        // Hexadecimal floats: the loader reads the affines back bit for bit.
         const auto vec_json = [](const glm::vec4& v, const std::size_t first, const std::size_t count) -> std::string {
             std::string text = "[";
             for (std::size_t c = 0; c < count; ++c) {
-                text += fmt::format("{}{}", (c > 0) ? "," : "", v[static_cast<glm::length_t>(first + c)]);
+                text += fmt::format("{}\"{:a}\"", (c > 0) ? "," : "", v[static_cast<glm::length_t>(first + c)]);
             }
             return text + "]";
         };
@@ -7706,7 +8137,7 @@ private:
                 }
                 const std::size_t accessor = add_stream_accessor(
                     optimized_views[stream_index].value(), attribute, stream.stride, vertex_count,
-                    optimized->streams[stream_index], name, Accessor_bounds::none
+                    optimized->streams[stream_index], Accessor_bounds::none
                 );
                 std::string affine;
                 if (name == "POSITION") {
@@ -7729,14 +8160,14 @@ private:
         );
     }
 
-    void write_prepared_primitive(Export_entry& entry, const erhe::primitive::Prepared_primitive_export& prepared)
+    void write_prepared_primitive(Export_entry& entry, const erhe::primitive::Prepared_primitive_export& prepared, std::optional<Gpu_stream_pack>& gpu_stream_pack)
     {
         const erhe::primitive::Triangle_soup& core = erhe::primitive::get_export_core(prepared);
         std::optional<std::string> gpu_streams_members;
         if (m_arguments.gpu_vertex_formats != nullptr) {
-            const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-            gpu_streams_members = write_gpu_vertex_streams(entry, core);
-            m_prepared_statistics.gpu_vertex_stream_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+            if (gpu_stream_pack.has_value()) {
+                gpu_streams_members = write_gpu_vertex_streams(entry, core, gpu_stream_pack.value());
+            }
             if (gpu_streams_members.has_value()) {
                 ++m_prepared_statistics.gpu_vertex_stream_count;
             } else {
@@ -8835,7 +9266,7 @@ private:
             source_bytes.size()
         };
         const bool transcode_to_astc =
-            (m_arguments.texture_export == Gltf_texture_export::ktx2_astc_4x4) &&
+            is_astc_texture_export(m_arguments.texture_export) &&
             erhe::graphics::is_ktx2_basis(encoded_bytes);
         const bool raw_ktx2 = transcode_to_astc || erhe::graphics::is_ktx2_raw_blocks(encoded_bytes);
 
@@ -8934,7 +9365,10 @@ private:
                 reinterpret_cast<const std::uint8_t*>(pending.source_bytes.data()),
                 pending.source_bytes.size()
             };
-            pending.result = erhe::graphics::transcode_ktx2_basis_to_astc_4x4(source_bytes, pending.color_space, erhe::graphics::Ktx2_supercompression::zstd);
+            const erhe::graphics::Ktx2_supercompression supercompression = (m_arguments.texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed)
+                ? erhe::graphics::Ktx2_supercompression::none
+                : erhe::graphics::Ktx2_supercompression::zstd;
+            pending.result = erhe::graphics::transcode_ktx2_basis_to_astc_4x4(source_bytes, pending.color_space, supercompression);
         };
         if ((m_arguments.executor != nullptr) && (m_pending_ktx2_transcodes.size() > 1)) {
             ::tf::Taskflow taskflow;

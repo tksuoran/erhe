@@ -49,7 +49,9 @@ Each referenced image is a glTF image with a bufferView and `mimeType`
   chain of the source (`levelCount` > 0);
 - `supercompressionScheme` 0 (none; levels aligned to 16 bytes) or 2
   (Zstandard; each level compressed on its own, not aligned). erhe writes
-  Zstandard: the Bistro ASTC data compresses to about 22 % of its size;
+  Zstandard by default (the Bistro ASTC data compresses to about 22 % of
+  its size, and a Quest load is no slower than from uncompressed levels) and
+  none on request (`Gltf_texture_export::ktx2_astc_4x4_uncompressed`);
 - a Khronos basic data format descriptor: color model `KHR_DF_MODEL_ASTC`
   (162), BT.709 primaries, transfer function sRGB (2) or linear (1), texel
   block 4x4x1, `bytesPlane0` 16 (0 when supercompressed), one sample of 128

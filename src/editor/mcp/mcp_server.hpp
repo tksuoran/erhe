@@ -39,6 +39,9 @@ namespace erhe {
 namespace erhe::graphics {
     class Gpu_timer;
 }
+namespace erhe::gltf {
+    enum class Gltf_texture_export : unsigned int;
+}
 namespace erhe::imgui {
     class Imgui_host;
 }
@@ -896,9 +899,10 @@ private:
         std::weak_ptr<Scene_root> scene_root;
         std::filesystem::path     path;
         Save_job_source_binding   source_binding{Save_job_source_binding::keep};
+        erhe::gltf::Gltf_texture_export texture_export{0}; // scene_for_quest: the ASTC form (0 = source)
     };
     // Returns the job's status object (state "pending").
-    auto queue_save          (Save_job_kind kind, const std::shared_ptr<Scene_root>& scene_root, const std::filesystem::path& path, Save_job_source_binding source_binding) -> nlohmann::json;
+    auto queue_save          (Save_job_kind kind, const std::shared_ptr<Scene_root>& scene_root, const std::filesystem::path& path, Save_job_source_binding source_binding, erhe::gltf::Gltf_texture_export texture_export = erhe::gltf::Gltf_texture_export{0}) -> nlohmann::json;
     void run_queued_saves    ();
     void run_save            (const Queued_save& save);
     void update_save_job     (std::uint64_t job_id, const nlohmann::json& fields);

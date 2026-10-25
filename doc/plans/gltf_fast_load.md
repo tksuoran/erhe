@@ -1133,6 +1133,33 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    against step 4; a signature mismatch (quantization off) falls back and
    renders as the portable path.
 
+   Result (2026-10-25, Release; Quest 3 off-head, `cpu_mesh_data` release,
+   64 MiB budget): `gpu vertex streams: 3852 stored, 0 portable` on Quest
+   and on desktop (the Quest signatures equal the desktop default ones, so
+   a desktop Save for Quest file is GPU-ready on both). No soup is read or
+   packed at load; the affines are hexadecimal floats in the file and reach
+   `Buffer_mesh` bit for bit (test `stored_vertex_streams_build_like_the_soup`:
+   same uploaded bytes, affines and bounds as the soup build, memcmp).
+   Quest: build phase 2.2-2.3 s (soup path, same APK) -> 1.3-1.5 s; listed /
+   idle 4.3-5.3 s / 4.7-5.3 s (step 4: 5.6 s; soup path same APK 5.0-5.6 /
+   5.5-5.6 s); VmHWM 853-894 MB (step 4: 798-809; soup path same APK 825):
+   the stored path peaks 30-70 MB higher, cause not found (the JSON grew
+   9.5 -> 15.7 MB, but desktop peak working set differs by 10-15 MB only;
+   the budget high-water is the full 64 MiB in both paths). Desktop: renders
+   identical with the streams used, ignored (`use_gpu_vertex_streams` off)
+   and as the step 4 file (md5 74c47fa9); with `quantize_vertex_positions`
+   off the optimized signature differs, all 3852 fall back and render as the
+   portable path (md5 68530704 both). The writer now packs in the parallel
+   preparation: Save for Quest 8.5 s -> 6.3 s, bytes identical.
+
+   D3 measurement (same scene, Quest): Zstandard levels 1.05 GB file, listed
+   4.3-5.3 s; uncompressed levels 2.46 GB file, listed 5.0-5.1 s, VmHWM
+   841-850 MB. Load time is the same within noise (the load is bound by the
+   memory budget and the upload rate, not by the Zstandard decode), so the
+   default stays Zstandard: 2.3x smaller file, no slower.
+   `save_scene_for_quest {texture_supercompression: "none"}` writes the
+   other form.
+
 ### Open items
 
 - Codegen: a field marked `removed_in` leaves a `[[deprecated]]` member in
@@ -1162,8 +1189,9 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
 - D2: `load.max_in_flight_bytes` defaults to 128 MiB on desktop and 64 MiB
   under OpenXR.
 - D3: "Save for Quest" offers both texture forms as an option: Zstandard
-  supercompressed ASTC and raw ASTC levels. Step 9 measures the Quest load
-  time of both, and the measurement picks the default.
+  supercompressed ASTC and raw ASTC levels. Step 9 measured the Quest load
+  time of both (equal within noise); the default is Zstandard (2.3x smaller
+  file).
 - D4: "Save for Quest" onto the scene's own source file is refused.
 - D5: the lazy base variant on Quest is item 10, after item 9; it is not
   part of item 9's commits.

@@ -5,6 +5,8 @@
 #include "erhe_primitive/prepared_primitive.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
+#include "erhe_primitive/stored_vertex_streams.hpp"
+#include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_log/log.hpp"
 #include "erhe_math/math_util.hpp"
@@ -468,6 +470,54 @@ Primitive_raytrace::Primitive_raytrace(const erhe::math::Aabb& aabb)
     m_rt_geometry->set_user_data(nullptr);
 }
 
+Primitive_raytrace::Primitive_raytrace(
+    const std::span<const float>                  positions_xyz,
+    const std::span<const uint32_t>               indices,
+    const erhe::math::Aabb&                       bounding_box,
+    const erhe::math::Sphere&                     bounding_sphere,
+    std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    constexpr std::size_t vertex_stride = 3 * sizeof(float);
+    constexpr std::size_t index_stride  = sizeof(uint32_t);
+    const std::size_t     vertex_count  = positions_xyz.size() / 3;
+    const std::size_t     index_count   = indices.size();
+    if ((vertex_count == 0) || (index_count < 3)) {
+        return; // the empty raytrace, as for a mesh without facets
+    }
+    // Tail padding of 16 bytes is required by Embree 4 for shared buffers
+    constexpr std::size_t raytrace_buffer_tail_padding = 16;
+    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("stored_streams_raytrace_vertex", vertex_count * vertex_stride, raytrace_buffer_tail_padding);
+    m_rt_index_buffer  = std::make_shared<erhe::buffer::Cpu_buffer>("stored_streams_raytrace_index",  index_count * index_stride,   raytrace_buffer_tail_padding);
+    memcpy(m_rt_vertex_buffer->get_span().data(), positions_xyz.data(), vertex_count * vertex_stride);
+    memcpy(m_rt_index_buffer ->get_span().data(), indices.data(),       index_count * index_stride);
+
+    m_rt_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
+    m_rt_mesh.triangle_fill_indices.first_index    = 0;
+    m_rt_mesh.triangle_fill_indices.index_count    = index_count;
+    m_rt_mesh.vertex_buffer_ranges.push_back(
+        Buffer_range{
+            .count        = vertex_count,
+            .element_size = vertex_stride,
+            .byte_offset  = 0
+        }
+    );
+    m_rt_mesh.index_buffer_range = Buffer_range{
+        .count        = index_count,
+        .element_size = index_stride,
+        .byte_offset  = 0
+    };
+    m_rt_mesh.bounding_box    = bounding_box;
+    m_rt_mesh.bounding_sphere = bounding_sphere;
+    // Identity facet mapping, as for the soup raytrace.
+    m_identity_facet_map = true;
+
+    make_raytrace_geometry(std::move(prebuilt));
+    m_rt_geometry->set_user_data(nullptr);
+}
+
 auto Primitive_raytrace::is_proxy() const -> bool
 {
     return m_is_proxy;
@@ -536,7 +586,7 @@ auto Primitive_raytrace::has_raytrace_triangles() const -> bool
         (m_rt_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0);
 }
 
-void Primitive_raytrace::make_raytrace_geometry()
+void Primitive_raytrace::make_raytrace_geometry(std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt)
 {
     // Distinct label for AABB proxies: the "BVH build <label> in <n> ms" log
     // line is the only visible difference between a 12-triangle proxy and a
@@ -546,6 +596,10 @@ void Primitive_raytrace::make_raytrace_geometry()
         m_is_proxy ? "rt_geometry_proxy" : "rt_geometry",
         erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
     );
+    if (prebuilt) {
+        static_cast<void>(m_rt_geometry->set_prebuilt_bvh(std::move(*prebuilt)));
+        prebuilt.reset();
+    }
 
     ERHE_VERIFY(m_rt_mesh.vertex_buffer_ranges.size() == 1);
     const auto& vertex_buffer_range   = m_rt_mesh.vertex_buffer_ranges.front();
@@ -810,6 +864,12 @@ Triangle_soup_source::~Triangle_soup_source() noexcept = default;
 
 auto Triangle_soup_source::load_prepared_data(const Triangle_soup&) const -> std::shared_ptr<Prepared_primitive_data>
 {
+    return {};
+}
+
+auto Triangle_soup_source::load_stored_vertex_streams(const Stored_vertex_stream_request&, std::string& out_reason) const -> std::unique_ptr<Stored_vertex_streams>
+{
+    out_reason = "no stored streams";
     return {};
 }
 
@@ -1422,6 +1482,26 @@ Primitive_render_shape::Primitive_render_shape(Buffer_mesh&& renderable_mesh, El
     m_element_mappings = std::move(element_mappings);
 }
 
+auto Primitive_render_shape::install_stored_build(
+    Buffer_mesh&&                            buffer_mesh,
+    std::shared_ptr<Prepared_primitive_data> prepared_data,
+    std::optional<Primitive_raytrace>&&      raytrace
+) -> bool
+{
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (!m_payload_pending) {
+        return false;
+    }
+    m_renderable_mesh = std::move(buffer_mesh);
+    m_prepared_data   = std::move(prepared_data);
+    if (raytrace.has_value() && !m_raytrace.has_raytrace_triangles()) {
+        m_raytrace = std::move(raytrace.value());
+    }
+    m_payload_pending = false;
+    return true;
+}
+
 auto Primitive_render_shape::has_buffer_mesh_triangles() const -> bool
 {
     const std::lock_guard<std::mutex> state_lock{m_state_mutex};
@@ -1661,16 +1741,20 @@ auto pack_triangle_soup_streams(
     };
 }
 
-auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>
+namespace {
+
+// The index and vertex range allocations of a fill-only build of
+// vertex_count / index_count, one atomic multi-pool transaction, and the
+// lockstep check of the vertex streams (see below). False when an
+// allocation fails or the streams are out of lockstep.
+[[nodiscard]] auto allocate_fill_buffer_mesh(
+    Buffer_mesh&       buffer_mesh,
+    const Buffer_info& buffer_info,
+    const std::size_t  vertex_count,
+    const std::size_t  index_count,
+    const char* const  caller
+) -> bool
 {
-    // TODO Use index_type from buffer_info
-    //const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
-    const std::size_t      source_vertex_stride  = triangle_soup.vertex_format.streams.front().stride;
-    const std::size_t      vertex_count          = triangle_soup.vertex_data.size() / source_vertex_stride;
-    const std::size_t      index_count           = triangle_soup.index_data.size();
-
-    Buffer_mesh buffer_mesh;
-
     {
         // One atomic multi-pool allocation transaction per mesh - see
         // buffer_mesh_allocation_mutex() (primitive_builder.hpp).
@@ -1678,7 +1762,7 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
 
         Buffer_sink_allocation index_sink_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, index_count);
         if (index_sink_allocation.range.count == 0) {
-            return std::optional<Buffer_mesh>{};
+            return false;
         }
 
         buffer_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
@@ -1687,14 +1771,12 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
         buffer_mesh.index_buffer_range                   = index_sink_allocation.range;
         buffer_mesh.index_allocation                     = std::move(index_sink_allocation.allocation);
         buffer_mesh.vertex_input_key                     = buffer_info.vertex_input_key;
-        buffer_mesh.has_vertex_colors                    =
-            triangle_soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0).attribute != nullptr;
 
         for (std::size_t i = 0, end = buffer_info.vertex_format.streams.size(); i < end; ++i) {
             const erhe::dataformat::Vertex_stream& stream = buffer_info.vertex_format.streams.at(i);
             Buffer_sink_allocation vertex_sink_allocation = buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(stream, vertex_count);
             if (vertex_sink_allocation.range.count == 0) {
-                return std::optional<Buffer_mesh>{};
+                return false;
             }
             buffer_mesh.vertex_buffer_ranges.emplace_back(vertex_sink_allocation.range);
             buffer_mesh.vertex_allocations.emplace_back(std::move(vertex_sink_allocation.allocation));
@@ -1719,17 +1801,38 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
                 (range.buffer_id != range_0.buffer_id)
             ) {
                 log_primitive->error(
-                    "build_buffer_mesh_from_triangle_soup(): vertex stream allocations out of lockstep "
+                    "{}: vertex stream allocations out of lockstep "
                     "(stream 0: pool {} buffer {} byte_offset {} stride {}; "
                     "stream {}: pool {} buffer {} byte_offset {} stride {}) - mesh skipped",
+                    caller,
                     range_0.pool_id, range_0.buffer_id, range_0.byte_offset, range_0.element_size,
                     stream,
                     range.pool_id, range.buffer_id, range.byte_offset, range.element_size
                 );
-                return std::optional<Buffer_mesh>{};
+                return false;
             }
         }
     }
+
+    return true;
+}
+
+} // anonymous namespace
+
+auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>
+{
+    // TODO Use index_type from buffer_info
+    //const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
+    const std::size_t      source_vertex_stride  = triangle_soup.vertex_format.streams.front().stride;
+    const std::size_t      vertex_count          = triangle_soup.vertex_data.size() / source_vertex_stride;
+    const std::size_t      index_count           = triangle_soup.index_data.size();
+
+    Buffer_mesh buffer_mesh;
+    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, vertex_count, index_count, "build_buffer_mesh_from_triangle_soup()")) {
+        return std::optional<Buffer_mesh>{};
+    }
+    buffer_mesh.has_vertex_colors =
+        triangle_soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0).attribute != nullptr;
 
     const Buffer_range& index_range = buffer_mesh.index_buffer_range;
 
@@ -2298,6 +2401,127 @@ auto Primitive::release_triangle_soup() -> bool
 auto Primitive::is_prepared() const -> bool
 {
     return render_shape && (render_shape->get_prepared_data() != nullptr);
+}
+
+namespace {
+
+// One stored variant enqueued as it is: the ranges allocated as the soup
+// build allocates them, the bytes moved into the sinks.
+[[nodiscard]] auto build_stored_buffer_mesh(
+    Stored_vertex_variant&&      variant,
+    std::vector<uint8_t>&&       indices,
+    const Stored_vertex_streams& stored,
+    const erhe::math::Aabb&      bounding_box,
+    const erhe::math::Sphere&    bounding_sphere,
+    const Buffer_info&           buffer_info
+) -> std::optional<Buffer_mesh>
+{
+    if (variant.streams.size() != buffer_info.vertex_format.streams.size()) {
+        return std::optional<Buffer_mesh>{};
+    }
+    Buffer_mesh buffer_mesh;
+    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, stored.vertex_count, stored.index_count, "stored vertex streams build")) {
+        return std::optional<Buffer_mesh>{};
+    }
+    buffer_mesh.has_vertex_colors     = stored.has_vertex_colors;
+    buffer_mesh.bounding_box          = bounding_box;
+    buffer_mesh.bounding_sphere       = bounding_sphere;
+    buffer_mesh.position_quantization = stored.position_quantization;
+    buffer_mesh.texcoord_quantization = stored.texcoord_quantization;
+    buffer_info.index_buffer_sink.enqueue_index_data(buffer_mesh.index_buffer_range, std::move(indices));
+    for (std::size_t i = 0, end = variant.streams.size(); i < end; ++i) {
+        buffer_info.vertex_buffer_sink.enqueue_vertex_data(buffer_mesh.vertex_buffer_ranges[i], std::move(variant.streams[i]));
+    }
+    return buffer_mesh;
+}
+
+} // anonymous namespace
+
+auto Primitive::make_stored_meshes(const Build_info& build_info, std::string& out_reason) -> Stored_build_result
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!render_shape || !render_shape->is_payload_pending()) {
+        out_reason = "payload not deferred";
+        return Stored_build_result::declined;
+    }
+    const std::shared_ptr<const Triangle_soup_source> source = render_shape->get_triangle_soup_source();
+    if (!source) {
+        out_reason = "no source";
+        return Stored_build_result::declined;
+    }
+    const Buffer_info& buffer_info = build_info.buffer_info;
+    const bool         optimize    = buffer_info.optimize_meshes && (buffer_info.optimized_vertex_format != nullptr);
+    const Stored_vertex_stream_request request{
+        .base_format      = &buffer_info.vertex_format,
+        .optimized_format = optimize ? buffer_info.optimized_vertex_format : nullptr,
+        .index_type       = buffer_info.index_type,
+        .encoding_version = vertex_encoding_version
+    };
+    std::unique_ptr<Stored_vertex_streams> stored = source->load_stored_vertex_streams(request, out_reason);
+    if (!stored) {
+        return Stored_build_result::declined;
+    }
+    const Triangle_soup_counts counts = render_shape->get_triangle_soup_counts();
+    if ((stored->vertex_count != counts.vertex_count) || (stored->index_count != counts.index_count)) {
+        out_reason = "counts differ";
+        return Stored_build_result::declined;
+    }
+
+    // The bounds the soup build computes, from the same float positions.
+    erhe::math::Point_vector_bounding_volume_source positions{stored->vertex_count};
+    for (std::size_t i = 0; i < stored->vertex_count; ++i) {
+        positions.add(stored->positions_xyz[(3 * i) + 0], stored->positions_xyz[(3 * i) + 1], stored->positions_xyz[(3 * i) + 2]);
+    }
+    erhe::math::Aabb   bounding_box{};
+    erhe::math::Sphere bounding_sphere{};
+    erhe::math::calculate_bounding_volume(positions, bounding_box, bounding_sphere);
+
+    // The raytrace before the indices move into the sinks.
+    std::optional<Primitive_raytrace>        raytrace;
+    std::shared_ptr<Prepared_primitive_data> prepared_data = stored->prepared_data;
+    if (prepared_data && prepared_data->bvh.has_value()) {
+        std::unique_ptr<erhe::raytrace::Prebuilt_bvh> bvh = std::make_unique<erhe::raytrace::Prebuilt_bvh>(std::move(prepared_data->bvh.value()));
+        prepared_data->bvh.reset();
+        const std::span<const uint32_t> indices{reinterpret_cast<const uint32_t*>(stored->indices.data()), stored->index_count};
+        raytrace.emplace(std::span<const float>{stored->positions_xyz}, indices, bounding_box, bounding_sphere, std::move(bvh));
+        if (!raytrace->has_raytrace_triangles() || (raytrace->get_bvh_source() != static_cast<unsigned int>(erhe::raytrace::Bvh_source::prebuilt))) {
+            // As make_prepared_raytrace(): the caller takes the proxy +
+            // deferred raytrace path.
+            log_primitive->warn("stored vertex streams: stored BVH not used - falling back to the deferred raytrace");
+            raytrace.reset();
+        }
+    }
+    stored->positions_xyz = std::vector<float>{};
+
+    std::optional<Buffer_mesh> optimized_mesh;
+    if (stored->optimized.has_value()) {
+        const Buffer_info optimized_buffer_info{
+            .normal_style       = buffer_info.normal_style,
+            .index_type         = buffer_info.index_type,
+            .vertex_format      = *buffer_info.optimized_vertex_format,
+            .vertex_buffer_sink = buffer_info.vertex_buffer_sink,
+            .index_buffer_sink  = buffer_info.index_buffer_sink,
+            .vertex_input_key   = buffer_info.optimized_vertex_input_key
+        };
+        std::vector<uint8_t> optimized_indices = stored->indices; // both variants upload the shared indices
+        optimized_mesh = build_stored_buffer_mesh(std::move(stored->optimized.value()), std::move(optimized_indices), *stored, bounding_box, bounding_sphere, optimized_buffer_info);
+        if (!optimized_mesh.has_value()) {
+            return Stored_build_result::failed;
+        }
+    }
+    std::optional<Buffer_mesh> base_mesh = build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, buffer_info);
+    if (!base_mesh.has_value()) {
+        return Stored_build_result::failed;
+    }
+    if (!render_shape->install_stored_build(std::move(base_mesh.value()), std::move(prepared_data), std::move(raytrace))) {
+        out_reason = "payload loaded meanwhile";
+        return Stored_build_result::declined;
+    }
+    if (optimized_mesh.has_value() && !optimized_render_shape) {
+        publish_optimized_render_shape(std::make_shared<Primitive_render_shape>(std::move(optimized_mesh.value()), Element_mappings{}));
+    }
+    return Stored_build_result::built;
 }
 
 auto Primitive::make_prepared_meshes(const Build_info& build_info) -> bool

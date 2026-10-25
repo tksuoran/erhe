@@ -6,10 +6,11 @@ Stability: experimental
 
 erhe project. Draft vendor extension. The plan that introduces it is
 [`../plans/gltf_fast_load.md`](../plans/gltf_fast_load.md) ("Item 9:
-streaming load"): "Save for Quest" writes it (step 8, landed) and the loader
-uses it (step 9). The writer is `erhe::gltf::export_gltf()` with
-`Gltf_export_arguments::gpu_vertex_formats` (`doc/erhe/gltf.md` "GPU vertex
-streams on export").
+streaming load"): "Save for Quest" writes it and the erhe loader uploads the
+stored streams (steps 8 and 9). The writer is `erhe::gltf::export_gltf()`
+with `Gltf_export_arguments::gpu_vertex_formats`, the reader
+`Triangle_soup_source::load_stored_vertex_streams()` (`doc/erhe/gltf.md` "GPU
+vertex streams on export" and "Stored vertex streams on load").
 
 ## Dependencies
 
@@ -86,8 +87,9 @@ A primitive carrying the extension satisfies, in addition to the
 | `_WEIGHTS_IMPLICIT` | optimized (skinned) | VEC3 UNSIGNED_SHORT normalized | the three largest weights; the fourth is max(0, 1 - sum) |
 
 The `base` variant names no attributes: its attributes are the core ones.
-`scale` and `offset` hold float values written with float round-trip
-precision (9 significant digits) and are read back as the same float.
+`scale` and `offset` are arrays of strings, each a float value written as
+a C99 hexadecimal floating-point literal (`%a`, for example `"0x1.4d2bp+6"`),
+so the loader reads back exactly the bits the encoder used.
 
 ### Signature
 
@@ -125,10 +127,10 @@ vertex input, attribute alignment); the signature captures that as layout.
             "signature": "s0=8:position.0=16_vec3_snorm@0|s1=24:...|s2=4:custom.1=8_vec2_unorm@0",
             "streams": [{"bufferView": 42}, {"bufferView": 43}, {"fill": "zero", "byteStride": 4}],
             "attributes": {
-                "POSITION":        {"accessor": 90, "scale": [4.1, 2.0, 7.3], "offset": [0.5, 2.0, -1.0]},
+                "POSITION":        {"accessor": 90, "scale": ["0x1.0666p+2", "0x1p+1", "0x1.d33334p+2"], "offset": ["0x1p-1", "0x1p+1", "-0x1p+0"]},
                 "_TBN_QUATERNION": {"accessor": 91},
-                "TEXCOORD_0":      {"accessor": 92, "scale": [3.0, 3.0], "offset": [-1.0, 0.0]},
-                "TEXCOORD_1":      {"accessor": 93, "scale": [1.0, 1.0], "offset": [0.0, 0.0]},
+                "TEXCOORD_0":      {"accessor": 92, "scale": ["0x1.8p+1", "0x1.8p+1"], "offset": ["-0x1p+0", "0x0p+0"]},
+                "TEXCOORD_1":      {"accessor": 93, "scale": ["0x1p+0", "0x1p+0"], "offset": ["0x0p+0", "0x0p+0"]},
                 "TEXCOORD_2":      {"accessor": 94},
                 "COLOR_0":         {"accessor": 95}
             }
@@ -146,15 +148,18 @@ vertex input, attribute alignment); the signature captures that as layout.
 
 ## Validation / fallback
 
-Per variant, the stored streams are used only when all hold: `version` is 1;
-`signature` equals the running layout's signature for that variant;
-`encoding_version` equals the running encoders'; every stored stream's
-bufferView is `byteLength` = vertex count * stride with `byteStride` = stride;
-every zero-filled stream's `byteStride` equals the running stride. Otherwise
-the loader builds that variant from the core accessors, as for a primitive
-without the extension. For every primitive the loader checks that all
-indices are below the vertex count (GPU safety) and the `ERHE_mesh_optimized`
-content hash; stream bytes are otherwise trusted.
+A loader uses the stored streams of a primitive only when all hold for
+every variant it builds: `version` is 1; `signature` equals the running
+layout's signature for that variant; `encoding_version` equals the running
+encoders'; every stored stream's bufferView is `byteLength` = vertex count *
+stride with `byteStride` = stride; every zero-filled stream's `byteStride`
+equals the running stride; the affines parse. Otherwise it builds the
+primitive from the core accessors, as one without the extension (the erhe
+loader decides per primitive, both variants together, and logs one line per
+file: `gpu vertex streams: N stored, M portable (reasons)`). For every
+primitive the loader checks that all indices are below the vertex count (GPU
+safety) and the `ERHE_mesh_optimized` content hash and topology over the
+stored base positions; stream bytes are otherwise trusted.
 
 ## Schema
 

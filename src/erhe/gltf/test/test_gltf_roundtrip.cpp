@@ -5,6 +5,8 @@
 #include "gltf_test_util.hpp"
 
 #include "erhe_item/item.hpp"
+#include "erhe_primitive/build_info.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_primitive/material.hpp"
@@ -25,6 +27,7 @@
 #include <simdjson.h>
 #include <taskflow/taskflow.hpp>
 
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <chrono>
@@ -774,10 +777,233 @@ TEST(Gltf_roundtrip, gpu_vertex_streams_hold_the_loader_pack)
             ASSERT_EQ(length, pack->streams[i].size());
             EXPECT_EQ(std::memcmp(chunks.bin.data() + offset, pack->streams[i].data(), length), 0) << "stream " << i;
         }
+        // The affines are hexadecimal floats, exact to the bit.
         const simdjson::dom::element position = optimized["attributes"]["POSITION"];
-        EXPECT_FLOAT_EQ(static_cast<float>(position["scale"].at(0).get_double().value()), pack->position_quantization.scale.x);
-        EXPECT_FLOAT_EQ(static_cast<float>(position["offset"].at(2).get_double().value()), pack->position_quantization.offset.z);
+        const auto hex_float = [](const simdjson::dom::element element) -> float {
+            const std::string text{element.get_string().value()};
+            return static_cast<float>(std::strtod(text.c_str(), nullptr));
+        };
+        for (glm::length_t c = 0; c < 3; ++c) {
+            const float scale  = hex_float(position["scale" ].at(static_cast<std::size_t>(c)));
+            const float offset = hex_float(position["offset"].at(static_cast<std::size_t>(c)));
+            EXPECT_EQ(std::memcmp(&scale,  &pack->position_quantization.scale [c], sizeof(float)), 0);
+            EXPECT_EQ(std::memcmp(&offset, &pack->position_quantization.offset[c], sizeof(float)), 0);
+        }
     }
+}
+
+// Records what a build enqueues: every allocation gets its own pool id at
+// offset 0 (the lockstep check sees one buffer), the bytes kept by pool id.
+class Recording_buffer_sink
+    : public erhe::primitive::Vertex_buffer_sink
+    , public erhe::primitive::Index_buffer_sink
+{
+public:
+    auto allocate_vertex_buffer_range(const erhe::dataformat::Vertex_stream& vertex_stream, const std::size_t vertex_count) -> erhe::primitive::Buffer_sink_allocation override
+    {
+        return allocate(vertex_count, vertex_stream.stride);
+    }
+    void enqueue_vertex_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data) override
+    {
+        bytes.at(buffer_range.pool_id) = std::move(data);
+    }
+    void vertex_writer_ready(erhe::primitive::Vertex_buffer_writer&) override
+    {
+    }
+    auto allocate_index_buffer_range(const erhe::dataformat::Format index_format, const std::size_t index_count) -> erhe::primitive::Buffer_sink_allocation override
+    {
+        return allocate(index_count, erhe::dataformat::get_format_size_bytes(index_format));
+    }
+    void enqueue_index_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data) override
+    {
+        bytes.at(buffer_range.pool_id) = std::move(data);
+    }
+    void index_writer_ready(erhe::primitive::Index_buffer_writer&) override
+    {
+    }
+
+    [[nodiscard]] auto get(const erhe::primitive::Buffer_range& range) const -> const std::vector<uint8_t>&
+    {
+        return bytes.at(range.pool_id);
+    }
+
+    std::vector<std::vector<uint8_t>> bytes;
+
+private:
+    auto allocate(const std::size_t count, const std::size_t element_size) -> erhe::primitive::Buffer_sink_allocation
+    {
+        bytes.emplace_back();
+        return erhe::primitive::Buffer_sink_allocation{
+            .range = erhe::primitive::Buffer_range{
+                .count        = count,
+                .element_size = element_size,
+                .byte_offset  = 0,
+                .pool_id      = bytes.size() - 1,
+                .buffer_id    = 0
+            },
+            .allocation = {}
+        };
+    }
+};
+
+// The uploaded bytes and the decoder-facing fields of two builds of one
+// variant are identical: indices, every vertex stream, the stored affines
+// (memcmp, bit for bit), bounds and the color flag.
+void expect_same_buffer_mesh(
+    const erhe::primitive::Buffer_mesh& a, const Recording_buffer_sink& a_sink,
+    const erhe::primitive::Buffer_mesh& b, const Recording_buffer_sink& b_sink
+)
+{
+    EXPECT_EQ(a_sink.get(a.index_buffer_range), b_sink.get(b.index_buffer_range));
+    ASSERT_EQ(a.vertex_buffer_ranges.size(), b.vertex_buffer_ranges.size());
+    for (std::size_t i = 0; i < a.vertex_buffer_ranges.size(); ++i) {
+        EXPECT_EQ(a_sink.get(a.vertex_buffer_ranges[i]), b_sink.get(b.vertex_buffer_ranges[i])) << "stream " << i;
+    }
+    EXPECT_EQ(std::memcmp(&a.position_quantization, &b.position_quantization, sizeof(a.position_quantization)), 0);
+    EXPECT_EQ(std::memcmp(&a.texcoord_quantization, &b.texcoord_quantization, sizeof(a.texcoord_quantization)), 0);
+    EXPECT_EQ(std::memcmp(&a.bounding_box,          &b.bounding_box,          sizeof(a.bounding_box)), 0);
+    EXPECT_EQ(std::memcmp(&a.bounding_sphere,       &b.bounding_sphere,       sizeof(a.bounding_sphere)), 0);
+    EXPECT_EQ(a.has_vertex_colors, b.has_vertex_colors);
+    EXPECT_EQ(a.triangle_fill_indices.index_count, b.triangle_fill_indices.index_count);
+    EXPECT_EQ(a.vertex_input_key, b.vertex_input_key);
+}
+
+// The loader's stored-stream build (Primitive::make_stored_meshes()) gives
+// the same GPU data as the soup build of the same file: the bytes, the
+// affines read back bit-exactly from the hexadecimal floats, the bounds;
+// a layout that differs from the stored signature is declined and the soup
+// path still loads.
+TEST(Gltf_roundtrip, stored_vertex_streams_build_like_the_soup)
+{
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = erhe_gltf_test::parse_file(data_path("variants.gltf"), source_scene);
+    static_cast<void>(source);
+    const auto [base_format, optimized_format] = make_test_gpu_formats();
+    const erhe::gltf::Gltf_gpu_vertex_formats formats{
+        .base              = &base_format,
+        .base_skinned      = &base_format,
+        .optimized         = &optimized_format,
+        .optimized_skinned = &optimized_format,
+        .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+        .encoding_version  = erhe::primitive::vertex_encoding_version
+    };
+    erhe::gltf::Gltf_export_arguments arguments{
+        .root_node          = *source_scene.get_root_node(),
+        .binary             = true,
+        .prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write
+    };
+    arguments.gpu_vertex_formats = &formats;
+    const std::string glb = erhe::gltf::export_gltf(arguments);
+    ASSERT_FALSE(glb.empty());
+    const std::filesystem::path path = write_temporary_file("stored_streams.glb", glb);
+
+    const auto parse_deferred = [&](erhe::scene::Scene& scene) -> erhe::gltf::Gltf_data {
+        tf::Executor executor{1};
+        return erhe::gltf::parse_gltf(
+            erhe::gltf::Gltf_parse_arguments{
+                .executor     = executor,
+                .root_node    = scene.get_root_node(),
+                .path         = path,
+                .parallel     = false,
+                .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
+            }
+        );
+    };
+    const auto get_primitives = [](const erhe::gltf::Gltf_data& data) -> std::vector<std::shared_ptr<erhe::primitive::Primitive>> {
+        std::vector<std::shared_ptr<erhe::primitive::Primitive>> primitives;
+        const std::shared_ptr<erhe::scene::Node> panel = find_by_name(data.nodes, "Panel");
+        EXPECT_TRUE(panel);
+        if (panel) {
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : erhe::scene::get_mesh(panel.get())->get_primitives()) {
+                primitives.push_back(mesh_primitive.primitive);
+            }
+        }
+        return primitives;
+    };
+    const auto make_build_info = [&](Recording_buffer_sink& sink, const erhe::dataformat::Vertex_format& optimized) -> erhe::primitive::Build_info {
+        erhe::primitive::Build_info build_info{
+            .primitive_types = {.fill_triangles = true},
+            .buffer_info     = {
+                .normal_style       = erhe::primitive::Normal_style::corner_normals,
+                .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
+                .vertex_format      = base_format,
+                .vertex_buffer_sink = sink,
+                .index_buffer_sink  = sink,
+                .vertex_input_key   = 1
+            }
+        };
+        build_info.buffer_info.optimize_meshes            = true;
+        build_info.buffer_info.optimized_vertex_format    = &optimized;
+        build_info.buffer_info.optimized_vertex_input_key = 2;
+        return build_info;
+    };
+
+    erhe::scene::Scene    stored_scene{"stored", nullptr};
+    erhe::gltf::Gltf_data stored_data = parse_deferred(stored_scene);
+    erhe::scene::Scene    soup_scene{"soup", nullptr};
+    erhe::gltf::Gltf_data soup_data = parse_deferred(soup_scene);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive>> stored_primitives = get_primitives(stored_data);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive>> soup_primitives   = get_primitives(soup_data);
+    ASSERT_EQ(stored_primitives.size(), 2u);
+    ASSERT_EQ(soup_primitives.size(),   2u);
+
+    Recording_buffer_sink             stored_sink;
+    Recording_buffer_sink             soup_sink;
+    const erhe::primitive::Build_info stored_build_info = make_build_info(stored_sink, optimized_format);
+    const erhe::primitive::Build_info soup_build_info   = make_build_info(soup_sink,   optimized_format);
+    for (std::size_t i = 0; i < 2; ++i) {
+        std::string reason;
+        EXPECT_EQ(stored_primitives[i]->make_stored_meshes(stored_build_info, reason), erhe::primitive::Primitive::Stored_build_result::built) << reason;
+        EXPECT_FALSE(stored_primitives[i]->render_shape->is_payload_pending());
+        EXPECT_TRUE (stored_primitives[i]->is_prepared());
+        EXPECT_TRUE (stored_primitives[i]->render_shape->is_triangle_soup_released());
+        ASSERT_TRUE (stored_primitives[i]->optimized_render_shape);
+
+        ASSERT_TRUE(soup_primitives[i]->load_payload());
+        ASSERT_TRUE(soup_primitives[i]->make_prepared_meshes(soup_build_info));
+        ASSERT_TRUE(soup_primitives[i]->optimized_render_shape);
+
+        expect_same_buffer_mesh(
+            stored_primitives[i]->render_shape->get_renderable_mesh(), stored_sink,
+            soup_primitives  [i]->render_shape->get_renderable_mesh(), soup_sink
+        );
+        expect_same_buffer_mesh(
+            stored_primitives[i]->optimized_render_shape->get_renderable_mesh(), stored_sink,
+            soup_primitives  [i]->optimized_render_shape->get_renderable_mesh(), soup_sink
+        );
+        EXPECT_EQ(stored_primitives[i]->has_real_raytrace(), soup_primitives[i]->has_real_raytrace());
+        if (stored_primitives[i]->has_real_raytrace()) {
+            const erhe::primitive::Buffer_mesh& a = stored_primitives[i]->render_shape->get_raytrace().get_raytrace_mesh();
+            const erhe::primitive::Buffer_mesh& b = soup_primitives  [i]->render_shape->get_raytrace().get_raytrace_mesh();
+            EXPECT_EQ(std::memcmp(&a.bounding_box,    &b.bounding_box,    sizeof(a.bounding_box)), 0);
+            EXPECT_EQ(std::memcmp(&a.bounding_sphere, &b.bounding_sphere, sizeof(a.bounding_sphere)), 0);
+        }
+        // The released soup reads back as the soup path's.
+        const std::shared_ptr<erhe::primitive::Triangle_soup> stored_soup = stored_primitives[i]->render_shape->get_triangle_soup();
+        const std::shared_ptr<erhe::primitive::Triangle_soup> soup        = soup_primitives  [i]->render_shape->get_triangle_soup();
+        ASSERT_TRUE(stored_soup);
+        ASSERT_TRUE(soup);
+        EXPECT_EQ(stored_soup->vertex_data, soup->vertex_data);
+        EXPECT_EQ(stored_soup->index_data,  soup->index_data);
+    }
+
+    // Another optimized layout (unquantized positions): declined, untouched,
+    // and the soup path still loads.
+    erhe::dataformat::Vertex_format other_optimized = optimized_format;
+    other_optimized.streams[0].attributes[0].format = erhe::dataformat::Format::format_32_vec3_float;
+    other_optimized.repack(erhe::dataformat::Vertex_stream_packing{.min_attribute_alignment = 1, .min_stride_alignment = 4});
+    erhe::scene::Scene    other_scene{"other", nullptr};
+    erhe::gltf::Gltf_data other_data = parse_deferred(other_scene);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive>> other_primitives = get_primitives(other_data);
+    ASSERT_EQ(other_primitives.size(), 2u);
+    Recording_buffer_sink             other_sink;
+    const erhe::primitive::Build_info other_build_info = make_build_info(other_sink, other_optimized);
+    std::string reason;
+    EXPECT_EQ(other_primitives[0]->make_stored_meshes(other_build_info, reason), erhe::primitive::Primitive::Stored_build_result::declined);
+    EXPECT_EQ(reason, "optimized signature differs");
+    EXPECT_TRUE(other_primitives[0]->render_shape->is_payload_pending());
+    ASSERT_TRUE(other_primitives[0]->load_payload());
+    EXPECT_TRUE(other_primitives[0]->make_prepared_meshes(other_build_info));
 }
 
 TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)

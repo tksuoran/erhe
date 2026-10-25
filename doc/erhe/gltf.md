@@ -288,15 +288,19 @@ The editor's "Save for Quest" fills it from the running `Mesh_memory`.
 `erhe::primitive::pack_triangle_soup_streams()` runs the loader's soup build
 (`build_buffer_mesh_from_triangle_soup()`) into a capturing sink, so the
 stored bytes are the bytes a loader's build uploads, plus the position and
-texcoord affines it encoded them with. Per prepared primitive the exporter
-writes:
+texcoord affines it encoded them with. The parallel preparation of the
+prepared cores packs them (one task per unique primitive). Per prepared
+primitive the exporter writes:
 
 - the indices as one `UNSIGNED_INT` accessor;
 - each non-zero base stream as its own buffer view with `byteStride`, and the
-  core attributes as accessors over those views, so a reader that ignores the
-  extension reads the same soup as from a plain prepared save;
+  core attributes as accessors over those views (min / max on POSITION
+  only), so a reader that ignores the extension reads the same soup as from
+  a plain prepared save;
 - each non-zero optimized stream as a view, with accessors named only by the
-  extension (`POSITION` and `TEXCOORD_0/1` carry `scale` / `offset`);
+  extension (`POSITION` and `TEXCOORD_0/1` carry `scale` / `offset` as
+  hexadecimal floats, exact to the bit); the stream accessors are unnamed,
+  which keeps the JSON the loader parses whole small;
 - an all-zero stream as `{"fill":"zero","byteStride":s}`.
 
 A primitive the layouts cannot express (a core attribute missing from the
@@ -304,10 +308,34 @@ base layout or packed to all zeros, a non-32-bit index format) is written as
 the plain core and counted in
 `Gltf_export_prepared_statistics::gpu_vertex_stream_skipped`;
 `gpu_vertex_stream_count` and `gpu_vertex_stream_ms` count the written ones
-and the packing time. Test: `test_gltf_roundtrip.cpp`
+and the packing time summed over the tasks. Test: `test_gltf_roundtrip.cpp`
 (`gpu_vertex_streams_hold_the_loader_pack`: stored optimized streams equal
 the pack of the parsed core byte for byte; the soup equals a plain prepared
 save's).
+
+## Stored vertex streams on load
+
+A deferred parse (`Mesh_payload_load::deferred`) records each primitive's
+`ERHE_gpu_vertex_streams` JSON in its prepared payload; the stream views and
+the extension-only accessors are read with the payload, never at the parse
+(`load_eager_buffer_views()` treats them as payload views).
+`Gltf_triangle_soup_source::load_stored_vertex_streams()` checks the
+variants against an `erhe::primitive::Stored_vertex_stream_request` (running
+formats, index format, encoding version), reads the UNSIGNED_INT indices and
+each stored stream into its own vector (a zero-fill stream becomes zeros),
+parses the affines, copies the float positions out of the base stream and
+validates the prepared data against them
+(`Gltf_prepared_payload::validate()` with
+`Validation_counting::accepted_only`: a rejection is counted by the soup
+load that follows). Any mismatch returns null with a fixed reason
+(`signature differs`, `encoding version differs`, `stream view mismatch`,
+...). `Primitive::make_stored_meshes()` turns the result into the base and
+optimized buffer meshes and the raytrace (doc/editor/async_asset_loading.md
+"Stored vertex streams"). Test: `test_gltf_roundtrip.cpp`
+(`stored_vertex_streams_build_like_the_soup`: the stored build uploads the
+same bytes as the soup build of the same file, with the same affines and
+bounds bit for bit; another optimized layout is declined and the soup path
+loads).
 
 ## Rebinding after a save
 

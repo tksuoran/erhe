@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -132,6 +133,7 @@ private:
         std::size_t                           primitive_count{0};
         std::size_t                           next_job       {0}; // main thread only
         bool                                  release_soups  {false}; // load.cpu_mesh_data release
+        Stored_vertex_streams_use             stored_streams {Stored_vertex_streams_use::use}; // load.use_gpu_vertex_streams
         std::chrono::steady_clock::time_point start_time;
 
         // Guarded by mutex: written by the tasks, read by the main thread.
@@ -140,6 +142,8 @@ private:
         std::size_t finished_count{0};
         std::size_t prepared_count{0};
         std::size_t released_count{0};
+        std::size_t stored_count  {0}; // built from stored GPU vertex streams
+        std::map<std::string, std::size_t> portable_reasons; // why a job did not use them
 
         [[nodiscard]] auto is_finished() -> bool;     // every job dispatched and finished
         [[nodiscard]] auto is_worker_idle() -> bool;  // no job task running

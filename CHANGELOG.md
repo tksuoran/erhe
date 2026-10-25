@@ -33,6 +33,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Stored_vertex_stream_request`, `Stored_vertex_variant`,
+  `Stored_vertex_streams` (`stored_vertex_streams.hpp`),
+  `Triangle_soup_source::load_stored_vertex_streams()`,
+  `Primitive::make_stored_meshes()` / `Primitive::Stored_build_result`,
+  `Primitive_render_shape::install_stored_build()`, the `Primitive_raytrace`
+  constructor from float positions and indices; `make_raytrace_geometry()`
+  takes an optional prebuilt BVH.
+- `erhe::gltf`: `Gltf_texture_export::ktx2_astc_4x4_uncompressed`,
+  `is_astc_texture_export()`.
 - `erhe::gltf`: `Gltf_gpu_vertex_formats`,
   `Gltf_export_arguments::gpu_vertex_formats` (export writes
   `ERHE_gpu_vertex_streams`), `Gltf_export_prepared_statistics::gpu_vertex_stream_count`
