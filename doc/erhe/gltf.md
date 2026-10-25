@@ -16,7 +16,7 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
 - `Gltf_scan` -- Lightweight scan result listing names of all assets in a glTF file without fully loading them.
 - `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: executor, `Gltf_device_options`, root node, mesh layer, file path. It deliberately holds NO `erhe::graphics::Device` and no `Image_transfer`: `parse_gltf` is structurally device-free so it can run on a worker thread (doc/editor/async_asset_loading.md). Anything device-derived the parse needs is queried by the caller on the main thread via `query_gltf_device_options()` and passed by value.
 - `Gltf_device_options` -- The two device-derived values the parse needs: the transcode format preference for KTX2/Basis images, and max sampler anisotropy.
-- `Gltf_image_residency` (`Gltf_data::image_residency`) -- The decode and GPU half of image loading, split out of the parse. `parse_gltf` decodes no image: it records each image's encoded stream (`Gltf_decoded_image::source`, the same bytes retained for export), the `Sampler_create_info`s, the material texture/sampler bindings and the decode settings (transcode preference, executor). Residency decodes on executor workers ahead of the upload under an `erhe::utility::Memory_budget`: each image holds a lease of its decoded size from the start of its decode until its upload, `schedule_decodes()` starts decodes while their leases fit (a single image larger than the budget decodes while nothing else holds it), and uploading an image releases its lease. `set_memory_budget()` shares a budget with other users (the editor's load memory budget, shared with the mesh builds); without one the residency makes its own of `max_decoded_bytes_in_flight` bytes (the parameter of `schedule_decodes()`, `process_next_image()` and `drain()`). `process_next_image()` (blocking; waits for the decode workers) / `process_next_image_into_frame()` (never waits; uploads the next decoded image) create the textures and record the uploads; `bind_material_textures()` fills the material slots; `drain()` does all of it synchronously, decoding in parallel under the same budget, and flushes. `get_pending_byte_count()` / `get_pending_byte_high_water()` report the decoded bytes in flight; `is_decode_idle()` tells whether a decode task runs. After `parse_gltf` returns, `Gltf_data::images` and `::samplers` are EMPTY until residency runs. A stream that fails to decode leaves a null texture and drops its retained source.
+- `Gltf_image_residency` (`Gltf_data::image_residency`) -- The decode and GPU half of image loading, split out of the parse. `parse_gltf` decodes no image: it records where each image's encoded stream is (`Gltf_decoded_image::source`, the same `Gltf_image_source` export reads; see "Image source streams"), the `Sampler_create_info`s, the material texture/sampler bindings and the decode settings (transcode preference, executor). Residency decodes on executor workers ahead of the upload under an `erhe::utility::Memory_budget`: each image holds a lease of its decoded size from the start of its decode until its upload, `schedule_decodes()` starts decodes while their leases fit (a single image larger than the budget decodes while nothing else holds it), and uploading an image releases its lease. `set_memory_budget()` shares a budget with other users (the editor's load memory budget, shared with the mesh builds); without one the residency makes its own of `max_decoded_bytes_in_flight` bytes (the parameter of `schedule_decodes()`, `process_next_image()` and `drain()`). `process_next_image()` (blocking; waits for the decode workers) / `process_next_image_into_frame()` (never waits; uploads the next decoded image) create the textures and record the uploads; `bind_material_textures()` fills the material slots; `drain()` does all of it synchronously, decoding in parallel under the same budget, and flushes. `get_pending_byte_count()` / `get_pending_byte_high_water()` report the decoded bytes in flight; `is_decode_idle()` tells whether a decode task runs. After `parse_gltf` returns, `Gltf_data::images` and `::samplers` are EMPTY until residency runs. A stream that fails to decode leaves a null texture and drops its retained source.
 - `Image_transfer` -- GPU texture uploads, in one of two modes, with a staging capacity given at construction (default 64 MiB). `blocking_drain` (the original): a private staging ring of that size and its own transfer command buffer; when the ring fills, `flush()` submits + fence-waits + reclaims, so loads make progress with bounded staging memory even when no frames are rendered. Required by callers with no frame loop (`src/example` and the OpenXR controller model loader). `frame_recording`: `upload_into_frame()` stages from the device's capped upload staging (`Device::allocate_upload_staging`, doc/erhe/ring_buffer_memory.md "Upload staging cap") and records copies into the caller's frame command buffer, returning `budget_exhausted` instead of blocking when the per-frame budget or the staging has no room; the private ring is not allocated at all. Destructor flushes.
 
 ## Public API
@@ -121,7 +121,7 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   default `none` writes raw soups; geometry-normative primitives are
   unaffected either way. The editor's `save_scene` passes `write`.
 - Texture image form: `Gltf_export_arguments::texture_export` is
-  `Gltf_texture_export::source` (the retained stream: PNG / JPEG through
+  `Gltf_texture_export::source` (the source stream: PNG / JPEG through
   the core `source`, Basis Universal KTX2 through `KHR_texture_basisu`, raw
   block KTX2 through `ERHE_texture_ktx2`) or `ktx2_astc_4x4` ("Save for
   Quest"): every Basis Universal KTX2 image is transcoded to a raw ASTC 4x4
@@ -173,8 +173,11 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   directory, device-backed because a material texture slot needs a `Texture`): a
   KTX2 texture exports through `KHR_texture_basisu` and a PNG through the core
   `source`, and the parse binds both material slots to their images.
-- Image export: the retained encoded stream (`Gltf_image_source`) is embedded
-  verbatim as a buffer view. A PNG / JPEG image is the texture's core `source`; a
+- Image export: the encoded stream (`Gltf_image_source::read()`, re-read from
+  its file when file-backed) is embedded verbatim as a buffer view. A source
+  that cannot be read - its file changed since the load - fails the export:
+  `export_gltf()` returns an empty string and the editor's save and export
+  paths write nothing. A PNG / JPEG image is the texture's core `source`; a
   KTX2 (Basis Universal) image is named only by `KHR_texture_basisu` (no fallback
   image), which the export lists in `extensionsUsed` and `extensionsRequired`.
   The KHR material extensions fastgltf writes for the exported materials
@@ -224,6 +227,33 @@ buffers in data URIs are resident and read through the asset as usual.
   tasks and closed when the parse ends, so no handle outlives the load (an
   open handle makes a save's rename onto the file fail on Windows).
   Primitives without an origin are built from the asset.
+
+## Image source streams
+
+`Gltf_image_source` is where an image's compressed stream is. A parse from a
+file keeps no image bytes in memory:
+
+- an image in a bufferView of a .glb BIN chunk or an external .bin is the
+  view's byte range of that file (`load_eager_buffer_views()` leaves image
+  views unread); an image with a file URI is that whole file;
+- the source records the file's size and modification time; `read()` returns
+  the stream, reading the range just in time, and refuses (error logged) a
+  file whose size or modification time changed;
+- only the first 16 bytes are read at the parse, to sniff the media type;
+- an image in a data URI, or every image of a parse from memory, keeps its
+  bytes (`encoded_bytes`), as does a source a caller builds from a
+  standalone image file.
+
+The decode task reads the stream when it starts and drops it when the
+decode ends; its memory-budget lease covers the stream plus the decoded
+pixels until the upload. The exporter reads the stream when it writes the
+image (and for "Save for Quest" holds it until the ASTC transcode).
+`get_memory_usage` reports the resident streams as
+`cpu_images.retained_source_bytes`, 0 after a load from a file.
+
+Tests: `test_gltf_texture_gpu.cpp` (`raw_ktx2_texture_round_trips_through_erhe_texture_ktx2`:
+the parsed source is file-backed and reads the written bytes;
+`file_backed_image_source_re_exports_and_refuses_a_changed_file`).
 
 ## Triangle soup reload
 

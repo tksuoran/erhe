@@ -28,6 +28,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::gltf`: `Gltf_image_source` can be file-backed (`file_path`,
+  `file_offset`, `byte_length`, `file_size`, `file_write_time`) with
+  `is_file_backed()`, `get_byte_count()` and `read()`; `parse_gltf` gives
+  every image loaded from a file such a source and keeps no image bytes.
+  `export_gltf()` returns an empty string when a source cannot be read.
+
 - `erhe::utility`: `Memory_budget`, `Memory_budget_lease` and
   `Memory_budget_kind` - a thread-safe byte budget handing out move-only
   leases (one request larger than the capacity is granted while nothing else

@@ -647,6 +647,11 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         add_gltf_editor_state(export_arguments, *sr, export_path, physics_items);
     }
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
+    if (gltf.empty()) {
+        json r = make_text_content("Export failed (a source image cannot be read; see logs/log.txt): " + path_str);
+        r["isError"] = true;
+        return r.dump();
+    }
     if (!erhe::file::write_file_via_temp(std::filesystem::path{path_str}, gltf)) {
         json r = make_text_content("Failed to write file: " + path_str);
         r["isError"] = true;
