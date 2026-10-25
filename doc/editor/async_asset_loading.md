@@ -152,6 +152,14 @@ byte budget - because content-library entries, `Gltf_source_reference` and
 `Gltf_data::images` all need real objects by then. Synchronous callers keep
 their behavior by calling `Gltf_image_residency::drain()`.
 
+A raw ASTC 4x4 KTX2 image ("Save for Quest",
+`doc/gltf_extensions/ERHE_texture_ktx2.md`) is not transcoded: on a device
+that samples ASTC its stored levels (inflated from Zstandard) are the
+decoded bytes; elsewhere mip level 0 is decoded to RGBA8 on the worker. The
+`async load '<file>' images:` line, logged next to the high-water line,
+counts the images by path (Basis transcoded, raw ASTC uploaded as stored,
+raw ASTC decoded to RGBA8, PNG / JPEG / DDS decoded, failed).
+
 ## Publish
 
 Publish happens once, when structure and fill meshes are resident and past the

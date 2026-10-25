@@ -214,7 +214,14 @@ public:
 // (doc/plans/gltf_fast_load.md), prepared in parallel on 'executor' (serial
 // when null). Returns false when the scene has no root node or the write
 // fails.
-[[nodiscard]] auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path, tf::Executor* executor) -> bool;
+// texture_export selects the image form (erhe::gltf::Gltf_texture_export);
+// source unless "Save for Quest".
+[[nodiscard]] auto save_scene_gltf(
+    Scene_root&                         scene_root,
+    const std::filesystem::path&        path,
+    tf::Executor*                       executor,
+    erhe::gltf::Gltf_texture_export     texture_export = erhe::gltf::Gltf_texture_export::source
+) -> bool;
 
 // THE scene save entry point (File > Save Scene, MCP save_scene): writes the
 // scene with save_scene_gltf() above, sends Scene_saved_message (asset
@@ -222,6 +229,20 @@ public:
 // prefab so every instance in every scene reflects the edit (this replaced
 // the separate Save Prefab command).
 [[nodiscard]] auto save_scene_gltf(
+    App_context&                 context,
+    Scene_root&                  scene_root,
+    const std::filesystem::path& path
+) -> bool;
+
+// "Save for Quest" (File > Save glTF for Quest, MCP save_scene_for_quest;
+// doc/plans/gltf_fast_load.md follow-up item 4): writes the same erhe glTF as
+// save_scene_gltf() above, but every Basis Universal KTX2 texture is
+// transcoded at save time to a raw ASTC 4x4 KTX2 image referenced through
+// ERHE_texture_ktx2 (doc/gltf_extensions/ERHE_texture_ktx2.md), so a device
+// with ASTC uploads the blocks with no transcode. PNG / JPEG images are
+// written as they are. An export: the scene's source file and dirty state
+// are left alone; the asset browser rescans.
+[[nodiscard]] auto save_scene_gltf_for_quest(
     App_context&                 context,
     Scene_root&                  scene_root,
     const std::filesystem::path& path

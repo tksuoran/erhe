@@ -604,6 +604,28 @@ auto get_component_byte_size(const Format format) -> std::size_t
     }
 }
 
+auto is_srgb(const Format format) -> bool
+{
+    switch (format) {
+        case Format::format_8_scalar_srgb:
+        case Format::format_8_vec2_srgb:
+        case Format::format_8_vec3_srgb:
+        case Format::format_8_vec4_srgb:
+        case Format::format_8_vec4_bgra_srgb:
+        case Format::format_bc1_rgb_srgb:
+        case Format::format_bc1_rgba_srgb:
+        case Format::format_bc2_srgb:
+        case Format::format_bc3_srgb:
+        case Format::format_bc7_srgb:
+        case Format::format_astc_4x4_srgb: {
+            return true;
+        }
+        default: {
+            return false;
+        }
+    }
+}
+
 auto has_color(const Format format) -> bool
 {
     switch (format) {

@@ -55,6 +55,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -70,6 +71,44 @@
 namespace editor {
 
 using namespace mcp_server_detail;
+
+auto Mcp_server::action_save_scene_for_quest(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string path_str   = args.value("path", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (sr->get_source_format() == Scene_source_format::usd) {
+        json r = make_text_content("save_scene_for_quest: '" + scene_name + "' is a USD-backed scene; Save for Quest writes glTF only");
+        r["isError"] = true;
+        return r.dump();
+    }
+    std::filesystem::path path = path_str.empty()
+        ? (editor::default_scene_dir() / (sr->get_name() + "_quest.glb"))
+        : std::filesystem::path{path_str};
+    if ((path.extension() != std::filesystem::path{".glb"}) && (path.extension() != std::filesystem::path{".gltf"})) {
+        path = std::filesystem::path{path.string() + ".glb"};
+    }
+    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+    if (!editor::save_scene_gltf_for_quest(m_context, *sr, path)) {
+        json r = make_text_content("save_scene_for_quest failed: " + path.string());
+        r["isError"] = true;
+        return r.dump();
+    }
+    const double save_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+    std::error_code error_code;
+    const std::uintmax_t file_size = std::filesystem::file_size(path, error_code);
+    return make_json_content({
+        {"scene_name", scene_name},
+        {"path",       path.string()},
+        {"save_ms",    save_ms},
+        {"file_bytes", error_code ? std::uintmax_t{0} : file_size}
+    }).dump();
+}
 
 auto Mcp_server::action_save_scene(const json& args) -> std::string
 {

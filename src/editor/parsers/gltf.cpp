@@ -1655,7 +1655,12 @@ auto collect_gltf_export_animations(const std::shared_ptr<Content_library>& cont
     return content_library->get_all<erhe::scene::Animation>();
 }
 
-auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path, tf::Executor* const executor) -> bool
+auto save_scene_gltf(
+    Scene_root&                           scene_root,
+    const std::filesystem::path&          path,
+    tf::Executor* const                   executor,
+    const erhe::gltf::Gltf_texture_export texture_export
+) -> bool
 {
     const erhe::scene::Scene& scene = scene_root.get_scene();
     const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
@@ -1681,6 +1686,9 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path, 
     export_arguments.prepared_mesh_data  = erhe::gltf::Prepared_mesh_data::write;
     export_arguments.executor            = executor;
     export_arguments.prepared_statistics = &prepared_statistics;
+    erhe::gltf::Gltf_export_texture_statistics texture_statistics;
+    export_arguments.texture_export      = texture_export;
+    export_arguments.texture_statistics  = &texture_statistics;
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
@@ -1713,6 +1721,29 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path, 
         export_ms,
         gltf.size()
     );
+    if (texture_export == erhe::gltf::Gltf_texture_export::ktx2_astc_4x4) {
+        log_parsers->info(
+            "save_scene_gltf: '{}' textures: {} images, {} transcoded to ASTC 4x4 KTX2 ({} -> {} bytes, {:.1f} ms), "
+            "{} transcodes failed, {} raw KTX2 images in the file",
+            erhe::file::to_string(path),
+            texture_statistics.image_count,
+            texture_statistics.transcoded_count,
+            texture_statistics.source_byte_count,
+            texture_statistics.transcoded_byte_count,
+            texture_statistics.transcode_ms,
+            texture_statistics.transcode_failed_count,
+            texture_statistics.raw_ktx2_count
+        );
+    }
+    return true;
+}
+
+auto save_scene_gltf_for_quest(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
+{
+    if (!save_scene_gltf(scene_root, path, context.executor, erhe::gltf::Gltf_texture_export::ktx2_astc_4x4)) {
+        return false;
+    }
+    context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
     return true;
 }
 

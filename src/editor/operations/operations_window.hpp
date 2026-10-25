@@ -328,6 +328,11 @@ public:
     // instance in every scene refreshes); a scene with no source file saves
     // to res/editor/scenes/<scene name>.glb, confirming overwrite.
     void save_scene();
+    // File > Save glTF for Quest: writes the target glTF scene to
+    // res/editor/scenes/<scene name>_quest.glb with save_scene_gltf_for_quest()
+    // (Basis KTX2 textures transcoded to raw ASTC 4x4 KTX2). An export: the
+    // scene's source binding is unchanged; an existing file is replaced.
+    void save_scene_for_quest();
     // Renders pending modal confirmation dialogs (the File > Save glTF (erhe)
     // overwrite prompt). Called once per frame from App_windows::viewport_menu
     // -- the imgui-host begin callback -- so the modal shows regardless of the
@@ -587,6 +592,7 @@ private:
 
     erhe::commands::Lambda_command m_export_gltf_command;
     erhe::commands::Lambda_command m_save_scene_command;
+    erhe::commands::Lambda_command m_save_scene_for_quest_command;
     erhe::commands::Lambda_command m_load_scene_command;
 
     erhe::commands::Lambda_command m_create_material;

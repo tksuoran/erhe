@@ -300,6 +300,17 @@ void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_contex
         staging.refused_count,
         staging.oversize_count
     );
+    const erhe::gltf::Gltf_image_decode_path_counts& paths = residency.get_decode_path_counts();
+    log_parsers->info(
+        "async load '{}' images: {} Basis KTX2 transcoded, {} raw ASTC KTX2 uploaded as stored, "
+        "{} raw ASTC KTX2 decoded to RGBA8 (device lacks ASTC), {} decoded (PNG / JPEG / DDS), {} failed",
+        erhe::file::to_string(m_handle->get_path().filename()),
+        paths.basis_transcoded,
+        paths.raw_blocks,
+        paths.raw_blocks_decoded,
+        paths.decoded,
+        paths.failed
+    );
 }
 
 auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_state

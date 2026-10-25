@@ -12,6 +12,7 @@
 #include "erhe_geometry/geometry_serialization.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_task/task.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -1246,6 +1247,7 @@ public:
         // residency step creates (doc/editor/async_asset_loading_design.md step 3).
         m_data_out.image_residency.decoded_images.resize(m_asset->images.size());
         m_data_out.image_residency.transcode_format_preference = m_transcode_format_preference;
+        m_data_out.image_residency.astc_support                = m_arguments.device_options.astc_support;
         m_data_out.image_residency.decode_executor             = &m_arguments.executor;
         m_data_out.image_residency.parallel_decode             = m_arguments.parallel;
         const Clock::time_point image_start_time = Clock::now();
@@ -2600,6 +2602,49 @@ public:
     void set_primitive_geometry_extensions(std::map<std::pair<std::size_t, std::size_t>, std::string>&& extensions)
     {
         m_primitive_geometry_extensions = std::move(extensions);
+    }
+
+    // ERHE_texture_ktx2 (asset root; doc/gltf_extensions/ERHE_texture_ktx2.md)
+    // names the raw block KTX2 image of textures that carry no core source.
+    // The image index is applied as the fastgltf texture's core image index,
+    // so every texture resolution path (texture_image_index) sees it. Called
+    // by parse_gltf() before parse_and_build().
+    void apply_texture_ktx2_extension(const std::string& extension_json)
+    {
+        simdjson::dom::parser  json_parser;
+        simdjson::dom::element root;
+        if (json_parser.parse(extension_json).get(root) != simdjson::SUCCESS) {
+            log_gltf->warn("ERHE_texture_ktx2: invalid JSON - extension ignored");
+            return;
+        }
+        std::uint64_t version = 0;
+        if ((root["version"].get_uint64().get(version) != simdjson::SUCCESS) || (version != 1)) {
+            log_gltf->warn("ERHE_texture_ktx2: unsupported version {} - extension ignored", version);
+            return;
+        }
+        simdjson::dom::array textures;
+        if (root["textures"].get_array().get(textures) != simdjson::SUCCESS) {
+            log_gltf->warn("ERHE_texture_ktx2: no textures array - extension ignored");
+            return;
+        }
+        std::size_t applied_count  = 0;
+        std::size_t rejected_count = 0;
+        for (simdjson::dom::element entry : textures) {
+            std::uint64_t texture_index = 0;
+            std::uint64_t image_index   = 0;
+            if (
+                (entry["texture"].get_uint64().get(texture_index) != simdjson::SUCCESS) ||
+                (entry["source"].get_uint64().get(image_index) != simdjson::SUCCESS) ||
+                (texture_index >= m_asset->textures.size()) ||
+                (image_index >= m_asset->images.size())
+            ) {
+                ++rejected_count;
+                continue;
+            }
+            m_asset->textures[static_cast<std::size_t>(texture_index)].imageIndex = static_cast<std::size_t>(image_index);
+            ++applied_count;
+        }
+        log_gltf->info("ERHE_texture_ktx2: {} textures use raw block KTX2 images, {} entries rejected", applied_count, rejected_count);
     }
 
     // Prepared mesh data extension payloads per (mesh index, primitive
@@ -4112,6 +4157,7 @@ void run_image_decode(
     const std::shared_ptr<Gltf_image_source>&       source,
     const bool                                      linear,
     const erhe::graphics::Transcode_format_preference transcode_format_preference,
+    const erhe::graphics::Astc_support              astc_support,
     const std::string&                              name
 )
 {
@@ -4123,7 +4169,7 @@ void run_image_decode(
         reinterpret_cast<const std::uint8_t*>(source->encoded_bytes.data()),
         source->encoded_bytes.size()
     };
-    bool        ok         = loader.open(encoded, info, linear, transcode_format_preference);
+    bool        ok         = loader.open(encoded, info, linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
     std::size_t byte_count = ok ? get_decoded_pixel_byte_count(info) : 0;
     {
         const std::lock_guard<std::mutex> lock{queue->m_mutex};
@@ -4310,6 +4356,13 @@ auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_
     } else if (graphics_device.get_format_properties(erhe::dataformat::Format::format_astc_4x4_srgb).supported) {
         options.transcode_format_preference = erhe::graphics::Transcode_format_preference::astc_4x4;
     }
+    // Raw ASTC KTX2 images ("Save for Quest") carry either color space.
+    if (
+        graphics_device.get_format_properties(erhe::dataformat::Format::format_astc_4x4_srgb).supported &&
+        graphics_device.get_format_properties(erhe::dataformat::Format::format_astc_4x4_unorm).supported
+    ) {
+        options.astc_support = erhe::graphics::Astc_support::native;
+    }
     options.max_sampler_anisotropy = graphics_device.get_info().max_texture_max_anisotropy;
     return options;
 }
@@ -4399,8 +4452,8 @@ void Gltf_image_residency::schedule_decodes(const std::size_t max_decoded_bytes_
         ++queue->m_running_count;
         erhe::task::spawn(
             *decode_executor,
-            [queue, i, source = decoded.source, linear = decoded.linear, preference = transcode_format_preference, name = decoded.name]() {
-                run_image_decode(queue, i, source, linear, preference, name);
+            [queue, i, source = decoded.source, linear = decoded.linear, preference = transcode_format_preference, astc = astc_support, name = decoded.name]() {
+                run_image_decode(queue, i, source, linear, preference, astc, name);
             }
         );
     }
@@ -4423,6 +4476,17 @@ void Gltf_image_residency::collect_decoded()
         decoded.ok      = slot.ok;
         decoded.decoded = true;
         slot.state      = Gltf_image_decode_state::collected;
+        if (!decoded.ok) {
+            ++m_decode_path_counts.failed;
+        } else {
+            switch (decoded.info.decode_path) {
+                case erhe::graphics::Image_decode_path::basis_transcoded:   ++m_decode_path_counts.basis_transcoded;   break;
+                case erhe::graphics::Image_decode_path::raw_blocks:         ++m_decode_path_counts.raw_blocks;         break;
+                case erhe::graphics::Image_decode_path::raw_blocks_decoded: ++m_decode_path_counts.raw_blocks_decoded; break;
+                case erhe::graphics::Image_decode_path::decoded:
+                default:                                                    ++m_decode_path_counts.decoded;            break;
+            }
+        }
     }
 }
 
@@ -4440,7 +4504,7 @@ void Gltf_image_residency::decode_inline(const std::size_t image_index)
     const Gltf_decoded_image& decoded = decoded_images[image_index];
     // Inline decodes run one at a time with nothing else in flight, so the
     // reservation always fits and the task never gives its turn back.
-    run_image_decode(queue, image_index, decoded.source, decoded.linear, transcode_format_preference, decoded.name);
+    run_image_decode(queue, image_index, decoded.source, decoded.linear, transcode_format_preference, astc_support, decoded.name);
     collect_decoded();
 }
 
@@ -4868,6 +4932,12 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 
     Gltf_data result;
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
+
+    for (const auto& [extension_name, extension_value] : parse_extras_context.asset_extensions.entries) {
+        if (extension_name == "ERHE_texture_ktx2") {
+            erhe_parser.apply_texture_ktx2_extension(extension_value);
+        }
+    }
 
     // Hand captured ERHE_geometry payloads to the parser: primitives
     // carrying them are geometry-normative and rebuild a full
@@ -6980,12 +7050,26 @@ private:
             return std::nullopt;
         }
 
+        // "Save for Quest" (Gltf_texture_export::ktx2_astc_4x4): a Basis
+        // Universal KTX2 image is transcoded to raw ASTC 4x4 blocks; its
+        // buffer is filled by finish_ktx2_transcodes(), on the executor.
+        const std::span<const std::uint8_t> encoded_bytes{
+            reinterpret_cast<const std::uint8_t*>(image_source->encoded_bytes.data()),
+            image_source->encoded_bytes.size()
+        };
+        const bool transcode_to_astc =
+            (m_arguments.texture_export == Gltf_texture_export::ktx2_astc_4x4) &&
+            erhe::graphics::is_ktx2_basis(encoded_bytes);
+        const bool raw_ktx2 = transcode_to_astc || erhe::graphics::is_ktx2_raw_blocks(encoded_bytes);
+
         const std::size_t buffer_index = m_gltf_asset.buffers.size();
         {
             fastgltf::Buffer image_buffer{
-                .byteLength = image_source->encoded_bytes.size(),
+                .byteLength = transcode_to_astc ? std::size_t{0} : image_source->encoded_bytes.size(),
                 .data = fastgltf::sources::Vector{
-                    .bytes    = std::vector<std::byte>{image_source->encoded_bytes.begin(), image_source->encoded_bytes.end()},
+                    .bytes    = transcode_to_astc
+                        ? std::vector<std::byte>{}
+                        : std::vector<std::byte>{image_source->encoded_bytes.begin(), image_source->encoded_bytes.end()},
                     .mimeType = fastgltf::MimeType::GltfBuffer
                 },
                 .name = {}
@@ -6997,7 +7081,7 @@ private:
             fastgltf::BufferView buffer_view{};
             buffer_view.bufferIndex = buffer_index;
             buffer_view.byteOffset  = 0;
-            buffer_view.byteLength  = image_source->encoded_bytes.size();
+            buffer_view.byteLength  = transcode_to_astc ? std::size_t{0} : image_source->encoded_bytes.size();
             m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
         }
 
@@ -7010,7 +7094,116 @@ private:
         const std::size_t image_index = m_gltf_asset.images.size();
         m_gltf_asset.images.emplace_back(std::move(gltf_image));
         m_exported_images.insert({texture, image_index});
+        if (raw_ktx2) {
+            m_raw_ktx2_images.insert(image_index);
+        }
+        if (transcode_to_astc) {
+            m_pending_ktx2_transcodes.push_back(
+                Pending_ktx2_transcode{
+                    .image_index       = image_index,
+                    .buffer_index      = buffer_index,
+                    .buffer_view_index = buffer_view_index,
+                    .source            = image_source,
+                    .color_space       = erhe::dataformat::is_srgb(texture->get_pixelformat())
+                        ? erhe::graphics::Ktx2_color_space::srgb
+                        : erhe::graphics::Ktx2_color_space::linear,
+                    .name              = texture->get_name(),
+                    .result            = {}
+                }
+            );
+        }
         return image_index;
+    }
+
+    // Raw block KTX2 images (written through ERHE_texture_ktx2, not
+    // KHR_texture_basisu, which is only for Basis Universal payloads), and
+    // the (texture, image) pairs the asset-root ERHE_texture_ktx2 extension
+    // lists.
+    std::unordered_set<std::size_t>                  m_raw_ktx2_images;
+    std::vector<std::pair<std::size_t, std::size_t>> m_texture_ktx2_entries;
+
+    class Pending_ktx2_transcode
+    {
+    public:
+        std::size_t                              image_index      {0};
+        std::size_t                              buffer_index     {0};
+        std::size_t                              buffer_view_index{0};
+        std::shared_ptr<const Gltf_image_source> source;
+        erhe::graphics::Ktx2_color_space         color_space{erhe::graphics::Ktx2_color_space::srgb};
+        std::string                              name;
+        std::vector<std::uint8_t>                result;
+    };
+    std::vector<Pending_ktx2_transcode> m_pending_ktx2_transcodes;
+    Gltf_export_texture_statistics      m_texture_statistics;
+
+    // Runs the Basis -> raw ASTC 4x4 transcodes process_image() queued, in
+    // parallel on the executor, and fills their buffers. A failed transcode
+    // writes the Basis source through KHR_texture_basisu instead. After every
+    // material pass, before combine_buffers().
+    void finish_ktx2_transcodes()
+    {
+        if (m_pending_ktx2_transcodes.empty()) {
+            return;
+        }
+        ERHE_PROFILE_FUNCTION();
+        const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+        const auto transcode = [this](const std::size_t i) {
+            Pending_ktx2_transcode& pending = m_pending_ktx2_transcodes[i];
+            const std::span<const std::uint8_t> source_bytes{
+                reinterpret_cast<const std::uint8_t*>(pending.source->encoded_bytes.data()),
+                pending.source->encoded_bytes.size()
+            };
+            pending.result = erhe::graphics::transcode_ktx2_basis_to_astc_4x4(source_bytes, pending.color_space, erhe::graphics::Ktx2_supercompression::zstd);
+        };
+        if ((m_arguments.executor != nullptr) && (m_pending_ktx2_transcodes.size() > 1)) {
+            ::tf::Taskflow taskflow;
+            for (std::size_t i = 0, end = m_pending_ktx2_transcodes.size(); i < end; ++i) {
+                taskflow.emplace([&transcode, i]() { transcode(i); });
+            }
+            erhe::task::run(*m_arguments.executor, taskflow).wait();
+        } else {
+            for (std::size_t i = 0, end = m_pending_ktx2_transcodes.size(); i < end; ++i) {
+                transcode(i);
+            }
+        }
+
+        for (Pending_ktx2_transcode& pending : m_pending_ktx2_transcodes) {
+            const bool ok = !pending.result.empty();
+            std::vector<std::byte> bytes;
+            if (ok) {
+                const std::byte* const begin = reinterpret_cast<const std::byte*>(pending.result.data());
+                bytes.assign(begin, begin + pending.result.size());
+                ++m_texture_statistics.transcoded_count;
+                m_texture_statistics.source_byte_count     += pending.source->encoded_bytes.size();
+                m_texture_statistics.transcoded_byte_count += pending.result.size();
+            } else {
+                log_gltf->warn("glTF export: ASTC transcode of image '{}' failed - the Basis Universal source is written", pending.name);
+                bytes.assign(pending.source->encoded_bytes.begin(), pending.source->encoded_bytes.end());
+                ++m_texture_statistics.transcode_failed_count;
+                m_raw_ktx2_images.erase(pending.image_index);
+                for (auto it = m_texture_ktx2_entries.begin(); it != m_texture_ktx2_entries.end();) {
+                    if (it->second == pending.image_index) {
+                        m_gltf_asset.textures[it->first].basisuImageIndex = pending.image_index;
+                        declare_extension_used    ("KHR_texture_basisu");
+                        declare_extension_required("KHR_texture_basisu");
+                        it = m_texture_ktx2_entries.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+            const std::size_t byte_count = bytes.size();
+            fastgltf::Buffer& buffer = m_gltf_asset.buffers[pending.buffer_index];
+            buffer.byteLength = byte_count;
+            buffer.data = fastgltf::sources::Vector{
+                .bytes    = std::move(bytes),
+                .mimeType = fastgltf::MimeType::GltfBuffer
+            };
+            m_gltf_asset.bufferViews[pending.buffer_view_index].byteLength = byte_count;
+            pending.result = std::vector<std::uint8_t>{};
+        }
+        m_texture_statistics.transcode_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+        m_pending_ktx2_transcodes.clear();
     }
 
     std::vector<std::pair<erhe::primitive::Material_sampler_state, std::size_t>> m_exported_samplers;
@@ -7071,7 +7264,11 @@ private:
             return fi->second;
         }
         fastgltf::Texture gltf_texture{};
-        if (is_ktx2_image(image_index.value())) {
+        if (m_raw_ktx2_images.contains(image_index.value())) {
+            // Raw block KTX2 (ERHE_texture_ktx2): no core source and no
+            // KHR_texture_basisu; the asset-root extension names the image.
+            m_texture_ktx2_entries.emplace_back(m_gltf_asset.textures.size(), image_index.value());
+        } else if (is_ktx2_image(image_index.value())) {
             // KTX2 (Basis Universal) images are written through
             // KHR_texture_basisu; core `source` only names PNG / JPEG. There
             // is no fallback image, so the extension is also required.
@@ -8394,6 +8591,15 @@ auto Gltf_exporter::export_gltf() -> std::string
     // unreferenced materials).
     declare_material_extensions();
 
+    // After every material pass (they queue the transcodes), before
+    // combine_buffers() (the transcodes fill image buffers).
+    finish_ktx2_transcodes();
+    m_texture_statistics.image_count    = m_gltf_asset.images.size();
+    m_texture_statistics.raw_ktx2_count = m_raw_ktx2_images.size();
+    if (m_arguments.texture_statistics != nullptr) {
+        *m_arguments.texture_statistics = m_texture_statistics;
+    }
+
     combine_buffers();
 
     // After every pass that adds top-level objects or names (nodes, physics,
@@ -8585,6 +8791,19 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
         if (!m_asset_reference_material_extensions.empty()) {
             declare_extension_used("ERHE_asset_reference");
+        }
+        // ERHE_texture_ktx2: the raw block KTX2 image of each texture that
+        // has no core source (doc/gltf_extensions/ERHE_texture_ktx2.md).
+        if (!m_texture_ktx2_entries.empty()) {
+            std::string entries;
+            for (const auto& [texture_index, image_index] : m_texture_ktx2_entries) {
+                entries += fmt::format("{}{{\"texture\":{},\"source\":{}}}", entries.empty() ? "" : ",", texture_index, image_index);
+            }
+            merge_extension_members(
+                export_extras_context.asset_extensions,
+                fmt::format("\"ERHE_texture_ktx2\":{{\"version\":1,\"textures\":[{}]}}", entries)
+            );
+            declare_extension_used("ERHE_texture_ktx2");
         }
     }
 

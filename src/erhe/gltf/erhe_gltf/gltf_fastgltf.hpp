@@ -158,6 +158,18 @@ public:
     std::size_t                sampler_index{0};
 };
 
+// Images by the path that produced their pixels (erhe::graphics::Image_decode_path),
+// for the per-load summary.
+class Gltf_image_decode_path_counts
+{
+public:
+    std::size_t decoded           {0}; // PNG / JPEG / ... decode or DDS blocks
+    std::size_t basis_transcoded  {0}; // Basis Universal KTX2 transcoded
+    std::size_t raw_blocks        {0}; // raw block KTX2 uploaded as stored
+    std::size_t raw_blocks_decoded{0}; // raw ASTC KTX2 decoded to RGBA8 on the CPU
+    std::size_t failed            {0};
+};
+
 class Gltf_data;
 
 // The decode and GPU half of image loading, split out of the parse.
@@ -188,6 +200,7 @@ public:
     // executor, or with parallel_decode false, images decode inline on the
     // residency thread, one per process_next_image* call.
     erhe::graphics::Transcode_format_preference transcode_format_preference{erhe::graphics::Transcode_format_preference::rgba8};
+    erhe::graphics::Astc_support               astc_support{erhe::graphics::Astc_support::decode_to_rgba8};
     ::tf::Executor*                            decode_executor{nullptr};
     bool                                       parallel_decode{true};
 
@@ -197,6 +210,8 @@ public:
     [[nodiscard]] auto get_pending_byte_count () const -> std::size_t;
     // Largest get_pending_byte_count() seen.
     [[nodiscard]] auto get_pending_byte_high_water() const -> std::size_t;
+    // Decoded images so far, by the path that produced their pixels.
+    [[nodiscard]] auto get_decode_path_counts() const -> const Gltf_image_decode_path_counts& { return m_decode_path_counts; }
 
     // Start decode tasks for pending images, in image order, while the
     // decoded bytes in flight stay within max_decoded_bytes_in_flight (at
@@ -260,6 +275,7 @@ private:
     [[nodiscard]] auto find_next_decoded_image() const -> std::size_t;
 
     std::shared_ptr<Gltf_image_decode_queue> m_decode_queue;
+    Gltf_image_decode_path_counts            m_decode_path_counts;
     // The image whose frame-recording upload found no budget or staging
     // room; it is retried first, so the staging cap's size mark (which makes
     // smaller requests wait behind it) is always honored by its owner.
@@ -429,6 +445,9 @@ public:
     erhe::graphics::Transcode_format_preference transcode_format_preference{
         erhe::graphics::Transcode_format_preference::rgba8
     };
+    // native when the device samples ASTC 4x4 (UNORM and SRGB): raw ASTC
+    // KTX2 images then upload as stored, else they are decoded to RGBA8.
+    erhe::graphics::Astc_support astc_support{erhe::graphics::Astc_support::decode_to_rgba8};
     float max_sampler_anisotropy{1.0f};
 };
 
@@ -573,6 +592,33 @@ public:
     std::vector<std::optional<std::size_t>>                           extra_mesh_indices;
 };
 
+// How the exporter writes texture images.
+// - source: the retained encoded stream as loaded (PNG / JPEG / Basis KTX2
+//   via KHR_texture_basisu / raw block KTX2 via ERHE_texture_ktx2).
+// - ktx2_astc_4x4: "Save for Quest" (doc/gltf_extensions/ERHE_texture_ktx2.md):
+//   every Basis Universal KTX2 image is transcoded to a raw ASTC 4x4 KTX2
+//   (all mip levels, SRGB or UNORM from the texture's format, each level
+//   Zstandard supercompressed) on the executor
+//   and referenced through ERHE_texture_ktx2; PNG / JPEG images are written
+//   as they are.
+enum class Gltf_texture_export : unsigned int {
+    source        = 0,
+    ktx2_astc_4x4 = 1
+};
+
+// What the texture pass of one export did.
+class Gltf_export_texture_statistics
+{
+public:
+    std::size_t image_count          {0}; // images written
+    std::size_t transcoded_count     {0}; // Basis KTX2 transcoded to raw ASTC 4x4
+    std::size_t transcode_failed_count{0}; // transcode failed: written as the Basis source
+    std::size_t raw_ktx2_count       {0}; // raw block KTX2 written (transcoded or retained)
+    std::size_t source_byte_count    {0}; // encoded bytes of the transcoded sources
+    std::size_t transcoded_byte_count{0}; // bytes of the KTX2 files they became
+    double      transcode_ms         {0.0}; // wall time of the parallel transcode
+};
+
 // Whether the exporter writes triangle-soup primitives as prepared cores with
 // the ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh
 // extensions (doc/plans/gltf_fast_load.md "Exporter") instead of the raw soup.
@@ -677,6 +723,11 @@ public:
     ::tf::Executor* executor{nullptr};
     // Receives the prepared-mesh-data statistics when non-null.
     Gltf_export_prepared_statistics* prepared_statistics{nullptr};
+    // Texture image form (Gltf_texture_export); source unless "Save for
+    // Quest". The transcodes run on 'executor' (serial when null).
+    Gltf_texture_export texture_export{Gltf_texture_export::source};
+    // Receives the texture statistics when non-null.
+    Gltf_export_texture_statistics* texture_statistics{nullptr};
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

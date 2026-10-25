@@ -380,7 +380,7 @@ Image_loader::~Image_loader() noexcept
     close();
 }
 
-auto Image_loader::open(const std::filesystem::path& path, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Alpha_mode alpha_mode) -> bool
+auto Image_loader::open(const std::filesystem::path& path, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Alpha_mode alpha_mode, const Astc_support astc_support) -> bool
 {
     // Route .ktx2 / .dds files by extension: the wuffs path memory-maps the
     // file itself, and sniffing the magic here would open the file twice.
@@ -390,7 +390,7 @@ auto Image_loader::open(const std::filesystem::path& path, Image_info& image_inf
         if (!m_ktx2) {
             m_ktx2 = std::make_unique<Image_loader_ktx2>();
         }
-        return m_ktx2->open(path, image_info, linear, transcode_format_preference);
+        return m_ktx2->open(path, image_info, linear, transcode_format_preference, astc_support);
     }
     if (m_use_dds) {
         if (!m_dds) {
@@ -401,7 +401,7 @@ auto Image_loader::open(const std::filesystem::path& path, Image_info& image_inf
     return m_impl->open(path, image_info, linear, alpha_mode);
 }
 
-auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Alpha_mode alpha_mode) -> bool
+auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Alpha_mode alpha_mode, const Astc_support astc_support) -> bool
 {
     m_use_ktx2 = Image_loader_ktx2::is_ktx2(buffer_view);
     m_use_dds  = !m_use_ktx2 && Image_loader_dds::is_dds(buffer_view);
@@ -409,7 +409,7 @@ auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_
         if (!m_ktx2) {
             m_ktx2 = std::make_unique<Image_loader_ktx2>();
         }
-        return m_ktx2->open(buffer_view, image_info, linear, transcode_format_preference);
+        return m_ktx2->open(buffer_view, image_info, linear, transcode_format_preference, astc_support);
     }
     if (m_use_dds) {
         if (!m_dds) {
