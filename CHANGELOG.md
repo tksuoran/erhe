@@ -33,6 +33,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::dataformat`: `get_vertex_format_signature()`.
+- `erhe::primitive`: `vertex_encoding_version` (`mesh_optimizer.hpp`).
+
 - `erhe::primitive`: `Position_quantization` and `get_position_quantization()`
   (moved from `erhe::scene_renderer`); `Buffer_mesh::position_quantization`
   and `Buffer_mesh::texcoord_quantization`, the affines a build encoded the

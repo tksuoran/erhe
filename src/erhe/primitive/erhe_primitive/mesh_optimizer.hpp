@@ -310,6 +310,14 @@ public:
 // The decoder is res/shaders/erhe_vertex_tbn.glsl and must match exactly.
 [[nodiscard]] auto encode_tbn_quaternion(const glm::vec3& normal, const glm::vec4& tangent) -> std::array<int16_t, 4>;
 
+// Version of the vertex attribute encoders (encode_tbn_quaternion(), the
+// implicit-sum joint weights, the position and texcoord affines and their
+// roundings): bumped whenever one of them writes different bits for the same
+// vertex format. GPU-ready vertex streams of a file are used as stored only
+// when their ERHE_gpu_vertex_streams `encoding_version` equals it
+// (doc/gltf_extensions/ERHE_gpu_vertex_streams.md).
+static constexpr int vertex_encoding_version = 1;
+
 // One vertex's skinning influences, sorted so the SMALLEST weight is last.
 //
 // That ordering is what the implicit-sum weight encoding needs - the dropped

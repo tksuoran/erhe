@@ -9,6 +9,7 @@
 
 #include "erhe_scene/mesh.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_primitive/buffer_writer.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -477,6 +478,17 @@ Mesh_memory::Mesh_memory(
     // Every format is now registered; get_vertex_input_from_vertex_format()
     // must never take its miss path again (workers read the vector unlocked).
     m_vertex_input_entries_frozen = true;
+
+    // The layouts GPU-ready vertex streams of a file must match to be used as
+    // stored (ERHE_gpu_vertex_streams `signature`, doc/gltf_extensions/ERHE_gpu_vertex_streams.md).
+    log_startup->info(
+        "Vertex format signatures (encoding version {}): base {} / skinned {}; optimized {} / skinned {}",
+        erhe::primitive::vertex_encoding_version,
+        erhe::dataformat::get_vertex_format_signature(vertex_format_not_skinned),
+        erhe::dataformat::get_vertex_format_signature(vertex_format_skinned),
+        erhe::dataformat::get_vertex_format_signature(vertex_format_not_skinned_optimized),
+        erhe::dataformat::get_vertex_format_signature(vertex_format_skinned_optimized)
+    );
 }
 
 auto Mesh_memory::get_all_vertex_formats() -> std::vector<erhe::dataformat::Vertex_format*>

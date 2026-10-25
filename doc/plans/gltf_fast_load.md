@@ -1099,6 +1099,17 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    `ERHE_gpu_vertex_streams.md` + schema;
    `get_vertex_format_signature()`. Gates: `check_doc_links.py`; signature
    unit test.
+
+   Result (2026-10-25): `doc/gltf_extensions/ERHE_gpu_vertex_streams.md`
+   finished (core-primitive contract, attribute names and encodings,
+   signature grammar with today's four layouts, JSON, validation) with
+   `schema/ERHE_gpu_vertex_streams.schema.json`; the signature is
+   `erhe::dataformat::get_vertex_format_signature()` (generic over any
+   `Vertex_format`, so the loader compares against the running
+   `Mesh_memory` formats directly) and the encoder version
+   `erhe::primitive::vertex_encoding_version` = 1; `Mesh_memory` logs both
+   at startup. `erhe_dataformat_tests` signature tests 2/2;
+   `check_doc_links` clean.
 8. **Save for Quest writes GPU streams.** Gates: the Khronos validator
    reports no new errors (infos only); the file loaded with
    `use_gpu_vertex_streams` off renders like the item 4 Quest file (Bistro

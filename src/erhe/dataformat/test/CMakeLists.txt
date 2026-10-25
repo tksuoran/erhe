@@ -3,6 +3,7 @@ add_executable(${_target}
     main.cpp
     test_snorm16_quantization.cpp
     test_vertex_format.cpp
+    test_vertex_format_signature.cpp
     test_vertex_stream_packing.cpp
 )
 
