@@ -335,6 +335,36 @@ byte-for-byte against the foreign Bistro at idle.
    `doc/agents/quest.md`. Gate: 0 deferred tasks, plus load time and peak
    memory recorded here.
 
+   Result (2026-10-25, Quest 3, release APK, off-head automated runs, the
+   default startup scene loaded first, MCP `load_scene` with both files in
+   the app's external files directory, fresh install so `cache/bvh` and
+   `cache/mesh_optimizer` start empty): listed and idle are host wall time
+   from the `load_scene` reply (0.25 s poll), peak RSS is `VmHWM` of the
+   process.
+
+   | Open | listed | idle | parse (images / meshes) | build | deferred tasks | peak RSS |
+   |---|---|---|---|---|---|---|
+   | foreign `.gltf`, run 1 (cold caches) | 15.1 s | killed | 8.8 s (5.1 / 3.3) | 0.58 s | 2727 | > 2.9 GB sampled; lmkd 6.3 GB at the kill |
+   | foreign `.gltf`, run 2 | 16.1 s | killed | 9.1 s (5.2 / 3.5) | 0.63 s | 2727 | > 2.8 GB sampled; lmkd 6.6 GB at the kill |
+   | erhe-saved `.glb`, run 1 | 16.7 s | 16.7 s | 8.1 s (5.2 / 1.4) | 1.64 s | 0 | 3.7 GB |
+   | erhe-saved `.glb`, run 2 | 18.9 s | 19.4 s | 7.5 s (5.0 / 1.1) | 1.51 s | 0 | 3.4 GB |
+   | erhe-saved `.glb`, run 3 | 17.2 s | 17.7 s | 8.6 s (5.1 / 1.9) | 1.55 s | 0 | 3.6 GB |
+
+   The foreign Bistro does not finish loading on the Quest: in the deferred
+   phase (2727 finalize tasks, geometry-path optimizer and BVH builds) the
+   process grows past 6 GB and the low memory killer's watchdog kills it
+   about 25 s after the load starts, in both runs (run 2 found most BVHs in
+   `cache/bvh` from run 1 and still ran out of memory). The erhe-saved file
+   loads with `prepared mesh data: 3852 used, 0 rejected; topology 3852,
+   BVH 3852`, `0 deferred finalize tasks queued, 2727 meshes skipped`, no
+   mesh optimize or BVH build line for the file, `render_shapes {count 3864,
+   prepared 3852, with_geometry 8}` (the 8 are the startup scene), and goes
+   idle within one poll of being listed. `dumpsys meminfo` at idle: total
+   PSS 4.6-5.6 GB; device-local GPU memory 3.25 GB, of which textures
+   1.96 GB (652 textures). The load is now bound by the KTX2 Basis
+   transcode (images 5.0-5.2 s of the 7.5-8.6 s parse, decision 3) and the
+   residency upload between the build and the finalize (about 5 s).
+
 ## Decisions (2026-10-25, user: "proceed" on the recommendations)
 
 1. The first save rewrites the imported vertex data into the prepared core
