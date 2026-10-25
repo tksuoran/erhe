@@ -697,8 +697,12 @@ void Operations::on_scene_opened(const std::shared_ptr<Scene_root>& scene_root)
     // Show the loaded scene in a viewport window: repurposes an existing
     // viewport that shows no scene when one exists (#265 follow-up), else
     // creates a new one docked (tabbed) with the existing viewport (#258)
-    // and brings its tab to the front.
-    m_context.scene_views->open_new_viewport_scene_view_node(scene_root);
+    // and brings its tab to the front. On OpenXR the headset path renders the
+    // scene and there is no desktop window host for a viewport window to
+    // feed, so no viewport is opened (same rule as Scene_builder).
+    if (!m_context.OpenXR) {
+        m_context.scene_views->open_new_viewport_scene_view_node(scene_root);
+    }
 
     // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to this
     // scene if none existed yet -- e.g. a load-only commands.json with no
