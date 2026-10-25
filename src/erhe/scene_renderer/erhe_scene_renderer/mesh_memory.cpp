@@ -111,7 +111,7 @@ auto get_blas_position_input(
 
     // The same affine the primitive record and the instance records carry, as a
     // build transform: translate(center) * scale(half_extent).
-    const Position_quantization quantization = get_position_quantization(buffer_mesh.bounding_box);
+    const Position_quantization& quantization = buffer_mesh.position_quantization;
     result.transform = glm::mat4{
         glm::vec4{quantization.scale.x, 0.0f, 0.0f, 0.0f},
         glm::vec4{0.0f, quantization.scale.y, 0.0f, 0.0f},

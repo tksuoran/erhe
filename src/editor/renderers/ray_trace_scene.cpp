@@ -194,8 +194,7 @@ auto Ray_trace_scene::get_or_create_geometry(
     // position fetch, which reads three int16 lanes at position_stride_bytes.
     const erhe::dataformat::Vertex_position_encoding position_encoding =
         erhe::dataformat::get_vertex_position_encoding(&m_mesh_memory.get_vertex_input(buffer_mesh.vertex_input_key).vertex_format);
-    const erhe::scene_renderer::Position_quantization quantization =
-        erhe::scene_renderer::get_position_quantization(buffer_mesh.bounding_box);
+    const erhe::scene_renderer::Position_quantization quantization = buffer_mesh.position_quantization;
 
     g.record = Scene_tlas::Instance_record_data{
         .index_address         = index_base_address + index_range.byte_offset + (triangles.first_index * index_range.element_size),
@@ -402,10 +401,8 @@ void Ray_trace_scene::update_materials(const erhe::scene_renderer::Material_set&
 
 auto Ray_trace_scene::refresh_quantization(Instance& instance) const -> bool
 {
-    // The dequantization affine follows the Buffer_mesh bounding box, which a
-    // live mesh-component drag grows in place (on_bounds_changed).
-    const erhe::scene_renderer::Position_quantization quantization =
-        erhe::scene_renderer::get_position_quantization(instance.geometry->buffer_mesh->bounding_box);
+    // The dequantization affine the build stored on the Buffer_mesh.
+    const erhe::scene_renderer::Position_quantization quantization = instance.geometry->buffer_mesh->position_quantization;
     const bool changed =
         (instance.record.position_scale  != quantization.scale) ||
         (instance.record.position_offset != quantization.offset);

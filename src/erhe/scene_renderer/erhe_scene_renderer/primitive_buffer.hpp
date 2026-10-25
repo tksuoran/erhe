@@ -5,6 +5,7 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/aabb.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_scene_renderer/generated/primitive_color_source.hpp"
 
@@ -61,21 +62,9 @@ public:
                                     // affine-encoded and does not appear here.
 };
 
-// Dequantization affine for one primitive, derived from its object space AABB.
-// Encoder and decoder must agree exactly, so both go through this:
-//   scale  = max(0.5 * (max - min), epsilon)  per axis
-//   offset = 0.5 * (max + min)
-// A degenerate axis encodes to exactly 0 and decodes back to the center, so the
-// epsilon never contributes there. An AABB that is invalid - i.e. never had a
-// point included - yields the identity instead.
-class Position_quantization
-{
-public:
-    glm::vec4 scale {1.0f, 1.0f, 1.0f, 0.0f};
-    glm::vec4 offset{0.0f, 0.0f, 0.0f, 0.0f};
-};
-
-[[nodiscard]] auto get_position_quantization(const erhe::math::Aabb& bounding_box) -> Position_quantization;
+// The position dequantization affine (erhe::primitive::Position_quantization;
+// each Buffer_mesh stores the one its build encoded with).
+using Position_quantization = erhe::primitive::Position_quantization;
 
 class Primitive_interface
 {

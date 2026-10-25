@@ -574,14 +574,14 @@ void write_slot_fields(
 void write_position_quantization_fields(std::byte* record, const Primitive_struct& offsets, const erhe::primitive::Buffer_mesh* buffer_mesh)
 {
     const Position_quantization quantization = (buffer_mesh != nullptr)
-        ? get_position_quantization(buffer_mesh->bounding_box)
+        ? buffer_mesh->position_quantization
         : Position_quantization{};
     std::memcpy(record + offsets.position_scale,  &quantization.scale,  sizeof(glm::vec4));
     std::memcpy(record + offsets.position_offset, &quantization.offset, sizeof(glm::vec4));
 
     // Texcoord affine, same fallback rule.
     const erhe::primitive::Texcoord_quantization texcoord_quantization = (buffer_mesh != nullptr)
-        ? erhe::primitive::get_texcoord_quantization(*buffer_mesh)
+        ? buffer_mesh->texcoord_quantization
         : erhe::primitive::Texcoord_quantization{};
     std::memcpy(record + offsets.texcoord_scale,  &texcoord_quantization.scale,  sizeof(glm::vec4));
     std::memcpy(record + offsets.texcoord_offset, &texcoord_quantization.offset, sizeof(glm::vec4));

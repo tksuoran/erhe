@@ -23,6 +23,23 @@ void release_allocations(Buffer_mesh& buffer_mesh)
 
 }
 
+auto get_position_quantization(const erhe::math::Aabb& bounding_box) -> Position_quantization
+{
+    if (!bounding_box.is_valid_3d()) {
+        return Position_quantization{};
+    }
+    // Small enough that it never perturbs a real extent, large enough to keep
+    // the encoder's division finite on a degenerate (zero thickness) axis.
+    constexpr float epsilon = 1e-6f;
+    const glm::vec3 center      = bounding_box.center();
+    const glm::vec3 half_extent = 0.5f * bounding_box.diagonal();
+    const glm::vec3 scale       = glm::max(half_extent, glm::vec3{epsilon});
+    return Position_quantization{
+        .scale  = glm::vec4{scale,  0.0f},
+        .offset = glm::vec4{center, 0.0f}
+    };
+}
+
 auto get_texcoord_quantization(const Buffer_mesh& buffer_mesh) -> Texcoord_quantization
 {
     constexpr float epsilon = 1e-6f;
@@ -74,6 +91,8 @@ Buffer_mesh& Buffer_mesh::operator=(Buffer_mesh&& other)
         bounding_box                   = other.bounding_box;
         bounding_sphere                = other.bounding_sphere;
         texcoord_ranges                = other.texcoord_ranges;
+        position_quantization          = other.position_quantization;
+        texcoord_quantization          = other.texcoord_quantization;
         has_vertex_colors              = other.has_vertex_colors;
         joint_bounding_boxes           = std::move(other.joint_bounding_boxes);
         triangle_fill_indices          = other.triangle_fill_indices;

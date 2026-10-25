@@ -3371,7 +3371,7 @@ auto Lightmap_baker::bake_gbuffer(const int tile) -> bool
                         const erhe::primitive::Buffer_mesh* const buffer_mesh =
                             (primitive != nullptr) ? primitive->get_renderable_mesh(erhe::primitive::Mesh_variant::original) : nullptr;
                         if (buffer_mesh != nullptr) {
-                            quantization = erhe::scene_renderer::get_position_quantization(buffer_mesh->bounding_box);
+                            quantization = buffer_mesh->position_quantization;
                         }
                     }
                 }
@@ -4228,8 +4228,7 @@ void Lightmap_baker::collect_instances(
                         &m_mesh_memory.get_vertex_input(buffer_mesh->vertex_input_key).vertex_format
                     )
                 );
-                const erhe::scene_renderer::Position_quantization quantization =
-                    erhe::scene_renderer::get_position_quantization(buffer_mesh->bounding_box);
+                const erhe::scene_renderer::Position_quantization quantization = buffer_mesh->position_quantization;
                 record.position_scale        = quantization.scale;
                 record.position_offset       = quantization.offset;
             }

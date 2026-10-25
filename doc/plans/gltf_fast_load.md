@@ -1081,6 +1081,20 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    builds (no Quest run: the load path did not change).
 6. **Explicit quantization on `Buffer_mesh`.** Gates: renders identical,
    scene renderer / editor GPU tests, BLAS path unchanged.
+
+   Result (2026-10-25): `Buffer_mesh::position_quantization` /
+   `texcoord_quantization` set by both encoders (and copied to an optimized
+   variant built from a source build); the record writers, the BLAS build
+   transform, the ray-trace instance records, the lightmap baker and MCP
+   `get_mesh_buffer_bytes` read them; `Position_quantization` and
+   `get_position_quantization()` moved to `erhe::primitive`, so the affine has
+   one derivation (doc/erhe/vertex_position_quantization.md section 3.0; the
+   doc/plans/mesh_memory.md "One definition of the affine" item is done).
+   Renders: prepared and foreign Bistro d488fefc... (the foreign one after
+   its deferred phase, i.e. with geometry-path optimized variants); `ctest
+   -LE editor` 1943/1943 (one earlier `-j 6` run had 3 failures that passed
+   on rerun and in a second full run), `ctest -R Mcp_` 93/96 (the same 3
+   ImGui cases); `example`, `hextiles`, `hello_swap` build.
 7. **Spec, schema and format signature.** Finish
    `ERHE_gpu_vertex_streams.md` + schema;
    `get_vertex_format_signature()`. Gates: `check_doc_links.py`; signature

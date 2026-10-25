@@ -200,6 +200,26 @@ there is nothing to fold into), and it corrupts `v_node_position` plus the
 corner-cap paths that need real object-space positions. The AABB stays
 explicit.
 
+### 3.0 The stored affine
+
+The affine is derived once, by `erhe::primitive::get_position_quantization(aabb)`
+(`erhe_primitive/buffer_mesh.hpp`, beside `Texcoord_quantization` /
+`get_texcoord_quantization()`), at the build that writes the vertices, and
+stored on the mesh: `Buffer_mesh::position_quantization` and
+`Buffer_mesh::texcoord_quantization`. The encoders read it from there (the
+soup path in `build_buffer_mesh_from_triangle_soup()`, the geometry path in
+`Build_context_root::calculate_bounding_volume()` and
+`take_optimizable_snapshot()`), the optimized variant built from a source
+build copies it, and every decoder reads it - the record writers below, the
+BLAS build transform (`get_blas_position_input()`), the ray-trace instance
+records and the lightmap baker. So encoder and decoders agree by
+construction, and a build that stores its affine elsewhere (GPU-ready vertex
+data with stored scale / offset, doc/plans/gltf_fast_load.md item 9) sets
+these fields instead of deriving them. A later change of `bounding_box` (a
+live edit of the float base variant, which reads no affine) leaves them as
+built. `erhe::scene_renderer::Position_quantization` is an alias of the
+`erhe::primitive` class.
+
 ### 3.1 The four write sites
 
 The decode lives behind `#if ERHE_VERTEX_POSITION_ENCODING == ...`, so a
@@ -207,7 +227,7 @@ passthrough variant never reads these fields. What matters is that every path
 that can produce a *quantized* draw writes them:
 
 1. `Primitive_buffer::update(std::span<const std::shared_ptr<Mesh>>, ...)` -
-   writes from `buffer_mesh->bounding_box`.
+   writes `buffer_mesh->position_quantization` / `texcoord_quantization`.
 2. `Primitive_buffer::write_primitive(...)` - same.
 3. `Primitive_buffer::update(std::span<const std::shared_ptr<Node>> ...)` -
    this site has no `Buffer_mesh`, no primitive and no material at all; it
@@ -218,8 +238,8 @@ that can produce a *quantized* draw writes them:
    it owns; `Primitive_buffer::update()`'s fast path `memcpy`s that record
    verbatim and patches only `color` and `size`. Left unwritten, every
    quantized mesh would get `scale = offset = (0,0,0,0)` and collapse to a
-   point at the origin. The AABB is static per `Buffer_mesh`, so it is written
-   once per entry next to `base_vertex`. This site does not abort when the
+   point at the origin. The stored affine is static per `Buffer_mesh`, so it
+   is written once per entry next to `base_vertex`. This site does not abort when the
    primitive has no renderable `Buffer_mesh`: `refresh_object_records()`
    replays entries against a scene that may have been mutated since, so it
    falls back to the identity affine.

@@ -1700,6 +1700,9 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
         }
     }
     const Texcoord_quantization texcoord_quantization = get_texcoord_quantization(buffer_mesh);
+    // The affines the vertices below are encoded with, stored for the decoders.
+    buffer_mesh.position_quantization = get_position_quantization(buffer_mesh.bounding_box);
+    buffer_mesh.texcoord_quantization = texcoord_quantization;
 
     // Sink encoding. Gated on the SINK format, not the source: this function is
     // also called with a local float3-only format by Primitive_raytrace, whose
@@ -1709,11 +1712,8 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     glm::vec3 position_encode_center   {0.0f, 0.0f, 0.0f};
     glm::vec3 position_encode_inv_scale{1.0f, 1.0f, 1.0f};
     if ((sink_position_encoding != erhe::dataformat::Vertex_position_encoding::passthrough) && (buffer_mesh.bounding_box.is_valid_3d())) {
-        // Same affine as Build_context and get_position_quantization().
-        constexpr float epsilon = 1e-6f;
-        const glm::vec3 half_extent = 0.5f * buffer_mesh.bounding_box.diagonal();
-        const glm::vec3 scale       = glm::max(half_extent, glm::vec3{epsilon});
-        position_encode_center    = buffer_mesh.bounding_box.center();
+        const glm::vec3 scale     = glm::vec3{buffer_mesh.position_quantization.scale};
+        position_encode_center    = glm::vec3{buffer_mesh.position_quantization.offset};
         position_encode_inv_scale = glm::vec3{1.0f / scale.x, 1.0f / scale.y, 1.0f / scale.z};
     }
 

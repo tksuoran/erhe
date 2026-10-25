@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::scene_renderer`: `get_position_quantization()` (read
+  `erhe::primitive::Buffer_mesh::position_quantization`, or call
+  `erhe::primitive::get_position_quantization()`);
+  `erhe::scene_renderer::Position_quantization` is now an alias of
+  `erhe::primitive::Position_quantization`.
 - `erhe::scene_renderer`: `Draw_list_scene::Shadow_record_scope` and
   `Draw_list_scene::begin_shadow_record_scope()`. The shared draw records
   are frame-wide: the first shared record a `Draw_list_scene` acquires in a
@@ -27,6 +32,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `ERHE_PRIMITIVE_INDEX` (doc/erhe/graphics.md "Draw records").
 
 ### Added
+
+- `erhe::primitive`: `Position_quantization` and `get_position_quantization()`
+  (moved from `erhe::scene_renderer`); `Buffer_mesh::position_quantization`
+  and `Buffer_mesh::texcoord_quantization`, the affines a build encoded the
+  mesh with, which the decoders read.
 
 - `erhe::primitive`: `Triangle_soup_source::references_file()` (virtual,
   false by default), `Primitive::rebind_triangle_soup_source()`,

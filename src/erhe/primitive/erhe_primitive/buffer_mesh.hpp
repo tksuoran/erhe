@@ -44,15 +44,34 @@ static constexpr std::size_t affine_texcoord_channel_count = 2;
 
 // Dequantization affine for the two affine texcoord channels of one primitive:
 // xy is channel 0, zw is channel 1, and decoded = a_texcoord * scale + offset.
-// Encoder and decoder must agree exactly, so both go through
-// get_texcoord_quantization() below - unlike the position affine, which is
-// derived independently at three sites.
+// The encoder stores the affine it used on the Buffer_mesh
+// (Buffer_mesh::texcoord_quantization); the decoders read it from there.
 class Texcoord_quantization
 {
 public:
     glm::vec4 scale {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 offset{0.0f, 0.0f, 0.0f, 0.0f};
 };
+
+// Dequantization affine of one primitive's stream-0 position:
+// decoded = a_position * scale.xyz + offset.xyz. Derived from the object
+// space AABB by get_position_quantization() below:
+//   scale  = max(0.5 * (max - min), epsilon)  per axis
+//   offset = 0.5 * (max + min)
+// A degenerate axis encodes to exactly 0 and decodes back to the center, so
+// the epsilon never contributes there. An AABB that is invalid - never had a
+// point included - yields the identity. The encoder stores the affine it
+// used on the Buffer_mesh (Buffer_mesh::position_quantization); the decoders
+// (the primitive records, the BLAS build transform, the ray-trace instance
+// records) read it from there.
+class Position_quantization
+{
+public:
+    glm::vec4 scale {1.0f, 1.0f, 1.0f, 0.0f};
+    glm::vec4 offset{0.0f, 0.0f, 0.0f, 0.0f};
+};
+
+[[nodiscard]] auto get_position_quantization(const erhe::math::Aabb& bounding_box) -> Position_quantization;
 
 // Serializes GPU vertex/index pool traffic of buffer meshes. The vertex-pool
 // lockstep invariant (one indirect-draw vertexOffset applied to every stream
@@ -94,9 +113,20 @@ public:
 
     // UV bounds of texcoord channels 0 and 1 over this mesh's vertices, from
     // which get_texcoord_quantization() derives the affine. Populated by every
-    // build; only READ when the vertex format stores those channels as
-    // unorm16x2, so it is inert for the float base variant.
+    // build.
     std::array<Texcoord_range, affine_texcoord_channel_count> texcoord_ranges{};
+
+    // The affines the build encoded this mesh's stream-0 position and
+    // texcoord channels 0 and 1 with (doc/erhe/vertex_position_quantization.md
+    // section 3): set by the build that writes the vertices - derived from
+    // bounding_box / texcoord_ranges, or stored with GPU-ready vertex data -
+    // and read by every decoder, never re-derived there. Only meaningful when
+    // the vertex format stores the attribute quantized (snorm16x3 position,
+    // unorm16x2 texcoords); a float format ignores them. A later change of
+    // bounding_box (a live edit of the float base variant) does not change
+    // them.
+    Position_quantization     position_quantization{};
+    Texcoord_quantization     texcoord_quantization{};
 
     // Per-joint rest-pose bounds, indexed by joint index (the same index space
     // as the JOINTS_n vertex attribute and erhe::scene::Skin_data::joints).
