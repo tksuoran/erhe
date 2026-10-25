@@ -1968,11 +1968,20 @@ auto finish_open_scene_gltf(
     // wrappers are never written), so open adds no wrapper either. No
     // default camera / lights are injected - an erhe-authored scene carries
     // exactly the cameras and lights it was saved with. Copy the child list:
-    // reparenting mutates it.
+    // reparenting mutates it. The local transform is kept as read from the
+    // file (set_prim_parent): the container is the parse root at the
+    // identity, and the world-preserving set_parent would store the composed
+    // world matrix instead of the file's TRS, which the next save decomposes
+    // (a few ulps off, a drift on every save).
     const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
     const std::vector<std::shared_ptr<erhe::Hierarchy>> children = container_node->get_children();
     for (const std::shared_ptr<erhe::Hierarchy>& child : children) {
-        child->set_parent(scene_root_node);
+        const std::shared_ptr<erhe::scene::Xformable> child_xformable = std::dynamic_pointer_cast<erhe::scene::Xformable>(child);
+        if (child_xformable) {
+            erhe::scene::set_prim_parent(child_xformable, scene_root_node);
+        } else {
+            child->set_parent(scene_root_node);
+        }
     }
 
     // The file's variant set, carried by the scene's own root prim: an
