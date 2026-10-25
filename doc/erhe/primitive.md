@@ -198,6 +198,27 @@ referenced, no degenerate triangle, content hash) and
 bitwise-identical positions per point); both return a fixed reason phrase,
 or an empty string when the input passes.
 
+`Primitive::make_prepared_meshes(build_info)` is the load build of such a
+primitive, with no Geometry:
+
+- the base render shape gets the fill-only soup buffer mesh
+  (`build_buffer_mesh_from_triangle_soup()` with `build_info.buffer_info`);
+- when `buffer_info.optimize_meshes` and `optimized_vertex_format` are set,
+  the optimized variant is a `Primitive_render_shape` over the same core soup
+  with empty `Element_mappings`, built into the optimized vertex format and
+  published with `publish_optimized_render_shape()`: the core already is in
+  meshoptimizer order, so this is one linear pack and no meshoptimizer call;
+- `Primitive_shape::make_prepared_raytrace()` builds
+  `Primitive_raytrace(soup, &bvh)`, which offers the stored BVH to the
+  backend before the commit (`IGeometry::set_prebuilt_bvh()`) and maps
+  triangle `t` to facet `t`. It is installed only when the backend used the
+  stored BVH (`Primitive_raytrace::get_bvh_source()` is `prebuilt`);
+  otherwise nothing is installed and the caller takes the proxy path.
+
+It is idempotent and has the threading of `make_renderable_mesh()`. The
+stored BVH stays in the prepared data after the raytrace takes its copy.
+Tests: `Prepared_primitive.prepared_meshes_build_without_geometry`.
+
 ## Empty primitives
 
 A `Geometry` with no facets is a legal source: mesh operations produce one when

@@ -279,6 +279,23 @@ byte-for-byte against the foreign Bistro at idle.
    - the render is byte-identical to the foreign Bistro at idle, or the
      difference is recorded and goes to the user;
    - two runs give identical results.
+
+   Result (2026-10-25, Release headless, the step 5 prepared Bistro, two
+   editor runs of two opens per setting, warm caches): on, listed 3.57 /
+   4.02 / 3.62 / 4.03 s and idle 0.17-0.18 s later (one MCP status round
+   trip); off, listed 3.12-4.29 s and idle 1.6-2.8 s later.
+   `build_imported_buffer_meshes` 325-352 ms with all 3852 shapes prepared
+   (off: 131-154 ms), `finalize_imported_meshes` 6-8 ms, `0 deferred
+   finalize tasks queued, 2727 meshes skipped` (off: 2727 queued). The log
+   holds no mesh optimize, BVH build or colocate line for the file (one
+   2-triangle primitive the editor creates outside the file is optimized in
+   both settings). Every render at idle, on and off, first and second open,
+   is byte-identical (md5 89832b6289571d743904759b59872f03), the reference
+   being the prepared file loaded with the setting off (which differs from
+   the foreign Bistro in 124 pixels, pre-existing, see step 4). Cold caches
+   (`cache/bvh` and `cache/mesh_optimizer` moved aside): on, listed 3.49-
+   3.62 s, idle 0.17-0.18 s later, same render; off, listed 3.68 s, idle
+   7.68 s.
 7. **Lazy `Geometry` and on-demand full build.** Gates:
    - no `Geometry` alive after a Bistro load (`get_memory_usage`; RSS down
      by about 1.9 GB);

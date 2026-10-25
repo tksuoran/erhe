@@ -171,6 +171,27 @@ on, the prepared mesh data a scene save writes (`doc/plans/gltf_fast_load.md`)
 is validated at parse and attached to the soup primitives; off, those files
 load as plain soups. It exists for A/B runs.
 
+A primitive loaded with prepared mesh data (`Primitive::is_prepared()`)
+reaches its final load state in the build phase and has nothing deferred:
+`build_imported_buffer_meshes` (worker, before the scene insert, so nothing
+draws or traces it yet) calls `Primitive::make_prepared_meshes()`, which
+builds the fill-only soup buffer mesh over the core, the optimized variant as
+one linear pack of the core into the optimized vertex format (no
+meshoptimizer, empty element mappings) and the real raytrace from the stored
+BVH with an identity facet map (`doc/erhe/primitive.md` "Prepared mesh data
+on load"). `finalize_imported_meshes` gives such a primitive no Geometry, no
+soup-path optimizer and no proxy (it calls the idempotent
+`make_prepared_meshes()` itself for the synchronous load paths), and
+`Async_raytrace_kickoff_operation` queues no task for a mesh whose
+primitives are all prepared with a real raytrace and, when meshes are
+optimized, their optimized variant; a mixed mesh keeps its task, which skips
+the full build of its prepared primitives. The kickoff logs
+`Async_raytrace_kickoff: N deferred finalize tasks queued, M meshes skipped`.
+A primitive whose stored BVH the backend does not use falls back to the
+proxy and the deferred raytrace. The Geometry of a prepared primitive is
+built only on demand (`get_geometry()`, from the soup), and with it no edge
+lines exist until a full build runs.
+
 `deferred_edge_lines` puts a GPU buffer-mesh build on a worker, which on GL
 needs a worker share context; without one (headless, null window) the edge
 lines are built eagerly on the main thread whatever the option says. Picking

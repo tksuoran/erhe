@@ -492,4 +492,79 @@ TEST(Prepared_primitive, load_validation_of_core_and_vertex_points)
 }
 
 
+// Load path of a prepared primitive (doc/plans/gltf_fast_load.md step 6):
+// base soup build, optimized variant packed from the core, and the raytrace
+// from the stored BVH with an identity facet map - and no Geometry. A stored
+// BVH that does not match the core installs no raytrace.
+TEST(Prepared_primitive, prepared_meshes_build_without_geometry)
+{
+    Primitive_render_shape source{make_soup(Soup_tangents::with_tangents)};
+    ASSERT_TRUE(source.make_raytrace());
+    const erhe::primitive::Prepare_primitive_result result = erhe::primitive::prepare_primitive_for_export(source);
+    ASSERT_TRUE(result.prepared.has_value()) << result.skip_reason;
+    const Prepared_primitive_export& prepared = result.prepared.value();
+    const bool has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
+
+    const Vertex_format& format       = prepared.core.vertex_format;
+    const std::size_t    stride       = format.streams.front().stride;
+    const std::size_t    vertex_count = prepared.core.get_vertex_count();
+    const std::size_t    index_count  = prepared.core.get_index_count();
+
+    const auto make_data = [&prepared](const uint64_t hash_delta) {
+        std::shared_ptr<erhe::primitive::Prepared_primitive_data> data = std::make_shared<erhe::primitive::Prepared_primitive_data>();
+        data->content_hash    = prepared.content_hash;
+        data->bounding_box    = prepared.bounding_box;
+        data->bounding_sphere = prepared.bounding_sphere;
+        data->colocation      = Vertex_colocation{.vertex_points = prepared.vertex_points, .point_count = prepared.point_count};
+        if (prepared.bvh.has_value()) {
+            data->bvh = prepared.bvh;
+            data->bvh->triangle_hash += hash_delta;
+        }
+        return std::shared_ptr<const erhe::primitive::Prepared_primitive_data>{data};
+    };
+
+    for (const uint64_t hash_delta : {uint64_t{0}, uint64_t{1}}) {
+        erhe::buffer::Cpu_buffer vertex_buffer{"test_vertex", 2 * vertex_count * stride};
+        erhe::buffer::Cpu_buffer index_buffer {"test_index",  2 * index_count * sizeof(uint32_t)};
+        erhe::primitive::Cpu_vertex_buffer_sink vertex_sink{{&vertex_buffer}};
+        erhe::primitive::Cpu_index_buffer_sink  index_sink {index_buffer};
+        const erhe::primitive::Build_info build_info{
+            .primitive_types = {.fill_triangles = true},
+            .buffer_info = {
+                .normal_style            = erhe::primitive::Normal_style::corner_normals,
+                .index_type              = Format::format_32_scalar_uint,
+                .vertex_format           = format,
+                .vertex_buffer_sink      = vertex_sink,
+                .index_buffer_sink       = index_sink,
+                .optimize_meshes         = true,
+                .optimized_vertex_format = &format
+            }
+        };
+
+        erhe::primitive::Primitive primitive{std::make_shared<Triangle_soup>(prepared.core), make_data(hash_delta)};
+        ASSERT_TRUE(primitive.is_prepared());
+        ASSERT_TRUE(primitive.make_prepared_meshes(build_info));
+        EXPECT_TRUE(primitive.has_renderable_triangles());
+        ASSERT_TRUE(primitive.optimized_render_shape);
+        EXPECT_EQ(primitive.optimized_render_shape->get_renderable_mesh().index_range(erhe::primitive::Primitive_mode::polygon_fill).index_count, index_count);
+        EXPECT_FALSE(primitive.render_shape->get_geometry_const());
+        if (!has_bvh_backend) {
+            EXPECT_FALSE(primitive.has_real_raytrace());
+            continue;
+        }
+        if (hash_delta != 0) {
+            // The backend refuses the stored BVH: nothing is installed and the
+            // caller takes the proxy + deferred raytrace path.
+            EXPECT_FALSE(primitive.has_raytrace_triangles());
+            continue;
+        }
+        ASSERT_TRUE(primitive.has_real_raytrace());
+        const erhe::primitive::Primitive_raytrace& raytrace = primitive.render_shape->get_raytrace();
+        EXPECT_EQ(raytrace.get_bvh_source(), static_cast<unsigned int>(erhe::raytrace::Bvh_source::prebuilt));
+        for (uint32_t triangle = 0; triangle < (index_count / 3); ++triangle) {
+            EXPECT_EQ(raytrace.get_mesh_facet_from_triangle(triangle), triangle);
+        }
+    }
+}
+
 } // namespace
