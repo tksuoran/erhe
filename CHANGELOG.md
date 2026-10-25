@@ -28,6 +28,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Primitive::make_prepared_meshes()` and
+  `Primitive::is_prepared()` (the load build of a primitive with prepared
+  mesh data), `Primitive_shape::make_prepared_raytrace()` and
+  `Primitive_raytrace::get_bvh_source()`. The soup constructor of
+  `Primitive_raytrace` is now
+  `Primitive_raytrace(const Triangle_soup&, const erhe::raytrace::Prebuilt_bvh*)`
+  (was `Primitive_raytrace(Triangle_soup&)`): it takes an optional stored
+  BVH and maps triangle t to facet t.
 - `erhe::primitive`: `Prepared_primitive_data`, `validate_prepared_core()`
   and `validate_vertex_points()` (`prepared_primitive.hpp`); the
   constructors `Primitive(soup, prepared_data)`,

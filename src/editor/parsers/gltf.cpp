@@ -730,6 +730,12 @@ void build_imported_buffer_meshes(
     // gltf_data.nodes keeps the meshes (and through them the primitives)
     // alive, and `jobs` outlives the wait below, so the raw pointers and the
     // job references captured by the tasks stay valid.
+    std::size_t prepared_count = 0;
+    for (const Build_job& job : jobs) {
+        if (job.primitive->is_prepared()) {
+            ++prepared_count;
+        }
+    }
     tf::Taskflow taskflow;
     for (const Build_job& job : jobs) {
         taskflow.emplace(
@@ -739,7 +745,17 @@ void build_imported_buffer_meshes(
                 // On GL the GPU buffer allocations inside the build need a
                 // worker share context; no-op on other backends.
                 const erhe::graphics::Scoped_worker_context worker_context{graphics_device};
-                if (!job.primitive->make_renderable_mesh(*job.build_info, erhe::primitive::Normal_style::corner_normals)) {
+                // A primitive loaded with prepared mesh data reaches its final
+                // load state here: base soup build, optimized variant packed
+                // from the core and the raytrace from the stored BVH
+                // (doc/editor/async_asset_loading.md "Prepared mesh data").
+                // Nothing draws or traces these primitives yet - the scene
+                // insert happens after this build phase - so the optimized
+                // variant and the raytrace are installed directly.
+                const bool built = job.primitive->is_prepared()
+                    ? job.primitive->make_prepared_meshes(*job.build_info)
+                    : job.primitive->make_renderable_mesh(*job.build_info, erhe::primitive::Normal_style::corner_normals);
+                if (!built) {
                     log_parsers->error(
                         "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
                         job.mesh->get_name()
@@ -759,10 +775,11 @@ void build_imported_buffer_meshes(
     future.get();
 
     log_parsers->info(
-        "build_imported_buffer_meshes: {} primitives, {} ms ({} unique shapes built in parallel)",
+        "build_imported_buffer_meshes: {} primitives, {} ms ({} unique shapes built in parallel, {} of them prepared)",
         primitive_count,
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count(),
-        jobs.size()
+        jobs.size(),
+        prepared_count
     );
 }
 
@@ -863,6 +880,7 @@ void finalize_imported_meshes(
         .autocolor       = build_info.autocolor
     };
 
+    std::size_t prepared_count = 0;
     for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
         if (!node) {
             continue;
@@ -886,6 +904,30 @@ void finalize_imported_meshes(
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
             erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
             const std::size_t this_primitive_index = primitive_index++;
+            // Prepared mesh data: the base soup build, the optimized variant
+            // and the stored-BVH raytrace are the primitive's final load
+            // state (build_imported_buffer_meshes builds them on the async
+            // path; make_prepared_meshes is idempotent and builds them here
+            // on the synchronous paths). No Geometry, no full build, no
+            // soup optimizer; only a primitive whose stored BVH was not used
+            // falls back to the proxy + deferred raytrace.
+            if (primitive.is_prepared()) {
+                ++prepared_count;
+                if (!primitive.make_prepared_meshes(mesh_build_info)) {
+                    log_parsers->error(
+                        "glTF import: failed to build renderable mesh for '{}' (out of GPU mesh memory?) - primitive skipped",
+                        mesh->get_name()
+                    );
+                }
+                if (!primitive.has_real_raytrace()) {
+                    if (defer_raytrace) {
+                        static_cast<void>(primitive.make_raytrace_proxy());
+                    } else if (!primitive.make_raytrace()) {
+                        log_parsers->warn("glTF import: failed to build raytrace for '{}'", mesh->get_name());
+                    }
+                }
+                continue;
+            }
             // glTF arrives with facets + vertices but no edges. Build edges
             // (and the smooth vertex normals used for wireframe bias) so
             // the content wide-line renderer has something to draw.
@@ -960,10 +1002,11 @@ void finalize_imported_meshes(
 
     const std::chrono::steady_clock::duration finalize_duration = std::chrono::steady_clock::now() - finalize_start_time;
     log_parsers->info(
-        "finalize_imported_meshes: {} ms (deferred_edge_lines = {}, deferred_raytrace = {})",
+        "finalize_imported_meshes: {} ms (deferred_edge_lines = {}, deferred_raytrace = {}, prepared primitives = {})",
         std::chrono::duration_cast<std::chrono::milliseconds>(finalize_duration).count(),
         defer_edge_lines,
-        defer_raytrace
+        defer_raytrace,
+        prepared_count
     );
     // Session totals, not this import's: primitives are shared and deduped
     // across imports, and the geometry-path optimizations of THIS import have

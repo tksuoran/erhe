@@ -13,6 +13,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -138,7 +139,11 @@ void deferred_finalize_mesh_items(
                 }
             }
             const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = primitive.render_shape;
+            // A prepared primitive's load state is final without a Geometry
+            // (doc/editor/async_asset_loading.md "Prepared mesh data"): no
+            // full build for it.
             const bool needs_full_build =
+                !primitive.is_prepared() &&
                 render_shape && render_shape->has_buffer_mesh_triangles() && !render_shape->has_edge_lines();
             // A complete mesh whose optimized variant is missing (snapshot
             // decision above) is rebuilt in full with force_rebuild: the
@@ -298,6 +303,28 @@ void deferred_finalize_mesh_items(
     }
 }
 
+// Every primitive of the mesh carries prepared mesh data, has its real
+// raytrace (the stored BVH was used) and, when meshes are optimized, its
+// optimized variant.
+[[nodiscard]] auto is_load_complete(const App_context& context, const erhe::scene::Mesh& mesh) -> bool
+{
+    const bool optimize_meshes = (context.mesh_memory_config != nullptr) && context.mesh_memory_config->optimize_meshes;
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh.get_primitives();
+    if (mesh_primitives.empty()) {
+        return false;
+    }
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+        if ((primitive == nullptr) || !primitive->is_prepared() || !primitive->has_real_raytrace()) {
+            return false;
+        }
+        if (optimize_meshes && !primitive->optimized_render_shape) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // anonymous namespace
 
 void Async_raytrace_kickoff_operation::execute(App_context& context)
@@ -309,7 +336,19 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
     // and the scene lock is held only for each mesh's short commit phase.
     // async_for_nodes_with_mesh chains each task after any pending task for
     // the same item.
+    std::size_t queued_count  = 0;
+    std::size_t skipped_count = 0;
     for (const std::shared_ptr<erhe::Item_base>& item : m_mesh_node_items) {
+        // A mesh whose primitives all loaded with prepared mesh data and a
+        // real raytrace has nothing left to finalize: no task is queued for
+        // it. A mesh mixing prepared and other primitives keeps its task;
+        // the task skips the prepared ones.
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(item);
+        if (mesh && is_load_complete(context, *mesh)) {
+            ++skipped_count;
+            continue;
+        }
+        ++queued_count;
         const std::vector<std::shared_ptr<erhe::Item_base>> single_item{item};
         async_for_nodes_with_mesh(
             context,
@@ -325,6 +364,10 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
             /*op_builds_gpu_meshes=*/false
         );
     }
+    log_operations->info(
+        "Async_raytrace_kickoff: {} deferred finalize tasks queued, {} meshes skipped (prepared mesh data, nothing to finalize)",
+        queued_count, skipped_count
+    );
 }
 
 void Async_raytrace_kickoff_operation::undo(App_context&)

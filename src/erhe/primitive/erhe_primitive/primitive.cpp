@@ -2,6 +2,7 @@
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/primitive_log.hpp"
+#include "erhe_primitive/prepared_primitive.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -9,6 +10,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_buffer/ibuffer.hpp"
 #include "erhe_raytrace/igeometry.hpp"
+#include "erhe_raytrace/prebuilt_bvh.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -481,6 +483,14 @@ auto Primitive_raytrace::get_raytrace_geometry() const -> const std::shared_ptr<
     return m_rt_geometry;
 }
 
+auto Primitive_raytrace::get_bvh_source() const -> unsigned int
+{
+    if (!m_rt_geometry) {
+        return static_cast<unsigned int>(erhe::raytrace::Bvh_source::none);
+    }
+    return static_cast<unsigned int>(m_rt_geometry->get_bvh_source());
+}
+
 auto Primitive_raytrace::get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t
 {
     if (m_triangle_to_mesh_facet.empty()) {
@@ -552,7 +562,7 @@ void Primitive_raytrace::make_raytrace_geometry()
     }
 }
 
-Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
+Primitive_raytrace::Primitive_raytrace(const Triangle_soup& triangle_soup, const erhe::raytrace::Prebuilt_bvh* const prebuilt)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -567,8 +577,13 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
     const std::size_t index_stride = 4;
     const std::size_t vertex_count = triangle_soup.get_vertex_count();
     const std::size_t index_count = triangle_soup.get_index_count();
-    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_vertex", vertex_count * vertex_stride);
-    m_rt_index_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_index", index_count * index_stride);
+    if ((vertex_count == 0) || (index_count < 3)) {
+        return; // the empty raytrace, as for a mesh without facets
+    }
+    // Tail padding of 16 bytes is required by Embree 4 for shared buffers
+    static constexpr std::size_t raytrace_buffer_tail_padding = 16;
+    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_vertex", vertex_count * vertex_stride, raytrace_buffer_tail_padding);
+    m_rt_index_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_index", index_count * index_stride, raytrace_buffer_tail_padding);
     Cpu_vertex_buffer_sink vertex_buffer_sink{{m_rt_vertex_buffer.get()}};
     Cpu_index_buffer_sink  index_buffer_sink{*m_rt_index_buffer.get()};
     const Buffer_info buffer_info{
@@ -581,14 +596,26 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
 
     std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(triangle_soup, buffer_info);
     if (!buffer_mesh_opt.has_value()) {
-        return; // TODO
+        m_rt_vertex_buffer.reset();
+        m_rt_index_buffer.reset();
+        return;
     }
     m_rt_mesh = std::move(buffer_mesh_opt.value());
     m_rt_geometry = erhe::raytrace::IGeometry::create_unique(
-        "triangle_soup_triangle_geometry",
+        "rt_geometry",
         erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
     );
-    m_rt_geometry->set_user_data(nullptr); // TODO
+    m_rt_geometry->set_user_data(nullptr);
+    if (prebuilt != nullptr) {
+        erhe::raytrace::Prebuilt_bvh prebuilt_copy = *prebuilt;
+        static_cast<void>(m_rt_geometry->set_prebuilt_bvh(std::move(prebuilt_copy)));
+    }
+    // Identity facet mapping: triangle t of the soup is facet t.
+    const std::size_t soup_triangle_count = index_count / 3;
+    m_triangle_to_mesh_facet.resize(soup_triangle_count);
+    for (std::size_t triangle = 0; triangle < soup_triangle_count; ++triangle) {
+        m_triangle_to_mesh_facet[triangle] = static_cast<uint32_t>(triangle);
+    }
 
     ERHE_VERIFY(m_rt_mesh.vertex_buffer_ranges.size() == 1);
 
@@ -875,6 +902,41 @@ auto Primitive_shape::make_raytrace() -> bool
     // } else if (m_triangle_soup) {
     //     m_raytrace = Primitive_raytrace{*m_triangle_soup.get()};
     // }
+}
+
+auto Primitive_shape::make_prepared_raytrace() -> bool
+{
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (has_real_raytrace_state_locked()) {
+            return true;
+        }
+    }
+    if (!m_triangle_soup || !m_prepared_data || !m_prepared_data->bvh.has_value()) {
+        return false;
+    }
+    // Built aside with no state lock held, like every raytrace build.
+    Primitive_raytrace raytrace{*m_triangle_soup, &m_prepared_data->bvh.value()};
+    if (!raytrace.has_raytrace_triangles()) {
+        return false;
+    }
+    if (raytrace.get_bvh_source() != static_cast<unsigned int>(erhe::raytrace::Bvh_source::prebuilt)) {
+        // The parse validated this BVH against the same soup, so the backend
+        // refusing it is unexpected; the caller falls back to the deferred
+        // raytrace.
+        log_primitive->warn(
+            "prepared raytrace: stored BVH not used ({}) - falling back to the deferred raytrace",
+            raytrace.get_raytrace_geometry()->get_prebuilt_bvh_rejection()
+        );
+        return false;
+    }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (m_raytrace.has_raytrace_triangles()) {
+        return !m_raytrace.is_proxy(); // another path won while we built
+    }
+    m_raytrace = std::move(raytrace);
+    return true;
 }
 
 auto Primitive_shape::make_raytrace_proxy(const erhe::math::Aabb& aabb) -> bool
@@ -1685,6 +1747,57 @@ auto Primitive::make_renderable_mesh(const Build_info& build_info, const Normal_
     if (optimized) {
         publish_optimized_render_shape(std::move(optimized));
     }
+    return true;
+}
+
+auto Primitive::is_prepared() const -> bool
+{
+    return render_shape && (render_shape->get_prepared_data() != nullptr);
+}
+
+auto Primitive::make_prepared_meshes(const Build_info& build_info) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!is_prepared()) {
+        return false;
+    }
+    const std::shared_ptr<Triangle_soup>& core = render_shape->get_triangle_soup();
+    if (!core) {
+        return false;
+    }
+    // Base: the fill-only soup build (no Geometry is published, so this is the
+    // soup path of make_buffer_mesh()).
+    if (!render_shape->has_buffer_mesh_triangles()) {
+        if (!render_shape->make_buffer_mesh(build_info.buffer_info)) {
+            return false;
+        }
+    }
+
+    // Optimized variant: the core already is in meshoptimizer order, so the
+    // variant is the core packed into the optimized vertex format - the same
+    // Buffer_info make_optimized_render_shape() builds its variant with.
+    const Buffer_info& buffer_info = build_info.buffer_info;
+    if (buffer_info.optimize_meshes && (buffer_info.optimized_vertex_format != nullptr) && !optimized_render_shape) {
+        const Buffer_info optimized_buffer_info{
+            .normal_style       = buffer_info.normal_style,
+            .index_type         = buffer_info.index_type,
+            .vertex_format      = *buffer_info.optimized_vertex_format,
+            .vertex_buffer_sink = buffer_info.vertex_buffer_sink,
+            .index_buffer_sink  = buffer_info.index_buffer_sink,
+            .vertex_input_key   = buffer_info.optimized_vertex_input_key
+        };
+        std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
+        if (optimized->make_buffer_mesh(optimized_buffer_info)) {
+            publish_optimized_render_shape(std::move(optimized));
+        } else {
+            log_primitive->warn("prepared mesh: the optimized buffer mesh did not build; rendering the source build");
+        }
+    }
+
+    // Real raytrace from the stored BVH; without one the caller takes the
+    // proxy + deferred raytrace path.
+    static_cast<void>(render_shape->make_prepared_raytrace());
     return true;
 }
 

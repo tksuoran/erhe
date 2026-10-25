@@ -17,7 +17,7 @@ namespace GEO { class Mesh; }
 
 namespace erhe::buffer   { class Cpu_buffer; }
 namespace erhe::geometry { class Geometry; }
-namespace erhe::raytrace { class IGeometry; }
+namespace erhe::raytrace { class IGeometry; class Prebuilt_bvh; }
 
 namespace erhe::primitive {
 
@@ -32,7 +32,13 @@ class Primitive_raytrace
 public:
     Primitive_raytrace();
     explicit Primitive_raytrace(const GEO::Mesh& mesh);
-    explicit Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_soup);
+    // Real triangle raytrace straight from a soup, triangle t of the BVH
+    // being soup triangle t. When `prebuilt` is non-null it is offered to the
+    // BVH backend before the commit (IGeometry::set_prebuilt_bvh()); whether
+    // it was used is get_bvh_source(). The facet mapping is the identity
+    // (triangle t is facet t), which holds for a prepared soup core
+    // (doc/gltf_extensions/ERHE_mesh_optimized.md contract item 5).
+    Primitive_raytrace(const erhe::primitive::Triangle_soup& triangle_soup, const erhe::raytrace::Prebuilt_bvh* prebuilt);
     // AABB proxy: a 12-triangle box over the given bounds. Cheap enough for
     // load time, so picking works immediately after a deferred-raytrace
     // import; hits report the right primitive but approximate position /
@@ -51,6 +57,9 @@ public:
 
     [[nodiscard]] auto get_raytrace_mesh    () const -> const Buffer_mesh&;
     [[nodiscard]] auto get_raytrace_geometry() const -> const std::shared_ptr<erhe::raytrace::IGeometry>&;
+    // How the BVH of the committed raytrace geometry was obtained
+    // (erhe::raytrace::Bvh_source as unsigned int; none without a geometry).
+    [[nodiscard]] auto get_bvh_source       () const -> unsigned int;
     // Maps a hit triangle index of *this* raytrace geometry to the GEO::Mesh
     // facet it was built from. The mapping is owned here, next to the
     // triangles it indexes, so it can never disagree with the geometry that
@@ -110,6 +119,12 @@ public:
     // carry a Buffer_mesh with no Geometry of their own (scene_builder's
     // instanced cubes), where the no-arg overload has nothing to build from.
     auto make_raytrace(const GEO::Mesh& mesh) -> bool;
+    // Prepared soup shape (get_prepared_data() with a stored BVH): builds the
+    // real raytrace from the soup with the stored BVH and installs it when no
+    // raytrace exists yet. Returns false, installing nothing, when the shape
+    // has no soup or no stored BVH, or the backend did not use the stored BVH
+    // (the caller then takes the proxy + deferred raytrace path).
+    auto make_prepared_raytrace() -> bool;
     // Installs an AABB proxy raytrace when no raytrace exists yet.
     auto make_raytrace_proxy(const erhe::math::Aabb& aabb) -> bool;
     // Worker step of the deferred raytrace: ensures Geometry exists and
@@ -309,6 +324,22 @@ public:
     [[nodiscard]] auto make_renderable_mesh    (const Build_info& build_info, Normal_style normal_style) -> bool;
     [[nodiscard]] auto make_renderable_mesh    (const erhe::primitive::Buffer_info& buffer_info) const -> bool;
     [[nodiscard]] auto make_raytrace           () const -> bool;
+    // Load path of a soup primitive carrying prepared mesh data
+    // (Primitive_shape::get_prepared_data(), doc/plans/gltf_fast_load.md step
+    // 6): the fill-only soup build of the render shape (as
+    // make_renderable_mesh() builds a soup), the optimized variant as one
+    // linear pack of the soup core into buffer_info.optimized_vertex_format
+    // (no meshoptimizer: the core already is in that order; empty element
+    // mappings, which is what composing the import path's empty mappings
+    // through an identity remap gives), published when
+    // buffer_info.optimize_meshes is set, and the real raytrace from the
+    // stored BVH. No Geometry is built. Returns false when the primitive has
+    // no prepared data or the base build fails; a missing raytrace (no stored
+    // BVH, or the backend refused it) is reported by has_real_raytrace().
+    // Same threading as make_renderable_mesh(): one caller per Primitive.
+    [[nodiscard]] auto make_prepared_meshes    (const Build_info& build_info) -> bool;
+    // The render shape carries prepared mesh data.
+    [[nodiscard]] auto is_prepared             () const -> bool;
     // AABB proxy raytrace over the renderable-mesh bounds; no-op when a
     // raytrace (proxy or real) already exists. See Primitive_raytrace.
     [[nodiscard]] auto make_raytrace_proxy     () const -> bool;
