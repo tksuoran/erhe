@@ -300,6 +300,13 @@ public:
     // stale-data guards that do not all run on the main thread.
     [[nodiscard]] auto get_load_task_count() const -> std::size_t;
 
+    // This frame's GPU upload allowance for the asynchronous loads
+    // (doc/editor/async_asset_loading.md "Upload budget while loading"):
+    // load.gpu_upload_bytes_per_frame_while_loading (0: the platform default)
+    // while at least one load task is live, load.gpu_upload_bytes_per_frame
+    // otherwise. The phase switches where load tasks are queued and reaped.
+    [[nodiscard]] auto get_gpu_upload_bytes_per_frame() const -> std::size_t;
+
     // Registers a procedural item as a builtin-scope asset (Scene_builder
     // palette brushes). Builtin names are a persistence contract.
     void register_builtin(Asset_type type, const std::shared_ptr<erhe::Item_base>& item);
@@ -542,6 +549,15 @@ private:
     // Owned by the manager, advanced from tick(), reaped once settled AND
     // their workers are idle (plan 2.3 invariant 4).
     std::vector<std::unique_ptr<Asset_load_task>> m_load_tasks;
+
+    // Whether any load task is live, switched by set_upload_phase() when the
+    // first task is queued and when the last one is reaped (main thread).
+    enum class Upload_phase : unsigned int {
+        idle,
+        loading
+    };
+    void set_upload_phase(Upload_phase phase);
+    Upload_phase m_upload_phase{Upload_phase::idle};
 
     // create<T>() bookkeeping (R5.5): validates the type and records the
     // creation against the defining scene's container record.

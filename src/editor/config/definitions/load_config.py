@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Load_config",
     reflect=True,
-    version=5,
+    version=6,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",
     developer=False,
@@ -84,6 +84,19 @@ struct("Load_config",
             ui_min="65536",
             ui_max="67108864",
             hard_min="65536",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "gpu_upload_bytes_per_frame_while_loading",
+            Int,
+            added_in=6,
+            default="0",
+            short_desc="GPU Upload Bytes / Frame While Loading",
+            long_desc="Upper bound on the texture and vertex/index bytes recorded per frame while at least one asynchronous load is in progress; gpu_upload_bytes_per_frame applies again once the last load has finished (so uploads after a load, such as deferred builds, stay small). 0 selects the platform default: 32 MiB on desktop, 16 MiB in OpenXR (half of that platform's upload staging cap, so two frames of uploads fit the staging ring). The staging cap, the decode budget and the load time slice still bound the uploads.",
+            ui_min="0",
+            ui_max="268435456",
+            hard_min="0",
             visible=True,
             developer=True
         ),

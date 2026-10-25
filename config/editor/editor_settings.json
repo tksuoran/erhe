@@ -305,7 +305,7 @@
         "bicubic_sampling": true
     },
     "load": {
-        "_version": 5,
+        "_version": 6,
         "deferred_raytrace": true,
         "deferred_edge_lines": true,
         "use_prepared_mesh_data": true,
@@ -313,6 +313,7 @@
         "parallel_gltf_parse": true,
         "async_gltf_load": true,
         "gpu_upload_bytes_per_frame": 4194304,
+        "gpu_upload_bytes_per_frame_while_loading": 33554432,
         "io_read_bytes_per_frame": 67108864,
         "max_decoded_bytes_in_flight": 134217728,
         "max_upload_staging_bytes": 67108864,

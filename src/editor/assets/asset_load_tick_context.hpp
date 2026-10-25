@@ -39,7 +39,10 @@ class App_context;
 class Frame_load_budget
 {
 public:
-    explicit Frame_load_budget(const Load_config& load_config);
+    // gpu_upload_bytes: this frame's upload allowance
+    // (Asset_manager::get_gpu_upload_bytes_per_frame()); the other budgets
+    // come from load_config.
+    Frame_load_budget(const Load_config& load_config, std::size_t gpu_upload_bytes);
 
     // True once the time slice has elapsed. Checked between items; wins over
     // every other budget below.
