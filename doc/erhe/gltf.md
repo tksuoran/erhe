@@ -63,6 +63,16 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   not stamped. Lights are extension-hosted and cannot carry uids. All uid
   read/write stays behind erhe::gltf so the pre-ratification surface can drift
   without touching clients.
+- Node transforms round-trip bit for bit. The parse stores a node's TRS
+  exactly as the file holds it (each node is parented once, before its
+  transform is set; a world-preserving re-parent would replace the TRS
+  with inverse(parent world) * world). The export writes the TRS
+  components the node holds; it composes through matrices, and so writes
+  a `glm::decompose()` result, only when a non-identity import-root
+  transform is folded into the node. The editor's open of an erhe-authored
+  scene moves the top-level nodes under the scene root keeping their local
+  transforms. Saving a loaded scene again therefore writes identical node
+  transforms, and the re-saved file renders identically.
 - Import restores the authored / default distinction: after the core glTF
   fields and the legacy extras have been replayed - which makes every field
   a local value - `parse_gltf` runs

@@ -4116,13 +4116,13 @@ private:
 
         for (std::size_t i = 0, end = node.children.size(); i < end; ++i) {
             std::size_t child_index = node.children[i];
+            // parse_node() / parse_prim_node() parent the child under
+            // erhe_node themselves. No second set_parent here: on an
+            // Xformable it is the world-preserving override, which would
+            // replace the child's TRS as read from the file with
+            // inverse(parent world) * world - a matrix a few ulps away from
+            // it, decomposed again on the next save.
             parse_node(child_index, erhe_node);
-        }
-
-        for (std::size_t i = 0, end = node.children.size(); i < end; ++i) {
-            std::size_t child_node_index = node.children[i];
-            const std::shared_ptr<erhe::Typed>& erhe_child_prim = m_data_out.prims.at(child_node_index);
-            erhe_child_prim->set_parent(erhe_node);
         }
 
         if (node.cameraIndex.has_value() && !node_is_camera) {
@@ -6087,6 +6087,25 @@ private:
             //.rotation    = fastgltf::math::fquat{r[1], r[2], r[3], r[0]},
             .scale       = fastgltf::math::fvec3{s.x, s.y, s.z}
         };
+    }
+
+    // The transform a node is written with: its own authored transform with
+    // the folded-in import-root transforms (pre_transform) composed in.
+    // An identity pre_transform - the common case: no import root, or an
+    // import root at the identity - returns the node's transform itself, so
+    // from_erhe() writes the TRS components the node holds (as loaded or as
+    // edited). Composing through operator* would make a matrix-only
+    // transform and write the glm::decompose() of it, which differs from
+    // the loaded TRS by a few ulps and drifts the file on every save.
+    [[nodiscard]] static auto compose_pre_transform(
+        const erhe::scene::Trs_transform& pre_transform,
+        const erhe::scene::Trs_transform& transform
+    ) -> erhe::scene::Trs_transform
+    {
+        if (pre_transform.get_matrix() == glm::mat4{1.0f}) {
+            return transform;
+        }
+        return pre_transform * transform;
     }
 
     struct Export_entry
@@ -8178,7 +8197,7 @@ private:
                 continue;
             }
             if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
-                process_child_nodes(*erhe_child_node, pre_transform * erhe_child_node->authored_parent_from_node_transform(), out_node_indices);
+                process_child_nodes(*erhe_child_node, compose_pre_transform(pre_transform, erhe_child_node->authored_parent_from_node_transform()), out_node_indices);
                 continue;
             }
             if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::render_proxy) != 0) {
@@ -8237,7 +8256,7 @@ private:
         fastgltf::Node gltf_node{};
 
         gltf_node.name = erhe_node.get_name();
-        gltf_node.transform = from_erhe(pre_transform * erhe_node.authored_parent_from_node_transform());
+        gltf_node.transform = from_erhe(compose_pre_transform(pre_transform, erhe_node.authored_parent_from_node_transform()));
 
         // glTF 2.1: a prefab-instance node is written as an externalAsset
         // reference. Children are not exported - the

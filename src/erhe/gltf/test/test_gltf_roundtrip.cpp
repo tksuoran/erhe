@@ -85,6 +85,64 @@ TEST(Gltf_roundtrip, node_hierarchy_and_transform)
     EXPECT_EQ(child_position, glm::vec3(0.0f, 0.0f, -4.0f));
 }
 
+// A node's TRS components survive save -> load -> save bit for bit: the
+// exporter writes the components the node holds, not a glm::decompose() of
+// the composed matrix (which differs by a few ulps and drifted every save).
+TEST(Gltf_roundtrip, node_trs_bit_exact)
+{
+    const glm::vec3 translation{1.1f, -2.3f, 3.7f};
+    const glm::quat rotation = glm::normalize(glm::quat{0.4f, 0.3f, 0.5f, -0.7f});
+    const glm::vec3 scale      {1.5f, 0.25f, 2.0f};
+
+    erhe::scene::Scene scene{"source", nullptr};
+    const std::shared_ptr<erhe::scene::Xform> node = std::make_shared<erhe::scene::Xform>("Node");
+    make_content(*node);
+    node->set_parent(scene.get_root_node());
+    node->node_data.transforms.parent_from_node.set_trs(translation, rotation, scale);
+    node->update_world_from_node();
+
+    // A child under a scaled, translated parent: the parse must keep the
+    // child's TRS as read, not re-derive it from the world transform.
+    const glm::vec3 child_translation{0.0f, 0.027f, 0.006f};
+    const glm::quat child_rotation = glm::normalize(glm::quat{0.7071066f, -0.7071069f, 0.0f, 0.0f});
+    const glm::vec3 child_scale      {0.016f, 0.016f, 0.016f};
+    const std::shared_ptr<erhe::scene::Xform> child = std::make_shared<erhe::scene::Xform>("Child");
+    make_content(*child);
+    child->set_parent(node);
+    child->node_data.transforms.parent_from_node.set_trs(child_translation, child_rotation, child_scale);
+    child->update_world_from_node();
+
+    const auto expect_node_trs = [&](
+        const erhe::gltf::Gltf_data& data,
+        const std::string_view       name,
+        const glm::vec3              expected_translation,
+        const glm::quat              expected_rotation,
+        const glm::vec3              expected_scale
+    ) {
+        const std::shared_ptr<erhe::scene::Node> loaded_node = find_by_name(data.nodes, name);
+        ASSERT_TRUE(loaded_node);
+        const erhe::scene::Trs_transform& loaded = loaded_node->node_data.transforms.parent_from_node;
+        const glm::vec3 loaded_translation = loaded.get_translation();
+        const glm::quat loaded_rotation    = loaded.get_rotation();
+        const glm::vec3 loaded_scale       = loaded.get_scale();
+        EXPECT_EQ(0, std::memcmp(&loaded_translation, &expected_translation, sizeof(glm::vec3))) << name;
+        EXPECT_EQ(0, std::memcmp(&loaded_rotation,    &expected_rotation,    sizeof(glm::quat))) << name;
+        EXPECT_EQ(0, std::memcmp(&loaded_scale,       &expected_scale,       sizeof(glm::vec3))) << name;
+    };
+    const auto expect_trs = [&](const erhe::gltf::Gltf_data& data) {
+        expect_node_trs(data, "Node",  translation,       rotation,       scale);
+        expect_node_trs(data, "Child", child_translation, child_rotation, child_scale);
+    };
+
+    erhe::scene::Scene          loaded_1{"loaded_1", nullptr};
+    const erhe::gltf::Gltf_data data_1 = round_trip(scene, "trs_1.glb", loaded_1);
+    expect_trs(data_1);
+
+    erhe::scene::Scene          loaded_2{"loaded_2", nullptr};
+    const erhe::gltf::Gltf_data data_2 = round_trip(loaded_1, "trs_2.glb", loaded_2);
+    expect_trs(data_2);
+}
+
 // A local value without a native glTF carrier rides the ERHE_* "properties"
 // map; a native one (KHR_lights_punctual intensity) rides the core field.
 // Both come back as local values, and unauthored values stay unauthored.
