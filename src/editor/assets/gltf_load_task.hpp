@@ -37,9 +37,12 @@ class Scene_root;
 //                     Gltf_device_options by value instead), and it parses
 //                     into an UNHOSTED container node - no live Scene - the
 //                     way the container and prefab loaders already do.
-//   residency MAIN    samplers + textures created, uploads recorded into the
-//                     frame command buffer, spread over frames under the
-//                     Frame_load_budget.
+//   residency MAIN    images decoded / transcoded on workers ahead of the
+//                     upload (decoded-bytes budget), samplers + textures
+//                     created, uploads recorded into the frame command
+//                     buffer, spread over frames under the Frame_load_budget
+//                     and the upload staging cap. Starts as soon as the
+//                     parse is done, overlapping the build.
 //   publish   MAIN    finish_open_scene_gltf: Scene_root construction, asset
 //                     reference resolution, Buffer_mesh build, content
 //                     library / physics / editor-state operations, node
@@ -137,7 +140,8 @@ private:
     void start_parse(Asset_load_tick_context& tick_context);
     void start_build(Asset_load_tick_context& tick_context);
     void notify_done();
-    auto advance_residency(Asset_load_tick_context& tick_context) -> bool; // true when residency is complete
+    auto advance_residency(Asset_load_tick_context& tick_context) -> bool; // true when every image is resident (not yet bound)
+    void log_staging_statistics(Asset_load_tick_context& tick_context) const;
 
     App_context&                                  m_context;
     Asset_load_request                            m_request;

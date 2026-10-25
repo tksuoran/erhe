@@ -110,35 +110,13 @@ build one shared primitive twice at once. Add that serialization first.
 `max_publish_items_per_frame` exists but is unused; publish is atomic. Only
 worth doing if a huge tree measurably overruns the frame.
 
-## 8. Decode backpressure
-
-`max_decoded_bytes_in_flight` is likewise carried but not enforced: the parse
-decodes every referenced image before the task reaches residency, so peak
-decoded-pixel memory is not yet bounded. It must throttle worker scheduling,
-not just buffer results (design record 2.4).
-
-## 9. The remaining synchronous MCP tools
+## 8. The remaining synchronous MCP tools
 
 `reload_prefab` and `load_asset_file` still load synchronously. Each either
 waits on a handle or returns a handle id plus a documented poll, as
 `instantiate_prefab` does.
 
-## 10. Ring buffer follow-ups
-
-From `doc/erhe/ring_buffer_memory.md`:
-
-- Dedicated one-shot staging for very large uploads (image mip chains, mesh
-  vertex / index pool block init): a plain host-visible `Buffer`, the copy
-  recorded, freed through `add_completion_handler` - transient, never joining
-  the permanent ring pool. A request larger than the whole budget must take
-  this path rather than forcing a giant ring buffer.
-- A device-level ring-buffer budget (`m_ring_buffer_total_bytes` plus a config
-  knob), counting the BAR heap toward it, with an allocator backstop that
-  reports "would exceed budget" so a loading thread can flush and wait -
-  except on the render thread mid-frame, where waiting on its own frame would
-  deadlock, so it allocates anyway and warns.
-
-## 11. Re-test the presentation stall
+## 9. Re-test the presentation stall
 
 The hypothesis that motivated the asynchronous pipeline is that the macOS
 presentation stall is triggered by a load blocking tick 1 with no run-loop

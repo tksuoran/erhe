@@ -51,7 +51,7 @@ an async result is compared against.
 | `scan` | worker | one task |
 | `parse` | worker | one task |
 | `build` (`Buffer_mesh` construction) | workers | one task fanning out one build task per unique render shape |
-| `residency` (textures + samplers) | main, in tick | GPU upload bytes/frame, items/frame, time slice |
+| `residency` (image decode + textures + samplers) | decode on workers, upload on main, in tick; starts when the parse is done and overlaps `build` | decoded bytes in flight, GPU upload bytes/frame, upload staging cap, items/frame, time slice |
 | `publish` | main, in tick | atomic, gated on the loader watermark |
 
 The scan decides erhe-authored-scene vs plain glTF asset; it is a whole-file
@@ -85,15 +85,25 @@ per-frame cost. The fields come from `Load_config` (v2):
 | `async_gltf_load` | `true` | master switch |
 | `gpu_upload_bytes_per_frame` | 4 MiB | texture + buffer bytes recorded per frame |
 | `io_read_bytes_per_frame` | 64 MiB | file bytes per frame |
-| `max_decoded_bytes_in_flight` | 128 MiB | decode backpressure; a standing cap carried on the tick context, not a per-frame allowance |
+| `max_decoded_bytes_in_flight` | 128 MiB | decode backpressure: image decodes start only while the decoded pixels waiting for upload plus those being decoded stay below it; a standing cap carried on the tick context, not a per-frame allowance |
+| `max_upload_staging_bytes` | 64 MiB (32 MiB in `openxr_editor_settings.json`) | hard cap on the host-visible staging of the budgeted uploads (v4); carried on the tick context |
 | `max_residency_items_per_frame` | 64 | guards against many tiny items |
 | `max_publish_items_per_frame` | 256 | publish slice |
 | `load_time_slice_ms` | 4 | hard cap, checked between items, wins over the byte budgets |
 
-`gpu_upload_bytes_per_frame` is not merely pacing:
-`Device::allocate_ring_buffer_entry` never refuses - it spills a new ring
-buffer sized to the request (doc/erhe/ring_buffer_memory.md) - so in
-frame-recording mode this budget is the only thing bounding staging memory.
+`gpu_upload_bytes_per_frame` paces the uploads; `max_upload_staging_bytes`
+bounds the memory they stage through. Texture uploads (`Image_transfer` in
+`frame_recording` mode) and the loader-queue vertex / index uploads take
+their host-visible staging from `Device::allocate_upload_staging`, one ring
+of that size that never grows: an upload that finds it full waits for the
+next frame, and a single upload larger than the cap goes alone through a
+one-shot buffer (doc/erhe/ring_buffer_memory.md "Upload staging cap"). The
+defaults: 64 MiB on desktop matches the `blocking_drain` private ring, holds
+the largest Bistro texture (a 5.6 MB BC7 mip chain) many times over and is
+about twice the high-water mark a Bistro load reaches at the 4 MiB per-frame
+budget (33-45 MB, frames in flight plus single-image overshoot); 32 MiB
+under OpenXR keeps the same headroom over the Quest high-water mark (20-29
+MB) on a device where every megabyte of host memory counts.
 
 ## Transfer queues and uploads
 
@@ -114,14 +124,29 @@ make that safe.
 through a private 64 MiB ring and its own transfer command buffer, flushed
 with submit-and-wait, and is required by callers with no frame loop, since no
 frame completion will ever arrive to reclaim staging; `frame_recording` stages
-from the device ring and records copies into the frame's command buffer,
-returning `budget_exhausted` instead of blocking, and allocates no private
-ring at all, so N concurrent loads do not multiply it.
+from the device's capped upload staging and records copies into the frame's
+command buffer, returning `budget_exhausted` instead of blocking (no budget
+or no staging room), and allocates no private ring at all, so N concurrent
+loads do not multiply it. Both take the staging capacity at construction:
+the private ring's size, or the cap passed to
+`Device::allocate_upload_staging`.
 
-The GPU half of image loading is split out of the parse into
-`Gltf_image_residency`, reachable as `Gltf_data::image_residency`. It holds
-the decoded pixels, the sampler `Sampler_create_info`s and the material
-texture bindings the parse recorded. Texture and sampler objects are created
+### Image residency
+
+The decode and GPU half of image loading is split out of the parse into
+`Gltf_image_residency`, reachable as `Gltf_data::image_residency`. The parse
+decodes nothing: it records each image's encoded stream (the same bytes
+retained for byte-exact export), the sampler `Sampler_create_info`s and the
+material texture bindings. Residency decodes / transcodes the images on
+executor workers (`schedule_decodes`, called every residency tick) ahead of
+the upload, bounded by `max_decoded_bytes_in_flight`: a decode starts only
+while the decoded pixels waiting for upload plus those being decoded fit the
+budget (a task opens the image header first and gives its turn back when
+the decoded size does not fit; an image larger than the whole budget decodes
+alone), and uploading an image releases its bytes. So a load never holds
+every image's pixels at once - the peak is the budget. Residency starts as
+soon as the parse is done and runs during the `build` phase too; the
+material slots are bound once every image is resident, after the build. Texture and sampler objects are created
 before publish - creation is cheap and only the pixel copies may lag under the
 byte budget - because content-library entries, `Gltf_source_reference` and
 `Gltf_data::images` all need real objects by then. Synchronous callers keep
@@ -386,4 +411,4 @@ surrounding editor.
 
 ## Future work
 
-- [plans/asset_loading.md](../plans/asset_loading.md) - dependent child tasks, pending acquires, publish slicing, decode backpressure and the remaining synchronous entry points.
+- [plans/asset_loading.md](../plans/asset_loading.md) - dependent child tasks, pending acquires, publish slicing and the remaining synchronous entry points.

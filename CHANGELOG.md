@@ -28,6 +28,21 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: capped upload staging (doc/erhe/ring_buffer_memory.md
+  "Upload staging cap"): `Device::allocate_upload_staging(target,
+  byte_count, capacity_byte_count)` (an empty range when there is no room;
+  a request larger than the cap gets a one-shot buffer while nothing else
+  is staged), `Device::get_upload_staging_usage()` and
+  `Upload_staging_usage`, `Ring_buffer_pool::allocate_upload_staging()` /
+  `get_upload_staging_usage()`, and `Command_buffer::try_upload_to_buffer()`
+  (`upload_to_buffer` staged through the cap; false when it must wait).
+- `erhe::gltf`: `Gltf_image_residency::schedule_decodes()`,
+  `is_decode_idle()`, `get_pending_byte_high_water()`,
+  `default_max_decoded_bytes_in_flight` and the decode settings
+  `transcode_format_preference`, `decode_executor`, `parallel_decode`;
+  `Gltf_decoded_image::linear` and `decoded`;
+  `Image_transfer::default_staging_capacity_byte_count` and
+  `get_staging_capacity_byte_count()`.
 - `erhe::graphics`: `Buffer_memory_statistics` and
   `Buffer::get_memory_statistics()` (process-wide live buffer capacity by
   creation usage: acceleration structure storage, acceleration structure
@@ -867,6 +882,25 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::gltf`: `parse_gltf()` no longer decodes images; it records each
+  image's encoded stream and `Gltf_image_residency` decodes / transcodes on
+  executor workers ahead of the upload under a decoded-bytes budget.
+  `process_next_image()` and `drain()` take an optional
+  `max_decoded_bytes_in_flight`; `get_pending_byte_count()` reports the
+  decoded bytes in flight. `parse_gltf()` and `scan_gltf()` stream the file
+  instead of reading it whole.
+- `erhe::gltf`: `Image_transfer` takes an optional staging capacity
+  (`Image_transfer(device, mode, staging_capacity_byte_count)`):
+  `blocking_drain` sizes its private ring by it, and `frame_recording`
+  stages through `Device::allocate_upload_staging` with it instead of the
+  spilling device ring, so `upload_into_frame()` also returns
+  `budget_exhausted` when the staging has no room.
+- `erhe::graphics`: `Buffer_transfer_queue::flush_budgeted()` takes a
+  `staging_capacity_byte_count` and stages through
+  `Command_buffer::try_upload_to_buffer()`; entries that find no staging room
+  stay queued in order for the next drain.
+- `erhe::scene_renderer`: `Mesh_memory::flush_budgeted()` takes a
+  `staging_capacity_byte_count`, passed to the loader queue's drain.
 - `erhe::graphics`: Vulkan `Device::get_memory_budget()` no longer adds the
   device-address allocator's usage when VK_EXT_memory_budget is enabled:
   each allocator then reports the driver's usage of the whole process, so

@@ -2349,6 +2349,21 @@ auto Device_impl::allocate_ring_buffer_entry(
     return m_ring_buffer_pool.allocate(required_alignment, ring_buffer_usage, byte_count);
 }
 
+auto Device_impl::allocate_upload_staging(
+    const Buffer_target buffer_target,
+    const std::size_t   byte_count,
+    const std::size_t   capacity_byte_count
+) -> Ring_buffer_range
+{
+    const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
+    return m_ring_buffer_pool.allocate_upload_staging(required_alignment, byte_count, capacity_byte_count);
+}
+
+auto Device_impl::get_upload_staging_usage() const -> Upload_staging_usage
+{
+    return m_ring_buffer_pool.get_upload_staging_usage();
+}
+
 auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
     //ERHE_FATAL("Not implemented");

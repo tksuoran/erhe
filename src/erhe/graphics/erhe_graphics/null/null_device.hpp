@@ -121,6 +121,8 @@ public:
     [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
     [[nodiscard]] auto is_present_target_time_honored     () const -> bool;
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto allocate_upload_staging            (Buffer_target buffer_target, std::size_t byte_count, std::size_t capacity_byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto get_upload_staging_usage           () const -> Upload_staging_usage;
     [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
     [[nodiscard]] auto make_render_command_encoder        (Command_buffer& command_buffer) -> Render_command_encoder;

@@ -107,24 +107,29 @@ public:
     std::vector<std::pair<std::string, std::string>> entries;
 };
 
-// Decoded pixels of one glTF image plus everything needed to create and
-// upload its Texture. parse_gltf produces these on the CPU only - decoding
-// touches no device, so it is safe on executor workers - and creating the
-// GPU texture from one is a separate residency step run by whoever owns a
-// command buffer (doc/editor/async_asset_loading_design.md step 3, phase 3b).
+// One glTF image on its way to a Texture. parse_gltf records the encoded
+// stream (`source`, the same bytes retained for export) and decodes NOTHING;
+// Gltf_image_residency decodes / transcodes the pixels on executor workers
+// ahead of the upload, bounded by a decoded-bytes budget, and creating the
+// GPU texture from them is the residency step run by whoever owns a command
+// buffer (doc/editor/async_asset_loading.md "Image residency").
 class Gltf_decoded_image
 {
 public:
     bool                               requested{false}; // an image no material slot references is never decoded
+    bool                               linear   {false}; // color space of the first referencing slot
+    bool                               decoded  {false}; // decode finished: info, pixels and ok are valid
     bool                               resident {false}; // texture created and upload recorded
-    bool                               ok       {false}; // decode succeeded
+    bool                               ok       {false}; // decode succeeded (valid once decoded)
     erhe::graphics::Image_info         info{};
-    std::vector<std::uint8_t>          pixels;           // released once resident
-    std::shared_ptr<Gltf_image_source> source;
+    std::vector<std::uint8_t>          pixels;           // held from decode until resident
+    std::shared_ptr<Gltf_image_source> source;           // encoded stream, decoded from; null when unreadable
     std::string                        name;
     std::string                        uid;              // glTF 2.1 uid, carried onto the Texture
     std::filesystem::path              source_path;
 };
+
+class Gltf_image_decode_queue; // gltf_fastgltf.cpp: worker decode state shared with the tasks
 
 // The five texture slots of erhe::primitive::Material_texture_samplers.
 // Material texture slots cannot be filled during the parse any more (the
@@ -155,38 +160,73 @@ public:
 
 class Gltf_data;
 
-// The GPU half of image loading, split out of the parse. parse_gltf leaves
-// Gltf_data::images empty and every decoded payload here; nothing in
-// Gltf_data holds a Texture until residency has run, so a caller that needs
-// textures (everything today) must drain this before using the result.
+// The decode and GPU half of image loading, split out of the parse.
+// parse_gltf leaves Gltf_data::images empty and every image's encoded stream
+// here; nothing in Gltf_data holds a Texture until residency has run, so a
+// caller that needs textures (everything today) must drain this before using
+// the result.
+//
+// Decoding runs on executor workers, started by schedule_decodes() (and by
+// the blocking entry points), and is bounded by a decoded-bytes budget: the
+// pixels decoded and not yet uploaded, plus those being decoded, stay within
+// max_decoded_bytes_in_flight - except a single image larger than the budget,
+// which decodes alone. Uploading an image releases its bytes. So the peak is
+// the budget, not the sum of every image (doc/editor/async_asset_loading.md
+// "Image residency").
 class Gltf_image_residency
 {
 public:
+    static constexpr std::size_t default_max_decoded_bytes_in_flight = 128 * 1024 * 1024;
+
     std::vector<Gltf_decoded_image>            decoded_images;            // parallel to Gltf_data::images
     // Sampler descriptions built by the parse; bind_material_textures
     // writes them into the material slots as Material_sampler_state. One
     // entry per glTF sampler plus a trailing default.
     std::vector<erhe::graphics::Sampler_create_info> sampler_create_infos;
     std::vector<Gltf_material_texture_binding> material_texture_bindings;
+    // Decode settings, filled by parse_gltf from its arguments. Without an
+    // executor, or with parallel_decode false, images decode inline on the
+    // residency thread, one per process_next_image* call.
+    erhe::graphics::Transcode_format_preference transcode_format_preference{erhe::graphics::Transcode_format_preference::rgba8};
+    ::tf::Executor*                            decode_executor{nullptr};
+    bool                                       parallel_decode{true};
 
     [[nodiscard]] auto get_pending_image_count() const -> std::size_t;
+    // Decoded pixel bytes held right now: decoded and waiting for upload,
+    // plus reserved by decodes in progress.
     [[nodiscard]] auto get_pending_byte_count () const -> std::size_t;
+    // Largest get_pending_byte_count() seen.
+    [[nodiscard]] auto get_pending_byte_high_water() const -> std::size_t;
+
+    // Start decode tasks for pending images, in image order, while the
+    // decoded bytes in flight stay within max_decoded_bytes_in_flight (at
+    // most one task per executor worker). Call it from the residency thread
+    // whenever residency runs; a no-op without parallel decode.
+    void schedule_decodes(std::size_t max_decoded_bytes_in_flight);
+    // True when no decode task is running (a task outlives nothing it
+    // references, but owners that track their workers wait for this).
+    [[nodiscard]] auto is_decode_idle() const -> bool;
 
     // Create the Texture for the next pending image and record its upload
-    // through a blocking_drain Image_transfer. Returns false when nothing is
+    // through a blocking_drain Image_transfer, decoding first (waiting for
+    // the decode workers) when needed. Returns false when nothing is
     // pending. Must run on a thread that owns the image_transfer and may
     // touch the device. Does NOT flush: a caller driving this itself must
     // flush the Image_transfer before the frame ends (drain() does).
     auto process_next_image(
         Gltf_data&              data,
         erhe::graphics::Device& graphics_device,
-        Image_transfer&         image_transfer
+        Image_transfer&         image_transfer,
+        std::size_t             max_decoded_bytes_in_flight = default_max_decoded_bytes_in_flight
     ) -> bool;
 
-    // Same, for a frame_recording Image_transfer: the copies go into
+    // Same, for a frame_recording Image_transfer, without ever waiting: the
+    // next image whose decode has finished is uploaded, its copies go into
     // command_buffer and the staged bytes come out of
-    // remaining_budget_bytes. Returns false when nothing is pending OR when
-    // the budget ran out - get_pending_image_count() distinguishes the two.
+    // remaining_budget_bytes. Returns false when nothing is pending, when no
+    // decode has finished yet, or when the budget or the staging ran out -
+    // get_pending_image_count() tells "done" from "try again next frame".
+    // Decodes are started by schedule_decodes(), not here.
     // The texture object is always created before its pixels are uploaded,
     // so callers see a real erhe::graphics::Texture in Gltf_data::images as
     // soon as an image is processed (plan 2.7 requires this by publish).
@@ -204,12 +244,26 @@ public:
 
     // Blocking convenience: make every pending image resident and bind the
     // material slots - the behavior a synchronous caller had before the
-    // split.
+    // split. Decodes in parallel under the same decoded-bytes budget.
     void drain(
         Gltf_data&              data,
         erhe::graphics::Device& graphics_device,
-        Image_transfer&         image_transfer
+        Image_transfer&         image_transfer,
+        std::size_t             max_decoded_bytes_in_flight = default_max_decoded_bytes_in_flight
     );
+
+private:
+    [[nodiscard]] auto get_decode_queue() -> const std::shared_ptr<Gltf_image_decode_queue>&;
+    void collect_decoded();
+    void decode_inline(std::size_t image_index);
+    void release_decoded(std::size_t image_index);
+    [[nodiscard]] auto find_next_decoded_image() const -> std::size_t;
+
+    std::shared_ptr<Gltf_image_decode_queue> m_decode_queue;
+    // The image whose frame-recording upload found no budget or staging
+    // room; it is retried first, so the staging cap's size mark (which makes
+    // smaller requests wait behind it) is always honored by its owner.
+    std::size_t                              m_retry_image_index{~std::size_t{0}};
 };
 
 // One KHR_materials_variants mapping, resolved to the objects the parse

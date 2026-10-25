@@ -20,11 +20,6 @@ namespace erhe::gltf {
 
 namespace {
 
-// Staging budget: the largest amount of pixel data held in host-visible
-// staging at once. Loads larger than this flush (submit + fence wait +
-// reclaim) mid-way instead of growing staging with the scene size.
-constexpr std::size_t s_staging_byte_count = 64 * 1024 * 1024;
-
 // vkCmdCopyBufferToImage requires bufferOffset to be a multiple of the
 // texel block size; 16 covers every format the image loaders produce
 // (RGBA8 = 4, fp16 RGBA = 8, BC / ASTC blocks = 8 or 16).
@@ -42,20 +37,27 @@ Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device)
 {
 }
 
-Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device, const Image_transfer_mode mode)
-    : m_graphics_device{graphics_device}
-    , m_mode           {mode}
+Image_transfer::Image_transfer(
+    erhe::graphics::Device&   graphics_device,
+    const Image_transfer_mode mode,
+    const std::size_t         staging_capacity_byte_count
+)
+    : m_graphics_device            {graphics_device}
+    , m_mode                       {mode}
+    , m_staging_capacity_byte_count{staging_capacity_byte_count}
 {
+    ERHE_VERIFY(m_staging_capacity_byte_count > 0);
     if (m_mode == Image_transfer_mode::blocking_drain) {
         // The private ring exists only for the blocking mode. In
-        // frame_recording mode staging comes from the device's shared ring
-        // and is reclaimed by frame completion, so allocating 64 MiB per
-        // loader here would be pure waste - and N concurrent loads would
-        // multiply it.
+        // frame_recording mode staging comes from the device's capped
+        // upload staging and is reclaimed by frame completion, so a private
+        // ring per loader would be pure waste - and N concurrent loads would
+        // multiply it. Loads larger than this ring flush (submit + fence
+        // wait + reclaim) mid-way instead of growing staging with the scene.
         m_staging.emplace(
             graphics_device,
             erhe::graphics::Ring_buffer_create_info{
-                .size              = s_staging_byte_count,
+                .size              = m_staging_capacity_byte_count,
                 .ring_buffer_usage = erhe::graphics::Ring_buffer_usage::CPU_write,
                 .debug_label       = "Image_transfer staging"
             }
@@ -220,17 +222,21 @@ auto Image_transfer::upload_into_frame(
         return Image_upload_result::budget_exhausted;
     }
 
-    // Staging comes from the device ring, so the range is reclaimed by frame
-    // completion - which is exactly what makes this mode non-blocking, and
-    // exactly why it requires a frame loop that keeps advancing. Note this
-    // call never fails: it spills a new ring buffer sized to the request
-    // when nothing has room, so remaining_budget_bytes above is what keeps
-    // staging memory bounded.
-    erhe::graphics::Ring_buffer_range range = m_graphics_device.allocate_ring_buffer_entry(
+    // Staging comes from the device's capped upload staging, so the range is
+    // reclaimed by frame completion - which is exactly what makes this mode
+    // non-blocking, and exactly why it requires a frame loop that keeps
+    // advancing. No room (the cap is held by staging that frames in flight
+    // still read) means wait: nothing is recorded and the caller retries
+    // next frame. An image larger than the whole cap is served by a one-shot
+    // buffer once nothing else is staged.
+    erhe::graphics::Ring_buffer_range range = m_graphics_device.allocate_upload_staging(
         erhe::graphics::Buffer_target::transfer_src,
-        erhe::graphics::Ring_buffer_usage::CPU_write,
-        byte_count
+        byte_count,
+        m_staging_capacity_byte_count
     );
+    if (range.get_buffer() == nullptr) {
+        return Image_upload_result::budget_exhausted;
+    }
     ERHE_VERIFY(range.get_span().size() >= byte_count);
 
     std::memcpy(range.get_span().data(), pixels.data(), byte_count);

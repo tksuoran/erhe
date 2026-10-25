@@ -85,7 +85,10 @@ auto Gltf_load_task::is_worker_idle() const -> bool
     const bool scan_idle  = !m_scan_result  || m_scan_result ->finished.load(std::memory_order_acquire);
     const bool parse_idle = !m_parse_result || m_parse_result->finished.load(std::memory_order_acquire);
     const bool build_idle = !m_build_result || m_build_result->finished.load(std::memory_order_acquire);
-    return scan_idle && parse_idle && build_idle;
+    // The image decode tasks residency starts (they write only into the
+    // residency's shared decode state, but this task owns them).
+    const bool decode_idle = !parse_idle || !m_parse_result || m_parse_result->gltf_data.image_residency.is_decode_idle();
+    return scan_idle && parse_idle && build_idle && decode_idle;
 }
 
 void Gltf_load_task::start_scan(Asset_load_tick_context& tick_context)
@@ -241,9 +244,16 @@ auto Gltf_load_task::advance_residency(Asset_load_tick_context& tick_context) ->
     if (!m_image_transfer) {
         m_image_transfer = std::make_unique<erhe::gltf::Image_transfer>(
             tick_context.graphics_device,
-            erhe::gltf::Image_transfer_mode::frame_recording
+            erhe::gltf::Image_transfer_mode::frame_recording,
+            tick_context.max_upload_staging_bytes
         );
     }
+
+    // Keep the decode workers fed: images decode / transcode ahead of the
+    // upload, as far as the decoded-bytes budget allows (decoded pixels
+    // waiting here plus those being decoded); each upload below frees its
+    // image's bytes for the next decode.
+    gltf_data.image_residency.schedule_decodes(tick_context.max_decoded_bytes_in_flight);
 
     const std::size_t total = gltf_data.image_residency.decoded_images.size();
     while (!tick_context.budget.is_exhausted() && tick_context.budget.take_residency_item()) {
@@ -263,21 +273,33 @@ auto Gltf_load_task::advance_residency(Asset_load_tick_context& tick_context) ->
         tick_context.budget.give_back_gpu_upload_bytes(granted);
         if (!did_work) {
             if (gltf_data.image_residency.get_pending_image_count() == 0) {
-                gltf_data.image_residency.bind_material_textures(gltf_data);
                 return true;
             }
-            return false; // budget ran out mid-image
+            return false; // budget or staging ran out mid-image, or no decode finished yet
         }
         if (total > 0) {
             const std::size_t done = total - gltf_data.image_residency.get_pending_image_count();
             m_handle->set_progress(0.5f + 0.4f * static_cast<float>(done) / static_cast<float>(total));
         }
     }
-    if (gltf_data.image_residency.get_pending_image_count() == 0) {
-        gltf_data.image_residency.bind_material_textures(gltf_data);
-        return true;
-    }
-    return false;
+    return gltf_data.image_residency.get_pending_image_count() == 0;
+}
+
+void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_context) const
+{
+    const erhe::gltf::Gltf_image_residency& residency = m_parse_result->gltf_data.image_residency;
+    const erhe::graphics::Upload_staging_usage staging = tick_context.graphics_device.get_upload_staging_usage();
+    log_parsers->info(
+        "async load '{}' resident: decoded pixels high-water {} of {} bytes budget; "
+        "upload staging high-water {} of {} bytes cap (device lifetime), {} waits, {} oversize",
+        erhe::file::to_string(m_handle->get_path().filename()),
+        residency.get_pending_byte_high_water(),
+        tick_context.max_decoded_bytes_in_flight,
+        staging.high_water_bytes,
+        staging.capacity_byte_count,
+        staging.refused_count,
+        staging.oversize_count
+    );
 }
 
 auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_state
@@ -403,7 +425,11 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
 
         case Phase::building: {
             if (!m_build_result->finished.load(std::memory_order_acquire)) {
-                return Asset_load_state::running; // on a worker; costs this frame nothing
+                // The images need nothing from the build: decode and upload
+                // them meanwhile, so the decode overlaps the build instead
+                // of following it. Publish still waits for both.
+                static_cast<void>(advance_residency(tick_context));
+                return Asset_load_state::running;
             }
             // Everything the build enqueued has a ticket at or below this.
             if (m_context.mesh_memory != nullptr) {
@@ -418,6 +444,9 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
             if (!advance_residency(tick_context)) {
                 return Asset_load_state::running;
             }
+            // Bound here, not while the build worker may still run.
+            m_parse_result->gltf_data.image_residency.bind_material_textures(m_parse_result->gltf_data);
+            log_staging_statistics(tick_context);
             m_handle->set_progress(0.9f);
             m_handle->set_state(Asset_load_state::resident);
             m_phase = Phase::publish;

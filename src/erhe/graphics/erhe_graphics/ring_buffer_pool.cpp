@@ -3,6 +3,7 @@
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/thread_roles.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <algorithm>
 #include <array>
@@ -104,11 +105,158 @@ auto Ring_buffer_pool::allocate(
     return ring_buffers.back()->acquire(required_alignment, usage, byte_count);
 }
 
+auto Ring_buffer_pool::get_upload_staging_bytes_in_use_locked() const -> std::size_t
+{
+    std::size_t bytes = 0;
+    if (m_upload_staging) {
+        bytes += m_upload_staging->get_bytes_in_use();
+    }
+    if (m_upload_staging_oversize) {
+        bytes += m_upload_staging_oversize->get_bytes_in_use();
+    }
+    return bytes;
+}
+
+auto Ring_buffer_pool::allocate_upload_staging(
+    const std::size_t required_alignment,
+    const std::size_t byte_count,
+    const std::size_t capacity_byte_count
+) -> Ring_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+    // The staging ring retires its space in acquisition order, which holds
+    // only for one role's frames (see the class comment).
+    ERHE_VERIFY(!erhe::utility::Thread_roles::is_render_role());
+    ERHE_VERIFY(byte_count > 0);
+    ERHE_VERIFY(capacity_byte_count > 0);
+
+    const std::lock_guard<std::mutex> lock{m_mutex};
+
+    // Fairness: a request that found no room is remembered by its size, and
+    // smaller requests are refused until one at least that large is served
+    // (its owner retries it every frame), so a stream of small uploads
+    // cannot keep the ring from ever draining for a large one. The mark
+    // expires when nothing that large retried for a while (a cancelled
+    // load).
+    if (
+        (m_upload_staging_waiting_byte_count > 0) &&
+        (m_last_completed_frame > (m_upload_staging_waiting_frame + upload_staging_wait_expiry_frames))
+    ) {
+        m_upload_staging_waiting_byte_count = 0;
+    }
+    const auto refuse = [this, byte_count](const Upload_staging_wait wait) -> Ring_buffer_range {
+        ++m_upload_staging_usage.refused_count;
+        if ((wait == Upload_staging_wait::remember) && (byte_count >= m_upload_staging_waiting_byte_count)) {
+            m_upload_staging_waiting_byte_count = byte_count;
+            m_upload_staging_waiting_frame      = m_last_completed_frame;
+        }
+        return Ring_buffer_range{};
+    };
+    const auto serve = [this, byte_count](Ring_buffer_range&& range) -> Ring_buffer_range {
+        if (byte_count >= m_upload_staging_waiting_byte_count) {
+            m_upload_staging_waiting_byte_count = 0;
+        }
+        m_upload_staging_usage.high_water_bytes = std::max(m_upload_staging_usage.high_water_bytes, get_upload_staging_bytes_in_use_locked());
+        return std::move(range);
+    };
+    if (byte_count < m_upload_staging_waiting_byte_count) {
+        return refuse(Upload_staging_wait::forget);
+    }
+
+    // A capacity change replaces the ring, but never under in-flight ranges:
+    // until the old ring is idle every request waits.
+    if (m_upload_staging && (m_upload_staging->get_capacity_byte_count() != capacity_byte_count)) {
+        if (!m_upload_staging->is_idle()) {
+            return refuse(Upload_staging_wait::forget);
+        }
+        log_buffer->info(
+            "Upload staging: capacity changed from {} to {} bytes",
+            m_upload_staging->get_capacity_byte_count(), capacity_byte_count
+        );
+        m_upload_staging.reset();
+    }
+    if (!m_upload_staging) {
+        m_upload_staging = std::make_unique<Ring_buffer>(
+            m_device,
+            Ring_buffer_create_info{
+                .size              = capacity_byte_count,
+                .ring_buffer_usage = Ring_buffer_usage::CPU_write,
+                .debug_label       = "Upload staging"
+            }
+        );
+        m_upload_staging_usage.capacity_byte_count = capacity_byte_count;
+        log_buffer->info("Upload staging: created {} byte staging ring", capacity_byte_count);
+    }
+    // An idle ring goes back to offset 0: a caught-up but mid-buffer write
+    // position would refuse a contiguous request the empty ring can hold.
+    // Idle means no range is open and no sync entry is live, so nothing
+    // references the old positions.
+    if (m_upload_staging->is_idle()) {
+        m_upload_staging->complete_all_syncs();
+    }
+
+    // Larger than the whole cap: a one-shot buffer, but only once nothing
+    // else is staged, so the cap is exceeded by at most this one request.
+    if ((byte_count + required_alignment) > capacity_byte_count) {
+        if (!m_upload_staging->is_idle() || m_upload_staging_oversize) {
+            return refuse(Upload_staging_wait::remember);
+        }
+        m_upload_staging_oversize = std::make_unique<Ring_buffer>(
+            m_device,
+            Ring_buffer_create_info{
+                .size              = byte_count + required_alignment,
+                .ring_buffer_usage = Ring_buffer_usage::CPU_write,
+                .debug_label       = "Upload staging (oversize)"
+            }
+        );
+        ++m_upload_staging_usage.oversize_count;
+        log_buffer->info(
+            "Upload staging: {} byte request exceeds the {} byte cap; using a one-shot staging buffer",
+            byte_count, capacity_byte_count
+        );
+        return serve(m_upload_staging_oversize->acquire(required_alignment, Ring_buffer_usage::CPU_write, byte_count));
+    }
+
+    // While a one-shot buffer is live the ring takes nothing, so the staged
+    // bytes stay within max(cap, largest single request).
+    if (m_upload_staging_oversize) {
+        return refuse(Upload_staging_wait::forget);
+    }
+    Ring_buffer_range range = m_upload_staging->try_acquire(required_alignment, Ring_buffer_usage::CPU_write, byte_count, Ring_buffer_wrap::not_allowed);
+    if (range.get_buffer() == nullptr) {
+        range = m_upload_staging->try_acquire(required_alignment, Ring_buffer_usage::CPU_write, byte_count, Ring_buffer_wrap::allowed);
+    }
+    if (range.get_buffer() == nullptr) {
+        return refuse(Upload_staging_wait::remember);
+    }
+    return serve(std::move(range));
+}
+
+auto Ring_buffer_pool::get_upload_staging_usage() const -> Upload_staging_usage
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    Upload_staging_usage usage = m_upload_staging_usage;
+    usage.bytes_in_use = get_upload_staging_bytes_in_use_locked();
+    return usage;
+}
+
 void Ring_buffer_pool::frame_completed(const uint64_t completed_frame)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
+    m_last_completed_frame = std::max(m_last_completed_frame, completed_frame);
     for (std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
         frame_completed_in_role(role_ring_buffers, completed_frame);
+    }
+    if (m_upload_staging) {
+        m_upload_staging->frame_completed(completed_frame);
+    }
+    if (m_upload_staging_oversize) {
+        m_upload_staging_oversize->frame_completed(completed_frame);
+        // One-shot: destroyed as soon as its range retired (deferred-safe,
+        // like the idle reclaim below).
+        if (m_upload_staging_oversize->is_idle()) {
+            m_upload_staging_oversize.reset();
+        }
     }
 }
 
@@ -163,6 +311,8 @@ void Ring_buffer_pool::clear()
     for (std::vector<std::unique_ptr<Ring_buffer>>& role_ring_buffers : m_ring_buffers) {
         role_ring_buffers.clear();
     }
+    m_upload_staging.reset();
+    m_upload_staging_oversize.reset();
 }
 
 auto Ring_buffer_pool::get_buffer_count() const -> std::size_t

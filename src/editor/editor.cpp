@@ -1522,6 +1522,9 @@ public:
                 .budget                      = budget,
                 .max_decoded_bytes_in_flight = static_cast<std::size_t>(
                     std::max(0, m_app_context.editor_settings->load.max_decoded_bytes_in_flight)
+                ),
+                .max_upload_staging_bytes = static_cast<std::size_t>(
+                    std::max(1, m_app_context.editor_settings->load.max_upload_staging_bytes)
                 )
             };
             m_asset_manager->tick(asset_load_tick_context);

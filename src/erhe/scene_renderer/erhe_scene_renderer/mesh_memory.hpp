@@ -171,7 +171,9 @@ public:
     // Drains ONLY the loader queue, up to max_byte_count bytes, and returns
     // the bytes recorded. Called from the asset-load tick slot; never from
     // the per-frame flush above, which must keep its full-drain semantics.
-    auto flush_budgeted(erhe::graphics::Command_buffer& command_buffer, std::size_t max_byte_count) -> std::size_t;
+    // Staging comes from the device's capped upload staging
+    // (staging_capacity_byte_count, see Buffer_transfer_queue::flush_budgeted).
+    auto flush_budgeted(erhe::graphics::Command_buffer& command_buffer, std::size_t max_byte_count, std::size_t staging_capacity_byte_count) -> std::size_t;
 
     // The loader queue, for tickets and the publish watermark (plan 2.5).
     [[nodiscard]] auto get_loader_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;

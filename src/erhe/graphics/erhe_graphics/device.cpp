@@ -280,6 +280,14 @@ auto Device::allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer
 {
     return m_impl->allocate_ring_buffer_entry(buffer_target, usage, byte_count);
 }
+auto Device::allocate_upload_staging(const Buffer_target buffer_target, const std::size_t byte_count, const std::size_t capacity_byte_count) -> Ring_buffer_range
+{
+    return m_impl->allocate_upload_staging(buffer_target, byte_count, capacity_byte_count);
+}
+auto Device::get_upload_staging_usage() const -> Upload_staging_usage
+{
+    return m_impl->get_upload_staging_usage();
+}
 auto Device::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
     return m_impl->get_format_properties(format);

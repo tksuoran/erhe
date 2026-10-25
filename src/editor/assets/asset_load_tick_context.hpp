@@ -85,9 +85,13 @@ public:
     Frame_load_budget&              budget;
 
     // Standing backpressure cap (plan 2.4): a task must not schedule further
-    // decode / build work while this many decoded bytes are already waiting
-    // for upload budget.
+    // image decodes while this many decoded bytes are waiting for upload or
+    // being decoded (Gltf_image_residency::schedule_decodes).
     std::size_t max_decoded_bytes_in_flight{0};
+
+    // Hard cap on the host-visible staging the budgeted uploads use
+    // (Device::allocate_upload_staging): passed with every staged upload.
+    std::size_t max_upload_staging_bytes{0};
 };
 
 } // namespace editor

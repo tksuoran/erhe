@@ -345,6 +345,15 @@ void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, std::size_t off
     std::memcpy(static_cast<std::byte*>(mtl_buffer->contents()) + offset, data, length);
 }
 
+auto Command_buffer_impl::try_upload_to_buffer(const Buffer& buffer, const std::size_t offset, const void* data, const std::size_t length, const std::size_t staging_capacity_byte_count) -> bool
+{
+    // Shared storage: upload_to_buffer is a memcpy and stages nothing, so
+    // there is nothing to cap.
+    static_cast<void>(staging_capacity_byte_count);
+    upload_to_buffer(buffer, offset, data, length);
+    return true;
+}
+
 void Command_buffer_impl::upload_to_texture(
     const Texture&           texture,
     int                      level,

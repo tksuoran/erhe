@@ -115,6 +115,7 @@ public:
     void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
     void submit_command_buffer_and_wait(Command_buffer& command_buffer);
     void upload_to_buffer          (const Buffer& buffer, size_t offset, const void* data, size_t length);
+    [[nodiscard]] auto try_upload_to_buffer(const Buffer& buffer, size_t offset, const void* data, size_t length, size_t staging_capacity_byte_count) -> bool;
     void upload_to_texture         (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void add_completion_handler    (std::function<void(Device_impl&)> callback);
     void on_thread_enter           ();
@@ -147,6 +148,8 @@ public:
     // Conservative: see Device::is_frame_completed().
     [[nodiscard]] auto is_frame_completed                 (uint64_t frame) const -> bool;
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto allocate_upload_staging            (Buffer_target buffer_target, std::size_t byte_count, std::size_t capacity_byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto get_upload_staging_usage           () const -> Upload_staging_usage;
     [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
     [[nodiscard]] auto make_render_command_encoder        (Command_buffer& command_buffer) -> Render_command_encoder;

@@ -13,6 +13,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -327,6 +328,107 @@ void Command_buffer_impl::pre_submit_wait()
     m_wait_for_cpu_producers.clear();
 }
 
+// The copy and post-copy barrier shared by upload_to_buffer and
+// try_upload_to_buffer: source_buffer holds the staged bytes at
+// source_offset.
+void Command_buffer_impl::record_buffer_upload_copy(
+    const VkBuffer     source_buffer,
+    const std::size_t  source_offset,
+    Buffer_impl&       impl,
+    const std::size_t  offset,
+    const std::size_t  length
+)
+{
+    const VkBufferCopy copy_region{
+        .srcOffset = source_offset,
+        .dstOffset = offset,
+        .size      = length
+    };
+    vkCmdCopyBuffer(m_vk_command_buffer, source_buffer, impl.get_vk_buffer(), 1, &copy_region);
+
+    // Chain the transfer write to the precise consumer stages this buffer
+    // was created for, so downstream readers don't need their own
+    // pre-barrier. The next copy into the buffer is a consumer too: every
+    // VkBuffer is created with TRANSFER_DST (Buffer_impl), whatever its
+    // Buffer_usage says, and a later upload_to_buffer into the same range -
+    // in this command buffer or in one submitted after it - must not race
+    // this write (write-after-write).
+    const Vk_stage_access_2     dst_scope = buffer_usage_to_vk_stage_access(impl.get_usage());
+    const VkPipelineStageFlags2 dst_stage_mask =
+        ((dst_scope.stage != 0) ? dst_scope.stage : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) | VK_PIPELINE_STAGE_2_COPY_BIT;
+    const VkAccessFlags2 dst_access_mask =
+        ((dst_scope.access != 0) ? dst_scope.access : VK_ACCESS_2_MEMORY_READ_BIT) | VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    const VkBufferMemoryBarrier2 buffer_barrier{
+        .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+        .pNext               = nullptr,
+        .srcStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
+        .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask        = dst_stage_mask,
+        .dstAccessMask       = dst_access_mask,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer              = impl.get_vk_buffer(),
+        .offset              = static_cast<VkDeviceSize>(offset),
+        .size                = static_cast<VkDeviceSize>(length)
+    };
+    const VkDependencyInfo post_copy_dep_info{
+        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                    = nullptr,
+        .dependencyFlags          = 0,
+        .memoryBarrierCount       = 0,
+        .pMemoryBarriers          = nullptr,
+        .bufferMemoryBarrierCount = 1,
+        .pBufferMemoryBarriers    = &buffer_barrier,
+        .imageMemoryBarrierCount  = 0,
+        .pImageMemoryBarriers     = nullptr,
+    };
+    vkCmdPipelineBarrier2(m_vk_command_buffer, &post_copy_dep_info);
+}
+
+auto Command_buffer_impl::try_upload_to_buffer(
+    const Buffer&     buffer,
+    const std::size_t offset,
+    const void*       data,
+    const std::size_t length,
+    const std::size_t staging_capacity_byte_count
+) -> bool
+{
+    ERHE_VERIFY(m_device_impl != nullptr);
+    ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);
+
+    Buffer_impl& impl = const_cast<Buffer_impl&>(buffer.get_impl());
+
+    // Host-visible destination: a memcpy through the map, no staging.
+    if (impl.is_host_visible()) {
+        std::span<std::byte> map = impl.map_bytes(offset, length);
+        if (!map.empty()) {
+            std::memcpy(map.data(), data, length);
+            impl.end_write(offset, length);
+            return true;
+        }
+    }
+
+    // Staged through the device's capped upload staging ring; no room means
+    // nothing is recorded and the caller retries next frame.
+    Ring_buffer_range range = m_device_impl->allocate_upload_staging(Buffer_target::transfer_src, length, staging_capacity_byte_count);
+    if (range.get_buffer() == nullptr) {
+        return false;
+    }
+    ERHE_VERIFY(range.get_span().size() >= length);
+    std::memcpy(range.get_span().data(), data, length);
+    range.bytes_written(length);
+    range.close();
+    record_buffer_upload_copy(
+        range.get_buffer()->get_buffer()->get_impl().get_vk_buffer(),
+        range.get_byte_start_offset_in_buffer(),
+        impl,
+        offset,
+        length
+    );
+    range.release();
+    return true;
+}
+
 void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, const std::size_t offset, const void* data, const std::size_t length)
 {
     ERHE_VERIFY(m_device_impl != nullptr);
@@ -380,50 +482,7 @@ void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, const std::size
     std::memcpy(staging_allocation_info.pMappedData, data, length);
     vmaFlushAllocation(allocator, staging_allocation, 0, length);
 
-    const VkBufferCopy copy_region{
-        .srcOffset = 0,
-        .dstOffset = offset,
-        .size      = length
-    };
-    vkCmdCopyBuffer(m_vk_command_buffer, staging_buffer, impl.get_vk_buffer(), 1, &copy_region);
-
-    // Chain the transfer write to the precise consumer stages this buffer
-    // was created for, so downstream readers don't need their own
-    // pre-barrier. The next copy into the buffer is a consumer too: every
-    // VkBuffer is created with TRANSFER_DST (Buffer_impl), whatever its
-    // Buffer_usage says, and a later upload_to_buffer into the same range -
-    // in this command buffer or in one submitted after it - must not race
-    // this write (write-after-write).
-    const Vk_stage_access_2     dst_scope = buffer_usage_to_vk_stage_access(impl.get_usage());
-    const VkPipelineStageFlags2 dst_stage_mask =
-        ((dst_scope.stage != 0) ? dst_scope.stage : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) | VK_PIPELINE_STAGE_2_COPY_BIT;
-    const VkAccessFlags2 dst_access_mask =
-        ((dst_scope.access != 0) ? dst_scope.access : VK_ACCESS_2_MEMORY_READ_BIT) | VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    const VkBufferMemoryBarrier2 buffer_barrier{
-        .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
-        .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask        = dst_stage_mask,
-        .dstAccessMask       = dst_access_mask,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .buffer              = impl.get_vk_buffer(),
-        .offset              = static_cast<VkDeviceSize>(offset),
-        .size                = static_cast<VkDeviceSize>(length)
-    };
-    const VkDependencyInfo post_copy_dep_info{
-        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext                    = nullptr,
-        .dependencyFlags          = 0,
-        .memoryBarrierCount       = 0,
-        .pMemoryBarriers          = nullptr,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers    = &buffer_barrier,
-        .imageMemoryBarrierCount  = 0,
-        .pImageMemoryBarriers     = nullptr,
-    };
-    vkCmdPipelineBarrier2(m_vk_command_buffer, &post_copy_dep_info);
+    record_buffer_upload_copy(staging_buffer, 0, impl, offset, length);
 
     // Defer staging buffer destruction until the GPU has consumed this
     // frame. add_completion_handler queues against the calling role's

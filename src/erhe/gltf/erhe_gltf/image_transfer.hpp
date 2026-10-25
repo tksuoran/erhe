@@ -30,10 +30,11 @@ enum class Image_transfer_mode : unsigned int
     blocking_drain = 0,
 
     // Copies are recorded into the caller's command buffer - the frame's -
-    // and staged from the device's shared ring buffer, whose ranges are
-    // reclaimed by frame completion. Nothing blocks: an upload that does not
-    // fit this frame's byte budget reports budget_exhausted and the caller
-    // resumes next frame. Requires a live frame loop.
+    // and staged from the device's capped upload staging
+    // (Device::allocate_upload_staging), whose ranges are reclaimed by frame
+    // completion. Nothing blocks: an upload that does not fit this frame's
+    // byte budget, or finds the staging full, reports budget_exhausted and
+    // the caller resumes next frame. Requires a live frame loop.
     frame_recording = 1
 };
 
@@ -41,7 +42,7 @@ enum class Image_transfer_mode : unsigned int
 enum class Image_upload_result : unsigned int
 {
     recorded         = 0, // copies are in the command buffer
-    budget_exhausted = 1  // no byte budget left this frame; retry next frame
+    budget_exhausted = 1  // no byte budget or no staging space left this frame; retry next frame
 };
 
 // Stages glTF texture uploads and records the per-level copies to the
@@ -58,15 +59,26 @@ enum class Image_upload_result : unsigned int
 class Image_transfer
 {
 public:
+    // Staging cap used when the caller names none: the size of the
+    // blocking_drain private ring, and the cap a frame_recording transfer
+    // passes to Device::allocate_upload_staging.
+    static constexpr std::size_t default_staging_capacity_byte_count = 64 * 1024 * 1024;
+
     explicit Image_transfer(erhe::graphics::Device& graphics_device);
-    Image_transfer(erhe::graphics::Device& graphics_device, Image_transfer_mode mode);
+    // staging_capacity_byte_count is the hard cap on host-visible staging:
+    // the private ring's size in blocking_drain mode, the device upload
+    // staging cap in frame_recording mode. An image larger than it still
+    // uploads, through a one-shot buffer (doc/erhe/ring_buffer_memory.md
+    // "Upload staging cap").
+    Image_transfer(erhe::graphics::Device& graphics_device, Image_transfer_mode mode, std::size_t staging_capacity_byte_count = default_staging_capacity_byte_count);
     ~Image_transfer();
     Image_transfer(const Image_transfer&)  = delete;
     void operator=(const Image_transfer&)  = delete;
     Image_transfer(Image_transfer&&)       = delete;
     void operator=(Image_transfer&&)       = delete;
 
-    [[nodiscard]] auto get_mode() const -> Image_transfer_mode { return m_mode; }
+    [[nodiscard]] auto get_mode                       () const -> Image_transfer_mode { return m_mode; }
+    [[nodiscard]] auto get_staging_capacity_byte_count() const -> std::size_t         { return m_staging_capacity_byte_count; }
 
     // Stage the pixel data (level_count levels contiguous, largest-first,
     // tightly packed) and record the per-level copies to the texture.
@@ -78,20 +90,19 @@ public:
         bool                                generate_mipmap
     );
 
-    // Same, but staged from the device ring and recorded into
-    // command_buffer. `remaining_budget_bytes` is the caller's per-frame GPU
-    // upload allowance: nothing is recorded and budget_exhausted is returned
-    // when it is already zero, otherwise it is decremented by the staged byte
-    // count. An image larger than the whole remaining budget still goes in
-    // one piece and takes the budget to zero - the budget bounds how much a
-    // frame STARTS, not how far a single image may overshoot; per-level
-    // slicing of one oversize image is a later step.
+    // Same, but staged from the device's capped upload staging and recorded
+    // into command_buffer. `remaining_budget_bytes` is the caller's
+    // per-frame GPU upload allowance: nothing is recorded and
+    // budget_exhausted is returned when it is already zero, otherwise it is
+    // decremented by the staged byte count. An image larger than the whole
+    // remaining budget still goes in one piece and takes the budget to zero
+    // - the budget bounds how much a frame STARTS, not how far a single
+    // image may overshoot.
     //
-    // The budget is not merely pacing: Device::allocate_ring_buffer_entry
-    // never refuses - it spills a new ring buffer sized to the request - so
-    // this budget is the ONLY thing bounding staging memory in this mode.
-    // A caller that passes an unbounded budget will grow the device's
-    // staging rings by the size of the scene.
+    // Staging memory is bounded by the staging cap, not by the budget: when
+    // Device::allocate_upload_staging has no room nothing is recorded and
+    // budget_exhausted is returned, so the caller waits for frame completion
+    // to retire older staging instead of growing it.
     // frame_recording mode only.
     [[nodiscard]] auto upload_into_frame(
         erhe::graphics::Command_buffer&     command_buffer,
@@ -119,6 +130,7 @@ private:
 
     erhe::graphics::Device&                    m_graphics_device;
     Image_transfer_mode                        m_mode{Image_transfer_mode::blocking_drain};
+    std::size_t                                m_staging_capacity_byte_count{default_staging_capacity_byte_count};
     std::optional<erhe::graphics::Ring_buffer> m_staging; // blocking_drain only
     erhe::graphics::Command_buffer*            m_command_buffer{nullptr};
 };

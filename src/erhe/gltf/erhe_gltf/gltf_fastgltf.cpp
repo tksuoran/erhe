@@ -56,10 +56,12 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstring>
 #include <filesystem>
 #include <future>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <random>
 #include <span>
@@ -1243,10 +1245,13 @@ public:
         // Parallel to images: the decoded payloads whose textures a later
         // residency step creates (doc/editor/async_asset_loading_design.md step 3).
         m_data_out.image_residency.decoded_images.resize(m_asset->images.size());
+        m_data_out.image_residency.transcode_format_preference = m_transcode_format_preference;
+        m_data_out.image_residency.decode_executor             = &m_arguments.executor;
+        m_data_out.image_residency.parallel_decode             = m_arguments.parallel;
         const Clock::time_point image_start_time = Clock::now();
-        // Decode every material-referenced image (in parallel when enabled)
-        // and upload on this thread; images referenced some other way fall
-        // back to the lazy get_image() path during material parsing.
+        // Retain the encoded stream of every material-referenced image (in
+        // parallel when enabled); residency decodes them. Images referenced
+        // some other way fall back to the lazy path during material parsing.
         parse_images();
         const long long image_ms = elapsed_ms(image_start_time);
 
@@ -1593,68 +1598,40 @@ private:
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
-    // CPU half of image loading: decode (and retain the encoded source
-    // stream) into plain memory. No GPU objects and no Image_transfer ring
-    // buffer are touched, so this is safe to run on executor workers. The
-    // GPU half now lives in Gltf_image_residency (see gltf_fastgltf.hpp).
-    [[nodiscard]] auto decode_image(const std::size_t image_index, const bool linear) -> Gltf_decoded_image
+    // CPU half of image loading, first step: retain the encoded source stream
+    // (for residency to decode from, and for byte-exact re-embedding on
+    // export). Nothing is decoded here: Gltf_image_residency decodes on
+    // workers ahead of the upload, under a decoded-bytes budget, so the parse
+    // never holds every image's pixels at once. No GPU object is touched.
+    [[nodiscard]] auto prepare_image(const std::size_t image_index, const bool linear) -> Gltf_decoded_image
     {
         ERHE_PROFILE_FUNCTION();
 
-        Gltf_decoded_image decoded;
-        decoded.requested = true;
-        decoded.uid       = m_asset->images[image_index].uid;
+        Gltf_decoded_image prepared;
+        prepared.requested = true;
+        prepared.linear    = linear;
+        prepared.uid       = m_asset->images[image_index].uid;
         const fastgltf::Image& image = m_asset->images[image_index];
-        decoded.name = safe_resource_name(image.name, "image", image_index);
+        prepared.name = safe_resource_name(image.name, "image", image_index);
 
         std::visit(
             fastgltf::visitor {
                 [&](auto& arg) {
                     static_cast<void>(arg);
-                    log_gltf->error("Image '{}': unsupported image source", decoded.name);
+                    log_gltf->error("Image '{}': unsupported image source", prepared.name);
                 },
                 [&](const fastgltf::sources::BufferView& buffer_view_source) {
                     const fastgltf::BufferView& buffer_view = m_asset->bufferViews[buffer_view_source.bufferViewIndex];
                     const fastgltf::Buffer&     buffer      = m_asset->buffers.at(buffer_view.bufferIndex);
                     const fastgltf::sources::Array* array_source = std::get_if<fastgltf::sources::Array>(&buffer.data);
                     if (array_source == nullptr) {
-                        log_gltf->error("Image '{}': buffer view source buffer is not loaded", decoded.name);
+                        log_gltf->error("Image '{}': buffer view source buffer is not loaded", prepared.name);
                         return;
                     }
-                    const std::span<const std::uint8_t> image_encoded_buffer_view{
-                        reinterpret_cast<const std::uint8_t*>(array_source->bytes.data()) + buffer_view.byteOffset,
-                        buffer_view.byteLength
-                    };
-                    erhe::graphics::Image_loader loader;
-                    if (!loader.open(image_encoded_buffer_view, decoded.info, linear, m_transcode_format_preference)) {
-                        log_gltf->error("Failed to parse image from buffer view '{}'", decoded.name);
-                        return;
-                    }
-                    // TODO Handle depth > 1
-                    if (erhe::dataformat::is_block_compressed(decoded.info.format) || (decoded.info.level_count > 1)) {
-                        // Container formats (DDS) carry a tightly packed mip chain
-                        decoded.pixels.resize(
-                            erhe::dataformat::get_mip_chain_byte_count(
-                                decoded.info.format,
-                                static_cast<std::size_t>(decoded.info.width),
-                                static_cast<std::size_t>(decoded.info.height),
-                                static_cast<std::size_t>(decoded.info.level_count)
-                            )
-                        );
-                    } else {
-                        ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
-                        decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
-                    }
-                    decoded.ok = loader.load(std::span<std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()});
-                    loader.close();
-                    decoded.source_path = m_arguments.path;
-                    if (decoded.ok) {
-                        // Retain the encoded source stream for byte-exact
-                        // re-embedding on export (phase 0).
-                        const std::byte* start = reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset;
-                        decoded.source = std::make_shared<Gltf_image_source>();
-                        decoded.source->encoded_bytes.assign(start, start + buffer_view.byteLength);
-                    }
+                    prepared.source_path = m_arguments.path;
+                    const std::byte* start = reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset;
+                    prepared.source = std::make_shared<Gltf_image_source>();
+                    prepared.source->encoded_bytes.assign(start, start + buffer_view.byteLength);
                 },
                 [&](const fastgltf::sources::URI& uri) {
                     // Resolve on a copy: replace_filename() mutates in place,
@@ -1663,55 +1640,37 @@ private:
                     std::filesystem::path relative_path = uri.uri.fspath();
                     std::filesystem::path image_path    = m_arguments.path;
                     image_path.replace_filename(relative_path);
-                    const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::decode_image", image_path);
+                    const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::prepare_image", image_path);
                     if (!file_is_ok) {
                         return;
                     }
-                    erhe::graphics::Image_loader loader;
-                    if (!loader.open(image_path, decoded.info, linear, m_transcode_format_preference)) {
-                        return;
-                    }
-                    // TODO Handle depth > 1
-                    if (erhe::dataformat::is_block_compressed(decoded.info.format) || (decoded.info.level_count > 1)) {
-                        // Container formats (DDS) carry a tightly packed mip chain
-                        decoded.pixels.resize(
-                            erhe::dataformat::get_mip_chain_byte_count(
-                                decoded.info.format,
-                                static_cast<std::size_t>(decoded.info.width),
-                                static_cast<std::size_t>(decoded.info.height),
-                                static_cast<std::size_t>(decoded.info.level_count)
-                            )
-                        );
-                    } else {
-                        ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
-                        decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
-                    }
-                    decoded.ok = loader.load(std::span<std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()});
-                    loader.close();
-                    decoded.source_path = image_path;
-                    if (decoded.ok) {
-                        const std::optional<std::string> file_content = erhe::file::read("gltf image source retention", image_path);
-                        if (file_content.has_value() && !file_content->empty()) {
-                            const std::byte* start = reinterpret_cast<const std::byte*>(file_content->data());
-                            decoded.source = std::make_shared<Gltf_image_source>();
-                            decoded.source->encoded_bytes.assign(start, start + file_content->size());
-                        }
+                    prepared.source_path = image_path;
+                    const std::optional<std::string> file_content = erhe::file::read("gltf image source", image_path);
+                    if (file_content.has_value() && !file_content->empty()) {
+                        const std::byte* start = reinterpret_cast<const std::byte*>(file_content->data());
+                        prepared.source = std::make_shared<Gltf_image_source>();
+                        prepared.source->encoded_bytes.assign(start, start + file_content->size());
                     }
                 }
             },
             image.data
         );
 
-        if (decoded.source) {
-            decoded.source->mime_type = sniff_image_mime_type(decoded.source->encoded_bytes);
+        if (prepared.source) {
+            prepared.source->mime_type = sniff_image_mime_type(prepared.source->encoded_bytes);
+        } else {
+            // Nothing to decode: settled as a failed decode right away.
+            prepared.decoded = true;
+            prepared.ok      = false;
         }
-        return decoded;
+        return prepared;
     }
 
 
-    // Decode every image referenced by a material texture slot, in parallel
-    // executor tasks when enabled. No GPU object is created here - the
-    // decoded payloads go to Gltf_image_residency. The slot determines the
+    // Prepare every image referenced by a material texture slot (retain its
+    // encoded stream), in parallel executor tasks when enabled. No GPU object
+    // is created and nothing is decoded here - Gltf_image_residency decodes
+    // and uploads. The slot determines the
     // color space, exactly like the lazy bind_image() calls in
     // parse_material() do (first referencing slot wins for images shared
     // between slots).
@@ -1762,6 +1721,8 @@ private:
             }
         }
 
+        // Only the encoded streams are gathered here (file reads for URI
+        // images, in parallel when enabled); decoding is residency's.
         std::vector<Gltf_decoded_image>& decoded_images = m_data_out.image_residency.decoded_images;
         if (m_arguments.parallel) {
             ::tf::Taskflow taskflow;
@@ -1772,7 +1733,7 @@ private:
                 const bool linear = image_linear[i] != 0;
                 taskflow.emplace(
                     [this, i, linear, &decoded_images]() {
-                        decoded_images[i] = decode_image(i, linear);
+                        decoded_images[i] = prepare_image(i, linear);
                     }
                 );
             }
@@ -1782,7 +1743,7 @@ private:
                 if (image_used[i] == 0) {
                     continue;
                 }
-                decoded_images[i] = decode_image(i, image_linear[i] != 0);
+                decoded_images[i] = prepare_image(i, image_linear[i] != 0);
             }
         }
 
@@ -1793,8 +1754,8 @@ private:
             m_data_out.image_sources[i] = decoded_images[i].source;
         }
     }
-    // Make sure image_index is decoded. The texture itself is created later,
-    // by Gltf_image_residency::process_next_image.
+    // Make sure image_index is requested (its encoded stream retained). The
+    // pixels and the texture come later, from Gltf_image_residency.
     void ensure_image_decoded(const std::size_t image_index, const bool linear)
     {
         Gltf_decoded_image& decoded = m_data_out.image_residency.decoded_images[image_index];
@@ -1805,7 +1766,7 @@ private:
         // parse_images() material-slot scan.
         ERHE_PROFILE_SCOPE("parse_image");
         log_gltf->trace("Image: image index = {}", image_index);
-        decoded = decode_image(image_index, linear);
+        decoded = prepare_image(image_index, linear);
         m_data_out.image_sources[image_index] = decoded.source;
     }
     void parse_sampler(const std::size_t sampler_index)
@@ -4063,6 +4024,163 @@ private:
 // thread that owns image_transfer and may touch the device; everything the
 // parser does may not.
 
+// Worker decode state of one Gltf_image_residency (see the class comment in
+// gltf_fastgltf.hpp). Shared with the decode tasks through a shared_ptr so a
+// task never outlives what it writes into; the tasks write only here, and the
+// residency thread moves finished results into Gltf_decoded_image.
+enum class Gltf_image_decode_state : unsigned int
+{
+    waiting   = 0, // not started, or gave its turn back for lack of budget
+    decoding  = 1, // a task owns the slot
+    finished  = 2, // result ready for collect_decoded()
+    collected = 3  // moved into Gltf_decoded_image
+};
+
+class Gltf_image_decode_slot
+{
+public:
+    Gltf_image_decode_state    state              {Gltf_image_decode_state::waiting};
+    std::size_t                known_byte_count   {0}; // decoded size, known once an open had to give its turn back
+    std::size_t                reserved_byte_count{0}; // counted in m_bytes_in_flight until the upload releases it
+    bool                       ok                 {false};
+    erhe::graphics::Image_info info{};
+    std::vector<std::uint8_t>  pixels;
+};
+
+class Gltf_image_decode_queue
+{
+public:
+    explicit Gltf_image_decode_queue(const std::size_t image_count)
+        : m_slots{image_count}
+    {
+    }
+
+    void reserve_locked(Gltf_image_decode_slot& slot, const std::size_t byte_count)
+    {
+        slot.reserved_byte_count = byte_count;
+        m_bytes_in_flight += byte_count;
+        m_high_water_bytes = std::max(m_high_water_bytes, m_bytes_in_flight);
+    }
+    void release_locked(Gltf_image_decode_slot& slot)
+    {
+        m_bytes_in_flight -= slot.reserved_byte_count;
+        slot.reserved_byte_count = 0;
+    }
+    // A reservation that keeps the in-flight bytes within the limit, or the
+    // only one (an image larger than the whole budget decodes alone).
+    [[nodiscard]] auto fits_locked(const std::size_t byte_count) const -> bool
+    {
+        return (m_bytes_in_flight == 0) || ((m_bytes_in_flight + byte_count) <= m_limit_byte_count);
+    }
+
+    std::mutex                          m_mutex;
+    std::condition_variable             m_condition;
+    std::vector<Gltf_image_decode_slot> m_slots;
+    std::size_t                         m_limit_byte_count        {Gltf_image_residency::default_max_decoded_bytes_in_flight};
+    std::size_t                         m_bytes_in_flight         {0};
+    std::size_t                         m_high_water_bytes        {0};
+    std::size_t                         m_running_count           {0};
+    std::size_t                         m_unreserved_running_count{0}; // running, size not known yet
+    std::size_t                         m_largest_byte_count      {0}; // largest decoded image so far, the estimate for unknown ones
+};
+
+namespace {
+
+[[nodiscard]] auto get_decoded_pixel_byte_count(const erhe::graphics::Image_info& info) -> std::size_t
+{
+    // TODO Handle depth > 1
+    if (erhe::dataformat::is_block_compressed(info.format) || (info.level_count > 1)) {
+        // Container formats (DDS, KTX2) carry a tightly packed mip chain
+        return erhe::dataformat::get_mip_chain_byte_count(
+            info.format,
+            static_cast<std::size_t>(info.width),
+            static_cast<std::size_t>(info.height),
+            static_cast<std::size_t>(info.level_count)
+        );
+    }
+    ERHE_VERIFY(info.width * erhe::dataformat::get_format_size_bytes(info.format) == info.row_stride);
+    return static_cast<std::size_t>(info.row_stride) * static_cast<std::size_t>(info.height);
+}
+
+// Body of one decode task (also run inline when decoding is serial). The
+// header open() tells the decoded size; the pixels are allocated only once
+// that size fits the budget - otherwise the slot goes back to waiting with
+// its size known, and schedule_decodes() restarts it when there is room.
+void run_image_decode(
+    const std::shared_ptr<Gltf_image_decode_queue>& queue,
+    const std::size_t                               image_index,
+    const std::shared_ptr<Gltf_image_source>&       source,
+    const bool                                      linear,
+    const erhe::graphics::Transcode_format_preference transcode_format_preference,
+    const std::string&                              name
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::graphics::Image_loader loader;
+    erhe::graphics::Image_info   info{};
+    const std::span<const std::uint8_t> encoded{
+        reinterpret_cast<const std::uint8_t*>(source->encoded_bytes.data()),
+        source->encoded_bytes.size()
+    };
+    bool        ok         = loader.open(encoded, info, linear, transcode_format_preference);
+    std::size_t byte_count = ok ? get_decoded_pixel_byte_count(info) : 0;
+    {
+        const std::lock_guard<std::mutex> lock{queue->m_mutex};
+        Gltf_image_decode_slot& slot = queue->m_slots[image_index];
+        if (slot.reserved_byte_count == 0) {
+            --queue->m_unreserved_running_count;
+            if (ok) {
+                queue->m_largest_byte_count = std::max(queue->m_largest_byte_count, byte_count);
+                if (queue->fits_locked(byte_count)) {
+                    queue->reserve_locked(slot, byte_count);
+                } else {
+                    slot.state            = Gltf_image_decode_state::waiting;
+                    slot.known_byte_count = byte_count;
+                    --queue->m_running_count;
+                    ok = false; // not a failure: give the turn back
+                }
+            }
+        } else {
+            // Admitted with the size an earlier open reported; the same
+            // stream opens to the same size.
+            ERHE_VERIFY(!ok || (slot.reserved_byte_count == byte_count));
+        }
+        if (!ok && (slot.state == Gltf_image_decode_state::waiting)) {
+            queue->m_condition.notify_all();
+            loader.close();
+            return;
+        }
+    }
+
+    std::vector<std::uint8_t> pixels;
+    if (ok) {
+        pixels.resize(byte_count);
+        ok = loader.load(std::span<std::uint8_t>{pixels.data(), pixels.size()});
+    }
+    loader.close();
+    if (!ok) {
+        log_gltf->error("Image '{}': decode failed", name);
+        pixels = std::vector<std::uint8_t>{};
+    }
+
+    {
+        const std::lock_guard<std::mutex> lock{queue->m_mutex};
+        Gltf_image_decode_slot& slot = queue->m_slots[image_index];
+        if (!ok) {
+            queue->release_locked(slot);
+        }
+        slot.ok     = ok;
+        slot.info   = info;
+        slot.pixels = std::move(pixels);
+        slot.state  = Gltf_image_decode_state::finished;
+        --queue->m_running_count;
+    }
+    queue->m_condition.notify_all();
+}
+
+} // anonymous namespace
+
 namespace {
 
 // Mipmap generation blits level to level, which cannot write
@@ -4089,7 +4207,6 @@ namespace {
     ERHE_PROFILE_FUNCTION();
 
     if (!decoded.ok) {
-        log_gltf->warn("Image '{}' load failed", decoded.name);
         return {};
     }
     const erhe::graphics::Image_info& image_info = decoded.info;
@@ -4146,15 +4263,22 @@ void finish_resident_image(
     if (image_index < data.images.size()) {
         data.images[image_index] = texture;
     }
+    if (!decoded.ok) {
+        // A stream that does not decode is not exported either.
+        decoded.source.reset();
+        if (image_index < data.image_sources.size()) {
+            data.image_sources[image_index].reset();
+        }
+    }
     decoded.resident = true;
     decoded.pixels   = std::vector<std::uint8_t>{};
 }
 
-[[nodiscard]] auto find_next_pending_image(const std::vector<Gltf_decoded_image>& decoded_images) -> std::size_t
+[[nodiscard]] auto find_next_undecoded_image(const std::vector<Gltf_decoded_image>& decoded_images) -> std::size_t
 {
     for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
         const Gltf_decoded_image& decoded = decoded_images[i];
-        if (decoded.requested && !decoded.resident) {
+        if (decoded.requested && !decoded.decoded) {
             return i;
         }
     }
@@ -4190,6 +4314,14 @@ auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_
     return options;
 }
 
+auto Gltf_image_residency::get_decode_queue() -> const std::shared_ptr<Gltf_image_decode_queue>&
+{
+    if (!m_decode_queue) {
+        m_decode_queue = std::make_shared<Gltf_image_decode_queue>(decoded_images.size());
+    }
+    return m_decode_queue;
+}
+
 auto Gltf_image_residency::get_pending_image_count() const -> std::size_t
 {
     std::size_t count = 0;
@@ -4203,27 +4335,183 @@ auto Gltf_image_residency::get_pending_image_count() const -> std::size_t
 
 auto Gltf_image_residency::get_pending_byte_count() const -> std::size_t
 {
-    std::size_t bytes = 0;
-    for (const Gltf_decoded_image& decoded : decoded_images) {
-        if (decoded.requested && !decoded.resident) {
-            bytes += decoded.pixels.size();
+    if (!m_decode_queue) {
+        return 0;
+    }
+    const std::lock_guard<std::mutex> lock{m_decode_queue->m_mutex};
+    return m_decode_queue->m_bytes_in_flight;
+}
+
+auto Gltf_image_residency::get_pending_byte_high_water() const -> std::size_t
+{
+    if (!m_decode_queue) {
+        return 0;
+    }
+    const std::lock_guard<std::mutex> lock{m_decode_queue->m_mutex};
+    return m_decode_queue->m_high_water_bytes;
+}
+
+auto Gltf_image_residency::is_decode_idle() const -> bool
+{
+    if (!m_decode_queue) {
+        return true;
+    }
+    const std::lock_guard<std::mutex> lock{m_decode_queue->m_mutex};
+    return m_decode_queue->m_running_count == 0;
+}
+
+void Gltf_image_residency::schedule_decodes(const std::size_t max_decoded_bytes_in_flight)
+{
+    if (!parallel_decode || (decode_executor == nullptr)) {
+        return;
+    }
+    ERHE_PROFILE_FUNCTION();
+
+    const std::shared_ptr<Gltf_image_decode_queue> queue = get_decode_queue();
+    const std::size_t max_running = std::max<std::size_t>(1, decode_executor->num_workers());
+    const std::lock_guard<std::mutex> lock{queue->m_mutex};
+    queue->m_limit_byte_count = std::max<std::size_t>(1, max_decoded_bytes_in_flight);
+    for (std::size_t i = 0, end = decoded_images.size(); (i < end) && (queue->m_running_count < max_running); ++i) {
+        const Gltf_decoded_image& decoded = decoded_images[i];
+        Gltf_image_decode_slot&   slot    = queue->m_slots[i];
+        if (!decoded.requested || decoded.decoded || (slot.state != Gltf_image_decode_state::waiting)) {
+            continue;
+        }
+        if (slot.known_byte_count > 0) {
+            // Size known from an open that gave its turn back: reserve now.
+            if (!queue->fits_locked(slot.known_byte_count)) {
+                break; // image order: later images wait behind this one
+            }
+            queue->reserve_locked(slot, slot.known_byte_count);
+        } else {
+            // Size unknown until the task opens the header: admit while the
+            // in-flight bytes plus the running unknowns, each estimated at
+            // the largest image so far, fit the budget.
+            const std::size_t estimate = queue->m_largest_byte_count * (queue->m_unreserved_running_count + 1);
+            if ((queue->m_bytes_in_flight + estimate) > queue->m_limit_byte_count) {
+                if ((queue->m_running_count > 0) || (queue->m_bytes_in_flight > 0)) {
+                    break;
+                }
+            }
+            ++queue->m_unreserved_running_count;
+        }
+        slot.state = Gltf_image_decode_state::decoding;
+        ++queue->m_running_count;
+        erhe::task::spawn(
+            *decode_executor,
+            [queue, i, source = decoded.source, linear = decoded.linear, preference = transcode_format_preference, name = decoded.name]() {
+                run_image_decode(queue, i, source, linear, preference, name);
+            }
+        );
+    }
+}
+
+void Gltf_image_residency::collect_decoded()
+{
+    if (!m_decode_queue) {
+        return;
+    }
+    const std::lock_guard<std::mutex> lock{m_decode_queue->m_mutex};
+    for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
+        Gltf_image_decode_slot& slot = m_decode_queue->m_slots[i];
+        if (slot.state != Gltf_image_decode_state::finished) {
+            continue;
+        }
+        Gltf_decoded_image& decoded = decoded_images[i];
+        decoded.info    = slot.info;
+        decoded.pixels  = std::move(slot.pixels);
+        decoded.ok      = slot.ok;
+        decoded.decoded = true;
+        slot.state      = Gltf_image_decode_state::collected;
+    }
+}
+
+void Gltf_image_residency::decode_inline(const std::size_t image_index)
+{
+    const std::shared_ptr<Gltf_image_decode_queue> queue = get_decode_queue();
+    {
+        const std::lock_guard<std::mutex> lock{queue->m_mutex};
+        Gltf_image_decode_slot& slot = queue->m_slots[image_index];
+        ERHE_VERIFY(slot.state == Gltf_image_decode_state::waiting);
+        slot.state = Gltf_image_decode_state::decoding;
+        ++queue->m_running_count;
+        ++queue->m_unreserved_running_count;
+    }
+    const Gltf_decoded_image& decoded = decoded_images[image_index];
+    // Inline decodes run one at a time with nothing else in flight, so the
+    // reservation always fits and the task never gives its turn back.
+    run_image_decode(queue, image_index, decoded.source, decoded.linear, transcode_format_preference, decoded.name);
+    collect_decoded();
+}
+
+void Gltf_image_residency::release_decoded(const std::size_t image_index)
+{
+    if (!m_decode_queue) {
+        return;
+    }
+    const std::lock_guard<std::mutex> lock{m_decode_queue->m_mutex};
+    m_decode_queue->release_locked(m_decode_queue->m_slots[image_index]);
+}
+
+auto Gltf_image_residency::find_next_decoded_image() const -> std::size_t
+{
+    for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
+        const Gltf_decoded_image& decoded = decoded_images[i];
+        if (decoded.requested && decoded.decoded && !decoded.resident) {
+            return i;
         }
     }
-    return bytes;
+    return decoded_images.size();
 }
 
 auto Gltf_image_residency::process_next_image(
     Gltf_data&                    data,
     erhe::graphics::Device&       graphics_device,
-    Image_transfer&               image_transfer
+    Image_transfer&               image_transfer,
+    const std::size_t             max_decoded_bytes_in_flight
 ) -> bool
 {
-    const std::size_t i = find_next_pending_image(decoded_images);
-    if (i == decoded_images.size()) {
-        return false;
+    // Blocking: wait for the decode workers (or decode inline) until an
+    // image is decoded.
+    std::size_t i = decoded_images.size();
+    for (;;) {
+        collect_decoded();
+        i = find_next_decoded_image();
+        if (i != decoded_images.size()) {
+            break;
+        }
+        const std::size_t undecoded = find_next_undecoded_image(decoded_images);
+        if (undecoded == decoded_images.size()) {
+            return false; // nothing pending
+        }
+        if (!parallel_decode || (decode_executor == nullptr)) {
+            decode_inline(undecoded);
+            continue;
+        }
+        schedule_decodes(max_decoded_bytes_in_flight);
+        // No decoded image is waiting, so every in-flight byte belongs to a
+        // running task; when none runs, schedule_decodes() above started one.
+        std::unique_lock<std::mutex> lock{m_decode_queue->m_mutex};
+        m_decode_queue->m_condition.wait(
+            lock,
+            [this]() {
+                if (m_decode_queue->m_running_count == 0) {
+                    return true;
+                }
+                for (const Gltf_image_decode_slot& slot : m_decode_queue->m_slots) {
+                    if (slot.state == Gltf_image_decode_state::finished) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        );
     }
+    // Keep the workers busy while this image uploads.
+    schedule_decodes(max_decoded_bytes_in_flight);
+
     Gltf_decoded_image& decoded = decoded_images[i];
-    std::shared_ptr<erhe::graphics::Texture> texture = create_image_texture(decoded, graphics_device);
+    std::shared_ptr<erhe::graphics::Texture> texture = decoded.ok ? create_image_texture(decoded, graphics_device) : std::shared_ptr<erhe::graphics::Texture>{};
     if (texture) {
         image_transfer.upload(
             decoded.info,
@@ -4231,8 +4519,11 @@ auto Gltf_image_residency::process_next_image(
             *texture.get(),
             needs_generated_mipmaps(decoded, *texture.get())
         );
+    } else if (!decoded.ok) {
+        log_gltf->warn("Image '{}' load failed", decoded.name);
     }
     finish_resident_image(data, i, decoded, texture);
+    release_decoded(i);
     return true;
 }
 
@@ -4244,16 +4535,36 @@ auto Gltf_image_residency::process_next_image_into_frame(
     std::size_t&                    remaining_budget_bytes
 ) -> bool
 {
-    const std::size_t i = find_next_pending_image(decoded_images);
+    collect_decoded();
+    std::size_t i = decoded_images.size();
+    if (
+        (m_retry_image_index < decoded_images.size()) &&
+        decoded_images[m_retry_image_index].decoded &&
+        !decoded_images[m_retry_image_index].resident
+    ) {
+        i = m_retry_image_index;
+    } else {
+        i = find_next_decoded_image();
+    }
     if (i == decoded_images.size()) {
-        return false;
+        if (parallel_decode && (decode_executor != nullptr)) {
+            return false; // decodes still running (or nothing pending)
+        }
+        const std::size_t undecoded = find_next_undecoded_image(decoded_images);
+        if (undecoded == decoded_images.size()) {
+            return false;
+        }
+        decode_inline(undecoded);
+        i = undecoded;
     }
     Gltf_decoded_image& decoded = decoded_images[i];
 
     // A failed decode has no pixels to upload but still must not be retried
     // forever, and it costs no budget.
     if (!decoded.ok) {
+        log_gltf->warn("Image '{}' load failed", decoded.name);
         finish_resident_image(data, i, decoded, {});
+        release_decoded(i);
         return true;
     }
     if (remaining_budget_bytes == 0) {
@@ -4266,6 +4577,7 @@ auto Gltf_image_residency::process_next_image_into_frame(
     std::shared_ptr<erhe::graphics::Texture> texture = create_image_texture(decoded, graphics_device);
     if (!texture) {
         finish_resident_image(data, i, decoded, {});
+        release_decoded(i);
         return true;
     }
     const Image_upload_result result = image_transfer.upload_into_frame(
@@ -4280,9 +4592,12 @@ auto Gltf_image_residency::process_next_image_into_frame(
         // Nothing was recorded; drop the texture and retry the whole image
         // next frame. Dropping is safe precisely because no command
         // referencing it was recorded.
+        m_retry_image_index = i;
         return false;
     }
+    m_retry_image_index = ~std::size_t{0};
     finish_resident_image(data, i, decoded, texture);
+    release_decoded(i);
     return true;
 }
 
@@ -4309,11 +4624,13 @@ void Gltf_image_residency::bind_material_textures(Gltf_data& data) const
 void Gltf_image_residency::drain(
     Gltf_data&              data,
     erhe::graphics::Device& graphics_device,
-    Image_transfer&         image_transfer
+    Image_transfer&         image_transfer,
+    const std::size_t       max_decoded_bytes_in_flight
 )
 {
     ERHE_PROFILE_FUNCTION();
-    while (process_next_image(data, graphics_device, image_transfer)) {
+    schedule_decodes(max_decoded_bytes_in_flight);
+    while (process_next_image(data, graphics_device, image_transfer, max_decoded_bytes_in_flight)) {
         // keep going
     }
     // Submit the recorded copies and wait. This used to live at the end of
@@ -4335,12 +4652,24 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     erhe::time::Timer timer{"parse_gltf"};
     timer.begin();
 
-    fastgltf::Expected<fastgltf::GltfDataBuffer> data = arguments.glb_data.empty()
-        ? fastgltf::GltfDataBuffer::FromPath(arguments.path)
-        : fastgltf::GltfDataBuffer::FromBytes(arguments.glb_data.data(), arguments.glb_data.size());
-    if (data.error() != fastgltf::Error::None) {
-        log_gltf->error("glTF load error: {}", fastgltf::getErrorMessage(data.error()));
-        return {};
+    // A file is streamed, not read whole: fastgltf copies the GLB BIN chunk
+    // into a buffer of its own, so reading the file into memory first would
+    // hold the binary payload twice at the parse peak.
+    std::unique_ptr<fastgltf::GltfDataGetter> data;
+    if (arguments.glb_data.empty()) {
+        std::unique_ptr<fastgltf::GltfFileStream> file_stream = std::make_unique<fastgltf::GltfFileStream>(arguments.path);
+        if (!file_stream->isOpen()) {
+            log_gltf->error("glTF load error: cannot open '{}'", arguments.path.string());
+            return {};
+        }
+        data = std::move(file_stream);
+    } else {
+        fastgltf::Expected<fastgltf::GltfDataBuffer> buffer = fastgltf::GltfDataBuffer::FromBytes(arguments.glb_data.data(), arguments.glb_data.size());
+        if (buffer.error() != fastgltf::Error::None) {
+            log_gltf->error("glTF load error: {}", fastgltf::getErrorMessage(buffer.error()));
+            return {};
+        }
+        data = std::make_unique<fastgltf::GltfDataBuffer>(std::move(buffer.get()));
     }
 
     constexpr auto extensions =
@@ -4527,7 +4856,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     );
 
     fastgltf::Expected<fastgltf::Asset> asset = fastgltf_parser.loadGltf(
-        data.get(),
+        *data,
         gltf_base_directory(arguments.path),
         fastgltf::Options::LoadExternalBuffers // TODO Consider | fastgltf::Options::DecomposeNodeMatrices
     );
@@ -5020,9 +5349,11 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
 
     Gltf_scan result;
 
-    fastgltf::Expected<fastgltf::GltfDataBuffer> data = fastgltf::GltfDataBuffer::FromPath(path);
-    if (data.error() != fastgltf::Error::None) {
-        const std::string error_message = fmt::format("glTF load error: {}", fastgltf::getErrorMessage(data.error()));
+    // Streamed, as in parse_gltf: reading the file whole first would hold
+    // the GLB binary payload twice (fastgltf copies the BIN chunk).
+    fastgltf::GltfFileStream data{path};
+    if (!data.isOpen()) {
+        const std::string error_message = fmt::format("glTF load error: cannot open '{}'", path.string());
         log_gltf->error(error_message);
         result.errors.push_back(error_message);
         return result;
@@ -5052,7 +5383,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         fastgltf::Extensions::KHR_materials_unlit;
     fastgltf::Parser fastgltf_parser{extensions};
     fastgltf::Expected<fastgltf::Asset> asset_expected = fastgltf_parser.loadGltf(
-        data.get(),
+        data,
         gltf_base_directory(path),
         fastgltf::Options::None
     );
