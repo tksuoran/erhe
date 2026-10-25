@@ -72,53 +72,95 @@ namespace editor {
 
 using namespace mcp_server_detail;
 
+namespace {
+
+[[nodiscard]] auto find_scene_root_shared(App_context& context, Scene_root* scene_root) -> std::shared_ptr<Scene_root>
+{
+    if ((scene_root == nullptr) || (context.app_scenes == nullptr)) {
+        return {};
+    }
+    for (const std::shared_ptr<Scene_root>& candidate : context.app_scenes->get_scene_roots()) {
+        if (candidate.get() == scene_root) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
+enum class Save_report_textures : unsigned int {
+    omit,
+    include
+};
+
+[[nodiscard]] auto make_save_report_json(const Gltf_scene_save_report& report, const Save_report_textures textures) -> json
+{
+    json skip_reasons = json::object();
+    for (const auto& [reason, count] : report.prepared.skip_reasons) {
+        skip_reasons[reason] = count;
+    }
+    json result = {
+        {"export_ms", report.export_ms},
+        {"prepared", {
+            {"prepared_count",               report.prepared.prepared_count},
+            {"retained_count",               report.prepared.retained_count},
+            {"skipped_count",                report.prepared.skipped_count},
+            {"skip_reasons",                 skip_reasons},
+            {"bvh_reused_count",             report.prepared.bvh_reused_count},
+            {"bvh_rebuilt_count",            report.prepared.bvh_rebuilt_count},
+            {"bvh_stored_count",             report.prepared.bvh_stored_count},
+            {"bvh_none_count",               report.prepared.bvh_none_count},
+            {"dropped_degenerate_triangles", report.prepared.dropped_degenerate_triangles},
+            {"preparation_ms",               report.prepared.preparation_ms}
+        }}
+    };
+    if (textures == Save_report_textures::include) {
+        result["textures"] = {
+            {"image_count",            report.textures.image_count},
+            {"transcoded_count",       report.textures.transcoded_count},
+            {"transcode_failed_count", report.textures.transcode_failed_count},
+            {"raw_ktx2_count",         report.textures.raw_ktx2_count},
+            {"source_byte_count",      report.textures.source_byte_count},
+            {"transcoded_byte_count",  report.textures.transcoded_byte_count},
+            {"transcode_ms",           report.textures.transcode_ms}
+        };
+    }
+    return result;
+}
+
+} // anonymous namespace
+
+// save_scene / save_scene_for_quest queue the save and return the job at
+// once (state "pending"); run_queued_saves() runs it on the main thread at
+// the end of this process_queued_requests() pass, and get_save_status
+// reports its progress and result (doc/agents/mcp_server_usage.md "Saving
+// scenes").
 auto Mcp_server::action_save_scene_for_quest(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
     const std::string path_str   = args.value("path", "");
-    Scene_root* sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        json r = make_text_content("Scene not found: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
+    const std::shared_ptr<Scene_root> scene_root = find_scene_root_shared(m_context, find_scene(scene_name));
+    if (!scene_root) {
+        return make_error_content("Scene not found: " + scene_name);
     }
-    if (sr->get_source_format() == Scene_source_format::usd) {
-        json r = make_text_content("save_scene_for_quest: '" + scene_name + "' is a USD-backed scene; Save for Quest writes glTF only");
-        r["isError"] = true;
-        return r.dump();
+    if (scene_root->get_source_format() == Scene_source_format::usd) {
+        return make_error_content("save_scene_for_quest: '" + scene_name + "' is a USD-backed scene; Save for Quest writes glTF only");
     }
     std::filesystem::path path = path_str.empty()
-        ? (editor::default_scene_dir() / (sr->get_name() + "_quest.glb"))
+        ? (editor::default_scene_dir() / (scene_root->get_name() + "_quest.glb"))
         : std::filesystem::path{path_str};
     if ((path.extension() != std::filesystem::path{".glb"}) && (path.extension() != std::filesystem::path{".gltf"})) {
         path = std::filesystem::path{path.string() + ".glb"};
     }
-    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-    if (!editor::save_scene_gltf_for_quest(m_context, *sr, path)) {
-        json r = make_text_content("save_scene_for_quest failed: " + path.string());
-        r["isError"] = true;
-        return r.dump();
-    }
-    const double save_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
-    std::error_code error_code;
-    const std::uintmax_t file_size = std::filesystem::file_size(path, error_code);
-    return make_json_content({
-        {"scene_name", scene_name},
-        {"path",       path.string()},
-        {"save_ms",    save_ms},
-        {"file_bytes", error_code ? std::uintmax_t{0} : file_size}
-    }).dump();
+    return make_json_content(queue_save(Save_job_kind::scene_for_quest, scene_root, path, Save_job_source_binding::keep)).dump();
 }
 
 auto Mcp_server::action_save_scene(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
     const std::string path_str   = args.value("path", "");
-    Scene_root* sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        json r = make_text_content("Scene not found: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
+    const std::shared_ptr<Scene_root> scene_root = find_scene_root_shared(m_context, find_scene(scene_name));
+    if (!scene_root) {
+        return make_error_content("Scene not found: " + scene_name);
     }
     // Save follows the scene's own format, the way File > Save Scene does
     // (doc/erhe/usd_compatibility_design.md E1): a USD-backed scene writes a USDA
@@ -129,10 +171,10 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     // explicit path is normalized to carry an extension of the scene's
     // format (.glb appended when missing; .gltf selects the text form,
     // .usda / .usd / .usdc / .usdz are honored for a USD scene).
-    const bool usd = (sr->get_source_format() == Scene_source_format::usd);
+    const bool usd = (scene_root->get_source_format() == Scene_source_format::usd);
     std::filesystem::path path;
     if (path_str.empty()) {
-        path = resolve_scene_save_path(*sr);
+        path = resolve_scene_save_path(*scene_root);
     } else {
         path = std::filesystem::path{path_str};
         if (usd) {
@@ -146,31 +188,165 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
             path = std::filesystem::path{path.string() + ".glb"};
         }
     }
-    // save_scene_gltf also reloads the prefab when 'path' is a loaded prefab
-    // source, refreshing every instance in every scene (this subsumed the
-    // former save_prefab tool).
-    const bool ok = usd
-        ? editor::save_scene_usd (m_context, *sr, path)
-        : editor::save_scene_gltf(m_context, *sr, path);
-    if (!ok) {
-        json r = make_text_content("save_scene failed: " + path.string());
-        r["isError"] = true;
-        return r.dump();
-    }
-    // set_as_source gives the save "Save As" semantics: the scene (and its
-    // R5.3 container record, which follows set_source_path) now lives in
-    // this file. Without it an explicit-path save is an export that leaves
-    // the scene's source binding untouched; a path-less first save writes
-    // back like File > Save Scene always has.
+    // set_as_source gives the save "Save As" semantics: once the save
+    // succeeds, the scene (and its R5.3 container record, which follows
+    // set_source_path) lives in this file. Without it an explicit-path save
+    // is an export that leaves the scene's source binding untouched; a
+    // path-less first save writes back like File > Save Scene always has.
     const bool set_as_source = args.value("set_as_source", false);
-    if (set_as_source || (path_str.empty() && sr->get_source_path().empty())) {
-        sr->set_source_path(path, usd ? Scene_source_format::usd : Scene_source_format::gltf);
+    const Save_job_source_binding source_binding = (set_as_source || (path_str.empty() && scene_root->get_source_path().empty()))
+        ? Save_job_source_binding::set_source
+        : Save_job_source_binding::keep;
+    return make_json_content(queue_save(Save_job_kind::scene, scene_root, path, source_binding)).dump();
+}
+
+auto Mcp_server::queue_save(
+    const Save_job_kind                kind,
+    const std::shared_ptr<Scene_root>& scene_root,
+    const std::filesystem::path&       path,
+    const Save_job_source_binding      source_binding
+) -> json
+{
+    const bool        for_quest = (kind == Save_job_kind::scene_for_quest);
+    const char* const tool      = for_quest ? "save_scene_for_quest" : "save_scene";
+    const char* const format    = for_quest ? c_str(Scene_source_format::gltf) : c_str(scene_root->get_source_format());
+    json job;
+    {
+        std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+        const std::uint64_t job_id = m_next_save_job_id++;
+        job = json{
+            {"job_id",     job_id},
+            {"tool",       tool},
+            {"scene_name", scene_root->get_name()},
+            {"path",       path.string()},
+            {"format",     format},
+            {"state",      "pending"},
+            {"saved",      false}
+        };
+        m_save_jobs.push_back(job);
+        while (m_save_jobs.size() > k_max_save_jobs) {
+            m_save_jobs.pop_front();
+        }
     }
-    return make_json_content({
-        {"saved",  true},
-        {"path",   path.string()},
-        {"format", c_str(sr->get_source_format())}
-    }).dump();
+    const std::uint64_t job_id = job["job_id"].get<std::uint64_t>();
+    m_queued_saves.push_back(Queued_save{
+        .job_id         = job_id,
+        .kind           = kind,
+        .scene_root     = scene_root,
+        .path           = path,
+        .source_binding = source_binding
+    });
+    log_mcp->info("MCP server: {} job {} queued for '{}' -> '{}'", tool, job_id, scene_root->get_name(), path.string());
+    job["message"] = "queued - poll get_save_status {job_id} until state is done or failed";
+    return job;
+}
+
+void Mcp_server::update_save_job(const std::uint64_t job_id, const json& fields)
+{
+    std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+    for (json& job : m_save_jobs) {
+        if (job.value("job_id", std::uint64_t{0}) == job_id) {
+            for (const auto& [key, value] : fields.items()) {
+                job[key] = value;
+            }
+            return;
+        }
+    }
+}
+
+void Mcp_server::run_queued_saves()
+{
+    // Swapped out first: the vector is not iterated while a save's side
+    // effects (message sends, prefab reload) run.
+    std::vector<Queued_save> saves;
+    saves.swap(m_queued_saves);
+    for (const Queued_save& save : saves) {
+        run_save(save);
+    }
+}
+
+void Mcp_server::run_save(const Queued_save& save)
+{
+    const std::shared_ptr<Scene_root> scene_root = save.scene_root.lock();
+    if (!scene_root) {
+        update_save_job(save.job_id, json{{"state", "failed"}, {"error", "the scene was closed before the save ran"}});
+        log_mcp->warn("MCP server: save job {} failed: the scene was closed before the save ran", save.job_id);
+        return;
+    }
+    update_save_job(save.job_id, json{{"state", "running"}});
+
+    const bool usd = (save.kind == Save_job_kind::scene) && (scene_root->get_source_format() == Scene_source_format::usd);
+    Gltf_scene_save_report report;
+    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+    bool ok = false;
+    switch (save.kind) {
+        case Save_job_kind::scene_for_quest: {
+            ok = editor::save_scene_gltf_for_quest(m_context, *scene_root, save.path, &report);
+            break;
+        }
+        case Save_job_kind::scene: {
+            // save_scene_gltf also reloads the prefab when 'path' is a loaded
+            // prefab source, refreshing every instance in every scene (this
+            // subsumed the former save_prefab tool).
+            ok = usd
+                ? editor::save_scene_usd (m_context, *scene_root, save.path)
+                : editor::save_scene_gltf(m_context, *scene_root, save.path, &report);
+            break;
+        }
+    }
+    const double save_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+    if (!ok) {
+        update_save_job(
+            save.job_id,
+            json{{"state", "failed"}, {"save_ms", save_ms}, {"error", "save failed: " + save.path.string() + " (details in logs/log.txt)"}}
+        );
+        log_mcp->warn("MCP server: save job {} failed: '{}'", save.job_id, save.path.string());
+        return;
+    }
+    if (save.source_binding == Save_job_source_binding::set_source) {
+        scene_root->set_source_path(save.path, usd ? Scene_source_format::usd : Scene_source_format::gltf);
+    }
+    std::error_code error_code;
+    const std::uintmax_t file_size  = std::filesystem::file_size(save.path, error_code);
+    const std::uintmax_t file_bytes = error_code ? std::uintmax_t{0} : file_size;
+    json fields = {
+        {"state",      "done"},
+        {"saved",      true},
+        {"save_ms",    save_ms},
+        {"file_bytes", file_bytes}
+    };
+    if (!usd) {
+        const Save_report_textures textures = (save.kind == Save_job_kind::scene_for_quest)
+            ? Save_report_textures::include
+            : Save_report_textures::omit;
+        const json report_json = make_save_report_json(report, textures);
+        for (const auto& [key, value] : report_json.items()) {
+            fields[key] = value;
+        }
+    }
+    update_save_job(save.job_id, fields);
+    log_mcp->info("MCP server: save job {} done: '{}' {} bytes in {:.1f} ms", save.job_id, save.path.string(), file_bytes, save_ms);
+}
+
+auto Mcp_server::query_save_status(const json& args) -> std::string
+{
+    std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+    if (args.contains("job_id")) {
+        const std::uint64_t job_id = args.value("job_id", std::uint64_t{0});
+        for (const json& job : m_save_jobs) {
+            if (job.value("job_id", std::uint64_t{0}) == job_id) {
+                return make_json_content(job).dump();
+            }
+        }
+        return make_error_content(
+            "Unknown save job " + std::to_string(job_id) + " (the most recent " + std::to_string(k_max_save_jobs) + " jobs are kept)"
+        );
+    }
+    json jobs = json::array();
+    for (const json& job : m_save_jobs) {
+        jobs.push_back(job);
+    }
+    return make_json_content(json{{"jobs", jobs}}).dump();
 }
 
 auto Mcp_server::action_close_scene(const json& args) -> std::string
@@ -471,7 +647,7 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         add_gltf_editor_state(export_arguments, *sr, export_path, physics_items);
     }
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
-    if (!erhe::file::write_file(std::filesystem::path{path_str}, gltf)) {
+    if (!erhe::file::write_file_via_temp(std::filesystem::path{path_str}, gltf)) {
         json r = make_text_content("Failed to write file: " + path_str);
         r["isError"] = true;
         return r.dump();

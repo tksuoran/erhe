@@ -56,9 +56,32 @@ class McpClient:
         except json.JSONDecodeError:
             return {"text": text}
 
+    def save(self, tool: str, arguments: dict, timeout_s: float = 900.0) -> dict:
+        """save_scene / save_scene_for_quest: queue the save and wait for its job."""
+        return wait_for_save(self.call, self.call(tool, arguments), timeout_s)
+
     def tool_names(self) -> set[str]:
         result = self.rpc("tools/list", {})
         return {tool["name"] for tool in result.get("tools", [])}
+
+
+def wait_for_save(call, job, timeout_s: float = 900.0) -> dict:
+    """Poll get_save_status for the job a save_scene / save_scene_for_quest
+    call returned (the saves are asynchronous) and return the final job
+    object: state "done" (saved true, path, file_bytes, ...) or "failed"
+    (error). 'call(tool, arguments)' is the caller's MCP call returning the
+    parsed payload. A job that is not a dict with a job_id (a mutate()
+    wrapper that lost the reply) is returned as is."""
+    if not isinstance(job, dict) or ("job_id" not in job):
+        return job
+    deadline = time.monotonic() + timeout_s
+    while True:
+        status = call("get_save_status", {"job_id": job["job_id"]})
+        if isinstance(status, dict) and status.get("state") in ("done", "failed"):
+            return status
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"save job {job['job_id']} did not finish in {timeout_s} s: {status}")
+        time.sleep(0.1)
 
 
 FAILURES: list[str] = []

@@ -401,7 +401,7 @@ def main():
         before_state = pole_state(client, attachment_id)
 
         first_path = os.path.join(scratch, "ik_pole_first.glb")
-        client.call("save_scene", {"scene_name": scene, "path": first_path})
+        client.save("save_scene", {"scene_name": scene, "path": first_path})
         wait_idle(client)
 
         reopened = load_scene_file(client, first_path)
@@ -466,7 +466,7 @@ def main():
             advance(client, 6)
             usd_path = os.path.join(scratch, "ik_pole_usd.usda")
             log_offset = log_size()
-            saved = client.call("save_scene", {"scene_name": usd_scene, "path": usd_path})
+            saved = client.save("save_scene", {"scene_name": usd_scene, "path": usd_path})
             wait_idle(client)
             log_text = log_since(log_offset)
             check_true(

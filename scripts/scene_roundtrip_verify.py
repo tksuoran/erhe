@@ -59,6 +59,8 @@ import tempfile
 import time
 import urllib.request
 
+from erhe_mcp import wait_for_save
+
 PORT = 3743
 SCHEMA_DIR = pathlib.Path("doc/gltf_extensions/schema")
 RESULTS = []
@@ -1081,7 +1083,7 @@ def section_save_and_validate():
 
     # Foreign-tool variant FIRST: without a prefab instance the asset stays
     # plain glTF 2.0 (stock viewers reject 2.1 / externalAssets).
-    saved = mutate("save_scene", {"scene_name": scene, "path": str(FOREIGN_GLB)})
+    saved = wait_for_save(call, mutate("save_scene", {"scene_name": scene, "path": str(FOREIGN_GLB)}))
     check(S, "save_scene (foreign-tool variant, pre-prefab)", bool(saved) and saved.get("saved"), str(saved))
     if FOREIGN_GLB.is_file():
         foreign_doc = read_glb_json(FOREIGN_GLB)
@@ -1108,7 +1110,7 @@ def section_save_and_validate():
         time.sleep(0.2)
     check(S, "prefab instance node present", bool(added), str(instantiated))
 
-    saved = mutate("save_scene", {"scene_name": scene, "path": str(E2E_GLB)})
+    saved = wait_for_save(call, mutate("save_scene", {"scene_name": scene, "path": str(E2E_GLB)}))
     check(S, "save_scene", bool(saved) and saved.get("saved"), str(saved))
     if not E2E_GLB.is_file():
         check(S, "saved file exists", False, str(E2E_GLB))
@@ -1420,7 +1422,7 @@ def section_asset_references():
     })
     check(S, "create_shape with the container material", created is None or bool(created), str(created))
 
-    saved = mutate("save_scene", {"scene_name": scene, "path": str(R6_GLTF)})
+    saved = wait_for_save(call, mutate("save_scene", {"scene_name": scene, "path": str(R6_GLTF)}))
     check(S, "save_scene", bool(saved) and saved.get("saved"), str(saved))
     if not R6_GLTF.is_file():
         check(S, "saved reference file exists", False, str(R6_GLTF))
@@ -1483,7 +1485,7 @@ def section_asset_references():
         stub = next((m for m in stub_materials if m.get("name") == material_name), None)
         check(S, "stub fallback material present (a new object, not the container's)",
               (stub is not None) and (stub.get("id") != source_id), f"source id={source_id} stub={stub}")
-        saved = mutate("save_scene", {"scene_name": loaded_scene, "path": str(R6_RESAVE_GLTF)})
+        saved = wait_for_save(call, mutate("save_scene", {"scene_name": loaded_scene, "path": str(R6_RESAVE_GLTF)}))
         check(S, "re-save with the container missing", bool(saved) and saved.get("saved"), str(saved))
         re_doc = read_glb_json(R6_RESAVE_GLTF) if R6_RESAVE_GLTF.is_file() else {}
         re_proxy = next(
@@ -1543,7 +1545,7 @@ def section_prefab_scene():
     exported_materials = {m.get("name") for m in source_doc.get("materials", [])}
     original = snapshot_scene(scene, exported_materials, [])
 
-    saved = mutate("save_scene", {"scene_name": scene, "path": str(PREFAB_RESAVE_GLB)})
+    saved = wait_for_save(call, mutate("save_scene", {"scene_name": scene, "path": str(PREFAB_RESAVE_GLB)}))
     check(S, "save_scene (resave)", bool(saved) and saved.get("saved"), str(saved))
     if not PREFAB_RESAVE_GLB.is_file():
         return
@@ -1940,7 +1942,7 @@ def usd_open_scene(section, path, scene_name):
 
 def usd_save_scene(section, scene_name, out_path):
     USD_ARTIFACTS.append(out_path)
-    answer = mutate("save_scene", {"scene_name": scene_name, "path": str(out_path)})
+    answer = wait_for_save(call, mutate("save_scene", {"scene_name": scene_name, "path": str(out_path)}))
     written = out_path.is_file()
     check(section, f"save_scene wrote {out_path.name} as USDA",
           written and isinstance(answer, dict) and (answer.get("format") == "usd"), str(answer))
@@ -2692,7 +2694,7 @@ def section_gltf_variants():
 
     original = gltf_variant_sets(scene_name)
 
-    answer = mutate("save_scene", {"scene_name": scene_name, "path": str(GLTF_VARIANTS_SAVE)})
+    answer = wait_for_save(call, mutate("save_scene", {"scene_name": scene_name, "path": str(GLTF_VARIANTS_SAVE)}))
     check(S, "save_scene wrote the scene", GLTF_VARIANTS_SAVE.is_file() and bool(answer) and answer.get("saved"),
           str(answer))
     mutate("close_scene", {"scene_name": scene_name})
@@ -2791,7 +2793,7 @@ def section_scene_ambient_light():
     check(S, "set_scene_settings writes the scene's LOCAL ambient value",
           (state[0] == "local") and (state[1] == local_text), str(state))
 
-    answer = mutate("save_scene", {"scene_name": scene_name, "path": str(AMBIENT_LOCAL_GLB)})
+    answer = wait_for_save(call, mutate("save_scene", {"scene_name": scene_name, "path": str(AMBIENT_LOCAL_GLB)}))
     check(S, "save_scene wrote the .glb", AMBIENT_LOCAL_GLB.is_file() and bool(answer) and answer.get("saved"), str(answer))
     mutate("close_scene", {"scene_name": scene_name})
     check(S, f"scene '{scene_name}' closed", wait_for_scene_gone(scene_name))
@@ -2807,7 +2809,7 @@ def section_scene_ambient_light():
     # The same scene with the color held by a style: the map is the item's
     # complete local set, so nothing is local after the reload.
     hold_ambient_in_a_style(S, reloaded, "Ambience", style_text)
-    answer = mutate("save_scene", {"scene_name": reloaded, "path": str(AMBIENT_STYLE_GLB)})
+    answer = wait_for_save(call, mutate("save_scene", {"scene_name": reloaded, "path": str(AMBIENT_STYLE_GLB)}))
     check(S, "save_scene wrote the style .glb", AMBIENT_STYLE_GLB.is_file() and bool(answer) and answer.get("saved"), str(answer))
     mutate("close_scene", {"scene_name": reloaded})
     check(S, f"scene '{reloaded}' closed", wait_for_scene_gone(reloaded))

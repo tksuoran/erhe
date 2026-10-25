@@ -381,7 +381,7 @@ def usd_warning_check(e: Editor, opened):
     e.advance(2)
     usd_path = os.path.join(tempfile.mkdtemp(prefix="erhe_skeleton_editing_"), "rest.usda")
     offset = log_size()
-    e.call("save_scene", {"scene_name": usd_scene, "path": usd_path})
+    e.c.save("save_scene", {"scene_name": usd_scene, "path": usd_path})
     e.wait_idle()
     text = log_since(offset)
     warned = ("carry IK settings or rest transforms" in text) and ("1 node(s)" in text)
@@ -516,7 +516,7 @@ def foundations_checks(e: Editor, opened):
     e.call("set_item_property", {"item_id": rig.ids["rig_root"], "property": "Rig.tail", "value": "0.8 1 0"})
     e.advance(4)
     path = os.path.join(shots, "unskinned_skeleton.glb")
-    e.call("save_scene", {"scene_name": scene, "path": path})
+    e.c.save("save_scene", {"scene_name": scene, "path": path})
     e.wait_idle()
     reopened = load_scene_file(e, path)
     opened.append(reopened)
@@ -732,7 +732,7 @@ def structure_checks(e: Editor, opened):
     names = ("Bone", "Bone.001", "Bone.002")
     before = {name: {prop: s.prop(name, prop)["value"] for prop in ("bone", "Rig.tail", "Rig.connected", "Rig.rest_translation", "Rig.rest_rotation", "Rig.rest_scale")}
               for name in names}
-    e.call("save_scene", {"scene_name": scene, "path": path})
+    e.c.save("save_scene", {"scene_name": scene, "path": path})
     e.wait_idle()
     reopened = load_scene_file(e, path)
     opened.append(reopened)

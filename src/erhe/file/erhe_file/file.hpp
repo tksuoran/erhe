@@ -1,8 +1,11 @@
 #pragma once
 
+#include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace erhe::file {
 
@@ -14,6 +17,19 @@ auto from_string(const std::string& path) -> std::filesystem::path;
 [[nodiscard]] auto read(std::string_view description, const std::filesystem::path& path) -> std::optional<std::string>;
 
 auto write_file(std::filesystem::path path, const std::string& text) -> bool;
+
+// Writes 'path' through a temporary file: 'write' fills a new file in the
+// same directory (a unique "<file name>.<pid>.<n>.tmp" name), which is
+// flushed, closed and then moved over 'path' in one rename (Windows
+// MoveFileExW with MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+// elsewhere std::filesystem::rename). Until the rename the old file is
+// untouched, so a writer may still read the file it replaces, and readers
+// never see a partial file. When 'write' returns false, or opening,
+// writing, flushing, closing or the rename fails, the temporary file is
+// removed, 'path' keeps its old content and the function returns false
+// (with the failure logged).
+[[nodiscard]] auto write_file_via_temp(const std::filesystem::path& path, const std::function<bool(std::FILE*)>& write) -> bool;
+[[nodiscard]] auto write_file_via_temp(const std::filesystem::path& path, std::string_view text) -> bool;
 
 // TODO open, save, ...
 [[nodiscard]] auto select_file_for_read() -> std::optional<std::filesystem::path>;

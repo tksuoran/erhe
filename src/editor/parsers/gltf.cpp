@@ -1700,7 +1700,8 @@ auto save_scene_gltf(
     Scene_root&                           scene_root,
     const std::filesystem::path&          path,
     tf::Executor* const                   executor,
-    const erhe::gltf::Gltf_texture_export texture_export
+    const erhe::gltf::Gltf_texture_export texture_export,
+    Gltf_scene_save_report* const         report
 ) -> bool
 {
     const erhe::scene::Scene& scene = scene_root.get_scene();
@@ -1737,7 +1738,10 @@ auto save_scene_gltf(
     const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     const double export_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
-    if (!erhe::file::write_file(path, gltf)) {
+    // Through a temporary file: saving onto the scene's own source keeps the
+    // old file readable (CPU soups reload from it) until the new one is
+    // complete, and a failed save leaves the old file as it was.
+    if (!erhe::file::write_file_via_temp(path, gltf)) {
         log_parsers->error("save_scene_gltf: failed to write '{}'", erhe::file::to_string(path));
         return false;
     }
@@ -1776,21 +1780,37 @@ auto save_scene_gltf(
             texture_statistics.raw_ktx2_count
         );
     }
+    if (report != nullptr) {
+        report->prepared   = prepared_statistics;
+        report->textures   = texture_statistics;
+        report->export_ms  = export_ms;
+        report->file_bytes = gltf.size();
+    }
     return true;
 }
 
-auto save_scene_gltf_for_quest(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
+auto save_scene_gltf_for_quest(
+    App_context&                  context,
+    Scene_root&                   scene_root,
+    const std::filesystem::path&  path,
+    Gltf_scene_save_report* const report
+) -> bool
 {
-    if (!save_scene_gltf(scene_root, path, context.executor, erhe::gltf::Gltf_texture_export::ktx2_astc_4x4)) {
+    if (!save_scene_gltf(scene_root, path, context.executor, erhe::gltf::Gltf_texture_export::ktx2_astc_4x4, report)) {
         return false;
     }
     context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
     return true;
 }
 
-auto save_scene_gltf(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
+auto save_scene_gltf(
+    App_context&                  context,
+    Scene_root&                   scene_root,
+    const std::filesystem::path&  path,
+    Gltf_scene_save_report* const report
+) -> bool
 {
-    if (!save_scene_gltf(scene_root, path, context.executor)) {
+    if (!save_scene_gltf(scene_root, path, context.executor, erhe::gltf::Gltf_texture_export::source, report)) {
         return false;
     }
     // R5.8: a successful save clears the scene's container record dirty flag

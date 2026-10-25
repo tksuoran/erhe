@@ -154,6 +154,7 @@ private:
 void advance_frames(Mcp_client& client, int frames);
 [[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>;
 [[nodiscard]] auto wait_until_idle(Mcp_client& client, int timeout_ms) -> bool;
+[[nodiscard]] auto save_and_wait(Mcp_client& client, const char* tool, const json& arguments, int timeout_ms) -> Mcp_client::Tool_result;
 
 // The scene every test runs in is created by Mcp_env::prepare(), from
 // this asset (textures for the texture tests) plus a material of its own.
@@ -432,6 +433,52 @@ TEST_F(Mcp_test, list_scenes_returns_named_scenes)
         EXPECT_TRUE(s.contains("name"));
         EXPECT_TRUE(s.contains("material_count"));
     }
+}
+
+// save_scene and save_scene_for_quest are asynchronous: the call returns the
+// queued job, get_save_status reports it through done with the written
+// file's size. A save as an export leaves the scene's source binding alone.
+TEST_F(Mcp_test, save_scene_is_asynchronous_and_reports_through_get_save_status)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "erhe_mcp_async_save.glb";
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+
+    Mcp_client::Tool_result queued = client.call_tool("save_scene", json{{"scene_name", env.scene_name()}, {"path", path.string()}});
+    ASSERT_FALSE(queued.is_error) << queued.text;
+    ASSERT_TRUE(queued.payload.contains("job_id")) << queued.text;
+    EXPECT_EQ(queued.payload.value("state", ""), "pending");
+    EXPECT_EQ(queued.payload.value("tool", ""), "save_scene");
+
+    Mcp_client::Tool_result done = save_and_wait(client, "save_scene", json{{"scene_name", env.scene_name()}, {"path", path.string()}}, 60000);
+    ASSERT_FALSE(done.is_error) << done.text;
+    EXPECT_EQ(done.payload.value("state", ""), "done");
+    EXPECT_TRUE(done.payload.value("saved", false));
+    EXPECT_TRUE(done.payload.contains("prepared"));
+    const std::uintmax_t file_bytes = std::filesystem::file_size(path, ignored);
+    EXPECT_GT(file_bytes, 0u);
+    EXPECT_EQ(done.payload.value("file_bytes", std::uintmax_t{0}), file_bytes);
+
+    // The first job (queued above, never polled) also reached done.
+    Mcp_client::Tool_result first = client.call_tool("get_save_status", json{{"job_id", queued.payload["job_id"]}});
+    ASSERT_FALSE(first.is_error) << first.text;
+    EXPECT_EQ(first.payload.value("state", ""), "done");
+
+    Mcp_client::Tool_result jobs = client.call_tool("get_save_status", json::object());
+    ASSERT_FALSE(jobs.is_error) << jobs.text;
+    ASSERT_TRUE(jobs.payload.contains("jobs") && jobs.payload["jobs"].is_array());
+    EXPECT_GE(jobs.payload["jobs"].size(), 2u);
+
+    Mcp_client::Tool_result unknown = client.call_tool("get_save_status", json{{"job_id", 999999999}});
+    EXPECT_TRUE(unknown.is_error);
+
+    Mcp_client::Tool_result missing = client.call_tool("save_scene", json{{"scene_name", "no such scene"}});
+    EXPECT_TRUE(missing.is_error);
+
+    std::filesystem::remove(path, ignored);
 }
 
 // get_node_details addresses a prim by its id as readily as by its name: the
@@ -1786,6 +1833,34 @@ void advance_frames(Mcp_client& client, int frames)
     return false;
 }
 
+// save_scene / save_scene_for_quest are asynchronous: issue the save, then
+// poll get_save_status for its job until it is done or failed. Returns the
+// final job object (state "done": saved true, path, file_bytes, ...), or the
+// save call's own error result.
+[[nodiscard]] auto save_and_wait(Mcp_client& client, const char* tool, const json& arguments, const int timeout_ms) -> Mcp_client::Tool_result
+{
+    Mcp_client::Tool_result queued = client.call_tool(tool, arguments);
+    if (queued.is_error || !queued.payload.contains("job_id")) {
+        return queued;
+    }
+    const json job_arguments = json{{"job_id", queued.payload["job_id"]}};
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeout_ms};
+    Mcp_client::Tool_result status = queued;
+    while (std::chrono::steady_clock::now() < deadline) {
+        status = client.call_tool("get_save_status", job_arguments);
+        const std::string state = status.payload.value("state", "");
+        if (status.is_error || (state == "done") || (state == "failed")) {
+            if (!status.is_error && (state == "failed")) {
+                status.is_error = true;
+            }
+            return status;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
+    status.is_error = true;
+    return status;
+}
+
 [[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>
 {
     std::vector<std::string> names;
@@ -3076,7 +3151,7 @@ TEST_F(Mcp_test, unskinned_skeleton_keeps_its_bones_and_connected_children_follo
 
     // Save, close, reopen: the bones, the tail and the connection persist.
     const std::string path = (std::filesystem::temp_directory_path() / "erhe_mcp_unskinned_skeleton.glb").string();
-    Mcp_client::Tool_result saved = client.call_tool("save_scene", json{{"scene_name", scene}, {"path", path}});
+    Mcp_client::Tool_result saved = save_and_wait(client, "save_scene", json{{"scene_name", scene}, {"path", path}}, 60000);
     ASSERT_FALSE(saved.is_error) << saved.text;
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 4);

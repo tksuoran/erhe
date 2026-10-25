@@ -282,7 +282,12 @@ extension; material and node variants are that document's step X4.
   writing one `.glb`. There is no save file dialog: `Operations::save_scene`
   derives `<scene name>.glb` from the scene name with an Overwrite / Cancel
   modal, defaulting to `res/editor/scenes/`. File > Load Scene is a file
-  picker filtered to `.glb` and `.gltf`.
+  picker filtered to `.glb` and `.gltf`. Every glTF write (scene save, Save
+  for Quest, glTF export, material containers) goes through
+  `erhe::file::write_file_via_temp`: the new file is complete before it
+  replaces the old one, so saving a scene onto its own source keeps the old
+  file readable while the export runs (released CPU soups reload from it),
+  and a failed save leaves the old file as it was.
 - **Open versus import**: a `.glb` or `.gltf` whose asset lists `ERHE_scene`
   in `extensionsUsed` opens as a full `Scene_root` (nodes, cameras, lights,
   meshes, physics import, brushes, graphs, layouts, settings); any other glTF
@@ -300,7 +305,8 @@ extension; material and node variants are that document's step X4.
   empty viewport window, or a new one when none is empty (undo unbinds that
   viewport again); it is the explicit "open a foreign glTF as a new scene" action,
   used by the asset browser and the MCP `open_scene` tool.
-- MCP tools: `save_scene` writes `.glb` (full editor state), `load_scene`
+- MCP tools: `save_scene` writes `.glb` (full editor state; asynchronous,
+  polled with `get_save_status`, `doc/agents/mcp_server_usage.md`), `load_scene`
   opens an erhe-authored `.glb`, and `export_gltf` is the plain interchange
   export - the same call minus the editor extensions. Scene save is full
   state; export is interchange.
