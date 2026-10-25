@@ -584,3 +584,392 @@ Further items (user, 2026-10-25):
   handle holds open fails the job (rename refused) and leaves the file
   byte-identical, no temporary left.
 
+## Item 9: streaming load (design, 2026-10-25, awaiting review)
+
+User requirements: texture file bytes are read just in time for their
+upload and never retained; mesh data streams the same way; one in-flight
+budget bounds the CPU memory of both; a save onto the scene's own source
+rebinds the reload sources to the new file; "Save for Quest" stores GPU
+ready vertex / index streams that load with at most a memcpy, with explicit
+per-attribute scale and bias in an ERHE extension.
+
+### Where the memory goes today (the targets)
+
+- `parse_gltf` streams the file, but fastgltf still copies the whole GLB
+  BIN chunk into one buffer (664 MB prepared, 857 MB Quest file) and keeps
+  it until the parse ends.
+- The parse builds every soup at once (about 300 MB) and retains every
+  encoded image stream (208 MB, Quest file 402 MB) for export.
+- Every build task converts its soup into base and optimized sink vectors
+  and enqueues them on the `Mesh_memory` loader queue. The queue holds them
+  until `flush_budgeted` stages them at 16-32 MiB per frame, so the backlog
+  can hold most of the mesh pool content (Bistro: about 650 MB) at once.
+- Quest VmHWM 1.98-2.02 GB against about 1.2-1.36 GB RSS at idle.
+
+Targets: Quest VmHWM at most 1.2 GB with `bistro_quest.glb`; desktop
+(`keep`) peak working set at most idle + 0.35 GB; listed / idle times no
+worse than item 7 (Quest 7.1-8.0 s, desktop 2.94-3.12 / 3.03-3.35 s);
+renders byte-identical.
+
+### Load data flow
+
+```
+scan (worker) -> parse (worker: JSON + structure, no payload bytes)
+  -> per unique primitive: mesh job   \  scheduled from Asset_manager::tick
+  -> per image:            image job  /  under one Load_memory_budget
+       job: positional read of the byte ranges -> validate -> convert
+            (portable) or nothing (GPU ready) -> enqueue on the loader
+            queue / Image_transfer -> budget lease released when the bytes
+            are copied into upload staging
+  -> publish (main, watermark-gated, unchanged)
+```
+
+- **Parse.** `parse_gltf` reads the JSON and the structure only. The GLB
+  BIN chunk and external `.bin` files are not loaded: the fastgltf fork
+  gets an option that leaves GLB / URI buffers unloaded and reports the
+  BIN chunk's file offset (the fork is already ours; the fallback, if the
+  fork change turns out larger than expected, is erhe reading the GLB
+  header and handing fastgltf the JSON chunk). `resolve_gltf_buffer_origins()`
+  becomes the parse's buffer model. Small payloads that structure needs
+  are read eagerly by range during the parse: animation samplers, skin
+  inverse bind matrices, `ERHE_geometry` payloads, physics collider
+  meshes, `ERHE_brushes` and node-graph meshes. Buffers without a file
+  origin (data URIs, `glb_data` parses from memory) stay on today's eager
+  path. The parse stays device-free; it records a source per primitive and
+  per image and copies the accessor / view descriptors the jobs need, so
+  the fastgltf asset dies with the parse.
+- **Source model** (one for meshes and images). `Source_file` (shared:
+  path, size, modification time) plus `Source_range` (file offset,
+  length, stride). `Triangle_soup_source` (doc/erhe/gltf.md "Triangle soup
+  reload") keeps its accessor copies and holds `Source_range`s;
+  `Gltf_image_source` gets a `Source_range` in place of the retained
+  bytes. Every read opens the file, checks the stamp, reads, closes: no
+  handle stays open after a load or a reload, because an open handle makes
+  the save's rename fail on Windows (item 8 result).
+- **Mesh job** (worker, one per unique render shape; replaces the build
+  phase's per-shape task). `erhe::gltf::load_primitive_payload(source,
+  options)` (device-free) reads the primitive's ranges and validates the
+  prepared extensions (the step 5 checks move here from the parse). Then
+  `erhe::primitive` builds:
+  - portable path: soup from the ranges (`build_triangle_soup()`, the
+    reload function, so first load and reload are one code path), then
+    `Primitive::make_prepared_meshes()` or `make_renderable_mesh()` as
+    today;
+  - GPU ready path (below): no soup, no conversion.
+
+  The raytrace with a stored BVH is committed in the job. With
+  `load.cpu_mesh_data` `release` the soup is dropped at the end of the job
+  (it was never retained); with `keep` it stays on the shape. A primitive
+  whose prepared data is rejected, or a foreign primitive, builds its soup
+  in the job and is picked up by the deferred finalize exactly as today.
+- **Image job** (worker): reads the encoded range just in time, decodes /
+  transcodes as `Gltf_image_residency` does today, drops the encoded bytes
+  after the decode. A raw ASTC KTX2 without supercompression is read level
+  by level straight into the buffer that is staged (no decode). Nothing is
+  retained for export.
+- **One budget.** `Load_memory_budget`, owned by `Asset_manager`, shared by
+  every live load: `load.max_in_flight_bytes` (Load_config v7, replaces
+  `max_decoded_bytes_in_flight`, migrated; default 128 MiB desktop, 64 MiB
+  OpenXR). A job takes a lease of its estimated peak before it reads
+  (computed from the JSON: mesh = range bytes + soup bytes + base and
+  optimized sink bytes, or the stream bytes on the GPU ready path; image =
+  encoded + decoded bytes); a single job larger than the budget runs alone
+  (today's image rule). The lease is not released when the job ends but
+  when its bytes leave the CPU: `Buffer_transfer_queue` entries and
+  `Image_transfer` uploads carry the lease and drop it when
+  `flush_budgeted` / `upload_into_frame` copy the bytes into upload
+  staging. That bounds the loader queue backlog, today's unbounded holder.
+  Mesh jobs have priority (publish waits for meshes, textures may lag);
+  images get the remainder, at least one in flight. `get_memory_usage` and
+  the "resident" log line report the budget high-water and the lease
+  counts per kind.
+- **Peak** = resident data (scene, retained soups under `keep`, raytrace,
+  topology) + budget + upload staging cap + parse structures.
+
+### Retention and reload, unified
+
+| | first load | after upload | read again by |
+|---|---|---|---|
+| mesh soup | job reads ranges | `keep`: stays; `release`: dropped | `get_triangle_soup()` (one read path, as today) |
+| image bytes | job reads range | always dropped (no setting: the user's rule) | export, through `Gltf_image_source` |
+| prepared topology, raytrace BVH | job | stay (unchanged) | - |
+
+Sources without a file origin keep their bytes (meshes: soup; images:
+encoded stream), as today's reload does.
+
+### Export re-read and post-save rebind
+
+- The exporter reads each image's bytes from its source at export time
+  (one task per image, beside the transcode tasks); a changed source file
+  fails the save with an error naming the image (no silent drop). Meshes
+  already reload their soups for the export.
+- `export_gltf` returns, beside the bytes, the written layout: per exported
+  shape and per image, the bufferView ranges relative to the BIN chunk,
+  the BIN chunk offset, and whether the written bytes are the shape's soup
+  / the image's source bytes unchanged (`retained`).
+- After `write_file_via_temp` succeeds and the target path is a path some
+  sources reference, the editor (main thread) stats the new file and
+  rebinds: every source on that path whose data was written `retained`
+  gets a new source (new `Source_file`, new ranges). A released soup whose
+  written core is not its soup (a non-prepared primitive saved onto its
+  own file) cannot be rebound: the exporter already holds it reloaded, and
+  the rebind keeps it resident (pinned, counted in the save status) so its
+  data does not vanish with the old file.
+- The swap is under the shape's soup mutex. A reload that captured the old
+  source and is refused for the changed stamp retries once when the
+  shape's current source is a different object (the source moved; this is
+  the defined behavior, not a tolerance of a stale state).
+- "Save for Quest" onto the scene's own source path is refused: it
+  rewrites textures (ASTC) and vertex data (GPU streams), so the scene in
+  memory would no longer be what its source holds (decision D4).
+
+### Quest file: GPU ready vertex streams (`ERHE_gpu_vertex_streams`)
+
+The Quest file writes each prepared primitive's base and optimized vertex
+streams and its index buffer exactly in the running `Mesh_memory` layout.
+The base streams are the core primitive's accessors, so the file stays a
+valid glTF 2.0 that stock viewers render with no extension required; the
+optimized streams are reachable only from the extension. Spec skeleton:
+`doc/gltf_extensions/ERHE_gpu_vertex_streams.md` (draft).
+
+Layout per primitive: one contiguous region `[indices][base s0][base
+s1][optimized s0][optimized s1]`, so the loader reads a primitive with one
+read and enqueues slices of it (loader queue entries hold a shared owner
+plus offset / length, so the shared index bytes feed both variants without
+a second copy).
+
+Mapping (the formats `Mesh_memory` derives on Quest and desktop today; the
+writer takes offsets and strides from the running `Vertex_format`, so this
+table is informative):
+
+| variant / stream | attribute | glTF accessor | normalized | stride | offset | scale / bias |
+|---|---|---|---|---|---|---|
+| core | indices | SCALAR UNSIGNED_INT | - | - | - | - |
+| base s0 | POSITION | VEC3 FLOAT | no | 12 (skinned 20) | 0 | - |
+| | JOINTS_0 (skinned) | VEC4 UNSIGNED_BYTE | no | 20 | 12 | - |
+| | WEIGHTS_0 (skinned) | VEC4 UNSIGNED_BYTE | yes | 20 | 16 | - |
+| base s1 | NORMAL | VEC3 FLOAT | no | 68 | 0 | - |
+| | TANGENT | VEC4 FLOAT | no | 68 | 12 | - |
+| | TEXCOORD_0 / 1 / 2 | VEC2 FLOAT | no | 68 | 28 / 36 / 44 | - |
+| | COLOR_0 | VEC4 FLOAT | no | 68 | 52 | - |
+| base s2 | smooth normal, aniso, valency, facet id | none: zero-filled | - | 24 | - | - |
+| optimized s0 | POSITION | VEC3 SHORT (a KHR_mesh_quantization type) | yes | 8 (skinned 16) | 0 | scale = AABB half extent (min 1e-6), bias = AABB center |
+| | JOINTS_0 (skinned, permuted smallest weight last) | VEC4 UNSIGNED_BYTE | no | 16 | 6 | - |
+| | `_WEIGHTS_IMPLICIT` (skinned) | VEC3 UNSIGNED_SHORT | yes | 16 | 10 | fourth weight = 1 - sum |
+| optimized s1 | `_TBN_QUATERNION` | VEC4 SHORT | no | 24 | 0 | erhe encoding (`erhe_vertex_tbn.glsl`) |
+| | TEXCOORD_0 / 1 | VEC2 UNSIGNED_SHORT | yes | 24 | 8 / 12 | scale = range max - min (min 1e-6), bias = range min |
+| | TEXCOORD_2 (lightmap) | VEC2 UNSIGNED_SHORT | yes | 24 | 16 | - |
+| | COLOR_0 | VEC4 UNSIGNED_BYTE | yes | 24 | 20 | - |
+| optimized s2 | aniso control | none: zero-filled | - | 4 | - | - |
+
+- Attributes the soup path writes as zeros (base s2, optimized s2) are not
+  stored: the stream is declared zero-filled and the loader fills the
+  staging range with zeros.
+- The optimized skinned offsets 6 and 10 break glTF's 4-byte element
+  alignment for mesh attributes, one more reason the optimized accessors
+  are referenced only from the extension. The validator reports them as
+  unused objects (info), as it does for the step 4 raw views.
+- The core indices are written UNSIGNED_INT (the `Mesh_memory` index
+  format) and are shared by both variants (identity mappings).
+- Base WEIGHTS_0 is unorm8, so the Quest file's core carries the
+  quantized weights; `ERHE_mesh_optimized` contract item 2 is amended for
+  primitives that carry `ERHE_gpu_vertex_streams`.
+
+Extension JSON (primitive):
+
+```json
+"ERHE_gpu_vertex_streams": {
+  "version": 1,
+  "encoding_version": 1,
+  "variants": [
+    {"role": "base",
+     "signature": "s0=12:position.0=32_vec3_float@0|s1=68:normal.0=32_vec3_float@0,...|s2=24:...",
+     "streams": [{"bufferView": 40}, {"bufferView": 41}, {"fill": "zero", "byteStride": 24}]},
+    {"role": "optimized",
+     "signature": "s0=8:position.0=16_vec3_snorm@0|s1=24:tangent.0=16_vec4_sint@0,...|s2=4:...",
+     "streams": [{"bufferView": 42}, {"bufferView": 43}, {"fill": "zero", "byteStride": 4}],
+     "attributes": {
+       "POSITION":        {"accessor": 90, "scale": [4.1, 2.0, 7.3], "offset": [0.5, 2.0, -1.0]},
+       "_TBN_QUATERNION": {"accessor": 91},
+       "TEXCOORD_0":      {"accessor": 92, "scale": [3.0, 3.0], "offset": [-1.0, 0.0]},
+       "TEXCOORD_2":      {"accessor": 93},
+       "COLOR_0":         {"accessor": 94}
+     }}
+  ]
+}
+```
+
+- `signature`: canonical string of the variant's `Vertex_format` after
+  repack (per stream: stride, then per attribute `usage.index=format@offset`
+  with `erhe::dataformat` names), produced by one function,
+  `Mesh_memory::get_vertex_format_signature()`. It captures the
+  device-dependent choices (position quantization on / off, unorm16x3
+  weights, attribute alignment) as layout.
+- `encoding_version`: bumped whenever an encoder changes bits for the same
+  layout (TBN rounding, implicit-sum rounding, affine epsilon).
+- `scale` / `offset`: decoded = stored (normalized) * scale + offset per
+  component, written with float round-trip precision (9 significant
+  digits) and parsed back to the same float. They are the values the
+  encoder used, stored, never re-derived.
+- **How scale / bias reach the shader.** `Buffer_mesh` gains explicit
+  `position_quantization` and `texcoord_quantization` fields. Both build
+  paths fill them (computed from the AABB / UV ranges as today, or read
+  from the extension); `Draw_list_scene::write_entry_record()`, the other
+  `Primitive_buffer` writers and the BLAS build transform read the fields
+  instead of recomputing them from `bounding_box` / `texcoord_ranges`. The
+  per-draw `Primitive_struct` already carries `position_scale` /
+  `position_offset` and `texcoord_scale` / `texcoord_offset`, so shaders do
+  not change. Further per-attribute scale / bias for other shader uses add
+  fields there the same way.
+- **Future work:** baking the position scale / bias into the model matrix
+  (saves a shader `fma`; not possible for skinned meshes, see
+  doc/erhe/vertex_position_quantization.md section 3) as a renderer option.
+- **Loader.** Per variant: `signature` equal to the running format's,
+  `encoding_version` equal to the compiled one, every stream's
+  `bufferView.byteLength` = count * stride, zero-fill strides equal to the
+  running strides. Always: indices below the vertex count (one read pass,
+  needed for GPU safety) and the `ERHE_mesh_optimized` content hash
+  (indices + base POSITION, from the read buffer). A matching variant is
+  enqueued as stored; a mismatching one is built from the soup (portable),
+  which the job then builds. Stream bytes are otherwise trusted. One line
+  per file: `gpu vertex streams: N stored, M portable (reasons)`.
+  `load.use_gpu_vertex_streams` allows A/B runs.
+- **Build phase with GPU ready streams.** `Primitive::make_stored_meshes()`
+  allocates both variants' ranges (lockstep, as the soup build does), sets
+  the bounding box (POSITION min / max), the sphere
+  (`ERHE_mesh_optimized`), the quantization fields and `vertex_input_key`,
+  and enqueues the read slices. The raytrace commits from base s0
+  positions + indices with the stored BVH (a `Primitive_raytrace` overload
+  over a strided position view; the precomputed triangles are its only
+  copy). Under `release` no soup is ever built; under `keep` the soup is
+  built from the core accessors.
+- **Edge lines, full build, Geometry:** lazy as today (step 7), built from
+  the soup (read back from the core accessors) with the stored topology.
+- **Raytrace BVH:** `ERHE_raytrace_bvh` unchanged, read in the same
+  per-primitive region.
+- **Textures in the Quest file:** `ERHE_texture_ktx2` as today. Zstandard
+  supercompression is processing; a `supercompression: none` option makes
+  the levels a direct read (about 1.8 GB of textures instead of 402 MB).
+  Decision D3.
+- **What a stock viewer sees:** a valid glTF 2.0 whose core primitives are
+  the float base streams in interleaved bufferViews (all core-legal types;
+  no extension required). Opaque to it: the optimized streams (quantized
+  POSITION, TBN quaternion, implicit-sum weights), zero-filled streams,
+  topology and BVH.
+
+### Pre-existing finding: re-saving the prepared Bistro changes 356 pixels
+
+Likely cause (read-only investigation): node transforms are not
+idempotent through a save. `process_node()` always writes
+`from_erhe(pre_transform * node.authored_parent_from_node_transform())`
+(`src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`). `operator*` on
+`Trs_transform` builds a matrix-only transform, so the written translation
+/ rotation / scale come from `glm::decompose()` of the composed matrix,
+not from the TRS the node was loaded with; TRS -> matrix -> decompose is
+not bit-exact, so every save moves node transforms by a few ulps.
+Evidence: step 7 found the re-saved file's BIN chunk byte-identical and
+its JSON different only in the `scale` / `translation` / `rotation` of
+1771 nodes, so mesh and texture bytes are not involved. Ulp shifts of node
+transforms move silhouettes and shadow edges, consistent with 356 changed
+pixels (max delta 55). The first save of the foreign file (124 pixels,
+step 4) has the same cause plus the core rewrite of decision 1.
+
+Item 9's mesh / texture export changes do not fix it. Fix (commit 0
+below): with an identity `pre_transform`, write the node's stored TRS
+components (its `Trs_transform` keeps them valid after `set_trs`); compose
+and decompose only when a non-identity import-root transform is folded in.
+A node loaded from a `matrix` is decomposed once, at its first save, and
+is stable afterwards.
+
+### Build order
+
+One commit per step (Opus coder, diff reviewed by the orchestrator). Load
+gate: `scripts/scene_load_profile.py --render-image` on the Release
+headless editor (prepared Bistro md5 89832b62..., foreign d488fefc...),
+peaks from `get_memory_usage` process sampling. Quest: release APK,
+off-head automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs,
+VmHWM.
+
+0. **Idempotent node transforms on export.** Gates: load prepared -> save A
+   -> load A -> save B gives A == B byte for byte; A renders 89832b62...;
+   an `erhe_gltf_tests` round trip checks TRS bit-exact.
+1. **JSON-only parse and the source model.** Fastgltf fork option, buffer
+   origins as `Source_file` / `Source_range`, eager range reads for the
+   small payloads; soups and images still built / retained as today.
+   Gates: `erhe_gltf_tests` (GLB, .gltf + .bin, data URI cases), render
+   identical, desktop and Quest peak recorded (expected drop: about the BIN
+   size).
+2. **Shared load budget.** `Load_memory_budget`, `max_in_flight_bytes`
+   (v7 migration), leases carried by loader queue entries and image
+   uploads; images move onto it. Gates: budget high-water at most the
+   budget (a single oversize job excepted), render identical, load time
+   recorded.
+3. **Image streaming.** Just-in-time read in the image job, no retained
+   streams, export re-reads, changed-file error. Gates: `cpu_images` 0 at
+   idle; a save of the untouched prepared Bistro has a byte-identical BIN;
+   `erhe_gltf_gpu_tests` export re-read and changed-file cases; Quest
+   VmHWM and idle heap (about -400 MB) recorded.
+4. **Mesh streaming.** The parse records sources only; mesh jobs run under
+   the budget; validation moves into the job. Gates: prepared and foreign
+   renders identical; prepared 0 deferred tasks, foreign deferred phase
+   unchanged; Quest VmHWM at most 1.2 GB, desktop `keep` peak at most idle
+   + 0.35 GB; load times no worse than item 7; `mcp_server_tests`.
+5. **Post-save rebind.** Gates: prepared Bistro with `release` saved onto
+   its own path, then meshes selected (soups read back, no refusal) and
+   saved again (byte-identical); a foreign file saved onto itself pins its
+   released soups (count in `get_save_status`); a unit test in
+   `erhe_gltf_tests`.
+6. **Explicit quantization on `Buffer_mesh`.** Gates: renders identical,
+   scene renderer / editor GPU tests, BLAS path unchanged.
+7. **Spec, schema and format signature.** Finish
+   `ERHE_gpu_vertex_streams.md` + schema;
+   `get_vertex_format_signature()`. Gates: `check_doc_links.py`; signature
+   unit test.
+8. **Save for Quest writes GPU streams.** Gates: the Khronos validator
+   reports no new errors (infos only); the file loaded with
+   `use_gpu_vertex_streams` off renders like the item 4 Quest file (Bistro
+   has no skinning); file size and save time recorded; a test compares the
+   stored stream bytes with the loader's pack of the same core, byte for
+   byte.
+9. **Loader GPU ready path.** Gates: `gpu vertex streams: 3852 stored, 0
+   portable` on Quest and desktop; renders identical to the step 8
+   portable load; Quest VmHWM, listed / idle and build time recorded
+   against step 4; a signature mismatch (quantization off) falls back and
+   renders as the portable path.
+
+### Risks
+
+- The fastgltf fork option may touch more of the GLB loader than expected
+  (fallback named under "Parse").
+- Many small positional reads: per-primitive contiguous regions keep it to
+  one read per primitive; foreign files take one read per bufferView range.
+- Mesh-first scheduling may delay textures; measured in step 4.
+- The export still assembles the whole output in memory (`std::string`
+  plus the combined buffer, about twice the file); a streaming writer is
+  separate work (D6).
+- A source file edited outside erhe between load and save now fails the
+  save for images, as it already does for released soups.
+
+### Decisions (user, 2026-10-25)
+
+- D1: GPU vertex streams are written by "Save for Quest" only;
+  `save_scene` writes the prepared core as today.
+- D2: `load.max_in_flight_bytes` defaults to 128 MiB on desktop and 64 MiB
+  under OpenXR.
+- D3: "Save for Quest" offers both texture forms as an option: Zstandard
+  supercompressed ASTC and raw ASTC levels. Step 9 measures the Quest load
+  time of both, and the measurement picks the default.
+- D4: "Save for Quest" onto the scene's own source file is refused.
+- D5: the lazy base variant on Quest is item 10, after item 9; it is not
+  part of item 9's commits.
+- D6: a streaming glTF writer and a lazy raytrace stay out of item 9.
+- Image bytes are always released after upload; there is no setting.
+
+## Item 10: lazy base variant on Quest (after item 9)
+
+Under OpenXR, do not build or upload a prepared primitive's base variant at
+load; build it on first demand (ID rendering, edge lines, solid wireframe,
+in-place GPU edits). Expected: about half the mesh upload bytes and an
+estimated 470 MB of GPU memory on Bistro, to be measured. Design to be
+written when item 9 is done.
+
