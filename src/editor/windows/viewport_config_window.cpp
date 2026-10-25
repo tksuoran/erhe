@@ -1,6 +1,7 @@
 #include "windows/viewport_config_window.hpp"
 #include "app_context.hpp"
 #include "app_settings.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -15,7 +16,7 @@
 
 namespace editor {
 
-void Viewport_config_window::render_style_ui(Render_style_data& render_style)
+auto Viewport_config_window::render_style_ui(Render_style_data& render_style) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -24,11 +25,13 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
     // color sources) is editor-global and edited in the Settings window
     // (Render_style_appearance). Widgets edit render_style in place; the owning
     // Scene_view's collect callback persists the change (autosaved).
-    ImGui::Checkbox("Polygon Fill",      &render_style.polygon_fill);
-    ImGui::Checkbox("Edge Lines",        &render_style.edge_lines);
-    ImGui::Checkbox("Solid Wireframe",   &render_style.solid_wireframe);
-    ImGui::Checkbox("Polygon Centroids", &render_style.polygon_centroids);
-    ImGui::Checkbox("Corner Points",     &render_style.corner_points);
+    bool edited = false;
+    edited = ImGui::Checkbox("Polygon Fill",      &render_style.polygon_fill)      || edited;
+    edited = ImGui::Checkbox("Edge Lines",        &render_style.edge_lines)        || edited;
+    edited = ImGui::Checkbox("Solid Wireframe",   &render_style.solid_wireframe)   || edited;
+    edited = ImGui::Checkbox("Polygon Centroids", &render_style.polygon_centroids) || edited;
+    edited = ImGui::Checkbox("Corner Points",     &render_style.corner_points)     || edited;
+    return edited;
 }
 
 void Viewport_config_window::sync_render_with_lightmaps(App_context& context)
@@ -110,14 +113,23 @@ void Viewport_config_window::imgui(App_context& context, Viewport_config& edit_d
         sync_render_with_lightmaps(context);
     }
 
+    // A checkbox turning on a mode only a full mesh build provides (edge
+    // lines, points, solid wireframe) is the change site of the on-demand
+    // full build of prepared primitives (doc/editor/async_asset_loading.md
+    // "Prepared mesh data").
+    const bool needed_before = viewports_need_full_builds(context);
+    bool       style_edited  = false;
     if (ImGui::TreeNodeEx("Default Style", flags)) {
-        render_style_ui(edit_data.render_style_not_selected);
+        style_edited = render_style_ui(edit_data.render_style_not_selected) || style_edited;
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Selection", flags)) {
-        render_style_ui(edit_data.render_style_selected);
+        style_edited = render_style_ui(edit_data.render_style_selected) || style_edited;
         ImGui::TreePop();
+    }
+    if (style_edited && !needed_before && viewports_need_full_builds(context)) {
+        request_prepared_full_builds_in_all_scenes(context);
     }
 
     // Selection Outline appearance is editor-global (Selection_outline_style),

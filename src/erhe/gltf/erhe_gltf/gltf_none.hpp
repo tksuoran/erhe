@@ -297,7 +297,9 @@ public:
     std::map<std::string, std::size_t> skip_reasons;                   // reason -> count
     std::size_t                        bvh_reused_count           {0}; // committed raytrace BVH remapped onto the core
     std::size_t                        bvh_rebuilt_count          {0}; // BVH built over the core
+    std::size_t                        bvh_stored_count           {0}; // retained primitive: the BVH its raytrace loaded with
     std::size_t                        bvh_none_count             {0}; // no ERHE_raytrace_bvh written
+    std::size_t                        retained_count             {0}; // prepared primitives written back unchanged (subset of prepared_count)
     std::size_t                        dropped_degenerate_triangles{0};
     double                             preparation_ms             {0.0}; // wall time of the parallel preparation
 };

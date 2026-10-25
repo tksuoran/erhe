@@ -520,7 +520,7 @@ TEST(Prepared_primitive, prepared_meshes_build_without_geometry)
             data->bvh = prepared.bvh;
             data->bvh->triangle_hash += hash_delta;
         }
-        return std::shared_ptr<const erhe::primitive::Prepared_primitive_data>{data};
+        return data;
     };
 
     for (const uint64_t hash_delta : {uint64_t{0}, uint64_t{1}}) {
@@ -564,6 +564,38 @@ TEST(Prepared_primitive, prepared_meshes_build_without_geometry)
         for (uint32_t triangle = 0; triangle < (index_count / 3); ++triangle) {
             EXPECT_EQ(raytrace.get_mesh_facet_from_triangle(triangle), triangle);
         }
+        EXPECT_FALSE(primitive.render_shape->has_stored_bvh()); // moved into the raytrace
+
+        // An untouched prepared shape exports retained: its own soup and the
+        // BVH read back from the raytrace, with no Geometry built.
+        {
+            const erhe::primitive::Prepare_primitive_result retained = erhe::primitive::prepare_primitive_for_export(*primitive.render_shape);
+            ASSERT_TRUE(retained.prepared.has_value()) << retained.skip_reason;
+            EXPECT_EQ(retained.prepared->retained_core, primitive.render_shape->get_triangle_soup());
+            EXPECT_EQ(retained.prepared->content_hash, prepared.content_hash);
+            EXPECT_EQ(retained.prepared->vertex_points, prepared.vertex_points);
+            EXPECT_EQ(retained.prepared->bvh_source, Prepared_bvh_source::stored);
+            ASSERT_TRUE(retained.prepared->bvh.has_value());
+            EXPECT_EQ(retained.prepared->bvh->nodes.size(), prepared.bvh->nodes.size());
+            EXPECT_EQ(retained.prepared->bvh->primitive_ids, prepared.bvh->primitive_ids);
+            EXPECT_EQ(retained.prepared->bvh->triangle_hash, prepared.bvh->triangle_hash);
+            EXPECT_FALSE(primitive.render_shape->get_geometry_const());
+        }
+
+        // The Geometry built on demand from the stored colocation: facet t
+        // is core triangle t.
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
+        ASSERT_TRUE(geometry);
+        EXPECT_EQ(geometry->get_mesh().facets.nb(), index_count / 3);
+        EXPECT_EQ(geometry->get_mesh().vertices.nb(), prepared.point_count);
+
+        // An in-place edit makes the prepared data stale: the export prepares
+        // the shape afresh instead of retaining it.
+        primitive.render_shape->mark_prepared_data_stale();
+        EXPECT_FALSE(primitive.render_shape->is_prepared_data_current());
+        const erhe::primitive::Prepare_primitive_result fresh = erhe::primitive::prepare_primitive_for_export(*primitive.render_shape);
+        ASSERT_TRUE(fresh.prepared.has_value()) << fresh.skip_reason;
+        EXPECT_FALSE(fresh.prepared->retained_core);
     }
 }
 

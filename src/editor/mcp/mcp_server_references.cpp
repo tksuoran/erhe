@@ -63,6 +63,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/mesh.hpp"
 
@@ -71,6 +72,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 
 namespace editor {
 
@@ -334,6 +336,46 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
             {"fetch_bytes_before",  totals.fetch_bytes_before},
             {"fetch_bytes_after",   totals.fetch_bytes_after},
             {"elapsed_seconds",     totals.elapsed_seconds}
+        };
+    }
+
+    // Render shapes of the scene meshes and how many hold a Geometry: a
+    // prepared primitive (loaded with prepared mesh data) has none until
+    // something needs it (doc/editor/async_asset_loading.md "Prepared mesh
+    // data"). Shapes shared by several meshes count once.
+    if (m_context.app_scenes != nullptr) {
+        std::unordered_set<const erhe::primitive::Primitive_shape*> shapes;
+        std::size_t with_geometry = 0;
+        std::size_t prepared      = 0;
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            if (!scene_root) {
+                continue;
+            }
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+            for (const std::shared_ptr<erhe::scene::Mesh_layer>& mesh_layer : scene_root->get_scene().get_mesh_layers()) {
+                for (const std::shared_ptr<erhe::scene::Mesh>& mesh : mesh_layer->meshes) {
+                    if (!mesh) {
+                        continue;
+                    }
+                    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+                        if ((primitive == nullptr) || !primitive->render_shape || !shapes.insert(primitive->render_shape.get()).second) {
+                            continue;
+                        }
+                        if (primitive->render_shape->get_geometry_const()) {
+                            ++with_geometry;
+                        }
+                        if (primitive->is_prepared()) {
+                            ++prepared;
+                        }
+                    }
+                }
+            }
+        }
+        result["render_shapes"] = {
+            {"count",         shapes.size()},
+            {"with_geometry", with_geometry},
+            {"prepared",      prepared}
         };
     }
 

@@ -1697,14 +1697,16 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path, 
         skip_reasons += fmt::format("{}{}: {}", skip_reasons.empty() ? "" : ", ", reason, count);
     }
     log_parsers->info(
-        "save_scene_gltf: '{}' prepared mesh data: {} prepared, {} skipped ({}), BVH reused {} / rebuilt {} / none {}, "
+        "save_scene_gltf: '{}' prepared mesh data: {} prepared ({} retained), {} skipped ({}), BVH reused {} / rebuilt {} / stored {} / none {}, "
         "degenerate triangles dropped {}, preparation {:.1f} ms, export {:.1f} ms, file {} bytes",
         erhe::file::to_string(path),
         prepared_statistics.prepared_count,
+        prepared_statistics.retained_count,
         prepared_statistics.skipped_count,
         skip_reasons,
         prepared_statistics.bvh_reused_count,
         prepared_statistics.bvh_rebuilt_count,
+        prepared_statistics.bvh_stored_count,
         prepared_statistics.bvh_none_count,
         prepared_statistics.dropped_degenerate_triangles,
         prepared_statistics.preparation_ms,

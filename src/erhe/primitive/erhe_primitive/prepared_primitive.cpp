@@ -296,6 +296,7 @@ auto c_str(const Prepared_bvh_source source) -> const char*
         case Prepared_bvh_source::none:    return "none";
         case Prepared_bvh_source::reused:  return "reused";
         case Prepared_bvh_source::rebuilt: return "rebuilt";
+        case Prepared_bvh_source::stored:  return "stored";
         default:                           return "?";
     }
 }
@@ -422,9 +423,63 @@ auto get_float_positions(const Triangle_soup& soup) -> std::vector<float>
     return positions;
 }
 
+auto get_export_core(const Prepared_primitive_export& prepared) -> const Triangle_soup&
+{
+    return prepared.retained_core ? *prepared.retained_core : prepared.core;
+}
+
+namespace {
+
+// The retained export of a shape whose prepared data is current. Empty when
+// the data lacks the stored colocation (a rejected ERHE_mesh_topology), which
+// the full preparation then derives.
+[[nodiscard]] auto retain_prepared_primitive(const Primitive_shape& shape) -> std::optional<Prepared_primitive_export>
+{
+    const std::shared_ptr<const Prepared_primitive_data>& data = shape.get_prepared_data();
+    const std::shared_ptr<Triangle_soup>&                 soup = shape.get_triangle_soup();
+    if (!data || !soup || !data->colocation.has_value()) {
+        return {};
+    }
+    Prepared_primitive_export out{};
+    out.retained_core   = soup;
+    out.vertex_points   = data->colocation->vertex_points;
+    out.point_count     = data->colocation->point_count;
+    out.options         = data->options;
+    out.content_hash    = data->content_hash;
+    out.bounding_box    = data->bounding_box;
+    out.bounding_sphere = data->bounding_sphere;
+    out.bvh_source      = Prepared_bvh_source::none;
+    // The BVH: the one the raytrace committed (the stored one, or one built
+    // over the same core triangles in index order after a fallback), read
+    // back from the backend; the shape keeps no second copy.
+    const Primitive_raytrace& raytrace = shape.get_raytrace();
+    if (!raytrace.is_proxy() && raytrace.get_raytrace_geometry()) {
+        erhe::raytrace::Prebuilt_bvh bvh{};
+        if (
+            raytrace.get_raytrace_geometry()->export_bvh(bvh) &&
+            (bvh.triangle_count == (soup->get_index_count() / 3))
+        ) {
+            out.bvh        = std::move(bvh);
+            out.bvh_source = Prepared_bvh_source::stored;
+        }
+    }
+    return out;
+}
+
+} // anonymous namespace
+
 auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_result
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (shape.is_prepared_data_current()) {
+        std::optional<Prepared_primitive_export> retained = retain_prepared_primitive(shape);
+        if (retained.has_value()) {
+            Prepare_primitive_result result{};
+            result.prepared = std::move(retained);
+            return result;
+        }
+    }
 
     const std::shared_ptr<Triangle_soup>& soup = shape.get_triangle_soup();
     if (!soup) {

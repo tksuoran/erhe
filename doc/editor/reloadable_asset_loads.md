@@ -198,7 +198,9 @@ measurement advances several frames before sampling.
 The MCP `get_memory_usage` tool reports per-pool mesh bytes (used, capacity,
 blocks), texture bytes and count, `Device::get_memory_budget()` (Vulkan only;
 the other backends return `{}`), container records and which retain a parse,
-undo/redo entry counts, and the bottom level structure count. It is backed by
+undo/redo entry counts, the bottom level structure count, and `render_shapes`
+(unique render shapes of the scene meshes, how many hold a `Geometry`, how
+many carry prepared mesh data). It is backed by
 `Buffer_pool::get_statistics()` / `Mesh_memory::get_pool_statistics()`, a
 process-wide texture byte counter in `erhe::graphics::Texture` (estimated from
 the create info, excluding views and wrapped images) and

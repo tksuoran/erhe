@@ -348,6 +348,7 @@ private:
     auto action_set_shadow_fit_cache_enabled(const nlohmann::json& args) -> std::string;
     auto query_cull_classification_check  (const nlohmann::json& args) -> std::string;
     auto action_set_occlusion_culling     (const nlohmann::json& args) -> std::string;
+    auto action_set_viewport_style        (const nlohmann::json& args) -> std::string;
     auto query_occlusion_check            (const nlohmann::json& args) -> std::string;
     auto action_set_light_cluster_binning (const nlohmann::json& args) -> std::string;
     auto query_light_cluster_stats        (const nlohmann::json& args) -> std::string;
