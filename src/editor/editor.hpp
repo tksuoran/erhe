@@ -12,8 +12,9 @@ namespace editor {
 // on startup instead of running the procedural startup script.
 // Overridable from the command line (--scene).
 //
-// no_startup_scene, when true, starts with an empty editor: neither the procedural
-// default scene nor any scene is loaded. Overridable from the command line
+// no_startup_scene, when true, starts with an empty scene (a default camera and
+// its viewport, nothing else): neither the procedural default scene nor any
+// scene is loaded. Overridable from the command line
 // (--no-scene) and takes precedence over startup_scene_path.
 //
 // force_post_processing_off, when true, disables viewport post processing for

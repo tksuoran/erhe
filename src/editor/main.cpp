@@ -39,8 +39,9 @@ auto main(int argc, char** argv) -> int
     //   --scene loads a saved scene file (.glb / .gltf) on startup instead of
     //     building a scene procedurally, e.g.
     //     --scene "res/editor/scenes/Default Scene.glb".
-    //   --no-scene starts with an empty editor: no procedural default scene and no
-    //     scene load (takes precedence over --scene).
+    //   --no-scene starts with an empty scene (a default camera and its viewport,
+    //     nothing else): no procedural default scene and no scene load (takes
+    //     precedence over --scene).
     //   --fix-spot-lights fixes up spot lights of every loaded glTF asset (broken
     //     exporter workaround): full color value, intensity 1000, doubled
     //     outer cone angle, and the original outer cone angle used as the inner
@@ -66,7 +67,7 @@ auto main(int argc, char** argv) -> int
         options.add_options()
             ("commands", "Startup commands script (scene setup) JSON path", cxxopts::value<std::string>()->default_value("config/editor/commands.json"))
             ("scene",    "Scene file (.glb / .gltf) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
-            ("no-scene", "Start with an empty editor: no procedural default scene and no scene load (overrides --scene)")
+            ("no-scene", "Start with an empty scene (default camera only): no procedural default scene and no scene load (overrides --scene)")
             ("no-post-processing", "Force viewport post processing off for this session, overriding editor_settings.json (the stored setting is not modified)")
             ("benchmark", "Benchmark file (JSON): run it, log the result, write logs/benchmark_<name>.json and exit", cxxopts::value<std::string>()->default_value(""))
             ("no-headset-culling", "Draw the headset's color passes unculled for this session (A/B against the culled draws)")

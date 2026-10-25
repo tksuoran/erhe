@@ -74,6 +74,13 @@ def wait_for_ready(editor_process, timeout_s):
     return None, None
 
 
+def scene_stem(scene_path):
+    """The listed name of a scene opened from scene_path: load_scene names the
+    scene after the file stem (no extension). The --no-scene startup scene
+    ("Scene 1") never matches."""
+    return os.path.splitext(os.path.basename(scene_path))[0]
+
+
 def scene_names(port):
     """Names of the listed scenes, or None when list_scenes did not answer
     (the request expires while the main thread is stalled, e.g. inside a
@@ -88,7 +95,7 @@ def wait_until_settled(port, scene_path, timeout_s):
     """Returns (seconds until the scene is listed, seconds until idle)."""
     start = time.time()
     listed_s = None
-    scene_file = os.path.basename(scene_path)
+    scene_file = scene_stem(scene_path)
     while (time.time() - start) < timeout_s:
         status = mcp(port, "get_async_status")
         if (listed_s is None) and any(scene_file in name for name in (scene_names(port) or [])):
@@ -206,13 +213,13 @@ def main():
         if (open_index < args.opens) or not args.keep_open:
             close_log_offset = len(read_log())
             for name in (scene_names(port) or []):
-                if os.path.basename(scene_path) in name:
+                if scene_stem(scene_path) in name:
                     mcp(port, "close_scene", {"scene_name": name})
             close_start = time.time()
             gone_s = None
             while (time.time() - close_start) < 120.0:
                 names = scene_names(port)
-                if (names is not None) and not any(os.path.basename(scene_path) in name for name in names):
+                if (names is not None) and not any(scene_stem(scene_path) in name for name in names):
                     gone_s = time.time() - close_start
                     break
                 time.sleep(0.25)
