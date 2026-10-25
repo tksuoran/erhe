@@ -205,7 +205,9 @@ render shapes, optimized variants, collision shapes of the scene meshes'
 distinct primitives - the CPU bytes of triangle soups, element mappings,
 prepared topology and BVH data, and the raytrace's own vertex / index copies,
 BVH nodes, primitive ids, precomputed triangles and facet maps; shared objects
-counted once; `Primitive_shape::add_memory_statistics()`), `cpu_images` (the
+counted once; `Primitive_shape::add_memory_statistics()`; plus the count of
+soups released after upload and the process's soup reloads,
+doc/editor/async_asset_loading.md "Releasing CPU mesh data"), `cpu_images` (the
 retained encoded source image streams and any decoded pixels not yet
 released), `ring_buffers` (count, capacity, bytes in use) and `process` (the
 operating system figures: working set / peak / private bytes and the CPU

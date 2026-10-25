@@ -11,6 +11,7 @@ add_executable(${_target}
     test_empty_geometry_build.cpp
     test_stored_colocation.cpp
     test_prepared_primitive.cpp
+    test_triangle_soup_release.cpp
     mesh_compare.hpp
 )
 

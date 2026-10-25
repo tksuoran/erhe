@@ -55,13 +55,16 @@
 #include <taskflow/taskflow.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <future>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <random>
@@ -1173,6 +1176,690 @@ public:
     [[nodiscard]] auto operator==(const Prepared_extension_json&) const -> bool = default;
 };
 
+// Whether build_triangle_soup() adds a mikktspace TANGENT to a primitive
+// that has normals and texture coordinates but no TANGENT.
+enum class Soup_tangents : unsigned int {
+    as_stored             = 0,
+    generate_when_missing = 1
+};
+
+// The triangle soup of one glTF primitive: indices as uint32, every
+// attribute copied into one interleaved stream in the accessor's own format,
+// a mikktspace TANGENT when `tangents` asks for one and the primitive has
+// none, and an opaque white COLOR_0 when it has no color. Null, with the
+// reason logged, when the primitive cannot be built. The parse and the
+// triangle soup reload (Gltf_triangle_soup_source) both build through this
+// function, so a reload over the same accessor bytes is bit-identical.
+[[nodiscard]] auto build_triangle_soup(
+    const fastgltf::Asset&     asset,
+    const fastgltf::Primitive& primitive,
+    const Soup_tangents        tangents
+) -> std::shared_ptr<erhe::primitive::Triangle_soup>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!primitive.indicesAccessor.has_value()) {
+        return {};
+    }
+
+    std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup_shared = std::make_shared<erhe::primitive::Triangle_soup>();
+    erhe::primitive::Triangle_soup& triangle_soup = *triangle_soup_shared.get();
+    // Record what the indices actually describe. The class default is
+    // `triangles`, so leaving this unset told every consumer that a strip,
+    // fan, line or point primitive was a triangle list - and a consumer that
+    // reorders triangles (the mesh optimizer) would silently scramble it.
+    triangle_soup.primitive_type = to_erhe_primitive_type(primitive.type);
+
+    // Copy indices
+    const fastgltf::Accessor& indices_accessor = asset.accessors[primitive.indicesAccessor.value()];
+    log_gltf->trace("index count = {}", indices_accessor.count);
+    try {
+        triangle_soup.index_data.resize(indices_accessor.count);
+    } catch (const std::exception& e) {
+        log_gltf->error("Out of memory allocating {} indices for glTF primitive: {} - primitive skipped", indices_accessor.count, e.what());
+        return {};
+    }
+    fastgltf::iterateAccessorWithIndex<uint32_t>(
+        asset,
+        indices_accessor,
+        [&](uint32_t index_value, std::size_t index) {
+            triangle_soup.index_data[index] = index_value;
+        }
+    );
+
+    // Gather attributes
+    std::size_t vertex_count = std::numeric_limits<std::size_t>::max();
+    triangle_soup.vertex_format.streams.emplace_back(0);
+    bool generate_tangents   = (tangents == Soup_tangents::generate_when_missing);
+    bool inject_vertex_color = true;
+    for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
+        const fastgltf::Attribute&                     gltf_attribute        = primitive.attributes[i];
+        const erhe::dataformat::Vertex_attribute_usage attribute_usage_type  = to_erhe(gltf_attribute.name);
+        const std::size_t                              attribute_usage_index = get_attribute_index(gltf_attribute.name);
+        const fastgltf::Accessor&                      accessor              = asset.accessors[gltf_attribute.accessorIndex];
+        const erhe::dataformat::Format                 format                = to_erhe_attribute(accessor);
+        // to_erhe_attribute() already logged what it could not express.
+        // Building the vertex format around an undefined attribute would
+        // give it a zero size and desynchronize every following attribute
+        // offset, so drop the whole primitive instead.
+        if (format == erhe::dataformat::Format::format_undefined) {
+            log_gltf->error(
+                "glTF primitive attribute '{}' has an unsupported format - primitive skipped",
+                gltf_attribute.name.c_str()
+            );
+            return {};
+        }
+        if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::tangent) {
+            generate_tangents = false;
+        }
+        if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::color) {
+            inject_vertex_color = false;
+        }
+        vertex_count = std::min(accessor.count, vertex_count);
+        triangle_soup.vertex_format.streams.front().emplace_back(
+            format,
+            attribute_usage_type,
+            attribute_usage_index
+        );
+    }
+    if (primitive.attributes.empty() || (vertex_count == std::numeric_limits<std::size_t>::max())) {
+        log_gltf->error("glTF primitive has no vertex attributes - primitive skipped");
+        return {};
+    }
+    // The glTF spec requires all attribute accessors of a primitive to
+    // have the same count. Proceed with the minimum (buffers are sized
+    // and copies clamped to it), but report the malformed file.
+    for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
+        const fastgltf::Accessor& accessor = asset.accessors[primitive.attributes[i].accessorIndex];
+        if (accessor.count != vertex_count) {
+            log_gltf->error(
+                "glTF primitive attribute '{}' accessor count {} does not match vertex count {} - clamping",
+                primitive.attributes[i].name.c_str(),
+                accessor.count,
+                vertex_count
+            );
+        }
+    }
+    // An index past the vertex count (the glTF spec requires every
+    // index to address an attribute element) would read outside the
+    // vertex data; such a primitive cannot be built.
+    for (const uint32_t index : triangle_soup.index_data) {
+        if (index >= vertex_count) {
+            log_gltf->error(
+                "glTF primitive index {} is out of range for vertex count {} - primitive skipped",
+                index,
+                vertex_count
+            );
+            return {};
+        }
+    }
+    if (generate_tangents) {
+        triangle_soup.vertex_format.streams.front().emplace_back(
+            erhe::dataformat::Format::format_32_vec4_float,
+            erhe::dataformat::Vertex_attribute_usage::tangent,
+            0
+        );
+        //triangle_soup.vertex_format.streams.front().emplace_back(
+        //    erhe::dataformat::Format::format_32_vec3_float,
+        //    erhe::dataformat::Vertex_attribute_usage::bitangent,
+        //    0
+        //);
+    }
+    if (inject_vertex_color) {
+        triangle_soup.vertex_format.streams.front().emplace_back(
+            erhe::dataformat::Format::format_32_vec4_float,
+            erhe::dataformat::Vertex_attribute_usage::color,
+            0
+        );
+    }
+    triangle_soup.vertex_format.streams.front().finalize_stride();
+    std::size_t vertex_stride = triangle_soup.vertex_format.streams.front().stride;
+
+    ERHE_VERIFY(triangle_soup.vertex_format.streams.size() == 1);
+    try {
+        triangle_soup.vertex_data.resize(vertex_count * vertex_stride);
+    } catch (const std::exception& e) {
+        log_gltf->error(
+            "Out of memory allocating {} bytes of vertex data for glTF primitive: {} - primitive skipped",
+            vertex_count * vertex_stride,
+            e.what()
+        );
+        return {};
+    }
+    const std::vector<erhe::dataformat::Attribute_stream> erhe_attributes = triangle_soup.vertex_format.get_attributes();
+
+    // Gather vertex data
+    for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
+        const fastgltf::Attribute&                     gltf_attribute  = primitive.attributes[i];
+        const erhe::dataformat::Vertex_attribute_usage attribute_usage = to_erhe(gltf_attribute.name);
+        const std::size_t                              attribute_index = get_attribute_index(gltf_attribute.name);
+        const fastgltf::Accessor&                      accessor        = asset.accessors[gltf_attribute.accessorIndex];
+
+        const erhe::dataformat::Attribute_stream&      erhe_attribute  = erhe_attributes[i];
+        ERHE_VERIFY(erhe_attribute.attribute != nullptr);
+        ERHE_VERIFY(erhe_attribute.stream != nullptr);
+        if (accessor.bufferViewIndex.has_value()) {
+            copyFromAccessorWithOutStride(
+                asset,
+                accessor,
+                triangle_soup.vertex_data.data() + erhe_attribute.attribute->offset,
+                erhe_attribute.stream->stride,
+                vertex_count
+            );
+        } else {
+            log_gltf->warn("Attribute without accessor buffer view");
+        }
+
+        log_gltf->trace(
+            "Primitive attribute[{}]: name = {}, attribute type = {}[{}], "
+            "component type = {}, accessor type = {}, normalized = {}, count = {}, "
+            "accessor offset = {}",
+            i,
+            gltf_attribute.name.c_str(),
+            erhe::dataformat::c_str(attribute_usage), // semantics
+            attribute_index,
+            c_str(accessor.componentType),
+            fastgltf::getAccessorTypeName(accessor.type),
+            accessor.normalized != 0,
+            accessor.count,
+            accessor.byteOffset
+        );
+    }
+
+    if (generate_tangents) {
+        using namespace erhe::dataformat;
+        const Attribute_stream position_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::position);
+        const Attribute_stream normal_attribute_    = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::normal);
+        const Attribute_stream texcoord_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tex_coord);
+        const Attribute_stream tangent_attribute_   = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tangent);
+        //const Attribute_stream bitangent_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::bitangent);
+
+        if (
+            (position_attribute_ .attribute != nullptr) &&
+            (normal_attribute_   .attribute != nullptr) &&
+            (texcoord_attribute_ .attribute != nullptr) &&
+            (tangent_attribute_  .attribute != nullptr)
+            //(bitangent_attribute_.attribute != nullptr)
+        ) {
+            log_gltf->info("generating tangents using mikktspace");
+            // Generate tangents with mikktspace
+
+            uint8_t* vertex_data = triangle_soup.vertex_data.data();
+            class Tangent_generation_context
+            {
+            public:
+                std::span<uint32_t> indices;
+                std::size_t         vertex_count;
+                std::size_t         stride;
+                const std::uint8_t* position_data;
+                const std::uint8_t* normal_data;
+                const std::uint8_t* texcoord_data;
+                std::uint8_t*       tangent_data;
+                std::uint8_t*       bitangent_data;
+                Format              position_format;
+                Format              normal_format;
+                Format              texcoord_format;
+                Format              tangent_format;
+                Format              bitangent_format;
+            };
+            Tangent_generation_context context{
+                .indices          = std::span<uint32_t>{triangle_soup.index_data.data(), triangle_soup.index_data.size()},
+                .vertex_count     = vertex_count,
+                .stride           = position_attribute_.stream->stride,
+                .position_data    = vertex_data + position_attribute_ .attribute->offset,
+                .normal_data      = vertex_data + normal_attribute_   .attribute->offset,
+                .texcoord_data    = vertex_data + texcoord_attribute_ .attribute->offset,
+                .tangent_data     = vertex_data + tangent_attribute_  .attribute->offset,
+                .bitangent_data   = nullptr,
+                .position_format  = position_attribute_ .attribute->format,
+                .normal_format    = normal_attribute_   .attribute->format,
+                .texcoord_format  = texcoord_attribute_ .attribute->format,
+                .tangent_format   = tangent_attribute_  .attribute->format,
+                .bitangent_format = erhe::dataformat::Format::format_undefined
+            };
+            SMikkTSpaceInterface mikktspace{
+                .m_getNumFaces = [](const SMikkTSpaceContext* mikk_tspace_context) -> int {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    return static_cast<int>(context->indices.size() / 3);
+                },
+                .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, int32_t) -> int {
+                    return 3;
+                },
+                .m_getPosition = [](const SMikkTSpaceContext* mikk_tspace_context, float posOut[], int32_t face, int32_t vert) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->position_data + context->stride * v);
+                    convert(src, context->position_format, &value[0], Format::format_32_vec4_float, 1.0f);
+                    posOut[0] = value[0];
+                    posOut[1] = value[1];
+                    posOut[2] = value[2];
+                },
+                .m_getNormal = [](const SMikkTSpaceContext* mikk_tspace_context, float normOut[], int32_t face, int32_t vert) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->normal_data + context->stride * v);
+                    convert(src, context->normal_format, &value[0], Format::format_32_vec4_float, 1.0f);
+                    normOut[0] = value[0];
+                    normOut[1] = value[1];
+                    normOut[2] = value[2];
+                },
+                .m_getTexCoord = [](const SMikkTSpaceContext* mikk_tspace_context, float texcOut[], int32_t face, int32_t vert) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->texcoord_data + context->stride * v);
+                    convert(src, context->texcoord_format, &value[0], Format::format_32_vec4_float, 1.0f);
+                    texcOut[0] = value[0];
+                    texcOut[1] = value[1];
+                },
+                .m_setTSpaceBasic = nullptr,
+                .m_setTSpace = [](
+                    const SMikkTSpaceContext* mikk_tspace_context,
+                    const float               tangent[],
+                    const float               /*bitangent*/[],
+                    const float               /*mag_s*/,
+                    const float               /*mag_t*/,
+                    const tbool               is_orientation_preserving,
+                    const int                 face,
+                    const int                 vert
+                ) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float tangent_src[4] = { tangent[0], tangent[1], tangent[2], is_orientation_preserving ? -1.0f : 1.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    std::uint8_t* tangent_dst = reinterpret_cast<std::uint8_t*>(context->tangent_data + context->stride * v);
+                    convert(tangent_src, Format::format_32_vec4_float, tangent_dst, context->tangent_format, 1.0f);
+                    //float bitangent_src[4] = { -bitangent[0], -bitangent[1], -bitangent[2], 0.0f };
+                    //std::uint8_t* bitangent_dst = reinterpret_cast<std::uint8_t*>(context->bitangent_data + context->stride * v);
+                    //convert(bitangent_src, Format::format_32_vec3_float, bitangent_dst, context->bitangent_format, 1.0f);
+                }
+            };
+            const SMikkTSpaceContext mikk_tspace_context {
+                .m_pInterface = &mikktspace,
+                .m_pUserData  = &context
+            };
+            const tbool res = genTangSpaceDefault(&mikk_tspace_context);
+            if (res == 0) {
+                log_gltf->warn("genTangSpaceDefault() failed");
+            }
+        } else {
+            log_gltf->info("glTF does not have tangents, and not enough attributes to generate tangents&");
+        }
+    }
+
+    if (inject_vertex_color) {
+        using namespace erhe::dataformat;
+        const Attribute_stream color_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::color);
+        ERHE_VERIFY(color_attribute_.attribute != nullptr);
+        const float       opaque_white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        const std::size_t stride          = color_attribute_.stream->stride;
+        const auto        color_format    = color_attribute_.attribute->format;
+        uint8_t*          vertex_data     = triangle_soup.vertex_data.data();
+        std::uint8_t*     color_data      = vertex_data + color_attribute_.attribute->offset;
+        for (std::size_t v = 0; v < vertex_count; ++v) {
+            std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(color_data + v * stride);
+            convert(opaque_white, Format::format_32_vec4_float, dst, color_format, 1.0f);
+        }
+    }
+
+    return triangle_soup_shared;
+}
+
+
+// A file a parse read glTF buffers from, with the size and modification time
+// it had at the parse; a triangle soup reload refuses the file when either
+// differs.
+class Gltf_source_file
+{
+public:
+    std::filesystem::path           path;
+    std::uintmax_t                  size{0};
+    std::filesystem::file_time_type write_time{};
+};
+
+// Where one glTF buffer's bytes are: the BIN chunk of the .glb or an external
+// .bin, at file_offset.
+class Gltf_buffer_origin
+{
+public:
+    std::size_t file_index {0};
+    std::size_t file_offset{0};
+};
+
+// The buffer origins of one parsed file, shared by the triangle soup sources
+// of all its primitives.
+class Gltf_buffer_origins
+{
+public:
+    std::vector<Gltf_source_file>                  files;
+    std::vector<std::optional<Gltf_buffer_origin>> buffers; // per glTF buffer; nullopt: not in a file (data URI)
+};
+
+namespace {
+
+[[nodiscard]] auto stamp_source_file(const std::filesystem::path& path, Gltf_source_file& out) -> bool
+{
+    std::error_code size_error;
+    std::error_code time_error;
+    const std::uintmax_t                  size       = std::filesystem::file_size(path, size_error);
+    const std::filesystem::file_time_type write_time = std::filesystem::last_write_time(path, time_error);
+    if (size_error || time_error) {
+        return false;
+    }
+    out.path       = path;
+    out.size       = size;
+    out.write_time = write_time;
+    return true;
+}
+
+[[nodiscard]] auto read_u32_le(const std::array<unsigned char, 4>& bytes) -> uint32_t
+{
+    return
+        static_cast<uint32_t>(bytes[0])         |
+        (static_cast<uint32_t>(bytes[1]) <<  8) |
+        (static_cast<uint32_t>(bytes[2]) << 16) |
+        (static_cast<uint32_t>(bytes[3]) << 24);
+}
+
+} // anonymous namespace
+
+// Resolves where the buffers of the glTF file at `path` live on disk: reads
+// the JSON (the whole .gltf, or the JSON chunk of a .glb) for the buffer
+// URIs, and the .glb chunk headers for the BIN chunk offset. Null when the
+// file cannot be read or is not glTF.
+[[nodiscard]] auto resolve_gltf_buffer_origins(const std::filesystem::path& path, const std::size_t buffer_count) -> std::shared_ptr<const Gltf_buffer_origins>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    std::ifstream file{path, std::ios::binary};
+    if (!file) {
+        return {};
+    }
+    constexpr uint32_t glb_magic      = 0x46546C67u; // "glTF"
+    constexpr uint32_t glb_chunk_json = 0x4E4F534Au; // "JSON"
+    constexpr uint32_t glb_chunk_bin  = 0x004E4942u; // "BIN\0"
+
+    std::array<unsigned char, 4> word{};
+    file.read(reinterpret_cast<char*>(word.data()), 4);
+    const bool is_glb = file && (read_u32_le(word) == glb_magic);
+
+    std::string               json_text;
+    std::optional<std::size_t> bin_chunk_offset;
+    if (is_glb) {
+        // 12 byte header, then the JSON chunk (length, type, data), then the
+        // BIN chunk (length, type, data).
+        file.seekg(12);
+        file.read(reinterpret_cast<char*>(word.data()), 4);
+        const uint32_t json_length = read_u32_le(word);
+        file.read(reinterpret_cast<char*>(word.data()), 4);
+        if (!file || (read_u32_le(word) != glb_chunk_json)) {
+            return {};
+        }
+        json_text.resize(json_length);
+        file.read(json_text.data(), static_cast<std::streamsize>(json_length));
+        std::array<unsigned char, 4> bin_type{};
+        file.read(reinterpret_cast<char*>(word.data()), 4);
+        file.read(reinterpret_cast<char*>(bin_type.data()), 4);
+        if (file && (read_u32_le(bin_type) == glb_chunk_bin)) {
+            bin_chunk_offset = std::size_t{12} + 8 + json_length + 8;
+        }
+    } else {
+        file.seekg(0, std::ios::end);
+        const std::streamoff file_size = file.tellg();
+        file.seekg(0);
+        json_text.resize(static_cast<std::size_t>(file_size));
+        file.read(json_text.data(), file_size);
+    }
+    if (!file) {
+        return {};
+    }
+
+    simdjson::dom::parser  parser;
+    simdjson::dom::element root;
+    if (parser.parse(simdjson::padded_string{json_text}).get(root) != simdjson::SUCCESS) {
+        return {};
+    }
+    std::shared_ptr<Gltf_buffer_origins> origins = std::make_shared<Gltf_buffer_origins>();
+    origins->buffers.resize(buffer_count);
+    simdjson::dom::array buffers;
+    if (root["buffers"].get_array().get(buffers) != simdjson::SUCCESS) {
+        return origins;
+    }
+    const std::filesystem::path base_directory = path.parent_path();
+    std::size_t buffer_index = 0;
+    for (simdjson::dom::element buffer : buffers) {
+        if (buffer_index >= buffer_count) {
+            break;
+        }
+        const std::size_t this_index = buffer_index++;
+        std::string_view uri_string;
+        if (buffer["uri"].get_string().get(uri_string) != simdjson::SUCCESS) {
+            if ((this_index == 0) && bin_chunk_offset.has_value()) {
+                Gltf_source_file source_file;
+                if (stamp_source_file(path, source_file)) {
+                    origins->files.push_back(std::move(source_file));
+                    origins->buffers[this_index] = Gltf_buffer_origin{.file_index = origins->files.size() - 1, .file_offset = bin_chunk_offset.value()};
+                }
+            }
+            continue;
+        }
+        const fastgltf::URI uri{uri_string};
+        if (!uri.valid() || uri.isDataUri() || !uri.isLocalPath()) {
+            continue;
+        }
+        Gltf_source_file source_file;
+        if (stamp_source_file(base_directory / uri.fspath(), source_file)) {
+            origins->files.push_back(std::move(source_file));
+            origins->buffers[this_index] = Gltf_buffer_origin{.file_index = origins->files.size() - 1, .file_offset = 0};
+        }
+    }
+    return origins;
+}
+
+// Reads one glTF primitive's triangle soup back from the source file: the
+// byte ranges of the bufferViews its accessors read, recorded at the parse,
+// are read into a minimal fastgltf::Asset and build_triangle_soup() builds
+// the soup from it as the parse did (doc/erhe/gltf.md "Triangle soup
+// reload").
+class Gltf_triangle_soup_source : public erhe::primitive::Triangle_soup_source
+{
+public:
+    class View
+    {
+    public:
+        std::size_t                file_index {0};
+        std::size_t                file_offset{0};
+        std::size_t                byte_length{0};
+        fastgltf::Optional<std::size_t> byte_stride{};
+    };
+    class Attribute
+    {
+    public:
+        std::string name;
+        std::size_t accessor_index{0};
+    };
+
+    std::shared_ptr<const Gltf_buffer_origins> origins;
+    std::vector<View>                          views;
+    std::vector<fastgltf::Accessor>            accessors; // bufferViewIndex into views
+    fastgltf::PrimitiveType                    primitive_type{fastgltf::PrimitiveType::Triangles};
+    std::size_t                                indices_accessor{0};
+    std::vector<Attribute>                     attributes;
+    Soup_tangents                              tangents{Soup_tangents::as_stored};
+    std::string                                description;
+
+    [[nodiscard]] auto describe() const -> std::string override
+    {
+        return description;
+    }
+
+    [[nodiscard]] auto load() const -> std::shared_ptr<erhe::primitive::Triangle_soup> override
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        // The file must be the one the parse read: same size, same
+        // modification time. Anything else may hold different bytes at the
+        // recorded ranges.
+        std::vector<bool> file_checked(origins->files.size(), false);
+        for (const View& view : views) {
+            if (file_checked[view.file_index]) {
+                continue;
+            }
+            file_checked[view.file_index] = true;
+            const Gltf_source_file& expected = origins->files[view.file_index];
+            Gltf_source_file current;
+            if (!stamp_source_file(expected.path, current)) {
+                log_gltf->error("triangle soup reload of {}: cannot read '{}' - refused", description, expected.path.string());
+                return {};
+            }
+            if ((current.size != expected.size) || (current.write_time != expected.write_time)) {
+                log_gltf->error(
+                    "triangle soup reload of {}: '{}' changed since it was loaded (size {} -> {}) - refused",
+                    description, expected.path.string(), expected.size, current.size
+                );
+                return {};
+            }
+        }
+
+        fastgltf::Asset asset;
+        std::size_t open_file_index = std::numeric_limits<std::size_t>::max();
+        std::ifstream file;
+        for (std::size_t i = 0, end = views.size(); i < end; ++i) {
+            const View& view = views[i];
+            if (view.file_index != open_file_index) {
+                file = std::ifstream{origins->files[view.file_index].path, std::ios::binary};
+                open_file_index = view.file_index;
+            }
+            std::vector<std::byte> bytes(view.byte_length);
+            file.seekg(static_cast<std::streamoff>(view.file_offset));
+            file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(view.byte_length));
+            if (!file) {
+                log_gltf->error(
+                    "triangle soup reload of {}: reading {} bytes at offset {} of '{}' failed - refused",
+                    description, view.byte_length, view.file_offset, origins->files[view.file_index].path.string()
+                );
+                return {};
+            }
+            fastgltf::Buffer buffer{};
+            buffer.byteLength = view.byte_length;
+            buffer.data       = fastgltf::sources::Vector{.bytes = std::move(bytes), .mimeType = fastgltf::MimeType::None};
+            asset.buffers.push_back(std::move(buffer));
+            fastgltf::BufferView buffer_view{};
+            buffer_view.bufferIndex = i;
+            buffer_view.byteOffset  = 0;
+            buffer_view.byteLength  = view.byte_length;
+            buffer_view.byteStride  = view.byte_stride;
+            asset.bufferViews.push_back(std::move(buffer_view));
+        }
+        for (const fastgltf::Accessor& accessor : accessors) {
+            asset.accessors.push_back(copy_accessor(accessor, accessor.bufferViewIndex));
+        }
+        fastgltf::Primitive primitive{};
+        primitive.type            = primitive_type;
+        primitive.indicesAccessor = indices_accessor;
+        for (const Attribute& attribute : attributes) {
+            primitive.attributes.emplace_back(
+                fastgltf::Attribute{
+                    .name          = decltype(fastgltf::Attribute::name){attribute.name.data(), attribute.name.size()},
+                    .accessorIndex = attribute.accessor_index
+                }
+            );
+        }
+        return build_triangle_soup(asset, primitive, tangents);
+    }
+
+    [[nodiscard]] static auto copy_accessor(const fastgltf::Accessor& accessor, const fastgltf::Optional<std::size_t> buffer_view_index) -> fastgltf::Accessor
+    {
+        fastgltf::Accessor copy{};
+        copy.byteOffset      = accessor.byteOffset;
+        copy.count           = accessor.count;
+        copy.type            = accessor.type;
+        copy.componentType   = accessor.componentType;
+        copy.normalized      = accessor.normalized;
+        copy.bufferViewIndex = buffer_view_index;
+        return copy;
+    }
+};
+
+// The reload source of one glTF primitive, or null when its soup cannot be
+// re-read from the file: a buffer that is not in a file (data URI), a sparse
+// accessor or an EXT_meshopt_compression bufferView. A primitive without a
+// source keeps its soup in memory.
+[[nodiscard]] auto make_gltf_triangle_soup_source(
+    const fastgltf::Asset&                            asset,
+    const fastgltf::Primitive&                        primitive,
+    const Soup_tangents                               tangents,
+    const std::shared_ptr<const Gltf_buffer_origins>& origins,
+    std::string                                       description
+) -> std::shared_ptr<const Gltf_triangle_soup_source>
+{
+    if (!origins || !primitive.indicesAccessor.has_value()) {
+        return {};
+    }
+    std::shared_ptr<Gltf_triangle_soup_source> source = std::make_shared<Gltf_triangle_soup_source>();
+    source->origins        = origins;
+    source->primitive_type = primitive.type;
+    source->tangents       = tangents;
+    source->description    = std::move(description);
+
+    std::map<std::size_t, std::size_t> local_view_of; // asset bufferView -> source view
+    const auto add_accessor = [&](const std::size_t accessor_index) -> std::optional<std::size_t> {
+        if (accessor_index >= asset.accessors.size()) {
+            return std::nullopt;
+        }
+        const fastgltf::Accessor& accessor = asset.accessors[accessor_index];
+        if (accessor.sparse.has_value()) {
+            return std::nullopt;
+        }
+        fastgltf::Optional<std::size_t> local_view{};
+        if (accessor.bufferViewIndex.has_value()) {
+            const std::size_t view_index = accessor.bufferViewIndex.value();
+            const auto found = local_view_of.find(view_index);
+            if (found != local_view_of.end()) {
+                local_view = found->second;
+            } else {
+                const fastgltf::BufferView& view = asset.bufferViews[view_index];
+                if (view.meshoptCompression || (view.bufferIndex >= origins->buffers.size()) || !origins->buffers[view.bufferIndex].has_value()) {
+                    return std::nullopt;
+                }
+                const Gltf_buffer_origin& origin = origins->buffers[view.bufferIndex].value();
+                source->views.push_back(
+                    Gltf_triangle_soup_source::View{
+                        .file_index  = origin.file_index,
+                        .file_offset = origin.file_offset + view.byteOffset,
+                        .byte_length = view.byteLength,
+                        .byte_stride = view.byteStride
+                    }
+                );
+                local_view = source->views.size() - 1;
+                local_view_of.emplace(view_index, source->views.size() - 1);
+            }
+        }
+        source->accessors.push_back(Gltf_triangle_soup_source::copy_accessor(accessor, local_view));
+        return source->accessors.size() - 1;
+    };
+
+    const std::optional<std::size_t> indices = add_accessor(primitive.indicesAccessor.value());
+    if (!indices.has_value()) {
+        return {};
+    }
+    source->indices_accessor = indices.value();
+    for (const fastgltf::Attribute& attribute : primitive.attributes) {
+        const std::optional<std::size_t> local = add_accessor(attribute.accessorIndex);
+        if (!local.has_value()) {
+            return {};
+        }
+        source->attributes.push_back(
+            Gltf_triangle_soup_source::Attribute{
+                .name           = std::string{attribute.name.data(), attribute.name.size()},
+                .accessor_index = local.value()
+            }
+        );
+    }
+    return source;
+}
+
 class Gltf_parser
 {
 private:
@@ -2196,321 +2883,14 @@ private:
         const bool                 tangent_frame_needed
     )
     {
-        ERHE_PROFILE_FUNCTION();
-
-        primitive_entry.triangle_soup.reset();
-
-        if (!primitive.indicesAccessor.has_value()) {
-            return;
-        }
-
-        primitive_entry.triangle_soup = std::make_shared<erhe::primitive::Triangle_soup>();
-        erhe::primitive::Triangle_soup& triangle_soup = *primitive_entry.triangle_soup.get();
-        // Record what the indices actually describe. The class default is
-        // `triangles`, so leaving this unset told every consumer that a strip,
-        // fan, line or point primitive was a triangle list - and a consumer that
-        // reorders triangles (the mesh optimizer) would silently scramble it.
-        triangle_soup.primitive_type = to_erhe_primitive_type(primitive.type);
-
-        // Copy indices
-        const fastgltf::Accessor& indices_accessor = m_asset->accessors[primitive.indicesAccessor.value()];
-        log_gltf->trace("index count = {}", indices_accessor.count);
-        try {
-            triangle_soup.index_data.resize(indices_accessor.count);
-        } catch (const std::exception& e) {
-            log_gltf->error("Out of memory allocating {} indices for glTF primitive: {} - primitive skipped", indices_accessor.count, e.what());
-            primitive_entry.triangle_soup.reset();
-            return;
-        }
-        fastgltf::iterateAccessorWithIndex<uint32_t>(
+        primitive_entry.triangle_soup = build_triangle_soup(
             m_asset.get(),
-            indices_accessor,
-            [&](uint32_t index_value, std::size_t index) {
-                triangle_soup.index_data[index] = index_value;
-            }
+            primitive,
+            tangent_frame_needed ? Soup_tangents::generate_when_missing : Soup_tangents::as_stored
         );
-
-        // Gather attributes
-        std::size_t vertex_count = std::numeric_limits<std::size_t>::max();
-        triangle_soup.vertex_format.streams.emplace_back(0);
-        bool generate_tangents   = tangent_frame_needed;
-        bool inject_vertex_color = true;
-        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-            const fastgltf::Attribute&                     gltf_attribute        = primitive.attributes[i];
-            const erhe::dataformat::Vertex_attribute_usage attribute_usage_type  = to_erhe(gltf_attribute.name);
-            const std::size_t                              attribute_usage_index = get_attribute_index(gltf_attribute.name);
-            const fastgltf::Accessor&                      accessor              = m_asset->accessors[gltf_attribute.accessorIndex];
-            const erhe::dataformat::Format                 format                = to_erhe_attribute(accessor);
-            // to_erhe_attribute() already logged what it could not express.
-            // Building the vertex format around an undefined attribute would
-            // give it a zero size and desynchronize every following attribute
-            // offset, so drop the whole primitive instead.
-            if (format == erhe::dataformat::Format::format_undefined) {
-                log_gltf->error(
-                    "glTF primitive attribute '{}' has an unsupported format - primitive skipped",
-                    gltf_attribute.name.c_str()
-                );
-                primitive_entry.triangle_soup.reset();
-                return;
-            }
-            if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::tangent) {
-                generate_tangents = false;
-            }
-            if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::color) {
-                inject_vertex_color = false;
-            }
-            vertex_count = std::min(accessor.count, vertex_count);
-            triangle_soup.vertex_format.streams.front().emplace_back(
-                format,
-                attribute_usage_type,
-                attribute_usage_index
-            );
+        if (primitive_entry.triangle_soup) {
+            primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
         }
-        if (primitive.attributes.empty() || (vertex_count == std::numeric_limits<std::size_t>::max())) {
-            log_gltf->error("glTF primitive has no vertex attributes - primitive skipped");
-            primitive_entry.triangle_soup.reset();
-            return;
-        }
-        // The glTF spec requires all attribute accessors of a primitive to
-        // have the same count. Proceed with the minimum (buffers are sized
-        // and copies clamped to it), but report the malformed file.
-        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-            const fastgltf::Accessor& accessor = m_asset->accessors[primitive.attributes[i].accessorIndex];
-            if (accessor.count != vertex_count) {
-                log_gltf->error(
-                    "glTF primitive attribute '{}' accessor count {} does not match vertex count {} - clamping",
-                    primitive.attributes[i].name.c_str(),
-                    accessor.count,
-                    vertex_count
-                );
-            }
-        }
-        // An index past the vertex count (the glTF spec requires every
-        // index to address an attribute element) would read outside the
-        // vertex data; such a primitive cannot be built.
-        for (const uint32_t index : triangle_soup.index_data) {
-            if (index >= vertex_count) {
-                log_gltf->error(
-                    "glTF primitive index {} is out of range for vertex count {} - primitive skipped",
-                    index,
-                    vertex_count
-                );
-                primitive_entry.triangle_soup.reset();
-                return;
-            }
-        }
-        if (generate_tangents) {
-            triangle_soup.vertex_format.streams.front().emplace_back(
-                erhe::dataformat::Format::format_32_vec4_float,
-                erhe::dataformat::Vertex_attribute_usage::tangent,
-                0
-            );
-            //triangle_soup.vertex_format.streams.front().emplace_back(
-            //    erhe::dataformat::Format::format_32_vec3_float,
-            //    erhe::dataformat::Vertex_attribute_usage::bitangent,
-            //    0
-            //);
-        }
-        if (inject_vertex_color) {
-            triangle_soup.vertex_format.streams.front().emplace_back(
-                erhe::dataformat::Format::format_32_vec4_float,
-                erhe::dataformat::Vertex_attribute_usage::color,
-                0
-            );
-        }
-        triangle_soup.vertex_format.streams.front().finalize_stride();
-        std::size_t vertex_stride = triangle_soup.vertex_format.streams.front().stride;
-
-        ERHE_VERIFY(triangle_soup.vertex_format.streams.size() == 1);
-        try {
-            triangle_soup.vertex_data.resize(vertex_count * vertex_stride);
-        } catch (const std::exception& e) {
-            log_gltf->error(
-                "Out of memory allocating {} bytes of vertex data for glTF primitive: {} - primitive skipped",
-                vertex_count * vertex_stride,
-                e.what()
-            );
-            primitive_entry.triangle_soup.reset();
-            return;
-        }
-        const std::vector<erhe::dataformat::Attribute_stream> erhe_attributes = triangle_soup.vertex_format.get_attributes();
-
-        // Gather vertex data
-        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-            const fastgltf::Attribute&                     gltf_attribute  = primitive.attributes[i];
-            const erhe::dataformat::Vertex_attribute_usage attribute_usage = to_erhe(gltf_attribute.name);
-            const std::size_t                              attribute_index = get_attribute_index(gltf_attribute.name);
-            const fastgltf::Accessor&                      accessor        = m_asset->accessors[gltf_attribute.accessorIndex];
-
-            const erhe::dataformat::Attribute_stream&      erhe_attribute  = erhe_attributes[i];
-            ERHE_VERIFY(erhe_attribute.attribute != nullptr);
-            ERHE_VERIFY(erhe_attribute.stream != nullptr);
-            if (accessor.bufferViewIndex.has_value()) {
-                copyFromAccessorWithOutStride(
-                    m_asset.get(),
-                    accessor,
-                    triangle_soup.vertex_data.data() + erhe_attribute.attribute->offset,
-                    erhe_attribute.stream->stride,
-                    vertex_count
-                );
-            } else {
-                log_gltf->warn("Attribute without accessor buffer view");
-            }
-
-            log_gltf->trace(
-                "Primitive attribute[{}]: name = {}, attribute type = {}[{}], "
-                "component type = {}, accessor type = {}, normalized = {}, count = {}, "
-                "accessor offset = {}",
-                i,
-                gltf_attribute.name.c_str(),
-                erhe::dataformat::c_str(attribute_usage), // semantics
-                attribute_index,
-                c_str(accessor.componentType),
-                fastgltf::getAccessorTypeName(accessor.type),
-                accessor.normalized != 0,
-                accessor.count,
-                accessor.byteOffset
-            );
-        }
-
-        if (generate_tangents) {
-            using namespace erhe::dataformat;
-            const Attribute_stream position_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::position);
-            const Attribute_stream normal_attribute_    = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::normal);
-            const Attribute_stream texcoord_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tex_coord);
-            const Attribute_stream tangent_attribute_   = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tangent);
-            //const Attribute_stream bitangent_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::bitangent);
-
-            if (
-                (position_attribute_ .attribute != nullptr) &&
-                (normal_attribute_   .attribute != nullptr) &&
-                (texcoord_attribute_ .attribute != nullptr) &&
-                (tangent_attribute_  .attribute != nullptr)
-                //(bitangent_attribute_.attribute != nullptr)
-            ) {
-                log_gltf->info("generating tangents using mikktspace");
-                // Generate tangents with mikktspace
-
-                uint8_t* vertex_data = triangle_soup.vertex_data.data();
-                class Tangent_generation_context
-                {
-                public:
-                    std::span<uint32_t> indices;
-                    std::size_t         vertex_count;
-                    std::size_t         stride;
-                    const std::uint8_t* position_data;
-                    const std::uint8_t* normal_data;
-                    const std::uint8_t* texcoord_data;
-                    std::uint8_t*       tangent_data;
-                    std::uint8_t*       bitangent_data;
-                    Format              position_format;
-                    Format              normal_format;
-                    Format              texcoord_format;
-                    Format              tangent_format;
-                    Format              bitangent_format;
-                };
-                Tangent_generation_context context{
-                    .indices          = std::span<uint32_t>{triangle_soup.index_data.data(), triangle_soup.index_data.size()},
-                    .vertex_count     = vertex_count,
-                    .stride           = position_attribute_.stream->stride,
-                    .position_data    = vertex_data + position_attribute_ .attribute->offset,
-                    .normal_data      = vertex_data + normal_attribute_   .attribute->offset,
-                    .texcoord_data    = vertex_data + texcoord_attribute_ .attribute->offset,
-                    .tangent_data     = vertex_data + tangent_attribute_  .attribute->offset,
-                    .bitangent_data   = nullptr,
-                    .position_format  = position_attribute_ .attribute->format,
-                    .normal_format    = normal_attribute_   .attribute->format,
-                    .texcoord_format  = texcoord_attribute_ .attribute->format,
-                    .tangent_format   = tangent_attribute_  .attribute->format,
-                    .bitangent_format = erhe::dataformat::Format::format_undefined
-                };
-                SMikkTSpaceInterface mikktspace{
-                    .m_getNumFaces = [](const SMikkTSpaceContext* mikk_tspace_context) -> int {
-                        Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
-                        return static_cast<int>(context->indices.size() / 3);
-                    },
-                    .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, int32_t) -> int {
-                        return 3;
-                    },
-                    .m_getPosition = [](const SMikkTSpaceContext* mikk_tspace_context, float posOut[], int32_t face, int32_t vert) {
-                        Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
-                        float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                        const uint32_t v = context->indices[face * 3 + vert];
-                        const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->position_data + context->stride * v);
-                        convert(src, context->position_format, &value[0], Format::format_32_vec4_float, 1.0f);
-                        posOut[0] = value[0];
-                        posOut[1] = value[1];
-                        posOut[2] = value[2];
-                    },
-                    .m_getNormal = [](const SMikkTSpaceContext* mikk_tspace_context, float normOut[], int32_t face, int32_t vert) {
-                        Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
-                        float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                        const uint32_t v = context->indices[face * 3 + vert];
-                        const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->normal_data + context->stride * v);
-                        convert(src, context->normal_format, &value[0], Format::format_32_vec4_float, 1.0f);
-                        normOut[0] = value[0];
-                        normOut[1] = value[1];
-                        normOut[2] = value[2];
-                    },
-                    .m_getTexCoord = [](const SMikkTSpaceContext* mikk_tspace_context, float texcOut[], int32_t face, int32_t vert) {
-                        Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
-                        float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                        const uint32_t v = context->indices[face * 3 + vert];
-                        const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->texcoord_data + context->stride * v);
-                        convert(src, context->texcoord_format, &value[0], Format::format_32_vec4_float, 1.0f);
-                        texcOut[0] = value[0];
-                        texcOut[1] = value[1];
-                    },
-                    .m_setTSpaceBasic = nullptr,
-                    .m_setTSpace = [](
-                        const SMikkTSpaceContext* mikk_tspace_context,
-                        const float               tangent[],
-                        const float               /*bitangent*/[],
-                        const float               /*mag_s*/,
-                        const float               /*mag_t*/,
-                        const tbool               is_orientation_preserving,
-                        const int                 face,
-                        const int                 vert
-                    ) {
-                        Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
-                        float tangent_src[4] = { tangent[0], tangent[1], tangent[2], is_orientation_preserving ? -1.0f : 1.0f };
-                        const uint32_t v = context->indices[face * 3 + vert];
-                        std::uint8_t* tangent_dst = reinterpret_cast<std::uint8_t*>(context->tangent_data + context->stride * v);
-                        convert(tangent_src, Format::format_32_vec4_float, tangent_dst, context->tangent_format, 1.0f);
-                        //float bitangent_src[4] = { -bitangent[0], -bitangent[1], -bitangent[2], 0.0f };
-                        //std::uint8_t* bitangent_dst = reinterpret_cast<std::uint8_t*>(context->bitangent_data + context->stride * v);
-                        //convert(bitangent_src, Format::format_32_vec3_float, bitangent_dst, context->bitangent_format, 1.0f);
-                    }
-                };
-                const SMikkTSpaceContext mikk_tspace_context {
-                    .m_pInterface = &mikktspace,
-                    .m_pUserData  = &context
-                };
-                const tbool res = genTangSpaceDefault(&mikk_tspace_context);
-                if (res == 0) {
-                    log_gltf->warn("genTangSpaceDefault() failed");
-                }
-            } else {
-                log_gltf->info("glTF does not have tangents, and not enough attributes to generate tangents&");
-            }
-        }
-
-        if (inject_vertex_color) {
-            using namespace erhe::dataformat;
-            const Attribute_stream color_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::color);
-            ERHE_VERIFY(color_attribute_.attribute != nullptr);
-            const float       opaque_white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-            const std::size_t stride          = color_attribute_.stream->stride;
-            const auto        color_format    = color_attribute_.attribute->format;
-            uint8_t*          vertex_data     = triangle_soup.vertex_data.data();
-            std::uint8_t*     color_data      = vertex_data + color_attribute_.attribute->offset;
-            for (std::size_t v = 0; v < vertex_count; ++v) {
-                std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(color_data + v * stride);
-                convert(opaque_white, Format::format_32_vec4_float, dst, color_format, 1.0f);
-            }
-        }
-
-        primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
     }
     auto get_primitive_geometry(
         const fastgltf::Primitive&     primitive,
@@ -2577,6 +2957,20 @@ private:
                 primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup, std::move(prepared_data));
             }
         }
+        // The reload source, before the primitive is shared: the shape may
+        // then release its soup after upload and read it back from the file.
+        if (m_buffer_origins && primitive_entry.primitive && primitive_entry.primitive->render_shape) {
+            std::shared_ptr<const Gltf_triangle_soup_source> source = make_gltf_triangle_soup_source(
+                m_asset.get(),
+                primitive,
+                tangent_frame_needed ? Soup_tangents::generate_when_missing : Soup_tangents::as_stored,
+                m_buffer_origins,
+                fmt::format("'{}' primitive '{}'", m_arguments.path.filename().string(), name)
+            );
+            if (source) {
+                primitive_entry.primitive->render_shape->set_triangle_soup_source(std::move(source));
+            }
+        }
         slot->triangle_soup = primitive_entry.triangle_soup;
         slot->primitive     = primitive_entry.primitive;
         slot->promise.set_value();
@@ -2598,6 +2992,15 @@ public:
     {
         m_node_prim_classes = std::move(node_prim_classes);
     }
+    // Where the file's buffers are on disk; set when the parse records
+    // triangle soup reload sources (Gltf_parse_arguments::triangle_soup_reload).
+    void set_buffer_origins(std::shared_ptr<const Gltf_buffer_origins> buffer_origins)
+    {
+        m_buffer_origins = std::move(buffer_origins);
+    }
+private:
+    std::shared_ptr<const Gltf_buffer_origins> m_buffer_origins;
+public:
 
     void set_primitive_geometry_extensions(std::map<std::pair<std::size_t, std::size_t>, std::string>&& extensions)
     {
@@ -4930,8 +5333,20 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     }
 
 
+    // Triangle soup reload sources need the buffers' places on disk, which
+    // the loaded asset no longer names (fastgltf replaces a buffer's URI with
+    // its loaded bytes). Only a parse from a file has them.
+    std::shared_ptr<const Gltf_buffer_origins> buffer_origins;
+    if ((arguments.triangle_soup_reload == Triangle_soup_reload::record) && arguments.glb_data.empty()) {
+        buffer_origins = resolve_gltf_buffer_origins(arguments.path, asset.get().buffers.size());
+        if (!buffer_origins) {
+            log_gltf->warn("glTF load: cannot resolve the buffer files of '{}' - triangle soups stay in memory", arguments.path.string());
+        }
+    }
+
     Gltf_data result;
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
+    erhe_parser.set_buffer_origins(std::move(buffer_origins));
 
     for (const auto& [extension_name, extension_value] : parse_extras_context.asset_extensions.entries) {
         if (extension_name == "ERHE_texture_ktx2") {
@@ -5849,6 +6264,21 @@ private:
         add_vertex_data_source(entry, vertex_count, vertex_format, std::span<const std::byte>(vertex_data, vertex_data_size));
     }
 
+    // The soups the export reads, held until the export ends. A soup released
+    // after upload (Primitive::release_triangle_soup()) is read back by
+    // get_triangle_soup() and freed again when its last holder lets go, and
+    // the export keys entries by soup address: holding them keeps one object,
+    // read once, per shape for the whole export.
+    std::unordered_map<const erhe::primitive::Primitive_shape*, std::shared_ptr<erhe::primitive::Triangle_soup>> m_held_soups;
+    [[nodiscard]] auto get_export_soup(const erhe::primitive::Primitive_shape& shape) -> const std::shared_ptr<erhe::primitive::Triangle_soup>&
+    {
+        const auto i = m_held_soups.find(&shape);
+        if (i != m_held_soups.end()) {
+            return i->second;
+        }
+        return m_held_soups.emplace(&shape, shape.get_triangle_soup()).first->second;
+    }
+
     std::unordered_map<erhe::primitive::Triangle_soup*, Export_entry> m_erhe_triangle_soup_entries;
     [[nodiscard]] auto process_triangle_soup(erhe::primitive::Primitive_render_shape& render_shape, erhe::primitive::Triangle_soup* triangle_soup) -> Export_entry
     {
@@ -5905,7 +6335,7 @@ private:
                     if (render_shape == nullptr) {
                         continue;
                     }
-                    const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = render_shape->get_triangle_soup();
+                    const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = get_export_soup(*render_shape);
                     if (soup) {
                         out_shapes.emplace(soup.get(), render_shape);
                     }
@@ -6554,13 +6984,13 @@ private:
     // mesh operation result that renders nothing, see doc/erhe/primitive.md)
     // is skipped: glTF has no empty primitive, every accessor needs a count
     // of at least one.
-    [[nodiscard]] static auto primitive_export_source(const erhe::scene::Mesh_primitive& erhe_mesh_primitive) -> const void*
+    [[nodiscard]] auto primitive_export_source(const erhe::scene::Mesh_primitive& erhe_mesh_primitive) -> const void*
     {
         const erhe::primitive::Primitive_render_shape* render_shape = erhe_mesh_primitive.primitive ? erhe_mesh_primitive.primitive->render_shape.get() : nullptr;
         if (render_shape == nullptr) {
             return nullptr;
         }
-        const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = render_shape->get_triangle_soup();
+        const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = get_export_soup(*render_shape);
         if (soup) {
             return soup.get();
         }
@@ -6587,7 +7017,7 @@ private:
         const std::vector<erhe::scene::Mesh_primitive>& erhe_primitives = erhe_mesh->get_primitives();
         const bool has_exportable_primitive = std::any_of(
             erhe_primitives.begin(), erhe_primitives.end(),
-            [](const erhe::scene::Mesh_primitive& erhe_mesh_primitive) {
+            [this](const erhe::scene::Mesh_primitive& erhe_mesh_primitive) {
                 return primitive_export_source(erhe_mesh_primitive) != nullptr;
             }
         );
@@ -6644,7 +7074,7 @@ private:
             if (primitive_render_shape == nullptr) {
                 continue;
             }
-            const std::shared_ptr<erhe::primitive::Triangle_soup>& triangle_soup = primitive_render_shape->get_triangle_soup();
+            const std::shared_ptr<erhe::primitive::Triangle_soup>& triangle_soup = get_export_soup(*primitive_render_shape);
             const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive_render_shape->get_geometry_const();
             if (!geometry && !triangle_soup) {
                 log_gltf->warn("Mesh primitive has neither triangle soup nor geometry");

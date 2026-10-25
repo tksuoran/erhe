@@ -3,6 +3,7 @@
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/enums.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
 
 #include <geogram/basic/numeric.h>
 
@@ -27,6 +28,7 @@ class Buffer_info;
 class Material;
 class Prepared_primitive_data;
 class Triangle_soup;
+class Triangle_soup_source;
 
 // CPU memory held by primitive shapes, summed by
 // Primitive_shape::add_memory_statistics() for memory reports (allocated
@@ -40,6 +42,7 @@ public:
     std::size_t triangle_soup_count       {0};
     std::size_t triangle_soup_vertex_bytes{0};
     std::size_t triangle_soup_index_bytes {0};
+    std::size_t triangle_soup_released_count{0}; // soups released after upload (release_triangle_soup()), not resident
     std::size_t element_mapping_bytes     {0};
     std::size_t prepared_data_count       {0};
     std::size_t prepared_colocation_bytes {0}; // ERHE_mesh_topology vertex points
@@ -91,8 +94,9 @@ public:
     // Maps a hit triangle index of *this* raytrace geometry to the GEO::Mesh
     // facet it was built from. The mapping is owned here, next to the
     // triangles it indexes, so it can never disagree with the geometry that
-    // reported the hit. Proxy and triangle-soup raytraces have no facets and
-    // return GEO::NO_INDEX.
+    // reported the hit. A triangle-soup raytrace maps triangle t to facet t
+    // (held as a flag, not a table); a proxy has no facets and returns
+    // GEO::NO_INDEX.
     [[nodiscard]] auto get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t;
 
     // Adds this raytrace's CPU memory to out. Buffers already in `counted`
@@ -100,6 +104,11 @@ public:
     void add_memory_statistics(Shape_memory_statistics& out, std::unordered_set<const void*>& counted) const;
 
 private:
+    // After the commit: frees the vertex / index copies when the backend
+    // does not read them any more (IGeometry::release_buffers()). The
+    // Buffer_mesh keeps its ranges and bounds.
+    void release_buffers_after_commit();
+
     // Order matters: m_rt_mesh must be destroyed before the buffers
     // it holds allocations from (m_rt_vertex_buffer, m_rt_index_buffer).
     // C++ destroys members in reverse declaration order.
@@ -108,6 +117,7 @@ private:
     std::shared_ptr<erhe::raytrace::IGeometry> m_rt_geometry     {};
     Buffer_mesh                                m_rt_mesh;
     std::vector<uint32_t>                      m_triangle_to_mesh_facet{};
+    bool                                       m_identity_facet_map{false}; // triangle t is facet t (soup raytrace)
     bool                                       m_is_proxy{false};
 };
 
@@ -142,9 +152,13 @@ public:
     //   (raytrace hover, the deferred-finalize commits) never wait for a
     //   loader worker.
     //
+    // - m_reload_mutex is held while a released triangle soup is read back
+    //   from its source (get_triangle_soup()), so concurrent callers read the
+    //   file once.
+    //
     // Full lock order: Item_host::item_host_mutex -> m_build_mutex ->
-    // m_state_mutex. Both are innermost: no Primitive_shape method touches
-    // scene state, so the reverse edge does not exist.
+    // m_reload_mutex -> m_state_mutex. All are innermost: no Primitive_shape
+    // method touches scene state, so the reverse edge does not exist.
     //
     // Locking lives in the public entry points only; the *_build_locked() /
     // *_state_locked() helpers assume the corresponding lock is already held.
@@ -188,7 +202,32 @@ public:
     [[nodiscard]] auto get_geometry_const          () const -> const std::shared_ptr<erhe::geometry::Geometry>&;
     [[nodiscard]] auto get_raytrace                () -> Primitive_raytrace&;
     [[nodiscard]] auto get_raytrace                () const -> const Primitive_raytrace&;
-    [[nodiscard]] auto get_triangle_soup           () const -> const std::shared_ptr<Triangle_soup>&;
+    // The triangle soup; null for a shape built from Geometry or a Buffer_mesh.
+    // This is the one read path of the soup: a soup released with
+    // release_triangle_soup() is read back here from its source, synchronously
+    // (callers that run on the main thread and are not one-off user actions
+    // read it in a task). While any caller holds the reloaded soup, every
+    // other caller gets the same object; when the last one lets go it is
+    // freed again. Null, with an error logged by the source, when the reload
+    // fails (the source file changed or cannot be read).
+    [[nodiscard]] auto get_triangle_soup           () const -> std::shared_ptr<Triangle_soup>;
+    // The shape has a soup, resident or released with a source. Never reloads.
+    [[nodiscard]] auto has_triangle_soup           () const -> bool;
+    // Vertex and index count of the soup, recorded at construction. Never
+    // reloads.
+    [[nodiscard]] auto get_triangle_soup_counts    () const -> Triangle_soup_counts;
+    // Where the soup is read back from after release_triangle_soup(). Set by
+    // the loader that made the soup (erhe::gltf with
+    // Triangle_soup_reload::record) before the shape is shared.
+    void set_triangle_soup_source(std::shared_ptr<const Triangle_soup_source> source);
+    [[nodiscard]] auto get_triangle_soup_source    () const -> std::shared_ptr<const Triangle_soup_source>;
+    // Frees the in-memory soup of a shape that has a source; later readers
+    // reload it through get_triangle_soup(). Returns false, keeping the soup,
+    // when the shape has no soup or no source. Idempotent.
+    auto release_triangle_soup() -> bool;
+    [[nodiscard]] auto is_triangle_soup_released   () const -> bool;
+    // The resident soups of both shapes are the same object.
+    [[nodiscard]] auto shares_resident_triangle_soup(const Primitive_shape& other) const -> bool;
     // The validated prepared mesh data the shape was loaded with; null when
     // there is none. Immutable: set at construction, never replaced.
     [[nodiscard]] auto get_prepared_data           () const -> const std::shared_ptr<const Prepared_primitive_data>&;
@@ -237,12 +276,17 @@ protected:
     // in constructors uses m_element_mappings.
     erhe::primitive::Element_mappings         m_element_mappings;
     std::shared_ptr<erhe::geometry::Geometry> m_geometry{};
-    std::shared_ptr<Triangle_soup>            m_triangle_soup{};
+    std::shared_ptr<Triangle_soup>            m_triangle_soup{};            // under m_state_mutex; null once released
+    std::shared_ptr<const Triangle_soup_source> m_triangle_soup_source{};   // under m_state_mutex
+    mutable std::weak_ptr<Triangle_soup>      m_reloaded_triangle_soup{};   // under m_state_mutex
+    Triangle_soup_counts                      m_triangle_soup_counts{};     // fixed at construction
+    bool                                      m_triangle_soup_released{false}; // under m_state_mutex
     std::shared_ptr<const Prepared_primitive_data> m_prepared_data{};
     std::unique_ptr<erhe::raytrace::Prebuilt_bvh>  m_stored_bvh{};          // under m_build_mutex
     bool                                           m_prepared_data_stale{false}; // under m_state_mutex
     Primitive_raytrace                        m_raytrace{};
     mutable std::mutex                        m_build_mutex;
+    mutable std::mutex                        m_reload_mutex;
     mutable std::mutex                        m_state_mutex;
     // Set (release) right after m_geometry is published under m_state_mutex.
     // m_geometry is written exactly once after construction, never cleared or
@@ -395,6 +439,15 @@ public:
     [[nodiscard]] auto make_prepared_meshes    (const Build_info& build_info) -> bool;
     // The render shape carries prepared mesh data.
     [[nodiscard]] auto is_prepared             () const -> bool;
+    // Releases the render shape's CPU triangle soup (and the optimized
+    // variant's, when it shares it) once the GPU buffers and the raytrace are
+    // built; readers reload it from the soup source through
+    // Primitive_shape::get_triangle_soup(). Returns false, keeping the soup,
+    // when the render shape has no soup source (a primitive not loaded from
+    // a file with Triangle_soup_reload::record). The load.cpu_mesh_data
+    // editor setting decides whether loads call this
+    // (doc/editor/async_asset_loading.md "Releasing CPU mesh data").
+    auto release_triangle_soup() -> bool;
     // AABB proxy raytrace over the renderable-mesh bounds; no-op when a
     // raytrace (proxy or real) already exists. See Primitive_raytrace.
     [[nodiscard]] auto make_raytrace_proxy     () const -> bool;

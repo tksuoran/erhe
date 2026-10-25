@@ -20,6 +20,7 @@ volume computation, and PBR material definitions.
 - `Primitive_builder` / `Build_context` -- orchestrates the conversion from GEO::Mesh to Buffer_mesh
 - `Material` -- PBR material: base color, roughness, metallic, emissive, texture samplers. It is a typed prim (`erhe::Typed`, `doc/erhe/item.md` "Prim classes") whose fixed `typeName` token is `Material`, USD's `UsdShadeMaterial`.
 - `Triangle_soup` -- raw vertex/index data container (e.g., from glTF import); `mesh_from_triangle_soup()` converts it to a `GEO::Mesh` ("Triangle soup to mesh" below)
+- `Triangle_soup_source` -- where a released soup is read back from ("Releasing the triangle soup" below); `Triangle_soup_counts` -- the vertex and index count a shape records for its soup
 - `Vertex_colocation` -- per-soup-vertex point ids plus point count: the colocation of a soup's vertices into mesh points
 - `Vertex_buffer_writer` / `Index_buffer_writer` -- write vertex attributes and indices to byte buffers; on destruction they call `vertex_writer_ready` / `index_writer_ready` on the owning sink.
 - `mesh_optimizer.hpp` -- `optimize_triangle_soup()` / `optimize_triangle_soup_cached()`:
@@ -88,6 +89,44 @@ draws after them, and the translucent draws blend over both. The standard
 fragment shader evaluates the alpha test and the screen-door dither before
 the ambient term and the light loops (`doc/erhe/scene_renderer.md`), and
 writes alpha 1 for both discard modes.
+
+## Releasing the triangle soup
+
+A soup shape can give up its CPU `Triangle_soup` once nothing needs it to
+build any more, and read it back on demand:
+
+- `Primitive_shape::set_triangle_soup_source()` gives the shape a
+  `Triangle_soup_source`, the loader's description of where the soup comes
+  from. `load()` reads the soup again, bit-identical to the one the loader
+  made, or returns null with an error logged when it cannot (erhe::gltf
+  refuses a source file whose size or modification time changed since the
+  load; doc/erhe/gltf.md "Triangle soup reload").
+- `Primitive_shape::release_triangle_soup()` frees the in-memory soup of a
+  shape that has a source and returns true; a shape without a source keeps its
+  soup and returns false. `Primitive::release_triangle_soup()` releases the
+  render shape's soup and, when the optimized variant is built over the same
+  soup (a prepared primitive), the variant's with it, under the same source.
+- `get_triangle_soup()` is the one read path of the soup, and returns it by
+  value. For a released soup it reads the soup back through the source
+  (synchronously; a main-thread caller that is not a one-off user action
+  reads it in a task), holds it as a weak reference so every caller that asks
+  while one holds it gets the same object, and lets it go with the last
+  holder. A reload whose vertex or index count differs from the released soup
+  is refused. Every soup reader goes through it: `get_geometry()` /
+  `make_geometry()`, the soup path of `make_buffer_mesh()`,
+  `make_prepared_raytrace()`, `Primitive::make_prepared_meshes()` (each step
+  reads the soup only when it builds, so a repeat call on a built primitive
+  reads nothing back), the mesh optimizer, `prepare_primitive_for_export()`
+  (the retained core holds the reloaded soup for the export), and the
+  exporters.
+- `has_triangle_soup()` (resident or released with a source) and
+  `get_triangle_soup_counts()` (recorded at construction) never reload; the
+  `erhe::scene::Mesh_primitive` count properties read the counts.
+- `get_triangle_soup_reload_statistics()` counts the process's reloads, their
+  bytes and the refused ones; `Shape_memory_statistics::triangle_soup_released_count`
+  counts released soups (once per source).
+
+Tests: `src/erhe/primitive/test/test_triangle_soup_release.cpp`.
 
 ## Triangle soup to mesh
 
@@ -217,7 +256,9 @@ primitive, with no Geometry:
   stored BVH (`Primitive_raytrace::get_bvh_source()` is `prebuilt`);
   otherwise nothing is installed and the caller takes the proxy path.
 
-It is idempotent and has the threading of `make_renderable_mesh()`. The
+It is idempotent and has the threading of `make_renderable_mesh()`; a step
+that is already built reads nothing, so a repeat call on a primitive whose
+soup was released does not read it back. The
 `Prepared_primitive_data::bvh` moves into the shape at construction
 (`has_stored_bvh()`) and from there into the raytrace backend, so no second
 copy of the BVH stays in memory.
@@ -279,7 +320,7 @@ raytraces nothing:
 ## Notes
 - The build pipeline supports multiple vertex buffer streams (multi-stream vertex layouts).
 - Element mappings track the relationship between triangles and source mesh facets, enabling picking.
-- Raytrace geometry is built separately from render geometry, using CPU buffers.
+- Raytrace geometry is built separately from render geometry, using CPU buffers. `Primitive_raytrace` builds its own vertex / index copies, commits them to the backend and then frees them when the backend does not read them after the commit (`erhe::raytrace::IGeometry::release_buffers()`: true for the `bvh` and `tinybvh` backends, false for `embree`, which shares them). Its `Buffer_mesh` keeps the ranges, index ranges and bounds (the developer Properties "Raytrace Buffer Mesh" view and `Primitive::get_bounding_box()` read them) and drops its allocations first (`Buffer_mesh::release_buffer_allocations()`). A raytrace built from a soup maps triangle t to facet t through a flag, with no table; a raytrace built from a `GEO::Mesh` keeps its triangle-to-facet table.
 - The builder generates indices for four primitive modes: triangle fill, edge lines, corner points, and polygon centroids.
 - `Buffer_mesh` is move-only (due to `Buffer_allocation`). `Primitive_render_shape`, `Primitive_shape`, and `Primitive_raytrace` are also move-only.
 - **Member declaration order matters**: In `Primitive_raytrace`, `m_rt_mesh` must be declared after the `Cpu_buffer` shared_ptrs so it is destroyed first, freeing allocations while the allocator is still alive.

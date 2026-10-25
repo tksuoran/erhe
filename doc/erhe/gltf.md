@@ -180,6 +180,37 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   extras carrier (`roughness_y`, `bxdf_model`, `blending_mode`, ...) are parsed but no
   longer written.
 
+## Triangle soup reload
+
+`Gltf_parse_arguments::triangle_soup_reload` (`Triangle_soup_reload`, default
+`none`) set to `record` makes `parse_gltf` give every soup primitive an
+`erhe::primitive::Triangle_soup_source` (doc/erhe/primitive.md "Releasing the
+triangle soup"), so the primitive may release its CPU soup after upload and
+read it back on demand:
+
+- After the asset loads, `resolve_gltf_buffer_origins()` finds where each
+  buffer is on disk - the BIN chunk of a .glb (offset from the chunk headers)
+  or an external .bin (the buffer URI, re-read from the JSON because fastgltf
+  replaces it with the loaded bytes) - and records each file's size and
+  modification time. A buffer in a data URI has no origin; a parse from memory
+  (`glb_data`) records nothing.
+- Per primitive, the source holds the byte ranges of the bufferViews its index
+  and attribute accessors read (file offset, length, stride), copies of those
+  accessors pointing at the recorded views, the attribute names, the primitive
+  type and whether tangents are generated. Primitives sharing a bufferView
+  each record it. A primitive with a sparse accessor, an
+  EXT_meshopt_compression view or a buffer without an origin gets no source
+  and keeps its soup.
+- `load()` refuses, with an error logged, when a file's size or modification
+  time differs from the recorded one; otherwise it reads the ranges into a
+  minimal `fastgltf::Asset` and builds the soup with `build_triangle_soup()`,
+  the function the parse builds every soup with (index widening, the
+  interleaved copy of the accessors, mikktspace tangents, the injected white
+  COLOR_0), so the reload is bit-identical.
+
+Tests: `src/erhe/gltf/test/test_gltf_soup_reload.cpp` (.gltf + .bin and .glb,
+primitives sharing interleaved views, uint8 / uint16 indices, a changed file).
+
 ## Future work
 
 - [plans/gltf.md](../plans/gltf.md) - open items of the glTF persistence design.

@@ -22,6 +22,7 @@ namespace erhe::graphics {
     class Command_buffer;
 }
 namespace erhe::primitive {
+    class Primitive_render_shape;
     class Triangle_soup;
 }
 namespace erhe::scene {
@@ -147,7 +148,7 @@ private:
         erhe::primitive::Normal_style                   normal_style {erhe::primitive::Normal_style::none};
         bool                                            skinned      {false};
         std::shared_ptr<erhe::geometry::Geometry>       geometry     {};
-        std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup{};
+        std::shared_ptr<erhe::primitive::Primitive_render_shape> soup_shape{}; // read in the build task
         std::vector<Display_color_target>               targets      {};
     };
 

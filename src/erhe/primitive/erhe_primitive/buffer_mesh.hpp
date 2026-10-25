@@ -83,6 +83,12 @@ public:
     [[nodiscard]] auto base_index () const -> uint32_t;
     [[nodiscard]] auto index_range(Primitive_mode primitive_mode) const -> Index_range;
 
+    // Frees the buffer allocations and keeps everything else (ranges, index
+    // ranges, bounds) as the description of what was built. Used when the
+    // buffers the ranges point into are released (Primitive_raytrace after
+    // its commit). Takes buffer_mesh_allocation_mutex().
+    void release_buffer_allocations();
+
     erhe::math::Aabb          bounding_box;
     erhe::math::Sphere        bounding_sphere;
 

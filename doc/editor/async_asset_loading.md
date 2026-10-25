@@ -248,8 +248,9 @@ data, so the ID buffer cannot resolve its facets; nothing default-on reads
 them (hover and click picking use the raytrace, whose triangle t is facet t),
 and the mesh component tools that do are reached through the selection,
 which requests the full build. `Mesh_primitive` count properties read the
-soup while there is no `Geometry` (facets and corners from the indices,
-vertices from the stored colocation, edges 0).
+soup counts the shape recorded while there is no `Geometry` (facets and
+corners from the index count, vertices from the stored colocation, edges 0),
+so a released soup is not read back for them.
 
 `deferred_edge_lines` puts a GPU buffer-mesh build on a worker, which on GL
 needs a worker share context; without one (headless, null window) the edge
@@ -299,6 +300,29 @@ the build fails with "vertex stream allocations out of lockstep".
 `Primitive_shape::make_geometry()` is lazily mutating, so it is guarded too:
 an on-demand caller blocks until the build is done, and the deferred task's
 own `make_geometry` then no-ops.
+
+## Releasing CPU mesh data
+
+`Load_config::cpu_mesh_data` (`Cpu_mesh_data_retention`, added in v5:
+`platform_default` keeps on desktop and releases in OpenXR; `keep`;
+`release`; the committed desktop config says `keep`, the OpenXR config
+`release`) decides whether a load keeps a primitive's CPU triangle soup.
+With `release`, every editor glTF parse records triangle soup reload sources
+(`get_triangle_soup_reload()`, doc/erhe/gltf.md "Triangle soup reload") and
+`finalize_imported_meshes` releases the soup of each prepared primitive that
+is final - its buffers built, its stored-BVH raytrace committed and, when
+meshes are optimized, its optimized variant built (the predicate of the
+kickoff's skip) - with `Primitive::release_triangle_soup()`; it logs
+`triangle soups released = N`. A primitive without a source (not loaded from
+a file, an authored or edited shape, a foreign primitive whose soup the
+deferred task still builds from) keeps its soup. Readers reload on demand
+through `Primitive_shape::get_triangle_soup()`: a selection's full build and
+`get_geometry()` read their primitives back, a scene save reads every
+released soup once and holds it until the export ends (the glTF exporter
+keys its entries by soup), and the display-color rebuild keys its groups by
+shape and reads the soup in its task. MCP `get_memory_usage` reports
+`cpu_mesh.render_shapes.triangle_soup_released_count` and
+`cpu_mesh.triangle_soup_reloads`.
 
 ## Display-color rebuild
 

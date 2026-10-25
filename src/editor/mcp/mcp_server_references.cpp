@@ -455,6 +455,7 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
                 {"triangle_soup_count",                 s.triangle_soup_count},
                 {"triangle_soup_vertex_bytes",          s.triangle_soup_vertex_bytes},
                 {"triangle_soup_index_bytes",           s.triangle_soup_index_bytes},
+                {"triangle_soup_released_count",        s.triangle_soup_released_count},
                 {"element_mapping_bytes",               s.element_mapping_bytes},
                 {"prepared_data_count",                 s.prepared_data_count},
                 {"prepared_colocation_bytes",           s.prepared_colocation_bytes},
@@ -471,11 +472,19 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
                 {"total_bytes",                         total}
             };
         };
+        // Soups released after upload (load.cpu_mesh_data) and read back on
+        // demand since the process started.
+        const erhe::primitive::Triangle_soup_reload_statistics reloads = erhe::primitive::get_triangle_soup_reload_statistics();
         result["cpu_mesh"] = {
             {"primitive_count",  primitives.size()},
             {"render_shapes",    shape_json(render_statistics)},
             {"optimized_shapes", shape_json(optimized_statistics)},
-            {"collision_shapes", shape_json(collision_statistics)}
+            {"collision_shapes", shape_json(collision_statistics)},
+            {"triangle_soup_reloads", {
+                {"reload_count",         reloads.reload_count},
+                {"reload_failure_count", reloads.reload_failure_count},
+                {"reload_bytes",         reloads.reload_bytes}
+            }}
         };
     }
 

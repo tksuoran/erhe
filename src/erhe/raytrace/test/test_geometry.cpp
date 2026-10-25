@@ -173,3 +173,69 @@ TEST(Geometry, ClosestHitWins)
 }
 
 } // anonymous namespace
+
+namespace {
+
+// IGeometry::release_buffers(): a backend that traverses and reports hits
+// from its own copies lets the caller free the vertex / index buffers after
+// commit(), and every hit stays identical (erhe::primitive::Primitive_raytrace
+// frees its copies this way).
+TEST(Geometry, ReleaseBuffersKeepsHitsIdentical)
+{
+    using namespace erhe::raytrace;
+    using namespace erhe::raytrace::test;
+
+    Test_geometry tg = make_cube();
+    std::unique_ptr<IScene> scene = IScene::create_unique("release_buffers");
+    scene->attach(tg.geometry.get());
+    scene->commit();
+
+    class Cast
+    {
+    public:
+        bool hit_found{false};
+        Hit  hit{};
+        Ray  ray{};
+    };
+    const auto cast_all = [&scene]() -> std::vector<Cast> {
+        std::vector<Cast> casts;
+        for (int y = -4; y <= 4; ++y) {
+            for (int x = -4; x <= 4; ++x) {
+                for (const glm::vec3 direction : {glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}) {
+                    const glm::vec3 offset = 0.15f * glm::vec3{static_cast<float>(x), static_cast<float>(y), static_cast<float>(x + y)};
+                    Cast cast;
+                    cast.ray = make_ray((-2.0f * direction) + (offset - (glm::dot(offset, direction) * direction)), direction);
+                    cast.hit_found = scene->intersect(cast.ray, cast.hit);
+                    casts.push_back(cast);
+                }
+            }
+        }
+        return casts;
+    };
+    const std::vector<Cast> before = cast_all();
+
+    if (!tg.geometry->release_buffers()) {
+        GTEST_SKIP() << "raytrace backend reads the buffers after commit";
+    }
+    tg.vertex_buffer.reset();
+    tg.index_buffer.reset();
+
+    const std::vector<Cast> after = cast_all();
+    ASSERT_EQ(before.size(), after.size());
+    std::size_t hit_count = 0;
+    for (std::size_t i = 0; i < before.size(); ++i) {
+        EXPECT_EQ(before[i].hit_found, after[i].hit_found) << i;
+        if (!before[i].hit_found) {
+            continue;
+        }
+        ++hit_count;
+        EXPECT_EQ(before[i].hit.triangle_id, after[i].hit.triangle_id) << i;
+        EXPECT_EQ(before[i].hit.geometry,    after[i].hit.geometry) << i;
+        EXPECT_EQ(before[i].hit.normal,      after[i].hit.normal) << i;
+        EXPECT_EQ(before[i].hit.uv,          after[i].hit.uv) << i;
+        EXPECT_EQ(before[i].ray.t_far,       after[i].ray.t_far) << i;
+    }
+    EXPECT_GT(hit_count, 0u);
+}
+
+} // anonymous namespace

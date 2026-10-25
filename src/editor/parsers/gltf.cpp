@@ -26,6 +26,7 @@
 #include "prefabs/prefab_library.hpp"
 
 #include "scene/generated/gltf_source_reference.hpp"
+#include "config/generated/cpu_mesh_data_retention.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 
@@ -620,6 +621,25 @@ auto get_prepared_mesh_data_use(const App_context& context) -> erhe::gltf::Prepa
     return erhe::gltf::Prepared_mesh_data_use::use;
 }
 
+auto get_cpu_mesh_data_retention(const App_context& context) -> Cpu_mesh_data_retention
+{
+    const Cpu_mesh_data_retention configured = (context.editor_settings != nullptr)
+        ? context.editor_settings->load.cpu_mesh_data
+        : Cpu_mesh_data_retention::platform_default;
+    switch (configured) {
+        case Cpu_mesh_data_retention::keep:    return Cpu_mesh_data_retention::keep;
+        case Cpu_mesh_data_retention::release: return Cpu_mesh_data_retention::release;
+        default:                               return context.OpenXR ? Cpu_mesh_data_retention::release : Cpu_mesh_data_retention::keep;
+    }
+}
+
+auto get_triangle_soup_reload(const App_context& context) -> erhe::gltf::Triangle_soup_reload
+{
+    return (get_cpu_mesh_data_retention(context) == Cpu_mesh_data_retention::release)
+        ? erhe::gltf::Triangle_soup_reload::record
+        : erhe::gltf::Triangle_soup_reload::none;
+}
+
 auto make_import_build_info(
     App_context&                              context,
     const erhe::scene_renderer::Mesh_memory_queue queue
@@ -864,6 +884,12 @@ void finalize_imported_meshes(
     const bool worker_contexts  = (context.graphics_device != nullptr) && context.graphics_device->supports_worker_contexts();
     const bool defer_edge_lines = (context.editor_settings != nullptr) && context.editor_settings->load.deferred_edge_lines && worker_contexts;
     const bool defer_raytrace   = (context.editor_settings != nullptr) && context.editor_settings->load.deferred_raytrace;
+    // load.cpu_mesh_data: a prepared primitive is final once its buffers and
+    // its stored-BVH raytrace are built, and its soup is then only read on
+    // demand (doc/editor/async_asset_loading.md "Releasing CPU mesh data").
+    const bool release_soups    = (get_cpu_mesh_data_retention(context) == Cpu_mesh_data_retention::release);
+    const bool optimize_meshes  = (context.mesh_memory_config != nullptr) && context.mesh_memory_config->optimize_meshes;
+    std::unordered_set<const erhe::primitive::Primitive*> released_primitives;
 
     // Build_info variant for skinned meshes -- same as the caller's
     // build_info but with vertex_format_skinned so the GPU vertex buffer
@@ -925,6 +951,19 @@ void finalize_imported_meshes(
                     } else if (!primitive.make_raytrace()) {
                         log_parsers->warn("glTF import: failed to build raytrace for '{}'", mesh->get_name());
                     }
+                }
+                // A primitive the deferred finalize task still builds from its
+                // soup keeps it: one without its real raytrace, or without its
+                // optimized variant when meshes are optimized (the task's
+                // predicate, is_load_complete() in
+                // async_raytrace_kickoff_operation.cpp).
+                if (
+                    release_soups &&
+                    primitive.has_real_raytrace() &&
+                    (!optimize_meshes || primitive.optimized_render_shape) &&
+                    primitive.release_triangle_soup()
+                ) {
+                    released_primitives.insert(&primitive);
                 }
                 continue;
             }
@@ -1002,11 +1041,12 @@ void finalize_imported_meshes(
 
     const std::chrono::steady_clock::duration finalize_duration = std::chrono::steady_clock::now() - finalize_start_time;
     log_parsers->info(
-        "finalize_imported_meshes: {} ms (deferred_edge_lines = {}, deferred_raytrace = {}, prepared primitives = {})",
+        "finalize_imported_meshes: {} ms (deferred_edge_lines = {}, deferred_raytrace = {}, prepared primitives = {}, triangle soups released = {})",
         std::chrono::duration_cast<std::chrono::milliseconds>(finalize_duration).count(),
         defer_edge_lines,
         defer_raytrace,
-        prepared_count
+        prepared_count,
+        released_primitives.size()
     );
     // Session totals, not this import's: primitives are shared and deduped
     // across imports, and the geometry-path optimizations of THIS import have
@@ -1154,7 +1194,8 @@ auto make_import_gltf_operation(
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
             .fix_spot_lights = context.fix_gltf_spot_lights,
-            .prepared_mesh_data_use = get_prepared_mesh_data_use(context)
+            .prepared_mesh_data_use = get_prepared_mesh_data_use(context),
+            .triangle_soup_reload   = get_triangle_soup_reload(context)
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         gltf_data = erhe::gltf::parse_gltf(parse_arguments);
@@ -2009,7 +2050,8 @@ auto open_scene_gltf(
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
             .fix_spot_lights = context.fix_gltf_spot_lights,
-            .prepared_mesh_data_use = get_prepared_mesh_data_use(context)
+            .prepared_mesh_data_use = get_prepared_mesh_data_use(context),
+            .triangle_soup_reload   = get_triangle_soup_reload(context)
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);

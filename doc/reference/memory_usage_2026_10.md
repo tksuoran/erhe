@@ -161,8 +161,13 @@ today:
 Status (2026-10-25): candidates 1 and 6 are done (doc/plans/gltf_fast_load.md
 follow-up item 6): decoded pixels stay within a 128 MiB budget and the
 .glb is streamed, so the prepared Bistro's peak working set fell from 3.9 to
-1.7 GB on desktop and VmHWM from 3.9 to 1.7 GB on Quest. Candidates 2-5 and
-7-8 are open.
+1.7 GB on desktop and VmHWM from 3.9 to 1.7 GB on Quest. Candidates 2 and 3
+are done (follow-up item 3): the raytrace copies and the facet map are gone
+always (`cpu_mesh` total 773 -> 660 MB), and with `load.cpu_mesh_data`
+`release` (the OpenXR default) the soups are released after upload and read
+back from the file on demand (`cpu_mesh` 361 MB; desktop idle heap 1068 ->
+775 MB, Quest heap 1440 -> 994 MB); the prepared topology stays (Geometry
+builds from it). Candidates 4, 5, 7 and 8 are open.
 
 | # | Candidate | Saves (idle / peak) | Cost | Notes |
 |---|---|---|---|---|

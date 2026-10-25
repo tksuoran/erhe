@@ -283,16 +283,19 @@ auto App_scenes::queue_display_color_build(Scene_root& scene_root, const std::sh
         const erhe::primitive::Primitive_render_shape&        render_shape  = *source->render_shape.get();
         const erhe::primitive::Normal_style                   normal_style  = render_shape.get_normal_style();
         const std::shared_ptr<erhe::geometry::Geometry>       geometry      = render_shape.get_geometry_const();
-        std::shared_ptr<erhe::primitive::Triangle_soup>       triangle_soup {};
+        std::shared_ptr<erhe::primitive::Primitive_render_shape> soup_shape{};
         const void*                                           source_key    {nullptr};
         if (geometry) {
             source_key = static_cast<const void*>(geometry.get());
         } else {
-            triangle_soup = render_shape.get_triangle_soup();
-            if (!triangle_soup) {
+            // The soup is read in the build task (get_triangle_soup() reads a
+            // soup released after upload back from its source file there, not
+            // here on the main thread); the shape that owns it is the key.
+            if (!render_shape.has_triangle_soup()) {
                 continue;
             }
-            source_key = static_cast<const void*>(triangle_soup.get());
+            soup_shape = source->render_shape;
+            source_key = static_cast<const void*>(soup_shape.get());
         }
 
         Display_color_build* build = nullptr;
@@ -314,7 +317,7 @@ auto App_scenes::queue_display_color_build(Scene_root& scene_root, const std::sh
             new_build.normal_style  = normal_style;
             new_build.skinned       = skinned;
             new_build.geometry      = geometry;
-            new_build.triangle_soup = triangle_soup;
+            new_build.soup_shape    = soup_shape;
             m_display_color_builds.push_back(std::move(new_build));
             build = &m_display_color_builds.back();
         }
@@ -387,8 +390,13 @@ void App_scenes::build_display_color_primitive(
     if (build.geometry) {
         new_primitive = std::make_shared<erhe::primitive::Primitive>(build.geometry);
     } else {
+        const std::shared_ptr<erhe::primitive::Triangle_soup> soup = build.soup_shape->get_triangle_soup();
+        if (!soup) {
+            log_scene->warn("display color rebuild: the triangle soup could not be read");
+            return;
+        }
         const std::shared_ptr<erhe::primitive::Triangle_soup> colored_soup =
-            erhe::primitive::make_triangle_soup_with_constant_color(*build.triangle_soup.get(), build.color);
+            erhe::primitive::make_triangle_soup_with_constant_color(*soup.get(), build.color);
         if (!colored_soup) {
             return;
         }

@@ -489,6 +489,15 @@ auto Bvh_geometry::get_memory_statistics() const -> Geometry_memory_statistics
     return statistics;
 }
 
+// commit() copies what traversal and hit reporting read (the precomputed
+// triangles / the triangle array and the BVH); nothing reads the caller's
+// buffers afterwards.
+auto Bvh_geometry::release_buffers() -> bool
+{
+    m_buffer_infos.clear();
+    return true;
+}
+
 void Bvh_geometry::enable()
 {
     m_enabled = true;

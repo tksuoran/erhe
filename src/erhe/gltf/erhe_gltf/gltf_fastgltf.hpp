@@ -462,6 +462,17 @@ enum class Prepared_mesh_data_use : unsigned int {
     use    = 1
 };
 
+// Whether parse_gltf records, per soup primitive, where its accessors' bytes
+// are in the source file (erhe::primitive::Triangle_soup_source), so the
+// primitive may release its CPU soup after upload and read it back on demand
+// (Primitive::release_triangle_soup(); the load.cpu_mesh_data editor
+// setting). Only a parse from a file records; see doc/erhe/gltf.md
+// "Triangle soup reload".
+enum class Triangle_soup_reload : unsigned int {
+    none   = 0,
+    record = 1
+};
+
 struct Gltf_parse_arguments
 {
     ::tf::Executor&                           executor;
@@ -488,6 +499,7 @@ struct Gltf_parse_arguments
     // accepted payloads to the soup primitives' render shapes
     // (erhe::primitive::Primitive_shape::get_prepared_data()).
     Prepared_mesh_data_use                    prepared_mesh_data_use{Prepared_mesh_data_use::use};
+    Triangle_soup_reload                      triangle_soup_reload{Triangle_soup_reload::none};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;

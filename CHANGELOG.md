@@ -28,6 +28,19 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Triangle_soup_source`, `Triangle_soup_counts`,
+  `Triangle_soup_reload_statistics` / `get_triangle_soup_reload_statistics()`;
+  `Primitive_shape::set_triangle_soup_source()`, `get_triangle_soup_source()`,
+  `release_triangle_soup()`, `is_triangle_soup_released()`,
+  `has_triangle_soup()`, `get_triangle_soup_counts()`,
+  `shares_resident_triangle_soup()`; `Primitive::release_triangle_soup()`;
+  `Shape_memory_statistics::triangle_soup_released_count`;
+  `Buffer_mesh::release_buffer_allocations()`.
+- `erhe::raytrace`: `IGeometry::release_buffers()`.
+- `erhe::gltf`: `Triangle_soup_reload` and
+  `Gltf_parse_arguments::triangle_soup_reload` (record per-primitive reload
+  sources).
+
 - `erhe::graphics`: capped upload staging (doc/erhe/ring_buffer_memory.md
   "Upload staging cap"): `Device::allocate_upload_staging(target,
   byte_count, capacity_byte_count)` (an empty range when there is no room;
@@ -899,6 +912,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::primitive`: `Primitive_shape::get_triangle_soup()` returns the soup
+  by value (`std::shared_ptr<Triangle_soup>`) and reads a released soup back
+  from its source.
+- `erhe::primitive`: `Primitive_raytrace` frees its vertex / index copies
+  after the commit when the backend does not read them, and maps a soup
+  raytrace's facets by identity without a table.
 - `erhe::gltf`: `parse_gltf()` no longer decodes images; it records each
   image's encoded stream and `Gltf_image_residency` decodes / transcodes on
   executor workers ahead of the upload under a decoded-bytes budget.

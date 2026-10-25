@@ -394,6 +394,51 @@ byte-for-byte against the foreign Bistro at idle.
    OpenXR / Quest, that releases a primitive's CPU-side mesh data once its
    GPU buffers are uploaded and reloads it from the source glTF on demand
    (raytrace, Geometry, export, edits). Scope decided by item 2.
+   Done:
+   - Setting `load.cpu_mesh_data` (`keep` / `release` / `platform_default`
+     = keep on desktop, release in OpenXR; the committed desktop config
+     says `keep`, the OpenXR config `release`; a device config that predates
+     the field gets `platform_default`, so Quest releases without a config
+     change). With `release` the parse records a triangle soup reload source
+     per primitive (the .glb BIN / .bin byte ranges of its bufferViews,
+     accessor copies, file size + modification time; doc/erhe/gltf.md
+     "Triangle soup reload") and `finalize_imported_meshes` releases the soup
+     of every final prepared primitive (buffers, stored-BVH raytrace and
+     optimized variant built) and of its optimized variant
+     (doc/editor/async_asset_loading.md "Releasing CPU mesh data").
+   - One read path: `Primitive_shape::get_triangle_soup()` reloads a
+     released soup, shared while held, freed with its last holder; a changed
+     source file is refused with an error. Count properties use recorded
+     counts; the display-color rebuild reads the soup in its task; the glTF
+     exporter holds the reloaded soups for the export (doc/erhe/primitive.md
+     "Releasing the triangle soup").
+   - Released: the soups only. The prepared topology (16 MB) stays: it is
+     the colocation `get_geometry()` builds from without `colocate()`, and
+     the raytrace BVH and precomputed triangles serve every ray cast.
+   - Always (memory report candidate 2): `Primitive_raytrace` frees its
+     vertex / index copies after the commit when the backend does not read
+     them (`IGeometry::release_buffers()`: bvh, tinybvh; not embree) and maps
+     a soup raytrace's facets by identity through a flag.
+
+   Result (2026-10-25, prepared Bistro `logs/step9/bistro_prepared.glb`,
+   Release headless desktop, AMD iGPU, warm caches, `load_scene`; Quest 3
+   release APK, off-head automated, `--no-scene`, `load_scene` of
+   `files/item4/bistro_quest.glb`, `close_scene "Scene 1"`, three runs):
+
+   | | before | after |
+   |---|---|---|
+   | desktop idle heap (`keep` / `release`) | 1068 MB | 775 MB (-293) |
+   | desktop `cpu_mesh.render_shapes` total | 773 MB (report) | 660 MB `keep` (raytrace copies + facet map 0), 361 MB `release` (soups 0, 3852 released) |
+   | desktop listed / idle | 3.1-3.6 / 3.5-3.6 s (`keep`) | 3.16-3.19 / 3.56-3.59 s (`release`) |
+   | desktop render md5 | 89832b62... | 89832b62... (both settings) |
+   | desktop save after load (`release`) | 1.8 s (`keep`) | 2.3 s: 3852 soups (305 MB) read back, BIN chunk byte-identical to the input, heap back to idle + selection after the save |
+   | Quest heap (malloc in use, idle) | 1440 MB (item 4) | 994 MB (-446) |
+   | Quest RSS + swap (idle) | 1598-1641 MB | 1199-1357 MB |
+   | Quest VmHWM | 1988-2012 MB | 1981-2018 MB (the load transient; soups exist until finalize) |
+   | Quest listed / idle | 10.1-10.3 s | 9.7-10.1 / 10.1-10.6 s |
+
+   Selecting three meshes reloaded their 5 soups (full build and
+   `get_geometry()`); no reload happens during or after the load itself.
 4. **Quest-ready glTF with ASTC textures.** A save variant that writes the
    textures as KTX2 with a raw ASTC 4x4 vkFormat (transcoded from the
    Basis source), so Quest uploads them without transcoding; desktop
