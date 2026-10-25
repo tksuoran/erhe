@@ -111,6 +111,12 @@ enum class Save_report_textures : unsigned int {
             {"bvh_none_count",               report.prepared.bvh_none_count},
             {"dropped_degenerate_triangles", report.prepared.dropped_degenerate_triangles},
             {"preparation_ms",               report.prepared.preparation_ms}
+        }},
+        {"sources", {
+            {"overwrote_sources",        report.overwrote_sources},
+            {"rebound_primitive_count",  report.rebound_primitive_count},
+            {"detached_primitive_count", report.detached_primitive_count},
+            {"rebound_image_count",      report.rebound_image_count}
         }}
     };
     if (textures == Save_report_textures::include) {

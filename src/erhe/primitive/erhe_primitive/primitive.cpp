@@ -813,6 +813,11 @@ auto Triangle_soup_source::load_prepared_data(const Triangle_soup&) const -> std
     return {};
 }
 
+auto Triangle_soup_source::references_file(const std::filesystem::path&) const -> bool
+{
+    return false;
+}
+
 auto get_triangle_soup_reload_statistics() -> Triangle_soup_reload_statistics
 {
     Triangle_soup_reload_counter& counter = get_triangle_soup_reload_counter();
@@ -1037,6 +1042,20 @@ auto Primitive_shape::get_triangle_soup() const -> std::shared_ptr<Triangle_soup
 
     ERHE_PROFILE_SCOPE("reload triangle soup");
     std::shared_ptr<Triangle_soup> reloaded = source->load();
+    if (!reloaded) {
+        // A save onto the source file gives the shape a new source
+        // (Primitive::rebind_triangle_soup_source()); a reload that captured
+        // the old one just before reads through the new one.
+        std::shared_ptr<const Triangle_soup_source> current;
+        {
+            const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+            current = m_triangle_soup_source;
+        }
+        if (current && (current != source)) {
+            source   = current;
+            reloaded = source->load();
+        }
+    }
     if (reloaded) {
         const Triangle_soup_counts reloaded_counts = get_counts(reloaded);
         if (
@@ -1105,6 +1124,21 @@ auto Primitive_shape::release_triangle_soup() -> bool
     }
     m_triangle_soup.reset();
     m_triangle_soup_released = true;
+    return true;
+}
+
+auto Primitive_shape::detach_triangle_soup_source() -> bool
+{
+    const std::shared_ptr<Triangle_soup> soup = get_triangle_soup();
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if ((m_triangle_soup_released || m_payload_pending) && !soup) {
+        return false;
+    }
+    if (m_triangle_soup_released) {
+        m_triangle_soup          = soup;
+        m_triangle_soup_released = false;
+    }
+    m_triangle_soup_source.reset();
     return true;
 }
 
@@ -2005,6 +2039,32 @@ Primitive::Primitive(std::shared_ptr<const Triangle_soup_source> source, const T
 auto Primitive::load_payload() -> bool
 {
     return !render_shape || render_shape->load_payload();
+}
+
+void Primitive::rebind_triangle_soup_source(const std::shared_ptr<const Triangle_soup_source>& source)
+{
+    if (!render_shape) {
+        return;
+    }
+    const std::shared_ptr<const Triangle_soup_source> old_source = render_shape->get_triangle_soup_source();
+    if (optimized_render_shape && old_source && (optimized_render_shape->get_triangle_soup_source() == old_source)) {
+        optimized_render_shape->set_triangle_soup_source(source);
+    }
+    render_shape->set_triangle_soup_source(source);
+}
+
+auto Primitive::detach_triangle_soup_source() -> bool
+{
+    if (!render_shape) {
+        return true;
+    }
+    const std::shared_ptr<const Triangle_soup_source> old_source = render_shape->get_triangle_soup_source();
+    if (optimized_render_shape && old_source && (optimized_render_shape->get_triangle_soup_source() == old_source)) {
+        if (!optimized_render_shape->detach_triangle_soup_source()) {
+            return false;
+        }
+    }
+    return render_shape->detach_triangle_soup_source();
 }
 
 Primitive::Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry)

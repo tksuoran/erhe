@@ -277,6 +277,25 @@ Tests: `test_gltf_texture_gpu.cpp` (`raw_ktx2_texture_round_trips_through_erhe_t
 the parsed source is file-backed and reads the written bytes;
 `file_backed_image_source_re_exports_and_refuses_a_changed_file`).
 
+## Rebinding after a save
+
+`Gltf_export_arguments::written_layout` receives where an export wrote the
+primitives it wrote from their retained prepared core
+(`Gltf_export_written_primitive`: the primitive, glTF mesh and primitive
+index) and the images it wrote from their source stream unchanged
+(`Gltf_export_written_image`). After the file is written,
+`rebind_sources_to_written_file(path, layout)` reads the written file's JSON
+(the BIN chunk skipped) and its buffer origins, gives each retained
+primitive whose soup source references `path` a new
+`Gltf_triangle_soup_source` over its accessors in the written file (the same
+`make_gltf_triangle_soup_source()` the parse uses, the old source's tangent
+mode) through `Primitive::rebind_triangle_soup_source()`, and returns a
+file-backed `Gltf_image_source` per image for the caller to install. Its
+reads open the file per read: no handle stays open. One info line reports
+the counts. Tests: `Gltf_roundtrip.save_onto_source_rebinds_released_soups`
+(a released soup refused after the save and read back bit-identical after
+the rebind; a detached primitive keeps its resident soup).
+
 ## Triangle soup reload
 
 `Gltf_parse_arguments::triangle_soup_reload` (`Triangle_soup_reload`, default

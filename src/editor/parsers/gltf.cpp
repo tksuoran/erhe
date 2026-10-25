@@ -1728,6 +1728,62 @@ auto collect_gltf_export_animations(const std::shared_ptr<Content_library>& cont
     return content_library->get_all<erhe::scene::Animation>();
 }
 
+namespace {
+
+// What a save onto the file the scene's sources read from has to handle
+// (doc/editor/scene_serialization.md "Saving onto the source file").
+class Overwritten_sources
+{
+public:
+    std::vector<std::shared_ptr<erhe::primitive::Primitive>> primitives; // soup source reads the target file
+    std::vector<std::shared_ptr<erhe::graphics::Texture>>    textures;   // image source reads the target file
+
+    [[nodiscard]] auto empty() const -> bool { return primitives.empty() && textures.empty(); }
+};
+
+[[nodiscard]] auto find_overwritten_sources(Scene_root& scene_root, const std::filesystem::path& path) -> Overwritten_sources
+{
+    Overwritten_sources result;
+    std::error_code error;
+    if (!std::filesystem::exists(path, error)) {
+        return result;
+    }
+    {
+        std::unordered_set<const erhe::primitive::Primitive*> seen;
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
+        for (const std::shared_ptr<erhe::scene::Mesh_layer>& mesh_layer : scene_root.get_scene().get_mesh_layers()) {
+            for (const std::shared_ptr<erhe::scene::Mesh>& mesh : mesh_layer->meshes) {
+                if (!mesh) {
+                    continue;
+                }
+                for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                    const std::shared_ptr<erhe::primitive::Primitive>& primitive = mesh_primitive.primitive;
+                    if (!primitive || !primitive->render_shape || !seen.insert(primitive.get()).second) {
+                        continue;
+                    }
+                    const std::shared_ptr<const erhe::primitive::Triangle_soup_source> source = primitive->render_shape->get_triangle_soup_source();
+                    if (source && source->references_file(path)) {
+                        result.primitives.push_back(primitive);
+                    }
+                }
+            }
+        }
+    }
+    const std::shared_ptr<Content_library>& content_library = scene_root.get_content_library();
+    if (content_library) {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+        for (const std::shared_ptr<erhe::graphics::Texture>& texture : content_library->get_all<erhe::graphics::Texture>()) {
+            const Resource_metadata* const metadata = content_library->find_metadata(*texture);
+            if ((metadata != nullptr) && metadata->image_source && metadata->image_source->is_file_backed() && erhe::gltf::is_same_file(metadata->image_source->file_path, path)) {
+                result.textures.push_back(texture);
+            }
+        }
+    }
+    return result;
+}
+
+} // anonymous namespace
+
 auto save_scene_gltf(
     Scene_root&                           scene_root,
     const std::filesystem::path&          path,
@@ -1767,6 +1823,62 @@ auto save_scene_gltf(
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
     add_gltf_editor_state(export_arguments, scene_root, path, physics_items);
+
+    // Saving onto the file the scene's soups and images read from: the save
+    // replaces it, so every source over it must point at the written file
+    // afterwards or its data must be in memory.
+    const Overwritten_sources overwritten = find_overwritten_sources(scene_root, path);
+    erhe::gltf::Gltf_export_written_layout written_layout;
+    std::size_t detached_primitive_count = 0;
+    if (!overwritten.empty()) {
+        if (texture_export == erhe::gltf::Gltf_texture_export::ktx2_astc_4x4) {
+            // Decision D4 (doc/plans/gltf_fast_load.md item 9): the Quest file
+            // rewrites textures and is a delivery format, not the scene's source.
+            log_parsers->error(
+                "save_scene_gltf: Save for Quest onto '{}', the file the scene was loaded from, is refused - save it under another name",
+                erhe::file::to_string(path)
+            );
+            return false;
+        }
+        // A primitive the export does not write from its retained core (its
+        // prepared data no longer describes it) is not reproduced by the new
+        // file: its soup becomes resident and it drops the source.
+        for (const std::shared_ptr<erhe::primitive::Primitive>& primitive : overwritten.primitives) {
+            if (primitive->render_shape->is_prepared_data_current()) {
+                continue;
+            }
+            if (!primitive->detach_triangle_soup_source()) {
+                log_parsers->error("save_scene_gltf: a soup of the scene cannot be read from '{}' - nothing written", erhe::file::to_string(path));
+                return false;
+            }
+            ++detached_primitive_count;
+        }
+        // The images get resident streams for the export; those the export
+        // writes unchanged read from the written file again afterwards.
+        const std::shared_ptr<Content_library>& content_library = scene_root.get_content_library();
+        for (const std::shared_ptr<erhe::graphics::Texture>& texture : overwritten.textures) {
+            std::shared_ptr<erhe::gltf::Gltf_image_source> file_source;
+            {
+                std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+                const Resource_metadata* const metadata = content_library->find_metadata(*texture);
+                file_source = (metadata != nullptr) ? metadata->image_source : std::shared_ptr<erhe::gltf::Gltf_image_source>{};
+            }
+            if (!file_source) {
+                continue;
+            }
+            std::shared_ptr<erhe::gltf::Gltf_image_source> resident = std::make_shared<erhe::gltf::Gltf_image_source>();
+            if (!file_source->read(resident->encoded_bytes)) {
+                log_parsers->error("save_scene_gltf: texture '{}' cannot be read from '{}' - nothing written", texture->get_name(), erhe::file::to_string(path));
+                return false;
+            }
+            resident->mime_type = file_source->mime_type;
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+            content_library->set_image_source(texture, resident);
+        }
+        export_arguments.image_source_provider = make_gltf_image_source_provider(content_library);
+        export_arguments.written_layout        = &written_layout;
+    }
+
     const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     const double export_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
@@ -1782,6 +1894,24 @@ auto save_scene_gltf(
     if (!erhe::file::write_file_via_temp(path, gltf)) {
         log_parsers->error("save_scene_gltf: failed to write '{}'", erhe::file::to_string(path));
         return false;
+    }
+    erhe::gltf::Gltf_rebind_result rebind_result{};
+    if (!overwritten.empty()) {
+        rebind_result = erhe::gltf::rebind_sources_to_written_file(path, written_layout);
+        const std::shared_ptr<Content_library>& content_library = scene_root.get_content_library();
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+        for (const auto& [texture, source] : rebind_result.image_sources) {
+            for (const std::shared_ptr<erhe::graphics::Texture>& overwritten_texture : overwritten.textures) {
+                if (overwritten_texture.get() == texture) {
+                    content_library->set_image_source(overwritten_texture, source);
+                }
+            }
+        }
+        log_parsers->info(
+            "save_scene_gltf: '{}' was the scene's source: {} primitives and {} images read from the written file, {} primitives made resident, {} failed",
+            erhe::file::to_string(path),
+            rebind_result.primitive_count, rebind_result.image_sources.size(), detached_primitive_count, rebind_result.failed_count
+        );
     }
     std::string skip_reasons;
     for (const auto& [reason, count] : prepared_statistics.skip_reasons) {
@@ -1823,6 +1953,10 @@ auto save_scene_gltf(
         report->textures   = texture_statistics;
         report->export_ms  = export_ms;
         report->file_bytes = gltf.size();
+        report->overwrote_sources        = !overwritten.empty();
+        report->rebound_primitive_count  = rebind_result.primitive_count;
+        report->detached_primitive_count = detached_primitive_count;
+        report->rebound_image_count      = rebind_result.image_sources.size();
     }
     return true;
 }

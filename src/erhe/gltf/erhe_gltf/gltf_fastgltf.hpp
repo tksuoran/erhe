@@ -693,6 +693,52 @@ enum class Gltf_texture_export : unsigned int {
     ktx2_astc_4x4 = 1
 };
 
+// Where an export wrote data a later rebind can point sources at
+// (rebind_sources_to_written_file()): the primitives written from their
+// retained prepared core (the file's data is the primitive's soup), and the
+// images written from their source stream unchanged.
+class Gltf_export_written_primitive
+{
+public:
+    std::shared_ptr<erhe::primitive::Primitive> primitive;
+    std::size_t                                 mesh_index     {0};
+    std::size_t                                 primitive_index{0};
+};
+class Gltf_export_written_image
+{
+public:
+    const erhe::graphics::Texture* texture    {nullptr};
+    std::size_t                    image_index{0};
+};
+class Gltf_export_written_layout
+{
+public:
+    std::vector<Gltf_export_written_primitive> retained_primitives;
+    std::vector<Gltf_export_written_image>     source_images;
+};
+
+// What rebind_sources_to_written_file() did.
+class Gltf_rebind_result
+{
+public:
+    std::size_t primitive_count{0}; // render shapes given a source in the written file
+    std::size_t failed_count   {0}; // retained primitives the written file could not describe
+    // New file-backed sources of the images written unchanged, for the
+    // owner of the texture's source to install.
+    std::vector<std::pair<const erhe::graphics::Texture*, std::shared_ptr<Gltf_image_source>>> image_sources;
+};
+
+// After a save of `layout` into `path` that replaced the file sources read
+// from (doc/erhe/gltf.md "Rebinding after a save"): reads the written file's
+// JSON and gives every retained primitive whose soup source references
+// `path` a new source over its accessors in the new file, and makes a
+// file-backed source for each image written unchanged. Main thread, with no
+// load reading the primitives.
+[[nodiscard]] auto rebind_sources_to_written_file(const std::filesystem::path& path, const Gltf_export_written_layout& layout) -> Gltf_rebind_result;
+
+// The two paths name the same existing file.
+[[nodiscard]] auto is_same_file(const std::filesystem::path& lhs, const std::filesystem::path& rhs) -> bool;
+
 // What the texture pass of one export did.
 class Gltf_export_texture_statistics
 {
@@ -815,6 +861,9 @@ public:
     Gltf_texture_export texture_export{Gltf_texture_export::source};
     // Receives the texture statistics when non-null.
     Gltf_export_texture_statistics* texture_statistics{nullptr};
+    // Receives where the retained primitives and the unchanged images were
+    // written when non-null (rebind_sources_to_written_file()).
+    Gltf_export_written_layout*     written_layout{nullptr};
 };
 
 // The file's bytes, or an empty string when the export failed: a texture

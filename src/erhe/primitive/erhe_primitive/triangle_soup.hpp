@@ -4,6 +4,7 @@
 #include "erhe_primitive/enums.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
@@ -59,6 +60,10 @@ public:
     // Primitive_shape::load_payload()); null otherwise and when it is
     // rejected (the primitive then loads as a plain soup).
     [[nodiscard]] virtual auto load_prepared_data(const Triangle_soup& soup) const -> std::shared_ptr<Prepared_primitive_data>;
+    // The source reads from the file at `path` (the same file, however the
+    // path is spelled). A save onto that file replaces it: the saver then
+    // gives the shape a new source or makes its soup resident.
+    [[nodiscard]] virtual auto references_file(const std::filesystem::path& path) const -> bool;
 };
 
 // Process-wide counts of Primitive_shape::get_triangle_soup() reloads.

@@ -217,6 +217,23 @@ core primitive") plus the payloads of `ERHE_mesh_optimized`,
 Shapes are prepared in parallel; one shape by one caller at a time. Tests:
 `src/erhe/primitive/test/test_prepared_primitive.cpp`.
 
+## Source file replaced
+
+A save onto the file a shape's soup source reads from replaces the file
+(doc/editor/scene_serialization.md "Saving onto the source file"):
+
+- `Triangle_soup_source::references_file(path)` tells whether the source
+  reads that file (false by default);
+- `Primitive::rebind_triangle_soup_source(source)` gives the render shape a
+  source over the written file, and the optimized variant too when it
+  shares the old source (a released prepared primitive);
+- `Primitive::detach_triangle_soup_source()` /
+  `Primitive_shape::detach_triangle_soup_source()` make the soup resident
+  (read back when released) and drop the source, for a shape the new file
+  does not reproduce; false, changing nothing, when the soup cannot be read;
+- a reload whose captured source fails retries once when the shape's source
+  has been replaced meanwhile.
+
 ## Deferred payload
 
 `Primitive(source, counts)` / `Primitive_shape(source, counts)` make a soup

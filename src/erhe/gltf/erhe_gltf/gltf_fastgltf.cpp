@@ -473,6 +473,13 @@ auto Gltf_image_source::read(std::vector<std::byte>& out) const -> bool
     return true;
 }
 
+auto is_same_file(const std::filesystem::path& lhs, const std::filesystem::path& rhs) -> bool
+{
+    std::error_code error;
+    const bool same = std::filesystem::equivalent(lhs, rhs, error);
+    return !error && same;
+}
+
 // Sniff the media type of an encoded image stream from its magic bytes
 // (Gltf_image_source retention; doc/editor/gltf_scene_roundtrip.md phase 0).
 // Returns an empty string when unrecognized.
@@ -2256,6 +2263,16 @@ public:
                 return origins->source_files->read(file_index, file_offset, out);
             }
         );
+    }
+
+    [[nodiscard]] auto references_file(const std::filesystem::path& path) const -> bool override
+    {
+        for (const Gltf_source_file& file : origins->files) {
+            if (is_same_file(file.path, path)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     [[nodiscard]] auto load_prepared_data(const erhe::primitive::Triangle_soup& soup) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data> override
@@ -5912,6 +5929,142 @@ void Gltf_image_residency::drain(
     bind_material_textures(data);
 }
 
+auto rebind_sources_to_written_file(const std::filesystem::path& path, const Gltf_export_written_layout& layout) -> Gltf_rebind_result
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Gltf_rebind_result result{};
+    if (layout.retained_primitives.empty() && layout.source_images.empty()) {
+        return result;
+    }
+    // The written file's JSON only (the BIN chunk is skipped), its buffer
+    // origins and view places: the places parse_gltf would record.
+    Gltf_file_stream   data{path};
+    Skip_glb_bin_state skip_glb_bin_state{.glb_bin_length = data.get_glb_bin_length()};
+    if (!data.is_open()) {
+        log_gltf->error("rebind after save: cannot open '{}'", path.string());
+        result.failed_count = layout.retained_primitives.size();
+        return result;
+    }
+    // The extensions parse_gltf accepts: a required one fastgltf does not
+    // know fails the parse.
+    constexpr auto extensions =
+        fastgltf::Extensions::EXT_mesh_gpu_instancing             |
+        fastgltf::Extensions::KHR_mesh_quantization               |
+        fastgltf::Extensions::EXT_meshopt_compression             |
+        fastgltf::Extensions::KHR_lights_punctual                 |
+        fastgltf::Extensions::EXT_texture_webp                    |
+        fastgltf::Extensions::KHR_texture_transform               |
+        fastgltf::Extensions::KHR_texture_basisu                  |
+        fastgltf::Extensions::MSFT_texture_dds                    |
+        fastgltf::Extensions::KHR_materials_pbrSpecularGlossiness |
+        fastgltf::Extensions::KHR_materials_specular              |
+        fastgltf::Extensions::KHR_materials_ior                   |
+        fastgltf::Extensions::KHR_materials_iridescence           |
+        fastgltf::Extensions::KHR_materials_volume                |
+        fastgltf::Extensions::KHR_materials_transmission          |
+        fastgltf::Extensions::KHR_materials_clearcoat             |
+        fastgltf::Extensions::KHR_materials_emissive_strength     |
+        fastgltf::Extensions::KHR_materials_sheen                 |
+        fastgltf::Extensions::KHR_materials_variants              |
+        fastgltf::Extensions::KHR_implicit_shapes                 |
+        fastgltf::Extensions::KHR_physics_rigid_bodies            |
+        fastgltf::Extensions::KHR_materials_unlit;
+    fastgltf::Parser parser{extensions};
+    parser.setUserPointer(&skip_glb_bin_state);
+    if (skip_glb_bin_state.glb_bin_length.has_value()) {
+        parser.setBufferAllocationCallback(
+            [](const std::uint64_t buffer_size, void* user_pointer) -> fastgltf::BufferInfo {
+                return skip_glb_bin_map_callback(*static_cast<Skip_glb_bin_state*>(user_pointer), buffer_size);
+            }
+        );
+    }
+    fastgltf::Expected<fastgltf::Asset> asset = parser.loadGltf(data, gltf_base_directory(path), fastgltf::Options::None);
+    if (asset.error() != fastgltf::Error::None) {
+        log_gltf->error("rebind after save: '{}' does not parse: {}", path.string(), fastgltf::getErrorMessage(asset.error()));
+        result.failed_count = layout.retained_primitives.size();
+        return result;
+    }
+    const std::shared_ptr<const Gltf_buffer_origins> resolved = resolve_gltf_buffer_origins(path, asset.get().buffers.size());
+    if (!resolved) {
+        log_gltf->error("rebind after save: cannot resolve the buffers of '{}'", path.string());
+        result.failed_count = layout.retained_primitives.size();
+        return result;
+    }
+    std::shared_ptr<Gltf_buffer_origins> origins = std::make_shared<Gltf_buffer_origins>(*resolved);
+    for (const fastgltf::BufferView& view : asset.get().bufferViews) {
+        origins->view_places.push_back(Gltf_view_place{.buffer_index = view.bufferIndex, .byte_offset = view.byteOffset});
+    }
+    {
+        std::vector<std::filesystem::path> paths;
+        for (const Gltf_source_file& file : origins->files) {
+            paths.push_back(file.path);
+        }
+        origins->source_files = std::make_shared<Gltf_source_files>(std::move(paths));
+        origins->source_files->close(); // reads open the file per read: no handle stays open
+    }
+
+    for (const Gltf_export_written_primitive& written : layout.retained_primitives) {
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive = written.primitive;
+        if (!primitive || !primitive->render_shape) {
+            continue;
+        }
+        const std::shared_ptr<const erhe::primitive::Triangle_soup_source> old_source = primitive->render_shape->get_triangle_soup_source();
+        if (!old_source || !old_source->references_file(path)) {
+            continue; // its file was not replaced
+        }
+        if ((written.mesh_index >= asset.get().meshes.size()) || (written.primitive_index >= asset.get().meshes[written.mesh_index].primitives.size())) {
+            ++result.failed_count;
+            continue;
+        }
+        const Gltf_triangle_soup_source* const old_gltf_source = dynamic_cast<const Gltf_triangle_soup_source*>(old_source.get());
+        const Soup_tangents tangents = (old_gltf_source != nullptr) ? old_gltf_source->tangents : Soup_tangents::as_stored;
+        std::shared_ptr<Gltf_triangle_soup_source> source = make_gltf_triangle_soup_source(
+            asset.get(),
+            asset.get().meshes[written.mesh_index].primitives[written.primitive_index],
+            tangents,
+            origins,
+            fmt::format("'{}' mesh {} primitive {}", path.filename().string(), written.mesh_index, written.primitive_index)
+        );
+        if (!source) {
+            ++result.failed_count;
+            continue;
+        }
+        primitive->rebind_triangle_soup_source(source);
+        ++result.primitive_count;
+    }
+
+    for (const Gltf_export_written_image& written : layout.source_images) {
+        if (written.image_index >= asset.get().images.size()) {
+            continue;
+        }
+        const fastgltf::Image& image = asset.get().images[written.image_index];
+        const fastgltf::sources::BufferView* buffer_view = std::get_if<fastgltf::sources::BufferView>(&image.data);
+        if ((buffer_view == nullptr) || (buffer_view->bufferViewIndex >= origins->view_places.size())) {
+            continue;
+        }
+        const Gltf_view_place& place = origins->view_places[buffer_view->bufferViewIndex];
+        if ((place.buffer_index >= origins->buffers.size()) || !origins->buffers[place.buffer_index].has_value()) {
+            continue;
+        }
+        const Gltf_buffer_origin& origin = origins->buffers[place.buffer_index].value();
+        const Gltf_source_file&   file   = origins->files[origin.file_index];
+        std::shared_ptr<Gltf_image_source> source = std::make_shared<Gltf_image_source>();
+        source->file_path       = file.path;
+        source->file_offset     = origin.file_offset + place.byte_offset;
+        source->byte_length     = asset.get().bufferViews[buffer_view->bufferViewIndex].byteLength;
+        source->file_size       = file.size;
+        source->file_write_time = file.write_time;
+        source->mime_type       = sniff_image_mime_type(read_file_head(*source));
+        result.image_sources.emplace_back(written.texture, std::move(source));
+    }
+    log_gltf->info(
+        "rebind after save of '{}': {} primitives and {} images point at the written file, {} primitives failed",
+        path.string(), result.primitive_count, result.image_sources.size(), result.failed_count
+    );
+    return result;
+}
+
 void close_source_files(Gltf_data& data)
 {
     if (data.source_files) {
@@ -7022,6 +7175,9 @@ private:
         // ERHE_mesh_optimized / ERHE_mesh_topology / ERHE_raytrace_bvh
         // members of a prepared soup primitive (empty otherwise).
         std::string                      prepared_extensions;
+        // Written from the shape's retained prepared core: the accessors
+        // hold the shape's soup as it is.
+        bool                             retained_core{false};
     };
     void add_index_data_source(
         Export_entry&              entry,
@@ -7214,6 +7370,7 @@ private:
             count_prepared_primitive(result);
             if (result.prepared.has_value()) {
                 write_prepared_primitive(entry, result.prepared.value());
+                entry.retained_core = static_cast<bool>(result.prepared.value().retained_core);
                 m_erhe_triangle_soup_entries.insert({triangle_soup, entry});
                 return entry;
             }
@@ -7985,6 +8142,7 @@ private:
         primitive_index_map.resize(erhe_primitives.size());
         std::vector<std::pair<std::size_t, std::string>> pending_geometry_extensions; // (gltf primitive index, extension members)
         std::vector<std::pair<std::size_t, std::string>> pending_prepared_extensions; // (gltf primitive index, extension members)
+        std::vector<std::pair<std::size_t, std::shared_ptr<erhe::primitive::Primitive>>> retained_primitives; // (gltf primitive index, primitive)
         for (std::size_t primitive_index = 0; primitive_index < erhe_primitives.size(); ++primitive_index) {
             const erhe::scene::Mesh_primitive& erhe_mesh_primitive = erhe_primitives[primitive_index];
             const erhe::primitive::Primitive& erhe_primitive = *erhe_mesh_primitive.primitive.get();
@@ -8028,6 +8186,9 @@ private:
             if (!export_entry.prepared_extensions.empty()) {
                 pending_prepared_extensions.emplace_back(gltf_mesh.primitives.size(), export_entry.prepared_extensions);
             }
+            if (export_entry.retained_core) {
+                retained_primitives.emplace_back(gltf_mesh.primitives.size(), erhe_mesh_primitive.primitive);
+            }
             primitive_index_map[primitive_index] = gltf_mesh.primitives.size();
             gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
         }
@@ -8042,6 +8203,13 @@ private:
         }
         for (auto& [gltf_primitive_index, extension_members] : pending_prepared_extensions) {
             m_prepared_primitive_extensions[{gltf_mesh_index, gltf_primitive_index}] = std::move(extension_members);
+        }
+        if (m_arguments.written_layout != nullptr) {
+            for (const auto& [gltf_primitive_index, retained_primitive] : retained_primitives) {
+                m_arguments.written_layout->retained_primitives.push_back(
+                    Gltf_export_written_primitive{.primitive = retained_primitive, .mesh_index = gltf_mesh_index, .primitive_index = gltf_primitive_index}
+                );
+            }
         }
         return gltf_mesh_index;
     }
@@ -8453,6 +8621,9 @@ private:
         m_exported_images.insert({texture, image_index});
         if (raw_ktx2) {
             m_raw_ktx2_images.insert(image_index);
+        }
+        if (!transcode_to_astc && (m_arguments.written_layout != nullptr)) {
+            m_arguments.written_layout->source_images.push_back(Gltf_export_written_image{.texture = texture, .image_index = image_index});
         }
         if (transcode_to_astc) {
             m_pending_ktx2_transcodes.push_back(
