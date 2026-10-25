@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Load_config",
     reflect=True,
-    version=2,
+    version=3,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",
     developer=False,
@@ -26,6 +26,16 @@ struct("Load_config",
             long_desc="Imported meshes are first shown with fill triangles only; geometry edges, wireframe lines and corner/centroid points are built in background tasks after the glTF file has finished loading. Disable to build everything synchronously during load.",
             visible=True,
             developer=False
+        ),
+        field(
+            "use_prepared_mesh_data",
+            Bool,
+            added_in=3,
+            default="true",
+            short_desc="Use Prepared Mesh Data",
+            long_desc="Read the prepared mesh data a scene save writes into glTF files (ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh: optimized vertex order, stored colocation and stored BVH) and use what validates. Disable to load such files as plain triangle soups, as files without the extensions.",
+            visible=True,
+            developer=True
         ),
         field(
             "parallel_gltf_parse",

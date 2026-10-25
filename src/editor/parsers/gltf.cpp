@@ -612,6 +612,14 @@ auto get_import_mesh_optimize_cache_directory(const App_context& context) -> std
     return std::filesystem::path{"cache"} / "mesh_optimizer";
 }
 
+auto get_prepared_mesh_data_use(const App_context& context) -> erhe::gltf::Prepared_mesh_data_use
+{
+    if ((context.editor_settings != nullptr) && !context.editor_settings->load.use_prepared_mesh_data) {
+        return erhe::gltf::Prepared_mesh_data_use::ignore;
+    }
+    return erhe::gltf::Prepared_mesh_data_use::use;
+}
+
 auto make_import_build_info(
     App_context&                              context,
     const erhe::scene_renderer::Mesh_memory_queue queue
@@ -1103,6 +1111,7 @@ auto make_import_gltf_operation(
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
             .fix_spot_lights = context.fix_gltf_spot_lights,
+            .prepared_mesh_data_use = get_prepared_mesh_data_use(context)
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         gltf_data = erhe::gltf::parse_gltf(parse_arguments);
@@ -1924,6 +1933,7 @@ auto open_scene_gltf(
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
             .fix_spot_lights = context.fix_gltf_spot_lights,
+            .prepared_mesh_data_use = get_prepared_mesh_data_use(context)
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);

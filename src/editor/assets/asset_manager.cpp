@@ -1163,6 +1163,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
         .mesh_layer_id   = 0,
         .path            = canonical_path,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
+        .prepared_mesh_data_use = get_prepared_mesh_data_use(m_context)
     };
     record->gltf_data = erhe::gltf::parse_gltf(parse_arguments);
     // parse_gltf creates no GPU objects (async-asset-loading plan step 3);

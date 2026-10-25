@@ -237,6 +237,22 @@ public:
     std::vector<Gltf_material_variant_binding> bindings;
 };
 
+// What the parse did with the prepared mesh data of a file
+// (ERHE_mesh_optimized / ERHE_mesh_topology / ERHE_raytrace_bvh, see
+// doc/plans/gltf_fast_load.md "Loader"). Counted per unique soup primitive
+// carrying ERHE_mesh_optimized (primitives sharing accessors and extension
+// payloads count once).
+class Gltf_prepared_mesh_statistics
+{
+public:
+    std::size_t                        used_count         {0}; // every extension the primitive carries was accepted
+    std::size_t                        rejected_count     {0}; // at least one extension was rejected
+    std::size_t                        topology_used_count{0}; // ERHE_mesh_topology accepted
+    std::size_t                        bvh_used_count     {0}; // ERHE_raytrace_bvh accepted
+    std::size_t                        ignored_count      {0}; // glTF primitives carrying ERHE_mesh_optimized while prepared_mesh_data_use is ignore
+    std::map<std::string, std::size_t> rejection_reasons;      // "<extension>: <reason>" -> count
+};
+
 class Gltf_data
 {
 public:
@@ -298,6 +314,9 @@ public:
     std::vector<Gltf_raw_extensions>              material_extensions;
     std::vector<Gltf_raw_extensions>              mesh_extensions;
     std::vector<std::vector<Gltf_raw_extensions>> mesh_primitive_extensions;
+
+    // Prepared mesh data outcome of the parse (see Gltf_prepared_mesh_statistics).
+    Gltf_prepared_mesh_statistics                 prepared_mesh_statistics;
 };
 
 class Gltf_scan
@@ -361,6 +380,15 @@ public:
 
 [[nodiscard]] auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_device_options;
 
+// Whether parse_gltf reads the prepared mesh data extensions
+// (ERHE_mesh_optimized, ERHE_mesh_topology, ERHE_raytrace_bvh) of soup
+// primitives. ignore loads them as plain soups, as a file without the
+// extensions (the load.use_prepared_mesh_data editor setting).
+enum class Prepared_mesh_data_use : unsigned int {
+    ignore = 0,
+    use    = 1
+};
+
 struct Gltf_parse_arguments
 {
     ::tf::Executor&                           executor;
@@ -383,6 +411,10 @@ struct Gltf_parse_arguments
     // All buffers and images must be embedded in the GLB, as with assets
     // delivered by OpenXR XR_FB_render_model / XR_EXT_render_model.
     std::span<const std::byte>                glb_data{};
+    // Read and validate the prepared mesh data extensions and attach the
+    // accepted payloads to the soup primitives' render shapes
+    // (erhe::primitive::Primitive_shape::get_prepared_data()).
+    Prepared_mesh_data_use                    prepared_mesh_data_use{Prepared_mesh_data_use::use};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;

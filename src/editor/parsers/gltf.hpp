@@ -136,6 +136,11 @@ void import_gltf(
 // or edited geometry run uncached.
 [[nodiscard]] auto get_import_mesh_optimize_cache_directory(const App_context& context) -> std::filesystem::path;
 
+// Whether glTF parses read the prepared mesh data extensions
+// (Load_config::use_prepared_mesh_data, doc/plans/gltf_fast_load.md "Loader");
+// use when the editor settings are not available.
+[[nodiscard]] auto get_prepared_mesh_data_use(const App_context& context) -> erhe::gltf::Prepared_mesh_data_use;
+
 // Make freshly parsed glTF meshes renderable: build geometry edges +
 // smooth vertex normals, allocate GPU buffers in Mesh_memory (skinned
 // meshes get the skinned vertex format), and update raytrace primitives.

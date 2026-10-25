@@ -109,6 +109,25 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   reasons, BVH reused / rebuilt / none) and the preparation time. The
   default `none` writes raw soups; geometry-normative primitives are
   unaffected either way. The editor's `save_scene` passes `write`.
+- Prepared mesh data on parse (`doc/plans/gltf_fast_load.md` "Loader"): with
+  `Gltf_parse_arguments::prepared_mesh_data_use = Prepared_mesh_data_use::use`
+  (the default) a soup primitive carrying `ERHE_mesh_optimized` is validated
+  in its mesh parse task against
+  `doc/gltf_extensions/ERHE_mesh_optimized.md`, `ERHE_mesh_topology.md` and
+  `ERHE_raytrace_bvh.md` ("Validation / fallback", including the full
+  `erhe::raytrace::validate_prebuilt_bvh()` check), all-or-nothing per
+  extension: a rejected marker drops the other two, a rejected topology or
+  BVH leaves the rest. The accepted payloads go on the render shape as an
+  `erhe::primitive::Prepared_primitive_data` (`doc/erhe/primitive.md`
+  "Prepared mesh data on load"); a rejected marker loads the primitive as a
+  plain soup. `Gltf_data::prepared_mesh_statistics` counts the unique soup
+  primitives that used every extension they carry and those with a
+  rejection, by `"<extension>: <reason>"`, and one info line per file reads
+  `prepared mesh data: N used, M rejected (<reasons>); topology T, BVH B`.
+  Primitives sharing accessors share one validation only when their payloads
+  are identical. `ignore` skips the extensions entirely (counted as
+  `ignored_count`, glTF primitives); geometry-normative (`ERHE_geometry`)
+  primitives are not checked.
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
 - A primitive with an index at or past its vertex count (invalid glTF) is skipped with an
@@ -118,7 +137,9 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   materials, `KHR_materials_variants` bindings, Geometry build; `out_of_range_indices.gltf`:
   the invalid primitive is skipped) and GLB round trips (node hierarchy and transforms,
   `ERHE_node` / `ERHE_light` / `ERHE_camera` local properties and their unauthored values,
-  the fixture's meshes, the prepared-mesh-data extensions and payload sizes).
+  the fixture's meshes, the prepared-mesh-data extensions and payload sizes, the
+  prepared data read back as used, and tampered copies rejected with their
+  reason while the primitive still loads as a soup).
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
   `ERHE_material`, `ERHE_geometry`) round-trip erhe-specific state that has no standard
   glTF representation; editor-domain extensions (`ERHE_scene`, collections, brushes,

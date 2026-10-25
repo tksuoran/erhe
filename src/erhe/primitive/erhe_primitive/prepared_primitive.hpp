@@ -108,4 +108,57 @@ public:
 // first stream.
 [[nodiscard]] auto get_float_positions(const Triangle_soup& soup) -> std::vector<float>;
 
+// Load side (doc/plans/gltf_fast_load.md "Loader"): the validated payloads
+// of the ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh
+// extensions of one loaded soup primitive. It describes exactly the soup of
+// the Primitive_shape that carries it (Primitive_shape::get_prepared_data())
+// and is immutable once attached. Present only when ERHE_mesh_optimized was
+// accepted; colocation and bvh are each present only when that extension was
+// present and accepted as well.
+class Prepared_primitive_data
+{
+public:
+    // ERHE_mesh_optimized: the passes the core went through (weld is always
+    // true), its content hash and bounding volumes. bounding_box comes from
+    // the POSITION accessor min / max.
+    Mesh_optimize_options options;
+    uint64_t              content_hash{0};
+    erhe::math::Aabb      bounding_box{};
+    erhe::math::Sphere    bounding_sphere{};
+
+    // ERHE_mesh_topology: the point of every core vertex, first-reference
+    // order (every value is a point id; no Vertex_colocation::no_point).
+    std::optional<Vertex_colocation> colocation;
+
+    // ERHE_raytrace_bvh: the stored build for the running raytrace backend
+    // and library tag, over the core triangles in index order.
+    std::optional<erhe::raytrace::Prebuilt_bvh> bvh;
+};
+
+// The ERHE_mesh_optimized checks on the core content
+// (doc/gltf_extensions/ERHE_mesh_optimized.md "Validation / fallback"): the
+// index count is a multiple of 3, every index is below the vertex count
+// (positions_xyz.size() / 3), every vertex is referenced, no triangle has two
+// corners with bitwise-identical positions, and the content hash over
+// indices and positions equals content_hash. Returns an empty string when
+// the core passes, otherwise the rejection reason: a fixed phrase without
+// numbers, so callers can count rejections by reason.
+[[nodiscard]] auto validate_prepared_core(
+    std::span<const uint32_t> indices,
+    std::span<const float>    positions_xyz,
+    uint64_t                  content_hash
+) -> std::string;
+
+// The ERHE_mesh_topology checks (doc/gltf_extensions/ERHE_mesh_topology.md
+// "Validation / fallback") on a vertex_points payload already known to hold
+// one value per core vertex: first-reference order, the distinct id count
+// equals point_count, and every vertex has the bitwise-identical position of
+// its point's first vertex. Returns an empty string when the payload passes,
+// otherwise the rejection reason (a fixed phrase without numbers).
+[[nodiscard]] auto validate_vertex_points(
+    std::span<const uint32_t> vertex_points,
+    uint32_t                  point_count,
+    std::span<const float>    positions_xyz
+) -> std::string;
+
 } // namespace erhe::primitive

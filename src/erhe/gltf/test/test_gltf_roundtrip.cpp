@@ -6,6 +6,7 @@
 
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/prepared_primitive.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_raytrace/prebuilt_bvh.hpp"
@@ -20,9 +21,11 @@
 #include <gtest/gtest.h>
 
 #include <simdjson.h>
+#include <taskflow/taskflow.hpp>
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -279,6 +282,345 @@ TEST(Gltf_roundtrip, prepared_mesh_data_extensions)
         ASSERT_TRUE(soup);
         EXPECT_EQ(soup->get_vertex_count(), 4u);
         EXPECT_EQ(soup->get_index_count(), 6u);
+    }
+}
+
+// A GLB split into its JSON and BIN chunks, and put back together, so tests
+// can tamper with either.
+class Glb_chunks
+{
+public:
+    std::string json;
+    std::string bin;
+};
+
+[[nodiscard]] auto split_glb(const std::string& glb) -> Glb_chunks
+{
+    Glb_chunks chunks;
+    uint32_t   json_length = 0;
+    std::memcpy(&json_length, glb.data() + 12, sizeof(uint32_t));
+    chunks.json = glb.substr(20, json_length);
+    const std::size_t bin_header = 20 + static_cast<std::size_t>(json_length);
+    if (bin_header + 8 <= glb.size()) {
+        uint32_t bin_length = 0;
+        std::memcpy(&bin_length, glb.data() + bin_header, sizeof(uint32_t));
+        chunks.bin = glb.substr(bin_header + 8, bin_length);
+    }
+    return chunks;
+}
+
+[[nodiscard]] auto join_glb(const Glb_chunks& chunks) -> std::string
+{
+    std::string json = chunks.json;
+    while ((json.size() % 4) != 0) {
+        json += ' ';
+    }
+    std::string bin = chunks.bin;
+    while ((bin.size() % 4) != 0) {
+        bin += '\0';
+    }
+    const auto put_u32 = [](std::string& out, const uint32_t value) {
+        char bytes[4];
+        std::memcpy(bytes, &value, sizeof(uint32_t));
+        out.append(bytes, 4);
+    };
+    std::string glb;
+    put_u32(glb, 0x46546C67u); // "glTF"
+    put_u32(glb, 2u);
+    put_u32(glb, static_cast<uint32_t>(12 + 8 + json.size() + (bin.empty() ? 0 : (8 + bin.size()))));
+    put_u32(glb, static_cast<uint32_t>(json.size()));
+    put_u32(glb, 0x4E4F534Au); // "JSON"
+    glb += json;
+    if (!bin.empty()) {
+        put_u32(glb, static_cast<uint32_t>(bin.size()));
+        put_u32(glb, 0x004E4942u); // "BIN\0"
+        glb += bin;
+    }
+    return glb;
+}
+
+[[nodiscard]] auto parse_glb(
+    const std::string&                       glb,
+    const std::string_view                   file_name,
+    erhe::scene::Scene&                      scene,
+    const erhe::gltf::Prepared_mesh_data_use use
+) -> erhe::gltf::Gltf_data
+{
+    tf::Executor executor{1};
+    const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+    return erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .executor               = executor,
+            .root_node              = root_node,
+            .path                   = write_temporary_file(file_name, glb),
+            .parallel               = false,
+            .prepared_mesh_data_use = use
+        }
+    );
+}
+
+// variants.gltf written with prepared mesh data: two soup primitives.
+[[nodiscard]] auto make_prepared_glb() -> std::string
+{
+    erhe::scene::Scene          scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = parse_file(data_path("variants.gltf"), scene);
+    EXPECT_EQ(source.nodes.size(), 1u);
+    const erhe::gltf::Gltf_export_arguments arguments{
+        .root_node          = *scene.get_root_node(),
+        .binary             = true,
+        .prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write
+    };
+    return erhe::gltf::export_gltf(arguments);
+}
+
+// The render shapes of the "Panel" mesh of a parsed variants.gltf copy.
+[[nodiscard]] auto get_panel_shapes(const erhe::gltf::Gltf_data& data) -> std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>>
+{
+    std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> shapes;
+    const std::shared_ptr<erhe::scene::Node> panel = find_by_name(data.nodes, "Panel");
+    EXPECT_TRUE(panel);
+    if (!panel) {
+        return shapes;
+    }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(panel.get());
+    EXPECT_TRUE(mesh);
+    if (!mesh) {
+        return shapes;
+    }
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+        shapes.push_back(mesh_primitive.primitive->render_shape);
+        // Every primitive loads as a soup, whatever was accepted.
+        const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = mesh_primitive.primitive->render_shape->get_triangle_soup();
+        EXPECT_TRUE(soup);
+        if (soup) {
+            EXPECT_EQ(soup->get_vertex_count(), 4u);
+            EXPECT_EQ(soup->get_index_count(), 6u);
+        }
+    }
+    return shapes;
+}
+
+// Replaces the first occurrence of `key` + value text in the JSON chunk:
+// the `length` characters right after `key`.
+void replace_after(std::string& json, const std::string_view key, const std::size_t length, const std::string_view replacement)
+{
+    const std::size_t position = json.find(key);
+    ASSERT_NE(position, std::string::npos) << key;
+    json.replace(position + key.size(), length, replacement);
+}
+
+// The bufferView index the first `"<member>":N` in the JSON names.
+[[nodiscard]] auto first_view_index(const std::string& json, const std::string_view member) -> uint64_t
+{
+    const std::string key      = "\"" + std::string{member} + "\":";
+    const std::size_t position = json.find(key);
+    EXPECT_NE(position, std::string::npos) << member;
+    return std::stoull(json.substr(position + key.size(), 20));
+}
+
+// Prepared mesh data read back (doc/plans/gltf_fast_load.md step 5): every
+// prepared primitive validates and carries its payloads; with the setting
+// off nothing is read.
+TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)
+{
+    const std::string glb = make_prepared_glb();
+    ASSERT_FALSE(glb.empty());
+    const bool has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
+
+    erhe::scene::Scene          loaded{"loaded", nullptr};
+    const erhe::gltf::Gltf_data data = parse_glb(glb, "prepared_parse.glb", loaded, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_prepared_mesh_statistics& statistics = data.prepared_mesh_statistics;
+    EXPECT_EQ(statistics.used_count,          2u);
+    EXPECT_EQ(statistics.rejected_count,      0u);
+    EXPECT_EQ(statistics.topology_used_count, 2u);
+    EXPECT_EQ(statistics.bvh_used_count,      has_bvh_backend ? 2u : 0u);
+    EXPECT_EQ(statistics.ignored_count,       0u);
+    EXPECT_TRUE(statistics.rejection_reasons.empty());
+
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> shapes = get_panel_shapes(data);
+    ASSERT_EQ(shapes.size(), 2u);
+    for (const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape : shapes) {
+        const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared = shape->get_prepared_data();
+        ASSERT_TRUE(prepared);
+        EXPECT_TRUE(prepared->options.weld);
+        EXPECT_NE(prepared->content_hash, 0u);
+        EXPECT_GT(prepared->bounding_sphere.radius, 0.0f);
+        ASSERT_TRUE(prepared->colocation.has_value());
+        EXPECT_EQ(prepared->colocation->vertex_points.size(), 4u);
+        EXPECT_EQ(prepared->colocation->point_count, 4u);
+        EXPECT_EQ(prepared->bvh.has_value(), has_bvh_backend);
+        if (prepared->bvh.has_value()) {
+            EXPECT_EQ(prepared->bvh->triangle_count, 2u);
+            EXPECT_EQ(prepared->bvh->primitive_ids.size(), 2u);
+        }
+    }
+
+    erhe::scene::Scene          ignored{"ignored", nullptr};
+    const erhe::gltf::Gltf_data ignored_data = parse_glb(glb, "prepared_ignored.glb", ignored, erhe::gltf::Prepared_mesh_data_use::ignore);
+    EXPECT_EQ(ignored_data.prepared_mesh_statistics.ignored_count, 2u);
+    EXPECT_EQ(ignored_data.prepared_mesh_statistics.used_count,    0u);
+    for (const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape : get_panel_shapes(ignored_data)) {
+        EXPECT_FALSE(shape->get_prepared_data());
+    }
+}
+
+class Tamper_expectation
+{
+public:
+    std::string reason;              // "<extension>: <reason>"
+    bool        marker_accepted{false};
+    bool        has_colocation {false};
+    bool        has_bvh        {false};
+};
+
+// Parses a tampered copy: exactly one primitive is rejected, for `reason`,
+// the other is fully used, and both still load as soups.
+void expect_one_rejected(const std::string& glb, const std::string_view file_name, const Tamper_expectation& expectation)
+{
+    const bool has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
+    erhe::scene::Scene          loaded{"loaded", nullptr};
+    const erhe::gltf::Gltf_data data = parse_glb(glb, file_name, loaded, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_prepared_mesh_statistics& statistics = data.prepared_mesh_statistics;
+    EXPECT_EQ(statistics.used_count,     1u) << file_name;
+    EXPECT_EQ(statistics.rejected_count, 1u) << file_name;
+    ASSERT_EQ(statistics.rejection_reasons.size(), 1u) << file_name;
+    EXPECT_EQ(statistics.rejection_reasons.begin()->first,  expectation.reason) << file_name;
+    EXPECT_EQ(statistics.rejection_reasons.begin()->second, 1u) << file_name;
+
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> shapes = get_panel_shapes(data);
+    ASSERT_EQ(shapes.size(), 2u);
+    std::size_t full_count     = 0;
+    std::size_t tampered_count = 0;
+    for (const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape : shapes) {
+        const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared = shape->get_prepared_data();
+        const bool full = prepared && prepared->colocation.has_value() && (prepared->bvh.has_value() == has_bvh_backend);
+        if (full) {
+            ++full_count;
+            continue;
+        }
+        ++tampered_count;
+        EXPECT_EQ(prepared != nullptr, expectation.marker_accepted) << file_name;
+        if (prepared) {
+            EXPECT_EQ(prepared->colocation.has_value(), expectation.has_colocation) << file_name;
+            EXPECT_EQ(prepared->bvh.has_value(),        expectation.has_bvh)        << file_name;
+        }
+    }
+    EXPECT_EQ(full_count,     1u) << file_name;
+    EXPECT_EQ(tampered_count, 1u) << file_name;
+}
+
+// Tampered prepared payloads are rejected with the reason the spec's
+// "Validation / fallback" section names, all-or-nothing per extension, and
+// the primitive still loads as a plain soup.
+TEST(Gltf_roundtrip, prepared_mesh_data_parse_rejects_tampered)
+{
+    const std::string glb = make_prepared_glb();
+    ASSERT_FALSE(glb.empty());
+    const bool       has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
+    const Glb_chunks original        = split_glb(glb);
+
+    // Bad content_hash: the marker is rejected, which takes the topology and
+    // the BVH with it.
+    {
+        Glb_chunks chunks = original;
+        const std::string key = "\"content_hash\":\"";
+        const std::size_t position = chunks.json.find(key);
+        ASSERT_NE(position, std::string::npos);
+        const char digit = chunks.json[position + key.size()];
+        replace_after(chunks.json, key, 1, (digit == '0') ? "1" : "0");
+        expect_one_rejected(join_glb(chunks), "tampered_hash.glb", Tamper_expectation{
+            .reason = "ERHE_mesh_optimized: content_hash mismatch"
+        });
+    }
+
+    // Bad vertex_points id: vertex 0 names point 1, which breaks the
+    // first-reference order. The marker and the BVH stay in use.
+    {
+        Glb_chunks chunks = original;
+        const uint64_t view_index = first_view_index(chunks.json, "vertex_points");
+        simdjson::dom::parser  parser;
+        const simdjson::dom::element root = parser.parse(chunks.json);
+        const simdjson::dom::element view = root["bufferViews"].get_array().at(view_index);
+        uint64_t byte_offset = 0;
+        if (view["byteOffset"].get_uint64().get(byte_offset) != simdjson::SUCCESS) {
+            byte_offset = 0;
+        }
+        ASSERT_EQ(view["buffer"].get_uint64().value(), 0u);
+        const uint32_t bad_point = 1;
+        ASSERT_LE(byte_offset + 4, chunks.bin.size());
+        std::memcpy(chunks.bin.data() + byte_offset, &bad_point, sizeof(uint32_t));
+        expect_one_rejected(join_glb(chunks), "tampered_vertex_points.glb", Tamper_expectation{
+            .reason          = "ERHE_mesh_topology: not in first-reference order",
+            .marker_accepted = true,
+            .has_colocation  = false,
+            .has_bvh         = has_bvh_backend
+        });
+    }
+
+    // Truncated vertex_points view: its byteLength is 4 short (fastgltf writes
+    // a bufferView as "buffer", "byteLength", "byteOffset").
+    {
+        Glb_chunks chunks = original;
+        const uint64_t view_index = first_view_index(chunks.json, "vertex_points");
+        simdjson::dom::parser  parser;
+        const simdjson::dom::element root = parser.parse(chunks.json);
+        const simdjson::dom::element view = root["bufferViews"].get_array().at(view_index);
+        const uint64_t byte_offset = view["byteOffset"].get_uint64().value();
+        const uint64_t byte_length = view["byteLength"].get_uint64().value();
+        const std::string old_text = "\"byteLength\":" + std::to_string(byte_length) + ",\"byteOffset\":" + std::to_string(byte_offset);
+        const std::string new_text = "\"byteLength\":" + std::to_string(byte_length - 4) + ",\"byteOffset\":" + std::to_string(byte_offset);
+        const std::size_t position = chunks.json.find(old_text);
+        ASSERT_NE(position, std::string::npos) << old_text;
+        chunks.json.replace(position, old_text.size(), new_text);
+        expect_one_rejected(join_glb(chunks), "tampered_truncated.glb", Tamper_expectation{
+            .reason          = "ERHE_mesh_topology: bufferView byteLength mismatch",
+            .marker_accepted = true,
+            .has_colocation  = false,
+            .has_bvh         = has_bvh_backend
+        });
+    }
+
+    if (!has_bvh_backend) {
+        return;
+    }
+
+    // Wrong BVH library tag: no build matches the running backend, so the
+    // BVH is rejected; the marker and the topology stay in use.
+    {
+        Glb_chunks chunks = original;
+        const std::string key = "\"library\":\"";
+        const std::size_t position = chunks.json.find(key);
+        ASSERT_NE(position, std::string::npos);
+        const char digit = chunks.json[position + key.size()];
+        replace_after(chunks.json, key, 1, (digit == '0') ? "1" : "0");
+        expect_one_rejected(join_glb(chunks), "tampered_library.glb", Tamper_expectation{
+            .reason          = "ERHE_raytrace_bvh: no build for the running backend and library",
+            .marker_accepted = true,
+            .has_colocation  = true,
+            .has_bvh         = false
+        });
+    }
+
+    // Truncated BVH nodes view.
+    {
+        Glb_chunks chunks = original;
+        const uint64_t view_index = first_view_index(chunks.json, "nodes");
+        simdjson::dom::parser  parser;
+        const simdjson::dom::element root = parser.parse(chunks.json);
+        const simdjson::dom::element view = root["bufferViews"].get_array().at(view_index);
+        const uint64_t byte_offset = view["byteOffset"].get_uint64().value();
+        const uint64_t byte_length = view["byteLength"].get_uint64().value();
+        const std::string old_text = "\"byteLength\":" + std::to_string(byte_length) + ",\"byteOffset\":" + std::to_string(byte_offset);
+        const std::string new_text = "\"byteLength\":" + std::to_string(byte_length - 28) + ",\"byteOffset\":" + std::to_string(byte_offset);
+        const std::size_t position = chunks.json.find(old_text);
+        ASSERT_NE(position, std::string::npos) << old_text;
+        chunks.json.replace(position, old_text.size(), new_text);
+        expect_one_rejected(join_glb(chunks), "tampered_nodes.glb", Tamper_expectation{
+            .reason          = "ERHE_raytrace_bvh: nodes bufferView byteLength mismatch",
+            .marker_accepted = true,
+            .has_colocation  = true,
+            .has_bvh         = false
+        });
     }
 }
 

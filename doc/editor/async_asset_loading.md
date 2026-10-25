@@ -165,6 +165,12 @@ it replaces.
 | `deferred_edge_lines` | the load builds a fill-only buffer mesh straight from the triangle soup and a background task builds the `Geometry` (edges, smooth normals) and the full buffer mesh |
 | `parallel_gltf_parse` | image decode, mesh parse and animation parse run as parallel tasks inside `erhe::gltf::parse_gltf` (`Gltf_parse_arguments::parallel`) |
 
+`Load_config::use_prepared_mesh_data` (default on, added in v3) passes
+`Gltf_parse_arguments::prepared_mesh_data_use` to every editor glTF parse:
+on, the prepared mesh data a scene save writes (`doc/plans/gltf_fast_load.md`)
+is validated at parse and attached to the soup primitives; off, those files
+load as plain soups. It exists for A/B runs.
+
 `deferred_edge_lines` puts a GPU buffer-mesh build on a worker, which on GL
 needs a worker share context; without one (headless, null window) the edge
 lines are built eagerly on the main thread whatever the option says. Picking

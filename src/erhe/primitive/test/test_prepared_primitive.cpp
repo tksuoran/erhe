@@ -459,4 +459,37 @@ TEST(Prepared_primitive, attribute_set_gap_is_refused)
     EXPECT_FALSE(result.skip_reason.empty());
 }
 
+// Load-side checks of ERHE_mesh_optimized and ERHE_mesh_topology
+// (doc/gltf_extensions/ERHE_mesh_optimized.md, ERHE_mesh_topology.md
+// "Validation / fallback").
+TEST(Prepared_primitive, load_validation_of_core_and_vertex_points)
+{
+    // A quad: vertices 0..3, two triangles; vertex 4 duplicates vertex 0's
+    // position (a seam vertex of point 0).
+    const std::vector<float> positions{
+        0.0f, 0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f,
+        1.0f, 1.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f
+    };
+    const std::vector<uint32_t> indices{0, 1, 2, 4, 2, 3};
+    const uint64_t hash = erhe::primitive::compute_mesh_content_hash(indices, positions);
+    EXPECT_EQ(erhe::primitive::validate_prepared_core(indices, positions, hash), "");
+    EXPECT_EQ(erhe::primitive::validate_prepared_core(indices, positions, hash + 1), "content_hash mismatch");
+    EXPECT_EQ(erhe::primitive::validate_prepared_core(std::vector<uint32_t>{0, 1, 2, 4, 2}, positions, hash), "index count is not a positive multiple of 3");
+    EXPECT_EQ(erhe::primitive::validate_prepared_core(std::vector<uint32_t>{0, 1, 2, 4, 2, 5}, positions, hash), "index out of range");
+    EXPECT_EQ(erhe::primitive::validate_prepared_core(std::vector<uint32_t>{0, 1, 2, 0, 2, 3}, positions, hash), "unreferenced vertex");
+    EXPECT_EQ(erhe::primitive::validate_prepared_core(std::vector<uint32_t>{0, 1, 2, 4, 0, 3}, positions, hash), "degenerate triangle");
+
+    EXPECT_EQ(erhe::primitive::validate_vertex_points(std::vector<uint32_t>{0, 1, 2, 3, 0}, 4, positions), "");
+    EXPECT_EQ(erhe::primitive::validate_vertex_points(std::vector<uint32_t>{1, 0, 2, 3, 1}, 4, positions), "not in first-reference order");
+    EXPECT_EQ(erhe::primitive::validate_vertex_points(std::vector<uint32_t>{0, 1, 2, 3, 1}, 4, positions), "point vertices differ in position");
+    EXPECT_EQ(erhe::primitive::validate_vertex_points(std::vector<uint32_t>{0, 1, 2, 3, 4}, 4, positions), "point id out of range");
+    EXPECT_EQ(erhe::primitive::validate_vertex_points(std::vector<uint32_t>{0, 1, 2, 3, 0}, 5, positions), "point_count mismatch");
+    EXPECT_EQ(erhe::primitive::validate_vertex_points(std::vector<uint32_t>{0, 1, 2, 3}, 4, positions), "vertex_points size mismatch");
+    EXPECT_EQ(erhe::primitive::validate_vertex_points(std::vector<uint32_t>{0, 1, 2, 3, 0}, 0, positions), "point_count out of range");
+}
+
+
 } // namespace

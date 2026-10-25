@@ -663,6 +663,7 @@ Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept
     : m_element_mappings       {std::move(old.m_element_mappings)}
     , m_geometry               {std::move(old.m_geometry)}
     , m_triangle_soup          {std::move(old.m_triangle_soup)}
+    , m_prepared_data          {std::move(old.m_prepared_data)}
     , m_raytrace               {std::move(old.m_raytrace)}
     , m_pending_raytrace       {std::move(old.m_pending_raytrace)}
     , m_retired_proxy_raytrace {std::move(old.m_retired_proxy_raytrace)}
@@ -679,6 +680,7 @@ Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
         m_element_mappings       = std::move(old.m_element_mappings);
         m_geometry               = std::move(old.m_geometry);
         m_triangle_soup          = std::move(old.m_triangle_soup);
+        m_prepared_data          = std::move(old.m_prepared_data);
         m_raytrace               = std::move(old.m_raytrace);
         m_pending_raytrace       = std::move(old.m_pending_raytrace);
         m_retired_proxy_raytrace = std::move(old.m_retired_proxy_raytrace);
@@ -696,6 +698,13 @@ Primitive_shape::Primitive_shape(const std::shared_ptr<erhe::geometry::Geometry>
 Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup)
     : m_triangle_soup{triangle_soup}
 {
+}
+
+Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data)
+    : m_triangle_soup{triangle_soup}
+    , m_prepared_data{prepared_data}
+{
+    ERHE_VERIFY(m_triangle_soup);
 }
 
 Primitive_shape::~Primitive_shape() noexcept
@@ -800,6 +809,11 @@ auto Primitive_shape::get_raytrace() const -> const Primitive_raytrace&
 auto Primitive_shape::get_triangle_soup() const -> const std::shared_ptr<Triangle_soup>&
 {
     return m_triangle_soup;
+}
+
+auto Primitive_shape::get_prepared_data() const -> const std::shared_ptr<const Prepared_primitive_data>&
+{
+    return m_prepared_data;
 }
 
 auto Primitive_shape::has_raytrace_triangles() const -> bool
@@ -968,6 +982,12 @@ Primitive_render_shape::Primitive_render_shape(Buffer_mesh&& renderable_mesh)
 
 Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup)
     : Primitive_shape{triangle_soup}
+    , m_normal_style {Normal_style::corner_normals}
+{
+}
+
+Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data)
+    : Primitive_shape{triangle_soup, prepared_data}
     , m_normal_style {Normal_style::corner_normals}
 {
 }
@@ -1529,6 +1549,11 @@ Primitive::~Primitive() noexcept = default;
 
 Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup)
     : render_shape{std::make_shared<Primitive_render_shape>(triangle_soup)}
+{
+}
+
+Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<const Prepared_primitive_data>& prepared_data)
+    : render_shape{std::make_shared<Primitive_render_shape>(triangle_soup, prepared_data)}
 {
 }
 
