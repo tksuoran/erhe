@@ -44,6 +44,15 @@ enum class Geometry_type : int {
 
 class IInstance;
 
+class Geometry_memory_statistics
+{
+public:
+    std::size_t bvh_node_bytes            {0};
+    std::size_t primitive_id_bytes        {0};
+    std::size_t precomputed_triangle_bytes{0};
+    std::size_t pending_prebuilt_bvh_bytes{0}; // supplied for the next commit, not yet consumed
+};
+
 class IGeometry
 {
 public:
@@ -91,6 +100,12 @@ public:
     // Why the BVH supplied for the last commit() was rejected; empty when
     // none was supplied or it was used.
     [[nodiscard]] virtual auto get_prebuilt_bvh_rejection() const -> std::string_view { return {}; }
+
+    // CPU memory the backend holds for this geometry (allocated capacity),
+    // for memory reports. Backends that do not track it report zeros. The
+    // vertex / index buffers passed to set_buffer() belong to the caller and
+    // are not counted.
+    [[nodiscard]] virtual auto get_memory_statistics() const -> Geometry_memory_statistics { return {}; }
 
     [[nodiscard]] static auto create       (std::string_view debug_label, Geometry_type geometry_type) -> IGeometry*;
     [[nodiscard]] static auto create_shared(std::string_view debug_label, Geometry_type geometry_type) -> std::shared_ptr<IGeometry>;

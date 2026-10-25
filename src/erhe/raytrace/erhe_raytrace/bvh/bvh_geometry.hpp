@@ -62,6 +62,7 @@ public:
     auto set_prebuilt_bvh          (Prebuilt_bvh&& prebuilt) -> bool   override;
     auto get_bvh_source            () const -> Bvh_source              override;
     auto get_prebuilt_bvh_rejection() const -> std::string_view        override;
+    auto get_memory_statistics     () const -> Geometry_memory_statistics override;
 
     // Bvh_geometry public API
     auto intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool;

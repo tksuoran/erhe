@@ -16,6 +16,7 @@
 
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
+#include "mcp/mcp_process_memory.hpp"
 
 #include "animation/animation_player.hpp"
 #include "animation/animation_window.hpp"
@@ -52,6 +53,8 @@
 
 #include "app_scenes.hpp"
 
+#include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/window_imgui_host.hpp"
@@ -69,6 +72,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -263,9 +267,15 @@ auto Mcp_server::query_editor_references(const json& args) -> std::string
 
 auto Mcp_server::query_memory_usage(const json& args) -> std::string
 {
-    static_cast<void>(args);
-
     json result;
+
+    // process_only: just the operating system figures - cheap and lock-free
+    // with respect to the scenes, for sampling the transient peak while a
+    // load runs.
+    if (args.value("process_only", false)) {
+        result["process"] = get_process_memory_json();
+        return make_json_content(result).dump();
+    }
 
     // Mesh vertex / index pools. `capacity` only ever grows - pool blocks are
     // never destroyed - so `used` is the figure that moves when meshes are
@@ -307,12 +317,26 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
         {"byte_count",  texture_statistics.byte_count}
     };
 
+    // GPU buffers (every erhe::graphics::Buffer, by creation usage): mesh
+    // pools, ring buffers, acceleration structures and their build inputs.
+    const erhe::graphics::Buffer_memory_statistics buffer_statistics = erhe::graphics::Buffer::get_memory_statistics();
+    result["buffers"] = {
+        {"count",                                    buffer_statistics.buffer_count},
+        {"byte_count",                               buffer_statistics.byte_count},
+        {"acceleration_structure_bytes",             buffer_statistics.acceleration_structure_bytes},
+        {"acceleration_structure_build_input_bytes", buffer_statistics.acceleration_structure_build_input_bytes},
+        {"vertex_index_bytes",                       buffer_statistics.vertex_index_bytes},
+        {"other_bytes",                              buffer_statistics.other_bytes}
+    };
+
     // Driver-reported figure; Vulkan only, zeros elsewhere.
     if (m_context.graphics_device != nullptr) {
         const erhe::graphics::Memory_budget budget = m_context.graphics_device->get_memory_budget();
         result["device_memory"] = {
             {"device_local_budget", budget.device_local_budget},
-            {"device_local_usage",  budget.device_local_usage}
+            {"device_local_usage",  budget.device_local_usage},
+            {"device_local_block_bytes",      budget.device_local_block_bytes},
+            {"device_local_allocation_bytes", budget.device_local_allocation_bytes}
         };
     }
 
@@ -378,6 +402,150 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
             {"prepared",      prepared}
         };
     }
+
+    // CPU-side mesh data of the scene meshes' primitives, per owner: the
+    // render shape (source build), the optimized variant and the collision
+    // shape of each distinct Primitive. Objects shared by several shapes or
+    // primitives (a soup, prepared data, raytrace buffers) count once.
+    // Answers "which CPU mesh copies exist after a load"
+    // (doc/reference/memory_usage_2026_10.md).
+    if (m_context.app_scenes != nullptr) {
+        std::unordered_set<const erhe::primitive::Primitive*> primitives;
+        std::unordered_set<const void*>                       counted;
+        erhe::primitive::Shape_memory_statistics             render_statistics;
+        erhe::primitive::Shape_memory_statistics             optimized_statistics;
+        erhe::primitive::Shape_memory_statistics             collision_statistics;
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            if (!scene_root) {
+                continue;
+            }
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+            for (const std::shared_ptr<erhe::scene::Mesh_layer>& mesh_layer : scene_root->get_scene().get_mesh_layers()) {
+                for (const std::shared_ptr<erhe::scene::Mesh>& mesh : mesh_layer->meshes) {
+                    if (!mesh) {
+                        continue;
+                    }
+                    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+                        if ((primitive == nullptr) || !primitives.insert(primitive).second) {
+                            continue;
+                        }
+                        if (primitive->render_shape && counted.insert(primitive->render_shape.get()).second) {
+                            primitive->render_shape->add_memory_statistics(render_statistics, counted);
+                        }
+                        if (primitive->optimized_render_shape && counted.insert(primitive->optimized_render_shape.get()).second) {
+                            primitive->optimized_render_shape->add_memory_statistics(optimized_statistics, counted);
+                        }
+                        if (primitive->collision_shape && counted.insert(primitive->collision_shape.get()).second) {
+                            primitive->collision_shape->add_memory_statistics(collision_statistics, counted);
+                        }
+                    }
+                }
+            }
+        }
+        const auto shape_json = [](const erhe::primitive::Shape_memory_statistics& s) -> json {
+            const std::size_t total =
+                s.triangle_soup_vertex_bytes + s.triangle_soup_index_bytes + s.element_mapping_bytes +
+                s.prepared_colocation_bytes + s.prepared_bvh_bytes + s.stored_bvh_bytes +
+                s.raytrace_buffer_bytes + s.raytrace_facet_map_bytes + s.raytrace_bvh_node_bytes +
+                s.raytrace_primitive_id_bytes + s.raytrace_precomputed_triangle_bytes + s.raytrace_pending_prebuilt_bvh_bytes;
+            return json{
+                {"shape_count",                         s.shape_count},
+                {"geometry_count",                      s.geometry_count},
+                {"triangle_soup_count",                 s.triangle_soup_count},
+                {"triangle_soup_vertex_bytes",          s.triangle_soup_vertex_bytes},
+                {"triangle_soup_index_bytes",           s.triangle_soup_index_bytes},
+                {"element_mapping_bytes",               s.element_mapping_bytes},
+                {"prepared_data_count",                 s.prepared_data_count},
+                {"prepared_colocation_bytes",           s.prepared_colocation_bytes},
+                {"prepared_bvh_bytes",                  s.prepared_bvh_bytes},
+                {"stored_bvh_bytes",                    s.stored_bvh_bytes},
+                {"raytrace_count",                      s.raytrace_count},
+                {"raytrace_proxy_count",                s.raytrace_proxy_count},
+                {"raytrace_buffer_bytes",               s.raytrace_buffer_bytes},
+                {"raytrace_facet_map_bytes",            s.raytrace_facet_map_bytes},
+                {"raytrace_bvh_node_bytes",             s.raytrace_bvh_node_bytes},
+                {"raytrace_primitive_id_bytes",         s.raytrace_primitive_id_bytes},
+                {"raytrace_precomputed_triangle_bytes", s.raytrace_precomputed_triangle_bytes},
+                {"raytrace_pending_prebuilt_bvh_bytes", s.raytrace_pending_prebuilt_bvh_bytes},
+                {"total_bytes",                         total}
+            };
+        };
+        result["cpu_mesh"] = {
+            {"primitive_count",  primitives.size()},
+            {"render_shapes",    shape_json(render_statistics)},
+            {"optimized_shapes", shape_json(optimized_statistics)},
+            {"collision_shapes", shape_json(collision_statistics)}
+        };
+    }
+
+    // Image bytes kept on the CPU after a load: the encoded source streams
+    // retained for byte-exact export (asset container parses and the scene
+    // content libraries; one stream counted once) and decoded pixels not yet
+    // released by image residency.
+    {
+        std::unordered_set<const void*> counted;
+        std::size_t source_bytes        = 0;
+        std::size_t decoded_pixel_bytes = 0;
+        if (m_context.asset_manager != nullptr) {
+            m_context.asset_manager->add_retained_image_bytes(counted, source_bytes, decoded_pixel_bytes);
+        }
+        if (m_context.app_scenes != nullptr) {
+            for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+                if (scene_root && scene_root->get_content_library()) {
+                    source_bytes += scene_root->get_content_library()->get_retained_image_source_bytes(counted);
+                }
+            }
+        }
+        result["cpu_images"] = {
+            {"retained_source_bytes", source_bytes},
+            {"decoded_pixel_bytes",   decoded_pixel_bytes}
+        };
+    }
+
+    // The scene content libraries' textures by pixel format (each texture
+    // counted once): which part of `textures` the loaded scenes own, and
+    // what the transcode target made of them.
+    if (m_context.app_scenes != nullptr) {
+        std::unordered_set<const erhe::graphics::Texture*> textures;
+        std::map<std::string, std::pair<std::size_t, std::size_t>> by_format; // format -> (count, bytes)
+        std::size_t total_bytes = 0;
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> library = scene_root ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+            if (!library) {
+                continue;
+            }
+            for (const std::shared_ptr<erhe::graphics::Texture>& texture : library->get_all<erhe::graphics::Texture>()) {
+                if (!texture || !textures.insert(texture.get()).second) {
+                    continue;
+                }
+                std::pair<std::size_t, std::size_t>& entry = by_format[erhe::dataformat::c_str(texture->get_pixelformat())];
+                entry.first  += 1;
+                entry.second += texture->get_estimated_byte_count();
+                total_bytes  += texture->get_estimated_byte_count();
+            }
+        }
+        json formats = json::array();
+        for (const auto& [format, entry] : by_format) {
+            formats.push_back({{"format", format}, {"count", entry.first}, {"byte_count", entry.second}});
+        }
+        result["scene_textures"] = {
+            {"count",      textures.size()},
+            {"byte_count", total_bytes},
+            {"by_format",  formats}
+        };
+    }
+
+    if (m_context.graphics_device != nullptr) {
+        const erhe::graphics::Device_debug_state debug_state = m_context.graphics_device->get_debug_state();
+        result["ring_buffers"] = {
+            {"count",          debug_state.ring_buffer_count},
+            {"capacity_bytes", debug_state.ring_buffer_capacity_bytes},
+            {"bytes_in_use",   debug_state.ring_buffer_bytes_in_use}
+        };
+    }
+
+    result["process"] = get_process_memory_json();
 
     // Acceleration structures pin their primitives, so this must drop too:
     // one bottom level structure per traced geometry of every scene root

@@ -387,6 +387,9 @@ byte-for-byte against the foreign Bistro at idle.
    prepared Bistro load on desktop and Quest (per owner: soups, raytrace
    BVH and precomputed triangles, retained glTF buffers and image bytes,
    Geometry, mesh memory, textures, staging), and rank the optimizations.
+   Measured: `doc/reference/memory_usage_2026_10.md` (per-owner tables,
+   transient peak, ranked candidates; MCP `get_memory_usage` reports the
+   owners).
 3. **Drop CPU mesh memory after GPU upload.** An option, default on under
    OpenXR / Quest, that releases a primitive's CPU-side mesh data once its
    GPU buffers are uploaded and reloads it from the source glTF on demand

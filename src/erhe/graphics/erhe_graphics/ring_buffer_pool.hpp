@@ -44,6 +44,7 @@ public:
     std::size_t buffer_count     {0};
     std::size_t busy_buffer_count{0}; // !Ring_buffer::is_idle()
     std::size_t bytes_in_use     {0}; // sum of Ring_buffer::get_bytes_in_use()
+    std::size_t capacity_bytes   {0}; // sum of Ring_buffer::get_capacity_byte_count()
 };
 
 class Ring_buffer_pool
