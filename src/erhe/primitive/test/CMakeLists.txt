@@ -9,6 +9,7 @@ add_executable(${_target}
     test_mesh_optimizer.cpp
     test_optimized_variant_build.cpp
     test_empty_geometry_build.cpp
+    test_stored_colocation.cpp
 )
 
 target_link_libraries(${_target}

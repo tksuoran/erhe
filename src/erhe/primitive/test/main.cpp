@@ -5,6 +5,8 @@
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_property/property_log.hpp"
 
+#include <geogram/basic/command_line.h>
+#include <geogram/basic/command_line_args.h>
 #include <geogram/basic/common.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -22,6 +24,10 @@ int main(int argc, char** argv)
     // and Geogram's own Logger, which aborts when a message arrives before
     // GEO::initialize().
     GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
+    // As the editor does (editor.cpp "initialize geogram"): the soup
+    // conversion's colocate() nearest neighbor search reads the "algo"
+    // command line group.
+    GEO::CmdLine::import_arg_group("algo");
     erhe::log::initialize_log_sinks();
     erhe::file::log_file = spdlog::stdout_color_mt("erhe.file.bootstrap");
     erhe::property::initialize_logging();

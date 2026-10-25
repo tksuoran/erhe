@@ -12,6 +12,7 @@
 #include <cstring>
 #include <numeric>
 #include <set>
+#include <span>
 
 using erhe::geometry::Mesh_attributes;
 using erhe::geometry::set_pointf;
@@ -62,6 +63,20 @@ auto Triangle_soup::get_index_count() const -> std::size_t
     return index_data.size();
 }
 
+// The colocation of a soup's used vertices into mesh points, in the order
+// the points are created: point i is created at the position of used slot
+// representative_slot[i], and used slot s (m_used_indices[s]) maps to point
+// point_from_used_slot[s]. Either colocate() computes it or the caller
+// supplies it (ERHE_mesh_topology vertex_points); everything after it is the
+// same code, so both sources build identical meshes from identical input.
+class Point_assignment
+{
+public:
+    GEO::index_t              point_count{0};
+    std::vector<GEO::index_t> point_from_used_slot;
+    std::vector<GEO::index_t> representative_slot;
+};
+
 class Mesh_from_triangle_soup
 {
 public:
@@ -77,16 +92,93 @@ public:
     {
     }
 
-    void build()
+    // Colocation by GEO::Geom::colocate() under erhe::geometry::geogram_lock().
+    void build_colocated(Vertex_colocation* const out_colocation)
     {
-        get_used_indices();
+        ERHE_VERIFY(m_triangle_soup.vertex_format.streams.size() == 1);
+        // TODO non-indexed primitives are not currently supported
+        ERHE_VERIFY(get_used_indices());
+        // A soup without positions has nothing to colocate (it used to fail
+        // later, on the first triangle's missing point).
+        ERHE_VERIFY(read_positions());
+        colocate_points();
+        if (out_colocation != nullptr) {
+            store_colocation(*out_colocation);
+        }
+        build_from_point_assignment();
+    }
+
+    // Colocation supplied by the caller. Validates everything before touching
+    // the mesh or the mappings, so a false return leaves both as they were.
+    // Takes no geogram lock and calls no geogram algorithm.
+    [[nodiscard]] auto build_from_vertex_points(const std::span<const uint32_t> vertex_points, const uint32_t point_count) -> bool
+    {
+        if (m_triangle_soup.vertex_format.streams.size() != 1) {
+            return false;
+        }
+        const std::size_t vertex_count = m_triangle_soup.get_vertex_count();
+        if (vertex_points.size() != vertex_count) {
+            return false;
+        }
+        if ((point_count == 0) || (point_count > vertex_count)) {
+            return false;
+        }
+        for (const uint32_t index : m_triangle_soup.index_data) {
+            if (index >= vertex_count) {
+                return false;
+            }
+        }
+        // A vertex no index references carries Vertex_colocation::no_point
+        // or an id below point_count; it creates nothing either way.
+        for (const uint32_t point : vertex_points) {
+            if ((point >= point_count) && (point != Vertex_colocation::no_point)) {
+                return false;
+            }
+        }
+        if (!get_used_indices()) {
+            return false;
+        }
+
+        // Every used vertex names a point, and every point is named by at
+        // least one used vertex. A point's representative is its first used
+        // slot, as in colocate_points().
+        const std::size_t used_count = m_used_indices.size();
+        m_point_assignment.point_count = static_cast<GEO::index_t>(point_count);
+        m_point_assignment.point_from_used_slot.resize(used_count);
+        m_point_assignment.representative_slot.assign(point_count, GEO::NO_INDEX);
+        for (std::size_t used_slot = 0; used_slot < used_count; ++used_slot) {
+            const uint32_t point = vertex_points[m_used_indices[used_slot]];
+            if (point >= point_count) {
+                return false;
+            }
+            m_point_assignment.point_from_used_slot[used_slot] = static_cast<GEO::index_t>(point);
+            if (m_point_assignment.representative_slot[point] == GEO::NO_INDEX) {
+                m_point_assignment.representative_slot[point] = static_cast<GEO::index_t>(used_slot);
+            }
+        }
+        for (const GEO::index_t representative : m_point_assignment.representative_slot) {
+            if (representative == GEO::NO_INDEX) {
+                return false;
+            }
+        }
+        if (!read_positions()) {
+            return false;
+        }
+
+        build_from_point_assignment();
+        return true;
+    }
+
+private:
+    void build_from_point_assignment()
+    {
         make_vertices();
         parse_triangles();
         parse_vertex_data();
     }
 
-private:
-    void get_used_indices()
+    // False when the soup has no indices.
+    [[nodiscard]] auto get_used_indices() -> bool
     {
         m_used_indices = m_triangle_soup.index_data;
 
@@ -108,23 +200,23 @@ private:
             m_max_index = std::max(index, m_max_index);
         }
 
-        // TODO non-indexed primitives are not currently supported
-        ERHE_VERIFY(m_min_index != std::numeric_limits<std::size_t>::max());
+        return (m_min_index != std::numeric_limits<std::size_t>::max());
     }
-    void make_vertices()
+
+    // Positions of the used vertices only, in m_used_indices order: a
+    // primitive's indices need not start at 0 (glTF primitives sharing one
+    // vertex buffer) nor be contiguous, and an unused index inside
+    // [m_min_index, m_max_index] must not become a mesh point. False when the
+    // soup has no position attribute.
+    [[nodiscard]] auto read_positions() -> bool
     {
         using namespace erhe::dataformat;
-        ERHE_VERIFY(m_triangle_soup.vertex_format.streams.size() == 1);
         const Vertex_stream&    vertex_stream      = m_triangle_soup.vertex_format.streams.front();
         const Vertex_attribute* position_attribute = vertex_stream.find_attribute(Vertex_attribute_usage::position);
         if (position_attribute == nullptr) {
-            return;
+            return false;
         }
 
-        // Positions of the used vertices only, in m_used_indices order: a
-        // primitive's indices need not start at 0 (glTF primitives sharing
-        // one vertex buffer) nor be contiguous, and an unused index inside
-        // [m_min_index, m_max_index] must not become a mesh point.
         const std::size_t used_count = m_used_indices.size();
         m_vertex_positions.clear();
         m_vertex_positions.resize(used_count);
@@ -142,13 +234,20 @@ private:
             );
             m_vertex_positions.at(used_slot) = GEO::vec3{v[0], v[1], v[2]};
         }
+        return true;
+    }
 
-        const std::size_t index_range = m_max_index - m_min_index + 1;
-        m_vertex_from_index.resize(index_range);
-        std::fill(m_vertex_from_index.begin(), m_vertex_from_index.end(), GEO::NO_INDEX);
-
-        // Create points for each unique vertex. colocate() maps each used
-        // slot to the used slot of its representative (old_to_new).
+    void colocate_points()
+    {
+        // colocate() maps each used slot to the used slot of its
+        // representative (old_to_new). The representative is the smallest
+        // slot of its cluster: each slot first maps to the smallest slot
+        // within tolerance (itself included), then colocate() follows those
+        // non-increasing links to the slot that maps to itself. Sorting the
+        // representatives ascending therefore numbers the points in the order
+        // of their first reference by ascending used slot, which is ascending
+        // soup vertex index (doc/gltf_extensions/ERHE_mesh_topology.md).
+        const std::size_t used_count = m_used_indices.size();
         GEO::vector<GEO::index_t> old_to_new(static_cast<GEO::index_t>(used_count), GEO::NO_INDEX);
         const double tolerance = 0.00001; // 0.01mm if node has scale = 1.0, 1mm if node scale is 100.0
         // See erhe::geometry::geogram_lock(): colocate() is a geogram
@@ -180,26 +279,52 @@ private:
         representatives.erase(std::unique(representatives.begin(), representatives.end()), representatives.end());
         ERHE_VERIFY(representatives.size() == point_count);
 
-        const GEO::index_t base_vertex = m_mesh.vertices.create_vertices(point_count);
-        m_mesh.vertices.set_double_precision();
         GEO::vector<GEO::index_t> point_from_representative(static_cast<GEO::index_t>(used_count), GEO::NO_INDEX);
+        m_point_assignment.point_count = point_count;
+        m_point_assignment.representative_slot.resize(point_count);
         for (GEO::index_t i = 0, end = static_cast<GEO::index_t>(representatives.size()); i < end; ++i) {
             const GEO::index_t representative = representatives[i];
             point_from_representative.at(representative) = i;
-            m_mesh.vertices.point<3>(base_vertex + i) = m_vertex_positions.at(representative);
+            m_point_assignment.representative_slot[i] = representative;
         }
-        m_mesh.vertices.set_single_precision();
+        m_point_assignment.point_from_used_slot.resize(used_count);
         for (std::size_t used_slot = 0; used_slot < used_count; ++used_slot) {
             const GEO::index_t point = point_from_representative.at(old_to_new.at(used_slot));
             ERHE_VERIFY(point != GEO::NO_INDEX);
             ERHE_VERIFY(point < point_count);
+            m_point_assignment.point_from_used_slot[used_slot] = point;
+        }
+    }
+
+    void store_colocation(Vertex_colocation& out_colocation) const
+    {
+        const std::size_t vertex_count = m_triangle_soup.get_vertex_count();
+        ERHE_VERIFY(m_max_index < vertex_count);
+        out_colocation.point_count = static_cast<uint32_t>(m_point_assignment.point_count);
+        out_colocation.vertex_points.assign(vertex_count, Vertex_colocation::no_point);
+        for (std::size_t used_slot = 0, end = m_used_indices.size(); used_slot < end; ++used_slot) {
+            out_colocation.vertex_points[m_used_indices[used_slot]] = static_cast<uint32_t>(m_point_assignment.point_from_used_slot[used_slot]);
+        }
+    }
+
+    void make_vertices()
+    {
+        const std::size_t index_range = m_max_index - m_min_index + 1;
+        m_vertex_from_index.resize(index_range);
+        std::fill(m_vertex_from_index.begin(), m_vertex_from_index.end(), GEO::NO_INDEX);
+
+        const GEO::index_t point_count = m_point_assignment.point_count;
+        const GEO::index_t base_vertex = m_mesh.vertices.create_vertices(point_count);
+        m_mesh.vertices.set_double_precision();
+        for (GEO::index_t i = 0; i < point_count; ++i) {
+            const GEO::index_t representative = m_point_assignment.representative_slot[i];
+            m_mesh.vertices.point<3>(base_vertex + i) = m_vertex_positions.at(representative);
+        }
+        m_mesh.vertices.set_single_precision();
+        for (std::size_t used_slot = 0, used_count = m_used_indices.size(); used_slot < used_count; ++used_slot) {
+            const GEO::index_t point = m_point_assignment.point_from_used_slot[used_slot];
             m_vertex_from_index.at(m_used_indices[used_slot] - m_min_index) = base_vertex + point;
         }
-        //log_primitive->trace(
-        //    "point count = {}, point share count = {}",
-        //    m_geometry.get_point_count(),
-        //    point_share_count
-        //);
     }
     void parse_triangles()
     {
@@ -429,6 +554,7 @@ private:
     GEO::index_t              m_corner_start         {};
     GEO::index_t              m_corner_end           {};
     std::vector<GEO::index_t> m_index_from_corner    {};
+    Point_assignment          m_point_assignment     {};
 
     GEO::Attribute<GEO::Numeric::int32> m_corner_indices;
 };
@@ -498,9 +624,45 @@ void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh
     ERHE_PROFILE_FUNCTION();
 
     // No geogram_lock() here: the builder takes it around the one geogram
-    // algorithm it calls (colocate() in make_vertices()).
+    // algorithm it calls (colocate() in colocate_points()).
     Mesh_from_triangle_soup builder{mesh, triangle_soup, element_mappings};
-    builder.build();
+    builder.build_colocated(nullptr);
+}
+
+void mesh_from_triangle_soup(
+    const Triangle_soup& triangle_soup,
+    GEO::Mesh&           mesh,
+    Element_mappings&    element_mappings,
+    Vertex_colocation&   out_colocation
+)
+{
+    ERHE_VERIFY(element_mappings.mesh_corner_to_vertex_buffer_index.empty());
+    ERHE_VERIFY(element_mappings.triangle_to_mesh_facet.empty());
+
+    ERHE_PROFILE_FUNCTION();
+
+    out_colocation = Vertex_colocation{};
+    Mesh_from_triangle_soup builder{mesh, triangle_soup, element_mappings};
+    builder.build_colocated(&out_colocation);
+}
+
+auto mesh_from_triangle_soup(
+    const Triangle_soup&            triangle_soup,
+    const std::span<const uint32_t> vertex_points,
+    const uint32_t                  point_count,
+    GEO::Mesh&                      mesh,
+    Element_mappings&               element_mappings
+) -> bool
+{
+    ERHE_VERIFY(element_mappings.mesh_corner_to_vertex_buffer_index.empty());
+    ERHE_VERIFY(element_mappings.triangle_to_mesh_facet.empty());
+
+    ERHE_PROFILE_FUNCTION();
+
+    // No geogram_lock(): the supplied colocation replaces colocate(), the
+    // only geogram algorithm this conversion runs.
+    Mesh_from_triangle_soup builder{mesh, triangle_soup, element_mappings};
+    return builder.build_from_vertex_points(vertex_points, point_count);
 }
 
 } // amespace erhe::primitive
