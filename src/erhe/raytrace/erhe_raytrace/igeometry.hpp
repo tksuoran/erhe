@@ -107,6 +107,15 @@ public:
     // are not counted.
     [[nodiscard]] virtual auto get_memory_statistics() const -> Geometry_memory_statistics { return {}; }
 
+    // Forgets the vertex / index buffers passed to set_buffer(), so that the
+    // caller may free them, when the backend does not read them after a
+    // successful commit() (it traverses and reports hits from data of its
+    // own). Returns false, keeping them, when the backend reads them after
+    // commit() (embree shares them) or nothing was committed; the caller then
+    // keeps the buffers alive for the lifetime of the geometry. After a true
+    // return commit() must not be called again.
+    [[nodiscard]] virtual auto release_buffers() -> bool { return false; }
+
     [[nodiscard]] static auto create       (std::string_view debug_label, Geometry_type geometry_type) -> IGeometry*;
     [[nodiscard]] static auto create_shared(std::string_view debug_label, Geometry_type geometry_type) -> std::shared_ptr<IGeometry>;
     [[nodiscard]] static auto create_unique(std::string_view debug_label, Geometry_type geometry_type) -> std::unique_ptr<IGeometry>;

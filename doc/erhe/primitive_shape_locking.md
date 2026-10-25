@@ -16,10 +16,19 @@ thread wait for a worker's multi-second build.
 - **`m_state_mutex`** is held only for short reads and writes of the shape's
   mutable slots (`m_geometry`, `m_element_mappings`, `m_raytrace`,
   `m_pending_raytrace`, `m_retired_proxy_raytrace`, `m_renderable_mesh`,
-  `m_pending_buffer_mesh`, `m_normal_style`). **Never held across a build.**
+  `m_pending_buffer_mesh`, `m_normal_style`, and the triangle soup slots
+  `m_triangle_soup`, `m_triangle_soup_source`, `m_reloaded_triangle_soup`,
+  `m_triangle_soup_released`). **Never held across a build.**
+- **`m_reload_mutex`** is held while `get_triangle_soup()` reads a released
+  soup back from its source (doc/erhe/primitive.md "Releasing the triangle
+  soup"), so concurrent readers read the file once. The file read runs with
+  no state lock held.
 
 **Lock order: `Item_host::item_host_mutex` -> `m_build_mutex` ->
-`m_state_mutex`.** The main thread genuinely takes the item-host lock and then
+`m_reload_mutex` -> `m_state_mutex`.** A build that needs the soup
+(`make_geometry()`, `make_prepared_raytrace()`, the soup path of
+`make_buffer_mesh()`) calls `get_triangle_soup()` under the build lock, which
+is the build -> reload edge. The main thread genuinely takes the item-host lock and then
 a shape lock (the commit closures in
 `async_raytrace_kickoff_operation.cpp`). What makes that deadlock-free is that
 no `Primitive_shape` method ever touches scene state - `primitive.cpp`
@@ -39,6 +48,8 @@ way.
 | `prepare_geometry_buffer_mesh()` | build across the build; early-outs and publish under state |
 | `commit_geometry_buffer_mesh()` | **state only** |
 | `get_mesh_facet_from_triangle()` | **state only** |
+| `get_triangle_soup()` | state for a resident soup; reload around a read-back, state for its publish |
+| `release_triangle_soup()`, `set_triangle_soup_source()`, `has_triangle_soup()` | state |
 | `has_raytrace_triangles()`, `has_real_raytrace()`, `has_buffer_mesh_triangles()`, `has_edge_lines()` | state |
 | `Primitive_render_shape::make_buffer_mesh()` (both overloads) | build around the build; publish `m_renderable_mesh` + `m_element_mappings` under state |
 

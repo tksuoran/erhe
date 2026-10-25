@@ -22,6 +22,8 @@ namespace erhe::primitive { class Build_info; }
 namespace erhe::scene     { class Animation; class Camera; class Xformable; using Node = Xformable; }
 namespace tf              { class Executor; }
 
+enum class Cpu_mesh_data_retention : unsigned int; // config/generated/cpu_mesh_data_retention.hpp
+
 namespace editor {
 
 // The name of the one variant set a glTF asset's KHR_materials_variants list
@@ -140,6 +142,13 @@ void import_gltf(
 // (Load_config::use_prepared_mesh_data, doc/plans/gltf_fast_load.md "Loader");
 // use when the editor settings are not available.
 [[nodiscard]] auto get_prepared_mesh_data_use(const App_context& context) -> erhe::gltf::Prepared_mesh_data_use;
+
+// Load_config::cpu_mesh_data with platform_default resolved (keep on desktop,
+// release in OpenXR), and the matching glTF parse argument: release records
+// triangle soup reload sources (doc/editor/async_asset_loading.md "Releasing
+// CPU mesh data").
+[[nodiscard]] auto get_cpu_mesh_data_retention(const App_context& context) -> Cpu_mesh_data_retention;
+[[nodiscard]] auto get_triangle_soup_reload  (const App_context& context) -> erhe::gltf::Triangle_soup_reload;
 
 // Make freshly parsed glTF meshes renderable: build geometry edges +
 // smooth vertex normals, allocate GPU buffers in Mesh_memory (skinned

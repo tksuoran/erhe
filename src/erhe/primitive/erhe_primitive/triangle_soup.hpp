@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -27,6 +28,43 @@ public:
     std::vector<uint32_t>           index_data;
     Primitive_type                  primitive_type{Primitive_type::triangles};
 };
+
+// Vertex and index count of a soup, kept by a shape whose soup was released
+// (Primitive_shape::get_triangle_soup_counts()).
+class Triangle_soup_counts
+{
+public:
+    std::size_t vertex_count{0};
+    std::size_t index_count {0};
+};
+
+// Where a Triangle_soup released from memory is read back from
+// (Primitive_shape::release_triangle_soup()). Implemented by the loader that
+// made the soup: erhe::gltf records the source file byte ranges of a glTF
+// primitive's accessors (doc/erhe/gltf.md "Triangle soup reload").
+class Triangle_soup_source
+{
+public:
+    virtual ~Triangle_soup_source() noexcept;
+
+    // Reads the soup again, bit-identical to the one the loader made. Null,
+    // with an error logged, when the source cannot reproduce it: the source
+    // file changed since the load or cannot be read.
+    [[nodiscard]] virtual auto load() const -> std::shared_ptr<Triangle_soup> = 0;
+    // Short description for logs (file and primitive).
+    [[nodiscard]] virtual auto describe() const -> std::string = 0;
+};
+
+// Process-wide counts of Primitive_shape::get_triangle_soup() reloads.
+class Triangle_soup_reload_statistics
+{
+public:
+    std::size_t reload_count        {0}; // successful reloads
+    std::size_t reload_failure_count{0}; // reloads the source refused or failed
+    std::size_t reload_bytes        {0}; // vertex + index bytes of the successful reloads
+};
+
+[[nodiscard]] auto get_triangle_soup_reload_statistics() -> Triangle_soup_reload_statistics;
 
 // A copy of `source` whose color attribute is `color` at every vertex: the
 // whole-surface color a `Gprim.display_color` names, built into the vertex

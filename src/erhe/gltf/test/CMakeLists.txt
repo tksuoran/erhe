@@ -8,6 +8,7 @@ add_executable(${_target}
     gltf_test_util.hpp
     test_gltf_parse.cpp
     test_gltf_roundtrip.cpp
+    test_gltf_soup_reload.cpp
 )
 
 target_compile_definitions(${_target} PRIVATE ERHE_GLTF_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")

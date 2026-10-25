@@ -36,6 +36,18 @@ if (scene->intersect(ray, hit)) { /* hit.geometry, hit.triangle_id, etc. */ }
 
 `IGeometry::get_memory_statistics()` reports the CPU bytes the backend holds for a committed geometry (BVH nodes, primitive ids, precomputed triangles, a supplied BVH not yet consumed); the bvh backend fills it, the others report zeros. The vertex / index `Cpu_buffer`s passed to `set_buffer()` are the caller's and are read only by `commit()`.
 
+## Releasing the input buffers
+
+`IGeometry::release_buffers()`, called after `commit()`, makes the geometry
+forget the buffers passed to `set_buffer()` and returns true when the backend
+does not read them after the commit: `bvh` (traversal and hits use the
+precomputed triangles and the BVH) and `tinybvh` (its own triangle array).
+`embree` shares the buffers with the device and returns false, as does the
+default. After a true return the caller may free the buffers and must not call
+`commit()` again. `erhe::primitive::Primitive_raytrace` frees its vertex /
+index copies this way. Test: `Geometry.ReleaseBuffersKeepsHitsIdentical`
+(`src/erhe/raytrace/test/test_geometry.cpp`).
+
 ## Prebuilt BVH
 
 A committed geometry's BVH can be exported and supplied to a later

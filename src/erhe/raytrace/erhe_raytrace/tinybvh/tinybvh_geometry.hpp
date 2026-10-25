@@ -33,6 +33,7 @@ public:
 
     // Implements IGeometry
     void commit                    () override;
+    auto release_buffers           () -> bool override;
     void enable                    () override;
     void disable                   () override;
     void set_mask                  (uint32_t mask) override;

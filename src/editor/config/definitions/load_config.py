@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Load_config",
     reflect=True,
-    version=4,
+    version=5,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",
     developer=False,
@@ -34,6 +34,16 @@ struct("Load_config",
             default="true",
             short_desc="Use Prepared Mesh Data",
             long_desc="Read the prepared mesh data a scene save writes into glTF files (ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh: optimized vertex order, stored colocation and stored BVH) and use what validates. Disable to load such files as plain triangle soups, as files without the extensions.",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "cpu_mesh_data",
+            EnumRef("Cpu_mesh_data_retention"),
+            added_in=5,
+            default="Cpu_mesh_data_retention::platform_default",
+            short_desc="CPU Mesh Data",
+            long_desc="What a glTF load does with a primitive's CPU triangle soup once its GPU buffers and raytrace are built. release frees it and reads it back from the source file on demand (export, Geometry builds, display color rebuilds) - this saves the soup memory (hundreds of MB for large scenes); keep holds it. Only primitives loaded with prepared mesh data from a file are released. platform_default keeps on desktop and releases in OpenXR.",
             visible=True,
             developer=True
         ),

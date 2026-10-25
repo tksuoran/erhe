@@ -124,22 +124,25 @@ enum class Geometry_count : unsigned int { vertices = 0, facets = 1, edges = 2, 
         // doc/erhe/primitive.md "Prepared mesh data on load"): the soup
         // counts. A soup triangle is a facet with three corners; the point
         // count is the stored colocation's when there is one; edges are not
-        // known without the Geometry.
-        const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = mesh_primitive.primitive->render_shape->get_triangle_soup();
-        if (!soup) {
+        // known without the Geometry. The counts are the ones the shape
+        // recorded at construction, so a soup released after upload is not
+        // read back for them.
+        const erhe::primitive::Primitive_render_shape& render_shape = *mesh_primitive.primitive->render_shape;
+        if (!render_shape.has_triangle_soup()) {
             return 0;
         }
-        const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared = mesh_primitive.primitive->render_shape->get_prepared_data();
+        const erhe::primitive::Triangle_soup_counts soup_counts = render_shape.get_triangle_soup_counts();
+        const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared = render_shape.get_prepared_data();
         switch (which) {
             case Geometry_count::vertices: {
                 if (prepared && prepared->colocation.has_value()) {
                     return static_cast<int>(prepared->colocation->point_count);
                 }
-                return static_cast<int>(soup->get_vertex_count());
+                return static_cast<int>(soup_counts.vertex_count);
             }
-            case Geometry_count::facets:  return static_cast<int>(soup->get_index_count() / 3);
+            case Geometry_count::facets:  return static_cast<int>(soup_counts.index_count / 3);
             case Geometry_count::edges:   return 0;
-            case Geometry_count::corners: return static_cast<int>(soup->get_index_count());
+            case Geometry_count::corners: return static_cast<int>(soup_counts.index_count);
         }
         return 0;
     }

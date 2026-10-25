@@ -45,6 +45,12 @@ auto get_texcoord_quantization(const Buffer_mesh& buffer_mesh) -> Texcoord_quant
 
 Buffer_mesh::Buffer_mesh() = default;
 
+void Buffer_mesh::release_buffer_allocations()
+{
+    const std::lock_guard<std::mutex> lock{buffer_mesh_allocation_mutex()};
+    release_allocations(*this);
+}
+
 Buffer_mesh::~Buffer_mesh()
 {
     // Free under the allocation mutex so the frees cannot interleave into

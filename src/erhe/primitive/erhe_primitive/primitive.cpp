@@ -493,6 +493,10 @@ auto Primitive_raytrace::get_bvh_source() const -> unsigned int
 
 auto Primitive_raytrace::get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t
 {
+    if (m_identity_facet_map) {
+        ERHE_VERIFY(triangle < (m_rt_mesh.triangle_fill_indices.index_count / 3));
+        return static_cast<GEO::index_t>(triangle);
+    }
     if (m_triangle_to_mesh_facet.empty()) {
         return GEO::NO_INDEX;
     }
@@ -525,11 +529,11 @@ void Primitive_raytrace::add_memory_statistics(Shape_memory_statistics& out, std
 
 auto Primitive_raytrace::has_raytrace_triangles() const -> bool
 {
+    // The vertex / index buffers are gone after a commit whose backend does
+    // not read them (release_buffers_after_commit()); the mesh ranges stay.
     return
         m_rt_geometry &&
-        m_rt_index_buffer &&
-        m_rt_vertex_buffer &&
-        m_rt_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0;
+        (m_rt_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0);
 }
 
 void Primitive_raytrace::make_raytrace_geometry()
@@ -583,6 +587,22 @@ void Primitive_raytrace::make_raytrace_geometry()
         erhe::log::set_breadcrumb(m_is_proxy ? "raytrace: proxy BVH commit" : "raytrace: BVH commit");
         m_rt_geometry->commit();
     }
+    release_buffers_after_commit();
+}
+
+void Primitive_raytrace::release_buffers_after_commit()
+{
+    // The backend copied what traversal and hit reporting read; its copies
+    // of the vertex / index data are only the commit's input. m_rt_mesh keeps
+    // its ranges and bounds (the developer Properties view and
+    // Primitive::get_bounding_box() read them) and drops the allocations
+    // before the buffers they point into.
+    if (!m_rt_geometry || !m_rt_geometry->release_buffers()) {
+        return;
+    }
+    m_rt_mesh.release_buffer_allocations();
+    m_rt_index_buffer.reset();
+    m_rt_vertex_buffer.reset();
 }
 
 Primitive_raytrace::Primitive_raytrace(const Triangle_soup& triangle_soup, std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt)
@@ -633,12 +653,9 @@ Primitive_raytrace::Primitive_raytrace(const Triangle_soup& triangle_soup, std::
         static_cast<void>(m_rt_geometry->set_prebuilt_bvh(std::move(*prebuilt)));
         prebuilt.reset();
     }
-    // Identity facet mapping: triangle t of the soup is facet t.
-    const std::size_t soup_triangle_count = index_count / 3;
-    m_triangle_to_mesh_facet.resize(soup_triangle_count);
-    for (std::size_t triangle = 0; triangle < soup_triangle_count; ++triangle) {
-        m_triangle_to_mesh_facet[triangle] = static_cast<uint32_t>(triangle);
-    }
+    // Identity facet mapping: triangle t of the soup is facet t. Held as a
+    // flag, not as a table.
+    m_identity_facet_map = true;
 
     ERHE_VERIFY(m_rt_mesh.vertex_buffer_ranges.size() == 1);
 
@@ -676,6 +693,7 @@ Primitive_raytrace::Primitive_raytrace(const Triangle_soup& triangle_soup, std::
         erhe::log::set_breadcrumb("raytrace: BVH commit");
         m_rt_geometry->commit();
     }
+    release_buffers_after_commit();
 }
 
 Primitive_raytrace::Primitive_raytrace(Primitive_raytrace&&) noexcept = default;
@@ -694,6 +712,7 @@ Primitive_raytrace& Primitive_raytrace::operator=(Primitive_raytrace&& other) no
         m_rt_index_buffer        = std::move(other.m_rt_index_buffer);
         m_rt_vertex_buffer       = std::move(other.m_rt_vertex_buffer);
         m_triangle_to_mesh_facet = std::move(other.m_triangle_to_mesh_facet);
+        m_identity_facet_map     = other.m_identity_facet_map;
         m_is_proxy               = other.m_is_proxy;
     }
     return *this;
@@ -713,6 +732,10 @@ Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept
     : m_element_mappings       {std::move(old.m_element_mappings)}
     , m_geometry               {std::move(old.m_geometry)}
     , m_triangle_soup          {std::move(old.m_triangle_soup)}
+    , m_triangle_soup_source   {std::move(old.m_triangle_soup_source)}
+    , m_reloaded_triangle_soup {std::move(old.m_reloaded_triangle_soup)}
+    , m_triangle_soup_counts   {old.m_triangle_soup_counts}
+    , m_triangle_soup_released {old.m_triangle_soup_released}
     , m_prepared_data          {std::move(old.m_prepared_data)}
     , m_stored_bvh             {std::move(old.m_stored_bvh)}
     , m_prepared_data_stale    {old.m_prepared_data_stale}
@@ -732,6 +755,10 @@ Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
         m_element_mappings       = std::move(old.m_element_mappings);
         m_geometry               = std::move(old.m_geometry);
         m_triangle_soup          = std::move(old.m_triangle_soup);
+        m_triangle_soup_source   = std::move(old.m_triangle_soup_source);
+        m_reloaded_triangle_soup = std::move(old.m_reloaded_triangle_soup);
+        m_triangle_soup_counts   = old.m_triangle_soup_counts;
+        m_triangle_soup_released = old.m_triangle_soup_released;
         m_prepared_data          = std::move(old.m_prepared_data);
         m_stored_bvh             = std::move(old.m_stored_bvh);
         m_prepared_data_stale    = old.m_prepared_data_stale;
@@ -749,13 +776,52 @@ Primitive_shape::Primitive_shape(const std::shared_ptr<erhe::geometry::Geometry>
     m_geometry_published.store(m_geometry != nullptr, std::memory_order_release);
 }
 
+namespace {
+
+[[nodiscard]] auto get_counts(const std::shared_ptr<Triangle_soup>& triangle_soup) -> Triangle_soup_counts
+{
+    if (!triangle_soup) {
+        return {};
+    }
+    return Triangle_soup_counts{
+        .vertex_count = triangle_soup->get_vertex_count(),
+        .index_count  = triangle_soup->get_index_count()
+    };
+}
+
+class Triangle_soup_reload_counter
+{
+public:
+    std::mutex                      mutex;
+    Triangle_soup_reload_statistics statistics;
+};
+
+auto get_triangle_soup_reload_counter() -> Triangle_soup_reload_counter&
+{
+    static Triangle_soup_reload_counter counter;
+    return counter;
+}
+
+}
+
+Triangle_soup_source::~Triangle_soup_source() noexcept = default;
+
+auto get_triangle_soup_reload_statistics() -> Triangle_soup_reload_statistics
+{
+    Triangle_soup_reload_counter& counter = get_triangle_soup_reload_counter();
+    const std::lock_guard<std::mutex> lock{counter.mutex};
+    return counter.statistics;
+}
+
 Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup)
-    : m_triangle_soup{triangle_soup}
+    : m_triangle_soup       {triangle_soup}
+    , m_triangle_soup_counts{get_counts(triangle_soup)}
 {
 }
 
 Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data)
-    : m_triangle_soup{triangle_soup}
+    : m_triangle_soup       {triangle_soup}
+    , m_triangle_soup_counts{get_counts(triangle_soup)}
 {
     ERHE_VERIFY(m_triangle_soup);
     if (prepared_data && prepared_data->bvh.has_value()) {
@@ -782,7 +848,8 @@ auto Primitive_shape::make_geometry_build_locked() -> std::shared_ptr<erhe::geom
     if (m_geometry_published.load(std::memory_order_acquire)) {
         return m_geometry;
     }
-    if (!m_triangle_soup) {
+    const std::shared_ptr<Triangle_soup> triangle_soup = get_triangle_soup();
+    if (!triangle_soup) {
         return {};
     }
 
@@ -816,7 +883,7 @@ auto Primitive_shape::make_geometry_build_locked() -> std::shared_ptr<erhe::geom
         m_prepared_data &&
         m_prepared_data->colocation.has_value() &&
         mesh_from_triangle_soup(
-            *m_triangle_soup.get(),
+            *triangle_soup.get(),
             m_prepared_data->colocation->vertex_points,
             m_prepared_data->colocation->point_count,
             mesh,
@@ -826,10 +893,10 @@ auto Primitive_shape::make_geometry_build_locked() -> std::shared_ptr<erhe::geom
         if (m_prepared_data && m_prepared_data->colocation.has_value()) {
             log_primitive->warn("make_geometry: the stored colocation was refused - colocating");
         }
-        mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, element_mappings);
+        mesh_from_triangle_soup(*triangle_soup.get(), mesh, element_mappings);
     }
 
-    const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
+    const erhe::dataformat::Attribute_stream tangent_stream = triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
     if (tangent_stream.attribute == nullptr) {
         erhe::geometry::compute_mesh_tangents(mesh, {.orthonormalize = false, .make_facets_flat = false, .texcoord_usage_index = 0});
     }
@@ -881,9 +948,120 @@ auto Primitive_shape::get_raytrace() const -> const Primitive_raytrace&
     return m_raytrace;
 }
 
-auto Primitive_shape::get_triangle_soup() const -> const std::shared_ptr<Triangle_soup>&
+auto Primitive_shape::get_triangle_soup() const -> std::shared_ptr<Triangle_soup>
 {
-    return m_triangle_soup;
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (m_triangle_soup || !m_triangle_soup_released) {
+            return m_triangle_soup;
+        }
+        std::shared_ptr<Triangle_soup> reloaded = m_reloaded_triangle_soup.lock();
+        if (reloaded) {
+            return reloaded;
+        }
+    }
+
+    // Released: read it back once, however many callers ask at the same time.
+    const std::lock_guard<std::mutex> reload_lock{m_reload_mutex};
+    std::shared_ptr<const Triangle_soup_source> source;
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        std::shared_ptr<Triangle_soup> reloaded = m_reloaded_triangle_soup.lock();
+        if (reloaded) {
+            return reloaded;
+        }
+        source = m_triangle_soup_source;
+    }
+    ERHE_VERIFY(source); // release_triangle_soup() refuses a shape without one
+
+    ERHE_PROFILE_SCOPE("reload triangle soup");
+    std::shared_ptr<Triangle_soup> reloaded = source->load();
+    if (reloaded) {
+        const Triangle_soup_counts reloaded_counts = get_counts(reloaded);
+        if (
+            (reloaded_counts.vertex_count != m_triangle_soup_counts.vertex_count) ||
+            (reloaded_counts.index_count  != m_triangle_soup_counts.index_count)
+        ) {
+            log_primitive->error(
+                "triangle soup reload of {}: {} vertices / {} indices, the released soup had {} / {} - refused",
+                source->describe(),
+                reloaded_counts.vertex_count, reloaded_counts.index_count,
+                m_triangle_soup_counts.vertex_count, m_triangle_soup_counts.index_count
+            );
+            reloaded.reset();
+        }
+    }
+    {
+        Triangle_soup_reload_counter& counter = get_triangle_soup_reload_counter();
+        const std::lock_guard<std::mutex> lock{counter.mutex};
+        if (reloaded) {
+            ++counter.statistics.reload_count;
+            counter.statistics.reload_bytes += reloaded->vertex_data.size() + (reloaded->index_data.size() * sizeof(uint32_t));
+        } else {
+            ++counter.statistics.reload_failure_count;
+        }
+    }
+    if (!reloaded) {
+        return {};
+    }
+    log_primitive->trace("triangle soup reloaded: {}", source->describe());
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_reloaded_triangle_soup = reloaded;
+    return reloaded;
+}
+
+auto Primitive_shape::has_triangle_soup() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_triangle_soup || m_triangle_soup_released;
+}
+
+auto Primitive_shape::get_triangle_soup_counts() const -> Triangle_soup_counts
+{
+    return m_triangle_soup_counts;
+}
+
+void Primitive_shape::set_triangle_soup_source(std::shared_ptr<const Triangle_soup_source> source)
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_triangle_soup_source = std::move(source);
+}
+
+auto Primitive_shape::get_triangle_soup_source() const -> std::shared_ptr<const Triangle_soup_source>
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_triangle_soup_source;
+}
+
+auto Primitive_shape::release_triangle_soup() -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (m_triangle_soup_released) {
+        return true;
+    }
+    if (!m_triangle_soup || !m_triangle_soup_source) {
+        return false;
+    }
+    m_triangle_soup.reset();
+    m_triangle_soup_released = true;
+    return true;
+}
+
+auto Primitive_shape::is_triangle_soup_released() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_triangle_soup_released;
+}
+
+auto Primitive_shape::shares_resident_triangle_soup(const Primitive_shape& other) const -> bool
+{
+    std::shared_ptr<Triangle_soup> this_soup;
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        this_soup = m_triangle_soup;
+    }
+    const std::lock_guard<std::mutex> other_state_lock{other.m_state_mutex};
+    return this_soup && (this_soup == other.m_triangle_soup);
 }
 
 auto Primitive_shape::get_prepared_data() const -> const std::shared_ptr<const Prepared_primitive_data>&
@@ -979,12 +1157,16 @@ auto Primitive_shape::make_prepared_raytrace() -> bool
             return true;
         }
     }
-    if (!m_triangle_soup || !m_prepared_data || !m_stored_bvh) {
+    if (!m_prepared_data || !m_stored_bvh) {
+        return false;
+    }
+    const std::shared_ptr<Triangle_soup> triangle_soup = get_triangle_soup();
+    if (!triangle_soup) {
         return false;
     }
     // Built aside with no state lock held, like every raytrace build. The
     // stored BVH moves into the backend: used or not, it is not kept twice.
-    Primitive_raytrace raytrace{*m_triangle_soup, std::move(m_stored_bvh)};
+    Primitive_raytrace raytrace{*triangle_soup, std::move(m_stored_bvh)};
     if (!raytrace.has_raytrace_triangles()) {
         return false;
     }
@@ -1281,10 +1463,11 @@ auto Primitive_render_shape::make_buffer_mesh_build_locked(
 
 auto Primitive_render_shape::make_buffer_mesh_build_locked(const Buffer_info& buffer_info) -> bool
 {
-    if (!m_triangle_soup) {
+    const std::shared_ptr<Triangle_soup> triangle_soup = get_triangle_soup();
+    if (!triangle_soup) {
         return false;
     }
-    std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*m_triangle_soup.get(), buffer_info);
+    std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*triangle_soup.get(), buffer_info);
     if (!buffer_mesh_opt.has_value()) {
         return false;
     }
@@ -1683,10 +1866,17 @@ void Primitive_shape::add_memory_statistics(Shape_memory_statistics& out, std::u
     if (m_geometry_published.load(std::memory_order_acquire) && m_geometry && counted.insert(m_geometry.get()).second) {
         ++out.geometry_count;
     }
-    if (m_triangle_soup && counted.insert(m_triangle_soup.get()).second) {
+    // A released soup counts while a reload of it is held by some caller.
+    const std::shared_ptr<Triangle_soup> resident_soup = m_triangle_soup ? m_triangle_soup : m_reloaded_triangle_soup.lock();
+    if (resident_soup && counted.insert(resident_soup.get()).second) {
         ++out.triangle_soup_count;
-        out.triangle_soup_vertex_bytes += m_triangle_soup->vertex_data.capacity();
-        out.triangle_soup_index_bytes  += m_triangle_soup->index_data.capacity() * sizeof(uint32_t);
+        out.triangle_soup_vertex_bytes += resident_soup->vertex_data.capacity();
+        out.triangle_soup_index_bytes  += resident_soup->index_data.capacity() * sizeof(uint32_t);
+    }
+    // Counted once per source: the optimized variant shares the render
+    // shape's soup and source.
+    if (m_triangle_soup_released && counted.insert(m_triangle_soup_source.get()).second) {
+        ++out.triangle_soup_released_count;
     }
     out.element_mapping_bytes +=
         (m_element_mappings.triangle_to_mesh_facet            .capacity() * sizeof(uint32_t)) +
@@ -1866,6 +2056,25 @@ auto Primitive::make_renderable_mesh(const Build_info& build_info, const Normal_
     return true;
 }
 
+auto Primitive::release_triangle_soup() -> bool
+{
+    if (!render_shape) {
+        return false;
+    }
+    const std::shared_ptr<const Triangle_soup_source> source = render_shape->get_triangle_soup_source();
+    if (!source) {
+        return false;
+    }
+    // The optimized variant of a prepared primitive is built over the same
+    // core soup; it is released with the render shape and reads back from the
+    // same source.
+    if (optimized_render_shape && optimized_render_shape->shares_resident_triangle_soup(*render_shape)) {
+        optimized_render_shape->set_triangle_soup_source(source);
+        static_cast<void>(optimized_render_shape->release_triangle_soup());
+    }
+    return render_shape->release_triangle_soup();
+}
+
 auto Primitive::is_prepared() const -> bool
 {
     return render_shape && (render_shape->get_prepared_data() != nullptr);
@@ -1878,12 +2087,13 @@ auto Primitive::make_prepared_meshes(const Build_info& build_info) -> bool
     if (!is_prepared()) {
         return false;
     }
-    const std::shared_ptr<Triangle_soup>& core = render_shape->get_triangle_soup();
-    if (!core) {
+    if (!render_shape->has_triangle_soup()) {
         return false;
     }
     // Base: the fill-only soup build (no Geometry is published, so this is the
-    // soup path of make_buffer_mesh()).
+    // soup path of make_buffer_mesh()). Each step reads the soup only when it
+    // builds, so a repeat call on a built primitive whose soup was released
+    // (release_triangle_soup()) reads nothing back.
     if (!render_shape->has_buffer_mesh_triangles()) {
         if (!render_shape->make_buffer_mesh(build_info.buffer_info)) {
             return false;
@@ -1903,6 +2113,10 @@ auto Primitive::make_prepared_meshes(const Build_info& build_info) -> bool
             .index_buffer_sink  = buffer_info.index_buffer_sink,
             .vertex_input_key   = buffer_info.optimized_vertex_input_key
         };
+        const std::shared_ptr<Triangle_soup> core = render_shape->get_triangle_soup();
+        if (!core) {
+            return false;
+        }
         std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
         if (optimized->make_buffer_mesh(optimized_buffer_info)) {
             publish_optimized_render_shape(std::move(optimized));

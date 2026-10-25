@@ -934,6 +934,8 @@ set(_config_sources
     ${_config_out}/camera_controls_config.hpp
     ${_config_out}/camera_controls_config_serialization.hpp
     ${_config_out}/camera_controls_config.cpp
+    ${_config_out}/cpu_mesh_data_retention.hpp
+    ${_config_out}/cpu_mesh_data_retention.cpp
     ${_config_out}/developer_config.hpp
     ${_config_out}/developer_config_serialization.hpp
     ${_config_out}/developer_config.cpp
