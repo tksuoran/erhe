@@ -208,8 +208,9 @@ BVH nodes, primitive ids, precomputed triangles and facet maps; shared objects
 counted once; `Primitive_shape::add_memory_statistics()`; plus the count of
 soups released after upload and the process's soup reloads,
 doc/editor/async_asset_loading.md "Releasing CPU mesh data"), `cpu_images` (the
-retained encoded source image streams and any decoded pixels not yet
-released), `ring_buffers` (count, capacity, bytes in use) and `process` (the
+resident encoded source image streams - 0 for images loaded from a file,
+which are re-read on demand, doc/erhe/gltf.md "Image source streams" - and
+any decoded pixels not yet released), `ring_buffers` (count, capacity, bytes in use) and `process` (the
 operating system figures: working set / peak / private bytes and the CPU
 heaps' allocated bytes on Windows, `/proc/self/status` VmRSS / VmHWM /
 RssAnon and mallinfo in-use bytes on Linux and Android). `process_only: true`

@@ -84,15 +84,36 @@ public:
     std::size_t file_index{0};
 };
 
-// Compressed source image stream retained at import so a later export can
-// re-embed the image verbatim, byte-exact (doc/editor/gltf_scene_roundtrip.md
-// phase 0). GPU-only textures (e.g. editor graph-texture bakes) have no
+// Where an image's compressed source stream is, so residency can decode it
+// and a later export can re-embed it verbatim, byte-exact
+// (doc/editor/gltf_scene_roundtrip.md phase 0). Either the bytes themselves
+// (a data URI, a parse from memory, a standalone image file a caller read)
+// or a byte range of a file, read just in time by read() - parse_gltf keeps
+// no image file bytes in memory (doc/erhe/gltf.md "Image source streams").
+// GPU-only textures (e.g. editor graph-texture bakes) have no
 // Gltf_image_source and are never exported as images.
 class Gltf_image_source
 {
 public:
-    std::vector<std::byte> encoded_bytes; // original PNG / JPEG / ... stream
+    std::vector<std::byte> encoded_bytes; // the stream, when resident; empty when file-backed
     std::string            mime_type;     // "image/png", "image/jpeg", ...
+
+    // File-backed stream: byte_length bytes at file_offset of file_path,
+    // which had file_size and file_write_time when the range was recorded.
+    std::filesystem::path           file_path;
+    std::size_t                     file_offset    {0};
+    std::size_t                     byte_length    {0};
+    std::uintmax_t                  file_size      {0};
+    std::filesystem::file_time_type file_write_time{};
+
+    [[nodiscard]] auto is_file_backed() const -> bool { return !file_path.empty(); }
+    // The stream's size, resident or not.
+    [[nodiscard]] auto get_byte_count() const -> std::size_t { return is_file_backed() ? byte_length : encoded_bytes.size(); }
+    // The stream: the resident bytes, or the file range read now. False,
+    // with an error logged, when the file cannot be read or its size or
+    // modification time differs from the recorded ones (it may hold other
+    // bytes at the range). Thread-safe; opens and closes the file per call.
+    [[nodiscard]] auto read(std::vector<std::byte>& out) const -> bool;
 };
 
 // Generic ERHE_* vendor-extension passthrough
@@ -757,6 +778,9 @@ public:
     Gltf_export_texture_statistics* texture_statistics{nullptr};
 };
 
+// The file's bytes, or an empty string when the export failed: a texture
+// source the file must carry could not be read (Gltf_image_source::read(),
+// its file changed since the load). Callers write nothing then.
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
 
 // Convenience wrapper without glTF 2.1 external assets.

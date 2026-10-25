@@ -984,6 +984,34 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    idle; a save of the untouched prepared Bistro has a byte-identical BIN;
    `erhe_gltf_gpu_tests` export re-read and changed-file cases; Quest
    VmHWM and idle heap (about -400 MB) recorded.
+
+   Result (2026-10-25): `Gltf_image_source` is a file range for every image
+   loaded from a file (doc/erhe/gltf.md "Image source streams"); the parse
+   reads 16 bytes per image to sniff the media type and leaves image views
+   unread; the decode task reads the stream and its lease covers stream +
+   pixels until the upload; the exporter re-reads (Save for Quest holds the
+   stream until its transcode); an unreadable source fails the export
+   (empty result; the save / export paths write nothing). Tests:
+   `erhe_gltf_gpu_tests` 3/3 (new: re-export from a file-backed source and a
+   changed file refused), `erhe_gltf_tests` 17/17, `ctest -R Mcp_` 92/95
+   (same 3 pre-existing failures).
+
+   | | step 2 | step 3 |
+   |---|---|---|
+   | desktop prepared Bistro `cpu_images.retained_source_bytes` at idle | 208 MB | 0 |
+   | desktop re-save of the untouched prepared Bistro | - | whole file byte-identical to the source (663646840 bytes), 1.8 s |
+   | desktop Save for Quest of it | - | 857 MB, 393 / 393 transcoded, 5.8 s |
+   | desktop bytes read whole at parse / `parse_gltf` | 355 MB / 944-957 ms | 147 MB (topology, BVH) / 751 ms |
+   | desktop listed (= idle) | 2.41-2.54 s | 2.61-2.70 s (3 runs) |
+   | desktop peak working set / heap at idle | 1349-1358 / 1068 MB | 1151-1154 / 860 MB |
+   | foreign Bistro listed / idle, render | 2.18 / 5.35 s | 2.37 / 5.67 s, d488fefc |
+   | Quest VmHWM | 1724-1729 MB | 1109-1138 MB |
+   | Quest heap at idle (mallinfo in use) | 991 MB (402 MB retained ASTC streams) | 554 MB (0 retained) |
+   | Quest listed (= idle) | 6.83-7.09 s | 6.20-6.42 s |
+
+   Renders d488fefc... for both files. Quest is now below the item 9 target
+   (1.2 GB) already; the desktop listed time grows by about 0.15 s (each
+   image is read from the file inside its decode task).
 4. **Mesh streaming.** The parse records sources only; mesh jobs run under
    the budget; validation moves into the job. Gates: prepared and foreign
    renders identical; prepared 0 deferred tasks, foreign deferred phase
@@ -1011,6 +1039,15 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    portable load; Quest VmHWM, listed / idle and build time recorded
    against step 4; a signature mismatch (quantization off) falls back and
    renders as the portable path.
+
+### Open items
+
+- Codegen: a field marked `removed_in` leaves a `[[deprecated]]` member in
+  the generated struct, and clang `-Werror` (the Android build) fails
+  wherever the struct's implicit copy is used. Step 2 deleted
+  `Load_config::max_decoded_bytes_in_flight` instead of marking it; fix the
+  generator (for example a diagnostic push around the generated struct, or
+  no member for a removed field) before the next removal.
 
 ### Risks
 

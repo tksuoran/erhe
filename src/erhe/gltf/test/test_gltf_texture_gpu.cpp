@@ -32,8 +32,10 @@
 
 #include <simdjson.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -292,9 +294,81 @@ TEST_F(Gltf_texture_gpu_test, raw_ktx2_texture_round_trips_through_erhe_texture_
         ASSERT_LT(image_index, data.image_sources.size());
         const std::shared_ptr<erhe::gltf::Gltf_image_source>& loaded_source = data.image_sources[image_index];
         ASSERT_TRUE(loaded_source);
-        ASSERT_EQ(loaded_source->encoded_bytes.size(), ktx2.size());
-        EXPECT_EQ(std::memcmp(loaded_source->encoded_bytes.data(), ktx2.data(), ktx2.size()), 0);
+        // The parse keeps no image bytes: the source is the file range.
+        EXPECT_TRUE(loaded_source->is_file_backed());
+        EXPECT_TRUE(loaded_source->encoded_bytes.empty());
+        std::vector<std::byte> loaded_bytes;
+        ASSERT_TRUE(loaded_source->read(loaded_bytes));
+        ASSERT_EQ(loaded_bytes.size(), ktx2.size());
+        EXPECT_EQ(std::memcmp(loaded_bytes.data(), ktx2.data(), ktx2.size()), 0);
     }
+}
+
+// A texture loaded from a file exports by re-reading its stream from that
+// file (doc/erhe/gltf.md "Image source streams"): the re-export carries the
+// same bytes. Once the file has changed, the source refuses to read and the
+// export fails as a whole (empty result) instead of dropping the image.
+TEST_F(Gltf_texture_gpu_test, file_backed_image_source_re_exports_and_refuses_a_changed_file)
+{
+    const std::shared_ptr<erhe::graphics::Texture> png_texture = make_texture("png_texture");
+    const std::vector<uint8_t> png{
+        0x89u, 0x50u, 0x4Eu, 0x47u, 0x0Du, 0x0Au, 0x1Au, 0x0Au, 0x00u, 0x00u, 0x00u, 0x0Du, 0x49u, 0x48u, 0x44u, 0x52u,
+        0x00u, 0x00u, 0x00u, 0x01u, 0x00u, 0x00u, 0x00u, 0x01u, 0x08u, 0x06u, 0x00u, 0x00u, 0x00u, 0x1Fu, 0x15u, 0xC4u,
+        0x89u, 0x00u, 0x00u, 0x00u, 0x0Du, 0x49u, 0x44u, 0x41u, 0x54u, 0x78u, 0x9Cu, 0x63u, 0xF8u, 0xDFu, 0xE0u, 0xF0u,
+        0x1Fu, 0x00u, 0x07u, 0x00u, 0x02u, 0xBFu, 0x2Bu, 0xD7u, 0xC7u, 0xE2u, 0x00u, 0x00u, 0x00u, 0x00u, 0x49u, 0x45u,
+        0x4Eu, 0x44u, 0xAEu, 0x42u, 0x60u, 0x82u
+    };
+    erhe::primitive::Material_create_info png_info{.name = "png_material"};
+    png_info.data.texture_samplers.base_color.texture_reference = png_texture;
+    const std::shared_ptr<erhe::primitive::Material> material = std::make_shared<erhe::primitive::Material>(png_info);
+
+    const auto export_with = [&](const std::shared_ptr<const erhe::gltf::Gltf_image_source>& source) -> std::string {
+        erhe::scene::Scene scene{"source", nullptr};
+        const erhe::gltf::Gltf_export_arguments arguments{
+            .root_node             = *scene.get_root_node(),
+            .binary                = true,
+            .image_source_provider = [&](const erhe::graphics::Texture* texture) -> std::shared_ptr<const erhe::gltf::Gltf_image_source> {
+                return (texture == png_texture.get()) ? source : std::shared_ptr<const erhe::gltf::Gltf_image_source>{};
+            },
+            .extra_materials = {material}
+        };
+        return erhe::gltf::export_gltf(arguments);
+    };
+    const auto loaded_png_source = [](const erhe::gltf::Gltf_data& data) -> std::shared_ptr<erhe::gltf::Gltf_image_source> {
+        EXPECT_EQ(data.image_sources.size(), 1u);
+        return data.image_sources.empty() ? std::shared_ptr<erhe::gltf::Gltf_image_source>{} : data.image_sources.front();
+    };
+
+    const std::string first_glb = export_with(make_source(png, "image/png"));
+    ASSERT_FALSE(first_glb.empty());
+    const std::filesystem::path first_path = write_temporary_file("file_backed_first.glb", first_glb);
+    erhe::scene::Scene          first_scene{"first", nullptr};
+    const erhe::gltf::Gltf_data first_data = parse_file(first_path, first_scene);
+    const std::shared_ptr<erhe::gltf::Gltf_image_source> first_source = loaded_png_source(first_data);
+    ASSERT_TRUE(first_source);
+    ASSERT_TRUE(first_source->is_file_backed());
+    EXPECT_EQ(first_source->mime_type, "image/png");
+
+    const std::string second_glb = export_with(first_source);
+    ASSERT_FALSE(second_glb.empty());
+    erhe::scene::Scene          second_scene{"second", nullptr};
+    const erhe::gltf::Gltf_data second_data = parse_file(write_temporary_file("file_backed_second.glb", second_glb), second_scene);
+    const std::shared_ptr<erhe::gltf::Gltf_image_source> second_source = loaded_png_source(second_data);
+    ASSERT_TRUE(second_source);
+    std::vector<std::byte> second_bytes;
+    ASSERT_TRUE(second_source->read(second_bytes));
+    ASSERT_EQ(second_bytes.size(), png.size());
+    EXPECT_EQ(std::memcmp(second_bytes.data(), png.data(), png.size()), 0);
+
+    // Same size, other bytes, later modification time: refused.
+    const std::filesystem::file_time_type old_time = std::filesystem::last_write_time(first_path);
+    std::string changed = first_glb;
+    changed.back() = static_cast<char>(changed.back() ^ 0x55);
+    static_cast<void>(write_temporary_file("file_backed_first.glb", changed));
+    std::filesystem::last_write_time(first_path, old_time + std::chrono::seconds{2});
+    std::vector<std::byte> refused_bytes;
+    EXPECT_FALSE(first_source->read(refused_bytes));
+    EXPECT_TRUE(export_with(first_source).empty());
 }
 
 } // anonymous namespace

@@ -194,8 +194,9 @@ the private ring's size, or the cap passed to
 
 The decode and GPU half of image loading is split out of the parse into
 `Gltf_image_residency`, reachable as `Gltf_data::image_residency`. The parse
-decodes nothing: it records each image's encoded stream (the same bytes
-retained for byte-exact export), the sampler `Sampler_create_info`s and the
+decodes nothing: it records where each image's encoded stream is (a byte
+range of the file, read just in time by the decode and by a later export;
+doc/erhe/gltf.md "Image source streams"), the sampler `Sampler_create_info`s and the
 material texture bindings. Residency decodes / transcodes the images on
 executor workers (`schedule_decodes`, called every residency tick) ahead of
 the upload, bounded by the load memory budget: a decode starts only while

@@ -92,10 +92,13 @@ persisted.
 `Gltf_exporter` (`src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`) writes every
 kind of content a round-trip needs.
 
-1. **Images, textures and samplers.** The original encoded bytes are retained
-   at import time on the content-library texture entry (the editor layer, next
-   to the `Gltf_source_reference`), not on `erhe::graphics::Texture`, which is
-   deliberately GPU-only. They are written back verbatim into the GLB buffer.
+1. **Images, textures and samplers.** The original encoded stream's source
+   (`Gltf_image_source`: the byte range of the file it came from, re-read on
+   export, or the bytes themselves for a data URI or standalone image) is
+   kept at import time on the content-library texture entry (the editor
+   layer, next to the `Gltf_source_reference`), not on
+   `erhe::graphics::Texture`, which is deliberately GPU-only. The stream is
+   written back verbatim into the GLB buffer.
    Export falls back to re-reading the bytes from
    `Gltf_source_reference::gltf_path` plus `item_index` when no retained bytes
    exist, and warns loudly when the source file is gone. A GPU-only texture (a

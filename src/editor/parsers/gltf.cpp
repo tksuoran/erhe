@@ -1728,6 +1728,12 @@ auto save_scene_gltf(
     const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     const double export_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
+    if (gltf.empty()) {
+        // An image source that changed on disk since the load (logged by the
+        // exporter): nothing is written, the old file stays as it was.
+        log_parsers->error("save_scene_gltf: export of '{}' failed - nothing written", erhe::file::to_string(path));
+        return false;
+    }
     // Through a temporary file: saving onto the scene's own source keeps the
     // old file readable (CPU soups reload from it) until the new one is
     // complete, and a failed save leaves the old file as it was.

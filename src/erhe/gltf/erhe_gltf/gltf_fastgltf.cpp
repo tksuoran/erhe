@@ -442,6 +442,36 @@ using erhe::geometry::get_mesh_info;
     }
 }
 
+auto Gltf_image_source::read(std::vector<std::byte>& out) const -> bool
+{
+    if (!is_file_backed()) {
+        out = encoded_bytes;
+        return true;
+    }
+    std::error_code size_error;
+    std::error_code time_error;
+    const std::uintmax_t                  size       = std::filesystem::file_size(file_path, size_error);
+    const std::filesystem::file_time_type write_time = std::filesystem::last_write_time(file_path, time_error);
+    if (size_error || time_error) {
+        log_gltf->error("image source '{}': cannot read the file", file_path.string());
+        return false;
+    }
+    if ((size != file_size) || (write_time != file_write_time)) {
+        log_gltf->error("image source '{}': the file changed since it was loaded (size {} -> {}) - refused", file_path.string(), file_size, size);
+        return false;
+    }
+    std::ifstream file{file_path, std::ios::binary};
+    out.resize(byte_length);
+    file.seekg(static_cast<std::streamoff>(file_offset));
+    file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(byte_length));
+    if (!file) {
+        log_gltf->error("image source '{}': reading {} bytes at offset {} failed", file_path.string(), byte_length, file_offset);
+        out.clear();
+        return false;
+    }
+    return true;
+}
+
 // Sniff the media type of an encoded image stream from its magic bytes
 // (Gltf_image_source retention; doc/editor/gltf_scene_roundtrip.md phase 0).
 // Returns an empty string when unrecognized.
@@ -2126,21 +2156,54 @@ public:
         std::holds_alternative<fastgltf::sources::ByteView>(buffer.data);
 }
 
+// The bytes of a resident buffer (is_buffer_resident()).
+[[nodiscard]] auto get_resident_buffer_bytes(const fastgltf::Buffer& buffer) -> std::span<const std::byte>
+{
+    if (const fastgltf::sources::Array* array = std::get_if<fastgltf::sources::Array>(&buffer.data)) {
+        return std::span<const std::byte>{array->bytes.data(), array->bytes.size()};
+    }
+    if (const fastgltf::sources::Vector* vector = std::get_if<fastgltf::sources::Vector>(&buffer.data)) {
+        return std::span<const std::byte>{vector->bytes.data(), vector->bytes.size()};
+    }
+    if (const fastgltf::sources::ByteView* byte_view = std::get_if<fastgltf::sources::ByteView>(&buffer.data)) {
+        return std::span<const std::byte>{byte_view->bytes.data(), byte_view->bytes.size()};
+    }
+    return {};
+}
+
+// The first bytes of a file-backed image stream (enough to sniff its media
+// type); empty when the file cannot be read.
+[[nodiscard]] auto read_file_head(const Gltf_image_source& source) -> std::vector<std::byte>
+{
+    constexpr std::size_t head_size = 16;
+    std::vector<std::byte> head(std::min(head_size, source.byte_length));
+    std::ifstream file{source.file_path, std::ios::binary};
+    file.seekg(static_cast<std::streamoff>(source.file_offset));
+    file.read(reinterpret_cast<char*>(head.data()), static_cast<std::streamsize>(head.size()));
+    if (!file) {
+        head.clear();
+    }
+    return head;
+}
+
 // Reads the bufferViews the parse reads through the asset into buffers of
-// their own and repoints the views at them, leaving unread only the views
-// that hold nothing but triangle-soup primitive data, which the parse reads
-// per primitive through Gltf_triangle_soup_source ranges. So the parse never
-// holds the whole GLB BIN chunk or .bin file.
+// their own and repoints the views at them, leaving unread the views that
+// hold nothing but triangle-soup primitive data, which the parse reads per
+// primitive through Gltf_triangle_soup_source ranges, and the views of
+// images, whose streams are read just in time by their decode and export
+// (Gltf_image_source). So the parse never holds the whole GLB BIN chunk or
+// .bin file.
 //
 // A primitive's data is read per primitive ("lazy") when the primitive is a
 // soup primitive (not geometry-normative: no ERHE_geometry) with indices,
 // and each of its index / attribute accessors has a bufferView in a buffer
 // that is in a file, is not sparse and is not meshopt compressed. A view is
 // left unread when every accessor on it is such a lazy accessor and no
-// sparse accessor, image or other user (morph targets, skins, animations,
-// instancing, geometry-normative primitives) reads from it. Every other view
-// in a non-resident buffer is read whole: images, animation and skin data,
-// ERHE_* payload views, and anything shared with them.
+// sparse accessor or other user (morph targets, skins, animations,
+// instancing, geometry-normative primitives) reads from it; a view an image
+// names is left unread when no accessor reads it. Every other view in a
+// non-resident buffer is read whole: animation and skin data, ERHE_*
+// payload views, and anything shared with them.
 //
 // Records the file places of all views in `origins.view_places` first.
 // Returns false (logged) when a view that must be read cannot be.
@@ -2275,13 +2338,21 @@ public:
         }
     }
 
+    std::vector<bool> view_has_image(view_count, false);
+    for (const fastgltf::Image& image : asset.images) {
+        const fastgltf::sources::BufferView* buffer_view = std::get_if<fastgltf::sources::BufferView>(&image.data);
+        if ((buffer_view != nullptr) && (buffer_view->bufferViewIndex < view_count)) {
+            view_has_image[buffer_view->bufferViewIndex] = true;
+        }
+    }
+
     std::vector<std::ifstream> files(origins.files.size());
     for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
         fastgltf::BufferView& view = asset.bufferViews[view_index];
         if ((view.bufferIndex >= buffer_count) || is_buffer_resident(asset.buffers[view.bufferIndex])) {
             continue;
         }
-        if (view_has_lazy[view_index] && !view_is_needed[view_index]) {
+        if ((view_has_lazy[view_index] || view_has_image[view_index]) && !view_is_needed[view_index]) {
             ++out_lazy_view_count;
             continue;
         }
@@ -2742,11 +2813,13 @@ private:
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
-    // CPU half of image loading, first step: retain the encoded source stream
-    // (for residency to decode from, and for byte-exact re-embedding on
-    // export). Nothing is decoded here: Gltf_image_residency decodes on
-    // workers ahead of the upload, under a decoded-bytes budget, so the parse
-    // never holds every image's pixels at once. No GPU object is touched.
+    // CPU half of image loading, first step: record where the encoded source
+    // stream is (for residency to decode from, and for byte-exact
+    // re-embedding on export) - a byte range of the file, read just in time,
+    // or the bytes themselves for a resident buffer (data URI, parse from
+    // memory). Only the first bytes are read here, to sniff the media type.
+    // Nothing is decoded here: Gltf_image_residency decodes on workers ahead
+    // of the upload, under the memory budget. No GPU object is touched.
     [[nodiscard]] auto prepare_image(const std::size_t image_index, const bool linear) -> Gltf_decoded_image
     {
         ERHE_PROFILE_FUNCTION();
@@ -2765,17 +2838,39 @@ private:
                     log_gltf->error("Image '{}': unsupported image source", prepared.name);
                 },
                 [&](const fastgltf::sources::BufferView& buffer_view_source) {
-                    const fastgltf::BufferView& buffer_view = m_asset->bufferViews[buffer_view_source.bufferViewIndex];
+                    const std::size_t           view_index  = buffer_view_source.bufferViewIndex;
+                    const fastgltf::BufferView& buffer_view = m_asset->bufferViews[view_index];
                     const fastgltf::Buffer&     buffer      = m_asset->buffers.at(buffer_view.bufferIndex);
-                    const fastgltf::sources::Array* array_source = std::get_if<fastgltf::sources::Array>(&buffer.data);
-                    if (array_source == nullptr) {
+                    prepared.source_path = m_arguments.path;
+                    if (is_buffer_resident(buffer)) {
+                        const std::span<const std::byte> bytes = get_resident_buffer_bytes(buffer);
+                        if (bytes.size() < (buffer_view.byteOffset + buffer_view.byteLength)) {
+                            log_gltf->error("Image '{}': buffer view is outside its buffer", prepared.name);
+                            return;
+                        }
+                        const std::byte* start = bytes.data() + buffer_view.byteOffset;
+                        prepared.source = std::make_shared<Gltf_image_source>();
+                        prepared.source->encoded_bytes.assign(start, start + buffer_view.byteLength);
+                        return;
+                    }
+                    // In the file: the view's place as the file has it.
+                    if (!m_buffer_origins || (view_index >= m_buffer_origins->view_places.size())) {
                         log_gltf->error("Image '{}': buffer view source buffer is not loaded", prepared.name);
                         return;
                     }
-                    prepared.source_path = m_arguments.path;
-                    const std::byte* start = reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset;
+                    const Gltf_view_place& place = m_buffer_origins->view_places[view_index];
+                    if ((place.buffer_index >= m_buffer_origins->buffers.size()) || !m_buffer_origins->buffers[place.buffer_index].has_value()) {
+                        log_gltf->error("Image '{}': buffer view source buffer is in no file", prepared.name);
+                        return;
+                    }
+                    const Gltf_buffer_origin& origin = m_buffer_origins->buffers[place.buffer_index].value();
+                    const Gltf_source_file&   file   = m_buffer_origins->files[origin.file_index];
                     prepared.source = std::make_shared<Gltf_image_source>();
-                    prepared.source->encoded_bytes.assign(start, start + buffer_view.byteLength);
+                    prepared.source->file_path       = file.path;
+                    prepared.source->file_offset     = origin.file_offset + place.byte_offset;
+                    prepared.source->byte_length     = buffer_view.byteLength;
+                    prepared.source->file_size       = file.size;
+                    prepared.source->file_write_time = file.write_time;
                 },
                 [&](const fastgltf::sources::URI& uri) {
                     // Resolve on a copy: replace_filename() mutates in place,
@@ -2789,11 +2884,14 @@ private:
                         return;
                     }
                     prepared.source_path = image_path;
-                    const std::optional<std::string> file_content = erhe::file::read("gltf image source", image_path);
-                    if (file_content.has_value() && !file_content->empty()) {
-                        const std::byte* start = reinterpret_cast<const std::byte*>(file_content->data());
+                    Gltf_source_file file;
+                    if (stamp_source_file(image_path, file) && (file.size > 0)) {
                         prepared.source = std::make_shared<Gltf_image_source>();
-                        prepared.source->encoded_bytes.assign(start, start + file_content->size());
+                        prepared.source->file_path       = file.path;
+                        prepared.source->file_offset     = 0;
+                        prepared.source->byte_length     = static_cast<std::size_t>(file.size);
+                        prepared.source->file_size       = file.size;
+                        prepared.source->file_write_time = file.write_time;
                     }
                 }
             },
@@ -2801,7 +2899,11 @@ private:
         );
 
         if (prepared.source) {
-            prepared.source->mime_type = sniff_image_mime_type(prepared.source->encoded_bytes);
+            if (prepared.source->is_file_backed()) {
+                prepared.source->mime_type = sniff_image_mime_type(read_file_head(*prepared.source));
+            } else {
+                prepared.source->mime_type = sniff_image_mime_type(prepared.source->encoded_bytes);
+            }
         } else {
             // Nothing to decode: settled as a failed decode right away.
             prepared.decoded = true;
@@ -5033,9 +5135,11 @@ namespace {
 }
 
 // Body of one decode task (also run inline when decoding is serial). The
-// header open() tells the decoded size; the pixels are allocated only once
-// that size fits the budget - otherwise the slot goes back to waiting with
-// its size known, and schedule_decodes() restarts it when there is room.
+// encoded stream is read now (from the file, for a file-backed source) and
+// dropped when the task ends. The header open() tells the decoded size; the
+// pixels are allocated only once the decoded plus the encoded size fits the
+// budget - otherwise the slot goes back to waiting with that size known, and
+// schedule_decodes() restarts it when there is room.
 void run_image_decode(
     const std::shared_ptr<Gltf_image_decode_queue>& queue,
     const std::size_t                               image_index,
@@ -5050,12 +5154,20 @@ void run_image_decode(
 
     erhe::graphics::Image_loader loader;
     erhe::graphics::Image_info   info{};
+    std::vector<std::byte>       encoded_bytes;
+    const bool read_ok = source->read(encoded_bytes);
+    if (!read_ok) {
+        log_gltf->error("Image '{}': reading the source stream failed", name);
+    }
     const std::span<const std::uint8_t> encoded{
-        reinterpret_cast<const std::uint8_t*>(source->encoded_bytes.data()),
-        source->encoded_bytes.size()
+        reinterpret_cast<const std::uint8_t*>(encoded_bytes.data()),
+        encoded_bytes.size()
     };
-    bool        ok         = loader.open(encoded, info, linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
-    std::size_t byte_count = ok ? get_decoded_pixel_byte_count(info) : 0;
+    bool ok = read_ok && loader.open(encoded, info, linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
+    // The lease covers the decoded pixels plus the encoded stream (dropped
+    // after the decode; the lease goes at the upload).
+    const std::size_t pixel_byte_count = ok ? get_decoded_pixel_byte_count(info) : 0;
+    const std::size_t byte_count       = ok ? (pixel_byte_count + encoded_bytes.size()) : 0;
     {
         const std::lock_guard<std::mutex> lock{queue->m_mutex};
         Gltf_image_decode_slot& slot = queue->m_slots[image_index];
@@ -5084,10 +5196,11 @@ void run_image_decode(
 
     std::vector<std::uint8_t> pixels;
     if (ok) {
-        pixels.resize(byte_count);
+        pixels.resize(pixel_byte_count);
         ok = loader.load(std::span<std::uint8_t>{pixels.data(), pixels.size()});
     }
     loader.close();
+    encoded_bytes = std::vector<std::byte>{};
     if (!ok) {
         log_gltf->error("Image '{}': decode failed", name);
         pixels = std::vector<std::uint8_t>{};
@@ -8021,8 +8134,18 @@ private:
         const std::shared_ptr<const Gltf_image_source> image_source = m_arguments.image_source_provider
             ? m_arguments.image_source_provider(texture)
             : std::shared_ptr<const Gltf_image_source>{};
-        if (!image_source || image_source->encoded_bytes.empty()) {
+        if (!image_source || (image_source->get_byte_count() == 0)) {
             log_gltf->warn("glTF export: texture '{}' has no retained source image bytes - texture slot skipped", texture->get_name());
+            m_exported_images.insert({texture, std::nullopt});
+            return std::nullopt;
+        }
+        // The stream, re-read from its file when file-backed. A source that
+        // cannot be read (the file changed since the load) fails the whole
+        // export rather than dropping the image from the file.
+        std::vector<std::byte> source_bytes;
+        if (!image_source->read(source_bytes) || source_bytes.empty()) {
+            log_gltf->error("glTF export: the source image of texture '{}' cannot be read - export failed", texture->get_name());
+            m_export_failed = true;
             m_exported_images.insert({texture, std::nullopt});
             return std::nullopt;
         }
@@ -8039,8 +8162,8 @@ private:
         // Universal KTX2 image is transcoded to raw ASTC 4x4 blocks; its
         // buffer is filled by finish_ktx2_transcodes(), on the executor.
         const std::span<const std::uint8_t> encoded_bytes{
-            reinterpret_cast<const std::uint8_t*>(image_source->encoded_bytes.data()),
-            image_source->encoded_bytes.size()
+            reinterpret_cast<const std::uint8_t*>(source_bytes.data()),
+            source_bytes.size()
         };
         const bool transcode_to_astc =
             (m_arguments.texture_export == Gltf_texture_export::ktx2_astc_4x4) &&
@@ -8050,11 +8173,9 @@ private:
         const std::size_t buffer_index = m_gltf_asset.buffers.size();
         {
             fastgltf::Buffer image_buffer{
-                .byteLength = transcode_to_astc ? std::size_t{0} : image_source->encoded_bytes.size(),
+                .byteLength = transcode_to_astc ? std::size_t{0} : source_bytes.size(),
                 .data = fastgltf::sources::Vector{
-                    .bytes    = transcode_to_astc
-                        ? std::vector<std::byte>{}
-                        : std::vector<std::byte>{image_source->encoded_bytes.begin(), image_source->encoded_bytes.end()},
+                    .bytes    = transcode_to_astc ? std::vector<std::byte>{} : source_bytes,
                     .mimeType = fastgltf::MimeType::GltfBuffer
                 },
                 .name = {}
@@ -8066,7 +8187,7 @@ private:
             fastgltf::BufferView buffer_view{};
             buffer_view.bufferIndex = buffer_index;
             buffer_view.byteOffset  = 0;
-            buffer_view.byteLength  = transcode_to_astc ? std::size_t{0} : image_source->encoded_bytes.size();
+            buffer_view.byteLength  = transcode_to_astc ? std::size_t{0} : source_bytes.size();
             m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
         }
 
@@ -8088,7 +8209,7 @@ private:
                     .image_index       = image_index,
                     .buffer_index      = buffer_index,
                     .buffer_view_index = buffer_view_index,
-                    .source            = image_source,
+                    .source_bytes      = transcode_to_astc ? std::move(source_bytes) : std::vector<std::byte>{},
                     .color_space       = erhe::dataformat::is_srgb(texture->get_pixelformat())
                         ? erhe::graphics::Ktx2_color_space::srgb
                         : erhe::graphics::Ktx2_color_space::linear,
@@ -8113,13 +8234,16 @@ private:
         std::size_t                              image_index      {0};
         std::size_t                              buffer_index     {0};
         std::size_t                              buffer_view_index{0};
-        std::shared_ptr<const Gltf_image_source> source;
+        std::vector<std::byte>                   source_bytes; // the Basis Universal stream
         erhe::graphics::Ktx2_color_space         color_space{erhe::graphics::Ktx2_color_space::srgb};
         std::string                              name;
         std::vector<std::uint8_t>                result;
     };
     std::vector<Pending_ktx2_transcode> m_pending_ktx2_transcodes;
     Gltf_export_texture_statistics      m_texture_statistics;
+    // Set when a texture source that must be written cannot be read
+    // (Gltf_image_source::read()); export_gltf() then returns nothing.
+    bool                                m_export_failed{false};
 
     // Runs the Basis -> raw ASTC 4x4 transcodes process_image() queued, in
     // parallel on the executor, and fills their buffers. A failed transcode
@@ -8135,8 +8259,8 @@ private:
         const auto transcode = [this](const std::size_t i) {
             Pending_ktx2_transcode& pending = m_pending_ktx2_transcodes[i];
             const std::span<const std::uint8_t> source_bytes{
-                reinterpret_cast<const std::uint8_t*>(pending.source->encoded_bytes.data()),
-                pending.source->encoded_bytes.size()
+                reinterpret_cast<const std::uint8_t*>(pending.source_bytes.data()),
+                pending.source_bytes.size()
             };
             pending.result = erhe::graphics::transcode_ktx2_basis_to_astc_4x4(source_bytes, pending.color_space, erhe::graphics::Ktx2_supercompression::zstd);
         };
@@ -8159,11 +8283,11 @@ private:
                 const std::byte* const begin = reinterpret_cast<const std::byte*>(pending.result.data());
                 bytes.assign(begin, begin + pending.result.size());
                 ++m_texture_statistics.transcoded_count;
-                m_texture_statistics.source_byte_count     += pending.source->encoded_bytes.size();
+                m_texture_statistics.source_byte_count     += pending.source_bytes.size();
                 m_texture_statistics.transcoded_byte_count += pending.result.size();
             } else {
                 log_gltf->warn("glTF export: ASTC transcode of image '{}' failed - the Basis Universal source is written", pending.name);
-                bytes.assign(pending.source->encoded_bytes.begin(), pending.source->encoded_bytes.end());
+                bytes = std::move(pending.source_bytes);
                 ++m_texture_statistics.transcode_failed_count;
                 m_raw_ktx2_images.erase(pending.image_index);
                 for (auto it = m_texture_ktx2_entries.begin(); it != m_texture_ktx2_entries.end();) {
@@ -9583,6 +9707,11 @@ auto Gltf_exporter::export_gltf() -> std::string
     m_texture_statistics.raw_ktx2_count = m_raw_ktx2_images.size();
     if (m_arguments.texture_statistics != nullptr) {
         *m_arguments.texture_statistics = m_texture_statistics;
+    }
+    if (m_export_failed) {
+        // A source the file must carry could not be read (logged where it
+        // failed): no partial file.
+        return {};
     }
 
     combine_buffers();
