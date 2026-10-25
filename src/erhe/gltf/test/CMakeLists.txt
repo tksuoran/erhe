@@ -26,6 +26,7 @@ target_link_libraries(${_target}
         erhe::raytrace
         erhe::scene
         GTest::gtest
+        simdjson::simdjson
         Taskflow
 )
 

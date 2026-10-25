@@ -1,4 +1,5 @@
 #include "erhe_raytrace/prebuilt_bvh.hpp"
+#include "erhe_hash/hash.hpp"
 
 #include <fmt/format.h>
 
@@ -23,6 +24,33 @@ auto c_str(const Bvh_source source) -> const char*
         case Bvh_source::prebuilt: return "prebuilt";
         default:                   return "?";
     }
+}
+
+auto hash_triangle_positions(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const uint64_t seed) -> uint64_t
+{
+    uint64_t hash_code = seed;
+    hash_code = erhe::hash::hash(p0.x, p0.y, p0.z, hash_code);
+    hash_code = erhe::hash::hash(p1.x, p1.y, p1.z, hash_code);
+    hash_code = erhe::hash::hash(p2.x, p2.y, p2.z, hash_code);
+    return hash_code;
+}
+
+auto compute_triangle_hash(const std::span<const uint32_t> indices, const std::span<const float> positions_xyz) -> uint64_t
+{
+    uint64_t hash_code = erhe::hash::c_seed;
+    const auto position = [&](const uint32_t vertex) -> glm::vec3 {
+        const std::size_t base = static_cast<std::size_t>(vertex) * 3;
+        return glm::vec3{positions_xyz[base + 0], positions_xyz[base + 1], positions_xyz[base + 2]};
+    };
+    for (std::size_t triangle = 0, end = indices.size() / 3; triangle < end; ++triangle) {
+        hash_code = hash_triangle_positions(
+            position(indices[(3 * triangle) + 0]),
+            position(indices[(3 * triangle) + 1]),
+            position(indices[(3 * triangle) + 2]),
+            hash_code
+        );
+    }
+    return hash_code;
 }
 
 auto get_prebuilt_bvh_backend() -> std::string_view

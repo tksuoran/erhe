@@ -10,6 +10,8 @@ add_executable(${_target}
     test_optimized_variant_build.cpp
     test_empty_geometry_build.cpp
     test_stored_colocation.cpp
+    test_prepared_primitive.cpp
+    mesh_compare.hpp
 )
 
 target_link_libraries(${_target}
@@ -23,6 +25,7 @@ target_link_libraries(${_target}
         erhe::item
         erhe::log
         erhe::property
+        erhe::raytrace
         erhe::verify
         GTest::gtest
 )

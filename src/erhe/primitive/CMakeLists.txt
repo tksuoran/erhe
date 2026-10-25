@@ -25,6 +25,8 @@ erhe_target_sources_grouped(
     erhe_primitive/mesh_optimizer.cpp
     erhe_primitive/mesh_optimizer.hpp
     erhe_primitive/mesh_optimizer_cache.cpp
+    erhe_primitive/prepared_primitive.cpp
+    erhe_primitive/prepared_primitive.hpp
     erhe_primitive/primitive_builder.cpp
     erhe_primitive/primitive_builder.hpp
     erhe_primitive/primitive_log.cpp

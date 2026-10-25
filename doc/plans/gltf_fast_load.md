@@ -224,7 +224,7 @@ asked.
 
 ## Build order
 
-One commit per step: Opus coder, then a Fable review for the larger steps.
+One commit per step: Opus coder, reviewed by the orchestrator.
 The load gate is `scripts/scene_load_profile.py` on the Release headless
 editor, run on the erhe-saved Bistro, with `--render-image` compared
 byte-for-byte against the foreign Bistro at idle.
@@ -245,6 +245,21 @@ byte-for-byte against the foreign Bistro at idle.
    - the extensions appear in `extensionsUsed` only;
    - a stock viewer renders the file;
    - file size and save time are recorded here.
+
+   Result (2026-10-25, Release headless, Bistro): `save_scene` prepares all
+   3852 soup primitives (0 skipped, BVH reused 3852 / rebuilt 0, 0
+   degenerate triangles dropped) in 1.2 s of parallel preparation; the save
+   takes 3.0 s (plain save 1.4 s) and writes 664 MB (plain 514 MB). The
+   Khronos validator 2.0.0-dev.3.10 reports 1077 errors, all present in a
+   plain save of the same scene as well (zero-length TANGENT vectors from
+   the import, `image/ktx2` MIME types, undeclared `KHR_materials_ior`);
+   the extensions add only infos (`UNUSED_OBJECT` for the 3 x 3852 raw
+   bufferViews, `UNUSED_MESH_TANGENT`). The extensions are in
+   `extensionsUsed` only. In place of a stock viewer (headless), the saved
+   file reloaded with today's loader (extensions ignored) renders
+   byte-identical to the plain-saved file reloaded; both differ from the
+   foreign load in 124 of 786432 pixels (max channel delta 44), which is
+   pre-existing.
 5. **Parser read and validate, data not used yet.** Gates: the log reads
    `3852 used, 0 rejected`; parse time grows by less than 100 ms; the render
    is identical.

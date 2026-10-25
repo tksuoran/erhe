@@ -204,8 +204,12 @@ public:
 // content plus physics data, prefab external-asset references, embedded
 // texture sources, animations, and every editor-domain ERHE_* extension
 // payload (add_gltf_editor_state). Binary .glb unless the path ends in
-// .gltf. Returns false when the scene has no root node or the write fails.
-[[nodiscard]] auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) -> bool;
+// .gltf. Soup primitives are written as prepared cores with the
+// ERHE_mesh_optimized / ERHE_mesh_topology / ERHE_raytrace_bvh extensions
+// (doc/plans/gltf_fast_load.md), prepared in parallel on 'executor' (serial
+// when null). Returns false when the scene has no root node or the write
+// fails.
+[[nodiscard]] auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path, tf::Executor* executor) -> bool;
 
 // THE scene save entry point (File > Save Scene, MCP save_scene): writes the
 // scene with save_scene_gltf() above, sends Scene_saved_message (asset

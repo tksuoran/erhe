@@ -28,6 +28,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `prepare_primitive_for_export()`,
+  `Prepared_primitive_export`, `Prepare_primitive_result`,
+  `Prepared_bvh_source`, `compute_mesh_content_hash()` and
+  `get_float_positions()` (`erhe_primitive/prepared_primitive.hpp`): the
+  glTF prepared core and its `ERHE_mesh_optimized` / `ERHE_mesh_topology` /
+  `ERHE_raytrace_bvh` payloads.
+- `erhe::raytrace`: `hash_triangle_positions()`, `compute_triangle_hash()`
+  and `bvh_v2_traversal_stack_size` (`prebuilt_bvh.hpp`).
+- `erhe::gltf`: `Gltf_export_arguments::prepared_mesh_data`
+  (`Prepared_mesh_data::none` by default), `executor` and
+  `prepared_statistics` (`Gltf_export_prepared_statistics`).
+
 - `erhe::raytrace`: BVH export and import (`erhe_raytrace/prebuilt_bvh.hpp`):
   `Prebuilt_bvh`, `Bvh_node_record`, `Bvh_build_quality`, `Bvh_source`,
   `get_prebuilt_bvh_backend()`, `get_prebuilt_bvh_library()`,
