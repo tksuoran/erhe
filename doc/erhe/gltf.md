@@ -110,6 +110,25 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   reasons, BVH reused / rebuilt / none) and the preparation time. The
   default `none` writes raw soups; geometry-normative primitives are
   unaffected either way. The editor's `save_scene` passes `write`.
+- Texture image form: `Gltf_export_arguments::texture_export` is
+  `Gltf_texture_export::source` (the retained stream: PNG / JPEG through
+  the core `source`, Basis Universal KTX2 through `KHR_texture_basisu`, raw
+  block KTX2 through `ERHE_texture_ktx2`) or `ktx2_astc_4x4` ("Save for
+  Quest"): every Basis Universal KTX2 image is transcoded to a raw ASTC 4x4
+  KTX2 file (all levels, SRGB / UNORM from the texture's format, Zstandard
+  supercompressed; `erhe::graphics::transcode_ktx2_basis_to_astc_4x4()`), one
+  task per image on `executor` after the material passes, and written
+  through `ERHE_texture_ktx2` (`doc/gltf_extensions/ERHE_texture_ktx2.md`);
+  PNG / JPEG are written as they are, a failed transcode writes the Basis
+  source. `texture_statistics` receives the counts, byte totals and the
+  transcode time.
+- Raw block KTX2 on parse: `ERHE_texture_ktx2` entries set the texture's
+  image; `Gltf_image_residency::astc_support` (from
+  `Gltf_device_options::astc_support`, `native` when the device samples
+  ASTC 4x4 in both color spaces) makes `Image_loader_ktx2` upload the stored
+  blocks or decode them to RGBA8 on the CPU.
+  `Gltf_image_residency::get_decode_path_counts()` counts the images by
+  `erhe::graphics::Image_decode_path` for the per-load summary.
 - Prepared mesh data on parse (`doc/plans/gltf_fast_load.md` "Loader"): with
   `Gltf_parse_arguments::prepared_mesh_data_use = Prepared_mesh_data_use::use`
   (the default) a soup primitive carrying `ERHE_mesh_optimized` is validated

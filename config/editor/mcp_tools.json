@@ -3430,6 +3430,26 @@
     "name": "save_scene"
   },
   {
+    "description": "Save for Quest: write a glTF scene the way save_scene does (same erhe-authored file with the prepared mesh data extensions and the ERHE_* editor state) but transcode every Basis Universal KTX2 texture at save time to a raw ASTC 4x4 KTX2 image (all mip levels; SRGB for color textures, UNORM for data textures; a two component X+Y normal map keeps its layout) referenced through the ERHE_texture_ktx2 extension, so a device with ASTC (Quest) uploads the blocks with no transcode, and a device without ASTC decodes them on the CPU. PNG / JPEG images are written as they are. An export: the scene's source file binding and dirty state are not changed. The reply reports the path, the file size and the texture transcode counts.",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "description": "Destination file path (default: res/editor/scenes/<scene name>_quest.glb). .glb is appended when the extension is neither .glb nor .gltf",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene (a glTF scene; a USD-backed scene is refused)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "save_scene_for_quest"
+  },
+  {
     "description": "Load a saved scene, without a file dialog: an erhe-authored glTF file (saved by save_scene) opens as a full scene with its saved editor state (fresh content library, browser + viewport windows; not undoable); a .usd / .usda / .usdc / .usdz file opens as a USD-backed scene, whose top-level prims are the scene's top-level nodes and which saves back as USDA; a foreign glTF opens as a new scene via the same path as open_scene. The load is queued and completes on a following frame; discover the scene via list_scenes.",
     "inputSchema": {
       "properties": {

@@ -398,6 +398,39 @@ byte-for-byte against the foreign Bistro at idle.
    textures as KTX2 with a raw ASTC 4x4 vkFormat (transcoded from the
    Basis source), so Quest uploads them without transcoding; desktop
    loaders without ASTC support decode them on the CPU.
+   Done: File > Save glTF for Quest / MCP `save_scene_for_quest` write the
+   `save_scene` file with every Basis texture transcoded on executor
+   workers to an ASTC 4x4 KTX2 (all levels, SRGB / UNORM from the loaded
+   texture's format, two component normal maps kept as X in RGB / Y in A
+   with the `--normal-mode` marker, Zstandard supercompressed through the
+   zstd already bundled with basis_universal), carried by the asset-root
+   `ERHE_texture_ktx2` extension (`doc/gltf_extensions/ERHE_texture_ktx2.md`;
+   `extensionsUsed` only, because fastgltf rejects unknown required
+   extensions and has no texture extension passthrough). PNG / JPEG images
+   are written as they are. The loader uploads the stored blocks when the
+   device samples ASTC and otherwise decodes level 0 to RGBA8 with the ARM
+   astc-encoder decoder (5.3.0, decoder sources only).
+
+   Result (2026-10-25, Release headless desktop, AMD iGPU without ASTC;
+   Quest 3 release APK, off-head automated, `--no-scene`, `load_scene`, then
+   `close_scene "Scene 1"`):
+
+   | | value |
+   |---|---|
+   | save (foreign Bistro loaded and idle) | 8.0 s (export 6.7 s: preparation 1.7 s, transcode + zstd 3.7 s); 393 of 393 images transcoded, 0 failed |
+   | file | 857 MB (normal prepared save 664 MB); ASTC textures 402 MB (1807 MB before zstd; the Basis sources were 208 MB) |
+   | desktop load | listed 8.1 s, idle 8.5 s (prepared normal 3.1-3.4 / 3.5-3.8 s): parse 1.0 s, 393 images decoded to RGBA8, 3852 prepared used, 0 deferred tasks; scene textures 7.2 GB RGBA8 (4x the ASTC size), peak working set 4.8 GB |
+   | desktop render vs prepared reference (89832b62...) | 40411 of 786432 pixels differ, max channel delta 183, PSNR 48.2 dB; no missing textures, normal or sRGB errors seen; identical with and without zstd |
+   | Quest load, 3 runs | listed = idle 10.1-10.3 s (item 6: 11.2-11.5 s); parse 1.55-1.80 s; 393 raw ASTC uploaded as stored, 0 transcodes; 3852 prepared used; VmHWM 1988-2012 MB (item 6: 1660-1728 MB) |
+   | Quest GPU textures | 1806 MB (ASTC SRGB 884 MB / 203, ASTC UNORM 923 MB / 190) |
+
+   The Quest residency now takes about 6.5 s and is bound by
+   `load.gpu_upload_bytes_per_frame` (4 MiB per frame at 72 Hz, 1.8 GB of
+   blocks), not by decoding. The VmHWM growth is the retained encoded
+   streams (402 MB instead of 208 MB, memory report candidate 5). The
+   device's writable config predates `load.max_upload_staging_bytes`, so the
+   runs used the 64 MiB staging default (high-water 29-41 MB); it does not
+   change the upload rate.
 5. **Headset scene selection.** Done: closing the scene the global tools
    are homed in moves them to the most recently opened remaining scene, and
    MCP `set_headset_scene` (or the headset window's scene combo) moves them

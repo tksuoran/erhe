@@ -1,8 +1,10 @@
 #include "erhe_graphics/image_loader_ktx2.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <transcoder/basisu_transcoder.h>
+#include <astcenc.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -92,6 +94,14 @@ constexpr std::uint8_t ktx2_identifier[12] = {
 
 }
 
+// Which half of Image_loader_ktx2 serves the open image.
+enum class Ktx2_payload : unsigned int
+{
+    basis              = 0, // Basis Universal, transcoded by basist
+    raw_blocks         = 1, // raw blocks passed through
+    raw_blocks_decoded = 2  // raw ASTC blocks decoded to RGBA8 by astcenc
+};
+
 class Image_loader_ktx2_impl_state
 {
 public:
@@ -99,8 +109,133 @@ public:
     std::vector<std::uint8_t>            owned_data;   // backing storage for the path-based open()
     Image_info                           info;
     basist::transcoder_texture_format    transcoder_format{basist::transcoder_texture_format::cTFRGBA32};
+    Ktx2_payload                         payload{Ktx2_payload::basis};
+    Ktx2_container                       raw_container;  // raw block payloads only
+    std::span<const std::uint8_t>        raw_file;       // the buffer passed to open(); alive until load()
+    erhe::dataformat::Format             raw_block_format{erhe::dataformat::Format::format_undefined};
     bool                                 is_open{false};
 };
+
+namespace {
+
+// Opens a raw block KTX2 file (non-zero vkFormat). Fills the state's
+// raw_* members and info.
+[[nodiscard]] auto open_raw_blocks(
+    Image_loader_ktx2_impl_state&       state,
+    const std::span<const std::uint8_t> buffer_view,
+    const Astc_support                  astc_support
+) -> bool
+{
+    Ktx2_container& container = state.raw_container;
+    if (!parse_ktx2(buffer_view, container)) {
+        return false;
+    }
+    const erhe::dataformat::Format block_format = get_ktx2_raw_block_format(container.vk_format);
+    if (block_format == erhe::dataformat::Format::format_undefined) {
+        log_texture->warn("KTX2: unsupported vkFormat {}", container.vk_format);
+        return false;
+    }
+    if (
+        (container.supercompression_scheme != static_cast<std::uint32_t>(Ktx2_supercompression::none)) &&
+        (container.supercompression_scheme != static_cast<std::uint32_t>(Ktx2_supercompression::zstd))
+    ) {
+        log_texture->warn("KTX2: raw block image with supercompression scheme {} is not supported", container.supercompression_scheme);
+        return false;
+    }
+    if ((container.depth > 1) || (container.layer_count > 1) || (container.face_count != 1) || (container.width == 0) || (container.height == 0)) {
+        log_texture->warn(
+            "KTX2: raw block image must be a single 2D image (depth {}, layers {}, faces {})",
+            container.depth, container.layer_count, container.face_count
+        );
+        return false;
+    }
+    for (std::size_t level = 0, end = container.levels.size(); level < end; ++level) {
+        const std::size_t level_width  = std::max<std::size_t>(1, container.width  >> level);
+        const std::size_t level_height = std::max<std::size_t>(1, container.height >> level);
+        const std::size_t expected     = erhe::dataformat::get_image_level_size_bytes(block_format, level_width, level_height);
+        if (container.levels[level].uncompressed_byte_length != expected) {
+            log_texture->warn("KTX2: level {} has {} bytes, expected {}", level, container.levels[level].uncompressed_byte_length, expected);
+            return false;
+        }
+    }
+    const bool srgb = (block_format == erhe::dataformat::Format::format_astc_4x4_srgb);
+    state.raw_file         = buffer_view;
+    state.raw_block_format = block_format;
+    if (astc_support == Astc_support::native) {
+        state.payload = Ktx2_payload::raw_blocks;
+        state.info = Image_info{
+            .width       = static_cast<int>(container.width),
+            .height      = static_cast<int>(container.height),
+            .depth       = 1,
+            .level_count = static_cast<int>(container.levels.size()),
+            .row_stride  = 0, // block-compressed data is tightly packed
+            .format      = block_format,
+            .two_component_normal = is_ktx2_two_component_normal(container),
+            .decode_path = Image_decode_path::raw_blocks
+        };
+    } else {
+        state.payload = Ktx2_payload::raw_blocks_decoded;
+        state.info = Image_info{
+            .width       = static_cast<int>(container.width),
+            .height      = static_cast<int>(container.height),
+            .depth       = 1,
+            .level_count = 1,
+            .row_stride  = static_cast<int>(container.width) * 4,
+            .format      = srgb ? erhe::dataformat::Format::format_8_vec4_srgb : erhe::dataformat::Format::format_8_vec4_unorm,
+            .two_component_normal = is_ktx2_two_component_normal(container),
+            .decode_path = Image_decode_path::raw_blocks_decoded
+        };
+    }
+    return true;
+}
+
+// Decodes the ASTC blocks of one level to tightly packed RGBA8 (sRGB-encoded
+// values for an SRGB format, like the hardware decode before conversion).
+[[nodiscard]] auto decode_astc_to_rgba8(
+    const std::span<const std::uint8_t> blocks,
+    const erhe::dataformat::Format      block_format,
+    const std::uint32_t                 width,
+    const std::uint32_t                 height,
+    const std::span<std::uint8_t>       rgba8
+) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const unsigned int    block_extent = static_cast<unsigned int>(erhe::dataformat::get_block_extent(block_format));
+    const astcenc_profile profile      = (block_format == erhe::dataformat::Format::format_astc_4x4_srgb)
+        ? ASTCENC_PRF_LDR_SRGB
+        : ASTCENC_PRF_LDR;
+    astcenc_config config{};
+    astcenc_error error = astcenc_config_init(profile, block_extent, block_extent, 1, ASTCENC_PRE_FASTEST, ASTCENC_FLG_DECOMPRESS_ONLY, &config);
+    if (error != ASTCENC_SUCCESS) {
+        log_texture->warn("KTX2: astcenc_config_init() failed: {}", astcenc_get_error_string(error));
+        return false;
+    }
+    astcenc_context* context = nullptr;
+    error = astcenc_context_alloc(&config, 1, &context);
+    if (error != ASTCENC_SUCCESS) {
+        log_texture->warn("KTX2: astcenc_context_alloc() failed: {}", astcenc_get_error_string(error));
+        return false;
+    }
+    void* slices[1] = { rgba8.data() };
+    astcenc_image image{
+        .dim_x     = width,
+        .dim_y     = height,
+        .dim_z     = 1,
+        .data_type = ASTCENC_TYPE_U8,
+        .data      = slices
+    };
+    const astcenc_swizzle swizzle{ASTCENC_SWZ_R, ASTCENC_SWZ_G, ASTCENC_SWZ_B, ASTCENC_SWZ_A};
+    error = astcenc_decompress_image(context, blocks.data(), blocks.size(), &image, &swizzle, 0);
+    astcenc_context_free(context);
+    if (error != ASTCENC_SUCCESS) {
+        log_texture->warn("KTX2: astcenc_decompress_image() failed: {}", astcenc_get_error_string(error));
+        return false;
+    }
+    return true;
+}
+
+} // anonymous namespace
 
 Image_loader_ktx2::Image_loader_ktx2()
     : m_state{std::make_unique<Image_loader_ktx2_impl_state>()}
@@ -117,7 +252,7 @@ auto Image_loader_ktx2::is_ktx2(const std::span<const std::uint8_t>& buffer_view
     return std::memcmp(buffer_view.data(), ktx2_identifier, sizeof(ktx2_identifier)) == 0;
 }
 
-auto Image_loader_ktx2::open(const std::filesystem::path& path, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference) -> bool
+auto Image_loader_ktx2::open(const std::filesystem::path& path, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Astc_support astc_support) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -141,10 +276,10 @@ auto Image_loader_ktx2::open(const std::filesystem::path& path, Image_info& imag
         return false;
     }
     const std::span<const std::uint8_t> buffer_view{m_state->owned_data.data(), m_state->owned_data.size()};
-    return open(buffer_view, image_info, linear, transcode_format_preference);
+    return open(buffer_view, image_info, linear, transcode_format_preference, astc_support);
 }
 
-auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference) -> bool
+auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Astc_support astc_support) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -152,9 +287,22 @@ auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, I
     // first, because the file-based open() forwards here after filling
     // owned_data - and close() would discard it. The transcoder init below
     // resets any previous state.
-    ensure_basisu_transcoder_init();
+    m_state->is_open  = false;
+    m_state->raw_file = {};
 
-    m_state->is_open = false;
+    // Raw block payloads (non-zero vkFormat) are not Basis Universal data:
+    // basist rejects them; they are passed through or decoded.
+    if (is_ktx2_raw_blocks(buffer_view)) {
+        if (!open_raw_blocks(*m_state, buffer_view, astc_support)) {
+            return false;
+        }
+        image_info       = m_state->info;
+        m_state->is_open = true;
+        return true;
+    }
+    m_state->payload = Ktx2_payload::basis;
+
+    ensure_basisu_transcoder_init();
     basist::ktx2_transcoder& transcoder = m_state->transcoder;
     if (!transcoder.init(buffer_view.data(), static_cast<std::uint32_t>(buffer_view.size()))) {
         log_texture->warn("KTX2: container parse failed");
@@ -243,6 +391,7 @@ auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, I
         }
     }
     m_state->info.two_component_normal = two_component_normal;
+    m_state->info.decode_path          = Image_decode_path::basis_transcoded;
     image_info       = m_state->info;
     m_state->is_open = true;
     return true;
@@ -268,6 +417,39 @@ auto Image_loader_ktx2::load(std::span<std::uint8_t> transfer_buffer) -> bool
         return false;
     }
     const bool is_compressed = erhe::dataformat::is_block_compressed(format);
+
+    const Ktx2_container& raw_container = m_state->raw_container;
+    if (m_state->payload == Ktx2_payload::raw_blocks) {
+        // Stored levels (inflated when supercompressed); open() verified
+        // their sizes.
+        std::size_t write_offset = 0;
+        for (int level = 0; level < info.level_count; ++level) {
+            const std::size_t byte_count = static_cast<std::size_t>(raw_container.levels[static_cast<std::size_t>(level)].uncompressed_byte_length);
+            if (!raw_container.read_level(m_state->raw_file, static_cast<std::uint32_t>(level), transfer_buffer.subspan(write_offset, byte_count))) {
+                return false;
+            }
+            write_offset += byte_count;
+        }
+        return true;
+    }
+    if (m_state->payload == Ktx2_payload::raw_blocks_decoded) {
+        std::span<const std::uint8_t> blocks = raw_container.get_level_data(m_state->raw_file, 0);
+        std::vector<std::uint8_t> inflated;
+        if (raw_container.supercompression_scheme != static_cast<std::uint32_t>(Ktx2_supercompression::none)) {
+            inflated.resize(static_cast<std::size_t>(raw_container.levels[0].uncompressed_byte_length));
+            if (!raw_container.read_level(m_state->raw_file, 0, std::span<std::uint8_t>{inflated.data(), inflated.size()})) {
+                return false;
+            }
+            blocks = std::span<const std::uint8_t>{inflated.data(), inflated.size()};
+        }
+        return decode_astc_to_rgba8(
+            blocks,
+            m_state->raw_block_format,
+            static_cast<std::uint32_t>(info.width),
+            static_cast<std::uint32_t>(info.height),
+            transfer_buffer.subspan(0, total_byte_count)
+        );
+    }
 
     // All levels are written contiguously, largest-first, tightly packed -
     // the same layout Image_loader_dds produces and upload_to_texture expects.
@@ -304,7 +486,8 @@ auto Image_loader_ktx2::load(std::span<std::uint8_t> transfer_buffer) -> bool
 
 void Image_loader_ktx2::close()
 {
-    m_state->is_open = false;
+    m_state->is_open  = false;
+    m_state->raw_file = {};
     m_state->owned_data.clear();
 }
 

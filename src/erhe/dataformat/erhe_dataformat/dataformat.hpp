@@ -149,6 +149,7 @@ enum class Format_kind {
 [[nodiscard]] auto get_component_count    (Format format) -> std::size_t;
 [[nodiscard]] auto get_component_byte_size(Format format) -> std::size_t;
 [[nodiscard]] auto has_color              (Format format) -> bool;
+[[nodiscard]] auto is_srgb                (Format format) -> bool; // sRGB-encoded color channels
 
 // For block-compressed formats get_format_size_bytes() returns the byte size
 // of one block (8 or 16), not of one texel.

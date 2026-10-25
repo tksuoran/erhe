@@ -803,6 +803,7 @@ Operations::Operations(
 
     , m_export_gltf_command       {commands, "File.SaveGltfStandard",              [this]() -> bool { export_gltf            (); return true; } }
     , m_save_scene_command        {commands, "File.SaveGltfErhe",                  [this]() -> bool { save_scene             (); return true; } }
+    , m_save_scene_for_quest_command{commands, "File.SaveGltfForQuest",            [this]() -> bool { save_scene_for_quest   (); return true; } }
     , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
     , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
     , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
@@ -879,6 +880,7 @@ Operations::Operations(
 
     commands.register_command(&m_export_gltf_command);
     commands.register_command(&m_save_scene_command);
+    commands.register_command(&m_save_scene_for_quest_command);
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
     commands.register_command(&m_create_brush);
@@ -958,6 +960,7 @@ Operations::Operations(
 
     commands.bind_command_to_menu(&m_export_gltf_command,     "File.Save glTF (standard)");
     commands.bind_command_to_menu(&m_save_scene_command,      "File.Save glTF (erhe)");
+    commands.bind_command_to_menu(&m_save_scene_for_quest_command, "File.Save glTF for Quest");
     commands.bind_command_to_menu(&m_load_scene_command,      "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,         "Create.Material");
     commands.bind_command_to_menu(&m_create_brush,            "Create.Brush from Selection");
@@ -3659,6 +3662,27 @@ void Operations::save_scene()
         }
     }
     save_scene_to_file(*scene_root, path);
+}
+
+void Operations::save_scene_for_quest()
+{
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        log_operations->warn("save_scene_for_quest: no scene to save");
+        return;
+    }
+    if (scene_root->get_source_format() == Scene_source_format::usd) {
+        log_operations->warn("save_scene_for_quest: '{}' is a USD-backed scene; Save for Quest writes glTF only", scene_root->get_name());
+        return;
+    }
+    const std::filesystem::path path = default_scene_dir() / (scene_root->get_name() + "_quest.glb");
+    try {
+        if (editor::save_scene_gltf_for_quest(m_context, *scene_root, path)) {
+            log_operations->info("Scene '{}' saved for Quest to '{}'", scene_root->get_name(), erhe::file::to_string(path));
+        }
+    } catch (...) {
+        log_operations->error("exception: save scene for Quest");
+    }
 }
 
 void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesystem::path& path)

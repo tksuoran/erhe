@@ -451,6 +451,29 @@ Returns: `{queued, active_item: {name, type, id}}`
 
 ## Action Tools
 
+### save_scene_for_quest
+
+"Save for Quest" (File > Save glTF for Quest): writes a glTF scene like
+`save_scene` (prepared mesh data, editor state), but every Basis Universal
+KTX2 texture is transcoded at save time to a raw ASTC 4x4 KTX2 image
+(Zstandard supercompressed) referenced through `ERHE_texture_ktx2`
+(`doc/gltf_extensions/ERHE_texture_ktx2.md`); PNG / JPEG images are written
+as they are. An export: the scene's source binding and dirty state stay. A
+USD-backed scene is refused. `path` defaults to
+`res/editor/scenes/<scene name>_quest.glb`; `.glb` is appended when the
+extension is neither `.glb` nor `.gltf`. The save runs on the main thread
+and can outlast the server's reply timeout on a large scene; the
+`save_scene_gltf: '<path>' textures: ...` log line reports the transcode
+counts and time.
+
+```bash
+curl -X POST http://127.0.0.1:3743/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"save_scene_for_quest","arguments":{"scene_name":"bistro_lights_c.gltf","path":"logs/bistro_quest.glb"}}}'
+```
+
+Returns: `{scene_name, path, save_ms, file_bytes}`.
+
 ### create_node
 
 Create an empty prim (undoable, inserted on the next editor frame).

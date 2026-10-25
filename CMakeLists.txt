@@ -799,6 +799,20 @@ CPMAddPackage(
     DOWNLOAD_ONLY     YES
 )
 
+# astc-encoder (ARM, Apache-2.0) decodes raw ASTC 4x4 KTX2 images (the
+# "Save for Quest" glTF textures, ERHE_texture_ktx2) to RGBA8 on devices
+# without ASTC sampling support. Fetched download-only; only the decoder
+# sources are compiled into erhe::graphics (ASTCENC_DECOMPRESS_ONLY, see
+# src/erhe/graphics/CMakeLists.txt) - the repo's own CMake builds the
+# encoder CLI per ISA, which erhe does not need.
+CPMAddPackage(
+    NAME              astcenc
+    GIT_TAG           5.3.0
+    GIT_SHALLOW       TRUE
+    GITHUB_REPOSITORY ARM-software/astc-encoder
+    DOWNLOAD_ONLY     YES
+)
+
 # dds_image (https://github.com/spnda/dds_image) is a small header-only DDS
 # reader used by the erhe::graphics DDS image loader (glTF MSFT_texture_dds
 # images, e.g. the niagara_bistro BC7 textures). Fetched download-only; the

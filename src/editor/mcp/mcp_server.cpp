@@ -693,6 +693,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_graphics_preset",            &Mcp_server::action_set_graphics_preset           },
         { "select_variant",                 &Mcp_server::action_select_variant                },
         { "save_scene",                     &Mcp_server::action_save_scene                    },
+        { "save_scene_for_quest",           &Mcp_server::action_save_scene_for_quest          },
         { "load_scene",                     &Mcp_server::action_load_scene                    },
         { "open_scene",                     &Mcp_server::action_open_scene                    },
         { "frame_scene",                    &Mcp_server::action_frame_scene                   },

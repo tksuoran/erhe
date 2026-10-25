@@ -1,0 +1,22 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_texture_ktx2.schema.json",
+    "title": "ERHE_texture_ktx2 glTF asset root extension",
+    "type": "object",
+    "properties": {
+        "version":  {"type": "integer", "const": 1},
+        "textures": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "texture": {"type": "integer", "minimum": 0, "description": "index into textures; the texture names no core source"},
+                    "source":  {"type": "integer", "minimum": 0, "description": "index into images: a KTX2 image with raw ASTC 4x4 blocks (non-zero vkFormat)"}
+                },
+                "required": ["texture", "source"]
+            }
+        }
+    },
+    "required": ["version", "textures"]
+}

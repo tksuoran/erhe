@@ -222,6 +222,14 @@ prefab source is Save Scene on the scene opened from that source.
   a loaded prefab source the prefab is reloaded so every instance in every
   scene reflects the edit - the prefab editing round-trip is open the
   source as a scene, edit, Save Scene.
+- **File > Save glTF for Quest** (`Operations::save_scene_for_quest`, to
+  `res/editor/scenes/<scene name>_quest.glb`) and **MCP
+  `save_scene_for_quest`** run `editor::save_scene_gltf_for_quest()`: the
+  same file, with every Basis Universal KTX2 texture transcoded to a raw
+  ASTC 4x4 KTX2 image (`doc/gltf_extensions/ERHE_texture_ktx2.md`), so the
+  Quest uploads the blocks with no transcode. It is an export: the scene's
+  source file binding and dirty state are not changed; only
+  `Scene_saved_message` is sent.
 - **MCP `export_gltf`** exports plain interchange (same call minus
   `add_gltf_editor_state` unless `editor_state: true` is passed) - use it
   for handing content to other tools, `save_scene` for full state.

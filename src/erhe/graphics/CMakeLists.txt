@@ -59,6 +59,8 @@ erhe_target_sources_grouped(
     erhe_graphics/image_loader_dds.hpp
     erhe_graphics/image_loader_ktx2.cpp
     erhe_graphics/image_loader_ktx2.hpp
+    erhe_graphics/ktx2_container.cpp
+    erhe_graphics/ktx2_container.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
     erhe_graphics/image_writer.hpp
@@ -232,6 +234,47 @@ else ()
     )
 endif ()
 target_include_directories(${_interface_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
+
+# ASTC decoder (image_loader_ktx2 raw ASTC path on devices without ASTC
+# sampling): the decoder half of the download-only astcenc package compiled
+# into the interface target. ASTCENC_DECOMPRESS_ONLY drops the encoder; the
+# SIMD level is picked by astcenc_mathlib.h from the compiler's target
+# macros (SSE2/AVX2 on x64, NEON on arm64).
+set(_astcenc_sources
+    astcenc_averages_and_directions.cpp
+    astcenc_block_sizes.cpp
+    astcenc_color_quantize.cpp
+    astcenc_color_unquantize.cpp
+    astcenc_compress_symbolic.cpp
+    astcenc_compute_variance.cpp
+    astcenc_decompress_symbolic.cpp
+    astcenc_diagnostic_trace.cpp
+    astcenc_entry.cpp
+    astcenc_find_best_partitioning.cpp
+    astcenc_ideal_endpoints_and_weights.cpp
+    astcenc_image.cpp
+    astcenc_integer_sequence.cpp
+    astcenc_mathlib.cpp
+    astcenc_mathlib_softfloat.cpp
+    astcenc_partition_tables.cpp
+    astcenc_percentile_tables.cpp
+    astcenc_pick_best_endpoint_format.cpp
+    astcenc_quantization.cpp
+    astcenc_symbolic_physical.cpp
+    astcenc_weight_align.cpp
+    astcenc_weight_quant_xfer_tables.cpp
+)
+list(TRANSFORM _astcenc_sources PREPEND "${astcenc_SOURCE_DIR}/Source/")
+target_sources(${_interface_target} PRIVATE ${_astcenc_sources})
+set_source_files_properties(${_astcenc_sources} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+target_compile_definitions(${_interface_target} PRIVATE ASTCENC_DECOMPRESS_ONLY)
+if (MSVC)
+    # Third-party source: exempt from warnings-as-errors.
+    set_source_files_properties(${_astcenc_sources} PROPERTIES COMPILE_OPTIONS "/WX-;/W0")
+else ()
+    set_source_files_properties(${_astcenc_sources} PROPERTIES COMPILE_OPTIONS "-Wno-error;-w")
+endif ()
+target_include_directories(${_interface_target} SYSTEM PRIVATE "${astcenc_SOURCE_DIR}/Source")
 
 # DDS reader (image_loader_dds): header-only dds_image package fetched
 # download-only at the top level (dds_image_SOURCE_DIR).

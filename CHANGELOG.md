@@ -36,6 +36,23 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Upload_staging_usage`, `Ring_buffer_pool::allocate_upload_staging()` /
   `get_upload_staging_usage()`, and `Command_buffer::try_upload_to_buffer()`
   (`upload_to_buffer` staged through the cap; false when it must wait).
+- `erhe::graphics`: raw block KTX2 support (`ktx2_container.hpp`:
+  `Ktx2_container`, `parse_ktx2()`, `write_ktx2_raw_blocks()` with
+  `Ktx2_raw_blocks_image` and `Ktx2_supercompression` (none / zstd),
+  `transcode_ktx2_basis_to_astc_4x4()` with `Ktx2_color_space`,
+  `is_ktx2_basis()`, `is_ktx2_raw_blocks()`); `Image_loader_ktx2` opens raw
+  ASTC 4x4 KTX2 files (passed through, or decoded to RGBA8 with the ARM
+  astc-encoder decoder) selected by the new `Astc_support` argument of
+  `Image_loader::open()` / `Image_loader_ktx2::open()`;
+  `Image_info::decode_path` (`Image_decode_path`).
+- `erhe::dataformat`: `is_srgb()`.
+- `erhe::gltf`: "Save for Quest" textures: `Gltf_texture_export`,
+  `Gltf_export_arguments::texture_export` / `texture_statistics`,
+  `Gltf_export_texture_statistics`; the `ERHE_texture_ktx2` asset-root
+  extension (written and parsed); `Gltf_device_options::astc_support`,
+  `Gltf_image_residency::astc_support`,
+  `Gltf_image_residency::get_decode_path_counts()` and
+  `Gltf_image_decode_path_counts`.
 - `erhe::gltf`: `Gltf_image_residency::schedule_decodes()`,
   `is_decode_idle()`, `get_pending_byte_high_water()`,
   `default_max_decoded_bytes_in_flight` and the decode settings

@@ -312,6 +312,7 @@ private:
     auto action_set_graphics_preset  (const nlohmann::json& args) -> std::string;
     auto action_select_variant    (const nlohmann::json& args) -> std::string;
     auto action_save_scene      (const nlohmann::json& args) -> std::string;
+    auto action_save_scene_for_quest(const nlohmann::json& args) -> std::string;
     auto action_load_scene      (const nlohmann::json& args) -> std::string;
     auto action_open_scene      (const nlohmann::json& args) -> std::string;
     auto action_close_scene     (const nlohmann::json& args) -> std::string;
