@@ -404,3 +404,17 @@ byte-for-byte against the foreign Bistro at idle.
    explicitly (`doc/editor/tools.md` "Headset scene"). On Quest, `--no-scene`
    + `load_scene` of the prepared Bistro + `close_scene "Scene 1"` renders
    Bistro in the headset.
+
+Decisions on the follow-up items (user, 2026-10-25):
+
+- Item 4: Quest uses ASTC. A dedicated "Save for Quest" operation (File
+  menu and MCP) transcodes every Basis texture to raw ASTC 4x4 KTX2 at
+  save time, so loading on Quest uploads the blocks with no transcode;
+  desktop loaders decode the ASTC images on the CPU.
+- Item 6 (new): **limit the CPU-visible memory used for GPU uploads.** A
+  hard cap on upload staging memory, and images are decoded / transcoded
+  only as fast as residency uploads them (an in-flight byte budget), which
+  removes the all-images-decoded peak the memory report measured (about
+  1.5 GB).
+- Order: item 6, then item 4, then item 3.
+
