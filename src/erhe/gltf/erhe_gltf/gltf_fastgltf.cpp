@@ -6720,6 +6720,12 @@ private:
         return sampler_index;
     }
 
+    [[nodiscard]] auto is_ktx2_image(const std::size_t image_index) const -> bool
+    {
+        const fastgltf::sources::BufferView* buffer_view = std::get_if<fastgltf::sources::BufferView>(&m_gltf_asset.images.at(image_index).data);
+        return (buffer_view != nullptr) && (buffer_view->mimeType == fastgltf::MimeType::KTX2);
+    }
+
     std::map<std::pair<std::size_t, std::optional<std::size_t>>, std::size_t> m_exported_textures;
     [[nodiscard]] auto process_texture(const erhe::graphics::Texture* texture, const erhe::primitive::Material_sampler_state& sampler) -> std::optional<std::size_t>
     {
@@ -6734,7 +6740,16 @@ private:
             return fi->second;
         }
         fastgltf::Texture gltf_texture{};
-        gltf_texture.imageIndex = image_index.value();
+        if (is_ktx2_image(image_index.value())) {
+            // KTX2 (Basis Universal) images are written through
+            // KHR_texture_basisu; core `source` only names PNG / JPEG. There
+            // is no fallback image, so the extension is also required.
+            gltf_texture.basisuImageIndex = image_index.value();
+            declare_extension_used    ("KHR_texture_basisu");
+            declare_extension_required("KHR_texture_basisu");
+        } else {
+            gltf_texture.imageIndex = image_index.value();
+        }
         if (sampler_index.has_value()) {
             gltf_texture.samplerIndex = sampler_index.value();
         }
@@ -7936,6 +7951,41 @@ private:
         }
         m_gltf_asset.extensionsUsed.emplace_back(std::string{extension_name}.c_str());
     }
+
+    // Adds an extension name to extensionsRequired once (the caller also
+    // declares it used: extensionsRequired is a subset of extensionsUsed).
+    void declare_extension_required(const std::string_view extension_name)
+    {
+        for (const auto& existing : m_gltf_asset.extensionsRequired) {
+            if (std::string_view{existing} == extension_name) {
+                return;
+            }
+        }
+        m_gltf_asset.extensionsRequired.emplace_back(std::string{extension_name}.c_str());
+    }
+
+    // Declares the KHR material extensions the fastgltf exporter writes for
+    // the exported materials; the conditions mirror fastgltf's
+    // Exporter::writeMaterials(), which writes the extension objects but
+    // leaves extensionsUsed to the application.
+    void declare_material_extensions()
+    {
+        for (const fastgltf::Material& material : m_gltf_asset.materials) {
+            if (material.anisotropy)              declare_extension_used("KHR_materials_anisotropy");
+            if (material.clearcoat)               declare_extension_used("KHR_materials_clearcoat");
+            if (material.diffuseTransmission)     declare_extension_used("KHR_materials_diffuse_transmission");
+            if (material.dispersion != 0.0f)      declare_extension_used("KHR_materials_dispersion");
+            if (material.emissiveStrength != 1.0f) declare_extension_used("KHR_materials_emissive_strength");
+            if (material.ior != 1.5f)             declare_extension_used("KHR_materials_ior");
+            if (material.iridescence)             declare_extension_used("KHR_materials_iridescence");
+            if (material.sheen)                   declare_extension_used("KHR_materials_sheen");
+            if (material.specular)                declare_extension_used("KHR_materials_specular");
+            if (material.specularGlossiness)      declare_extension_used("KHR_materials_pbrSpecularGlossiness");
+            if (material.transmission)            declare_extension_used("KHR_materials_transmission");
+            if (material.unlit)                   declare_extension_used("KHR_materials_unlit");
+            if (material.volume)                  declare_extension_used("KHR_materials_volume");
+        }
+    }
 };
 
 auto Gltf_exporter::export_gltf() -> std::string
@@ -8009,6 +8059,9 @@ auto Gltf_exporter::export_gltf() -> std::string
     if (m_uses_texture_transform) {
         m_gltf_asset.extensionsUsed.emplace_back("KHR_texture_transform");
     }
+    // After every material pass (node meshes, extra meshes, variants,
+    // unreferenced materials).
+    declare_material_extensions();
 
     combine_buffers();
 

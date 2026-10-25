@@ -47,7 +47,7 @@ it runs, and the list of what is and is not persisted, is
 | lights (type, color, intensity, range, spot angles) | KHR_lights_punctual |
 | light cast_shadow, Item flags | `ERHE_light` extension; KHR_lights_punctual has no shadow flag |
 | materials plus erhe fields | core plus `ERHE_material` extension |
-| textures / images / samplers | core |
+| textures / images / samplers | core; KTX2 (Basis Universal) images through `KHR_texture_basisu` (required, no fallback image) |
 | animations | core |
 | skins | core |
 | meshes (triangle soup) | core |
