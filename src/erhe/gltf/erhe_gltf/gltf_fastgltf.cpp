@@ -65,6 +65,7 @@
 #include <future>
 #include <limits>
 #include <map>
+#include <set>
 #include <mutex>
 #include <optional>
 #include <random>
@@ -1527,13 +1528,25 @@ public:
     std::size_t file_offset{0};
 };
 
+// Where one bufferView of the file is: its glTF buffer and its offset in
+// that buffer, as the file says. The parse reads the views it needs eagerly
+// into buffers of their own and repoints them (load_eager_buffer_views()),
+// so the asset no longer tells where they are in the file.
+class Gltf_view_place
+{
+public:
+    std::size_t buffer_index{0};
+    std::size_t byte_offset {0};
+};
+
 // The buffer origins of one parsed file, shared by the triangle soup sources
 // of all its primitives.
 class Gltf_buffer_origins
 {
 public:
     std::vector<Gltf_source_file>                  files;
-    std::vector<std::optional<Gltf_buffer_origin>> buffers; // per glTF buffer; nullopt: not in a file (data URI)
+    std::vector<std::optional<Gltf_buffer_origin>> buffers;     // per glTF buffer; nullopt: not in a file (data URI)
+    std::vector<Gltf_view_place>                   view_places; // per glTF bufferView, as the file has it
 };
 
 namespace {
@@ -1657,6 +1670,43 @@ namespace {
     return origins;
 }
 
+// Reads byte ranges of the source files of one parse with one open handle
+// per file, shared by the parse's tasks (reads are serialized). The parse
+// reads every soup through it; the handles close with the reader, when the
+// parse ends, so no handle outlives the load (an open handle makes a save's
+// rename onto the file fail on Windows). The files were stamped by
+// resolve_gltf_buffer_origins() at the start of the parse.
+class Gltf_range_reader
+{
+public:
+    explicit Gltf_range_reader(std::shared_ptr<const Gltf_buffer_origins> origins)
+        : m_origins{std::move(origins)}
+        , m_files  {m_origins ? m_origins->files.size() : 0}
+    {
+    }
+
+    [[nodiscard]] auto read(const std::size_t file_index, const std::size_t file_offset, std::span<std::byte> out) -> bool
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        if (!m_origins || (file_index >= m_files.size())) {
+            return false;
+        }
+        std::ifstream& file = m_files[file_index];
+        if (!file.is_open()) {
+            file.open(m_origins->files[file_index].path, std::ios::binary);
+        }
+        file.clear();
+        file.seekg(static_cast<std::streamoff>(file_offset));
+        file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size()));
+        return static_cast<bool>(file);
+    }
+
+private:
+    std::shared_ptr<const Gltf_buffer_origins> m_origins;
+    std::mutex                                 m_mutex;
+    std::vector<std::ifstream>                 m_files;
+};
+
 // Reads one glTF primitive's triangle soup back from the source file: the
 // byte ranges of the bufferViews its accessors read, recorded at the parse,
 // are read into a minimal fastgltf::Asset and build_triangle_soup() builds
@@ -1694,13 +1744,47 @@ public:
         return description;
     }
 
+    // The reload: checks that the files are the ones the parse read, then
+    // reads the ranges with handles of its own.
     [[nodiscard]] auto load() const -> std::shared_ptr<erhe::primitive::Triangle_soup> override
     {
         ERHE_PROFILE_FUNCTION();
 
-        // The file must be the one the parse read: same size, same
-        // modification time. Anything else may hold different bytes at the
-        // recorded ranges.
+        if (!check_files()) {
+            return {};
+        }
+        std::size_t open_file_index = std::numeric_limits<std::size_t>::max();
+        std::ifstream file;
+        return read_and_build(
+            [&](const std::size_t file_index, const std::size_t file_offset, const std::span<std::byte> out) -> bool {
+                if (file_index != open_file_index) {
+                    file = std::ifstream{origins->files[file_index].path, std::ios::binary};
+                    open_file_index = file_index;
+                }
+                file.seekg(static_cast<std::streamoff>(file_offset));
+                file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size()));
+                return static_cast<bool>(file);
+            }
+        );
+    }
+
+    // The first load, during the parse that stamped the files: reads through
+    // the parse's shared reader.
+    [[nodiscard]] auto load_in_parse(Gltf_range_reader& reader) const -> std::shared_ptr<erhe::primitive::Triangle_soup>
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        return read_and_build(
+            [&reader](const std::size_t file_index, const std::size_t file_offset, const std::span<std::byte> out) -> bool {
+                return reader.read(file_index, file_offset, out);
+            }
+        );
+    }
+
+    // The file must be the one the parse read: same size, same modification
+    // time. Anything else may hold different bytes at the recorded ranges.
+    [[nodiscard]] auto check_files() const -> bool
+    {
         std::vector<bool> file_checked(origins->files.size(), false);
         for (const View& view : views) {
             if (file_checked[view.file_index]) {
@@ -1711,30 +1795,29 @@ public:
             Gltf_source_file current;
             if (!stamp_source_file(expected.path, current)) {
                 log_gltf->error("triangle soup reload of {}: cannot read '{}' - refused", description, expected.path.string());
-                return {};
+                return false;
             }
             if ((current.size != expected.size) || (current.write_time != expected.write_time)) {
                 log_gltf->error(
                     "triangle soup reload of {}: '{}' changed since it was loaded (size {} -> {}) - refused",
                     description, expected.path.string(), expected.size, current.size
                 );
-                return {};
+                return false;
             }
         }
+        return true;
+    }
 
+    // Reads the views with `read_range(file_index, file_offset, out)` into a
+    // minimal asset and builds the soup.
+    template <typename Read_range>
+    [[nodiscard]] auto read_and_build(Read_range&& read_range) const -> std::shared_ptr<erhe::primitive::Triangle_soup>
+    {
         fastgltf::Asset asset;
-        std::size_t open_file_index = std::numeric_limits<std::size_t>::max();
-        std::ifstream file;
         for (std::size_t i = 0, end = views.size(); i < end; ++i) {
             const View& view = views[i];
-            if (view.file_index != open_file_index) {
-                file = std::ifstream{origins->files[view.file_index].path, std::ios::binary};
-                open_file_index = view.file_index;
-            }
             std::vector<std::byte> bytes(view.byte_length);
-            file.seekg(static_cast<std::streamoff>(view.file_offset));
-            file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(view.byte_length));
-            if (!file) {
+            if (!read_range(view.file_index, view.file_offset, std::span<std::byte>{bytes.data(), bytes.size()})) {
                 log_gltf->error(
                     "triangle soup reload of {}: reading {} bytes at offset {} of '{}' failed - refused",
                     description, view.byte_length, view.file_offset, origins->files[view.file_index].path.string()
@@ -1803,7 +1886,19 @@ public:
     source->tangents       = tangents;
     source->description    = std::move(description);
 
-    std::map<std::size_t, std::size_t> local_view_of; // asset bufferView -> source view
+    // Each source view covers only the bytes the primitive's accessors read
+    // from the bufferView, not the whole view: a file may pack every mesh
+    // into a handful of views (the foreign Bistro has 7 views of up to 47 MB
+    // for 3852 primitives). The accessor copies are rebased onto the range.
+    class Local_view
+    {
+    public:
+        std::size_t local_index{0};
+        std::size_t begin      {std::numeric_limits<std::size_t>::max()}; // byte range read, relative to the asset view
+        std::size_t end        {0};
+    };
+    std::map<std::size_t, Local_view> local_view_of; // asset bufferView -> source view
+    std::vector<std::size_t>          asset_view_of_local;
     const auto add_accessor = [&](const std::size_t accessor_index) -> std::optional<std::size_t> {
         if (accessor_index >= asset.accessors.size()) {
             return std::nullopt;
@@ -1815,29 +1910,59 @@ public:
         fastgltf::Optional<std::size_t> local_view{};
         if (accessor.bufferViewIndex.has_value()) {
             const std::size_t view_index = accessor.bufferViewIndex.value();
-            const auto found = local_view_of.find(view_index);
-            if (found != local_view_of.end()) {
-                local_view = found->second;
-            } else {
-                const fastgltf::BufferView& view = asset.bufferViews[view_index];
-                if (view.meshoptCompression || (view.bufferIndex >= origins->buffers.size()) || !origins->buffers[view.bufferIndex].has_value()) {
-                    return std::nullopt;
-                }
-                const Gltf_buffer_origin& origin = origins->buffers[view.bufferIndex].value();
+            if (view_index >= asset.bufferViews.size()) {
+                return std::nullopt;
+            }
+            const fastgltf::BufferView& view  = asset.bufferViews[view_index];
+            const Gltf_view_place       place = (view_index < origins->view_places.size())
+                ? origins->view_places[view_index]
+                : Gltf_view_place{.buffer_index = view.bufferIndex, .byte_offset = view.byteOffset};
+            if (view.meshoptCompression || (place.buffer_index >= origins->buffers.size()) || !origins->buffers[place.buffer_index].has_value()) {
+                return std::nullopt;
+            }
+            const std::size_t element_size = fastgltf::getElementByteSize(accessor.type, accessor.componentType);
+            const std::size_t stride       = view.byteStride.has_value() ? view.byteStride.value() : element_size;
+            const std::size_t first        = accessor.byteOffset;
+            const std::size_t last         = (accessor.count == 0) ? first : (first + ((accessor.count - 1) * stride) + element_size);
+            if (last > view.byteLength) {
+                return std::nullopt;
+            }
+            auto found = local_view_of.find(view_index);
+            if (found == local_view_of.end()) {
+                const Gltf_buffer_origin& origin = origins->buffers[place.buffer_index].value();
                 source->views.push_back(
                     Gltf_triangle_soup_source::View{
                         .file_index  = origin.file_index,
-                        .file_offset = origin.file_offset + view.byteOffset,
-                        .byte_length = view.byteLength,
+                        .file_offset = origin.file_offset + place.byte_offset, // narrowed in finish_views()
+                        .byte_length = 0,
                         .byte_stride = view.byteStride
                     }
                 );
-                local_view = source->views.size() - 1;
-                local_view_of.emplace(view_index, source->views.size() - 1);
+                asset_view_of_local.push_back(view_index);
+                found = local_view_of.emplace(view_index, Local_view{.local_index = source->views.size() - 1}).first;
             }
+            found->second.begin = std::min(found->second.begin, first);
+            found->second.end   = std::max(found->second.end,   last);
+            local_view = found->second.local_index;
         }
         source->accessors.push_back(Gltf_triangle_soup_source::copy_accessor(accessor, local_view));
         return source->accessors.size() - 1;
+    };
+    // Narrows each view to the byte range its accessors read and rebases the
+    // accessors onto it.
+    const auto finish_views = [&]() {
+        for (std::size_t local = 0, end = source->views.size(); local < end; ++local) {
+            const Local_view&                range = local_view_of.at(asset_view_of_local[local]);
+            Gltf_triangle_soup_source::View& view  = source->views[local];
+            view.file_offset += range.begin;
+            view.byte_length  = range.end - range.begin;
+        }
+        for (fastgltf::Accessor& accessor : source->accessors) {
+            if (accessor.bufferViewIndex.has_value()) {
+                const Local_view& range = local_view_of.at(asset_view_of_local[accessor.bufferViewIndex.value()]);
+                accessor.byteOffset -= range.begin;
+            }
+        }
     };
 
     const std::optional<std::size_t> indices = add_accessor(primitive.indicesAccessor.value());
@@ -1857,7 +1982,336 @@ public:
             }
         );
     }
+    finish_views();
     return source;
+}
+
+namespace {
+
+// The byte fastgltf is told to write the GLB BIN chunk to. It is never
+// written: Gltf_file_stream::read() recognizes it and seeks past the chunk.
+unsigned char s_skipped_glb_bin_marker{0};
+
+} // anonymous namespace
+
+// A glTF file stream for fastgltf that does not read the GLB BIN chunk.
+// fastgltf hands the BIN chunk to the buffer map callback
+// (skip_glb_bin_map_callback()) before it parses the JSON; the callback
+// answers with s_skipped_glb_bin_marker, and this stream turns the read of
+// the chunk into a seek. The file's buffer 0 is then a
+// fastgltf::sources::CustomBuffer with no bytes, and the parse reads the
+// byte ranges it needs from the file (load_eager_buffer_views(), the triangle
+// soup sources). Otherwise it behaves as fastgltf::GltfFileStream.
+class Gltf_file_stream : public fastgltf::GltfDataGetter
+{
+public:
+    explicit Gltf_file_stream(const std::filesystem::path& path)
+        : m_file{path, std::ios::binary}
+    {
+        std::error_code error;
+        m_size = static_cast<std::size_t>(std::filesystem::file_size(path, error));
+        if (error) {
+            m_size = 0;
+        }
+        // GLB: 12 byte header, JSON chunk (length, type, data), BIN chunk
+        // (length, type, data). Remember the BIN chunk length, so the map
+        // callback only answers the chunk's own request with the marker.
+        std::array<unsigned char, 20> header{};
+        m_file.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(header.size()));
+        const auto u32 = [&header](const std::size_t offset) -> uint32_t {
+            return
+                static_cast<uint32_t>(header[offset + 0])         |
+                (static_cast<uint32_t>(header[offset + 1]) <<  8) |
+                (static_cast<uint32_t>(header[offset + 2]) << 16) |
+                (static_cast<uint32_t>(header[offset + 3]) << 24);
+        };
+        if (m_file && (u32(0) == 0x46546C67u)) { // "glTF"
+            const std::size_t json_length = u32(12);
+            std::array<unsigned char, 8> bin_header{};
+            m_file.seekg(static_cast<std::streamoff>(20 + json_length));
+            m_file.read(reinterpret_cast<char*>(bin_header.data()), 8);
+            if (m_file) {
+                const uint32_t bin_length = static_cast<uint32_t>(bin_header[0]) | (static_cast<uint32_t>(bin_header[1]) << 8) | (static_cast<uint32_t>(bin_header[2]) << 16) | (static_cast<uint32_t>(bin_header[3]) << 24);
+                const uint32_t bin_type   = static_cast<uint32_t>(bin_header[4]) | (static_cast<uint32_t>(bin_header[5]) << 8) | (static_cast<uint32_t>(bin_header[6]) << 16) | (static_cast<uint32_t>(bin_header[7]) << 24);
+                if (bin_type == 0x004E4942u) { // "BIN\0"
+                    m_glb_bin_length = bin_length;
+                }
+            }
+        }
+        m_file.clear();
+        m_file.seekg(0);
+    }
+
+    [[nodiscard]] auto is_open() const -> bool
+    {
+        return m_file.is_open();
+    }
+
+    // The BIN chunk length of a .glb that has one; nullopt otherwise.
+    [[nodiscard]] auto get_glb_bin_length() const -> std::optional<std::size_t>
+    {
+        return m_glb_bin_length;
+    }
+
+    void read(void* ptr, const std::size_t count) override
+    {
+        if (ptr == &s_skipped_glb_bin_marker) {
+            m_file.seekg(static_cast<std::streamoff>(count), std::ios::cur);
+            return;
+        }
+        m_file.read(static_cast<char*>(ptr), static_cast<std::streamsize>(count));
+    }
+
+    [[nodiscard]] auto read(const std::size_t count, const std::size_t padding) -> fastgltf::span<std::byte> override
+    {
+        m_buffer.resize(count + padding);
+        m_file.read(reinterpret_cast<char*>(m_buffer.data()), static_cast<std::streamsize>(count));
+        return fastgltf::span<std::byte>(m_buffer.data(), m_buffer.size());
+    }
+
+    void reset() override
+    {
+        m_file.clear();
+        m_file.seekg(0, std::ios::beg);
+    }
+
+    [[nodiscard]] auto bytesRead() -> std::size_t override
+    {
+        return static_cast<std::size_t>(m_file.tellg());
+    }
+
+    [[nodiscard]] auto totalSize() -> std::size_t override
+    {
+        return m_size;
+    }
+
+private:
+    std::ifstream              m_file;
+    std::vector<std::byte>     m_buffer;
+    std::size_t                m_size{0};
+    std::optional<std::size_t> m_glb_bin_length;
+};
+
+// What skip_glb_bin_map_callback() needs: the BIN chunk length to answer and
+// whether it was answered. Lives in the parser's user pointer object.
+class Skip_glb_bin_state
+{
+public:
+    std::optional<std::size_t> glb_bin_length;
+    bool                       skipped{false};
+};
+
+// fastgltf buffer map callback: the first request of exactly the GLB BIN
+// chunk's size is the BIN chunk (fastgltf maps it before it parses the JSON,
+// so before any data URI); it gets the marker Gltf_file_stream skips. Any
+// other request gets no memory, which makes fastgltf allocate as usual.
+[[nodiscard]] auto skip_glb_bin_map_callback(Skip_glb_bin_state& state, const std::uint64_t buffer_size) -> fastgltf::BufferInfo
+{
+    if (!state.skipped && state.glb_bin_length.has_value() && (state.glb_bin_length.value() == buffer_size)) {
+        state.skipped = true;
+        return fastgltf::BufferInfo{.mappedMemory = &s_skipped_glb_bin_marker, .customId = 0};
+    }
+    return fastgltf::BufferInfo{.mappedMemory = nullptr, .customId = 0};
+}
+
+// True when the buffer's bytes are in memory: data URIs (and every buffer of
+// a parse from memory). A GLB BIN chunk skipped by Gltf_file_stream
+// (CustomBuffer) and an external .bin (URI, not loaded) are not.
+[[nodiscard]] auto is_buffer_resident(const fastgltf::Buffer& buffer) -> bool
+{
+    return
+        std::holds_alternative<fastgltf::sources::Array >(buffer.data) ||
+        std::holds_alternative<fastgltf::sources::Vector>(buffer.data) ||
+        std::holds_alternative<fastgltf::sources::ByteView>(buffer.data);
+}
+
+// Reads the bufferViews the parse reads through the asset into buffers of
+// their own and repoints the views at them, leaving unread only the views
+// that hold nothing but triangle-soup primitive data, which the parse reads
+// per primitive through Gltf_triangle_soup_source ranges. So the parse never
+// holds the whole GLB BIN chunk or .bin file.
+//
+// A primitive's data is read per primitive ("lazy") when the primitive is a
+// soup primitive (not geometry-normative: no ERHE_geometry) with indices,
+// and each of its index / attribute accessors has a bufferView in a buffer
+// that is in a file, is not sparse and is not meshopt compressed. A view is
+// left unread when every accessor on it is such a lazy accessor and no
+// sparse accessor, image or other user (morph targets, skins, animations,
+// instancing, geometry-normative primitives) reads from it. Every other view
+// in a non-resident buffer is read whole: images, animation and skin data,
+// ERHE_* payload views, and anything shared with them.
+//
+// Records the file places of all views in `origins.view_places` first.
+// Returns false (logged) when a view that must be read cannot be.
+[[nodiscard]] auto load_eager_buffer_views(
+    fastgltf::Asset&                                       asset,
+    Gltf_buffer_origins&                                   origins,
+    const std::set<std::pair<std::size_t, std::size_t>>&   geometry_primitives,
+    std::size_t&                                           out_eager_byte_count,
+    std::size_t&                                           out_lazy_view_count
+) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    out_eager_byte_count = 0;
+    out_lazy_view_count  = 0;
+    origins.view_places.clear();
+    origins.view_places.reserve(asset.bufferViews.size());
+    for (const fastgltf::BufferView& view : asset.bufferViews) {
+        origins.view_places.push_back(Gltf_view_place{.buffer_index = view.bufferIndex, .byte_offset = view.byteOffset});
+    }
+
+    const std::size_t buffer_count = asset.buffers.size();
+    std::vector<bool> buffer_in_file(buffer_count, false);
+    bool any_non_resident = false;
+    for (std::size_t i = 0; i < buffer_count; ++i) {
+        if (!is_buffer_resident(asset.buffers[i])) {
+            any_non_resident = true;
+            buffer_in_file[i] = (i < origins.buffers.size()) && origins.buffers[i].has_value();
+        }
+    }
+    if (!any_non_resident) {
+        return true;
+    }
+
+    const std::size_t accessor_count = asset.accessors.size();
+    const auto lazy_capable = [&](const std::size_t accessor_index) -> bool {
+        if (accessor_index >= accessor_count) {
+            return false;
+        }
+        const fastgltf::Accessor& accessor = asset.accessors[accessor_index];
+        if (accessor.sparse.has_value() || !accessor.bufferViewIndex.has_value()) {
+            return false;
+        }
+        const std::size_t view_index = accessor.bufferViewIndex.value();
+        if (view_index >= asset.bufferViews.size()) {
+            return false;
+        }
+        const fastgltf::BufferView& view = asset.bufferViews[view_index];
+        return !view.meshoptCompression && (view.bufferIndex < buffer_count) && buffer_in_file[view.bufferIndex];
+    };
+
+    // Accessors read per primitive, and accessors read through the asset.
+    std::vector<bool> lazy_accessor (accessor_count, false);
+    std::vector<bool> eager_accessor(accessor_count, false);
+    const auto mark_eager = [&](const std::size_t accessor_index) {
+        if (accessor_index < accessor_count) {
+            eager_accessor[accessor_index] = true;
+        }
+    };
+    for (std::size_t mesh_index = 0, mesh_end = asset.meshes.size(); mesh_index < mesh_end; ++mesh_index) {
+        const fastgltf::Mesh& mesh = asset.meshes[mesh_index];
+        for (std::size_t primitive_index = 0, primitive_end = mesh.primitives.size(); primitive_index < primitive_end; ++primitive_index) {
+            const fastgltf::Primitive& primitive = mesh.primitives[primitive_index];
+            bool lazy = primitive.indicesAccessor.has_value() && !geometry_primitives.contains({mesh_index, primitive_index});
+            if (lazy) {
+                lazy = lazy_capable(primitive.indicesAccessor.value());
+            }
+            for (const fastgltf::Attribute& attribute : primitive.attributes) {
+                lazy = lazy && lazy_capable(attribute.accessorIndex);
+            }
+            if (lazy) {
+                lazy_accessor[primitive.indicesAccessor.value()] = true;
+                for (const fastgltf::Attribute& attribute : primitive.attributes) {
+                    lazy_accessor[attribute.accessorIndex] = true;
+                }
+            } else {
+                if (primitive.indicesAccessor.has_value()) {
+                    mark_eager(primitive.indicesAccessor.value());
+                }
+                for (const fastgltf::Attribute& attribute : primitive.attributes) {
+                    mark_eager(attribute.accessorIndex);
+                }
+            }
+            for (const auto& target : primitive.targets) {
+                for (const fastgltf::Attribute& attribute : target) {
+                    mark_eager(attribute.accessorIndex);
+                }
+            }
+        }
+    }
+    for (const fastgltf::Skin& skin : asset.skins) {
+        if (skin.inverseBindMatrices.has_value()) {
+            mark_eager(skin.inverseBindMatrices.value());
+        }
+    }
+    for (const fastgltf::Animation& animation : asset.animations) {
+        for (const fastgltf::AnimationSampler& sampler : animation.samplers) {
+            mark_eager(sampler.inputAccessor);
+            mark_eager(sampler.outputAccessor);
+        }
+    }
+    for (const fastgltf::Node& node : asset.nodes) {
+        for (const fastgltf::Attribute& attribute : node.instancingAttributes) {
+            mark_eager(attribute.accessorIndex);
+        }
+    }
+
+    // A view stays unread only when every accessor on it is lazy and
+    // nothing else reads it.
+    const std::size_t view_count = asset.bufferViews.size();
+    std::vector<bool> view_has_lazy  (view_count, false);
+    std::vector<bool> view_is_needed (view_count, false);
+    for (std::size_t accessor_index = 0; accessor_index < accessor_count; ++accessor_index) {
+        const fastgltf::Accessor& accessor = asset.accessors[accessor_index];
+        if (accessor.sparse.has_value()) {
+            if (accessor.sparse->indicesBufferView < view_count) {
+                view_is_needed[accessor.sparse->indicesBufferView] = true;
+            }
+            if (accessor.sparse->valuesBufferView < view_count) {
+                view_is_needed[accessor.sparse->valuesBufferView] = true;
+            }
+        }
+        if (!accessor.bufferViewIndex.has_value() || (accessor.bufferViewIndex.value() >= view_count)) {
+            continue;
+        }
+        const std::size_t view_index = accessor.bufferViewIndex.value();
+        if (lazy_accessor[accessor_index] && !eager_accessor[accessor_index]) {
+            view_has_lazy[view_index] = true;
+        } else {
+            // Read through the asset, or by an extension that names it.
+            view_is_needed[view_index] = true;
+        }
+    }
+
+    std::vector<std::ifstream> files(origins.files.size());
+    for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
+        fastgltf::BufferView& view = asset.bufferViews[view_index];
+        if ((view.bufferIndex >= buffer_count) || is_buffer_resident(asset.buffers[view.bufferIndex])) {
+            continue;
+        }
+        if (view_has_lazy[view_index] && !view_is_needed[view_index]) {
+            ++out_lazy_view_count;
+            continue;
+        }
+        if (!buffer_in_file[view.bufferIndex]) {
+            log_gltf->error("glTF load: bufferView {} is in buffer {}, which is in no file - not readable", view_index, view.bufferIndex);
+            return false;
+        }
+        const Gltf_buffer_origin& origin = origins.buffers[view.bufferIndex].value();
+        std::ifstream& file = files[origin.file_index];
+        if (!file.is_open()) {
+            file.open(origins.files[origin.file_index].path, std::ios::binary);
+        }
+        fastgltf::StaticVector<std::byte> bytes(view.byteLength);
+        file.seekg(static_cast<std::streamoff>(origin.file_offset + view.byteOffset));
+        file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(view.byteLength));
+        if (!file) {
+            log_gltf->error(
+                "glTF load: reading bufferView {} ({} bytes at offset {} of '{}') failed",
+                view_index, view.byteLength, origin.file_offset + view.byteOffset, origins.files[origin.file_index].path.string()
+            );
+            return false;
+        }
+        out_eager_byte_count += view.byteLength;
+        fastgltf::Buffer buffer{};
+        buffer.byteLength = view.byteLength;
+        buffer.data       = fastgltf::sources::Array{.bytes = std::move(bytes), .mimeType = fastgltf::MimeType::GltfBuffer};
+        view.bufferIndex  = asset.buffers.size();
+        view.byteOffset   = 0;
+        asset.buffers.push_back(std::move(buffer));
+    }
+    return true;
 }
 
 class Gltf_parser
@@ -2877,20 +3331,39 @@ private:
     std::vector<std::shared_ptr<Primitive_entry_slot>> m_primitive_entries;
     ERHE_PROFILE_MUTEX(std::mutex, m_primitive_entries_mutex);
 
-    void load_new_primitive_geometry(
+    // Builds the primitive's soup. A primitive whose bytes are in a file is
+    // read through its Gltf_triangle_soup_source - the byte ranges its
+    // accessors cover, read from the file now - since the parse does not
+    // load the buffers that hold only such data (load_eager_buffer_views());
+    // the triangle soup reload reads the same ranges with the same function,
+    // so the soup is the same either way. Other primitives (data URI
+    // buffers, sparse accessors, a parse from memory) build from the asset.
+    // Returns the source.
+    auto load_new_primitive_geometry(
         const fastgltf::Primitive& primitive,
         Primitive_entry&           primitive_entry,
-        const bool                 tangent_frame_needed
-    )
+        const bool                 tangent_frame_needed,
+        const std::string&         name
+    ) -> std::shared_ptr<const Gltf_triangle_soup_source>
     {
-        primitive_entry.triangle_soup = build_triangle_soup(
-            m_asset.get(),
-            primitive,
-            tangent_frame_needed ? Soup_tangents::generate_when_missing : Soup_tangents::as_stored
-        );
+        const Soup_tangents tangents = tangent_frame_needed ? Soup_tangents::generate_when_missing : Soup_tangents::as_stored;
+        std::shared_ptr<const Gltf_triangle_soup_source> source;
+        if (m_buffer_origins) {
+            source = make_gltf_triangle_soup_source(
+                m_asset.get(),
+                primitive,
+                tangents,
+                m_buffer_origins,
+                fmt::format("'{}' primitive '{}'", m_arguments.path.filename().string(), name)
+            );
+        }
+        primitive_entry.triangle_soup = source
+            ? source->load_in_parse(*m_range_reader)
+            : build_triangle_soup(m_asset.get(), primitive, tangents);
         if (primitive_entry.triangle_soup) {
             primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
         }
+        return source;
     }
     auto get_primitive_geometry(
         const fastgltf::Primitive&     primitive,
@@ -2949,7 +3422,7 @@ private:
         }
 
         // This task claimed the slot; build outside the lock and publish.
-        load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
+        std::shared_ptr<const Gltf_triangle_soup_source> source = load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed, name);
         if (primitive_entry.triangle_soup && !prepared_json.optimized.empty()) {
             std::shared_ptr<erhe::primitive::Prepared_primitive_data> prepared_data =
                 read_prepared_mesh_data(primitive, prepared_json, *primitive_entry.triangle_soup, name);
@@ -2959,17 +3432,8 @@ private:
         }
         // The reload source, before the primitive is shared: the shape may
         // then release its soup after upload and read it back from the file.
-        if (m_buffer_origins && primitive_entry.primitive && primitive_entry.primitive->render_shape) {
-            std::shared_ptr<const Gltf_triangle_soup_source> source = make_gltf_triangle_soup_source(
-                m_asset.get(),
-                primitive,
-                tangent_frame_needed ? Soup_tangents::generate_when_missing : Soup_tangents::as_stored,
-                m_buffer_origins,
-                fmt::format("'{}' primitive '{}'", m_arguments.path.filename().string(), name)
-            );
-            if (source) {
-                primitive_entry.primitive->render_shape->set_triangle_soup_source(std::move(source));
-            }
+        if (m_record_soup_sources && source && primitive_entry.primitive && primitive_entry.primitive->render_shape) {
+            primitive_entry.primitive->render_shape->set_triangle_soup_source(std::move(source));
         }
         slot->triangle_soup = primitive_entry.triangle_soup;
         slot->primitive     = primitive_entry.primitive;
@@ -2994,12 +3458,19 @@ public:
     }
     // Where the file's buffers are on disk; set when the parse records
     // triangle soup reload sources (Gltf_parse_arguments::triangle_soup_reload).
-    void set_buffer_origins(std::shared_ptr<const Gltf_buffer_origins> buffer_origins)
+    // `record_soup_sources`: give each soup primitive its reload source
+    // (Triangle_soup_reload::record). The origins themselves are used by
+    // every parse from a file, to read the primitives' bytes.
+    void set_buffer_origins(std::shared_ptr<const Gltf_buffer_origins> buffer_origins, const Triangle_soup_reload record_soup_sources)
     {
-        m_buffer_origins = std::move(buffer_origins);
+        m_buffer_origins      = std::move(buffer_origins);
+        m_record_soup_sources = (record_soup_sources == Triangle_soup_reload::record);
+        m_range_reader        = std::make_unique<Gltf_range_reader>(m_buffer_origins);
     }
 private:
     std::shared_ptr<const Gltf_buffer_origins> m_buffer_origins;
+    bool                                       m_record_soup_sources{false};
+    std::unique_ptr<Gltf_range_reader>         m_range_reader;
 public:
 
     void set_primitive_geometry_extensions(std::map<std::pair<std::size_t, std::size_t>, std::string>&& extensions)
@@ -5122,13 +5593,18 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     // A file is streamed, not read whole: fastgltf copies the GLB BIN chunk
     // into a buffer of its own, so reading the file into memory first would
     // hold the binary payload twice at the parse peak.
+    // Gltf_file_stream does not even read the BIN chunk once: the parse
+    // reads the byte ranges it needs from the file (load_eager_buffer_views()
+    // and the triangle soup sources), so the payload is never held whole.
     std::unique_ptr<fastgltf::GltfDataGetter> data;
+    Skip_glb_bin_state                        skip_glb_bin_state;
     if (arguments.glb_data.empty()) {
-        std::unique_ptr<fastgltf::GltfFileStream> file_stream = std::make_unique<fastgltf::GltfFileStream>(arguments.path);
-        if (!file_stream->isOpen()) {
+        std::unique_ptr<Gltf_file_stream> file_stream = std::make_unique<Gltf_file_stream>(arguments.path);
+        if (!file_stream->is_open()) {
             log_gltf->error("glTF load error: cannot open '{}'", arguments.path.string());
             return {};
         }
+        skip_glb_bin_state.glb_bin_length = file_stream->get_glb_bin_length();
         data = std::move(file_stream);
     } else {
         fastgltf::Expected<fastgltf::GltfDataBuffer> buffer = fastgltf::GltfDataBuffer::FromBytes(arguments.glb_data.data(), arguments.glb_data.size());
@@ -5182,11 +5658,23 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         std::vector<std::pair<std::size_t, Gltf_raw_extensions>> material_extensions;
         std::vector<std::pair<std::size_t, Gltf_raw_extensions>> mesh_extensions;
         std::vector<std::pair<std::pair<std::size_t, std::size_t>, Gltf_raw_extensions>> mesh_primitive_extensions;
+        Skip_glb_bin_state* skip_glb_bin_state{nullptr};
     };
     Parse_extras_context parse_extras_context;
+    parse_extras_context.skip_glb_bin_state = &skip_glb_bin_state;
 
     fastgltf::Parser fastgltf_parser{extensions};
     fastgltf_parser.setUserPointer(&parse_extras_context);
+    // Only for a .glb file with a BIN chunk: with a map callback set,
+    // fastgltf does not load a BIN chunk the callback gives no memory for.
+    if (skip_glb_bin_state.glb_bin_length.has_value()) {
+        fastgltf_parser.setBufferAllocationCallback(
+            [](const std::uint64_t buffer_size, void* user_pointer) -> fastgltf::BufferInfo {
+                Parse_extras_context* context = static_cast<Parse_extras_context*>(user_pointer);
+                return skip_glb_bin_map_callback(*context->skip_glb_bin_state, buffer_size);
+            }
+        );
+    }
     fastgltf_parser.setExtensionsParseCallback(
         [](simdjson::dom::object* extensions_object, std::size_t object_index, std::size_t sub_object_index, fastgltf::Category object_type, void* user_pointer) {
             if (extensions_object == nullptr) {
@@ -5322,31 +5810,53 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         }
     );
 
+    // External buffers are not loaded (no Options::LoadExternalBuffers) and
+    // the GLB BIN chunk is skipped (Gltf_file_stream): the parse reads byte
+    // ranges from the files below.
     fastgltf::Expected<fastgltf::Asset> asset = fastgltf_parser.loadGltf(
         *data,
         gltf_base_directory(arguments.path),
-        fastgltf::Options::LoadExternalBuffers // TODO Consider | fastgltf::Options::DecomposeNodeMatrices
+        fastgltf::Options::None // TODO Consider | fastgltf::Options::DecomposeNodeMatrices
     );
     if (auto error = asset.error(); error != fastgltf::Error::None) {
         log_gltf->error("glTF parse error: {}", fastgltf::getErrorMessage(error));
         return {};
     }
 
-
-    // Triangle soup reload sources need the buffers' places on disk, which
-    // the loaded asset no longer names (fastgltf replaces a buffer's URI with
-    // its loaded bytes). Only a parse from a file has them.
-    std::shared_ptr<const Gltf_buffer_origins> buffer_origins;
-    if ((arguments.triangle_soup_reload == Triangle_soup_reload::record) && arguments.glb_data.empty()) {
-        buffer_origins = resolve_gltf_buffer_origins(arguments.path, asset.get().buffers.size());
-        if (!buffer_origins) {
-            log_gltf->warn("glTF load: cannot resolve the buffer files of '{}' - triangle soups stay in memory", arguments.path.string());
+    // Where the buffers are on disk (the asset names the external .bin URIs
+    // but not the GLB BIN chunk offset). Only a parse from a file has them;
+    // a parse from memory loads every buffer as before.
+    std::shared_ptr<Gltf_buffer_origins> buffer_origins;
+    if (arguments.glb_data.empty()) {
+        std::shared_ptr<const Gltf_buffer_origins> resolved = resolve_gltf_buffer_origins(arguments.path, asset.get().buffers.size());
+        if (resolved) {
+            buffer_origins = std::make_shared<Gltf_buffer_origins>(*resolved);
         }
+        std::set<std::pair<std::size_t, std::size_t>> geometry_primitives;
+        for (const auto& [key, captured] : parse_extras_context.mesh_primitive_extensions) {
+            for (const auto& [extension_name, extension_value] : captured.entries) {
+                if (extension_name == "ERHE_geometry") {
+                    geometry_primitives.insert(key);
+                }
+            }
+        }
+        Gltf_buffer_origins no_origins;
+        no_origins.buffers.resize(asset.get().buffers.size());
+        std::size_t eager_byte_count = 0;
+        std::size_t lazy_view_count  = 0;
+        if (!load_eager_buffer_views(asset.get(), buffer_origins ? *buffer_origins : no_origins, geometry_primitives, eager_byte_count, lazy_view_count)) {
+            log_gltf->error("glTF load error: cannot read the buffers of '{}'", arguments.path.string());
+            return {};
+        }
+        log_gltf->info(
+            "glTF load '{}': {} bufferView bytes read whole, {} views read per primitive",
+            arguments.path.filename().string(), eager_byte_count, lazy_view_count
+        );
     }
 
     Gltf_data result;
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
-    erhe_parser.set_buffer_origins(std::move(buffer_origins));
+    erhe_parser.set_buffer_origins(std::move(buffer_origins), arguments.triangle_soup_reload);
 
     for (const auto& [extension_name, extension_value] : parse_extras_context.asset_extensions.entries) {
         if (extension_name == "ERHE_texture_ktx2") {
@@ -5834,10 +6344,11 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
 
     Gltf_scan result;
 
-    // Streamed, as in parse_gltf: reading the file whole first would hold
-    // the GLB binary payload twice (fastgltf copies the BIN chunk).
-    fastgltf::GltfFileStream data{path};
-    if (!data.isOpen()) {
+    // Streamed with the GLB BIN chunk skipped, as in parse_gltf: the scan
+    // reads no buffer data.
+    Gltf_file_stream   data{path};
+    Skip_glb_bin_state skip_glb_bin_state{.glb_bin_length = data.get_glb_bin_length()};
+    if (!data.is_open()) {
         const std::string error_message = fmt::format("glTF load error: cannot open '{}'", path.string());
         log_gltf->error(error_message);
         result.errors.push_back(error_message);
@@ -5867,6 +6378,14 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         fastgltf::Extensions::KHR_physics_rigid_bodies            |
         fastgltf::Extensions::KHR_materials_unlit;
     fastgltf::Parser fastgltf_parser{extensions};
+    fastgltf_parser.setUserPointer(&skip_glb_bin_state);
+    if (skip_glb_bin_state.glb_bin_length.has_value()) {
+        fastgltf_parser.setBufferAllocationCallback(
+            [](const std::uint64_t buffer_size, void* user_pointer) -> fastgltf::BufferInfo {
+                return skip_glb_bin_map_callback(*static_cast<Skip_glb_bin_state*>(user_pointer), buffer_size);
+            }
+        );
+    }
     fastgltf::Expected<fastgltf::Asset> asset_expected = fastgltf_parser.loadGltf(
         data,
         gltf_base_directory(path),

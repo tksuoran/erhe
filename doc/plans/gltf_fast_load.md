@@ -625,12 +625,12 @@ scan (worker) -> parse (worker: JSON + structure, no payload bytes)
 ```
 
 - **Parse.** `parse_gltf` reads the JSON and the structure only. The GLB
-  BIN chunk and external `.bin` files are not loaded: the fastgltf fork
-  gets an option that leaves GLB / URI buffers unloaded and reports the
-  BIN chunk's file offset (the fork is already ours; the fallback, if the
-  fork change turns out larger than expected, is erhe reading the GLB
-  header and handing fastgltf the JSON chunk). `resolve_gltf_buffer_origins()`
-  becomes the parse's buffer model. Small payloads that structure needs
+  BIN chunk and external `.bin` files are not loaded, with no fastgltf fork
+  change: external buffers stay URIs (no `Options::LoadExternalBuffers`),
+  and erhe's `Gltf_file_stream` skips the BIN chunk (the buffer map
+  callback answers the chunk with a marker address the stream turns into a
+  seek; doc/erhe/gltf.md "Reading buffers by range").
+  `resolve_gltf_buffer_origins()` becomes the parse's buffer model. Small payloads that structure needs
   are read eagerly by range during the parse: animation samplers, skin
   inverse bind matrices, `ERHE_geometry` payloads, physics collider
   meshes, `ERHE_brushes` and node-graph meshes. Buffers without a file
@@ -885,20 +885,62 @@ is stable afterwards.
 
 One commit per step (Opus coder, diff reviewed by the orchestrator). Load
 gate: `scripts/scene_load_profile.py --render-image` on the Release
-headless editor (prepared Bistro md5 89832b62..., foreign d488fefc...),
-peaks from `get_memory_usage` process sampling. Quest: release APK,
-off-head automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs,
-VmHWM.
+headless editor, peaks from `get_memory_usage` process sampling. Since
+step 0 the reference is a prepared Bistro saved fresh from the foreign
+file, which renders byte-identical to the foreign load: md5 d488fefc...
+for both (the step 4-8 prepared file `logs/step9/bistro_prepared.glb`
+carries the transform drift step 0 removed and renders 89832b62... at
+HEAD before step 0, 434633d8... after). Quest: release APK, off-head
+automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
 
 0. **Idempotent node transforms on export.** Gates: load prepared -> save A
    -> load A -> save B gives A == B byte for byte; A renders 89832b62...;
    an `erhe_gltf_tests` round trip checks TRS bit-exact.
-1. **JSON-only parse and the source model.** Fastgltf fork option, buffer
-   origins as `Source_file` / `Source_range`, eager range reads for the
-   small payloads; soups and images still built / retained as today.
-   Gates: `erhe_gltf_tests` (GLB, .gltf + .bin, data URI cases), render
-   identical, desktop and Quest peak recorded (expected drop: about the BIN
-   size).
+
+   Result (2026-10-25, Release headless): three causes, all fixed. The
+   exporter wrote `glm::decompose()` of `pre_transform * local` even for an
+   identity `pre_transform`; the parse re-parented every child through the
+   world-preserving `Xformable::set_parent` (local := inverse(parent world)
+   * world); the open of an erhe-authored scene did the same for the
+   top-level nodes. Old prepared file -> save A -> load A -> save B: A == B
+   byte for byte (663773028 bytes), A's JSON equals the source's, every
+   render 434633d8... (13 pixels from 89832b62..., which carried the
+   drift). Foreign Bistro -> fresh save -> load -> save: the two saves are
+   byte-identical and every render is d488fefc..., the foreign render: the
+   124 pixels of step 4 were the same drift. `erhe_gltf_tests`
+   `node_trs_bit_exact` (fails with the export fix disabled).
+1. **JSON-only parse and the source model.** Buffer origins with the file
+   places of every view, eager range reads for the views the parse reads
+   through the asset, soups built through their sources; soups and images
+   still built / retained as today. Gates: `erhe_gltf_tests` (GLB, .gltf +
+   .bin, data URI cases), render identical, desktop and Quest peak recorded
+   (expected drop: about the BIN size).
+
+   Result (2026-10-25): no fastgltf fork change (`Gltf_file_stream`,
+   doc/erhe/gltf.md "Reading buffers by range"). The source views cover only
+   the bytes their accessors read (the foreign Bistro packs all meshes into
+   7 views of up to 47 MB), which also makes the reload of a foreign file's
+   soup read kilobytes instead of whole views. `erhe_gltf_tests` 17/17 (new:
+   .glb file parse == memory parse, .gltf + .bin parse == data URI parse,
+   soups and an animation read from a view read whole), `erhe_gltf_gpu_tests`
+   2/2. Renders: fresh prepared and foreign Bistro d488fefc... (unchanged).
+
+   | | before | after |
+   |---|---|---|
+   | desktop prepared Bistro (Release headless, one editor per open) peak working set | 1635 MB | 1351-1360 MB (3 runs) |
+   | desktop listed / idle | 3.13 / 3.55 s | 2.51-2.94 / 2.51-2.94 s |
+   | desktop `parse_gltf` | 818 ms | 933-1120 ms |
+   | desktop bytes read whole / views read per primitive | whole BIN (664 MB) | 355 MB (images, topology, BVH) / 7704 |
+   | foreign Bistro listed / idle | 2.06-3.76 / 5.7-7.0 s | 2.25 / 5.47 s (parse 861 ms; 0.6 MB read whole) |
+   | Quest `bistro_quest.glb` VmHWM | 1987-2024 MB | 1747-1782 MB |
+   | Quest listed = idle | 7.43-7.99 s | 6.91-7.08 s |
+   | Quest `parse_gltf` | 1769-1856 ms | 2145-2217 ms (549 MB read whole: the ASTC images, topology, BVH) |
+
+   The drop is the mesh part of the BIN; the views still read whole are the
+   images (step 3) and the prepared topology / BVH payloads (step 4 moves
+   them into the per-primitive job). The parse is 0.1-0.4 s slower: 3852
+   small range reads through one shared handle instead of one sequential
+   read.
 2. **Shared load budget.** `Load_memory_budget`, `max_in_flight_bytes`
    (v7 migration), leases carried by loader queue entries and image
    uploads; images move onto it. Gates: budget high-water at most the

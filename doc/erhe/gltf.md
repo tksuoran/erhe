@@ -36,7 +36,7 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
 ## Notes
 - Backend is selected at CMake time: `ERHE_GLTF_LIBRARY_FASTGLTF` or `ERHE_GLTF_LIBRARY_NONE`.
 - `parse_gltf` creates NO GPU objects at all -- not textures, not samplers. Keep it that way: it is what makes the editor's asynchronous loading safe (doc/editor/async_asset_loading.md), and nothing will catch a regression automatically.
-- `parse_gltf` and `scan_gltf` stream a file (`fastgltf::GltfFileStream`) rather than reading it whole: fastgltf copies the GLB BIN chunk into a buffer of its own, so a whole-file read first would hold the binary payload twice.
+- `parse_gltf` and `scan_gltf` read a file's JSON and never load its buffers whole: see "Reading buffers by range".
 - `gltf.hpp` is a dispatch header that includes the appropriate backend.
 - In `blocking_drain` mode `Image_transfer` records into its own transfer command buffer, submitted and fence-waited whenever the staging ring fills and at destruction. An image larger than the staging ring uses a dedicated one-shot staging buffer.
 - fastgltf is pinned in the top-level CMakeLists to the `tksuoran/fastgltf` fork, which
@@ -190,36 +190,68 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   extras carrier (`roughness_y`, `bxdf_model`, `blending_mode`, ...) are parsed but no
   longer written.
 
+## Reading buffers by range
+
+A parse from a file never holds a GLB BIN chunk or an external `.bin` whole;
+it reads the byte ranges it needs. A parse from memory (`glb_data`) and
+buffers in data URIs are resident and read through the asset as usual.
+
+- `Gltf_file_stream` feeds fastgltf the file without the BIN chunk: fastgltf
+  asks the buffer map callback for the chunk's memory, the callback answers
+  with a marker address, and the stream turns the read into a seek. The
+  file's buffer 0 is then a `fastgltf::sources::CustomBuffer` with no bytes.
+  External buffers are not loaded (no `Options::LoadExternalBuffers`); they
+  stay `sources::URI`. `scan_gltf` uses the same stream.
+- `resolve_gltf_buffer_origins()` finds where each buffer is on disk - the
+  BIN chunk of a .glb (offset from the chunk headers) or an external .bin
+  (the buffer URI) - and stamps each file's size and modification time
+  (`Gltf_buffer_origins`). A buffer in a data URI has no origin.
+- `load_eager_buffer_views()` decides which bufferViews are read whole and
+  which per primitive. A soup primitive (no `ERHE_geometry`) with indices,
+  whose index and attribute accessors all lie in a buffer that is in a file
+  and are neither sparse nor meshopt compressed, is read per primitive. A
+  view on which every accessor is such a per-primitive accessor, and which
+  no sparse accessor, image or other user (morph targets, skins, animations,
+  instancing, geometry-normative primitives) reads, is left unread. Every
+  other view in a non-resident buffer - images, animation and skin data, the
+  `ERHE_*` payload views, anything shared with them - is read whole into a
+  buffer of its own and the view is repointed at it; the file places of all
+  views stay in `Gltf_buffer_origins::view_places`. One info line per file
+  gives the bytes read whole and the count of views left unread.
+- Every soup primitive with a file origin is built through its
+  `Gltf_triangle_soup_source` (below): during the parse the ranges are read
+  through `Gltf_range_reader`, one handle per file shared by the parse's
+  tasks and closed when the parse ends, so no handle outlives the load (an
+  open handle makes a save's rename onto the file fail on Windows).
+  Primitives without an origin are built from the asset.
+
 ## Triangle soup reload
 
 `Gltf_parse_arguments::triangle_soup_reload` (`Triangle_soup_reload`, default
-`none`) set to `record` makes `parse_gltf` give every soup primitive an
+`none`) set to `record` makes `parse_gltf` give every soup primitive its
 `erhe::primitive::Triangle_soup_source` (doc/erhe/primitive.md "Releasing the
-triangle soup"), so the primitive may release its CPU soup after upload and
-read it back on demand:
+triangle soup"), the source the parse built the soup through, so the
+primitive may release its CPU soup after upload and read it back on demand:
 
-- After the asset loads, `resolve_gltf_buffer_origins()` finds where each
-  buffer is on disk - the BIN chunk of a .glb (offset from the chunk headers)
-  or an external .bin (the buffer URI, re-read from the JSON because fastgltf
-  replaces it with the loaded bytes) - and records each file's size and
-  modification time. A buffer in a data URI has no origin; a parse from memory
-  (`glb_data`) records nothing.
-- Per primitive, the source holds the byte ranges of the bufferViews its index
-  and attribute accessors read (file offset, length, stride), copies of those
-  accessors pointing at the recorded views, the attribute names, the primitive
-  type and whether tangents are generated. Primitives sharing a bufferView
-  each record it. A primitive with a sparse accessor, an
-  EXT_meshopt_compression view or a buffer without an origin gets no source
-  and keeps its soup.
+- Per primitive, the source holds, for each bufferView its index and
+  attribute accessors read, the byte range those accessors cover (file
+  offset, length, stride; not the whole view: a file may pack every mesh
+  into a few large views), copies of the accessors rebased onto the ranges,
+  the attribute names, the primitive type and whether tangents are
+  generated. A primitive with a sparse accessor, an EXT_meshopt_compression
+  view or a buffer without an origin gets no source and keeps its soup.
 - `load()` refuses, with an error logged, when a file's size or modification
   time differs from the recorded one; otherwise it reads the ranges into a
   minimal `fastgltf::Asset` and builds the soup with `build_triangle_soup()`,
-  the function the parse builds every soup with (index widening, the
-  interleaved copy of the accessors, mikktspace tangents, the injected white
-  COLOR_0), so the reload is bit-identical.
+  the function every soup is built with (index widening, the interleaved
+  copy of the accessors, mikktspace tangents, the injected white COLOR_0),
+  so the reload is bit-identical to the parse.
 
 Tests: `src/erhe/gltf/test/test_gltf_soup_reload.cpp` (.gltf + .bin and .glb,
-primitives sharing interleaved views, uint8 / uint16 indices, a changed file).
+primitives sharing interleaved views, uint8 / uint16 indices, a changed file;
+a parse of a .glb file equals the parse of the same bytes from memory, and a
+.gltf + .bin parse equals the data URI parse of the same content, soups and
+an animation read from a view that is read whole).
 
 ## Future work
 
