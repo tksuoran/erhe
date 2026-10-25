@@ -509,6 +509,7 @@ flowchart TD
 - [reference/glslang_bug_report_debugglobalvariable.md](reference/glslang_bug_report_debugglobalvariable.md): glslang DebugGlobalVariable SPIR-V bug report
 - [reference/gltf_2_1_item_flags_comment.md](reference/gltf_2_1_item_flags_comment.md): glTF 2.1 per-node flags survey and issue comment
 - [reference/gltf_sample_renderer_comparison.md](reference/gltf_sample_renderer_comparison.md): erhe vs Khronos glTF-Sample-Renderer feature comparison
+- [reference/memory_usage_2026_10.md](reference/memory_usage_2026_10.md): Memory usage after a prepared Bistro load on desktop and Quest 3 (2026-10-25): CPU per owner, GPU per category, transient load peak, ranked optimization candidates
 - [reference/nova3d_comparison.md](reference/nova3d_comparison.md): Nova3D vs erhe AI creation tooling comparison
 - [reference/nvidia_present_timing_driver_report.md](reference/nvidia_present_timing_driver_report.md): NVIDIA VK_EXT_present_timing driver issue report
 - [reference/nvidia_texel_fetch_3d_driver_report.md](reference/nvidia_texel_fetch_3d_driver_report.md): NVIDIA OpenGL texelFetch sampler3D zeros driver report, with standalone reproduction

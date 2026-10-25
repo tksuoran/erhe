@@ -200,7 +200,19 @@ blocks), texture bytes and count, `Device::get_memory_budget()` (Vulkan only;
 the other backends return `{}`), container records and which retain a parse,
 undo/redo entry counts, the bottom level structure count, and `render_shapes`
 (unique render shapes of the scene meshes, how many hold a `Geometry`, how
-many carry prepared mesh data). It is backed by
+many carry prepared mesh data). It also reports `cpu_mesh` (per owner -
+render shapes, optimized variants, collision shapes of the scene meshes'
+distinct primitives - the CPU bytes of triangle soups, element mappings,
+prepared topology and BVH data, and the raytrace's own vertex / index copies,
+BVH nodes, primitive ids, precomputed triangles and facet maps; shared objects
+counted once; `Primitive_shape::add_memory_statistics()`), `cpu_images` (the
+retained encoded source image streams and any decoded pixels not yet
+released), `ring_buffers` (count, capacity, bytes in use) and `process` (the
+operating system figures: working set / peak / private bytes and the CPU
+heaps' allocated bytes on Windows, `/proc/self/status` VmRSS / VmHWM /
+RssAnon and mallinfo in-use bytes on Linux and Android). `process_only: true`
+returns just `process`, for sampling during a load. The measured breakdown of
+a Bistro load is `doc/reference/memory_usage_2026_10.md`. It is backed by
 `Buffer_pool::get_statistics()` / `Mesh_memory::get_pool_statistics()`, a
 process-wide texture byte counter in `erhe::graphics::Texture` (estimated from
 the create info, excluding views and wrapped images) and

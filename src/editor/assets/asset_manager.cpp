@@ -1917,6 +1917,28 @@ auto Asset_manager::inspect_assets() const -> std::vector<Asset_info>
     return result;
 }
 
+void Asset_manager::add_retained_image_bytes(std::unordered_set<const void*>& counted, std::size_t& out_source_bytes, std::size_t& out_decoded_pixel_bytes) const
+{
+    for (const auto& [container_id, record] : m_containers) {
+        static_cast<void>(container_id);
+        if (!record) {
+            continue;
+        }
+        const erhe::gltf::Gltf_data& gltf_data = record->gltf_data;
+        for (const std::shared_ptr<erhe::gltf::Gltf_image_source>& source : gltf_data.image_sources) {
+            if (source && counted.insert(source.get()).second) {
+                out_source_bytes += source->encoded_bytes.capacity();
+            }
+        }
+        for (const erhe::gltf::Gltf_decoded_image& decoded : gltf_data.image_residency.decoded_images) {
+            out_decoded_pixel_bytes += decoded.pixels.capacity();
+            if (decoded.source && counted.insert(decoded.source.get()).second) {
+                out_source_bytes += decoded.source->encoded_bytes.capacity();
+            }
+        }
+    }
+}
+
 auto Asset_manager::inspect_containers() const -> std::vector<Asset_container_info>
 {
     std::vector<Asset_container_info> result;

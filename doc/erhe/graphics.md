@@ -96,6 +96,7 @@ on every push.
 - `device.allocate_ring_buffer_entry(target, usage, size)` -- Allocate from ring buffer.
 - `device.create_render_pipeline(Render_pipeline_create_info)` -- Up-front pipeline creation.
 - `Buffer(device, create_info)` / `Texture(device, create_info)` -- Create GPU resources.
+- `Buffer::get_memory_statistics()` / `Texture::get_memory_statistics()` / `Texture::get_estimated_byte_count()` / `Device::get_memory_budget()` -- Memory accounting: the live buffers' capacity by creation usage (mutex-guarded process-wide counters), the textures' estimated bytes, and the driver budget with the backend allocator's block and allocation bytes (Vulkan: VMA over every allocator; with VK_EXT_memory_budget `device_local_usage` is the driver's figure for the whole process). `Device_debug_state::ring_buffer_capacity_bytes` is the ring buffer pool's total capacity.
 - `Bind_group_layout(device, create_info)` -- Create a descriptor layout plus synthesized sampler declarations.
 - `Shader_stages(device, prototype)` -- Create shader program from compiled prototype.
 - `Texture_heap(device, fallback_texture, fallback_sampler, bind_group_layout)` -- Create a material-texture heap bound to a layout.

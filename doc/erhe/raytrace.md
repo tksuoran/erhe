@@ -34,6 +34,8 @@ Hit hit{};
 if (scene->intersect(ray, hit)) { /* hit.geometry, hit.triangle_id, etc. */ }
 ```
 
+`IGeometry::get_memory_statistics()` reports the CPU bytes the backend holds for a committed geometry (BVH nodes, primitive ids, precomputed triangles, a supplied BVH not yet consumed); the bvh backend fills it, the others report zeros. The vertex / index `Cpu_buffer`s passed to `set_buffer()` are the caller's and are read only by `commit()`.
+
 ## Prebuilt BVH
 
 A committed geometry's BVH can be exported and supplied to a later

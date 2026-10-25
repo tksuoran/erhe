@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace erhe {
@@ -497,6 +498,11 @@ public:
     // Observability (MCP query_asset_manager)
     [[nodiscard]] auto inspect_assets    () const -> std::vector<Asset_info>;
     [[nodiscard]] auto inspect_containers() const -> std::vector<Asset_container_info>;
+    // Memory reports (MCP get_memory_usage): the image bytes the container
+    // records' parses still hold - the retained encoded source streams
+    // (Gltf_data::image_sources) and decoded pixels not yet released by
+    // image residency. Streams already in `counted` are not added again.
+    void add_retained_image_bytes(std::unordered_set<const void*>& counted, std::size_t& out_source_bytes, std::size_t& out_decoded_pixel_bytes) const;
 
     // Scene-close leak watchdog integration: true when the manager keeps
     // this item alive intentionally - a manager-owned strong reference

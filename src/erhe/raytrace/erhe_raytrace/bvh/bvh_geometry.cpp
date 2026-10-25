@@ -475,6 +475,20 @@ auto Bvh_geometry::get_prebuilt_bvh_rejection() const -> std::string_view
     return m_prebuilt_bvh_rejection;
 }
 
+auto Bvh_geometry::get_memory_statistics() const -> Geometry_memory_statistics
+{
+    Geometry_memory_statistics statistics{};
+    statistics.bvh_node_bytes             = m_bvh.nodes.capacity() * sizeof(m_bvh.nodes[0]);
+    statistics.primitive_id_bytes         = m_bvh.prim_ids.capacity() * sizeof(m_bvh.prim_ids[0]);
+    statistics.precomputed_triangle_bytes = m_precomputed_triangles.capacity() * sizeof(bvh::v2::PrecomputedTri<float>);
+    if (m_prebuilt_bvh.has_value()) {
+        statistics.pending_prebuilt_bvh_bytes =
+            (m_prebuilt_bvh->nodes.capacity() * sizeof(Bvh_node_record)) +
+            (m_prebuilt_bvh->primitive_ids.capacity() * sizeof(uint32_t));
+    }
+    return statistics;
+}
+
 void Bvh_geometry::enable()
 {
     m_enabled = true;

@@ -197,7 +197,8 @@ auto Ring_buffer_pool::get_usage() const -> Ring_buffer_pool_usage
             if (!ring_buffer->is_idle()) {
                 ++usage.busy_buffer_count;
             }
-            usage.bytes_in_use += ring_buffer->get_bytes_in_use();
+            usage.bytes_in_use   += ring_buffer->get_bytes_in_use();
+            usage.capacity_bytes += ring_buffer->get_capacity_byte_count();
         }
     }
     return usage;

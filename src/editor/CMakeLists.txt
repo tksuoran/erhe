@@ -363,6 +363,8 @@ erhe_target_sources_grouped(
     mcp/mcp_server_material.cpp
     mcp/mcp_server_properties.cpp
     mcp/mcp_server_mesh_components.cpp
+    mcp/mcp_process_memory.cpp
+    mcp/mcp_process_memory.hpp
     mcp/mcp_server_references.cpp
     mcp/mcp_server_rig.cpp
     mcp/mcp_server_physics.cpp

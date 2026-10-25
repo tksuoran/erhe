@@ -1389,6 +1389,7 @@ auto Device_impl::get_debug_state() const -> Device_debug_state
     state.ring_buffer_count        = ring_buffer_usage.buffer_count;
     state.busy_ring_buffer_count   = ring_buffer_usage.busy_buffer_count;
     state.ring_buffer_bytes_in_use = ring_buffer_usage.bytes_in_use;
+    state.ring_buffer_capacity_bytes = ring_buffer_usage.capacity_bytes;
     return state;
 }
 

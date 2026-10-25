@@ -135,6 +135,9 @@ public:
     // a material normal slot.
     void               set_two_component_normal(bool value) { m_two_component_normal = value; }
     [[nodiscard]] auto is_two_component_normal () const -> bool { return m_two_component_normal; }
+    // The bytes this texture counts into get_memory_statistics() (estimated
+    // from the create info); 0 for views and wrapped images.
+    [[nodiscard]] auto get_estimated_byte_count() const -> std::size_t { return m_estimated_byte_count; }
 
 private:
     std::unique_ptr<Texture_impl> m_impl;

@@ -9,6 +9,7 @@
 #include "geometry_graph/graph_mesh.hpp"
 #include "texture_graph/graph_texture.hpp"
 
+#include "erhe_gltf/gltf.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
@@ -484,6 +485,21 @@ void Content_library::set_image_source(const std::shared_ptr<erhe::Item_base>& i
 void Content_library::set_asset_key(const std::shared_ptr<erhe::Item_base>& item, const Asset_key& asset_key)
 {
     metadata_entry(item).asset_key = asset_key;
+}
+
+auto Content_library::get_retained_image_source_bytes(std::unordered_set<const void*>& counted) const -> std::size_t
+{
+    std::size_t byte_count = 0;
+    for (const auto& [item, metadata] : m_metadata) {
+        static_cast<void>(item);
+        if (metadata.resource.expired() || !metadata.image_source) {
+            continue;
+        }
+        if (counted.insert(metadata.image_source.get()).second) {
+            byte_count += metadata.image_source->encoded_bytes.capacity();
+        }
+    }
+    return byte_count;
 }
 
 namespace {

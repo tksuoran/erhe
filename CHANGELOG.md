@@ -28,6 +28,25 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Buffer_memory_statistics` and
+  `Buffer::get_memory_statistics()` (process-wide live buffer capacity by
+  creation usage: acceleration structure storage, acceleration structure
+  build input, vertex / index, other); `Texture::get_estimated_byte_count()`;
+  `Memory_budget::device_local_block_bytes` and
+  `device_local_allocation_bytes` (Vulkan: VMA blocks and allocations in
+  device-local heaps over every allocator);
+  `Device_debug_state::ring_buffer_capacity_bytes` and
+  `Ring_buffer_pool_usage::capacity_bytes`.
+- `erhe::raytrace`: `Geometry_memory_statistics` and
+  `IGeometry::get_memory_statistics()` (BVH nodes, primitive ids,
+  precomputed triangles, a supplied BVH not yet consumed; the bvh backend
+  reports them, the others zeros).
+- `erhe::primitive`: `Shape_memory_statistics`,
+  `Primitive_shape::add_memory_statistics()` and
+  `Primitive_raytrace::add_memory_statistics()` (CPU bytes of a shape's
+  soup, element mappings, prepared data, stored BVH and raytraces; shared
+  objects counted once through a caller-owned set).
+
 - `erhe::primitive`: `Primitive_shape::has_stored_bvh()`,
   `mark_prepared_data_stale()`, `is_prepared_data_current()`,
   `Prepared_primitive_export::retained_core`, `get_export_core()` and
@@ -847,6 +866,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::graphics`: Vulkan `Device::get_memory_budget()` no longer adds the
+  device-address allocator's usage when VK_EXT_memory_budget is enabled:
+  each allocator then reports the driver's usage of the whole process, so
+  the sum counted it twice whenever ray tracing created the second
+  allocator.
 
 - `erhe::scene_renderer`: `Draw_list_scene` reads a retired frame's
   occlusion words back on the CPU only when an occlusion check

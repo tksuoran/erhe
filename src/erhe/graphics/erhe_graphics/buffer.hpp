@@ -26,6 +26,20 @@ public:
 
 class Buffer_impl;
 
+// Process-wide buffer memory accounting (Buffer::get_memory_statistics()):
+// the capacity of every live Buffer, split by the usage it was created for.
+// A buffer counts into the first matching category in declaration order.
+class Buffer_memory_statistics
+{
+public:
+    std::size_t buffer_count                           {0};
+    std::size_t byte_count                             {0};
+    std::size_t acceleration_structure_bytes           {0}; // acceleration_structure_storage
+    std::size_t acceleration_structure_build_input_bytes{0}; // acceleration_structure_build_input
+    std::size_t vertex_index_bytes                     {0}; // vertex or index
+    std::size_t other_bytes                            {0};
+};
+
 class Buffer final
 {
 public:
@@ -75,11 +89,17 @@ public:
     [[nodiscard]] auto get_impl() -> Buffer_impl&;
     [[nodiscard]] auto get_impl() const -> const Buffer_impl&;
 
+    [[nodiscard]] static auto get_memory_statistics() -> Buffer_memory_statistics;
+
     friend class Vertex_input_state;
     friend class Texture;
 
 private:
     std::unique_ptr<Buffer_impl> m_impl;
+    // What this buffer counts into get_memory_statistics(); moves with
+    // m_impl.
+    std::size_t                  m_counted_byte_count{0};
+    Buffer_usage                 m_counted_usage     {Buffer_usage::none};
 };
 
 } // namespace erhe::graphics

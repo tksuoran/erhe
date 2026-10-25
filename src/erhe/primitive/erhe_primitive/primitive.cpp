@@ -500,6 +500,29 @@ auto Primitive_raytrace::get_mesh_facet_from_triangle(const uint32_t triangle) c
     return m_triangle_to_mesh_facet[triangle];
 }
 
+void Primitive_raytrace::add_memory_statistics(Shape_memory_statistics& out, std::unordered_set<const void*>& counted) const
+{
+    if (m_is_proxy) {
+        ++out.raytrace_proxy_count;
+    } else if (m_rt_geometry) {
+        ++out.raytrace_count;
+    }
+    if (m_rt_vertex_buffer && counted.insert(m_rt_vertex_buffer.get()).second) {
+        out.raytrace_buffer_bytes += m_rt_vertex_buffer->get_capacity_byte_count();
+    }
+    if (m_rt_index_buffer && counted.insert(m_rt_index_buffer.get()).second) {
+        out.raytrace_buffer_bytes += m_rt_index_buffer->get_capacity_byte_count();
+    }
+    out.raytrace_facet_map_bytes += m_triangle_to_mesh_facet.capacity() * sizeof(uint32_t);
+    if (m_rt_geometry && counted.insert(m_rt_geometry.get()).second) {
+        const erhe::raytrace::Geometry_memory_statistics geometry = m_rt_geometry->get_memory_statistics();
+        out.raytrace_bvh_node_bytes             += geometry.bvh_node_bytes;
+        out.raytrace_primitive_id_bytes         += geometry.primitive_id_bytes;
+        out.raytrace_precomputed_triangle_bytes += geometry.precomputed_triangle_bytes;
+        out.raytrace_pending_prebuilt_bvh_bytes += geometry.pending_prebuilt_bvh_bytes;
+    }
+}
+
 auto Primitive_raytrace::has_raytrace_triangles() const -> bool
 {
     return
@@ -1639,6 +1662,55 @@ auto Primitive_shape::get_mesh_facet_from_triangle(const erhe::raytrace::IGeomet
 auto Primitive_shape::get_element_mappings() const -> const Element_mappings&
 {
     return m_element_mappings;
+}
+
+namespace {
+
+[[nodiscard]] auto get_prebuilt_bvh_bytes(const erhe::raytrace::Prebuilt_bvh& bvh) -> std::size_t
+{
+    return
+        (bvh.nodes.capacity() * sizeof(erhe::raytrace::Bvh_node_record)) +
+        (bvh.primitive_ids.capacity() * sizeof(uint32_t));
+}
+
+}
+
+void Primitive_shape::add_memory_statistics(Shape_memory_statistics& out, std::unordered_set<const void*>& counted) const
+{
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    ++out.shape_count;
+    if (m_geometry_published.load(std::memory_order_acquire) && m_geometry && counted.insert(m_geometry.get()).second) {
+        ++out.geometry_count;
+    }
+    if (m_triangle_soup && counted.insert(m_triangle_soup.get()).second) {
+        ++out.triangle_soup_count;
+        out.triangle_soup_vertex_bytes += m_triangle_soup->vertex_data.capacity();
+        out.triangle_soup_index_bytes  += m_triangle_soup->index_data.capacity() * sizeof(uint32_t);
+    }
+    out.element_mapping_bytes +=
+        (m_element_mappings.triangle_to_mesh_facet            .capacity() * sizeof(uint32_t)) +
+        (m_element_mappings.mesh_corner_to_vertex_buffer_index.capacity() * sizeof(uint32_t)) +
+        (m_element_mappings.mesh_vertex_to_vertex_buffer_index.capacity() * sizeof(uint32_t));
+    if (m_prepared_data && counted.insert(m_prepared_data.get()).second) {
+        ++out.prepared_data_count;
+        if (m_prepared_data->colocation.has_value()) {
+            out.prepared_colocation_bytes += m_prepared_data->colocation->vertex_points.capacity() * sizeof(uint32_t);
+        }
+        if (m_prepared_data->bvh.has_value()) {
+            out.prepared_bvh_bytes += get_prebuilt_bvh_bytes(m_prepared_data->bvh.value());
+        }
+    }
+    if (m_stored_bvh) {
+        out.stored_bvh_bytes += get_prebuilt_bvh_bytes(*m_stored_bvh);
+    }
+    m_raytrace.add_memory_statistics(out, counted);
+    if (m_pending_raytrace) {
+        m_pending_raytrace->add_memory_statistics(out, counted);
+    }
+    if (m_retired_proxy_raytrace) {
+        m_retired_proxy_raytrace->add_memory_statistics(out, counted);
+    }
 }
 
 /////////////////////////

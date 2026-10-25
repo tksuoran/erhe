@@ -11,6 +11,7 @@
 #include <mutex>
 #include <optional>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 
 namespace GEO { class Mesh; }
@@ -26,6 +27,33 @@ class Buffer_info;
 class Material;
 class Prepared_primitive_data;
 class Triangle_soup;
+
+// CPU memory held by primitive shapes, summed by
+// Primitive_shape::add_memory_statistics() for memory reports (allocated
+// capacities, in bytes). GPU buffers (Buffer_mesh allocations) are not
+// counted: they belong to the mesh memory pools.
+class Shape_memory_statistics
+{
+public:
+    std::size_t shape_count               {0};
+    std::size_t geometry_count            {0}; // shapes holding an erhe::geometry::Geometry
+    std::size_t triangle_soup_count       {0};
+    std::size_t triangle_soup_vertex_bytes{0};
+    std::size_t triangle_soup_index_bytes {0};
+    std::size_t element_mapping_bytes     {0};
+    std::size_t prepared_data_count       {0};
+    std::size_t prepared_colocation_bytes {0}; // ERHE_mesh_topology vertex points
+    std::size_t prepared_bvh_bytes        {0}; // a BVH still inside the prepared data
+    std::size_t stored_bvh_bytes          {0}; // the stored BVH waiting for make_prepared_raytrace()
+    std::size_t raytrace_count            {0}; // real triangle raytraces
+    std::size_t raytrace_proxy_count      {0}; // AABB proxies (current, pending or retired)
+    std::size_t raytrace_buffer_bytes     {0}; // the raytrace's own vertex / index copies (Cpu_buffer capacity)
+    std::size_t raytrace_facet_map_bytes  {0};
+    std::size_t raytrace_bvh_node_bytes   {0}; // backend (erhe::raytrace::Geometry_memory_statistics)
+    std::size_t raytrace_primitive_id_bytes{0};
+    std::size_t raytrace_precomputed_triangle_bytes{0};
+    std::size_t raytrace_pending_prebuilt_bvh_bytes{0};
+};
 
 class Primitive_raytrace
 {
@@ -66,6 +94,10 @@ public:
     // reported the hit. Proxy and triangle-soup raytraces have no facets and
     // return GEO::NO_INDEX.
     [[nodiscard]] auto get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t;
+
+    // Adds this raytrace's CPU memory to out. Buffers already in `counted`
+    // (shared between raytraces) are not added again.
+    void add_memory_statistics(Shape_memory_statistics& out, std::unordered_set<const void*>& counted) const;
 
 private:
     // Order matters: m_rt_mesh must be destroyed before the buffers
@@ -183,6 +215,13 @@ public:
     // triangle index is always interpreted against the triangles it came
     // from. Unknown geometry / proxy hits yield GEO::NO_INDEX.
     [[nodiscard]] auto get_mesh_facet_from_triangle(const erhe::raytrace::IGeometry* geometry, const uint32_t triangle) const -> GEO::index_t;
+    // Adds the shape's CPU memory to out (memory reports): its triangle
+    // soup, element mappings, prepared data, stored BVH and raytraces
+    // (current, pending and retired proxy). Objects already in `counted` -
+    // a soup or prepared data shared with another shape - are not added
+    // again, so one set over many shapes counts each object once. Takes the
+    // build and state locks.
+    void add_memory_statistics(Shape_memory_statistics& out, std::unordered_set<const void*>& counted) const;
 
 protected:
     // Caller holds m_build_mutex. Returns the published geometry (never null

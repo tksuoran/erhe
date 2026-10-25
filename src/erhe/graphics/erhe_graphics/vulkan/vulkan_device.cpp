@@ -2478,20 +2478,29 @@ auto Device_impl::get_memory_budget() const -> Memory_budget
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
     vmaGetHeapBudgets(m_vma_allocator, budgets.data());
     // The device-address allocator (ray tracing buffers) draws from the same
-    // heaps, so its usage has to be added in or the reported figure would
-    // under-count. budget is the driver's per-heap ceiling and is reported
-    // identically by both allocators, so only usage accumulates.
+    // heaps. With VK_EXT_memory_budget each allocator's usage is the
+    // driver-reported usage of the whole process (plus the allocator's own
+    // blocks since the last budget fetch), so adding the two would count the
+    // process twice: the main allocator's figure stands alone. Without the
+    // extension usage is each allocator's own estimate and the two add up.
+    // budget is the driver's per-heap ceiling, identical in both. Block and
+    // allocation bytes are each allocator's own and always add up.
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> device_address_budgets{};
     if (m_vma_device_address_allocator != VK_NULL_HANDLE) {
         vmaGetHeapBudgets(m_vma_device_address_allocator, device_address_budgets.data());
     }
+    const bool driver_reported_usage = m_device_extensions.m_VK_EXT_memory_budget;
     for (uint32_t heap = 0; heap < memory_properties->memoryHeapCount; ++heap) {
         if ((memory_properties->memoryHeaps[heap].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) == 0) {
             continue;
         }
         result.device_local_budget += budgets[heap].budget;
         result.device_local_usage  += budgets[heap].usage;
-        result.device_local_usage  += device_address_budgets[heap].usage;
+        if (!driver_reported_usage) {
+            result.device_local_usage += device_address_budgets[heap].usage;
+        }
+        result.device_local_block_bytes      += budgets[heap].statistics.blockBytes      + device_address_budgets[heap].statistics.blockBytes;
+        result.device_local_allocation_bytes += budgets[heap].statistics.allocationBytes + device_address_budgets[heap].statistics.allocationBytes;
     }
     return result;
 }
@@ -2759,6 +2768,7 @@ auto Device_impl::get_debug_state() const -> Device_debug_state
     state.ring_buffer_count        = ring_buffer_usage.buffer_count;
     state.busy_ring_buffer_count   = ring_buffer_usage.busy_buffer_count;
     state.ring_buffer_bytes_in_use = ring_buffer_usage.bytes_in_use;
+    state.ring_buffer_capacity_bytes = ring_buffer_usage.capacity_bytes;
     return state;
 }
 

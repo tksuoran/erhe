@@ -202,6 +202,10 @@ public:
     void set_gltf_source (const std::shared_ptr<erhe::Item_base>& item, const Gltf_source_reference& gltf_source);
     void set_image_source(const std::shared_ptr<erhe::Item_base>& item, const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source);
     void set_asset_key   (const std::shared_ptr<erhe::Item_base>& item, const Asset_key& asset_key);
+    // Memory reports (MCP get_memory_usage): the retained encoded source
+    // image streams (Resource_metadata::image_source) of live resources.
+    // Streams already in `counted` are not added again. Main thread.
+    [[nodiscard]] auto get_retained_image_source_bytes(std::unordered_set<const void*>& counted) const -> std::size_t;
 
     ERHE_PROFILE_MUTEX(std::mutex, mutex);
 

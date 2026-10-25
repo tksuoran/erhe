@@ -465,6 +465,14 @@ class Memory_budget
 public:
     uint64_t device_local_budget{0}; // bytes the process may use before oversubscribing; 0 = unknown
     uint64_t device_local_usage {0}; // bytes currently allocated by this process
+    // What the backend's own allocator holds in device-local heaps (Vulkan:
+    // VMA statistics over every allocator): memory blocks taken from the
+    // driver, and the part of them handed out to buffers and images. The
+    // difference is free space inside blocks; usage minus block bytes is
+    // memory the driver reports outside the allocator (swapchain images,
+    // driver internals). 0 = unknown.
+    uint64_t device_local_block_bytes     {0};
+    uint64_t device_local_allocation_bytes{0};
 
     [[nodiscard]] auto is_known     () const -> bool     { return device_local_budget > 0; }
     [[nodiscard]] auto get_remaining() const -> uint64_t { return (device_local_budget > device_local_usage) ? (device_local_budget - device_local_usage) : 0; }
@@ -497,6 +505,8 @@ public:
     std::size_t ring_buffer_count               {0};
     std::size_t busy_ring_buffer_count          {0};
     std::size_t ring_buffer_bytes_in_use        {0};
+    // Sum of the pool's ring buffer capacities (the memory the pool holds).
+    std::size_t ring_buffer_capacity_bytes      {0};
 };
 
 using Shader_error_callback   = std::function<void(const std::string& error_log, const std::string& shader_source, const std::string& callstack)>;
