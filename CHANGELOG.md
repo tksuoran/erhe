@@ -33,6 +33,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::gltf`: `Gltf_gpu_vertex_formats`,
+  `Gltf_export_arguments::gpu_vertex_formats` (export writes
+  `ERHE_gpu_vertex_streams`), `Gltf_export_prepared_statistics::gpu_vertex_stream_count`
+  / `gpu_vertex_stream_skipped` / `gpu_vertex_stream_ms`.
+- `erhe::primitive`: `Packed_vertex_streams`, `pack_triangle_soup_streams()`.
 - `erhe::dataformat`: `get_vertex_format_signature()`.
 - `erhe::primitive`: `vertex_encoding_version` (`mesh_optimizer.hpp`).
 

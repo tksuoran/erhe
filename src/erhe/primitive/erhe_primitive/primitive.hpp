@@ -602,6 +602,25 @@ public:
 
 auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>;
 
+// The GPU vertex streams and index buffer build_buffer_mesh_from_triangle_soup()
+// writes for `triangle_soup` in `vertex_format` / `index_type`, captured on
+// the CPU instead of uploaded, with the affines it encoded them with: the
+// bytes a loader's soup build uploads, written into a file as GPU-ready
+// streams (ERHE_gpu_vertex_streams, doc/gltf_extensions/ERHE_gpu_vertex_streams.md).
+class Packed_vertex_streams
+{
+public:
+    std::vector<std::vector<uint8_t>> streams; // per stream of vertex_format
+    std::vector<uint8_t>              indices;
+    Position_quantization             position_quantization{};
+    Texcoord_quantization             texcoord_quantization{};
+};
+[[nodiscard]] auto pack_triangle_soup_streams(
+    const Triangle_soup&                   triangle_soup,
+    const erhe::dataformat::Vertex_format& vertex_format,
+    erhe::dataformat::Format               index_type
+) -> std::optional<Packed_vertex_streams>;
+
 [[nodiscard]] auto primitive_type(Primitive_mode primitive_mode) -> Primitive_type;
 
 } // namespace erhe::primitive

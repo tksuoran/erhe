@@ -1578,6 +1578,89 @@ auto Primitive_render_shape::make_buffer_mesh_build_locked(const Buffer_info& bu
 }
 #pragma endregion Primitive_render_shape
 
+namespace {
+
+// Captures what a build enqueues instead of uploading it: every allocation
+// gets its own pool id (so the lockstep check sees one buffer, offset 0).
+class Capturing_buffer_sink
+    : public Vertex_buffer_sink
+    , public Index_buffer_sink
+{
+public:
+    auto allocate_vertex_buffer_range(const erhe::dataformat::Vertex_stream& vertex_stream, const std::size_t vertex_count) -> Buffer_sink_allocation override
+    {
+        vertex_data.emplace_back();
+        return Buffer_sink_allocation{
+            .range = Buffer_range{
+                .count        = vertex_count,
+                .element_size = vertex_stream.stride,
+                .byte_offset  = 0,
+                .pool_id      = vertex_data.size() - 1,
+                .buffer_id    = 0
+            },
+            .allocation = {}
+        };
+    }
+    void enqueue_vertex_data(const Buffer_range& buffer_range, std::vector<uint8_t>&& data) override
+    {
+        vertex_data.at(buffer_range.pool_id) = std::move(data);
+    }
+    void vertex_writer_ready(Vertex_buffer_writer&) override
+    {
+    }
+    auto allocate_index_buffer_range(const erhe::dataformat::Format index_format, const std::size_t index_count) -> Buffer_sink_allocation override
+    {
+        return Buffer_sink_allocation{
+            .range = Buffer_range{
+                .count        = index_count,
+                .element_size = erhe::dataformat::get_format_size_bytes(index_format),
+                .byte_offset  = 0,
+                .pool_id      = 0,
+                .buffer_id    = 0
+            },
+            .allocation = {}
+        };
+    }
+    void enqueue_index_data(const Buffer_range&, std::vector<uint8_t>&& data) override
+    {
+        index_data = std::move(data);
+    }
+    void index_writer_ready(Index_buffer_writer&) override
+    {
+    }
+
+    std::vector<std::vector<uint8_t>> vertex_data;
+    std::vector<uint8_t>              index_data;
+};
+
+} // anonymous namespace
+
+auto pack_triangle_soup_streams(
+    const Triangle_soup&                   triangle_soup,
+    const erhe::dataformat::Vertex_format& vertex_format,
+    const erhe::dataformat::Format         index_type
+) -> std::optional<Packed_vertex_streams>
+{
+    Capturing_buffer_sink sink;
+    const Buffer_info buffer_info{
+        .normal_style       = Normal_style::corner_normals,
+        .index_type         = index_type,
+        .vertex_format      = vertex_format,
+        .vertex_buffer_sink = sink,
+        .index_buffer_sink  = sink
+    };
+    const std::optional<Buffer_mesh> buffer_mesh = build_buffer_mesh_from_triangle_soup(triangle_soup, buffer_info);
+    if (!buffer_mesh.has_value() || (sink.vertex_data.size() != vertex_format.streams.size())) {
+        return std::nullopt;
+    }
+    return Packed_vertex_streams{
+        .streams               = std::move(sink.vertex_data),
+        .indices               = std::move(sink.index_data),
+        .position_quantization = buffer_mesh->position_quantization,
+        .texcoord_quantization = buffer_mesh->texcoord_quantization
+    };
+}
+
 auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>
 {
     // TODO Use index_type from buffer_info

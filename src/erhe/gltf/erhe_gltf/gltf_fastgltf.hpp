@@ -35,6 +35,9 @@ namespace erhe::graphics {
     class Texture;
     class Vertex_format;
 }
+namespace erhe::dataformat {
+    class Vertex_format;
+}
 namespace erhe::primitive {
     class Buffer_sink;
     class Primitive;
@@ -775,6 +778,26 @@ public:
     std::size_t                        retained_count             {0}; // prepared primitives written back unchanged (subset of prepared_count)
     std::size_t                        dropped_degenerate_triangles{0};
     double                             preparation_ms             {0.0}; // wall time of the parallel preparation
+    std::size_t                        gpu_vertex_stream_count    {0}; // prepared primitives written with ERHE_gpu_vertex_streams
+    std::size_t                        gpu_vertex_stream_skipped  {0}; // prepared primitives the GPU formats cannot express
+    double                             gpu_vertex_stream_ms       {0.0}; // packing time of the GPU vertex streams
+};
+
+// The running device's vertex layouts, for an export that writes each
+// prepared primitive's GPU-ready vertex streams (ERHE_gpu_vertex_streams,
+// doc/gltf_extensions/ERHE_gpu_vertex_streams.md; "Save for Quest"): the
+// base and optimized formats, skinned or not (a primitive whose soup has
+// joint attributes uses the skinned pair), the index format and the encoder
+// version. The editor fills it from its Mesh_memory.
+class Gltf_gpu_vertex_formats
+{
+public:
+    const erhe::dataformat::Vertex_format* base             {nullptr};
+    const erhe::dataformat::Vertex_format* base_skinned     {nullptr};
+    const erhe::dataformat::Vertex_format* optimized        {nullptr};
+    const erhe::dataformat::Vertex_format* optimized_skinned{nullptr};
+    erhe::dataformat::Format               index_type       {erhe::dataformat::Format::format_32_scalar_uint};
+    int                                    encoding_version {0};
 };
 
 class Gltf_export_arguments
@@ -859,6 +882,11 @@ public:
     // Texture image form (Gltf_texture_export); source unless "Save for
     // Quest". The transcodes run on 'executor' (serial when null).
     Gltf_texture_export texture_export{Gltf_texture_export::source};
+    // When non-null (and prepared_mesh_data is write), each prepared
+    // primitive is written with GPU-ready vertex streams in these layouts:
+    // the base streams are its core accessors, the optimized ones are named
+    // by ERHE_gpu_vertex_streams.
+    const Gltf_gpu_vertex_formats* gpu_vertex_formats{nullptr};
     // Receives the texture statistics when non-null.
     Gltf_export_texture_statistics* texture_statistics{nullptr};
     // Receives where the retained primitives and the unchanged images were

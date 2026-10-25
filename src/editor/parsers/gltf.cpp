@@ -1789,7 +1789,8 @@ auto save_scene_gltf(
     const std::filesystem::path&          path,
     tf::Executor* const                   executor,
     const erhe::gltf::Gltf_texture_export texture_export,
-    Gltf_scene_save_report* const         report
+    Gltf_scene_save_report* const         report,
+    const erhe::gltf::Gltf_gpu_vertex_formats* const gpu_vertex_formats
 ) -> bool
 {
     const erhe::scene::Scene& scene = scene_root.get_scene();
@@ -1819,6 +1820,7 @@ auto save_scene_gltf(
     erhe::gltf::Gltf_export_texture_statistics texture_statistics;
     export_arguments.texture_export      = texture_export;
     export_arguments.texture_statistics  = &texture_statistics;
+    export_arguments.gpu_vertex_formats  = gpu_vertex_formats;
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
@@ -1934,6 +1936,15 @@ auto save_scene_gltf(
         export_ms,
         gltf.size()
     );
+    if (gpu_vertex_formats != nullptr) {
+        log_parsers->info(
+            "save_scene_gltf: '{}' GPU vertex streams: {} primitives written, {} not expressible in the layouts, {:.1f} ms",
+            erhe::file::to_string(path),
+            prepared_statistics.gpu_vertex_stream_count,
+            prepared_statistics.gpu_vertex_stream_skipped,
+            prepared_statistics.gpu_vertex_stream_ms
+        );
+    }
     if (texture_export == erhe::gltf::Gltf_texture_export::ktx2_astc_4x4) {
         log_parsers->info(
             "save_scene_gltf: '{}' textures: {} images, {} transcoded to ASTC 4x4 KTX2 ({} -> {} bytes, {:.1f} ms), "
@@ -1968,7 +1979,21 @@ auto save_scene_gltf_for_quest(
     Gltf_scene_save_report* const report
 ) -> bool
 {
-    if (!save_scene_gltf(scene_root, path, context.executor, erhe::gltf::Gltf_texture_export::ktx2_astc_4x4, report)) {
+    // The running device's vertex layouts: the Quest file carries GPU-ready
+    // vertex streams in them (ERHE_gpu_vertex_streams).
+    std::optional<erhe::gltf::Gltf_gpu_vertex_formats> gpu_vertex_formats;
+    if (context.mesh_memory != nullptr) {
+        const erhe::scene_renderer::Mesh_memory& mesh_memory = *context.mesh_memory;
+        gpu_vertex_formats = erhe::gltf::Gltf_gpu_vertex_formats{
+            .base              = &mesh_memory.vertex_format_not_skinned,
+            .base_skinned      = &mesh_memory.vertex_format_skinned,
+            .optimized         = &mesh_memory.vertex_format_not_skinned_optimized,
+            .optimized_skinned = &mesh_memory.vertex_format_skinned_optimized,
+            .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+            .encoding_version  = erhe::primitive::vertex_encoding_version
+        };
+    }
+    if (!save_scene_gltf(scene_root, path, context.executor, erhe::gltf::Gltf_texture_export::ktx2_astc_4x4, report, gpu_vertex_formats ? &gpu_vertex_formats.value() : nullptr)) {
         return false;
     }
     context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
